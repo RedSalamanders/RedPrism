@@ -3,6 +3,7 @@
 #include "DocumentDraft.h"
 
 #include "PipelineTrace.h"
+#include "RasterWork.h"
 
 #include "Adjust.h"
 #include "CanvasSize.h"
@@ -25,6 +26,65 @@
 
 #pragma comment(lib, "rpcrt4.lib")
 #pragma comment(lib, "ole32.lib")
+
+namespace
+{
+std::mutex gRasterResidencyGate;
+std::atomic<std::uint64_t> gRasterResidencyEpoch{1};
+thread_local bool gRasterResidencyLeaseHeld = false;
+} // namespace
+
+Raster::ResidencyLease::ResidencyLease(std::mutex& gate, bool attempt) : _lock(gate, std::defer_lock)
+{
+    if (gRasterResidencyLeaseHeld)
+        return; // refuse recursive acquisition instead of invoking non-recursive mutex UB/deadlock
+    if (attempt)
+        (void)_lock.try_lock();
+    else
+        _lock.lock();
+    gRasterResidencyLeaseHeld = _lock.owns_lock();
+}
+
+Raster::ResidencyLease::~ResidencyLease() noexcept
+{
+    Reset();
+}
+
+Raster::ResidencyLease::ResidencyLease(ResidencyLease&& source) noexcept : _lock(std::move(source._lock)) {}
+
+Raster::ResidencyLease& Raster::ResidencyLease::operator=(ResidencyLease&& source) noexcept
+{
+    if (this != &source)
+    {
+        Reset();
+        _lock = std::move(source._lock);
+        if (_lock.owns_lock())
+            gRasterResidencyLeaseHeld = true;
+    }
+    return *this;
+}
+
+void Raster::ResidencyLease::Reset() noexcept
+{
+    if (_lock.owns_lock())
+        gRasterResidencyLeaseHeld = false;
+    _lock = {};
+}
+
+Raster::ResidencyLease Raster::AcquireResidencyLease()
+{
+    return ResidencyLease{gRasterResidencyGate, false};
+}
+
+Raster::ResidencyLease Raster::TryResidencyLease() noexcept
+{
+    return ResidencyLease{gRasterResidencyGate, true};
+}
+
+std::uint64_t Raster::ResidencyEpoch() noexcept
+{
+    return gRasterResidencyEpoch.load(std::memory_order_acquire);
+}
 
 std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
 {
@@ -71,6 +131,34 @@ std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(
         (layer.mask && (!raster(layer.mask.value().asset.image) || !raster(layer.mask.value().asset.thumbnail))))
         return std::nullopt;
     return result;
+}
+
+std::uint64_t CanvasDocument::RetirementMemoryBytes() const noexcept
+{
+    const auto layerBounds = layers.OwnershipBounds();
+    // A default empty handle owns no root. A published root with unavailable bounds must be refused.
+    if (!layerBounds && layers.Identity() != nullptr)
+        return 0;
+    std::uint64_t bytes = 64 * 1024 + sizeof(CanvasDocument);
+    const auto add = [&bytes](std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    if (layerBounds && !add(layerBounds->ownershipBytes))
+        return 0;
+    if (selection)
+    {
+        // StorageBytes covers retained outer/inner vector capacities. Charge the outer shared control/proxy
+        // and each constructed inner vector's allocator/Debug proxy without visiting its points or loops.
+        const auto loopCount = selection->loops.size();
+        if (loopCount > ((std::numeric_limits<std::uint64_t>::max)() - 64) / 64 ||
+            !add(selection->loops.StorageBytes()) || !add(64 + static_cast<std::uint64_t>(loopCount) * 64))
+            return 0;
+    }
+    return bytes;
 }
 
 Guid Guid::Generate() noexcept
@@ -250,10 +338,21 @@ void Raster::CacheRetirementMemory(Storage& storage) noexcept
         storage.graphNodes += value->graphNodes;
         return true;
     };
+    // Freeze the distinct allocation bound before adding children. A shared DAG can have an unavailable
+    // occurrence sum while every individual allocation still has a valid bound for a unique owning index.
+    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)))
+        return;
+    const auto ownedPixels = storage.adoptedBytes.AllocationBytes();
+    if (storage.bytes.capacity() > (std::numeric_limits<std::uint64_t>::max)() - ownedPixels)
+        return;
+    const auto residentPixels = ownedPixels + storage.bytes.capacity();
+    const auto potentialPixels = PixelBuffer::RequiredBytes(static_cast<std::size_t>(logical));
+    if (residentPixels > potentialPixels && !add(1, residentPixels - potentialPixels))
+        return;
+    storage.selfRetirementBytes = bytes;
     // Sum already cached child bounds while the producer owns this record. Even a repeatedly shared nested
     // sparse DAG then has an O(1) bound read; admission never recursively expands it or materializes pixels.
-    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)) ||
-        !child(storage.base))
+    if (!child(storage.base))
         return;
     for (const auto& tile : storage.tiles)
         if (!child(tile.pixels._storage))
@@ -348,6 +447,10 @@ Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
     const int largest = std::max(width, height);
     if (largest <= maxSide)
     {
+        // Gray thumbnails carry mask edge semantics and are read on the owner during composition/admission.
+        // A fitting sparse mask must not leave those readers an alias that can assemble shared source caches.
+        if (source.Format() == RasterFormat::Gray8 && !source.IsMaterialized())
+            return ContiguousRasterForWork(source);
         return source;
     }
     const int thumbWidth = std::max(1, (width * maxSide + largest / 2) / largest);
@@ -489,6 +592,8 @@ const std::uint8_t* Raster::Data() const noexcept
     const std::uint8_t* pixels = _storage->assembled.load(std::memory_order_acquire);
     if (pixels == nullptr)
     {
+        if (gRasterResidencyLeaseHeld)
+            return nullptr; // never build/wait recursively inside a resident sample/publication lease
         Materialize(*_storage);
         pixels = _storage->assembled.load(std::memory_order_acquire);
     }
@@ -530,8 +635,17 @@ void Raster::Materialize(const Storage& storage) noexcept
     {
         BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
     }
+    // Build privately before this brief publication gate. History samples resident charges under the same
+    // gate; an owner can try it to validate a prepared sample and swap history without racing this growth.
+    auto residency = AcquireResidencyLease();
+    if (!residency.Held())
+        return;
+    const auto epoch = ResidencyEpoch();
+    if (epoch == (std::numeric_limits<std::uint64_t>::max)())
+        return; // never wrap a resident witness and authorize an old prepared sample
     storage.bytes = std::move(bytes);
     storage.assembled.store(storage.bytes.data(), std::memory_order_release);
+    gRasterResidencyEpoch.store(epoch + 1, std::memory_order_release);
 }
 
 void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,

@@ -6,10 +6,13 @@
 #include <atomic>
 #include <barrier>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <new>
+#include <optional>
 #include <thread>
 #include <utility>
 
@@ -60,6 +63,242 @@ struct Handle final
 };
 
 using Entries = HistoryEntries<Handle>;
+
+struct OwnershipMeasure final
+{
+    std::size_t calls{};
+};
+
+struct MeasuredEntry final
+{
+    MeasuredEntry(OwnershipMeasure& measure, int value, std::optional<RecordOwnershipBounds> bounds) noexcept
+        : measure_(&measure), value_(value), bounds_(bounds)
+    {
+    }
+
+    [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept
+    {
+        ++measure_->calls;
+        return bounds_;
+    }
+
+    OwnershipMeasure* measure_{};
+    int value_{};
+    std::optional<RecordOwnershipBounds> bounds_;
+};
+
+using MeasuredHandle = std::shared_ptr<const MeasuredEntry>;
+using MeasuredEntries = HistoryEntries<MeasuredHandle>;
+static_assert(sizeof(MeasuredEntries) == 16);
+
+MeasuredHandle MakeMeasuredEntry(OwnershipMeasure& measure, int value, std::optional<RecordOwnershipBounds> bounds)
+{
+    return std::make_shared<const MeasuredEntry>(measure, value, bounds);
+}
+
+bool BoundsAre(const MeasuredEntries& entries, const RecordOwnershipBounds& expected) noexcept
+{
+    const auto actual = entries.OwnershipBounds();
+    return actual.has_value() && actual.value() == expected;
+}
+
+bool HasUnavailableBounds(const MeasuredEntries& entries) noexcept
+{
+    return !entries.OwnershipBounds().has_value();
+}
+
+std::uint64_t ExpectedRootBytes(const MeasuredEntries& entries) noexcept
+{
+    return static_cast<std::uint64_t>(sizeof(MeasuredEntries::Container) +
+                                      sizeof(std::optional<RecordOwnershipBounds>) + 64 +
+                                      entries.capacity() * sizeof(MeasuredHandle));
+}
+
+void TestOwnershipCacheEmptyCopyAndQueries()
+{
+    OwnershipMeasure measure;
+    MeasuredEntries empty;
+    const RecordOwnershipBounds zero{};
+    Expect(BoundsAre(empty, zero), "ownership-cache-default-root-is-valid-zero");
+    const MeasuredEntries emptyCopy = empty;
+    Expect(emptyCopy.Identity() == empty.Identity() && BoundsAre(emptyCopy, zero),
+           "ownership-cache-empty-copy-preserves-zero-bounds");
+
+    MeasuredEntries entries;
+    entries.push_back(MakeMeasuredEntry(measure, 7, RecordOwnershipBounds{3, 5, 2}));
+    const std::size_t callsAfterPublish = measure.calls;
+    const void* const identityBeforeQueries = entries.Identity();
+    const auto cached = entries.OwnershipBounds();
+    const MeasuredEntries copy = entries;
+    const auto copied = copy.OwnershipBounds();
+    bool repeatedReadsMatch = cached.has_value() && copied == cached;
+    for (int query = 0; query < 2048; ++query)
+    {
+        const auto queried = entries.OwnershipBounds();
+        repeatedReadsMatch = repeatedReadsMatch && queried == cached;
+    }
+    Expect(repeatedReadsMatch && measure.calls == callsAfterPublish && entries.Identity() == identityBeforeQueries,
+           "ownership-cache-thousands-of-queries-and-copy-do-not-remeasure");
+    Expect(cached.has_value() && cached->metadataBytes >= 3 && cached->ownershipBytes >= 5 &&
+               cached->ownershipBytes - cached->metadataBytes == 2 && cached->rasterNodes == 2,
+           "ownership-cache-includes-root-and-preserves-child-components");
+    Expect(cached.has_value() && cached->metadataBytes == ExpectedRootBytes(entries) + 3 &&
+               cached->ownershipBytes == ExpectedRootBytes(entries) + 5,
+           "ownership-cache-counts-root-header-capacity-and-control-allowance");
+}
+
+void TestOwnershipCacheMutationAndRootSnapshots()
+{
+    OwnershipMeasure measure;
+    MeasuredEntries entries;
+    entries.push_back(MakeMeasuredEntry(measure, 11, RecordOwnershipBounds{2, 4, 1}));
+    const MeasuredEntries oldRoot = entries;
+    const auto oldBounds = oldRoot.OwnershipBounds();
+    const std::size_t callsBeforeMutation = measure.calls;
+    entries.push_back(MakeMeasuredEntry(measure, 22, RecordOwnershipBounds{5, 9, 3}));
+    const auto newBounds = entries.OwnershipBounds();
+    Expect(oldBounds.has_value() && newBounds.has_value() && oldBounds != newBounds &&
+               oldRoot.Identity() != entries.Identity() && oldRoot.size() == 1 && entries.size() == 2,
+           "ownership-cache-mutation-publishes-new-root-and-keeps-old-snapshot");
+    Expect(measure.calls == callsBeforeMutation + 2 && oldBounds.has_value() && newBounds.has_value() &&
+               newBounds->metadataBytes > oldBounds->metadataBytes + 5 &&
+               newBounds->ownershipBytes > oldBounds->ownershipBytes + 9 &&
+               newBounds->rasterNodes == oldBounds->rasterNodes + 3,
+           "ownership-cache-mutation-measures-complete-private-vector");
+
+    const std::size_t callsBeforeMove = measure.calls;
+    MeasuredEntries moved(std::move(entries));
+    Expect(entries.empty() && BoundsAre(entries, RecordOwnershipBounds{}) && moved.size() == 2 &&
+               moved.OwnershipBounds() == newBounds && measure.calls == callsBeforeMove,
+           "ownership-cache-move-transfers-cache-without-measurement");
+
+    MeasuredEntries other;
+    other.push_back(MakeMeasuredEntry(measure, 33, RecordOwnershipBounds{1, 3, 4}));
+    const auto otherBounds = other.OwnershipBounds();
+    const std::size_t callsBeforeSwap = measure.calls;
+    moved.swap(other);
+    Expect(moved.OwnershipBounds() == otherBounds && other.OwnershipBounds() == newBounds &&
+               measure.calls == callsBeforeSwap,
+           "ownership-cache-swap-transfers-matching-caches");
+
+    MeasuredEntries assigned;
+    assigned = std::move(other);
+    Expect(other.empty() && BoundsAre(other, RecordOwnershipBounds{}) && assigned.OwnershipBounds() == newBounds &&
+               measure.calls == callsBeforeSwap,
+           "ownership-cache-move-assignment-transfers-cache");
+    assigned.clear();
+    Expect(assigned.empty() && BoundsAre(assigned, RecordOwnershipBounds{}) && oldRoot.OwnershipBounds() == oldBounds,
+           "ownership-cache-clear-restores-zero-with-snapshot-intact");
+}
+
+void TestOwnershipCachePopAndEraseRestoreCompleteBounds()
+{
+    OwnershipMeasure measure;
+    MeasuredEntries entries;
+    entries.push_back(MakeMeasuredEntry(measure, 1, RecordOwnershipBounds{2, 4, 1}));
+    const auto oneEntryBounds = entries.OwnershipBounds();
+    entries.push_back(MakeMeasuredEntry(measure, 2, RecordOwnershipBounds{3, 7, 2}));
+    entries.push_back(MakeMeasuredEntry(measure, 3, RecordOwnershipBounds{5, 8, 4}));
+    entries.pop_back();
+    const auto afterPop = entries.OwnershipBounds();
+    Expect(oneEntryBounds.has_value() && entries.size() == 2 && entries.back()->value_ == 2 && afterPop.has_value() &&
+               afterPop->metadataBytes > oneEntryBounds->metadataBytes + 3 &&
+               afterPop->ownershipBytes > oneEntryBounds->ownershipBytes + 7 &&
+               afterPop->rasterNodes == oneEntryBounds->rasterNodes + 2,
+           "ownership-cache-pop-remeasures-retained-complete-vector");
+
+    entries.erase(entries.begin(), entries.begin() + 1);
+    const auto afterErase = entries.OwnershipBounds();
+    Expect(entries.size() == 1 && entries.back()->value_ == 2 && afterErase.has_value() && afterPop.has_value() &&
+               afterErase->metadataBytes == ExpectedRootBytes(entries) + 3 &&
+               afterErase->ownershipBytes == ExpectedRootBytes(entries) + 7 && afterErase->rasterNodes == 2,
+           "ownership-cache-erase-rebuilds-bounds-for-surviving-entry");
+}
+
+void TestOwnershipCacheRefusesInvalidChildrenAndOverflow()
+{
+    OwnershipMeasure measure;
+    const int kValue = 44;
+    const auto assertRefusalPreservesContents = [&](MeasuredHandle entry, const char* name)
+    {
+        MeasuredEntries entries;
+        entries.push_back(std::move(entry));
+        Expect(HasUnavailableBounds(entries) && entries.size() == 1 && entries.back()->value_ == kValue, name);
+    };
+
+    assertRefusalPreservesContents(MakeMeasuredEntry(measure, kValue, std::nullopt),
+                                   "ownership-cache-unavailable-child-keeps-valid-entry");
+    assertRefusalPreservesContents(MakeMeasuredEntry(measure, kValue, RecordOwnershipBounds{8, 7, 1}),
+                                   "ownership-cache-inconsistent-child-keeps-valid-entry");
+    assertRefusalPreservesContents(
+        MakeMeasuredEntry(measure, kValue,
+                          RecordOwnershipBounds{(std::numeric_limits<std::uint64_t>::max)() - 1,
+                                                (std::numeric_limits<std::uint64_t>::max)() - 1, 0}),
+        "ownership-cache-byte-overflow-keeps-valid-entry");
+    MeasuredEntries rasterOverflow;
+    rasterOverflow.push_back(
+        MakeMeasuredEntry(measure, kValue, RecordOwnershipBounds{0, 1, (std::numeric_limits<std::uint64_t>::max)()}));
+    rasterOverflow.push_back(MakeMeasuredEntry(measure, kValue + 1, RecordOwnershipBounds{0, 1, 1}));
+    Expect(HasUnavailableBounds(rasterOverflow) && rasterOverflow.size() == 2 &&
+               (*rasterOverflow.begin())->value_ == kValue && rasterOverflow.back()->value_ == kValue + 1,
+           "ownership-cache-raster-overflow-keeps-valid-entries");
+
+    MeasuredEntries nullEntry;
+    nullEntry.push_back({});
+    Expect(HasUnavailableBounds(nullEntry) && nullEntry.size() == 1 && !nullEntry.back(),
+           "ownership-cache-null-child-keeps-null-entry");
+    HistoryEntries<std::shared_ptr<const int>> noPolicy;
+    noPolicy.push_back(std::make_shared<const int>(9));
+    Expect(!noPolicy.OwnershipBounds() && noPolicy.size() == 1 && *noPolicy.back() == 9,
+           "ownership-cache-unmeasurable-handle-keeps-valid-entry");
+}
+
+void TestStackStorageMetadataExcludesChildrenAndPreservesRoots()
+{
+    OwnershipMeasure measure;
+    MeasuredEntries entries;
+    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}),
+           "storage-only-default-handle-owns-zero-bytes");
+    constexpr std::uint64_t kLargeChild = 1024 * 1024;
+    entries.push_back(MakeMeasuredEntry(measure, 3, RecordOwnershipBounds{0, kLargeChild, 1}));
+    const auto stackBytes = entries.StorageMetadataBytes();
+    const auto calls = measure.calls;
+    Expect(stackBytes && *stackBytes == ExpectedRootBytes(entries) && *stackBytes < 4096 &&
+               entries.OwnershipBounds()->ownershipBytes >= kLargeChild,
+           "storage-only-header-capacity-excludes-one-mib-child");
+    const auto captured = entries;
+    bool stable = true;
+    for (unsigned int query = 0; query < 1024; ++query)
+        stable =
+            stable && entries.StorageMetadataBytes() == stackBytes && captured.StorageMetadataBytes() == stackBytes;
+    Expect(stable && measure.calls == calls && captured.Identity() == entries.Identity(),
+           "storage-only-queries-never-measure-children-or-clone-root");
+    entries.push_back(MakeMeasuredEntry(measure, 4, RecordOwnershipBounds{0, 8 * kLargeChild, 1}));
+    Expect(entries.StorageMetadataBytes() && *entries.StorageMetadataBytes() < 4096 &&
+               captured.StorageMetadataBytes() == stackBytes && captured.size() == 1 && captured.back()->value_ == 3,
+           "storage-only-old-root-survives-new-eight-mib-child");
+    MeasuredEntries moved = std::move(entries);
+    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}) && moved.StorageMetadataBytes() &&
+               moved.size() == 2 && moved.back()->value_ == 4,
+           "storage-only-move-transfers-capacity-and-clears-source");
+    moved.clear();
+    Expect(moved.StorageMetadataBytes() == std::optional(std::uint64_t{}) &&
+               captured.StorageMetadataBytes() == stackBytes,
+           "storage-only-clear-preserves-captured-allocation");
+    MeasuredEntries unavailable;
+    unavailable.push_back(MakeMeasuredEntry(measure, 5, std::nullopt));
+    const auto unavailableCalls = measure.calls;
+    Expect(!unavailable.OwnershipBounds() && unavailable.StorageMetadataBytes() &&
+               *unavailable.StorageMetadataBytes() == ExpectedRootBytes(unavailable) &&
+               measure.calls == unavailableCalls,
+           "storage-only-unavailable-child-does-not-hide-own-allocation");
+    HistoryEntries<std::shared_ptr<const int>> unsupported;
+    unsupported.push_back(std::make_shared<const int>(7));
+    Expect(!unsupported.OwnershipBounds() && unsupported.StorageMetadataBytes() &&
+               *unsupported.StorageMetadataBytes() >= unsupported.capacity() * sizeof(std::shared_ptr<const int>) &&
+               *unsupported.StorageMetadataBytes() < 4096 && *unsupported.back() == 7,
+           "storage-only-unmeasurable-handle-keeps-valid-self-bound");
+}
 
 bool ValuesAre(const Entries& entries, const int* expected, std::size_t count) noexcept
 {
@@ -437,6 +676,11 @@ void TestEraseCopyRefusalPreservesRootsAndOwnership()
 int RunHistoryEntriesTests()
 {
     gFailures = 0;
+    TestOwnershipCacheEmptyCopyAndQueries();
+    TestOwnershipCacheMutationAndRootSnapshots();
+    TestOwnershipCachePopAndEraseRestoreCompleteBounds();
+    TestOwnershipCacheRefusesInvalidChildrenAndOverflow();
+    TestStackStorageMetadataExcludesChildrenAndPreservesRoots();
     TestEmptySharingAndReads();
     TestPopEraseAndNoOpErase();
     TestClearSwapAndMoves();

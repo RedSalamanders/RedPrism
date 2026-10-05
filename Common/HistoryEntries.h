@@ -1,7 +1,12 @@
 #pragma once
 
+#include "RecordRoot.h"
+
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -47,6 +52,24 @@ template <typename Handle> class HistoryEntries final
         return _root.get();
     }
 
+    // Construction-cached complete entry ownership. The default root owns nothing; unavailable child bounds
+    // propagate as nullopt. Readers never measure entries or expand their document/raster owners.
+    [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept
+    {
+        return _root ? _root->bounds : std::optional(RecordOwnershipBounds{});
+    }
+    // This immutable stack allocation only, from its sealed capacity in constant time. A complete unique
+    // index charges the separately owned entries/snapshots instead of summing their occurrence bounds here.
+    [[nodiscard]] std::optional<std::uint64_t> StorageMetadataBytes() const noexcept
+    {
+        if (!_root)
+            return std::uint64_t{};
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (_root->values.capacity() > (maximum - sizeof(Storage) - 64) / sizeof(Handle))
+            return std::nullopt;
+        return sizeof(Storage) + 64 + _root->values.capacity() * sizeof(Handle);
+    }
+
     void clear() noexcept
     {
         _root.reset();
@@ -58,14 +81,14 @@ template <typename Handle> class HistoryEntries final
     void push_back(Handle value)
     {
         auto next = Clone();
-        next->push_back(std::move(value));
-        _root = std::move(next);
+        next->values.push_back(std::move(value));
+        Publish(std::move(next));
     }
     void pop_back()
     {
         auto next = Clone();
-        next->pop_back();
-        _root = std::move(next);
+        next->values.pop_back();
+        Publish(std::move(next));
     }
     void erase(const_iterator first, const_iterator last)
     {
@@ -74,21 +97,65 @@ template <typename Handle> class HistoryEntries final
         const auto offset = first - begin();
         const auto count = last - first;
         auto next = Clone();
-        next->erase(next->begin() + offset, next->begin() + offset + count);
-        _root = std::move(next);
+        next->values.erase(next->values.begin() + offset, next->values.begin() + offset + count);
+        Publish(std::move(next));
     }
 
   private:
+    struct Storage final
+    {
+        explicit Storage(const Container& source) : values(source) {}
+        Container values;
+        std::optional<RecordOwnershipBounds> bounds;
+    };
     [[nodiscard]] const Container& Read() const noexcept
     {
         static const Container empty;
-        return _root ? *_root : empty;
+        return _root ? _root->values : empty;
     }
-    [[nodiscard]] std::shared_ptr<Container> Clone() const
+    [[nodiscard]] std::shared_ptr<Storage> Clone() const
     {
         // A relaxed shared_ptr use_count is not a synchronization proof that another reader has finished.
         // Never write a formerly shared root in place; publication exposes only the completed private clone.
-        return std::make_shared<Container>(Read());
+        return std::make_shared<Storage>(Read());
     }
-    std::shared_ptr<const Container> _root;
+    void Publish(std::shared_ptr<Storage> next) noexcept
+    {
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (next->values.capacity() <= (maximum - sizeof(Storage) - 64) / sizeof(Handle))
+        {
+            const auto rootBytes = sizeof(Storage) + 64 + next->values.capacity() * sizeof(Handle);
+            RecordOwnershipBounds total{rootBytes, rootBytes, 0};
+            bool measurable = true;
+            if constexpr (requires(const Handle& entry) { entry->OwnershipBounds(); })
+            {
+                const auto add = [](std::uint64_t& bytes, std::uint64_t amount) noexcept
+                {
+                    if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+                        return false;
+                    bytes += amount;
+                    return true;
+                };
+                for (const auto& entry : next->values)
+                {
+                    static_assert(noexcept(entry->OwnershipBounds()));
+                    const auto child = entry ? entry->OwnershipBounds() : std::nullopt;
+                    if (!child || child->ownershipBytes < child->metadataBytes ||
+                        !add(total.metadataBytes, child->metadataBytes) ||
+                        !add(total.ownershipBytes, child->ownershipBytes) ||
+                        !add(total.rasterNodes, child->rasterNodes))
+                    {
+                        measurable = false;
+                        break;
+                    }
+                }
+            }
+            else
+                measurable = next->values.empty();
+            if (measurable)
+                next->bounds = total;
+        }
+        _root = std::move(next);
+    }
+    std::shared_ptr<const Storage> _root;
 };

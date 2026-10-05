@@ -36,7 +36,8 @@ enum class Expected
     ImportedLayers,
     ImportedLayersRefused,
     GradientPreview,
-    GradientApplied
+    GradientApplied,
+    SampledPrefix
 };
 
 struct Operation final
@@ -50,7 +51,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 26> kOperations{{
+constexpr std::array<Operation, 27> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -77,7 +78,9 @@ constexpr std::array<Operation, 26> kOperations{{
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
     {"gradient-preview-coalesced", 0, 0, {}, 0, Expected::GradientPreview},
     {"gradient-apply-ordered", 0, 0, {}, 0, Expected::GradientApplied},
+    {"sampler-accepted-prefix", 0, 0, {}, 0, Expected::SampledPrefix},
 }};
+static_assert(kOperations.back().expected == Expected::SampledPrefix);
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
 {
@@ -218,12 +221,17 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
     try
     {
         auto next = std::make_unique<UiBenchmarkState>();
-        const bool smoke = mode == L"ui-smoke";
-        const bool ceiling = mode == L"ui100";
-        const int width = smoke ? 64 : ceiling ? 10000 : mode == L"ui45" ? 8192 : 3840;
-        const int height = smoke ? 48 : ceiling ? 10000 : mode == L"ui45" ? 5464 : 2160;
+        const bool samplerOnly = mode == L"ui-sampler" || mode == L"ui-sampler45" ||
+                                 mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
+        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke";
+        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100";
+        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45";
+        const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
+        const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
+        next->samplerOnly = samplerOnly;
+        next->operation = samplerOnly ? kOperations.size() - 1 : 0;
         const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
         auto& temporary = *temporaryStorage;
         const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
@@ -398,6 +406,31 @@ void Report(const UiBenchmarkState& state)
                     .c_str());
     std::fflush(stdout);
 }
+
+void ReportSamplerBoundary(const UiBenchmarkState& state, const char* boundary)
+{
+    // Report the initial display preparation and excluded first sampler trial separately. The recorded
+    // distribution must not hide their owner-thread cost, and neither row is an isolated GPU upload timer.
+    const auto& timing = state.timing;
+    const auto& dispatch = timing.durations[static_cast<std::size_t>(UiTimingKind::MessageDispatch)];
+    const auto& message = timing.durations[static_cast<std::size_t>(UiTimingKind::WindowMessage)];
+    const auto& drain = timing.durations[static_cast<std::size_t>(UiTimingKind::CompletionDrain)];
+    const auto& apply = timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)];
+    const auto& action = timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)];
+    const auto& frame = timing.durations[static_cast<std::size_t>(UiTimingKind::Frame)];
+    std::printf("%s\n", std::format("UI BENCH BOUNDARY name=sampler-accepted-prefix boundary={} width={} height={} "
+                                  "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                                  "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionMaxUs={} "
+                                  "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={}",
+                                  boundary, state.fixture.width, state.fixture.height,
+                                  dispatch.PercentileUpperBound(99), dispatch.MaximumMicroseconds(),
+                                  message.PercentileUpperBound(99), message.MaximumMicroseconds(),
+                                  drain.PercentileUpperBound(99), drain.MaximumMicroseconds(),
+                                  apply.MaximumMicroseconds(), action.MaximumMicroseconds(),
+                                  frame.PercentileUpperBound(99), frame.MaximumMicroseconds(),
+                                  frame.SampleCount(), timing.clockFailures).c_str());
+    std::fflush(stdout);
+}
 } // namespace
 
 UiBenchmarkState::~UiBenchmarkState()
@@ -479,7 +512,7 @@ HRESULT Application::InitializeUiBenchmark() noexcept
         std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n", FormatBenchmarkMachineInfo(machine).c_str(),
                     _renderer.IsWarp() ? "WARP" : "hardware", static_cast<unsigned long long>(state.fixtureChecksum));
         // A single failure deadline for an opt-in harness, never a normal application polling timer.
-        if (SetTimer(_window.get(), kUiBenchmarkTimerId, _bench == L"ui-smoke" ? 90000 : 1800000, nullptr) == 0)
+        if (SetTimer(_window.get(), kUiBenchmarkTimerId, state.smoke ? 90000 : 1800000, nullptr) == 0)
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -555,6 +588,11 @@ void Application::PrepareUiBenchmarkStep() noexcept
         state.exportReceipt.reset();
     if (operation.expected == Expected::GradientApplied)
         state.gradientApplyReceipt.reset();
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        state.samplerReceipt.reset();
+        OnTool(EditorTool::Eyedropper);
+    }
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
@@ -631,7 +669,34 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.expected == Expected::GradientPreview)
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        // Exact document coordinates avoid fit-zoom integer client rounding. These are the actual accepted
+        // Down/Move/end producers; the posted harness message, admission, readback, publication and final frame
+        // remain inside the measured outer application loop. End never samples a release coordinate.
+        DxUi::PointerEvent down{};
+        down.action = DxUi::PointerAction::Down;
+        down.modifiers = MK_LBUTTON;
+        const Vec2 first{0.5, 0.5};
+        PressCanvas(down, WM_LBUTTONDOWN, _viewport.ViewFromDocument(first, DocumentSize()), POINT{});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto* opening = sampling && sampling->opening ? FindSamplerOpening(sampling->opening.value()) : nullptr;
+        if (!opening || sampling->composite || _samplerHostTicket || _samplerHostJob)
+        {
+            FailUiBenchmark("sampler-scalar-admission");
+            return;
+        }
+        _uiBenchmark->samplerReceipt = opening->receipt;
+        SampleColorAt(_viewport.ViewFromDocument(Vec2{1.5, 0.5}, DocumentSize()));
+        SampleColorAt(_viewport.ViewFromDocument(first, DocumentSize()));
+        if (opening->points.PendingCount() != 3)
+        {
+            FailUiBenchmark("sampler-three-point-prefix");
+            return;
+        }
+        EndColorSampling();
+    }
+    else if (operation.expected == Expected::GradientPreview)
     {
         auto& state = *_uiBenchmark;
         const double startX = 1.5;
@@ -803,6 +868,15 @@ void Application::AdvanceUiBenchmark() noexcept
         state.previousPreviewSequence = edit.has_value() ? edit->previewSequence : 0;
         state.previousZoom = _viewport.zoom;
         state.previousPan = _viewport.pan;
+        if (state.samplerOnly && state.trial == 0)
+        {
+            if (state.timing.clockFailures != 0)
+            {
+                FailUiBenchmark("sampler-preparation-clock");
+                return;
+            }
+            ReportSamplerBoundary(state, "initial-display");
+        }
         state.timing = {};
         state.previousPresents = _renderer.PresentCount();
         state.requestedAt = Now();
@@ -922,9 +996,24 @@ void Application::AdvanceUiBenchmark() noexcept
         layer->asset->image != state.previousImage && _session.history.CurrentRevision() != state.previousRevision &&
         _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Gradient" &&
         GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
+    const auto samplerResult = state.samplerReceipt ? state.samplerReceipt->Read() : ContinuationReceipt::Result{};
+    const auto samplerReadback = _gpuWork.Statistics();
+    // Independent fixture oracle at (0,0): top gray 29 over bottom gray 71 with mask 128 rounds to 50.
+    // Exposure +0.25 in linear sRGB rounds that byte to 55. The ceiling fixture has only opaque top gray 29.
+    const auto expectedSample = state.fixture.width == 10000 ? 0xFF1D1D1Du : 0xFF373737u;
+    const bool sampledPrefix =
+        expected == Expected::SampledPrefix && state.samplerReceipt && samplerResult.outcome == HostOutcome::Succeeded &&
+        _session.ForegroundColor() == expectedSample && _session.DocumentSerial() == state.previousSessionSerial &&
+        _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount &&
+        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
+        layer->asset->image == state.previousImage && !edit && !std::holds_alternative<ColorSampling>(_drag) &&
+        !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
+        !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0 &&
+        samplerReadback.copies - state.previousReadback.copies == 3 && samplerReadback.busyFailures == state.previousReadback.busyFailures;
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
         !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
-          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied ||
+          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied || sampledPrefix ||
           (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
@@ -941,19 +1030,23 @@ void Application::AdvanceUiBenchmark() noexcept
                                            readback.readinessBarriers - state.previousReadback.readinessBarriers,
                                            readback.busyFailures - state.previousReadback.busyFailures}};
     }
+    else if (state.samplerOnly)
+    {
+        ReportSamplerBoundary(state, "excluded-warmup");
+    }
     if (saved)
         state.savedBaselineReady = true;
     if (++state.trial > state.runs)
     {
         Report(state);
         state.trial = 0;
-        if (++state.operation == kOperations.size())
+        if (state.samplerOnly || ++state.operation == kOperations.size())
         {
             state.phase = UiBenchmarkState::Phase::Done;
             state.complete = true;
             (void)KillTimer(_window.get(), kUiBenchmarkTimerId);
             std::printf("UI BENCH REPORT status=ok width=%d height=%d operations=%zu\n", state.fixture.width,
-                        state.fixture.height, kOperations.size());
+                        state.fixture.height, state.samplerOnly ? std::size_t{1} : kOperations.size());
             std::fflush(stdout);
             PostQuitMessage(0);
             return;

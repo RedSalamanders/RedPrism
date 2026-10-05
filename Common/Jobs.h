@@ -218,6 +218,17 @@ class JobScheduler final
     // Actual initialized pool size for diagnostics; zero before initialization or after Close. Owner thread.
     [[nodiscard]] unsigned int WorkerCount() const noexcept;
     [[nodiscard]] bool HasUiWork() const noexcept;
+    struct UiReadiness final
+    {
+        std::uint32_t completions = 0;
+        std::uint32_t actions = 0;
+        bool source = false;
+        bool resumes = false;
+        bool owner = false;
+        bool memory = false;
+    };
+    // Owner-only diagnostic snapshot. It consumes no readiness and never pumps or waits.
+    [[nodiscard]] UiReadiness UiReadinessForTest() const noexcept;
     [[nodiscard]] bool InUiCallback() const noexcept;
     [[nodiscard]] void* WakeHandle() const noexcept;
 

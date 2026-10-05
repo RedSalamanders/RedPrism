@@ -177,6 +177,58 @@ void TestRefusalsAndInstallRules()
     Expect(afterClear.destroyed.load() == 1, "fresh-post-clear-payload-inline-destroy-once");
 }
 
+void TestExplicitOwnerPolicyKeepsDeclaredBytesAndThreadIsolation()
+{
+    Payload ownerPayload;
+    ownerPayload.node.bytes = 7;
+    ownerPayload.node.destroy = DestroyPayload;
+    Expect(!TryDeferRelease(ownerPayload.node, DeferredReleasePolicy::AlwaysOnOwner),
+           "always-owner-missing-sink-retains-caller-ownership");
+    SinkScope scope;
+    Expect(scope.installed, "always-owner-installs-exact-owner-sink");
+    if (!scope.installed)
+        return;
+    Expect(!TryDeferRelease(ownerPayload.node) && scope.sink.enqueueCount == 0,
+           "always-owner-default-policy-still-refuses-small-node");
+    const bool deferred = TryDeferRelease(ownerPayload.node, DeferredReleasePolicy::AlwaysOnOwner);
+    Expect(deferred && scope.sink.record == &ownerPayload.node && scope.sink.enqueueCount == 1 &&
+               ownerPayload.node.bytes == 7 && ownerPayload.destroyed.load() == 0,
+           "always-owner-hands-off-small-node-with-original-byte-declaration");
+    if (deferred)
+    {
+        scope.sink.record->destroy(scope.sink.record);
+        scope.sink.record = nullptr;
+    }
+    Expect(ownerPayload.destroyed.load() == 1, "always-owner-consumer-destroys-small-node-once");
+    DeferredReleaseNode incomplete;
+    incomplete.bytes = 9;
+    Expect(!TryDeferRelease(incomplete, DeferredReleasePolicy::AlwaysOnOwner) && scope.sink.enqueueCount == 1,
+           "always-owner-missing-destroy-still-refuses-without-enqueue");
+    Payload workerPayload;
+    workerPayload.node.bytes = 11;
+    workerPayload.node.destroy = DestroyPayload;
+    std::atomic<bool> workerDeferred{true};
+    std::thread worker(
+        [&]() noexcept
+        {
+            workerDeferred.store(TryDeferRelease(workerPayload.node, DeferredReleasePolicy::AlwaysOnOwner));
+            if (!workerDeferred.load())
+                workerPayload.node.destroy(&workerPayload.node);
+        });
+    worker.join();
+    Expect(!workerDeferred.load() && workerPayload.destroyed.load() == 1 && scope.sink.enqueueCount == 1 &&
+               scope.sink.record == nullptr,
+           "always-owner-worker-cannot-inherit-owner-sink-and-destroys-inline");
+    Expect(ClearDeferredReleaseSink(&scope.sink), "always-owner-clears-only-after-worker-join");
+    scope.installed = false;
+    Payload afterClear;
+    afterClear.node.bytes = 13;
+    afterClear.node.destroy = DestroyPayload;
+    Expect(!TryDeferRelease(afterClear.node, DeferredReleasePolicy::AlwaysOnOwner) && afterClear.destroyed.load() == 0,
+           "always-owner-after-clear-refuses-with-caller-ownership-preserved");
+    afterClear.node.destroy(&afterClear.node);
+}
+
 void TestThreadIsolation()
 {
     SinkScope scope;
@@ -215,5 +267,6 @@ int RunDeferredReleaseTests()
     TestOwnershipAndThreshold();
     TestRefusalsAndInstallRules();
     TestThreadIsolation();
+    TestExplicitOwnerPolicyKeepsDeclaredBytesAndThreadIsolation();
     return g_failures;
 }

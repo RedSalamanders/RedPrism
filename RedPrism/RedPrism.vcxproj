@@ -279,6 +279,11 @@
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
     <ClCompile Include="ApplicationWandCompositeHostJobs.cpp" />
     <ClCompile Include="ApplicationWandCompositeHostSelfTest.cpp" />
+    <ClCompile Include="ApplicationSamplerIntentSelfTest.cpp" />
+    <ClCompile Include="ApplicationSamplerInput.cpp" />
+    <ClCompile Include="ApplicationSamplerJobs.cpp" />
+    <ClCompile Include="ApplicationSamplerHostSelfTest.cpp" />
+    <ClCompile Include="ApplicationSamplerCallerSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />

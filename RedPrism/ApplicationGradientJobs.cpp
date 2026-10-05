@@ -361,16 +361,17 @@ Application::GradientRequest Application::CaptureGradientRequest() const noexcep
 {
     const auto* pending = _session.PendingGradient();
     const auto colors = _session.GradientColors();
+    const auto& settings = pending->capturedInputs ? pending->capturedInputs->settings : _session.gradientSettings;
     return GradientRequest{pending->target,
                            pending->opening,
                            pending->sequence,
                            pending->mask,
                            pending->start,
                            pending->end,
-                           _session.gradientSettings.shape,
+                           settings.shape,
                            colors[0],
                            colors[1],
-                           _session.gradientSettings.opacity};
+                           settings.opacity};
 }
 
 void Application::CancelGradientJobs() noexcept

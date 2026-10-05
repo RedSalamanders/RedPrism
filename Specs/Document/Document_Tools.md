@@ -609,6 +609,10 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
   success renews only the caller's authority. Explicit foreground/background writes, swap and reset invalidate
   earlier authority even for equal colors or A–B–A input. Session copy/move cannot inherit it. These counters remain
   outside document generation/history. Exhaustion permanently disables checked publication instead of wrapping.
+  `ApplySampledBackgroundColor` has the same checked semantics. Separate `CapturePaletteIntentAuthority` /
+  `IsPaletteIntentCurrent` track explicit input only: successful checked samples retain that intent while renewing
+  publication authority. This permits ordered accepted sample prefixes without treating an earlier sample as a
+  manual edit. A new manual input still invalidates both old publication and manual authority.
   This authority prerequisite does not activate asynchronous sampling or qualify G1.
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.

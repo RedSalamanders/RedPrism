@@ -225,6 +225,175 @@ struct ImageLayerSample final
             total += raster->RetirementMemoryBytes();
     return total;
 }
+
+void CanvasDocumentRetirementBounds()
+{
+    CanvasDocument defaultDocument;
+    const std::uint64_t defaultBound = defaultDocument.RetirementMemoryBytes();
+    Expect(defaultBound == 64ull * 1024 + sizeof(CanvasDocument),
+           "canvas-default-empty-source-has-fixed-nonzero-bound");
+
+    const ImageLayerSample emptyLayers = SampleEmptyImageLayerRoot();
+    CanvasDocument sealedEmptyDocument;
+    sealedEmptyDocument.layers = emptyLayers.root;
+    const std::uint64_t sealedEmptyBound = sealedEmptyDocument.RetirementMemoryBytes();
+    Expect(emptyLayers.bounds.has_value() && sealedEmptyBound > defaultBound,
+           "canvas-published-empty-layer-root-has-own-nonzero-bound");
+
+    const Raster base = Raster::Make(12, 12, RasterFormat::Bgra8888);
+    std::vector<RasterTile> tiles;
+    tiles.emplace_back(RasterTile{0, 0, Raster::Make(4, 4, RasterFormat::Bgra8888)});
+    const Raster sparse = Raster::MakeSparse(24, 24, RasterFormat::Bgra8888, base, 3, 5, std::move(tiles), 0);
+    ImageLayer layer = LayerWithRaster(sparse, L"canvas image child ownership");
+    layer.asset->thumbnail = Raster::Make(3, 2, RasterFormat::Bgra8888);
+    layer.mask = LayerMask{RasterAsset{Raster::Make(7, 5, RasterFormat::Gray8),
+                                       Raster::Make(2, 2, RasterFormat::Gray8), L"mask child"},
+                           true, std::nullopt, true};
+    layer.shapeImage = Raster::Make(5, 3, RasterFormat::Bgra8888);
+    const ImageLayerSample fullLayer = Sample(std::move(layer));
+    const bool fullLayerReady = fullLayer.bounds.has_value() && fullLayer.root.size() == 1;
+    Expect(fullLayerReady, "canvas-full-raster-child-fixture-seals");
+    if (fullLayerReady)
+    {
+        CanvasDocument source;
+        source.width = 24;
+        source.height = 24;
+        source.layers = fullLayer.root;
+        const ImageLayer& stored = source.layers[0];
+        const bool allRasterFieldsReady =
+            stored.asset.has_value() && stored.mask.has_value() && stored.asset->image.HasStorage() &&
+            stored.asset->thumbnail.HasStorage() && stored.mask->asset.image.HasStorage() &&
+            stored.mask->asset.thumbnail.HasStorage() && stored.shapeImage.HasStorage();
+        Expect(allRasterFieldsReady, "canvas-child-fixture-retains-image-thumbnail-mask-and-shape-rasters");
+        if (allRasterFieldsReady)
+        {
+            const std::uint64_t childRasterBytes =
+                SumRasterBytes({&stored.asset->image, &stored.asset->thumbnail, &stored.mask->asset.image,
+                                &stored.mask->asset.thumbnail, &stored.shapeImage});
+            const std::uint64_t requiredFloor = 64ull * 1024 + sizeof(CanvasDocument) + childRasterBytes;
+            const std::uint64_t sourceBound = source.RetirementMemoryBytes();
+            Expect(sourceBound >= requiredFloor,
+                   "canvas-bound-covers-every-image-thumbnail-mask-and-shape-raster-owner");
+            Expect(stored.asset->image.IsSparse() && !stored.asset->image.IsMaterialized(),
+                   "canvas-bound-fixture-starts-as-unmaterialized-sparse-image");
+            const auto repeatedOne = source.RetirementMemoryBytes();
+            const auto repeatedTwo = source.RetirementMemoryBytes();
+            Expect(sourceBound != 0 && repeatedOne == sourceBound && repeatedTwo == sourceBound,
+                   "canvas-source-query-reuses-stable-published-ownership-cache");
+
+            const std::uint8_t* const assembled = stored.asset->image.Data();
+            Expect(assembled != nullptr && stored.asset->image.IsMaterialized(),
+                   "canvas-explicit-sparse-data-access-materializes-image");
+            Expect(source.RetirementMemoryBytes() == sourceBound,
+                   "canvas-bound-remains-stable-after-late-sparse-assembly");
+
+            CanvasDocument retained = source;
+            const std::uint64_t retainedBound = retained.RetirementMemoryBytes();
+            ImageLayerSample replacementLayer = Sample(LayerWithRaster(Raster::Make(2, 3, RasterFormat::Bgra8888),
+                                                                        L"replacement source"));
+            const bool replacementReady = replacementLayer.bounds.has_value();
+            Expect(replacementReady, "canvas-replacement-source-layer-seals");
+            if (replacementReady)
+            {
+                CanvasDocument replacement = source;
+                replacement.layers = replacementLayer.root;
+                Expect(source.RetirementMemoryBytes() == sourceBound &&
+                           retained.RetirementMemoryBytes() == retainedBound && retainedBound == sourceBound,
+                       "canvas-copy-and-replacement-preserve-original-source-bounds");
+                Expect(replacement.RetirementMemoryBytes() != sourceBound && source.layers[0].asset->image.IsSparse(),
+                       "canvas-replacement-publishes-new-bound-with-old-source-intact");
+            }
+
+            std::vector<Vec2> points;
+            points.reserve(7);
+            points.emplace_back(Vec2{1, 2});
+            points.emplace_back(Vec2{8, 2});
+            points.emplace_back(Vec2{8, 9});
+            points.emplace_back(Vec2{1, 9});
+            SelectionLoop loop = std::move(points);
+            std::vector<SelectionLoop> loops;
+            loops.reserve(3);
+            loops.emplace_back(std::move(loop));
+            DocumentSelection selection{false, SelectionLoops(std::move(loops))};
+            const auto selectionIdentity = selection.loops.Identity();
+            const auto selectionStorage = selection.loops.StorageBytes();
+            CanvasDocument selected = source;
+            selected.selection = selection;
+            const auto selectedBefore = selected.selection.value();
+            const std::uint64_t selectedBound = selected.RetirementMemoryBytes();
+            Expect(selectedBound >= sourceBound + selectionStorage + 128,
+                   "canvas-selection-bound-includes-retained-capacity-and-two-control-allowances");
+            Expect(selected.selection.value() == selectedBefore &&
+                       selected.selection->loops.Identity() == selectionIdentity &&
+                       selected.selection->loops.StorageBytes() == selectionStorage &&
+                       !selected.selection->loops.empty(),
+                   "canvas-selection-query-does-not-mutate-shared-outline-or-capacity");
+
+            const std::uint64_t sourceBeforeHistory = source.RetirementMemoryBytes();
+            DocumentSession unrelatedHistory;
+            unrelatedHistory.CreateDocument(2, 2, true);
+            unrelatedHistory.AddBlankLayer();
+            unrelatedHistory.AddBlankLayer();
+            const auto unrelatedHistoryBytes = unrelatedHistory.history.RetirementMemoryBytes(unrelatedHistory.Document());
+            Expect(unrelatedHistory.history.CanUndo() && unrelatedHistoryBytes > sourceBeforeHistory &&
+                       source.RetirementMemoryBytes() == sourceBeforeHistory,
+                   "canvas-source-bound-does-not-include-unrelated-session-history");
+        }
+    }
+
+    {
+        Raster deep = Raster::Make(1, 1, RasterFormat::Bgra8888);
+        for (int depth = 0; depth < 130; ++depth)
+            deep = Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, Raster{}, 0, 0,
+                                     {RasterTile{0, 0, deep}}, 0);
+        const bool childStoredButUnmeasurable = deep.HasStorage() && deep.RetirementMemoryBytes() == 0;
+        Expect(childStoredButUnmeasurable, "canvas-deep-sparse-child-is-stored-with-unavailable-bound");
+        if (childStoredButUnmeasurable)
+        {
+            ImageLayerSample unavailableLayer = Sample(LayerWithRaster(deep, L"unmeasurable child"));
+            CanvasDocument unavailableDocument;
+            unavailableDocument.layers = unavailableLayer.root;
+            Expect(unavailableLayer.root.size() == 1 && !unavailableLayer.bounds.has_value() &&
+                       unavailableDocument.RetirementMemoryBytes() == 0,
+                   "canvas-published-root-with-unmeasurable-child-is-refused");
+        }
+    }
+
+    {
+        constexpr std::size_t recordCount = 10'000;
+        RecordRoot<ImageLayer>::Builder builder(recordCount);
+        bool appended = true;
+        for (std::size_t index = 0; index < recordCount; ++index)
+        {
+            ImageLayer record;
+            record.id.bytes[0] = static_cast<std::uint8_t>(index & 0xFFu);
+            record.id.bytes[1] = static_cast<std::uint8_t>((index >> 8) & 0xFFu);
+            if (!builder.Append(std::move(record)))
+            {
+                appended = false;
+                break;
+            }
+        }
+        std::optional<RecordRoot<ImageLayer>> largeRoot;
+        if (appended)
+            largeRoot = builder.Seal();
+        Expect(largeRoot.has_value(), "canvas-ten-thousand-record-root-seals");
+        if (largeRoot.has_value())
+        {
+            CanvasDocument large;
+            large.layers = largeRoot.value();
+            const std::uint64_t cachedBound = large.RetirementMemoryBytes();
+            bool stable = cachedBound != 0;
+            for (int query = 0; query < 16; ++query)
+                stable = stable && large.RetirementMemoryBytes() == cachedBound;
+            Expect(stable, "canvas-large-root-repeated-queries-return-cached-source-bound");
+            Expect(large.layers.size() == recordCount && large.layers[0].id.bytes[0] == 0 &&
+                       large.layers[recordCount - 1].id.bytes[0] == 0x0F &&
+                       large.layers[recordCount - 1].id.bytes[1] == 0x27,
+                   "canvas-large-root-queries-preserve-all-ten-thousand-records");
+        }
+    }
+}
 } // namespace
 
 int RunRecordOwnershipBoundsTests()
@@ -671,6 +840,7 @@ int RunRecordOwnershipBoundsTests()
         }
     }
 
+    CanvasDocumentRetirementBounds();
     std::printf("SUMMARY record-bounds checks=%d failures=%d\n", gChecks, gFailures);
     return gFailures;
 }

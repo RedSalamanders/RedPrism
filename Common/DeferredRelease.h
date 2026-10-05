@@ -55,10 +55,20 @@ inline thread_local Sink sink;
     return true;
 }
 
-[[nodiscard]] inline bool TryDeferRelease(DeferredReleaseNode& node) noexcept
+enum class DeferredReleasePolicy : std::uint8_t
+{
+    SizeThreshold,
+    AlwaysOnOwner,
+};
+
+// Complete metadata graphs can have expensive destruction below the pixel-size threshold. Their producers
+// choose AlwaysOnOwner while still declaring their actual conservative ownership bound in node.bytes.
+[[nodiscard]] inline bool TryDeferRelease(DeferredReleaseNode& node,
+                                          DeferredReleasePolicy policy = DeferredReleasePolicy::SizeThreshold) noexcept
 {
     const auto sink = DeferredReleaseDetail::sink;
-    if (!sink.enqueue || !node.destroy || node.bytes < kDeferredReleaseThreshold)
+    if (!sink.enqueue || !node.destroy ||
+        (policy == DeferredReleasePolicy::SizeThreshold && node.bytes < kDeferredReleaseThreshold))
     {
         return false;
     }

@@ -339,6 +339,123 @@ void ThumbnailRasterForWorkCases()
            "thumbnail.precancel-and-invalid-max-side-publish-nothing");
 }
 
+void FittingSparseMaskThumbnailCases()
+{
+    std::vector<std::uint8_t> largeLeafBytes(128U * 128U, 61);
+    largeLeafBytes[126U * 128U + 126U] = 201;
+    largeLeafBytes[126U * 128U + 127U] = 202;
+    largeLeafBytes[127U * 128U + 126U] = 203;
+    largeLeafBytes[127U * 128U + 127U] = 204;
+    const Raster largeLeaf = Gray(128, 128, largeLeafBytes);
+    if (!largeLeaf.HasStorage())
+    {
+        Expect(false, "thumbnail-reference.nested-mask-fixtures-created");
+        return;
+    }
+    const Raster nested = Raster::MakeSparse(128, 128, RasterFormat::Gray8, Raster{}, 0, 0,
+                                             {RasterTile{0, 0, largeLeaf}}, 61);
+    const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Gray8, Raster{}, 0, 0,
+                                             {RasterTile{0, 0, nested, 126, 126, 2, 2}}, 9);
+    if (!nested.HasStorage() || !sparse.HasStorage())
+    {
+        Expect(false, "thumbnail-reference.nested-mask-fixtures-created");
+        return;
+    }
+
+    const std::size_t sourceBytesBefore = sparse.ByteSize();
+    const std::size_t nestedBytesBefore = nested.ByteSize();
+    const std::size_t leafBytesBefore = largeLeaf.ByteSize();
+    const Raster thumbnail = Raster::MakeThumbnail(sparse, 2);
+    constexpr std::array<std::uint8_t, 4> expected{201, 202, 203, 204};
+    const bool privatePixels = thumbnail.HasStorage() && thumbnail.Width() == 2 && thumbnail.Height() == 2 &&
+                               thumbnail.Format() == RasterFormat::Gray8 && thumbnail.IsMaterialized() &&
+                               thumbnail.Identity() != sparse.Identity() && thumbnail.ByteSize() == expected.size() &&
+                               std::equal(expected.begin(), expected.end(), thumbnail.Data());
+    Expect(privatePixels && sparse.ByteSize() == sourceBytesBefore && nested.ByteSize() == nestedBytesBefore &&
+               largeLeaf.ByteSize() == leafBytesBefore && !sparse.IsMaterialized() && !nested.IsMaterialized() &&
+               largeLeaf.IsMaterialized(),
+           "thumbnail-reference.fitting-nested-sparse-gray-copies-only-private-thumbnail");
+
+    constexpr std::array<std::uint8_t, 4> denseGrayBytes{7, 8, 9, 10};
+    constexpr std::array<std::uint8_t, 16> denseBgraBytes{1,  2,  3,  4,  5,  6,  7,  8,
+                                                          9,  10, 11, 12, 13, 14, 15, 16};
+    const Raster denseGray = Gray(2, 2, denseGrayBytes);
+    const Raster denseBgra = Bgra(2, 2, denseBgraBytes);
+    const Raster grayAlias = Raster::MakeThumbnail(denseGray, 2);
+    const Raster bgraAlias = Raster::MakeThumbnail(denseBgra, 2);
+    Expect(denseGray.HasStorage() && denseBgra.HasStorage() && grayAlias == denseGray && bgraAlias == denseBgra,
+           "thumbnail-reference.fitting-dense-gray-and-bgra-preserve-alias");
+
+    constexpr std::array<std::uint8_t, 4> belowThresholdBytes{127, 127, 127, 127};
+    constexpr std::array<std::uint8_t, 4> exactThresholdBytes{127, 128, 128, 127};
+    const Raster belowThreshold = Gray(2, 2, belowThresholdBytes);
+    const Raster exactThreshold = Gray(2, 2, exactThresholdBytes);
+    Expect(belowThreshold.HasStorage() && exactThreshold.HasStorage() &&
+               MaskEdgeBackground(belowThreshold) == 0.0 && MaskEdgeBackground(exactThreshold) == 1.0,
+           "thumbnail-reference.mask-edge-127-128-threshold-remains-exact");
+}
+
+void FittingSparseMaskWorkerThumbnailCases()
+{
+    std::vector<std::uint8_t> largeLeafBytes(128U * 128U, 61);
+    largeLeafBytes[126U * 128U + 126U] = 201;
+    largeLeafBytes[126U * 128U + 127U] = 202;
+    largeLeafBytes[127U * 128U + 126U] = 203;
+    largeLeafBytes[127U * 128U + 127U] = 204;
+    const Raster largeLeaf = Gray(128, 128, largeLeafBytes);
+    if (!largeLeaf.HasStorage())
+    {
+        Expect(false, "thumbnail-worker.nested-mask-fixtures-created");
+        return;
+    }
+    const Raster nested = Raster::MakeSparse(128, 128, RasterFormat::Gray8, Raster{}, 0, 0,
+                                             {RasterTile{0, 0, largeLeaf}}, 61);
+    const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Gray8, Raster{}, 0, 0,
+                                             {RasterTile{0, 0, nested, 126, 126, 2, 2}}, 9);
+    if (!nested.HasStorage() || !sparse.HasStorage())
+    {
+        Expect(false, "thumbnail-worker.nested-mask-fixtures-created");
+        return;
+    }
+
+    const std::size_t sourceBytesBefore = sparse.ByteSize();
+    const std::size_t nestedBytesBefore = nested.ByteSize();
+    const std::size_t leafBytesBefore = largeLeaf.ByteSize();
+    const Raster thumbnail = ThumbnailRasterForWork(sparse, 2);
+    constexpr std::array<std::uint8_t, 4> expected{201, 202, 203, 204};
+    const bool privatePixels = thumbnail.HasStorage() && thumbnail.Width() == 2 && thumbnail.Height() == 2 &&
+                               thumbnail.Format() == RasterFormat::Gray8 && thumbnail.IsMaterialized() &&
+                               thumbnail.Identity() != sparse.Identity() && thumbnail.ByteSize() == expected.size() &&
+                               std::equal(expected.begin(), expected.end(), thumbnail.Data());
+    Expect(privatePixels && sparse.ByteSize() == sourceBytesBefore && nested.ByteSize() == nestedBytesBefore &&
+               largeLeaf.ByteSize() == leafBytesBefore && !sparse.IsMaterialized() && !nested.IsMaterialized() &&
+               largeLeaf.IsMaterialized(),
+           "thumbnail-worker.fitting-nested-sparse-gray-copies-only-private-thumbnail");
+
+    constexpr std::array<std::uint8_t, 4> denseGrayBytes{7, 8, 9, 10};
+    constexpr std::array<std::uint8_t, 16> denseBgraBytes{1,  2,  3,  4,  5,  6,  7,  8,
+                                                          9,  10, 11, 12, 13, 14, 15, 16};
+    const Raster denseGray = Gray(2, 2, denseGrayBytes);
+    const Raster denseBgra = Bgra(2, 2, denseBgraBytes);
+    const Raster grayAlias = ThumbnailRasterForWork(denseGray, 2);
+    const Raster bgraAlias = ThumbnailRasterForWork(denseBgra, 2);
+    Expect(denseGray.HasStorage() && denseBgra.HasStorage() && grayAlias == denseGray && bgraAlias == denseBgra,
+           "thumbnail-worker.fitting-dense-gray-and-bgra-preserve-alias");
+
+    CancelSource localCancellation;
+    (void)localCancellation.Cancel();
+    std::stop_source shutdown;
+    (void)shutdown.request_stop();
+    const CancelToken shutdownCancellation{std::stop_token{}, shutdown.get_token()};
+    const Raster locallyCancelled = ThumbnailRasterForWork(sparse, 2, localCancellation.Token());
+    const Raster shutdownCancelled = ThumbnailRasterForWork(sparse, 2, shutdownCancellation);
+    Expect(!locallyCancelled.HasStorage() && !shutdownCancelled.HasStorage() &&
+               sparse.ByteSize() == sourceBytesBefore && nested.ByteSize() == nestedBytesBefore &&
+               largeLeaf.ByteSize() == leafBytesBefore && !sparse.IsMaterialized() && !nested.IsMaterialized() &&
+               largeLeaf.IsMaterialized(),
+           "thumbnail-worker.local-and-shutdown-cancel-publish-nothing-or-grow-source");
+}
+
 void CarriedLargeSparseMaskUsesSampledRows()
 {
     constexpr std::array<std::uint8_t, 1> sample{99};
@@ -378,6 +495,8 @@ int RunRasterWorkTests()
     CopyAndCropOutputs();
     StretchedRasterForWorkCases();
     ThumbnailRasterForWorkCases();
+    FittingSparseMaskThumbnailCases();
+    FittingSparseMaskWorkerThumbnailCases();
     CarriedLargeSparseMaskUsesSampledRows();
     return gFailures;
 }

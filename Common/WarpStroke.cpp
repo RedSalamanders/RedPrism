@@ -1,4 +1,5 @@
 #include "WarpStroke.h"
+#include "RasterWork.h"
 
 #include <algorithm>
 #include <cmath>
@@ -20,12 +21,12 @@ template <typename T> [[nodiscard]] bool AddRetirementCapacity(std::uint64_t& to
 }
 } // namespace
 
-WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings)
+WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings, CancelToken cancellation)
     : _mode(mode), _diameter(std::max(2.0, settings.diameter)), _hardness(std::clamp(settings.hardness, 0.0, 0.98)),
       _strength(std::clamp(settings.opacity, 0.01, 1.0))
 {
-    const std::uint8_t* data = image.HasStorage() && image.Format() == RasterFormat::Bgra8888 ? image.Data() : nullptr;
-    if (data == nullptr || !std::isfinite(_diameter))
+    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !std::isfinite(_diameter) ||
+        cancellation.IsCancelled())
     {
         return;
     }
@@ -36,12 +37,9 @@ WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings&
     try
     {
         _pixels.resize(static_cast<std::size_t>(_width) * static_cast<std::size_t>(_height) * 4u);
-        for (int y = 0; y < _height; ++y)
-        {
-            std::memcpy(_pixels.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(_width) * 4u,
-                        data + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride()),
-                        static_cast<std::size_t>(_width) * 4u);
-        }
+        if (!ReadRasterRegionForWork(image, {0, 0, _width, _height}, _pixels, static_cast<std::size_t>(_width) * 4u, 0,
+                                     cancellation))
+            return;
         _dirty.assign(static_cast<std::size_t>(_columns) * static_cast<std::size_t>(rows), 0);
     }
     catch (const std::bad_alloc&)
@@ -49,7 +47,7 @@ WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings&
         _pixels.clear();
         return;
     }
-    _valid = true;
+    _valid = !cancellation.IsCancelled();
 }
 
 std::uint64_t WarpStroke::RetirementMemoryBytes() const noexcept

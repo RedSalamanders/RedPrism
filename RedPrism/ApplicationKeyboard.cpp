@@ -400,6 +400,13 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     // Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && _chrome->EscapeFloatingCard())
     {
+        SealSamplerForBoundary();
+        return true;
+    }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
+        (_samplerHostTicket || (std::get_if<ColorSampling>(&_drag) && std::get<ColorSampling>(_drag).opening)))
+    {
+        CancelHostContinuations(); // Retain published color; acknowledge cancellation of the remaining prefix.
         return true;
     }
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CancelCanvasBrush())

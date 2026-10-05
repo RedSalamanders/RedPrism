@@ -1,5 +1,9 @@
 # P1.3 — asynchronous canvas color sampler
 
+**Execution paused by the user on 2026-10-05.** This private tree and its older checklist are a saved WIP,
+not the current integration record. Read the [private checkpoint](../../TestRuns/P1PrivateCandidatePause_2026-10-05.md)
+before any further edits or validation.
+
 ## Delivery checklist
 
 - [x] Audit the synchronous press/move/release path and its committed-source, palette, picker and shutdown consumers.
@@ -7,6 +11,7 @@
 - [x] Implement fixed scalar session/picker input authority; full Debug r10 passes all 13 palette and eight picker controls. Other profiles remain due.
 - [x] Implement bounded accepted-coordinate FIFO input and qualify its 2,653 controls in full Debug r10, preserving opaque-prefix, exact acknowledgement, wrap, cancellation and capacity behavior.
 - [x] Full Debug r10 qualifies repeated 1×1 readbacks on one acknowledged ticket, source and reservation; exact pixels, refusal, cancellation, device replacement and retirement. Final required matrix remains due.
+- [x] Implement separate explicit palette/picker intent tracking and intent-sensitive FIFO context; primary review and format/skills pass. New controls are unqualified until the recorded runtime run completes.
 - [ ] Integrate and runtime-qualify the actual Eyedropper and Alt Brush/Heal/Gradient callers with bounded accepted-coordinate FIFO input and one admitted source capture.
 - [ ] Bind publication to the exact document session, gesture opening and foreground/picker input authority, including equal-value reopen and A–B–A changes.
 - [ ] Preserve older sample / younger palette-dependent brush, gradient and shape ordering through terminal acknowledgement.
@@ -14,8 +19,9 @@
 - [ ] Measure sampler owner capture, utility record/first upload, completion/chrome and invalidated-frame G1 rows on A/B; fix overruns.
 - [ ] Complete required x64 suites, analysis, ARM64 cross-builds, contracts/guide and native integration; commit/push the qualified slice.
 
-Status: ACTIVE prerequisite and caller work under [P1](UiNeverBlocks_2026-09-22.md). Full Debug r10 passed the repaired combined snapshot, including all eight picker controls, 13 palette controls, 2,653 FIFO checks and repeated readback controls. r8 analysis predates clipboard integration; Release, ASan, current combined analysis/ARM64, actual sampler callers and G1 remain due.
-Baseline: managed `b49e4b4`; the main color qualification runs independently in its frozen worktree.
+Status: HOLD (user pause 2026-10-05); prerequisite and caller work under [P1](UiNeverBlocks_2026-09-22.md). Full Debug r10 passed the repaired combined snapshot, including all eight picker controls, 13 palette controls, 2,653 FIFO checks and repeated readback controls. r8 analysis predates clipboard integration; Release, ASan, current combined analysis/ARM64, actual sampler callers and G1 remain due.
+Baseline: managed `b49e4b4`; the candidate now includes the wand descriptor repair from `e0360b0`.
+The reviewed intent sidecar build is frozen independently in main r53; it has no runtime result yet.
 Owners: `Application`, `DocumentReadbackJob`, `GpuWorkQueue`, palette/picker input and selected host continuations.
 Contracts: `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `UI_ApplicationChrome`, `Core_PerformanceAndResources`, `Testing_Validation`.
 
@@ -56,6 +62,30 @@ revision, renew a successful caller's stamp, and permanently invalidate exhauste
 palette/picker paths preserve their color semantics. Independent core controls and actual picker calls are in the
 candidate; a fresh build/runtime matrix is required. They are prerequisites only: the current canvas sampler still
 uses synchronous `WandComposite`, and selected younger tool dependencies below are not yet migrated.
+
+The current sidecar adds explicit manual intent counters. `CapturePaletteIntentAuthority` and
+`IsPaletteIntentCurrent` remain stable across checked foreground/background samples, while public setters,
+swap/reset (including mask palette), equal writes and A–B–A advance intent. Picker intent similarly stays stable
+through its own checked Preview callback; raw pointer/key/character, public sampling, Open/Close/Detach advance
+intent. Opening lifetime changes advance intent even during a callback. Full publication stamps still renew on
+every checked sample. The picker Preview changes its chosen chrome color; foreground/background Preview does
+not write the session palette, and Cancel retains the opening color. The independently reviewed new controls
+are 16 `palette-intent.*` and 23 `sampler-intent.picker.*`, plus the intent FIFO suite. They are pending qualification.
+
+`SamplerIntentInput` pairs the fixed coordinate FIFO with scalar manual palette/picker revisions and a captured
+baseline color per pending point. Same-pixel coalescing also requires identical context. Selection freezes that
+context until its exact acknowledgement; wrong/foreign acknowledgements, cancellation, wrap, full capacity,
+move and counter exhaustion cannot rebind it. Its raw `LatestOpaqueColor` does not resolve color across differing
+manual intents; the actual host must retain an opaque prefix only within the same manual intent and use the
+captured baseline after explicit intent changes. The wrapper alone does not activate asynchronous sampling.
+
+The actual graph must keep nine bounded opening slots (eight pending host inputs plus one selected input) until
+acknowledgement, with storage allocated once outside input dispatch. Each younger admitted color consumer holds
+the original opening and manual intent, event-time tool settings and fallback color. If explicit input intervened
+before that consumer's press, it uses the captured fallback. Otherwise it resolves the older sampler's exact final
+accepted prefix, even when later unrelated input prevents that prefix from publishing to the current palette.
+Reference counts and exact opening checks prevent reuse before every admitted consumer retires. Refused queue
+admission releases its descriptor reference, and no late replay reads unrelated live palette values.
 
 1. Press owns a trivial descriptor: session/document serial, generation, exact gesture opening, document pixel,
    original ring color and intended palette/picker target. No raster or document graph is captured before whole

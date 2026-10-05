@@ -77,7 +77,9 @@ int RunKernelCliTests()
     check(!ParseArguments({L"--isa", L"scalar", L"--isa", L"sse2"}, parsed, error) && error == L"--isa",
           "duplicate-switch-rejected");
 
-    constexpr std::array<std::wstring_view, 4> kUiBenchmarks{{L"ui", L"ui45", L"ui100", L"ui-smoke"}};
+    constexpr std::array<std::wstring_view, 8> kUiBenchmarks{{
+        L"ui", L"ui45", L"ui100", L"ui-smoke", L"ui-sampler", L"ui-sampler45", L"ui-sampler100",
+        L"ui-sampler-smoke"}};
     for (const std::wstring_view benchmark : kUiBenchmarks)
     {
         std::wstring parsedBenchmark;
@@ -88,6 +90,15 @@ int RunKernelCliTests()
     check(!ParseArguments({L"--bench", L""}, parsed, error) && error.empty(), "bench-empty-value-rejected");
     check(!ParseArguments({L"--bench", L"ui-smoke-extra"}, parsed, error) && error == L"ui-smoke-extra",
           "bench-invalid-value-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler-smoke-extra"}, parsed, error) &&
+              error == L"ui-sampler-smoke-extra",
+          "bench-sampler-suffixed-value-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler45x"}, parsed, error) && error == L"ui-sampler45x",
+          "bench-sampler45-near-match-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler1000"}, parsed, error) && error == L"ui-sampler1000",
+          "bench-sampler100-near-match-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler-Smoke"}, parsed, error) && error == L"ui-sampler-Smoke",
+          "bench-sampler-value-is-case-sensitive");
 
     const RedPrismCommandLineSwitch* isaSwitch = RedPrismFindSwitch(L"--isa");
     const std::wstring help = RedPrismFormatCommandLineHelp();

@@ -108,7 +108,9 @@
     <ClInclude Include="JobSuspendedRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
     <ClInclude Include="SamplerInputTests.h" />
+    <ClInclude Include="SamplerIntentInputTests.h" />
     <ClInclude Include="..\..\Common\SamplerInput.h" />
+    <ClInclude Include="..\..\Common\SamplerIntentInput.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
@@ -184,6 +186,7 @@
     <ClCompile Include="OpacityInputOrderTests.cpp" />
     <ClCompile Include="PointerInputStreamTests.cpp" />
     <ClCompile Include="SamplerInputTests.cpp" />
+    <ClCompile Include="SamplerIntentInputTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />
     <ClCompile Include="ContinuationRequestTests.cpp" />
     <ClCompile Include="HostPathReadTests.cpp" />

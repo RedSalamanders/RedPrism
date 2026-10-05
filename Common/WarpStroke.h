@@ -17,7 +17,9 @@ class WarpStroke
 
     // `image` is the layer rendered at document size (premultiplied BGRA); `settings` give the tip (diameter at
     // least 2, hardness at most 0.98) and the strength (the opacity, 0.01–1).
-    WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings);
+    // Copies into private working storage without assembling any shared sparse source. An incomplete or
+    // cancelled read leaves the stroke invalid; a worker caller supplies its operation/shutdown token.
+    WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings, CancelToken cancellation = {});
 
     [[nodiscard]] bool IsValid() const noexcept
     {

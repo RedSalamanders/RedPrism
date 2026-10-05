@@ -1064,6 +1064,12 @@ int Application::RunSelfTest() noexcept
         }
         std::printf("PASS sampler-authority.picker.equal-target-reopen-refuses-older-sample\n");
         _chrome->CloseColorPicker(false);
+        if (!RunSamplerIntentHostSelfTest())
+            return 5;
+        if (RunSamplerHostSelfTest() != 0)
+            return 5;
+        if (RunSamplerCallerSelfTest() != 0)
+            return 5;
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
         if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
@@ -1932,17 +1938,19 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A dropped shape draft still made a layer.\n");
             return 5;
         }
-        // Eyedropper: pressing reads the canvas into the foreground; releasing ends the sampling.
+        // Eyedropper: pressing admits sampling; Up hides the ring and acknowledges its accepted color prefix.
         OnTool(EditorTool::Eyedropper);
         _session.SetForegroundColor(0xFF000000u);
         pointer(WM_LBUTTONDOWN, 0, 40.0, 35.0);
-        if (!std::holds_alternative<ColorSampling>(_drag) || _session.ForegroundColor() != 0xFF3366CCu)
+        if (!std::holds_alternative<ColorSampling>(_drag))
         {
             SelfTestFailure(L"The Eyedropper did not sample the shape's color.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 40.0, 35.0);
-        if (std::holds_alternative<ColorSampling>(_drag))
+        if (std::holds_alternative<ColorSampling>(_drag) ||
+            SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+            _session.ForegroundColor() != 0xFF3366CCu)
         {
             SelfTestFailure(L"Releasing the Eyedropper did not end sampling.\n");
             return 5;
@@ -2958,6 +2966,8 @@ void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid>
 
 void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint32_t argb) noexcept
 {
+    if (phase != ChromeEditPhase::Preview)
+        SealSamplerForBoundary(); // A terminal picker callback ends its exact physical sampling target.
     switch (target)
     {
     case PickerTarget::Foreground:
@@ -3593,6 +3603,16 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Close suppresses Completed callbacks. Its completed worker/retirement join acknowledges the sampler's
+    // original record; clearing these earlier would let its borrowed source or opening retire before that join.
+    assert(_samplerHostJob == nullptr);
+    if (_samplerHostStamp)
+        (void)_historyWork.Finish(_samplerHostStamp.value());
+    _samplerHostStamp.reset();
+    _samplerHostTicket.reset();
+    SweepSamplerOpenings();
+    if (_samplerState)
+        _samplerState->palettePrefix.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3836,7 +3856,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         else if (event.action == DxUi::PointerAction::Move || message == WM_LBUTTONUP)
             RecordCanvasBrush(event, capturedView);
         else if (event.action == DxUi::PointerAction::Leave && !(_canvasLifetime && _canvasLifetime->presenting))
-            LoseCanvasBrush();
+            LoseCanvasBrush(true);
         return; // A canvas press owns its captured samples over chrome until its terminal is acknowledged.
     }
     if (event.action == DxUi::PointerAction::Down && !PointerBusy())
@@ -3945,21 +3965,26 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         return;
     }
-    if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
-    {
-        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
-        return;
-    }
     const bool left = message == WM_LBUTTONDOWN;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if (left && SamplesColor())
     {
-        // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
-        ColorSampling sampling;
-        sampling.original = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
-        sampling.composite = WandComposite();
-        _drag = std::move(sampling);
-        SampleColorAt(view);
+        // Only a scalar descriptor is captured here. One admitted original root serves this accepted prefix.
+        const auto opening = CanQueueSampler() ? BeginSamplerOpening(pixel) : std::nullopt;
+        if (!opening)
+        {
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+            return;
+        }
+        const auto* source = FindSamplerOpening(opening.value());
+        _drag = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
+        _layoutDirty = true;
+        _frameInvalidated = true;
+        return;
+    }
+    if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
     if (left && EditorToolIsBrush(_tool))
@@ -4328,6 +4353,20 @@ bool Application::SkipsTransformSettle(int command) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    if (!_hostExecuting && (command == ChromeHost::kCommandSwapPalette || command == ChromeHost::kCommandResetPalette) &&
+        CanChangePaletteDuringSampling())
+    {
+        if (_chrome && _chrome->ColorPickerOpen())
+            _chrome->CloseColorPicker(false);
+        if (command == ChromeHost::kCommandSwapPalette)
+            _session.SwapPaletteColors();
+        else
+            _session.ResetPaletteColors();
+        RefreshGradientJobs();
+        _layoutDirty = true;
+        _frameInvalidated = true;
+        return; // Explicit input invalidates old sample publication at event time, outside document history.
+    }
     if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
         CancelCanvasBrush())
         return; // The first history action cancels this admitted stroke, without consuming opacity history.
@@ -7191,7 +7230,9 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
-    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke")
+    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
+        _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
+        _bench == L"ui-sampler-smoke")
     {
         return RunUiBenchmark();
     }
@@ -7316,10 +7357,8 @@ int Application::RunBenchmark() noexcept
 
 // ── Retouch tools (C11) ───────────────────────────────────────────────────
 
-namespace
-{
 // Shift constrains a gradient line to 45° steps around the other end, as in Photoshop.
-[[nodiscard]] Vec2 Snapped(Vec2 point, Vec2 anchor) noexcept
+Vec2 Application::SnappedGradientPoint(Vec2 point, Vec2 anchor) noexcept
 {
     const double dx = point.x - anchor.x;
     const double dy = point.y - anchor.y;
@@ -7328,7 +7367,6 @@ namespace
     const double angle = std::round(std::atan2(dy, dx) / step) * step;
     return Vec2{anchor.x + std::cos(angle) * length, anchor.y + std::sin(angle) * length};
 }
-} // namespace
 
 BrushKind Application::BrushKindFor() const noexcept
 {
@@ -7522,7 +7560,7 @@ void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
     Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if ((modifiers & MK_SHIFT) != 0)
     {
-        pixel = Snapped(pixel, handle == 0 ? pending->end : pending->start);
+        pixel = SnappedGradientPoint(pixel, handle == 0 ? pending->end : pending->start);
     }
     if (handle == 0)
     {
@@ -8364,19 +8402,25 @@ void Application::FinishShapeDraft() noexcept
     {
         _shapeCommitPreview = _session.PendingShape();
         _shapePreviewDocumentSerial = _session.DocumentSerial();
+        _shapePreviewArgb = _session.ForegroundColor();
         CancelShapeDraft(); // The owned release keeps its event-time geometry/color through ordered settlement.
     }
 }
 
 bool Application::SamplesColor() const noexcept
 {
-    if (_tool == EditorTool::Eyedropper)
+    return SamplesColor(_tool);
+}
+
+bool Application::SamplesColor(EditorTool tool) const noexcept
+{
+    if (tool == EditorTool::Eyedropper)
     {
         return true;
     }
     // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
     const bool alt = KeyboardState::Held(VK_MENU);
-    return alt && (_tool == EditorTool::Brush || _tool == EditorTool::Heal || _tool == EditorTool::Gradient) &&
+    return alt && (tool == EditorTool::Brush || tool == EditorTool::Heal || tool == EditorTool::Gradient) &&
            _session.PendingBrush() == nullptr && !std::holds_alternative<GradientDrag>(_drag);
 }
 
@@ -8389,6 +8433,13 @@ void Application::SampleColorAt(Vec2 view) noexcept
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     sampling->point = pixel;
+    if (sampling->opening)
+    {
+        RecordSamplerPoint(sampling->opening.value(), pixel);
+        _layoutDirty = true;
+        _frameInvalidated = true;
+        return;
+    }
     if (sampling->composite.has_value())
     {
         const std::optional<uint32_t> color = DocumentSession::SampleCompositeColor(sampling->composite.value(), pixel);
@@ -8410,10 +8461,13 @@ void Application::SampleColorAt(Vec2 view) noexcept
 
 void Application::EndColorSampling() noexcept
 {
-    if (!std::holds_alternative<ColorSampling>(_drag))
+    const auto* sampling = std::get_if<ColorSampling>(&_drag);
+    if (!sampling)
     {
         return;
     }
+    if (sampling->opening)
+        SealSamplerOpening(sampling->opening.value()); // Up/leave/loss seal; they never add a release coordinate.
     _drag = PointerDrag{};
     SyncChrome();
     _frameInvalidated = true;
@@ -8452,7 +8506,11 @@ void Application::SyncToolOverlays() noexcept
         overlay.ellipse = shape->kind == ShapeKind::Ellipse;
         overlay.rect = D2D1::RectF(a.x, a.y, b.x, b.y);
         overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.ViewScale());
-        overlay.argb = _session.ForegroundColor();
+        const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+        overlay.argb = !pendingShape && committedShape ? _shapePreviewArgb
+                       : _canvasBrushReplayed && captured && captured->tool == EditorTool::Shape
+                           ? _canvasResolvedForeground
+                           : _session.ForegroundColor();
         draft = overlay;
     }
     _chrome->SetShapeDraft(draft);
