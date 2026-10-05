@@ -1,10 +1,12 @@
 #include "WarpStroke.h"
+#include "RasterWork.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
 #include <new>
+#include <utility>
 
 namespace
 {
@@ -20,33 +22,38 @@ template <typename T> [[nodiscard]] bool AddRetirementCapacity(std::uint64_t& to
 }
 } // namespace
 
-WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings)
+WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings, CancelToken cancellation)
     : _mode(mode), _diameter(std::max(2.0, settings.diameter)), _hardness(std::clamp(settings.hardness, 0.0, 0.98)),
       _strength(std::clamp(settings.opacity, 0.01, 1.0))
 {
-    const std::uint8_t* data = image.HasStorage() && image.Format() == RasterFormat::Bgra8888 ? image.Data() : nullptr;
-    if (data == nullptr || !std::isfinite(_diameter))
+    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !std::isfinite(_diameter) ||
+        cancellation.IsCancelled())
     {
         return;
     }
-    _width = image.Width();
-    _height = image.Height();
-    _columns = (_width + kTileSize - 1) / kTileSize;
-    const int rows = (_height + kTileSize - 1) / kTileSize;
+    const int width = image.Width();
+    const int height = image.Height();
+    const int columns = (width + kTileSize - 1) / kTileSize;
+    const int rows = (height + kTileSize - 1) / kTileSize;
     try
     {
-        _pixels.resize(static_cast<std::size_t>(_width) * static_cast<std::size_t>(_height) * 4u);
-        for (int y = 0; y < _height; ++y)
-        {
-            std::memcpy(_pixels.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(_width) * 4u,
-                        data + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride()),
-                        static_cast<std::size_t>(_width) * 4u);
-        }
-        _dirty.assign(static_cast<std::size_t>(_columns) * static_cast<std::size_t>(rows), 0);
+        std::vector<std::uint8_t> pixels;
+        pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+        if (!ReadRasterRegionForWork(image, {0, 0, width, height}, pixels, static_cast<std::size_t>(width) * 4u, 0,
+                                     cancellation))
+            return;
+        std::vector<std::uint8_t> dirty;
+        dirty.assign(static_cast<std::size_t>(columns) * static_cast<std::size_t>(rows), 0);
+        if (cancellation.IsCancelled())
+            return;
+        _pixels = std::move(pixels);
+        _dirty = std::move(dirty);
+        _width = width;
+        _height = height;
+        _columns = columns;
     }
     catch (const std::bad_alloc&)
     {
-        _pixels.clear();
         return;
     }
     _valid = true;

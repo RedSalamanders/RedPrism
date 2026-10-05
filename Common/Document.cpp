@@ -3,6 +3,7 @@
 #include "DocumentDraft.h"
 
 #include "PipelineTrace.h"
+#include "RasterWork.h"
 
 #include "Adjust.h"
 #include "CanvasSize.h"
@@ -25,6 +26,100 @@
 
 #pragma comment(lib, "rpcrt4.lib")
 #pragma comment(lib, "ole32.lib")
+
+namespace
+{
+std::atomic<std::uint64_t> gRasterResidencyEpoch{1};
+thread_local bool gRasterResidencyLeaseHeld = false;
+} // namespace
+
+namespace
+{
+// Owner attempts perform one acquire CAS. Workers block on value changes; no timer, spin or polling source.
+// Release is paired with notify_one so contention wakes one waiter, while an owner never enters a wait.
+std::atomic<bool> gRasterResidencyGate{false};
+} // namespace
+
+Raster::ResidencyLease::ResidencyLease(bool attempt) noexcept
+{
+    if (attempt)
+    {
+        (void)TryAcquire();
+        return;
+    }
+    if (gRasterResidencyLeaseHeld)
+        return;
+    bool expected = false;
+    while (!gRasterResidencyGate.compare_exchange_strong(expected, true, std::memory_order_acquire,
+                                                         std::memory_order_relaxed))
+    {
+        gRasterResidencyGate.wait(true, std::memory_order_relaxed);
+        expected = false;
+    }
+    _held = true;
+    _thread = std::this_thread::get_id();
+    gRasterResidencyLeaseHeld = true;
+}
+
+Raster::ResidencyLease::~ResidencyLease() noexcept
+{
+    Reset();
+}
+
+void Raster::ResidencyLease::CheckThread() const noexcept
+{
+    // A foreign-thread transfer is a programming error. Fail before releasing another thread's scope owner.
+    if (_held && _thread != std::this_thread::get_id())
+        std::terminate();
+}
+
+bool Raster::ResidencyLease::Held() const noexcept
+{
+    CheckThread();
+    return _held;
+}
+
+bool Raster::ResidencyLease::TryAcquire() noexcept
+{
+    CheckThread();
+    if (_held || gRasterResidencyLeaseHeld)
+        return false;
+    bool expected = false;
+    if (!gRasterResidencyGate.compare_exchange_strong(expected, true, std::memory_order_acquire,
+                                                      std::memory_order_relaxed))
+        return false;
+    _held = true;
+    _thread = std::this_thread::get_id();
+    gRasterResidencyLeaseHeld = true;
+    return true;
+}
+
+void Raster::ResidencyLease::Reset() noexcept
+{
+    CheckThread();
+    if (!_held)
+        return;
+    gRasterResidencyLeaseHeld = false;
+    _held = false;
+    _thread = {};
+    gRasterResidencyGate.store(false, std::memory_order_release);
+    gRasterResidencyGate.notify_one();
+}
+
+Raster::ResidencyLease Raster::AcquireResidencyLease() noexcept
+{
+    return ResidencyLease{false};
+}
+
+Raster::ResidencyLease Raster::TryResidencyLease() noexcept
+{
+    return ResidencyLease{true};
+}
+
+std::uint64_t Raster::ResidencyEpoch() noexcept
+{
+    return gRasterResidencyEpoch.load(std::memory_order_acquire);
+}
 
 std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
 {
@@ -387,6 +482,10 @@ Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
     const int largest = std::max(width, height);
     if (largest <= maxSide)
     {
+        // Gray thumbnails carry mask edge semantics and are read on the owner during composition/admission.
+        // A fitting sparse mask must not leave those readers an alias that can assemble shared source caches.
+        if (source.Format() == RasterFormat::Gray8 && !source.IsMaterialized())
+            return ContiguousRasterForWork(source);
         return source;
     }
     const int thumbWidth = std::max(1, (width * maxSide + largest / 2) / largest);
@@ -528,6 +627,8 @@ const std::uint8_t* Raster::Data() const noexcept
     const std::uint8_t* pixels = _storage->assembled.load(std::memory_order_acquire);
     if (pixels == nullptr)
     {
+        if (gRasterResidencyLeaseHeld)
+            return nullptr; // never build/wait recursively inside a resident sample/publication lease
         Materialize(*_storage);
         pixels = _storage->assembled.load(std::memory_order_acquire);
     }
@@ -569,8 +670,17 @@ void Raster::Materialize(const Storage& storage) noexcept
     {
         BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
     }
+    // Build privately before this brief publication gate. History samples resident charges under the same
+    // gate; an owner can try it to validate a prepared sample and swap history without racing this growth.
+    auto residency = AcquireResidencyLease();
+    if (!residency.Held())
+        return;
+    const auto epoch = ResidencyEpoch();
+    if (epoch == (std::numeric_limits<std::uint64_t>::max)())
+        return; // never wrap a resident witness and authorize an old prepared sample
     storage.bytes = std::move(bytes);
     storage.assembled.store(storage.bytes.data(), std::memory_order_release);
+    gRasterResidencyEpoch.store(epoch + 1, std::memory_order_release);
 }
 
 void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,

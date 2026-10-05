@@ -131,6 +131,8 @@ int Application::RunSamplerHostSelfTest() noexcept
                "sampler-host.graph.three-points-no-release-sample"))
         return 5;
     const auto dependency = CaptureSamplerColorDependency();
+    if (!retainedSlot)
+        return 5; // Explicit guard also proves the prior named assertion's pointer prerequisite to analysis.
     const ContinuationReceipt savedReceipt = retainedSlot->receipt;
     SealSamplerOpening(opening.value());
     if (!check(savedReceipt.Read().outcome == ContinuationOutcome::Pending && settled(),

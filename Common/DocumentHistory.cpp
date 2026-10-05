@@ -112,6 +112,46 @@ DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit
     _savedRevision = _revision;
 }
 
+DocumentHistory::Publication::~Publication() noexcept
+{
+    if (residencyPermit)
+        residencyPermit->Reset();
+}
+
+DocumentHistory::Publication::Publication(Publication&& source) noexcept
+{
+    if (source.residencyPermit)
+        source.residencyPermit->Reset();
+    state = std::move(source.state);
+    restore = std::move(source.restore);
+    source.restore.reset();
+    expectedRevision = source.expectedRevision;
+    expectedEpoch = source.expectedEpoch;
+    published = std::exchange(source.published, true);
+    sampledResidency = std::exchange(source.sampledResidency, false);
+    requiresResidencyPermit = std::exchange(source.requiresResidencyPermit, false);
+}
+
+DocumentHistory::Publication& DocumentHistory::Publication::operator=(Publication&& source) noexcept
+{
+    if (this != &source)
+    {
+        if (residencyPermit)
+            residencyPermit->Reset();
+        if (source.residencyPermit)
+            source.residencyPermit->Reset();
+        state = std::move(source.state);
+        restore = std::move(source.restore);
+        source.restore.reset();
+        expectedRevision = source.expectedRevision;
+        expectedEpoch = source.expectedEpoch;
+        published = std::exchange(source.published, true);
+        sampledResidency = std::exchange(source.sampledResidency, false);
+        requiresResidencyPermit = std::exchange(source.requiresResidencyPermit, false);
+    }
+    return *this;
+}
+
 DocumentHistory::StateView DocumentHistory::CaptureState() const noexcept
 {
     StateView view;
@@ -283,6 +323,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
         !TrimPrepared(result.state, after, cancellation, observer))
         return std::nullopt;
+    result.sampledResidency = true;
     return result;
 }
 
@@ -315,6 +356,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareRestore(Stat
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
         !TrimPrepared(result.state, result.restore->document, cancellation, observer))
         return std::nullopt;
+    result.sampledResidency = true;
     return result;
 }
 
@@ -441,6 +483,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
         !TrimPrepared(result.state, after, cancellation, observer))
         return std::nullopt;
+    result.sampledResidency = true;
     return result;
 }
 
@@ -472,7 +515,7 @@ std::optional<DocumentHistory::StateView> DocumentHistory::FollowingPreparedStat
 
 bool DocumentHistory::Publish(Publication& publication) noexcept
 {
-    if (!CanPublish(publication))
+    if (!CanPublish(publication) || (publication.requiresResidencyPermit && !publication.residencyPermit))
         return false;
     _past.swap(publication.state.past);
     _future.swap(publication.state.future);
@@ -482,6 +525,8 @@ bool DocumentHistory::Publish(Publication& publication) noexcept
     std::swap(_revision, publication.state.revision);
     ++_stateEpoch;
     publication.published = true;
+    if (publication.residencyPermit)
+        publication.residencyPermit->Reset();
     // Saved revision belongs to the owner and can have changed while this publication was prepared.
     return true;
 }
@@ -770,6 +815,7 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
     std::uint64_t metadataBytes = 0;
     std::uint64_t ownershipBytes = 0;
     std::uint64_t retainedBytes = 0;
+    std::uint64_t residencyEpoch = 0;
 
     [[nodiscard]] static std::unique_ptr<StorageIndex> Update(
         const std::shared_ptr<const StorageIndex>& previous, std::span<const EntryHandle> desired,
@@ -913,6 +959,11 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
 
     [[nodiscard]] bool SampleCharges(CancelToken cancellation)
     {
+        if (cancellation.IsCancelled())
+            return false;
+        auto residency = Raster::AcquireResidencyLease();
+        if (!residency.Held())
+            return false;
         retainedBytes = 0;
         const auto sample = [&](auto& records, const auto& bytes) -> bool
         {
@@ -928,10 +979,11 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
             }
             return true;
         };
-        // Resident charges are sampled once per distinct storage on this worker preparation. They are not
-        // a publication lease: concurrent/late cache growth still needs the H3 synchronization protocol.
-        return sample(rasters, [](const Raster& raster) { return raster.ByteSize(); }) &&
-               sample(selections, [](const SelectionLoops& selection) { return selection.StorageBytes(); });
+        if (!sample(rasters, [](const Raster& raster) { return raster.ByteSize(); }) ||
+            !sample(selections, [](const SelectionLoops& selection) { return selection.StorageBytes(); }))
+            return false;
+        residencyEpoch = Raster::ResidencyEpoch();
+        return !cancellation.IsCancelled();
     }
 
     [[nodiscard]] bool RemoveEntry(const Entry* entry, CancelToken cancellation)
@@ -1313,4 +1365,50 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
     std::unique_ptr<StorageIndex, StorageIndex::Retire> sealed{index.release()};
     state.storageIndex = std::shared_ptr<const StorageIndex>{std::move(sealed)};
     return !cancellation.IsCancelled();
+}
+
+DocumentHistory::ResidencyValidation DocumentHistory::ResidencyPermit::TryAcquire(Publication& publication) noexcept
+{
+    if (_publication || _lease.Held() || publication.published || !publication.state.owner)
+        return ResidencyValidation::Invalid;
+    if (!publication.sampledResidency)
+        return ResidencyValidation::Ready; // Begin/nested/no-op does not publish a new resident trim decision
+    if (!publication.state.storageIndex)
+        return ResidencyValidation::Invalid;
+    publication.requiresResidencyPermit = true;
+    if (!_lease.TryAcquire())
+        return ResidencyValidation::Busy;
+    if (publication.state.storageIndex->residencyEpoch != Raster::ResidencyEpoch())
+    {
+        _lease.Reset();
+        return ResidencyValidation::Refresh;
+    }
+    _publication = &publication;
+    publication.residencyPermit = this;
+    return ResidencyValidation::Ready;
+}
+
+void DocumentHistory::ResidencyPermit::Reset() noexcept
+{
+    if (_publication && _publication->residencyPermit == this)
+        _publication->residencyPermit = nullptr;
+    _publication = nullptr;
+    _lease.Reset();
+}
+
+bool DocumentHistory::RefreshPreparedResidency(Publication& publication, const std::optional<CanvasDocument>& current,
+                                               CancelToken cancellation, PrepareObserver observer)
+{
+    if (publication.published || !publication.state.owner || publication.residencyPermit || cancellation.IsCancelled())
+        return false;
+    if (!publication.sampledResidency)
+        return true;
+    if (!publication.state.storageIndex || !publication.state.storageIndex->current ||
+        !publication.state.storageIndex->current->Matches(current))
+        return false;
+    auto candidate = publication.state;
+    if (!TrimPrepared(candidate, current, cancellation, observer) || cancellation.IsCancelled())
+        return false;
+    publication.state = std::move(candidate);
+    return true;
 }

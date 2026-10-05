@@ -67,6 +67,7 @@
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
+#include "RasterWork.h"
 #include "RasterWorkTests.h"
 #include "RecordOwnershipBoundsTests.h"
 #include "RecordRootAdoptTests.h"
@@ -797,7 +798,8 @@ void TestPaletteSampleAuthority()
 
 void TestPaletteIntentAuthority()
 {
-    DocumentSession sampled;
+    const auto sampledOwner = std::make_unique<DocumentSession>();
+    auto& sampled = *sampledOwner;
     sampled.CreateDocument(2, 2, true);
     const Guid sampledRevision = sampled.history.CurrentRevision();
     const auto sampledGeneration = sampled.Generation();
@@ -840,7 +842,8 @@ void TestPaletteIntentAuthority()
                sampled.history.UndoCount() == sampledUndoCount,
            "palette-intent.sampled-colors-remain-outside-document-generation-and-history");
 
-    DocumentSession foregroundEqual;
+    const auto foregroundEqualOwner = std::make_unique<DocumentSession>();
+    auto& foregroundEqual = *foregroundEqualOwner;
     foregroundEqual.CreateDocument(2, 2, true);
     auto foregroundManual = foregroundEqual.CapturePaletteIntentAuthority();
     auto foregroundPublication = foregroundEqual.CapturePaletteSampleAuthority();
@@ -854,7 +857,8 @@ void TestPaletteIntentAuthority()
                foregroundEqual.brushSettings.green == 0.0 && foregroundEqual.brushSettings.blue == 0.0,
            "palette-intent.equal-explicit-foreground-invalidates-manual-and-publication-authority");
 
-    DocumentSession backgroundEqual;
+    const auto backgroundEqualOwner = std::make_unique<DocumentSession>();
+    auto& backgroundEqual = *backgroundEqualOwner;
     backgroundEqual.CreateDocument(2, 2, true);
     auto backgroundManual = backgroundEqual.CapturePaletteIntentAuthority();
     auto backgroundPublication = backgroundEqual.CapturePaletteSampleAuthority();
@@ -867,7 +871,8 @@ void TestPaletteIntentAuthority()
                backgroundEqual.BackgroundColor() == equalBackground,
            "palette-intent.equal-explicit-background-invalidates-manual-and-publication-authority");
 
-    DocumentSession foregroundAba;
+    const auto foregroundAbaOwner = std::make_unique<DocumentSession>();
+    auto& foregroundAba = *foregroundAbaOwner;
     foregroundAba.CreateDocument(2, 2, true);
     auto foregroundAbaManual = foregroundAba.CapturePaletteIntentAuthority();
     auto foregroundAbaPublication = foregroundAba.CapturePaletteSampleAuthority();
@@ -881,7 +886,8 @@ void TestPaletteIntentAuthority()
                foregroundAba.ForegroundColor() == foregroundOriginal,
            "palette-intent.foreground-a-b-a-refuses-old-manual-and-publication-authority");
 
-    DocumentSession backgroundAba;
+    const auto backgroundAbaOwner = std::make_unique<DocumentSession>();
+    auto& backgroundAba = *backgroundAbaOwner;
     backgroundAba.CreateDocument(2, 2, true);
     auto backgroundAbaManual = backgroundAba.CapturePaletteIntentAuthority();
     auto backgroundAbaPublication = backgroundAba.CapturePaletteSampleAuthority();
@@ -895,7 +901,8 @@ void TestPaletteIntentAuthority()
                backgroundAba.BackgroundColor() == backgroundOriginal,
            "palette-intent.background-a-b-a-refuses-old-manual-and-publication-authority");
 
-    DocumentSession paletteCommands;
+    const auto paletteCommandsOwner = std::make_unique<DocumentSession>();
+    auto& paletteCommands = *paletteCommandsOwner;
     paletteCommands.CreateDocument(2, 2, true);
     auto swapManual = paletteCommands.CapturePaletteIntentAuthority();
     paletteCommands.SwapPaletteColors();
@@ -906,7 +913,8 @@ void TestPaletteIntentAuthority()
     Expect(!paletteCommands.IsPaletteIntentCurrent(resetManual),
            "palette-intent.palette-reset-invalidates-manual-authority");
 
-    DocumentSession maskPalette;
+    const auto maskPaletteOwner = std::make_unique<DocumentSession>();
+    auto& maskPalette = *maskPaletteOwner;
     maskPalette.CreateDocument(2, 2, true);
     maskPalette.AddLayerMask(true);
     const uint32_t maskForeground = maskPalette.ForegroundColor();
@@ -922,10 +930,12 @@ void TestPaletteIntentAuthority()
                maskPalette.ForegroundColor() == maskForeground && maskPalette.BackgroundColor() == maskBackground,
            "palette-intent.mask-target-reset-invalidates-authority-without-changing-colors");
 
-    DocumentSession owner;
+    const auto ownerOwner = std::make_unique<DocumentSession>();
+    auto& owner = *ownerOwner;
     owner.CreateDocument(2, 2, true);
     const auto ownerManual = owner.CapturePaletteIntentAuthority();
-    DocumentSession foreign;
+    const auto foreignOwner = std::make_unique<DocumentSession>();
+    auto& foreign = *foreignOwner;
     foreign.CreateDocument(2, 2, true);
     auto foreignManual = ownerManual;
     auto foreignPublication = owner.CapturePaletteSampleAuthority();
@@ -935,9 +945,11 @@ void TestPaletteIntentAuthority()
                !foreign.ApplySampledBackgroundColor(foreignPublication, 0xFF112233u) &&
                foreignPublication == foreignPublicationBefore && foreign.BackgroundColor() == foreignBackground,
            "palette-intent.foreign-session-refuses-manual-and-publication-authority");
-    DocumentSession copied = owner;
+    const auto copiedOwner = std::make_unique<DocumentSession>(owner);
+    auto& copied = *copiedOwner;
     Expect(!copied.IsPaletteIntentCurrent(ownerManual), "palette-intent.copied-session-refuses-manual-authority");
-    DocumentSession moved = std::move(owner);
+    const auto movedOwner = std::make_unique<DocumentSession>(std::move(owner));
+    auto& moved = *movedOwner;
     Expect(!moved.IsPaletteIntentCurrent(ownerManual) && !owner.IsPaletteIntentCurrent(ownerManual),
            "palette-intent.moved-session-and-source-refuse-original-manual-authority");
 }
@@ -3909,6 +3921,63 @@ void TestBlurTool()
 
 void TestSmearWarp()
 {
+    // Literal private-copy reference: a nested sparse tile window with an overlapping replacement.
+    // Reading the working image must not grow either source cache or history's resident charge.
+    const std::array<std::uint8_t, 16> leafBytes{1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255};
+    const Raster leaf = Raster::Make(2, 2, RasterFormat::Bgra8888, leafBytes.data(), leafBytes.size());
+    const Raster nested = Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, leaf, 1, 0, {{1, 1, leaf, 1, 1, 1, 1}}, 11);
+    const Raster sparse = Raster::MakeSparse(4, 3, RasterFormat::Bgra8888, {}, 0, 0, {{1, 1, nested, 1, 0, 2, 2}}, 5);
+    const std::array<std::uint8_t, 48> expected{5, 5, 5, 5, 5,  5,  5,  5,   5,  5,  5,  5,   5, 5, 5, 5,
+                                                5, 5, 5, 5, 1,  2,  3,  255, 4,  5,  6,  255, 5, 5, 5, 5,
+                                                5, 5, 5, 5, 10, 11, 12, 255, 10, 11, 12, 255, 5, 5, 5, 5};
+    const std::uint64_t emptyStorageBytes = sizeof(WarpStroke) + 1024;
+    const Raster onePixel = Raster::Make(1, 1, RasterFormat::Bgra8888, leafBytes.data(), 4);
+    WarpStroke emptyStroke(onePixel, SmearMode::Liquify, BrushSettings{});
+    Expect(emptyStroke.IsValid() && emptyStroke.Points().empty() &&
+               emptyStroke.RetirementMemoryBytes() > emptyStorageBytes,
+           "warp.private-source.valid-empty-stroke-retains-working-copy");
+    Expect(!sparse.IsMaterialized() && !nested.IsMaterialized() && sparse.ByteSize() == 0 && nested.ByteSize() == 0,
+           "warp.private-source.fixture-caches-unassembled");
+    for (const SmearMode mode : {SmearMode::Smudge, SmearMode::Liquify})
+    {
+        WarpStroke working(sparse, mode, BrushSettings{});
+        const Raster copied = working.Image();
+        Expect(working.IsValid() && working.Width() == 4 && working.Height() == 3 && working.Points().empty(),
+               "warp.private-source.valid-initial-copy-without-dabs");
+        Expect(copied.HasStorage() && copied.ByteSize() == expected.size() &&
+                   std::equal(expected.begin(), expected.end(), copied.Data()),
+               "warp.private-source.literal-nested-window-and-overlap-pixels");
+        Expect(!sparse.IsMaterialized() && !nested.IsMaterialized() && sparse.ByteSize() == 0 && nested.ByteSize() == 0,
+               "warp.private-source.leaves-complete-source-residency-unchanged");
+        Expect(working.TakeChangedTiles().empty(), "warp.private-source.initial-copy-has-no-dirty-preview");
+    }
+    CancelSource stopped;
+    (void)stopped.Cancel();
+    WarpStroke cancelled(sparse, SmearMode::Smudge, BrushSettings{}, stopped.Token());
+    Expect(!cancelled.IsValid() && !cancelled.Image().HasStorage() && cancelled.Points().empty() &&
+               cancelled.TakeChangedTiles().empty() && cancelled.Width() == 0 && cancelled.Height() == 0 &&
+               cancelled.RetirementMemoryBytes() == emptyStorageBytes &&
+               cancelled.RetirementMemoryBytes() < emptyStroke.RetirementMemoryBytes(),
+           "warp.private-source.cancelled-before-copy-exposes-no-partial-stroke");
+    Expect(!sparse.IsMaterialized() && !nested.IsMaterialized(),
+           "warp.private-source.cancelled-copy-leaves-source-caches-unassembled");
+    WarpStroke shutdown(sparse, SmearMode::Liquify, BrushSettings{}, CancelToken{{}, stopped.Token().LocalToken()});
+    Expect(!shutdown.IsValid() && !shutdown.Image().HasStorage() && !sparse.IsMaterialized() &&
+               shutdown.RetirementMemoryBytes() == emptyStorageBytes,
+           "warp.private-source.worker-shutdown-token-refuses-copy");
+    const Raster gray = Raster::Make(2, 2, RasterFormat::Gray8);
+    WarpStroke invalid(gray, SmearMode::Liquify, BrushSettings{});
+    Expect(!invalid.IsValid() && !invalid.Image().HasStorage() && invalid.RetirementMemoryBytes() == emptyStorageBytes,
+           "warp.private-source.gray-input-refused");
+    Raster tooDeep = leaf;
+    for (std::size_t depth = 0; depth < kRasterWorkDepthLimit; ++depth)
+        tooDeep = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, tooDeep}}, 0);
+    WarpStroke refused(tooDeep, SmearMode::Liquify, BrushSettings{});
+    Expect(!refused.IsValid() && !refused.Image().HasStorage() && refused.TakeChangedTiles().empty() &&
+               !tooDeep.IsMaterialized() && refused.Width() == 0 && refused.Height() == 0 &&
+               refused.RetirementMemoryBytes() == emptyStorageBytes &&
+               refused.RetirementMemoryBytes() < emptyStroke.RetirementMemoryBytes(),
+           "warp.private-source.depth-refusal-never-publishes-partial-pixels");
     const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
     const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
     const Raster halves = BytesRaster(60, 20, [&](int x, int) { return x < 30 ? red : blue; });

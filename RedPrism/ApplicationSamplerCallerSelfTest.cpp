@@ -301,7 +301,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
                    "sampler-caller.eyedropper.blue-brown-transparent-prefix-no-release-sample"))
             return false;
 
-        OnTool(tool);                  // Queued behind the physical sampler Up.
+        if (!openingBeforeRelease)
+            return false; // Keep the named prefix assertion above; prove its pointer prerequisite explicitly.
+        OnTool(tool);     // Queued behind the physical sampler Up.
         pointer(WM_LBUTTONDOWN, down); // Actual consumer press before any owner pump.
         const std::uint64_t canvasOpening = _canvasBrushInput.Opening();
         const auto* captured = _canvasBrushInput.CapturedContext(canvasOpening);

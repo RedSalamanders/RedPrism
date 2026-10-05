@@ -21,6 +21,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -133,6 +134,33 @@ struct RasterTile;
 class Raster
 {
   public:
+    // Brief process-wide gate for sparse resident-cache publication. Workers may wait while sampling history;
+    // owners only try. Holding this gate never authorizes pixel work on the owner. A lease stays on its acquiring
+    // thread and is released before callbacks, waits or transfer to a different thread.
+    class ResidencyLease final
+    {
+      public:
+        ResidencyLease() noexcept = default;
+        ~ResidencyLease() noexcept;
+        ResidencyLease(const ResidencyLease&) = delete;
+        ResidencyLease& operator=(const ResidencyLease&) = delete;
+        ResidencyLease(ResidencyLease&&) = delete;
+        ResidencyLease& operator=(ResidencyLease&&) = delete;
+        [[nodiscard]] bool Held() const noexcept;
+        // One nonblocking attempt; reuses the scope owner, refuses recursion and never waits/allocates.
+        [[nodiscard]] bool TryAcquire() noexcept;
+        void Reset() noexcept;
+
+      private:
+        friend class Raster;
+        explicit ResidencyLease(bool attempt) noexcept;
+        void CheckThread() const noexcept;
+        std::thread::id _thread;
+        bool _held = false;
+    };
+    [[nodiscard]] static ResidencyLease AcquireResidencyLease() noexcept; // worker, blocks on atomic wait
+    [[nodiscard]] static ResidencyLease TryResidencyLease() noexcept;     // owner, one attempt only
+    [[nodiscard]] static std::uint64_t ResidencyEpoch() noexcept;
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format);
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels,
                                      std::size_t byteCount);
@@ -1656,31 +1684,15 @@ class DocumentHistory
         void* context = nullptr;
     };
 
+    class ResidencyPermit;
     struct Publication final
     {
         Publication() = default;
+        ~Publication() noexcept;
         Publication(const Publication&) = delete;
         Publication& operator=(const Publication&) = delete;
-        Publication(Publication&& source) noexcept
-            : state(std::move(source.state)), restore(std::move(source.restore)),
-              expectedRevision(source.expectedRevision), expectedEpoch(source.expectedEpoch),
-              published(std::exchange(source.published, true))
-        {
-            source.restore.reset();
-        }
-        Publication& operator=(Publication&& source) noexcept
-        {
-            if (this != &source)
-            {
-                state = std::move(source.state);
-                restore = std::move(source.restore);
-                source.restore.reset();
-                expectedRevision = source.expectedRevision;
-                expectedEpoch = source.expectedEpoch;
-                published = std::exchange(source.published, true);
-            }
-            return *this;
-        }
+        Publication(Publication&& source) noexcept;
+        Publication& operator=(Publication&& source) noexcept;
         [[nodiscard]] const std::optional<Snapshot>& RestoreSnapshot() const noexcept
         {
             return restore;
@@ -1700,12 +1712,50 @@ class DocumentHistory
 
       private:
         friend class DocumentHistory;
+        friend class ResidencyPermit;
         StateView state;
         std::optional<Snapshot> restore;
         Guid expectedRevision;
         std::uint64_t expectedEpoch = 0;
         bool published = false;
+        bool sampledResidency = false;
+        bool requiresResidencyPermit = false;
+        ResidencyPermit* residencyPermit = nullptr; // borrowed only within the acquiring owner's completion
     };
+    enum class ResidencyValidation : std::uint8_t
+    {
+        Ready,
+        Refresh,
+        Busy,
+        Invalid
+    };
+    // Opt-in owner completion guard. TryAcquire never waits or allocates; Busy/Refresh retain the edit intent
+    // for a worker resume. It is not document authority. Reset before any wait, transfer or callback; successful
+    // Publish releases it immediately after the history swap. Moving a publication releases its borrowed permit
+    // and requires a fresh permit at the new destination. Default/reference publication remains unchanged.
+    class ResidencyPermit final
+    {
+      public:
+        ResidencyPermit() noexcept = default;
+        ~ResidencyPermit()
+        {
+            Reset();
+        }
+        ResidencyPermit(const ResidencyPermit&) = delete;
+        ResidencyPermit& operator=(const ResidencyPermit&) = delete;
+        [[nodiscard]] ResidencyValidation TryAcquire(Publication& publication) noexcept;
+        void Reset() noexcept;
+
+      private:
+        Publication* _publication = nullptr;
+        Raster::ResidencyLease _lease;
+    };
+    // Worker-only history refresh over the original prepared document; no pixel operation, new revision,
+    // authority or ticket is created. A failed/cancelled refresh preserves the original publication. Host
+    // admission must cover the extra candidate-index/container peak before using this staged protocol.
+    [[nodiscard]] static bool RefreshPreparedResidency(Publication& publication,
+                                                       const std::optional<CanvasDocument>& current,
+                                                       CancelToken cancellation = {}, PrepareObserver observer = {});
     // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
     // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
     // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers

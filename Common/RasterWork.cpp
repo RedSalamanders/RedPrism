@@ -310,6 +310,10 @@ Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken can
     const int largest = std::max(width, height);
     if (largest <= maxSide)
     {
+        // Semantic mask thumbnails are eager dense pixels even when no downsampling is necessary. Copy
+        // privately; later MaskEdgeBackground reads cannot change the shared mask's resident history charge.
+        if (source.Format() == RasterFormat::Gray8 && !source.IsMaterialized())
+            return ContiguousRasterForWork(source, cancellation);
         return cancellation.IsCancelled() ? Raster{} : source;
     }
 

@@ -1,11 +1,18 @@
 # P1 — Responsive raster editor delivery milestone
 
-**Paused at the user’s request on 2026-10-05.** Source, qualified receipts and local helpers are saved.
-Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) before continuing.
+**Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
+[checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
+Current work: H3 scope-bound waitable residency gate, same-ticket refresh and live-cache maintenance;
+bounded Wand mode and Warp cleanup sidecars.
+No later candidate is qualified or activated in Native yet.
 
 ## Delivery checklist
 
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
+- [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
+- [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.
+  - [x] Earlier mutex core/mask/Warp candidate passes full managed Debug r77, Release r78 and ASan Debug r79: 6,778 document / 9,298 application controls and unchanged 79 stages; all archive copies verify. Subsequent analysis failures r80–r84 are preserved and repaired with a waitable atomic gate and explicit test ownership/initialization/null guards ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
+  - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
 - [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.
@@ -18,64 +25,37 @@ Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) be
 - [x] Fresh normal managed x64 Debug/Release/ASan suites and ARM64 cross-builds pass for the combined lifetime/build/fixture candidate. All 627 owned inputs match; exact 78-stage / 8,962-control application registry, bounds suite, scanner controls and screenshots pass. Static analysis, diagnosis of the intermittent first-clean-run Wand failure and native activation remain open; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
 - [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
 - [x] Managed default-desktop Debug analysis qualifies the repaired candidate: all five images, unchanged stack thresholds, concurrency SAL controls, ISA/PDB/scanner gates and provenance pass; r31's 754 inputs / 1,038 archive copies are verified. The full current runtime matrix and native activation remain open.
-- [x] First fresh current x64 Debug full suite and all three ARM64 cross-builds pass on identical 754 inputs; 6,491 document / 8,980 application controls, exact 78 stages and 12 new scratch controls are verified. Release/x64 ASan runtime and native activation remain open.
-- [x] Preserve Release r36's ISA refusal and qualify fixture-isolated Release r37 without changing assertions, scanner rules or the ISA floor: all 6,491 document / 8,980 application controls and 78 stages pass.
-- [x] Preserve ASan r38's delayed clipboard failure, ARM64 r39–r41 cross-build receipts, and ASan r42's IoTests clipboard failure with its independently verified archive; record r43–r45 as diagnostic station-creation failures without assigning a cause.
-- [x] Reproduce the native null-owner concurrent clipboard-scope hazard with read-only r49/r50 diagnostics and integrate a fresh worker-owned message HWND scope plus actual two-worker Inspect/Copy regression. The original r47/r48 clipboard actor remains unidentified; full-suite ASan r51 exits 0 with all 146 clipboard-transfer checks passing, unchanged 8,980 application controls / 78 stages, 6,491 document controls, and 1,028 independently verified archive copies.
-- [x] Sampler prerequisites pass combined full Debug r10: bounded FIFO, palette/picker authority, acknowledged repeated readback and device replacement; 6,504 document / 8,988 application controls preserve all preceding controls and the same 78 stages. Complete matrix and real callers remain open.
-- [x] Full Debug r55 qualifies explicit sampler intent and per-point context: 16 new palette, 23 new picker and 1,757 FIFO controls; exact preceding registries remain (6,571 document / 9,122 application, 79 stages). Actual sampler/younger consumer integration and remaining matrix/G1 stay open.
-- [x] Actual settled All Layers wand New passes full Debug r12: 51 new core and 111 host checks; exact preceding registries/stage order are preserved (6,555 document / 9,099 application controls, 79 stages). Complete matrix, graph-specific shutdown, larger supported fixtures, remaining wand modes/callers and G1 remain open.
-- [ ] P1.3: finish [real sampler](SamplerReadback_2026-10-04.md), [All Layers wand New](WandCompositeReadback_2026-10-04.md), remaining wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
-- [x] Sampler full ASan Debug r64 qualifies actual opening/scheduler refusal and recovery, physical input overflow and source-capture counts: 6,604 document / 9,244 application, unchanged 79 stages, sanitizer detection, 27 smoke rows and 1,046 verified copies. Later source, final matrix and G1 remain due.
-- [x] Sampler graph prerequisite full Debug r57 preserves 6,588 document / 9,147 application controls and 79 stages; format failed before that snapshot. Physical callers, selected cancellation and event-time Brush/Gradient/Shape are implemented privately for r58; runtime, remaining matrix and G1 are pending.
-- [x] Private full Debug r60 qualifies actual Eyedropper, queued Brush/Gradient/Shape and selected/idle cancellation; 6,604 document / 9,178 application controls, original 79 stages and skills/format pass. Cross-opening fix, Alt/live cases, final matrix, H3/H4 and G1 remain due.
-- [x] Private full Debug r61 qualifies cross-opening color inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup readiness; 6,604 document / 9,192 application controls, unchanged 79 stages and verified archive. Broader physical terminals, final matrix, H3/H4 and G1 remain due.
+- [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
-- [x] Private full Release r62 passes physical sampler leave/loss/Cancel Mode/Escape and partial alpha: 6,604 document / 9,207 application controls and unchanged 79 stages. Combined Debug/analysis/ARM64, native activation and G1 remain due.
-- [x] Private full Debug r63 passes 31 actual picker-target controls and the sampler benchmark smoke row; 6,604 document / 9,238 application, original 79 stages and 27 benchmark rows. Final matrix, larger Release measurements and G1 remain due.
-- [x] Sampler full Release r65 qualifies bounded physical Map recovery/failure and focused sampler benchmark smoke: 6,604 document / 9,248 application, original 79 stages and verified archive. First hardware timing attempt is refused by the awake-display guard; later shutdown source and G1 remain due.
-- [x] Sampler full Debug r66 qualifies exact shutdown acknowledgement before capture, at a live prefix and during held Map recovery: 6,604 document / 9,266 application, unchanged 79 stages and independently verified archive. Broader lifetime/admission, current matrix and G1 remain due.
-- [x] Sampler full ASan Debug r68 qualifies cached complete source-only admission, including selection, late sparse assembly and unavailable bounds: 6,624 document / 9,266 application, unchanged 79 stages and verified archive. Later history-cache and memory-waiting work, current matrix/native activation and G1 remain open.
-- [x] Full Debug r71 qualifies cached history admission, the shape-source trim repair and sampler memory waiting/recovery/cancel/refusal: 6,658 document / 9,289 application controls, original 79 stages and independently verified archive. Later topology/Escape, current matrix/native activation and G1 remain open.
-- [x] Full ASan Debug r72 qualifies complete worker-prepared history topology, mixed reference/live exclusion and actual sampler Escape after pointer Up during memory waiting: 6,683 document / 9,298 application controls, unchanged 79 stages and 1,048 verified archive copies. Current full matrix/native activation, exact unique H3 accounting, late residency, reference-path cost, G1 and pointer-held Escape remain open.
-- [x] Full Release r73 passes the same 771-input freeze as ASan Debug r72: 6,683 document / 9,298 application controls, all 79 stages and PASS counters/routes preserved; 1,041 archive copies verify. This qualifies Release on that snapshot only; full Debug, analysis, ARM64, native activation and G1 remain open.
-- [x] Managed history index and unique retirement slice passes full Debug r74, Release r75 and ASan Debug r76 on the same 771-input freeze: 6,729 document / 9,298 application controls, original 79 stages and nine new owner-policy HostTests controls; the 1,041-copy Debug/Release and 1,048-copy ASan archives verify. H3 late residency/reference/delta cost, analysis/ARM64, native activation and G1 remain open ([evidence](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
 - [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
-- [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets. Cached conservative stack admission and the omitted shape-source charge pass full Debug r71; worker-prepared topology and mixed reference/live exclusion pass full ASan Debug r72. Exact unique accounting, late residency and reference-path cost remain open.
-- [x] Qualify the worker-prepared complete storage index and mixed reference/live-exclusion repair, plus actual Escape during sampler memory waiting after pointer Up: full ASan Debug r72 passes. Pointer-held Escape and the original H3/H4/G1 requirements remain open.
+- [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
+  - [x] Main-integrated immutable history-index slice passes full x64 Debug r74, Release r75 and ASan Debug r76 on identical inputs (`1936fe6`): unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.
 
-**Status: HOLD / P1 (user pause 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
+**Status: ACTIVE / P1 (user resumed 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Latest managed history-index snapshot passes full Debug r74, Release r75 and ASan Debug r76 on an identical 771-input freeze: 6,729 document / 9,298 application controls and unchanged 79 stages; the 1,041-copy Debug/Release and 1,048-copy ASan archives verify. ASan Debug r76 passes the same source and complete registry. Earlier topology/sampler source passes ASan r72 and Release r73; those receipts do not qualify the later index. Current analysis/ARM64, native activation, late residency, reference/delta cost, pointer-held Escape and G1 remain open. Private Smudge/Liquify source-copy and eager small sparse Gray8 thumbnail repairs are under preparation and have not been integrated or qualified. Earlier full Debug r66 passes, adding sampler post-join shutdown cleanup and three actual host phases
-with 18 new assertions: 6,604 document / 9,266 application and unchanged 79 stages. Full Release r65 passes physical Map recovery/failure and focused benchmark
-smoke: 6,604 document / 9,248 application controls, original 79 stages, 27-operation and one-operation smoke.
-Admission/refusal/overflow previously passed ASan Debug r64, including sanitizer detection.
-Actual picker targets and sampler smoke passed Debug r63; physical terminals and numeric
-alpha passed full Release r62. Preceding Debug r61 qualifies
-cross-opening color, actual Alt callers and guarded cleanup readiness; it is pushed as `af99efe`.
-Current combined Debug/analysis/ARM64, broader callers, native activation and G1 remain open. The reviewed clipboard-scope
-fix previously passed ASan r51 and Debug analysis r52; earlier receipts qualify their recorded snapshots only.
-Original failures and diagnostic uncertainty remain preserved in the
-[color-display evidence](../../TestRuns/DeferredColorDisplay_2026-10-04.md) and
-[sampler evidence](../../TestRuns/SamplerReadback_2026-10-04.md).
-
-The actual All Layers wand New-selection graph passes full Debug r12 and Release r14 with original registries preserved.
-Debug r11's fixture failure and ASan r15's dispatch-table ISA rejection are archived. The shared request descriptor
-repair passes full ASan r16, Release r19 and repaired Debug analysis r21. Debug r17 remains an unassigned
-ordering failure; the current combined matrix, ARM64 cross-builds, shutdown and G1 remain due.
-[Its checklist](WandCompositeReadback_2026-10-04.md) distinguishes implementation from qualification.
-Remaining P1 callers, admission on the largest supported fixtures, original G1 measurements and native activation
-still precede P1 Done.
-Every P1 exit row and original G1 requirement remains unchanged; the milestone is incomplete.
+Current integration: the corrected 18-case color-display host route is implemented and pushed in the managed
+candidate (`92bd2ae`). The earlier r21 document suite passed 6,491 controls; that result does not qualify later
+stack/scratch repairs. Full attempts stopped before the main application registry on process/tool-start or
+clipboard fixture failures. Analysis r25 failed PowerShell initialization (`0xC0000142`); r26 failed tool
+discovery before compilation. r27 used a private temporary WinSta0 desktop, closed after its child exited, with
+`MSBUILDDISABLENODEREUSE=1` scoped to that process. The unchanged `build.ps1 -Platform x64 -Configuration Debug
+-Rebuild -MaxCpuCount 2 -Analyze` entrypoint reached compiler analysis and exited 1 on diagnostics. This is a
+compiler-diagnostics failure, not a runtime pass or P1 completion. Its independently verified archive, current
+repairs, remaining Debug/Release/ASan and ARM64 qualification, native activation, remaining code routes and
+G1 measurements are recorded in [DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md).
+The persistent recorder now runs on the recovered default desktop. r29/r30 compile and link the application
+without the earlier production diagnostics, but remain overall analysis failures on large test functions;
+their verified evidence and unqualified repairs are retained. The active-desktop G1/Release ETW run remains
+an independent requirement. Every P1 exit row remains unchanged.
 
 ## What this milestone delivers
 

@@ -7,10 +7,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <latch>
 #include <memory>
 #include <new>
 #include <optional>
 #include <string>
+#include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -52,6 +55,13 @@ void ExpectStorageIndex(bool condition, const char* name) noexcept
     {
         ++gFailures;
     }
+}
+
+void ExpectResidency(bool condition, const char* name) noexcept
+{
+    std::printf("%s history-residency.%s\n", condition ? "PASS" : "FAIL", name);
+    if (!condition)
+        ++gFailures;
 }
 
 struct HistoryIndexCheckpoint final
@@ -1134,6 +1144,165 @@ void PreparedIndexResamplesLateSparseMaterializationOnNextPreparation()
                        "next-preparation-drops-old-history-above-literal-eight-byte-budget-after-cache-growth");
 }
 
+void ScopeBoundResidencyLeaseRefusesRecursiveMaterialization()
+{
+    static_assert(!std::is_move_constructible_v<Raster::ResidencyLease>);
+    static_assert(!std::is_move_assignable_v<Raster::ResidencyLease>);
+    const Raster leaf = TinyBgra(1, 1, 71);
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    const auto epoch = Raster::ResidencyEpoch();
+    auto lease = Raster::TryResidencyLease();
+    ExpectResidency(lease.Held() && !lease.TryAcquire(), "scope-bound-held-lease-refuses-recursive-reacquisition");
+    ExpectResidency(sparse.Data() == nullptr && !sparse.IsMaterialized() && sparse.ByteSize() == 0 &&
+                        Raster::ResidencyEpoch() == epoch,
+                    "scope-bound-lease-refuses-shared-assembly-before-allocation-or-wait");
+    const auto* dense = leaf.Data();
+    ExpectResidency(dense && dense[0] == 71 && Raster::ResidencyEpoch() == epoch,
+                    "scope-bound-lease-still-permits-published-dense-pixels");
+    lease.Reset();
+    ExpectResidency(!lease.Held() && lease.TryAcquire() && lease.Held(),
+                    "same-thread-reset-and-reacquire-retains-local-owner-lifetime");
+    lease.Reset();
+    const auto* pixels = sparse.Data();
+    ExpectResidency(pixels && sparse.ByteSize() == 8 && Raster::ResidencyEpoch() == epoch + 1,
+                    "released-scope-allows-one-subsequent-shared-cache-publication");
+}
+
+void PreparedResidencyRefreshPreservesTheOriginalEdit()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    const Raster leaf = TinyBgra(1, 1, 81);
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    const auto before = std::optional<CanvasDocument>{DocumentWithRaster(sparse, L"late resident source")};
+    const auto after = std::optional<CanvasDocument>{CanvasDocument{}};
+    DocumentHistory history(100, 8);
+    const auto baseline = history.CurrentRevision();
+    auto publication = DocumentHistory::PrepareEdit(history.CaptureState(), before, {}, after, {}, L"Original edit");
+    ExpectResidency(publication.has_value() && !sparse.IsMaterialized(), "original-edit-prepared-without-source-cache");
+    if (!publication)
+        return;
+    const auto following = DocumentHistory::FollowingPreparedState(publication.value());
+    ExpectResidency(following && following->PastCount() == 1 && following->UndoName() == L"Original edit",
+                    "four-byte-leaf-fits-eight-byte-budget-before-cache-growth");
+    Guid intendedRevision{};
+    if (following)
+        intendedRevision = following->Revision();
+    DocumentHistory::ResidencyPermit permit;
+    ExpectResidency(permit.TryAcquire(publication.value()) == Validation::Ready,
+                    "fresh-sample-obtains-owner-permit-without-repreparing-pixels");
+    permit.Reset();
+    const auto epoch = Raster::ResidencyEpoch();
+    const auto* assembled = sparse.Data();
+    ExpectResidency(assembled && sparse.ByteSize() == 8 && Raster::ResidencyEpoch() == epoch + 1,
+                    "one-cache-publication-advances-resident-epoch-once");
+    (void)sparse.Data();
+    (void)leaf.Data();
+    ExpectResidency(Raster::ResidencyEpoch() == epoch + 1, "repeat-and-dense-data-reads-do-not-advance-epoch");
+    ExpectResidency(permit.TryAcquire(publication.value()) == Validation::Refresh,
+                    "late-growth-requests-refresh-without-revoking-document-authority");
+    ExpectResidency(history.CanPublish(publication.value()) && !history.Publish(publication.value()) &&
+                        history.CurrentRevision() == baseline && history.UndoCount() == 0,
+                    "opted-in-stale-sample-cannot-publish-or-change-live-history");
+    CancelSource cancelled;
+    (void)cancelled.Cancel();
+    ExpectResidency(!DocumentHistory::RefreshPreparedResidency(publication.value(), after, cancelled.Token()) &&
+                        history.CanPublish(publication.value()),
+                    "cancelled-refresh-preserves-original-publication-and-authority");
+    HistoryIndexCheckpoint fault;
+    fault.throwAllocation = true;
+    fault.target = DocumentHistory::PrepareStage::StorageIndexBounds;
+    bool refused = false;
+    try
+    {
+        (void)DocumentHistory::RefreshPreparedResidency(publication.value(), after, {},
+                                                        {&HistoryIndexCheckpoint::Run, &fault});
+    }
+    catch (const std::bad_alloc&)
+    {
+        refused = true;
+    }
+    ExpectResidency(refused && fault.reached && history.CanPublish(publication.value()) &&
+                        history.CurrentRevision() == baseline &&
+                        permit.TryAcquire(publication.value()) == Validation::Refresh,
+                    "partial-refresh-allocation-failure-keeps-original-intent-and-live-state");
+    ExpectResidency(!DocumentHistory::RefreshPreparedResidency(publication.value(), before),
+                    "unrelated-live-exclusion-root-cannot-refresh-this-edit");
+    ExpectResidency(DocumentHistory::RefreshPreparedResidency(publication.value(), after),
+                    "worker-refresh-reuses-completed-edit-and-trims-grown-owner");
+    const auto refreshed = DocumentHistory::FollowingPreparedState(publication.value());
+    ExpectResidency(refreshed && refreshed->Revision() == intendedRevision && refreshed->PastCount() == 0,
+                    "twelve-byte-resident-owner-is-trimmed-with-original-revision-intact");
+    ExpectResidency(permit.TryAcquire(publication.value()) == Validation::Ready &&
+                        history.Publish(publication.value()) && history.CurrentRevision() == intendedRevision &&
+                        history.UndoCount() == 0 && history.RetainedBytes(after) == 0 && history.IsModified(),
+                    "fresh-permit-publishes-original-edit-under-eight-byte-history-limit");
+    auto released = Raster::TryResidencyLease();
+    ExpectResidency(released.Held(), "successful-history-swap-releases-gate-before-later-owner-work");
+    released.Reset();
+    ExpectResidency(permit.TryAcquire(publication.value()) == Validation::Invalid &&
+                        !DocumentHistory::RefreshPreparedResidency(publication.value(), after),
+                    "published-edit-refuses-reuse-and-refresh");
+}
+
+void BusyResidencyGateAndOwningMovesAreExplicit()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    const auto before = std::optional<CanvasDocument>{DocumentWithRaster(TinyBgra(1, 1, 91), L"permit source")};
+    const auto after = std::optional<CanvasDocument>{CanvasDocument{}};
+    DocumentHistory history;
+    auto publication = DocumentHistory::PrepareEdit(history.CaptureState(), before, {}, after, {}, L"Permit edit");
+    ExpectResidency(publication.has_value(), "busy-gate-original-publication-ready");
+    if (!publication)
+        return;
+    std::latch acquired{1};
+    std::latch release{1};
+    bool held = false;
+    bool recursiveRefused = false;
+    std::thread worker(
+        [&]
+        {
+            auto lease = Raster::AcquireResidencyLease();
+            held = lease.Held();
+            auto recursive = Raster::TryResidencyLease();
+            recursiveRefused = !recursive.Held();
+            acquired.count_down();
+            release.wait();
+        });
+    acquired.wait();
+    DocumentHistory::ResidencyPermit permit;
+    const auto decision = permit.TryAcquire(publication.value());
+    const bool unchanged = !history.Publish(publication.value()) && history.UndoCount() == 0;
+    release.count_down();
+    worker.join();
+    ExpectResidency(held && recursiveRefused, "worker-gate-owns-lease-and-refuses-recursion");
+    ExpectResidency(decision == Validation::Busy && unchanged,
+                    "owner-try-reports-busy-without-waiting-or-mutating-live-history");
+    ExpectResidency(permit.TryAcquire(publication.value()) == Validation::Ready,
+                    "same-publication-obtains-permit-after-worker-releases-gate");
+    DocumentHistory::Publication moved(std::move(publication.value()));
+    auto gate = Raster::TryResidencyLease();
+    const bool moveReleased = gate.Held();
+    gate.Reset();
+    ExpectResidency(moveReleased && !history.CanPublish(publication.value()) && !history.Publish(moved),
+                    "move-releases-borrowed-permit-and-requires-new-destination-permit");
+    ExpectResidency(permit.TryAcquire(moved) == Validation::Ready && history.Publish(moved) &&
+                        history.UndoCount() == 1 && history.UndoName() == L"Permit edit" &&
+                        history.RetainedBytes(after) == 4,
+                    "owning-move-preserves-complete-intent-and-literal-charge");
+
+    DocumentHistory::ResidencyPermit destructorPermit;
+    auto abandoned = DocumentHistory::PrepareEdit(history.CaptureState(), after, {}, before, {}, L"Abandoned edit");
+    const bool borrowed = abandoned && destructorPermit.TryAcquire(abandoned.value()) == Validation::Ready;
+    abandoned.reset();
+    auto afterDestruction = Raster::TryResidencyLease();
+    ExpectResidency(borrowed && afterDestruction.Held() && history.UndoCount() == 1,
+                    "publication-destruction-releases-borrowed-permit-before-retiring-owners");
+    afterDestruction.Reset();
+    DocumentHistory::Publication invalid;
+    ExpectResidency(destructorPermit.TryAcquire(invalid) == Validation::Invalid,
+                    "default-publication-cannot-acquire-a-resident-permit");
+}
+
 void PreparedIndexBoundsRepeatedLargeRasterAcrossMetadataEdits()
 {
     constexpr std::uint64_t kMiB = 1024 * 1024;
@@ -1319,6 +1488,9 @@ void TestHistoryStorageTopology()
     PreparedIndexFailureAtTrimPreservesStateAndAllowsRetry();
     CapturedIndexViewSurvivesResetAndPreventsRasterIdentityReuse();
     PreparedIndexResamplesLateSparseMaterializationOnNextPreparation();
+    ScopeBoundResidencyLeaseRefusesRecursiveMaterialization();
+    PreparedResidencyRefreshPreservesTheOriginalEdit();
+    BusyResidencyGateAndOwningMovesAreExplicit();
     PreparedIndexBoundsRepeatedLargeRasterAcrossMetadataEdits();
     PartialIndexFaultsPreserveRedoAndAllowACompleteRetry();
     CompleteIndexesUseTheOwnerRetirementHandoff();
