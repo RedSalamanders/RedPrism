@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-05
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -23,6 +23,26 @@ Immutable selection storage also counts once by its held `SelectionLoops` identi
 document's selection identity. Its cached charge includes the outer vector object, outer retained capacity
 and each loop's retained point capacity; spare capacity counts. Opaque allocator/control-block overhead is
 covered by global headroom. The byte query never traverses selection points. Empty geometry owns no storage.
+
+## P1.9 H3 candidate contract (scoped Debug qualification)
+
+The integrated candidate maintains an immutable `HistoryStorageIndex` with owning entry, raster and selection
+membership records. Preparation diffs changed entries; Undo/Redo move entry handles between past and future
+without changing membership. The index holds every identity owner and excludes identities still owned by the
+live document. `RetainedBytes` reads current resident bytes from each unique retained raster and selection; it
+does not return a cached resident total. Its cached retirement bound charges unique index-owned raster
+self-bounds, selection storage, and layer/index/entry metadata. Sealed history-stack storage metadata is computed
+in O(1) from immutable capacity. Reference paths and pending, unmatched or additional sources continue to use
+conservative occurrence bounds.
+
+The index is privately mutable only during preparation. A partial clone remains uniquely producer-owned until
+`CacheBounds` succeeds; only then can it publish as shared immutable state with deferred retirement.
+`AlwaysOnOwner` applies only to sealed indexes and keeps the node's actual conservative byte bound; other
+deferred-release callers retain the default size threshold and the release-node layout is unchanged. With no
+registered owner sink, including on worker TLS, retirement remains inline. Concurrent late sparse-cache
+publication and trim/reprepare synchronization remain unresolved, as do native/full-matrix qualification and
+G1/caller-cost measurements. The scoped x64 Debug run qualifies only the integrated index slice; the private WARP
+copy candidate and complete H3 exit remain open ([record](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 
 ## Transactions
 

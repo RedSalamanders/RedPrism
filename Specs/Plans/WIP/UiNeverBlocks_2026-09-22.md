@@ -20,6 +20,7 @@
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
 - [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
 - [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
+  - [x] Main-integrated immutable history-index slice passes scoped x64 Debug r74: unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.

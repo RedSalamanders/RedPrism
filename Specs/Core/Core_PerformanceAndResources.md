@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-05
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -133,7 +133,7 @@ that makes them impossible.
 
 | Budget | Limit |
 | --- | --- |
-| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached. Conservative raster retirement bounds and prepared publication qualify for basic raster/gradient/pixel move; other H1 callers and H2/H3 exact accounting/constant-time capture remain open |
+| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached. Conservative raster retirement bounds and prepared publication qualify for basic raster/gradient/pixel move; other H1 callers remain open. The integrated P1.9 H3 immutable-index slice has scoped x64 Debug qualification; late-cache synchronization, remaining H3 paths and full resource qualification remain open. |
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | File encode buffers (P1.7) | Direct bounded temporary-file streams for PNG/JPEG; ZIP sources stream durable staged PNG files. No retention of all encoded asset vectors through archive close. Manifest/source-path/codec allocations remain in whole-graph admission/headroom; serial staging disk cost is measured separately |
@@ -244,6 +244,17 @@ edits, gradients and pixel moves; its scoped native qualification is recorded in
 production Undo/Redo have not migrated to prepared publication. Exact retained-byte accounting and constant-time
 history capture remain H2/H3 work. Unmigrated synchronous Begin/End callers retain their existing owner-side
 allocation behavior.
+
+The current P1.9 H3 candidate maintains a sealed `HistoryStorageIndex` of unique entry, raster and selection
+ownership. Preparation diffs changed entries; Undo/Redo transfer entry handles between past/future without
+changing index membership. The live document's identities remain excluded. `RetainedBytes` samples current
+raster and selection resident bytes when queried; the cached retirement total is not used as a resident-byte
+snapshot. The cached retirement bound covers unique index-owned entries, rasters, selections and metadata, plus
+O(1) sealed-stack capacity metadata. Reference, pending, unmatched and additional sources retain conservative
+occurrence bounds. The scoped x64 Debug run qualifies this index slice only. Concurrent late sparse materialization,
+reprepare/publication synchronization, remaining reference/caller paths, the private WARP copy candidate, the
+full configuration matrix, native execution and measured G1 remain open. See
+[`HistoryStorageIndexCandidate_2026-10-05.md`](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md).
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 

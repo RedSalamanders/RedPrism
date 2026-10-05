@@ -187,6 +187,7 @@
       inputs, with 28 root assertions and 331 parser controls per x64 configuration
       ([qualified record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
+    - [x] Main-integrated history-index slice: immutable unique Entry/Raster/Selection membership with changed-entry diffs; Undo/Redo transfer between stacks without changing membership; live-document exclusion; fresh resident-byte reads; unique cached retirement ownership bounds and O(1) sealed-stack metadata pass scoped x64 Debug r74. This does not close H3. Late-cache concurrency/reprepare, remaining reference paths, complete native/configuration qualification, caller/delta cost and G1 remain open; see [scoped record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md).
     - [ ] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
       key. Include nested sparse tiles/bases, distinct optional thumbnails and selection capacity without
       repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged.
@@ -198,6 +199,10 @@
     - [ ] Add independent shared/nested topology, address-reuse, live-document exclusion, capacity, checked overflow
       and oldest-first cases; gate an export's materialization before/after trim preparation and publication.
       Verify cancellation/allocation refusal preserves revision/redo and releases every replaced index owner.
+    - [ ] Complete retirement policy/lifetime and partial-clone qualification across all required profiles. Scoped
+      x64 Debug r74 adds 46 DocumentTests assertions and 0 Application assertions; the full registry/archive receipt
+      is recorded, but Release, ASan, ARM64 and any separately counted HostTests policy suite remain unqualified or
+      unreported ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
     - [x] H4.1 — Image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,
