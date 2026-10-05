@@ -106,6 +106,9 @@ On shutdown, the application requests cancellation and hides the window before j
 their inputs and dependent owners alive until they return, drops undelivered callbacks, then tears down chrome,
 renderer/device, HWND and localization/COM state. A shutdown request from inside a job UI callback is deferred
 until that callback returns.
+Completion-suppressed sampler jobs retain their original ticket, source and history stamp through the scheduler's
+worker/retirement join. The join is their shutdown acknowledgement; only then does the host clear that ticket,
+finish the exact stamp and sweep scalar openings. Normal completion remains the ordinary acknowledgement path.
 
 ### Job activity and end-session policy
 

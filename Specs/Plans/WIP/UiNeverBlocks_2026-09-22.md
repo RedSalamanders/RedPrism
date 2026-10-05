@@ -29,6 +29,7 @@
 - [x] Private full Release r62 passes physical sampler leave/loss/Cancel Mode/Escape and partial alpha: 6,604 document / 9,207 application controls and unchanged 79 stages. Combined Debug/ASan/analysis/ARM64, native activation and G1 remain due.
 - [x] Private full Debug r63 passes 31 actual picker-target controls and the sampler benchmark smoke row; 6,604 document / 9,238 application, original 79 stages and 27 benchmark rows. Final matrix, larger Release measurements and G1 remain due.
 - [x] Sampler full Release r65 qualifies bounded physical Map recovery/failure and focused sampler benchmark smoke: 6,604 document / 9,248 application, original 79 stages and verified archive. First hardware timing attempt is refused by the awake-display guard; later shutdown source and G1 remain due.
+- [x] Sampler full Debug r66 qualifies exact shutdown acknowledgement before capture, at a live prefix and during held Map recovery: 6,604 document / 9,266 application, unchanged 79 stages and independently verified archive. Broader lifetime/admission, current matrix and G1 remain due.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
@@ -43,7 +44,8 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current private integration passes full Release r65 with physical Map recovery/failure and focused benchmark
+Current private integration passes full Debug r66, adding sampler post-join shutdown cleanup and three actual host phases
+with 18 new assertions: 6,604 document / 9,266 application and unchanged 79 stages. Full Release r65 passes physical Map recovery/failure and focused benchmark
 smoke: 6,604 document / 9,248 application controls, original 79 stages, 27-operation and one-operation smoke.
 Admission/refusal/overflow previously passed ASan Debug r64, including sanitizer detection.
 Actual picker targets and sampler smoke passed Debug r63; physical terminals and numeric

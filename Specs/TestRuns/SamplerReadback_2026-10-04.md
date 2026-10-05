@@ -456,3 +456,32 @@ and use a fresh output directory after the display state changes. Do not bypass 
 The newer shutdown audit identifies ticket/history-stamp fields that relied on a completion callback suppressed
 by shutdown. A post-join cleanup and three actual host phases are prepared separately and absent from r65.
 Final matrix, native activation, broader memory/device/shutdown, H3/H4 and original G1 remain due.
+
+## Sampler shutdown acknowledgement - full Debug r66
+
+Actual child 57048, 2026-10-05T01:46:35.509493Z-01:55:58.556964Z, exit **0**, 771 unchanged inputs.
+Freeze `A172E8DC60099FC09183BE1897CA2D7271928865EDF95BC15262B7C2FDC43DD3`; stdout
+`E7FD8685771EC007F4BB3B978C7C9078DE38688BF49283DD1CAD93E1F6AEAA58`, stderr
+`7C27BE48C8C666FE9428C1092067FE429697E5F71E4FC0334FD9DB2101E08BE3`. Skills/format pass before freeze.
+All full suites, ISA/PDB/scanner controls, WARP, crash probes, CLI/build/RAW fixtures, both UI smoke paths and
+harness screenshots pass. The proof preserves every preceding literal application control and document PASS
+line, including parameterized names, with **6,604 document / 9,266 application** controls and **79 ordered stages**.
+
+Eighteen new checks use actual hidden WARP application hosts before source capture, at an acknowledged live
+prefix, and during a held Map-recovery event. They retain the original receipt/source/reservation until join,
+then require cancelled acknowledgement, cleared sampler ticket/history stamp, no capture/device/worker owners,
+one final MTA CPU-root retirement, idempotent second shutdown and consumed fixture quit. Shutdown clears the
+ticket and stamp after Close joins; suppressed Completed callbacks cannot leave the session busy. Secondary
+review finds no concrete lifetime or order defect. Existing standalone shutdown tests and stage order remain.
+
+Proof `verified-sampler-shutdown-registries.json`: SHA-256
+`F84B8F013D45ADF3452AA08C45C0E5427F1CE5DA54C3446130CB400F7D6C3422`.
+Archive `p1-sampler-shutdown-x64-Debug-r66-full-qualified`: **1,041 copies / 79 stages**, independently
+verified 2026-10-05T02:02:33.3150033Z. Completion
+`F77926C742C07DE70E34B8A4FF4D6D73D9CF1A02B23AA2ECD2363980C4A59FD3`; source manifest
+`9B1E843CC8BF95CFEDD76839C070969757662DF68A76282B85364BB5B1A40C5C`; evidence manifest
+`E043A93E8613B147C2A2FFF6AD785EDCA3503782079AAB1129C303B9BE60C28D`.
+
+The first proof script mistakenly expected lowercase UI smoke text; correcting that diagnostic assertion
+changes neither source nor runtime. Cached source-only document admission is absent from r66. Combined
+Release/ASan/analysis/ARM64, native integration, broader callers and original G1 remain open.

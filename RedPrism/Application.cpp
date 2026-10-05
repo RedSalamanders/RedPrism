@@ -3603,6 +3603,16 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Close suppresses Completed callbacks. Its completed worker/retirement join acknowledges the sampler's
+    // original record; clearing these earlier would let its borrowed source or opening retire before that join.
+    assert(_samplerHostJob == nullptr);
+    if (_samplerHostStamp)
+        (void)_historyWork.Finish(_samplerHostStamp.value());
+    _samplerHostStamp.reset();
+    _samplerHostTicket.reset();
+    SweepSamplerOpenings();
+    if (_samplerState)
+        _samplerState->palettePrefix.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
