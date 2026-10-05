@@ -505,6 +505,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostBatchFailed = false;
     _hostBatchError = S_OK;
     _pathClassifications = {};
+    _historyResidencySource.RetryDeferred();
     if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime))
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
@@ -1473,6 +1474,7 @@ void Application::RunHostContinuation() noexcept
 
 void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error) noexcept
 {
+    _historyResidencySource.RetryDeferred();
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return;

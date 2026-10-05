@@ -3039,6 +3039,7 @@ Vec2 Application::DocumentSize() const noexcept
 
 void Application::DocumentChanged() noexcept
 {
+    _historyResidencySource.RetryDeferred();
     RefreshColorJobs();
     SyncColorLookupPreview();
     _composition.InvalidateDocument();
@@ -3497,6 +3498,7 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    _historyResidencySource.StopNotifications();
     StopHostContinuations();
     CancelColorJobs();
     CancelGradientJobs();
@@ -3524,6 +3526,7 @@ void Application::Shutdown() noexcept
              owner._session.DetachCoverageForShutdown();
              owner._brushEngine.Release();
              owner._retryWait.CloseAfterWorkers();
+             owner._historyResidencySource.CloseAfterWorkers();
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;
              owner._shapeCommitPreview.reset();
@@ -3623,6 +3626,10 @@ void Application::Shutdown() noexcept
     _jobIndicatorTimer.reset();
     SaveSettings();
     StopSettingsWatch();
+    if (_historyResidencyStamp)
+        (void)_historyWork.Finish(_historyResidencyStamp.value());
+    _historyResidencyTicket.reset();
+    _historyResidencyStamp.reset();
     _displayPowerNotification.reset();
     if (_window)
     {

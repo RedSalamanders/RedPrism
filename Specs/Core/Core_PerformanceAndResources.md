@@ -834,5 +834,10 @@ layer and selection owners. Fixed recent-root matching reuses a compatible index
 Index vector capacity and object/control allowances are covered by cached snapshot bounds; worker construction
 and temporary pending/dedup storage stay inside admitted history preparation peaks. No index producer runs during
 owner publication. Reference methods keep a single document scan and iterative nested closure without constructing
-an index object; their final caller migration and comparative cost measurements remain P1 work. The index caches
-no resident byte total: late sparse-cache growth and its publication/trim synchronization remain required H3 work.
+an index object; their final caller migration and comparative cost measurements remain P1 work. The index retains a sampled resident total with a coherent residency-epoch witness; diagnostic queries read fresh
+resident bytes. Opted-in owner completion makes one nonblocking permit attempt and resumes the existing ticket on
+a worker when busy or stale. An unchanged witness avoids cloning/rebuilding the index. Declared admission includes
+one extra refresh candidate/index/container overlap before capture and remains held through apply/drop and retirement.
+Bounded growth subscriptions publish readiness only and join notices before scheduler teardown. The history-only
+source remains self-test scoped; migration of every caller, activation, comparative peak/cost measurement and G1
+qualification remain required H3 work. See `Document_History.md` for the staged publication contract.

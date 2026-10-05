@@ -161,6 +161,7 @@ BEGIN
     IDS_ERROR_LAYER_METADATA        "The layer edit could not be completed."
     IDS_ERROR_SELECTION_EDIT        "The selection edit could not be completed."
     IDS_ERROR_HISTORY_RESTORE       "RedPrism could not complete Undo or Redo. The document is unchanged."
+    IDS_ERROR_HISTORY_RESIDENCY     "RedPrism could not update the history memory budget. The document is unchanged."
     IDS_ERROR_CLONE_SOURCE          "Alt-click where Clone Stamp should copy from first."
     IDS_ERROR_SMEAR_MASK            "Smudge and Liquify work on a layer's pixels, not its mask."
     IDS_ERROR_SHAPE_SIZE            "That shape is too large. A shape can cover up to 100 megapixels."

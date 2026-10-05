@@ -961,7 +961,7 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
     {
         if (cancellation.IsCancelled())
             return false;
-        auto residency = Raster::AcquireResidencyLease();
+        auto residency = Raster::AcquireResidencyLease(cancellation);
         if (!residency.Held())
             return false;
         retainedBytes = 0;
@@ -1406,9 +1406,39 @@ bool DocumentHistory::RefreshPreparedResidency(Publication& publication, const s
     if (!publication.state.storageIndex || !publication.state.storageIndex->current ||
         !publication.state.storageIndex->current->Matches(current))
         return false;
+    // Contention alone does not invalidate the resident witness. Wait on the worker with its stop token,
+    // then avoid cloning/rebuilding the index if no cache grew. A later growth is still caught by owner try.
+    auto residency = Raster::AcquireResidencyLease(cancellation);
+    if (!residency.Held())
+        return false;
+    if (publication.state.storageIndex->residencyEpoch == Raster::ResidencyEpoch())
+        return !cancellation.IsCancelled();
+    residency.Reset();
     auto candidate = publication.state;
     if (!TrimPrepared(candidate, current, cancellation, observer) || cancellation.IsCancelled())
         return false;
     publication.state = std::move(candidate);
     return true;
+}
+
+bool DocumentHistory::NeedsResidencyMaintenance() const noexcept
+{
+    return (!_past.empty() || !_future.empty()) &&
+           (!_storageIndex || _storageIndex->residencyEpoch != Raster::ResidencyEpoch());
+}
+
+std::optional<DocumentHistory::Publication> DocumentHistory::PrepareResidencyMaintenance(
+    StateView view, const std::optional<CanvasDocument>& current, CancelToken cancellation, PrepareObserver observer)
+{
+    if (!view.owner || cancellation.IsCancelled())
+        return std::nullopt;
+    Publication result;
+    result.expectedEpoch = view.epoch;
+    result.expectedRevision = view.revision;
+    result.state = std::move(view);
+    if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
+        !TrimPrepared(result.state, current, cancellation, observer))
+        return std::nullopt;
+    result.sampledResidency = true;
+    return result;
 }

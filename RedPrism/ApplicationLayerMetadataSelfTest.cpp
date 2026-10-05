@@ -44,6 +44,9 @@ int Application::RunLayerMetadataSelfTest() noexcept
         Generation,
         Epoch,
         Active,
+        ResidencyRefresh,
+        ResidencyRefreshFault,
+        ResidencyRefreshCancel,
     };
     struct Case final
     {
@@ -75,6 +78,9 @@ int Application::RunLayerMetadataSelfTest() noexcept
         Case{"generation", Mode::Generation, {}, {}},
         Case{"epoch", Mode::Epoch, {}, {}},
         Case{"active-target", Mode::Active, {}, {}},
+        Case{"residency-refresh", Mode::ResidencyRefresh, {}, {}},
+        Case{"residency-refresh-fault", Mode::ResidencyRefreshFault, {}, {}},
+        Case{"residency-refresh-cancel", Mode::ResidencyRefreshCancel, {}, {}},
     };
     constexpr UINT kPumpMessage = WM_APP + 0x5c1;
     struct State final
@@ -89,6 +95,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
         Guid other;
         std::uint64_t generation = 0;
         bool visited = false, held = false, viewPending = false, cancelPending = false;
+        int originalUndoCount = 0;
     };
     int checks = 0;
     const auto expect = [&checks](const char* mode, const char* check, bool condition) noexcept
@@ -206,6 +213,28 @@ int Application::RunLayerMetadataSelfTest() noexcept
         if (test.mode == Mode::Failure)
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
         _layerMetadataTestGate = gate;
+        const bool residency = test.mode == Mode::ResidencyRefresh || test.mode == Mode::ResidencyRefreshFault ||
+                               test.mode == Mode::ResidencyRefreshCancel;
+        if (residency)
+        {
+            constexpr std::array<std::uint8_t, 4> leafBytes{61, 62, 63, 255};
+            const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, leafBytes.data(), leafBytes.size());
+            gate->lateResidencySource = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+            auto historical = DocumentFixture::Copy(_session.Document().value());
+            historical.layers.front().asset = RasterAsset{gate->lateResidencySource, {}, L"Literal sparse history"};
+            const auto source = std::optional<CanvasDocument>{std::move(historical).Seal()};
+            _session.history = DocumentHistory{100, 8};
+            auto baseline = DocumentHistory::PrepareEdit(_session.history.CaptureState(), source, active,
+                                                         _session.Document(), active, L"Literal cache baseline");
+            if (!expect(test.name, "literal-four-byte-history-baseline",
+                        baseline && _session.history.Publish(baseline.value()) &&
+                            _session.history.RetainedBytes(_session.Document()) == 4 &&
+                            !gate->lateResidencySource.IsMaterialized()))
+                return 5;
+            _session.history.MarkSaved();
+            gate->throwResidencyRefresh = test.mode == Mode::ResidencyRefreshFault;
+            gate->cancelResidencyRefresh = test.mode == Mode::ResidencyRefreshCancel;
+        }
         const auto before = _session.Document();
         State state{*this,
                     test.mode,
@@ -217,6 +246,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
                     target,
                     other,
                     _session.Generation()};
+        state.originalUndoCount = _session.history.UndoCount();
         if (test.mode == Mode::Visibility || test.mode == Mode::Blend)
             state.receipt = QueueHostInput(HostCommandInput{test.mode == Mode::Visibility
                                                                 ? ChromeHost::kCommandToggleLayerVisibility
@@ -231,10 +261,12 @@ int Application::RunLayerMetadataSelfTest() noexcept
         const bool fault = test.mode == Mode::CaptureFault || test.mode == Mode::StageFault;
         const bool stale = test.mode == Mode::Generation || test.mode == Mode::Epoch || test.mode == Mode::Active;
         const auto outcome = state.receipt.Read();
-        const auto expected = fault || test.mode == Mode::Failure ? HostOutcome::Failed
-                              : stale                             ? HostOutcome::Stale
-                              : test.mode == Mode::Cancel         ? HostOutcome::Cancelled
-                                                                  : HostOutcome::Succeeded;
+        const auto expected = fault || test.mode == Mode::Failure || test.mode == Mode::ResidencyRefreshFault
+                                  ? HostOutcome::Failed
+                              : test.mode == Mode::ResidencyRefreshCancel ? HostOutcome::Cancelled
+                              : stale                                     ? HostOutcome::Stale
+                              : test.mode == Mode::Cancel                 ? HostOutcome::Cancelled
+                                                                          : HostOutcome::Succeeded;
         if (!expect(test.name, "acknowledged-outcome", outcome.outcome == expected) ||
             !expect(test.name, "complete-retirement",
                     gate->retired.load() && gate->retiredOffOwner.load() && _jobs.ReservedMemoryBytes() == 0 &&
@@ -251,7 +283,8 @@ int Application::RunLayerMetadataSelfTest() noexcept
         {
             if (!expect(test.name, "owner-and-history-preserved",
                         _session.Document() == state.before && _session.Generation() == state.generation &&
-                            _session.history.CurrentRevision() == state.revision && _session.history.UndoCount() == 0 &&
+                            _session.history.CurrentRevision() == state.revision &&
+                            _session.history.UndoCount() == state.originalUndoCount &&
                             _session.history.CaptureState().FutureCount() == (test.mode == Mode::NoOp ? 1u : 0u)))
                 return 5;
         }
@@ -292,6 +325,26 @@ int Application::RunLayerMetadataSelfTest() noexcept
         if (test.mode == Mode::Cancel &&
             !expect(test.name, "cancel-retains-unacknowledged-barrier", state.cancelPending))
             return 5;
+        if (residency)
+        {
+            if (!expect(test.name, "same-reservation-single-capture-and-metadata-preparation",
+                        gate->captures.load() == 1 && gate->visits.load() == 1 && gate->residentGrowths.load() == 1 &&
+                            gate->residencyRefreshes.load() == 1 && gate->refreshReservationHeld.load() &&
+                            gate->lateResidencySource.ByteSize() == 8))
+                return 5;
+            if (test.mode == Mode::ResidencyRefresh &&
+                !expect(test.name, "literal-grown-history-trim-and-completed-rename",
+                        _session.history.RetainedBytes(_session.Document()) == 0 &&
+                            _session.history.CurrentRevision() != state.revision && _session.history.IsModified()))
+                return 5;
+            if (test.mode == Mode::ResidencyRefreshFault &&
+                !expect(test.name, "worker-refresh-allocation-fails-original-operation",
+                        outcome.error == E_OUTOFMEMORY))
+                return 5;
+            // No live-history maintenance is claimed here: failure/cancel preserves the old revision/history,
+            // whose independently grown cache is a separate notification/maintenance obligation.
+            _session.history = DocumentHistory{};
+        }
         _layerMetadataTestGate.reset();
     }
     prepare();
@@ -412,5 +465,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
     }
     std::fprintf(stderr, "PASS metadata-host.summary checks=%d cases=%zu\n", checks,
                  cases.size() + 1 + contexts.size() * kinds.size());
+    if (const int residency = RunHistoryResidencySelfTest(); residency != 0)
+        return residency;
     return 0;
 }

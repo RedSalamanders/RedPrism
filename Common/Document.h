@@ -153,14 +153,37 @@ class Raster
 
       private:
         friend class Raster;
-        explicit ResidencyLease(bool attempt) noexcept;
+        explicit ResidencyLease(bool attempt, CancelToken cancellation = {}) noexcept;
         void CheckThread() const noexcept;
         std::thread::id _thread;
         bool _held = false;
     };
-    [[nodiscard]] static ResidencyLease AcquireResidencyLease() noexcept; // worker, blocks on atomic wait
-    [[nodiscard]] static ResidencyLease TryResidencyLease() noexcept;     // owner, one attempt only
+    [[nodiscard]] static ResidencyLease AcquireResidencyLease(CancelToken cancellation = {}) noexcept;
+    [[nodiscard]] static ResidencyLease TryResidencyLease() noexcept; // owner, one attempt only
     [[nodiscard]] static std::uint64_t ResidencyEpoch() noexcept;
+
+    // Bounded, allocation-free cache-growth notices. Start/Stop belong to startup/teardown, outside leases and
+    // callbacks. Stop joins any in-flight notice before the borrowed context can die. A notice runs after both
+    // cache locks release and may only publish readiness/wake; it must not reenter subscriptions or read pixels.
+    // This is notification only: it cannot authorize an edit or account/trim history on a producer thread.
+    class ResidencySubscription final
+    {
+      public:
+        using Changed = void (*)(void*) noexcept;
+        static constexpr std::size_t kCapacity = 8;
+        ResidencySubscription() noexcept = default;
+        ~ResidencySubscription() noexcept;
+        ResidencySubscription(const ResidencySubscription&) = delete;
+        ResidencySubscription& operator=(const ResidencySubscription&) = delete;
+        [[nodiscard]] bool Start(Changed changed, void* context) noexcept;
+        void Stop() noexcept;
+
+      private:
+        friend class Raster;
+        Changed _changed = nullptr;
+        void* _context = nullptr;
+        bool _registered = false;
+    };
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format);
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels,
                                      std::size_t byteCount);
@@ -280,6 +303,7 @@ class Raster
     }
 
   private:
+    static void NotifyResidencyChanged() noexcept;
     // The intrusive base outlives the last shared_ptr when large storage is handed to the worker release queue.
 #pragma warning(push)
 #pragma warning(disable : 4324) // the intrusive release node requires 16-byte storage alignment
@@ -1756,6 +1780,15 @@ class DocumentHistory
     [[nodiscard]] static bool RefreshPreparedResidency(Publication& publication,
                                                        const std::optional<CanvasDocument>& current,
                                                        CancelToken cancellation = {}, PrepareObserver observer = {});
+    // Owner-only constant-time hint. It never samples raster bytes or changes history. Empty history needs no
+    // maintenance. Reference-written history with no index must be rebuilt on the worker before a budget claim.
+    [[nodiscard]] bool NeedsResidencyMaintenance() const noexcept;
+    // Worker-only maintenance of the captured current history, with no user edit or new/saved revision.
+    // Normal publication authority/permit and full reservation still apply. The host must serialize it with
+    // accepted document writers and retire replaced containers off owner; this API alone does not wire notices.
+    [[nodiscard]] static std::optional<Publication> PrepareResidencyMaintenance(
+        StateView view, const std::optional<CanvasDocument>& current, CancelToken cancellation = {},
+        PrepareObserver observer = {});
     // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
     // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
     // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers

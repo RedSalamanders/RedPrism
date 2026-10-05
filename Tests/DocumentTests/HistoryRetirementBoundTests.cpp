@@ -4,6 +4,7 @@
 #include "Document.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -16,6 +17,12 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <windows.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -1168,6 +1175,298 @@ void ScopeBoundResidencyLeaseRefusesRecursiveMaterialization()
                     "released-scope-allows-one-subsequent-shared-cache-publication");
 }
 
+struct ResidencyNoticeProbe final
+{
+    std::atomic<int> notices{0};
+    std::atomic<bool> residencyLeaseAcquired{false};
+
+    static void OnChanged(void* context) noexcept
+    {
+        auto& probe = *static_cast<ResidencyNoticeProbe*>(context);
+        auto lease = Raster::TryResidencyLease();
+        probe.residencyLeaseAcquired.store(lease.Held(), std::memory_order_release);
+        lease.Reset();
+        probe.notices.fetch_add(1, std::memory_order_release);
+    }
+};
+
+void ResidencySubscriptionsNotifyBoundedlyAndFenceStop()
+{
+    const std::array<std::uint8_t, 4> pixels{11, 22, 33, 255};
+    const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+    const auto makeSparse = [&leaf](std::uint8_t fill)
+    { return Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, fill); };
+
+    ResidencyNoticeProbe singleProbe;
+    Raster::ResidencySubscription single;
+    ExpectResidency(single.Start(&ResidencyNoticeProbe::OnChanged, &singleProbe),
+                    "subscription-start-registers-one-observer");
+    const Raster first = makeSparse(4);
+    const auto firstEpoch = Raster::ResidencyEpoch();
+    const auto* firstPixels = first.Data();
+    ExpectResidency(firstPixels && first.IsMaterialized() && singleProbe.notices.load(std::memory_order_acquire) == 1 &&
+                        Raster::ResidencyEpoch() == firstEpoch + 1,
+                    "subscription-observes-one-real-cache-growth-and-epoch");
+    (void)first.Data();
+    (void)leaf.Data();
+    ExpectResidency(singleProbe.notices.load(std::memory_order_acquire) == 1 &&
+                        Raster::ResidencyEpoch() == firstEpoch + 1 &&
+                        singleProbe.residencyLeaseAcquired.load(std::memory_order_acquire),
+                    "subscription-repeat-and-dense-reads-stay-quiet-after-cache-locks-release");
+    single.Stop();
+
+    ResidencyNoticeProbe firstSubscriberProbe;
+    ResidencyNoticeProbe secondSubscriberProbe;
+    Raster::ResidencySubscription firstSubscriber;
+    Raster::ResidencySubscription secondSubscriber;
+    const bool bothStarted = firstSubscriber.Start(&ResidencyNoticeProbe::OnChanged, &firstSubscriberProbe) &&
+                             secondSubscriber.Start(&ResidencyNoticeProbe::OnChanged, &secondSubscriberProbe);
+    const Raster second = makeSparse(5);
+    const Raster third = makeSparse(6);
+    const auto pairEpoch = Raster::ResidencyEpoch();
+    (void)second.Data();
+    const bool bothSawGrowth = firstSubscriberProbe.notices.load(std::memory_order_acquire) == 1 &&
+                               secondSubscriberProbe.notices.load(std::memory_order_acquire) == 1 &&
+                               Raster::ResidencyEpoch() == pairEpoch + 1;
+    firstSubscriber.Stop();
+    (void)third.Data();
+    ExpectResidency(bothStarted && bothSawGrowth && firstSubscriberProbe.notices.load(std::memory_order_acquire) == 1 &&
+                        secondSubscriberProbe.notices.load(std::memory_order_acquire) == 2 &&
+                        Raster::ResidencyEpoch() == pairEpoch + 2,
+                    "subscribers-notify-independently-and-stop-removes-future-notices");
+    secondSubscriber.Stop();
+
+    std::array<Raster::ResidencySubscription, Raster::ResidencySubscription::kCapacity> capacitySubscriptions;
+    std::array<ResidencyNoticeProbe, Raster::ResidencySubscription::kCapacity> capacityProbes;
+    Raster::ResidencySubscription overflow;
+    ResidencyNoticeProbe overflowProbe;
+    bool allCapacitySlotsStarted = true;
+    for (std::size_t index = 0; index < capacitySubscriptions.size(); ++index)
+        allCapacitySlotsStarted =
+            capacitySubscriptions[index].Start(&ResidencyNoticeProbe::OnChanged, &capacityProbes[index]) &&
+            allCapacitySlotsStarted;
+    const bool refusedOverflow = !overflow.Start(&ResidencyNoticeProbe::OnChanged, &overflowProbe);
+    capacitySubscriptions[3].Stop();
+    const bool reusedSlot = overflow.Start(&ResidencyNoticeProbe::OnChanged, &overflowProbe);
+    const Raster fourth = makeSparse(7);
+    (void)fourth.Data();
+    bool capacityNoticesMatch = true;
+    for (std::size_t index = 0; index < capacityProbes.size(); ++index)
+        capacityNoticesMatch = capacityNoticesMatch &&
+                               capacityProbes[index].notices.load(std::memory_order_acquire) == (index == 3 ? 0 : 1);
+    ExpectResidency(allCapacitySlotsStarted && refusedOverflow && reusedSlot && capacityNoticesMatch &&
+                        overflowProbe.notices.load(std::memory_order_acquire) == 1,
+                    "subscription-capacity-eight-refuses-ninth-and-reuses-stopped-slot");
+    overflow.Stop();
+    for (auto& subscription : capacitySubscriptions)
+        subscription.Stop();
+
+    struct InFlightNotice final
+    {
+        std::latch entered{1};
+        std::latch release{1};
+        std::atomic<int> notices{0};
+        std::atomic<bool> callbackFinished{false};
+
+        static void OnChanged(void* context) noexcept
+        {
+            auto& notice = *static_cast<InFlightNotice*>(context);
+            notice.notices.fetch_add(1, std::memory_order_release);
+            notice.entered.count_down();
+            notice.release.wait();
+            notice.callbackFinished.store(true, std::memory_order_release);
+        }
+    } inFlight;
+    Raster::ResidencySubscription fenced;
+    const bool fenceStarted = fenced.Start(&InFlightNotice::OnChanged, &inFlight);
+    if (!fenceStarted)
+    {
+        ExpectResidency(false, "subscription-stop-fences-an-in-flight-callback-before-context-retirement");
+        return;
+    }
+    const Raster fifth = makeSparse(8);
+    std::atomic<bool> growthThreadFinished{false};
+    std::thread growthThread(
+        [&]
+        {
+            (void)fifth.Data();
+            growthThreadFinished.store(true, std::memory_order_release);
+        });
+    inFlight.entered.wait();
+    std::latch stopInvoked{1};
+    std::atomic<bool> stopThreadFinished{false};
+    std::atomic<bool> callbackFinishedAtStopReturn{false};
+    std::thread stopThread(
+        [&]
+        {
+            stopInvoked.count_down();
+            fenced.Stop();
+            callbackFinishedAtStopReturn.store(inFlight.callbackFinished.load(std::memory_order_acquire),
+                                               std::memory_order_release);
+            stopThreadFinished.store(true, std::memory_order_release);
+        });
+    stopInvoked.wait();
+    const bool stopWaitedForCallback = !stopThreadFinished.load(std::memory_order_acquire);
+    inFlight.release.count_down();
+    growthThread.join();
+    stopThread.join();
+    ExpectResidency(fenceStarted && stopWaitedForCallback && inFlight.notices.load(std::memory_order_acquire) == 1 &&
+                        inFlight.callbackFinished.load(std::memory_order_acquire) &&
+                        growthThreadFinished.load(std::memory_order_acquire) &&
+                        callbackFinishedAtStopReturn.load(std::memory_order_acquire) &&
+                        stopThreadFinished.load(std::memory_order_acquire),
+                    "subscription-stop-fences-an-in-flight-callback-before-context-retirement");
+    const Raster sixth = makeSparse(9);
+    (void)sixth.Data();
+    ExpectResidency(inFlight.notices.load(std::memory_order_acquire) == 1,
+                    "subscription-stop-prevents-callback-after-return");
+}
+
+void StoppedResidencyWaitersReturnBeforeTheHolderReleases()
+{
+    CancelSource alreadyLocal, alreadyShutdown;
+    (void)alreadyLocal.Cancel();
+    (void)alreadyShutdown.Cancel();
+    auto localRefused = Raster::AcquireResidencyLease(alreadyLocal.Token());
+    auto shutdownRefused = Raster::AcquireResidencyLease(CancelToken{{}, alreadyShutdown.Token().LocalToken()});
+    ExpectResidency(!localRefused.Held() && !shutdownRefused.Held(),
+                    "pre-stopped-local-and-shutdown-tokens-never-acquire-residency");
+    for (const bool shutdown : {false, true})
+    {
+        const char* name = shutdown ? "shutdown-stop-returns-worker-before-current-holder-releases"
+                                    : "local-stop-returns-worker-before-current-holder-releases";
+        auto holder = Raster::TryResidencyLease();
+        wil::unique_handle completed(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (!holder.Held() || !completed)
+        {
+            ExpectResidency(false, name);
+            continue;
+        }
+        CancelSource stop;
+        const auto epoch = Raster::ResidencyEpoch();
+        const CancelToken token = shutdown ? CancelToken{{}, stop.Token().LocalToken()} : stop.Token();
+        std::latch started{1};
+        std::atomic<bool> acquired{false};
+        std::thread waiter(
+            [&]()
+            {
+                started.count_down();
+                auto lease = Raster::AcquireResidencyLease(token);
+                acquired.store(lease.Held(), std::memory_order_release);
+                (void)SetEvent(completed.get());
+            });
+        started.wait();
+        const bool stopped = stop.Cancel();
+        const auto acknowledged = WaitForSingleObject(completed.get(), 5000); // Failure bound, never a latency gate.
+        const bool returnedBeforeRelease = acknowledged == WAIT_OBJECT_0 && holder.Held();
+        holder.Reset(); // Also releases a broken/unresponsive waiter before join, so a failed control cannot hang.
+        waiter.join();
+        ExpectResidency(stopped && returnedBeforeRelease && !acquired.load(std::memory_order_acquire) &&
+                            Raster::ResidencyEpoch() == epoch,
+                        name);
+    }
+    auto reusable = Raster::TryResidencyLease();
+    ExpectResidency(reusable.Held(), "stopped-waiters-do-not-consume-or-strand-the-global-residency-gate");
+    reusable.Reset();
+}
+
+void LiveResidencyMaintenancePreservesRevisionAndSavedMarker()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    const Raster leaf = TinyBgra(1, 1, 101);
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    const auto before = std::optional<CanvasDocument>{DocumentWithRaster(sparse, L"live maintenance source")};
+    const auto current = std::optional<CanvasDocument>{CanvasDocument{}};
+    DocumentHistory history(100, 8);
+    ExpectResidency(!history.NeedsResidencyMaintenance(), "empty-history-does-not-request-cache-maintenance");
+    const bool published = PublishIndexedEdit(history, before, current, L"Existing edit");
+    history.MarkSaved();
+    const auto revision = history.CurrentRevision();
+    ExpectResidency(published && !history.NeedsResidencyMaintenance() && history.RetainedBytes(current) == 4,
+                    "fresh-four-byte-live-index-does-not-request-maintenance");
+    const auto* bytes = sparse.Data();
+    ExpectResidency(bytes && history.NeedsResidencyMaintenance() && history.RetainedBytes(current) == 12 &&
+                        history.CurrentRevision() == revision && !history.IsModified(),
+                    "later-cache-growth-requests-maintenance-without-changing-saved-revision");
+    CancelSource cancelled;
+    (void)cancelled.Cancel();
+    auto stopped = DocumentHistory::PrepareResidencyMaintenance(history.CaptureState(), current, cancelled.Token());
+    ExpectResidency(!stopped && history.CanUndo() && history.CurrentRevision() == revision,
+                    "cancelled-maintenance-preserves-live-entry-and-revision");
+    HistoryIndexCheckpoint fault;
+    fault.throwAllocation = true;
+    fault.target = DocumentHistory::PrepareStage::StorageIndexBounds;
+    bool failed = false;
+    try
+    {
+        (void)DocumentHistory::PrepareResidencyMaintenance(history.CaptureState(), current, {},
+                                                           {&HistoryIndexCheckpoint::Run, &fault});
+    }
+    catch (const std::bad_alloc&)
+    {
+        failed = true;
+    }
+    ExpectResidency(failed && fault.reached && history.CanUndo() && history.CurrentRevision() == revision &&
+                        !history.IsModified(),
+                    "maintenance-allocation-failure-does-not-change-original-history-or-saved-state");
+    auto maintenance = DocumentHistory::PrepareResidencyMaintenance(history.CaptureState(), current);
+    const auto after = maintenance ? DocumentHistory::FollowingPreparedState(maintenance.value()) : std::nullopt;
+    ExpectResidency(maintenance && !maintenance->ChangesRevision() && after && after->Revision() == revision &&
+                        after->PastCount() == 0 && history.UndoCount() == 1,
+                    "private-maintenance-trims-twelve-byte-cache-without-new-user-revision");
+    DocumentHistory::ResidencyPermit permit;
+    ExpectResidency(maintenance && permit.TryAcquire(maintenance.value()) == Validation::Ready &&
+                        history.Publish(maintenance.value()) && history.UndoCount() == 0 &&
+                        history.CurrentRevision() == revision && !history.IsModified() &&
+                        history.RetainedBytes(current) == 0 && !history.NeedsResidencyMaintenance(),
+                    "maintenance-publication-preserves-saved-marker-and-enforces-literal-eight-byte-limit");
+    ExpectResidency(!maintenance || !history.CanPublish(maintenance.value()),
+                    "maintenance-publication-cannot-be-reused");
+
+    DocumentHistory stale;
+    const bool baseline = PublishIndexedEdit(stale, before, current, L"Stale maintenance baseline");
+    auto old = DocumentHistory::PrepareResidencyMaintenance(stale.CaptureState(), current);
+    auto next = current;
+    next->width = 2;
+    const bool changed = PublishIndexedEdit(stale, current, next, L"Younger user edit");
+    const auto youngerRevision = stale.CurrentRevision();
+    ExpectResidency(baseline && old && changed && !stale.CanPublish(old.value()) && !stale.Publish(old.value()) &&
+                        stale.CurrentRevision() == youngerRevision && stale.UndoName() == L"Younger user edit",
+                    "stale-maintenance-refuses-to-overwrite-younger-user-history");
+}
+
+void UnchangedResidencyRefreshSkipsConstruction()
+{
+    const auto before = std::optional<CanvasDocument>{DocumentWithRaster(TinyBgra(1, 1, 19), L"Same witness")};
+    const auto after = std::optional<CanvasDocument>{CanvasDocument{}};
+    DocumentHistory history;
+    auto publication = DocumentHistory::PrepareEdit(history.CaptureState(), before, {}, after, {}, L"Original intent");
+    HistoryIndexCheckpoint fault;
+    fault.throwAllocation = true;
+    fault.target = DocumentHistory::PrepareStage::StorageIndexBounds;
+    bool refreshed = false;
+    if (publication)
+    {
+        try
+        {
+            refreshed = DocumentHistory::RefreshPreparedResidency(publication.value(), after, {},
+                                                                  {&HistoryIndexCheckpoint::Run, &fault});
+        }
+        catch (const std::bad_alloc&)
+        {
+            refreshed = false;
+        }
+    }
+    ExpectResidency(refreshed && !fault.reached && history.UndoCount() == 0,
+                    "unchanged-residency-refresh-skips-private-index-construction-and-keeps-live-history");
+    DocumentHistory::ResidencyPermit permit;
+    ExpectResidency(publication &&
+                        permit.TryAcquire(publication.value()) == DocumentHistory::ResidencyValidation::Ready &&
+                        history.Publish(publication.value()) && history.UndoCount() == 1 &&
+                        history.UndoName() == L"Original intent",
+                    "unchanged-witness-refresh-publishes-the-original-edit-once");
+}
+
 void PreparedResidencyRefreshPreservesTheOriginalEdit()
 {
     using Validation = DocumentHistory::ResidencyValidation;
@@ -1489,6 +1788,10 @@ void TestHistoryStorageTopology()
     CapturedIndexViewSurvivesResetAndPreventsRasterIdentityReuse();
     PreparedIndexResamplesLateSparseMaterializationOnNextPreparation();
     ScopeBoundResidencyLeaseRefusesRecursiveMaterialization();
+    ResidencySubscriptionsNotifyBoundedlyAndFenceStop();
+    StoppedResidencyWaitersReturnBeforeTheHolderReleases();
+    LiveResidencyMaintenancePreservesRevisionAndSavedMarker();
+    UnchangedResidencyRefreshSkipsConstruction();
     PreparedResidencyRefreshPreservesTheOriginalEdit();
     BusyResidencyGateAndOwningMovesAreExplicit();
     PreparedIndexBoundsRepeatedLargeRasterAcrossMetadataEdits();

@@ -103,6 +103,13 @@ class PreparedLayerMetadata final
     {
         return _document.has_value();
     }
+    // Owner-only attempt; no wait/allocation/pixel work. A Busy/Refresh result retains the completed metadata
+    // intent for an admitted same-ticket worker stage. This never substitutes for current session authority.
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    // Worker-only; reuses the sealed output and original revision, never recreates the metadata edit.
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
 
   private:
     friend class DocumentSession;

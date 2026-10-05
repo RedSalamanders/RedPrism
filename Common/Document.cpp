@@ -31,34 +31,60 @@ namespace
 {
 std::atomic<std::uint64_t> gRasterResidencyEpoch{1};
 thread_local bool gRasterResidencyLeaseHeld = false;
+std::mutex gRasterResidencyNotificationsGate;
+std::array<Raster::ResidencySubscription*, Raster::ResidencySubscription::kCapacity> gRasterResidencySubscribers{};
 } // namespace
 
 namespace
 {
 // Owner attempts perform one acquire CAS. Workers block on value changes; no timer, spin or polling source.
 // Release is paired with notify_one so contention wakes one waiter, while an owner never enters a wait.
-std::atomic<bool> gRasterResidencyGate{false};
+// Bit zero is ownership; upper bits are a wake sequence, not publication authority. Stop callbacks change the
+// observed value without releasing ownership, so a stopped waiter returns before the current holder releases.
+std::atomic<std::uint64_t> gRasterResidencyGate{0};
 } // namespace
 
-Raster::ResidencyLease::ResidencyLease(bool attempt) noexcept
+Raster::ResidencyLease::ResidencyLease(bool attempt, CancelToken cancellation) noexcept
 {
     if (attempt)
     {
         (void)TryAcquire();
         return;
     }
-    if (gRasterResidencyLeaseHeld)
+    if (gRasterResidencyLeaseHeld || cancellation.IsCancelled())
         return;
-    bool expected = false;
-    while (!gRasterResidencyGate.compare_exchange_strong(expected, true, std::memory_order_acquire,
-                                                         std::memory_order_relaxed))
+    const auto wakeStoppedWaiters = []() noexcept
     {
-        gRasterResidencyGate.wait(true, std::memory_order_relaxed);
-        expected = false;
+        gRasterResidencyGate.fetch_add(2, std::memory_order_release);
+        gRasterResidencyGate.notify_all();
+    };
+    // Intrusive stop registrations allocate no storage. Their worker-scope destruction joins the bounded
+    // readiness callback. The owner/try path returns above without registering or waiting for callbacks.
+    const std::stop_callback localStop(cancellation.LocalToken(), wakeStoppedWaiters);
+    const std::stop_callback shutdownStop(cancellation.ShutdownToken(), wakeStoppedWaiters);
+    for (;;)
+    {
+        if (cancellation.IsCancelled())
+            return;
+        auto observed = gRasterResidencyGate.load(std::memory_order_acquire);
+        if ((observed & 1) == 0 && gRasterResidencyGate.compare_exchange_strong(
+                                       observed, observed | 1, std::memory_order_acquire, std::memory_order_relaxed))
+        {
+            _held = true;
+            _thread = std::this_thread::get_id();
+            gRasterResidencyLeaseHeld = true;
+            if (cancellation.IsCancelled())
+                Reset();
+            return;
+        }
+        if (cancellation.IsCancelled())
+            return;
+        if ((observed & 1) == 0)
+            continue; // CAS lost to a wake-sequence change; the gate is free, so there is no holder to wake us.
+        // A concurrent stop changes the sequence before notifying; wait therefore cannot miss that stop even
+        // if it arrives between the predicate check and parking. Other waiters recheck after the actual event.
+        gRasterResidencyGate.wait(observed, std::memory_order_relaxed);
     }
-    _held = true;
-    _thread = std::this_thread::get_id();
-    gRasterResidencyLeaseHeld = true;
 }
 
 Raster::ResidencyLease::~ResidencyLease() noexcept
@@ -84,9 +110,9 @@ bool Raster::ResidencyLease::TryAcquire() noexcept
     CheckThread();
     if (_held || gRasterResidencyLeaseHeld)
         return false;
-    bool expected = false;
-    if (!gRasterResidencyGate.compare_exchange_strong(expected, true, std::memory_order_acquire,
-                                                      std::memory_order_relaxed))
+    auto expected = gRasterResidencyGate.load(std::memory_order_relaxed);
+    if ((expected & 1) != 0 || !gRasterResidencyGate.compare_exchange_strong(
+                                   expected, expected | 1, std::memory_order_acquire, std::memory_order_relaxed))
         return false;
     _held = true;
     _thread = std::this_thread::get_id();
@@ -102,13 +128,13 @@ void Raster::ResidencyLease::Reset() noexcept
     gRasterResidencyLeaseHeld = false;
     _held = false;
     _thread = {};
-    gRasterResidencyGate.store(false, std::memory_order_release);
+    gRasterResidencyGate.fetch_and(~std::uint64_t{1}, std::memory_order_release);
     gRasterResidencyGate.notify_one();
 }
 
-Raster::ResidencyLease Raster::AcquireResidencyLease() noexcept
+Raster::ResidencyLease Raster::AcquireResidencyLease(CancelToken cancellation) noexcept
 {
-    return ResidencyLease{false};
+    return ResidencyLease{false, cancellation};
 }
 
 Raster::ResidencyLease Raster::TryResidencyLease() noexcept
@@ -119,6 +145,54 @@ Raster::ResidencyLease Raster::TryResidencyLease() noexcept
 std::uint64_t Raster::ResidencyEpoch() noexcept
 {
     return gRasterResidencyEpoch.load(std::memory_order_acquire);
+}
+
+Raster::ResidencySubscription::~ResidencySubscription() noexcept
+{
+    Stop();
+}
+
+bool Raster::ResidencySubscription::Start(Changed changed, void* context) noexcept
+{
+    if (!changed)
+        return false;
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    if (_registered)
+        return false;
+    for (auto*& subscriber : gRasterResidencySubscribers)
+    {
+        if (subscriber)
+            continue;
+        _changed = changed;
+        _context = context;
+        _registered = true;
+        subscriber = this;
+        return true;
+    }
+    return false;
+}
+
+void Raster::ResidencySubscription::Stop() noexcept
+{
+    // The notice owns this lock through its bounded readiness callback. Joining it is allowed only at teardown,
+    // before the scheduler wake/context is destroyed. No callback can follow removal or retain that context.
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    if (!_registered)
+        return;
+    for (auto*& subscriber : gRasterResidencySubscribers)
+        if (subscriber == this)
+            subscriber = nullptr;
+    _registered = false;
+    _changed = nullptr;
+    _context = nullptr;
+}
+
+void Raster::NotifyResidencyChanged() noexcept
+{
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    for (auto* subscriber : gRasterResidencySubscribers)
+        if (subscriber)
+            subscriber->_changed(subscriber->_context);
 }
 
 std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
@@ -644,7 +718,7 @@ const std::vector<RasterTile>& Raster::Tiles() const noexcept
 void Raster::Materialize(const Storage& storage) noexcept
 {
     // Serialize builders, not readers. A failed allocation leaves the cache unpublished and retryable.
-    const std::lock_guard lock(storage.assemblyMutex);
+    std::unique_lock lock(storage.assemblyMutex);
     if (storage.assembled.load(std::memory_order_acquire) != nullptr)
     {
         return;
@@ -681,6 +755,9 @@ void Raster::Materialize(const Storage& storage) noexcept
     storage.bytes = std::move(bytes);
     storage.assembled.store(storage.bytes.data(), std::memory_order_release);
     gRasterResidencyEpoch.store(epoch + 1, std::memory_order_release);
+    residency.Reset();
+    lock.unlock();
+    NotifyResidencyChanged();
 }
 
 void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,

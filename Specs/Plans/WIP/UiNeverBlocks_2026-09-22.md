@@ -4,7 +4,7 @@
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
 Current work: H3 scope-bound waitable residency gate, same-ticket refresh and live-cache maintenance;
 bounded Wand mode and Warp cleanup sidecars.
-No later candidate is qualified or activated in Native yet.
+The managed residency core and scoped metadata/maintenance slices are qualified; Native activation remains open.
 
 ## Delivery checklist
 
@@ -13,6 +13,8 @@ No later candidate is qualified or activated in Native yet.
 - [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.
   - [x] Earlier mutex core/mask/Warp candidate passes full managed Debug r77, Release r78 and ASan Debug r79: 6,778 document / 9,298 application controls and unchanged 79 stages; all archive copies verify. Subsequent analysis failures r80–r84 are preserved and repaired with a waitable atomic gate and explicit test ownership/initialization/null guards ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
   - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
+  - [x] Qualified core committed/pushed as `ce4f8b4`; Native checklist/evidence pushed as `88b9b1b`.
+  - [x] Qualify combined cancellation/notification/metadata refresh and scoped live-history maintenance; Debug r89/r90 fixture failures preserved and repaired; build r91 and actual host runtime r92 pass (9,362 controls / 79 stages). Full Debug r93, analysis r94, Release r95 and all ARM64 cross-builds pass on the same 774 inputs. ASan r96 also passes with all prior controls/routes/stages preserved. Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown remain drafted separately.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
 - [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.

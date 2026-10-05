@@ -70,6 +70,16 @@ class Application::LayerMetadataJob final : public Job
             return {}; // successful admission precedes owner capture on the resumable boundary
         if (!_payload->input)
             return {JobStatus::Failed, E_UNEXPECTED};
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed =
+                _payload->publication && _payload->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         DocumentHistory::PrepareObserver historyObserver;
         LayerMetadataPrepareObserver observer;
         if (_gate && _gate->throwHistoryStage)
@@ -101,6 +111,14 @@ class Application::LayerMetadataJob final : public Job
         if (!publication)
             return {JobStatus::Failed, E_FAIL};
         _payload->publication.emplace(std::move(publication.value()));
+        if (_gate && _gate->lateResidencySource.HasStorage())
+        {
+            // Harness-only actual worker cache publication AFTER the private history sample, before owner apply.
+            // Production leaves the gate absent; this models a concurrent consumer without UI pixel work.
+            if (!_gate->lateResidencySource.Data())
+                return {JobStatus::Failed, E_FAIL};
+            _gate->residentGrowths.fetch_add(1);
+        }
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
@@ -117,9 +135,36 @@ class Application::LayerMetadataJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || _payload || !Current() ||
-            _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
+        if (_payload)
+        {
+            if (!_payload->publication)
+                return false;
+            const auto decision = _payload->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false; // same owner drain immediately calls Completed; no message pumping or callbacks
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _captureError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshReservationHeld.store(_owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes &&
+                                                    _gate->reservationBytes != 0);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket); // harness-only: exact retained ticket, before resumed stage
+                return true;
+            }
+            _captureError = E_UNEXPECTED;
+            return false;
+        }
         try
         {
             _payload.reset(std::make_unique<MetadataPayload>().release());
@@ -161,6 +206,7 @@ class Application::LayerMetadataJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -194,6 +240,8 @@ class Application::LayerMetadataJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        // No callback/chrome/display/source read retains this gate, including stale/failed/cancelled results.
+        _residencyPermit.Reset();
         if (outcome == HostOutcome::Succeeded && _opacityContext)
             _owner.AcknowledgeOpacityMetadata(_target, _opacity, _opacityContext.value());
         if (outcome == HostOutcome::Failed)
@@ -233,6 +281,8 @@ class Application::LayerMetadataJob final : public Job
     const std::shared_ptr<LayerMetadataTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<MetadataPayload, RetireMetadataPayload> _payload;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _refreshResidency = false; // scheduler stage fences protect the same-record worker/owner handoff
     std::int32_t _captureError = 0;
 };
 

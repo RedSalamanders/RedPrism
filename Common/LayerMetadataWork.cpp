@@ -228,6 +228,22 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
     return result;
 }
 
+DocumentHistory::ResidencyValidation PreparedLayerMetadata::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_input._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedLayerMetadata::RefreshHistoryResidency(CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_input._valid || cancellation.IsCancelled())
+        return false;
+    return !_history || (_document && DocumentHistory::RefreshPreparedResidency(_history.value(), _document,
+                                                                                cancellation, observer));
+}
+
 bool DocumentSession::IsPreparedLayerMetadataCurrent(const PreparedLayerMetadata& prepared) const noexcept
 {
     return !prepared._applied && prepared._input._valid && CanApplyLayerMetadataAuthority(prepared._input._authority) &&
@@ -272,6 +288,13 @@ std::uint64_t DocumentSession::LayerMetadataMemoryBytesImpl(LayerMetadataKind ki
         return 0;
     auto bytes = history.EditMemoryBytes(_document);
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    // Metadata changes retain identical raster/selection owners. A resident refresh may overlap its sealed
+    // original index/stack with one additional private clone, roots and dedup scratch. Reserve a second complete
+    // construction allowance before capture; neither the refresh nor its old owners release this reservation.
+    // The new rename/root overlap remains covered by the explicit name allowance below.
+    if (!bytes || bytes > maximum / 2)
+        return 0;
+    bytes *= 2;
     // Existing eight-copy edit accounting covers capture, output, a typed opening and both history snapshots,
     // record/selection children, stack growth and trim. Reserve the captured
     // request, trimmed replacement and all before/after name overlap as well as root/control/block overhead.

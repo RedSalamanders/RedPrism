@@ -18,9 +18,12 @@ struct LayerMetadataTestGate final
     wil::unique_handle release;
     JobResult result;
     bool hold = true, throwCaptureFailure = false;
+    bool throwResidencyRefresh = false, cancelResidencyRefresh = false;
+    Raster lateResidencySource; // small literal harness owner; production never supplies this gate
     std::optional<LayerMetadataPrepareStage> throwMetadataStage;
     std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
     std::uint64_t reservationBytes = 0;
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};
-    std::atomic<unsigned int> visits{0}, faultHits{0}, captures{0};
+    std::atomic<unsigned int> visits{0}, faultHits{0}, captures{0}, residentGrowths{0}, residencyRefreshes{0};
+    std::atomic<bool> refreshReservationHeld{false};
 };

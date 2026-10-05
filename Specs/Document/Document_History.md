@@ -260,16 +260,54 @@ mismatched topology refuses the snapshot admission bound. Recent pending/past/fu
 exact matching topology through a fixed five-candidate check, avoiding repeated producer walks for those roots.
 Index object/control allowances and retained vector capacity are included in snapshot ownership bounds.
 
-The index stores owners, not cached resident totals. Trim reads each unique owner's current `ByteSize()` and
-cached selection capacity, excluding every owner held by the current document. Prepared trim builds/reuses
+The index topology retains identity owners. Its prepared resident-byte total is sampled under a raster residency
+lease and is valid only with the index's `residencyEpoch` witness. A later sparse-cache publication advances the
+epoch; `RetainedBytes` independently reads fresh resident bytes for diagnostics. Prepared trim builds/reuses
 its live-source index on the worker. Reference methods retain their existing document scan with one iterative
 pending-owner vector and their shared dedup set; they construct no temporary topology object. Both routes take
 the complete nested closure and preserve oldest-first removal. Migrating the remaining synchronous reference
 callers and measuring their costs remain P1 requirements. `RetainedBytes` remains a reference/diagnostic query.
 
-Late materialization may change byte charges after preparation. This topology prerequisite does not authorize
-a stale trim decision or close the residency notification/reprepare protocol; that protocol, incremental unique
-accounting and final native qualification remain tracked by P1.9 H3 before the milestone can be complete.
+Late materialization may change byte charges after preparation. Staged publication below prevents a stale trim
+decision for opted-in callers. Incremental unique accounting and final native qualification remain tracked by
+P1.9 H3 before the milestone can be complete.
+
+## Staged sparse-residency publication (opt-in)
+
+A caller using indexed prepared history with sparse rasters MUST treat the sampled resident total and its
+`residencyEpoch` as one witness. The worker MUST take the complete coherent charge sample while holding a
+`Raster::ResidencyLease`; this lease is nonmovable, noncopyable, thread-affine, and cancellation-aware. The lease
+MUST be released before callbacks, waits, or transfer of prepared work to another thread.
+
+At owner completion, an opted-in caller makes exactly one nonblocking `ResidencyPermit::TryAcquire` decision
+for that completion attempt. `Ready` permits the caller to continue ordinary authority checks and publication;
+it does not grant document or session authority. `Busy` means the process-wide lease is occupied. `Refresh` means
+the sampled epoch no longer matches the current residency epoch. `Invalid` means the publication is ineligible
+for this protocol. The owner MUST NOT wait, allocate, read pixels, rebuild an index, or run callbacks while
+holding the permit. On `Busy` or `Refresh`, it releases any permit and resumes the same ticket on a worker using
+the original prepared intent and publication authority. The worker waits for the lease with that ticket's
+cancellation token, then refreshes resident charges against the same prepared intent. If the epoch witness is
+unchanged, refresh MUST retain the existing index without cloning or rebuilding it. A changed witness permits
+the worker to prepare a refreshed candidate; the owner makes a new one-shot decision when that same ticket
+completes. Cancellation or failed refresh leaves live history and the original intent unpublished.
+
+Every successful publication releases its permit immediately after the history swap and before callbacks.
+Resetting or destroying a permit releases it. Permits are nonmovable. Moving a publication with a borrowed permit releases that permit and
+requires a fresh owner decision at the destination. All error, stale-authority, cancellation, drop, and shutdown
+paths MUST release the permit. Workers waiting for the lease MUST observe ticket cancellation and shutdown;
+shutdown MUST cancel those waits and drain accepted work before destroying borrowed callback contexts.
+
+Residency-change subscriptions are bounded to eight registrations process-wide. They report readiness only:
+the callback runs after raster cache locks are released and may publish readiness or wake an owner, but MUST NOT
+read pixels, enter subscription management, decide a trim, or authorize publication. Subscription Start/Stop
+belong to startup/teardown outside residency leases and callbacks. Stop is a fence: when it returns, no in-flight
+callback can still access its borrowed context. Teardown MUST Stop subscriptions before destroying those contexts.
+
+Only the current metadata host is opted into staged sparse-residency publication. The history-only source path is
+scoped to self-test until activation and its full gates are complete. All other source callers and the reference
+history methods remain required P1 migration work. This scoped opt-in does not qualify G1, O(delta) work, native
+configuration coverage, or live-source behavior. Preserve the legacy oldest-past-then-oldest-future trim order,
+revision assignment, no-op redo preservation, and saved-revision semantics above.
 
 ## Trim
 

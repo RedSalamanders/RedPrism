@@ -11,12 +11,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <latch>
 #include <limits>
 #include <memory>
 #include <new>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
@@ -129,6 +131,185 @@ std::optional<PreparedLayerMetadata> Prepare(DocumentSession& session, LayerMeta
     if (!input)
         return std::nullopt;
     return PrepareLayerMetadataPublication(std::move(input.value()), cancellation, historyObserver, observer);
+}
+
+Raster ResidencyRaster()
+{
+    constexpr std::array<std::uint8_t, 4> pixel{17, 39, 83, 255};
+    const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
+    return Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, 0);
+}
+
+DocumentSession MakeResidencySession()
+{
+    constexpr Guid layerId{{0x72, 0, 0, 1, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1}};
+    constexpr Guid documentId{{0x72, 0, 0, 2, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 2}};
+    ImageLayer layer = ImageLayer::Blank(L"Residency source", Vec2{2, 1});
+    layer.id = layerId;
+    layer.asset = RasterAsset{ResidencyRaster(), {}, L"literal sparse pixels"};
+    DocumentFixture fixture;
+    fixture.id = documentId;
+    fixture.width = 2;
+    fixture.height = 1;
+    fixture.layers.push_back(std::move(layer));
+    DocumentSession session;
+    session.ReplaceDocument(std::move(fixture).Seal(), layerId);
+    return session;
+}
+
+struct ResidencyFailure final
+{
+    bool reached = false;
+};
+
+void FailResidencyRefreshAtBounds(void* raw, DocumentHistory::PrepareStage stage)
+{
+    if (stage == DocumentHistory::PrepareStage::StorageIndexBounds)
+    {
+        static_cast<ResidencyFailure*>(raw)->reached = true;
+        throw std::bad_alloc{};
+    }
+}
+
+Raster ResidencyImage(const DocumentSession& session)
+{
+    return session.Document().value().layers.front().asset.value().image;
+}
+
+void PreparedHistoryResidencyCallers()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    constexpr Guid layerId{{0x72, 0, 0, 1, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1}};
+    {
+        DocumentSession session = MakeResidencySession();
+        const OwnerState before(session);
+        auto prepared = Prepare(session, LayerMetadataKind::Rename, layerId, L"One edit");
+        DocumentHistory::ResidencyPermit permit;
+        const auto ready = prepared ? prepared->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+        const bool unchangedWhileHeld = SameOwnerState(session, before) && session.history.UndoCount() == 0 &&
+                                        session.Document()->layers.front().name == L"Residency source";
+        Expect(prepared && ready == Validation::Ready && unchangedWhileHeld &&
+                   session.ApplyPreparedLayerMetadataIfCurrent(prepared.value()) &&
+                   session.Document()->layers.front().name == L"One edit" && session.history.UndoCount() == 1 &&
+                   session.history.UndoName() == L"Rename Layer",
+               "residency-ready-keeps-live-state-until-one-original-edit-applies");
+        permit.Reset();
+        Expect(prepared && prepared->TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                   !prepared->RefreshHistoryResidency() && session.history.UndoCount() == 1,
+               "residency-applied-publication-is-invalid-and-cannot-refresh-again");
+    }
+    {
+        DocumentSession session = MakeResidencySession();
+        const OwnerState before(session);
+        const Guid openingRevision = session.history.CurrentRevision();
+        auto prepared = Prepare(session, LayerMetadataKind::Rename, layerId, L"After cache growth");
+        const std::uint64_t epoch = Raster::ResidencyEpoch();
+        const Raster sparse = ResidencyImage(session);
+        const std::uint8_t* pixels = sparse.Data();
+        const bool literalGrowth = pixels && pixels[0] == 17 && pixels[1] == 39 && pixels[2] == 83 &&
+                                   pixels[3] == 255 && pixels[4] == 0 && pixels[5] == 0 && pixels[6] == 0 &&
+                                   pixels[7] == 0 && sparse.ByteSize() == 8 && Raster::ResidencyEpoch() == epoch + 1;
+        DocumentHistory::ResidencyPermit permit;
+        const auto refresh = prepared ? prepared->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+        CancelSource cancellation;
+        (void)cancellation.Cancel();
+        const bool cancelPreserves = prepared && !prepared->RefreshHistoryResidency(cancellation.Token()) &&
+                                     prepared->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                                     SameOwnerState(session, before) &&
+                                     session.history.CurrentRevision() == openingRevision;
+        ResidencyFailure failure;
+        const bool allocationStillPropagates = prepared && [&]()
+        {
+            try
+            {
+                (void)prepared->RefreshHistoryResidency({}, {&FailResidencyRefreshAtBounds, &failure});
+                return false; // The wrapper must propagate bad_alloc for the scheduler's E_OUTOFMEMORY boundary.
+            }
+            catch (const std::bad_alloc&)
+            {
+                return true;
+            }
+        }();
+        const bool failedRefreshPreserves = failure.reached && allocationStillPropagates &&
+                                            prepared->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                                            SameOwnerState(session, before) &&
+                                            session.history.CurrentRevision() == openingRevision;
+        const bool refreshed = prepared && prepared->RefreshHistoryResidency();
+        const auto ready = prepared ? prepared->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+        bool publishOriginal = refreshed && ready == Validation::Ready && SameOwnerState(session, before) &&
+                               session.history.CurrentRevision() == openingRevision &&
+                               session.ApplyPreparedLayerMetadataIfCurrent(prepared.value()) &&
+                               session.Document()->layers.front().name == L"After cache growth" &&
+                               session.history.UndoCount() == 1 && session.history.UndoName() == L"Rename Layer";
+        if (publishOriginal)
+        {
+            session.Undo();
+            const bool undone = session.Document()->layers.front().name == L"Residency source";
+            session.Redo();
+            publishOriginal = undone && session.Document()->layers.front().name == L"After cache growth" &&
+                              session.history.UndoCount() == 1;
+        }
+        permit.Reset();
+        Expect(prepared && literalGrowth && refresh == Validation::Refresh,
+               "residency-late-literal-cache-growth-requests-worker-refresh");
+        Expect(cancelPreserves, "residency-cancelled-refresh-retains-original-edit-and-live-revision");
+        Expect(failedRefreshPreserves, "residency-allocation-failed-refresh-retains-original-edit-and-live-revision");
+        Expect(publishOriginal, "residency-refresh-reuses-sealed-edit-with-one-undo-redo-entry");
+    }
+    {
+        DocumentSession session = MakeResidencySession();
+        auto prepared = Prepare(session, LayerMetadataKind::Rename, layerId, L"Stale");
+        session.RenameLayer(layerId, L"Younger live edit");
+        DocumentHistory::ResidencyPermit permit;
+        const bool residencyIsNotAuthority = prepared &&
+                                             prepared->TryAcquireHistoryResidency(permit) == Validation::Ready &&
+                                             !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
+                                             !session.ApplyPreparedLayerMetadataIfCurrent(prepared.value()) &&
+                                             session.Document()->layers.front().name == L"Younger live edit";
+        permit.Reset();
+        auto movable = Prepare(session, LayerMetadataKind::Rename, layerId, L"Moved handle");
+        std::optional<PreparedLayerMetadata> moved;
+        if (movable)
+            moved.emplace(std::move(movable.value()));
+        const bool movedFromInvalid = movable && moved &&
+                                      movable->TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                      !movable->RefreshHistoryResidency();
+        Expect(residencyIsNotAuthority, "residency-stale-document-authority-is-refused-at-apply-after-ready-permit");
+        Expect(movedFromInvalid, "residency-moved-from-prepared-output-is-invalid");
+    }
+    {
+        DocumentSession session = MakeResidencySession();
+        auto prepared = Prepare(session, LayerMetadataKind::Rename, layerId, L"Retry after busy");
+        if (prepared)
+        {
+            std::latch acquired{1};
+            std::latch release{1};
+            bool workerHeld = false;
+            std::thread worker(
+                [&]
+                {
+                    auto lease = Raster::AcquireResidencyLease();
+                    workerHeld = lease.Held();
+                    acquired.count_down();
+                    release.wait();
+                });
+            acquired.wait();
+            DocumentHistory::ResidencyPermit permit;
+            const auto busy = prepared->TryAcquireHistoryResidency(permit);
+            release.count_down();
+            worker.join();
+            const auto retried = prepared->TryAcquireHistoryResidency(permit);
+            permit.Reset();
+            Expect(workerHeld && busy == Validation::Busy && retried == Validation::Ready &&
+                       session.history.UndoCount() == 0 &&
+                       session.Document()->layers.front().name == L"Residency source",
+                   "residency-busy-is-nonmutating-and-same-output-retries-ready");
+        }
+        else
+        {
+            Expect(false, "residency-busy-is-nonmutating-and-same-output-retries-ready");
+        }
+    }
 }
 
 void MetadataValuesAndLiteralHistory()
@@ -595,6 +776,7 @@ int RunLayerMetadataWorkTests()
     NoOpsAndGroups();
     InputValidationAndConsumption();
     StalePublicationGuards();
+    PreparedHistoryResidencyCallers();
     MetadataPreparationFailures();
     HistoryPreparationFailures();
     AdmissionAndMemory();

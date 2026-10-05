@@ -38,6 +38,7 @@
 #include "TransformOverlay.h"
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -60,6 +61,7 @@ struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
+struct HistoryResidencyTestGate;
 struct SelectionCommandTestGate;
 struct LayerMetadataTestGate;
 struct SelectionNudgeTestGate;
@@ -432,6 +434,30 @@ class Application final : public ChromeEvents
       private:
         Application& _owner;
     };
+    class HistoryResidencySource final : public OwnerWorkPump
+    {
+      public:
+        explicit HistoryResidencySource(Application& owner) noexcept : _owner(owner) {}
+        [[nodiscard]] bool Start() noexcept;
+        void StopNotifications() noexcept;
+        void CloseAfterWorkers() noexcept;
+        void RetryDeferred() noexcept;
+        [[nodiscard]] bool HasPending() const noexcept override;
+        [[nodiscard]] bool HasReady() const noexcept override;
+        void Pump() noexcept override;
+
+      private:
+        Application& _owner;
+        Raster::ResidencySubscription _subscription;
+        std::atomic<bool> _ready{false};
+        bool _enabled = false;
+        bool _attached = false;
+        bool _deferred = false;
+    };
+    class HistoryResidencyJob;
+    [[nodiscard]] bool CanStartHistoryResidencyMaintenance() const noexcept;
+    [[nodiscard]] HRESULT StartHistoryResidencyMaintenance() noexcept;
+    int RunHistoryResidencySelfTest() noexcept;
     [[nodiscard]] bool InitializeHostContinuations() noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
@@ -944,6 +970,10 @@ class Application final : public ChromeEvents
     bool _gpuWorkInitialized = false;
     HRESULT _gpuBindingError = E_PENDING;
     HistoryWork _historyWork;
+    HistoryResidencySource _historyResidencySource{*this};
+    std::optional<JobTicket> _historyResidencyTicket;
+    std::optional<HistoryWorkStamp> _historyResidencyStamp;
+    std::shared_ptr<HistoryResidencyTestGate> _historyResidencyTestGate;
     ContinuationAction _continuationAction{*this}; // stable borrowed source; unregister before joining jobs
     HostInputBudget _hostInputBudget;              // outlives queued and active request reservations
     std::optional<HostRequest> _startupPaths;      // owned until Run initializes the document and can bind its serial
