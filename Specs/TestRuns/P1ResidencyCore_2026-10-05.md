@@ -358,3 +358,25 @@ full Debug attempt is now isolated from another application test. Real ASan Debu
 | `incremental-x64-test-Release-r108` | 91260 / 0 | 2026-10-05T10:18:10.849652+00:00 to 2026-10-05T10:24:59.716817+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Release-r108-full-qualified` / `F3B1DF2F63982B7BCB4007EECCE33C55903E4B96FE1410E1441246CEC4383F6F` |
 
 Native activation, normal maintenance startup, remaining-writer/delta accounting and G1 remain open.
+
+### Integrated history caller group: complete managed qualification
+
+Full isolated Debug r109 and real ASan Debug r110 pass on the identical repaired 775-input source already used
+by Release r108, analysis r106 and all three r4 ARM64 cross-builds. Every preceding literal counter/multiplicity,
+stdout/stderr route and all 79 ordered stages remain intact: 6,841 document / 9,446 named application controls.
+The exact selection summary adapter and registry proof are the same in all three full suites. Skills validate
+all 15 entries; format checks all 655 files; diff checks pass. No test tolerance, stack threshold, runtime/ISA
+allowlist, fixture guard or build running-process rule was relaxed.
+
+The isolated real ASan detection probe also passes its expected-failure gate. Its actual heap-use-after-free
+diagnostic is independently copied and hashed in the ASan archive's Supplemental folder, with a separate
+asan-diagnostic-proof.json; the original archive manifests and completion hashes remain unchanged.
+
+ASan diagnostic SHA-256: `95108FB3FAF14264D6FB1C2EB6539FCA2F3DFEBD06AB2F4742EBA1DDD059444B`; supplemental receipt SHA-256: `8392D3F441235D4E97B34A9BDEF290BED519FC62CEC7F15CA0B96E1E0E040217`.
+
+| Attempt | Actual child / exit | UTC interval | Source freeze | Verified archive completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| `incremental-x64-test-Debug-r109` | 79668 / 0 | 2026-10-05T10:27:03.683990+00:00 to 2026-10-05T10:35:05.414771+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r109-full-qualified` / `1E77CDD4E6BC4B9D93051DF7582940CD2D5350F4ACF13B342F11AF74929CA61A` |
+| `incremental-x64-test-ASanDebug-r110` | 43756 / 0 | 2026-10-05T10:38:58.574041+00:00 to 2026-10-05T10:53:25.841273+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-ASanDebug-r110-full-qualified` / `052B8A0E0BC1CF792A7A5B9F331ED50714346CA1341B502FEC31AA6F714FB186` |
+
+This qualifies this managed caller/shutdown slice. Native activation, normal maintenance startup, every remaining writer/delta-cost gate and G1/P1 completion remain open. Earlier sections preserve the state and failures at each attempt.

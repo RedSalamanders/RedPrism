@@ -2,8 +2,8 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: H3 scope-bound waitable residency gate, same-ticket refresh and live-cache maintenance;
-bounded Wand mode and Warp cleanup sidecars.
+Current work: H3 remaining image import/replacement, mask, copy and shape residency callers;
+registered worker upload rows and bounded first-display/GPU preparation.
 The managed residency core and scoped metadata/maintenance slices are qualified; Native activation remains open.
 
 ## Delivery checklist
@@ -15,7 +15,7 @@ The managed residency core and scoped metadata/maintenance slices are qualified;
   - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
   - [x] Qualified core committed/pushed as `ce4f8b4`; Native checklist/evidence pushed as `88b9b1b`.
   - [x] Combined metadata/maintenance source committed and pushed as `8ab921d` after the full identical-source matrix; six sampler measurement children pass, with original first/warmup overruns retained ([record](../../TestRuns/P1SamplerMeasurements_2026-10-05.md)).
-  - [ ] Qualify the integrated Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown group. Repaired r104 build, r105 actual runtime, r106 analysis, r108 full Release and all three r4 ARM64 cross-builds pass on the same source. r107 clipboard-fixture refusal is archived; isolated full Debug r109 passes; real ASan r110 is running ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
+  - [x] Qualify the integrated Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown group. Full Debug r109, Release r108 and real ASan r110 pass on the same 775 inputs as analysis r106 and all three r4 ARM64 cross-builds. All 6,841 document / 9,446 application controls and 79 stages preserve predecessors; 15 skills / 655 formatted files pass. Earlier fixture/clipboard failures remain archived; Native activation and G1 remain open ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
   - [ ] Integrate and qualify image import/replacement, mask, layer-copy and shape residency callers plus registered worker upload rows. Private codegen and linked CPU diagnostics pass; actual host/normal matrix and first-upload/G1 remain open ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)).
   - [x] Qualify combined cancellation/notification/metadata refresh and scoped live-history maintenance; Debug r89/r90 fixture failures preserved and repaired; build r91 and actual host runtime r92 pass (9,362 controls / 79 stages). Full Debug r93, analysis r94, Release r95 and all ARM64 cross-builds pass on the same 774 inputs. ASan r96 also passes with all prior controls/routes/stages preserved. Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown remain drafted separately.
 
