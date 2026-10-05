@@ -324,6 +324,7 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
 
 struct Distribution final
 {
+    std::uint64_t samples = 0;
     std::uint64_t p99UpperUs = 0;
     std::uint64_t maximumUs = 0;
 };
@@ -343,6 +344,7 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
             buckets[bucket] += histogram.BucketCounts()[bucket];
         }
     }
+    result.samples = count;
     if (count == 0)
     {
         return result;
@@ -360,6 +362,37 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
         }
     }
     return result;
+}
+
+constexpr std::array<std::pair<UiTimingKind, const char*>, 6> kResourceStages{{
+    {UiTimingKind::TextureCreate, "texture-create"},
+    {UiTimingKind::ShaderViewCreate, "shader-view-create"},
+    {UiTimingKind::MipGeneration, "mip-generation"},
+    {UiTimingKind::RasterUpload, "raster-upload"},
+    {UiTimingKind::CompositionRecord, "composition-record"},
+    {UiTimingKind::ChromeSync, "chrome-sync"},
+}};
+
+void ReportResourceStages(const UiBenchmarkState& state, const char* boundary, bool recorded)
+{
+    for (const auto& [kind, name] : kResourceStages)
+    {
+        Distribution distribution;
+        if (recorded)
+            distribution = Summarize(state, kind);
+        else
+        {
+            const auto& histogram = state.timing.durations[static_cast<std::size_t>(kind)];
+            distribution = {histogram.SampleCount(), histogram.PercentileUpperBound(99),
+                            histogram.MaximumMicroseconds()};
+        }
+        // Zero samples means this boundary performed none of that work, not a measured zero-duration stage.
+        std::printf("%s\n", std::format("UI RESOURCE name={} boundary={} stage={} samples={} "
+                                        "p99UpperUs={} maxUs={} inclusive=1",
+                                        CurrentOperation(state).name, boundary, name, distribution.samples,
+                                        distribution.p99UpperUs, distribution.maximumUs)
+                                .c_str());
+    }
 }
 
 void Report(const UiBenchmarkState& state)
@@ -405,6 +438,7 @@ void Report(const UiBenchmarkState& state)
                             frames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
                     .c_str());
     std::fflush(stdout);
+    ReportResourceStages(state, "recorded", true);
 }
 
 void ReportSamplerBoundary(const UiBenchmarkState& state, const char* boundary)
@@ -430,6 +464,7 @@ void ReportSamplerBoundary(const UiBenchmarkState& state, const char* boundary)
                             frame.MaximumMicroseconds(), frame.SampleCount(), timing.clockFailures)
                     .c_str());
     std::fflush(stdout);
+    ReportResourceStages(state, boundary, false);
 }
 } // namespace
 

@@ -212,3 +212,24 @@ SHA-256 in the manifest. Successful `-Download` (including an all-present `-Offl
 license rows, URLs and hashes. Evidence writes use the same pinned, no-replacement file policy as images; differing
 existing evidence fails without overwriting it. Preview never creates evidence. Updated manifests create distinct
 snapshots, allowing prior acquisition evidence to remain intact. No license fetch occurs in tests or offline mode.
+
+
+### First-display resource stage diagnostics
+
+UI benchmark reports additionally emit six `UI RESOURCE` rows per recorded operation and per focused
+`initial-display`/`excluded-warmup` boundary: texture-create, shader-view-create, mip-generation, raster-upload,
+composition-record and chrome-sync. Each row includes sample count, p99 upper bound, maximum wall microseconds
+and `inclusive=1`. Zero samples means no observed call, never a measured zero-duration operation.
+
+Stages use the fixed thread-local histograms and optional verbose ETW keyword 0x4. Without an active capture
+or provider they perform no clock read, allocation or wakeup. Resource calls and nested composition/chrome
+scopes measure inclusive owner wall time; never sum nested durations or call command-recording time GPU
+completion/scanout. Chrome timing remains captured for all calls; ETW suppresses chrome-sync at or below
+4000 microseconds to avoid a per-frame resource event. Existing UI BENCH rows and their gates remain unchanged.
+
+Real WARP tests assert first-compose resource samples, exact opaque premultiplied pixels, source-resident
+reuse after invalidation and zero resource/recomposition samples for a settled document. A separate capture
+isolates diagnostic readback staging creation. Real private ETL decoding verifies literal stage ids 6–11,
+payload types/values, owner thread, keyword and worker/chrome suppression. Tests never assert elapsed times.
+Actual largest-fixture Release/ETW measurements and fixes remain necessary for H4/G1; instrumentation alone
+cannot qualify first display or an accelerated pipeline.

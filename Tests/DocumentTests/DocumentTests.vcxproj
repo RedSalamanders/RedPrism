@@ -118,8 +118,10 @@
     <ClInclude Include="..\..\Common\RasterUploadWork.h" />
     <ClInclude Include="RasterUploadReductionWorkTests.h" />
     <ClInclude Include="RasterUploadLayoutTests.h" />
+    <ClInclude Include="RasterResidencyPlanTests.h" />
     <ClInclude Include="..\..\Common\RasterUploadReductionWork.h" />
     <ClInclude Include="..\..\Common\RasterUploadLayout.h" />
+    <ClInclude Include="..\..\Common\RasterResidencyPlanWork.h" />
     <ClInclude Include="HistoryEntriesTests.h" />
     <ClInclude Include="RecordRootTests.h" />
     <ClInclude Include="RecordOwnershipBoundsTests.h" />
@@ -224,8 +226,10 @@
     <ClCompile Include="..\..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="RasterUploadReductionWorkTests.cpp" />
     <ClCompile Include="RasterUploadLayoutTests.cpp" />
+    <ClCompile Include="RasterResidencyPlanTests.cpp" />
     <ClCompile Include="..\..\Common\RasterUploadReductionWork.cpp" />
     <ClCompile Include="..\..\Common\RasterUploadLayout.cpp" />
+    <ClCompile Include="..\..\Common\RasterResidencyPlanWork.cpp" />
     <ClCompile Include="HistoryEntriesTests.cpp" />
     <ClCompile Include="RecordRootTests.cpp" />
     <ClCompile Include="RecordOwnershipBoundsTests.cpp" />

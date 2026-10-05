@@ -848,3 +848,25 @@ one extra refresh candidate/index/container overlap before capture and remains h
 Bounded growth subscriptions publish readiness only and join notices before scheduler teardown. The history-only
 source remains self-test scoped; migration of every caller, activation, comparative peak/cost measurement and G1
 qualification remain required H3 work. See `Document_History.md` for the staged publication contract.
+
+
+### Dormant committed-document residency preparation
+
+`RasterResidencyAdmission::Estimate` reads sealed layer/selection ownership bounds, dimensions and layer count
+without traversal, capture, allocation or materialization. It refuses missing/overflow bounds, unsupported
+geometry/counts and invalid device/queue policy. Its descriptor is immediate and non-owning, never a cache key
+or publication authority. The owner must revalidate session/document/generation authority, actually reserve
+both complete CPU and GPU budgets, then capture immutable roots without reentrant dispatch.
+
+`RasterResidencyPlanWork::Prepare` runs on an admitted worker. The plan holds its document root and each unique
+raster layout; ordered layer/role bindings share those owners. Enumeration and a fixed-capacity hash table
+belong to workers. The descriptor charges container/scratch capacity and separate live/retired CPU/GPU overlap,
+full mip logical bytes, canvas/stack/coverage/lookup allowances, staging and declared opaque driver headroom.
+These are conservative policy allowances, not measurements of actual driver allocation or complete application
+reservation. Preview, borrowed brush and full-resolution utility graphs require their own additional charges.
+The committed-document plan cannot substitute its reduced display source for utility pixels.
+
+An intrusive plan cannot copy or move. Live owner consumers MUST keep the admitted deferred-release sink
+installed until all handles drain; release queues the CPU graph with AlwaysOnOwner. Without that sink the
+fallback destroys inline and is permitted only on workers or after the window is hidden during shutdown.
+Device/resource/mip/display publication and complete actual admission remain dormant and unqualified.

@@ -5,6 +5,7 @@
 #include "BrushStroke.h"
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
+#include "CompositionStageTimingTests.h"
 #include "Document.h"
 #include "DocumentReadbackTests.h"
 #include "FrameScheduler.h"
@@ -2089,6 +2090,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuUploadInitializationTests();
     gFailures += RunGpuUploadFaultTests();
     gFailures += RunGpuRasterUploadJobTests();
+    gFailures += RunCompositionStageTimingTests();
     gFailures += RunDocumentReadbackTests();
     TestFrameLoop();
     Harness harness;

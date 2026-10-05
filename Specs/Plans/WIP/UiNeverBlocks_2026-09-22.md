@@ -2,10 +2,10 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: terminal upload acknowledgement, complete first-display resource admission and remaining P1 callers/timing.
+Current work: complete first-display resource admission/creation, stage measurements and remaining P1 callers/timing.
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
-([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). Newer private GPU/retirement drafts need qualification;
-Native activation and G1 remain open.
+([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
+([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
 
@@ -45,6 +45,7 @@ Native activation and G1 remain open.
   - [x] Main-integrated immutable history-index slice passes full x64 Debug r74, Release r75 and ASan Debug r76 on identical inputs (`1936fe6`): unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
   - [x] Create and index the detailed [bounded upload/first-display plan](BoundedRasterUploads_2026-10-05.md); worker row-copy draft awaits registered qualification. No upload/G1 activation is claimed.
+  - [x] Review/register committed-document preparation and resource stage capture; current private proofs pass 43 CPU / 23 WARP / 31 ETL controls. Full 811-input matrix now passes: Debug r135, Release r137, real ASan r138, analysis r136 and all three ARM64 r10 cross-builds, with exact predecessor preservation. Production activation remains due ([record](../../TestRuns/P1ResidencyPlanAndStages_2026-10-05.md)).
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.

@@ -3,6 +3,7 @@
 #include "Adjust.h"
 #include "Jobs.h"
 #include "Shaders/CompositionShared.h"
+#include "UiTiming.h"
 
 #include "CompositionBlitPixelShader.h"
 #include "CompositionPixelShader.h"
@@ -18,6 +19,35 @@
 
 namespace
 {
+// Optional thread-local/ETW diagnostics. No active sink/provider means no clock read or allocation.
+// Nested resource scopes are inclusive and must never be summed to infer frame duration.
+HRESULT TimedCreateTexture2D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE2D_DESC* description,
+                             _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
+                             _COM_Outptr_ ID3D11Texture2D** texture) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::TextureCreate, 2};
+    return device->CreateTexture2D(description, initial, texture);
+}
+HRESULT TimedCreateTexture3D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE3D_DESC* description,
+                             _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
+                             _COM_Outptr_ ID3D11Texture3D** texture) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::TextureCreate, 3};
+    return device->CreateTexture3D(description, initial, texture);
+}
+HRESULT TimedCreateShaderResourceView(_In_ ID3D11Device* device, _In_ ID3D11Resource* texture,
+                                      _In_opt_ const D3D11_SHADER_RESOURCE_VIEW_DESC* description,
+                                      _COM_Outptr_ ID3D11ShaderResourceView** view) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::ShaderViewCreate};
+    return device->CreateShaderResourceView(texture, description, view);
+}
+void TimedGenerateMips(_In_ ID3D11DeviceContext* context, _In_ ID3D11ShaderResourceView* view) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::MipGeneration};
+    context->GenerateMips(view);
+}
+
 constexpr std::array<float, 4> kClearZero{0, 0, 0, 0};
 constexpr double kPi = 3.14159265358979323846;
 // Stroke tiles are this many grid pixels on a side (BrushStroke's tile grid): a reduced stroke texture starts its part
@@ -392,20 +422,20 @@ HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT forma
     description.SampleDesc.Count = 1;
     description.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
     description.MiscFlags = mips ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0u;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, surface.texture.texture.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
     if (FAILED(result) && mips)
     {
         // Without generated mips the zoomed-out blit samples the top level only.
         description.MipLevels = 1;
         description.MiscFlags = 0;
-        result = _device->CreateTexture2D(&description, nullptr, surface.texture.texture.put());
+        result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
         mips = false;
     }
     if (FAILED(result))
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(surface.texture.texture.get(), nullptr, surface.texture.srv.put());
+    result = TimedCreateShaderResourceView(_device, surface.texture.texture.get(), nullptr, surface.texture.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -527,14 +557,14 @@ HRESULT CanvasRenderer::CreateMippedTexture(int width, int height, bool gray, Gp
     description.SampleDesc.Count = 1;
     description.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, gpu.texture.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
     bool mipped = true;
     if (FAILED(result))
     {
         description.MipLevels = 1;
         description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         description.MiscFlags = 0;
-        result = _device->CreateTexture2D(&description, nullptr, gpu.texture.put());
+        result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
         mipped = false;
         if (FAILED(result))
         {
@@ -556,7 +586,7 @@ void CanvasRenderer::GenerateMipsFor(const GpuTexture& gpu) noexcept
 {
     if (gpu.mipped && gpu.srv)
     {
-        _context->GenerateMips(gpu.srv.get());
+        TimedGenerateMips(_context, gpu.srv.get());
     }
 }
 
@@ -572,6 +602,7 @@ std::array<float, 4> CanvasRenderer::RectFor(const GpuTexture& texture) noexcept
 
 template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, Reader&& read) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::RasterUpload};
     const int channels = gpu.gray ? 1 : 4;
     const int scale = std::max(1, gpu.scale);
     const std::size_t rowBytes = static_cast<std::size_t>(gpu.regionWidth) * static_cast<std::size_t>(channels);
@@ -753,7 +784,7 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
         gpu = {};
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         gpu = {};
@@ -765,6 +796,7 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
 
 HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::RasterUpload};
     gpu = {};
     if (!raster.HasStorage())
     {
@@ -795,7 +827,7 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
     }
     const D3D11_BOX box{0, 0, 0, static_cast<UINT>(gpu.width), static_cast<UINT>(gpu.height), 1};
     _context->UpdateSubresource(gpu.texture.get(), 0, &box, raster.Data(), static_cast<UINT>(raster.Stride()), 0);
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -949,7 +981,7 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -1130,7 +1162,7 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -1188,7 +1220,7 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
                                 static_cast<UINT>(top + committed->Height()),
                                 1};
             _context->CopySubresourceRegion(adopted.texture.get(), 0, 0, 0, 0, _strokeTexture.texture.get(), 0, &box);
-            if (SUCCEEDED(_device->CreateShaderResourceView(adopted.texture.get(), nullptr, adopted.srv.put())))
+            if (SUCCEEDED(TimedCreateShaderResourceView(_device, adopted.texture.get(), nullptr, adopted.srv.put())))
             {
                 GenerateMipsFor(adopted);
                 adopted.keepAlive = *committed;
@@ -1715,12 +1747,12 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             if (!entry->lut.srv)
             {
                 GpuTexture lut;
-                HRESULT result = _device->CreateTexture2D(&desc, nullptr, lut.texture.put());
+                HRESULT result = TimedCreateTexture2D(_device, &desc, nullptr, lut.texture.put());
                 if (FAILED(result))
                 {
                     return result;
                 }
-                result = _device->CreateShaderResourceView(lut.texture.get(), nullptr, lut.srv.put());
+                result = TimedCreateShaderResourceView(_device, lut.texture.get(), nullptr, lut.srv.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1765,7 +1797,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             {
                 wil::com_ptr_nothrow<ID3D11Texture3D> texture;
                 wil::com_ptr_nothrow<ID3D11ShaderResourceView> srv;
-                HRESULT result = _device->CreateTexture3D(&desc, nullptr, texture.put());
+                HRESULT result = TimedCreateTexture3D(_device, &desc, nullptr, texture.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1774,7 +1806,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                 view.Format = desc.Format;
                 view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
                 view.Texture3D.MipLevels = 1;
-                result = _device->CreateShaderResourceView(texture.get(), &view, srv.put());
+                result = TimedCreateShaderResourceView(_device, texture.get(), &view, srv.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1984,6 +2016,7 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
 
 HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::CompositionRecord};
     _composeId = ++_composeSerial;
     if (!_utilityRecording)
     {
@@ -2268,7 +2301,7 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     if (reduces && _canvasMipsStale)
     {
         // Zoomed out: reduce the new composite through its mips, once per change (RF-412).
-        _context->GenerateMips(_canvas[_front].texture.srv.get());
+        TimedGenerateMips(_context, _canvas[_front].texture.srv.get());
         _canvasMipsStale = false;
     }
     BlitConstants constants{};
@@ -2340,7 +2373,7 @@ HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UIN
     description.Usage = D3D11_USAGE_STAGING;
     description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     wil::com_ptr_nothrow<ID3D11Texture2D> staging;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, staging.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, staging.put());
     if (FAILED(result))
     {
         return result;

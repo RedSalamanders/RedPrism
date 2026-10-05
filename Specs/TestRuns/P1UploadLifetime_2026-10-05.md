@@ -11,7 +11,7 @@
 - [x] Normal full x64 Release r133 and real ASan Debug r134 on the same current source; all predecessor controls preserved.
 - [ ] Complete resource-plan admission, device resource creation/mips, consumers, retirement and G1.
 
-Status: managed dormant foundations fully qualified; production activation remains open. No application upload activation, Native source
+Status: managed dormant foundations fully qualified and pushed as `1cd2b699b38edb2f175113608822fb5c8e0b52d3`; production activation remains open. No application upload activation, Native source
 integration, RAW speed result or P1 exit is established. ARM64 runtime remains unavailable.
 
 ## Reviewed behavior

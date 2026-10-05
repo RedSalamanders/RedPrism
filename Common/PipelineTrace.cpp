@@ -89,7 +89,7 @@ void TracePipelineUi(UiTimingKind kind, std::uint64_t durationUs, std::uint32_t 
         return;
     }
     if ((kind == UiTimingKind::MessageDispatch || kind == UiTimingKind::WindowMessage ||
-         kind == UiTimingKind::CompletionDrain) &&
+         kind == UiTimingKind::CompletionDrain || kind == UiTimingKind::ChromeSync) &&
         durationUs <= 4000)
     {
         return;
@@ -122,6 +122,16 @@ void TracePipelineUi(UiTimingKind kind, std::uint64_t durationUs, std::uint32_t 
     case UiTimingKind::Frame:
         TraceLoggingWrite(g_pipelineTraceProvider, "UiFrame", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
                           TraceLoggingKeyword(0x4), TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::TextureCreate:
+    case UiTimingKind::ShaderViewCreate:
+    case UiTimingKind::MipGeneration:
+    case UiTimingKind::RasterUpload:
+    case UiTimingKind::CompositionRecord:
+    case UiTimingKind::ChromeSync:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiResourceStage", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt32(static_cast<std::uint32_t>(kind), "stage"),
+                          TraceLoggingUInt32(detail, "detail"), TraceLoggingUInt64(durationUs, "durationUs"));
         break;
     case UiTimingKind::Count:
         break;

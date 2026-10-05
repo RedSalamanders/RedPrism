@@ -15,6 +15,12 @@ enum class UiTimingKind : std::uint8_t
     ResultApply,
     UiAction,
     Frame,
+    TextureCreate,
+    ShaderViewCreate,
+    MipGeneration,
+    RasterUpload,
+    CompositionRecord,
+    ChromeSync,
     Count
 };
 

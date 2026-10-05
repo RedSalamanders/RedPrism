@@ -106,6 +106,7 @@
     <ClInclude Include="GpuUploadInitializationTests.h" />
     <ClInclude Include="GpuUploadFaultTests.h" />
     <ClInclude Include="GpuRasterUploadJobTests.h" />
+    <ClInclude Include="CompositionStageTimingTests.h" />
     <ClInclude Include="..\..\Common\RasterUploadReductionWork.h" />
     <ClInclude Include="..\..\Common\RasterUploadLayout.h" />
     <ClInclude Include="..\..\RedPrism\GpuRasterUploadJob.h" />
@@ -120,6 +121,7 @@
     <ClCompile Include="GpuUploadInitializationTests.cpp" />
     <ClCompile Include="GpuUploadFaultTests.cpp" />
     <ClCompile Include="GpuRasterUploadJobTests.cpp" />
+    <ClCompile Include="CompositionStageTimingTests.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuUploadWork.cpp" />

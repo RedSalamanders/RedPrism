@@ -3049,6 +3049,7 @@ void Application::DocumentChanged() noexcept
 
 void Application::SyncChrome() noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::ChromeSync};
     RefreshGradientJobs();
     RefreshPixelMoveJobs();
     RefreshTransformPreviewJobs();
