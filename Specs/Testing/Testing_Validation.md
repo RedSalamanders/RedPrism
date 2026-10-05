@@ -11,6 +11,24 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Experimental prepared layer-row and retained-cache foundation
+
+Normal `DocumentTests` preserves all predecessor goldens and adds 42 `layer-rows-work.*` and 16
+`collapse-revision.*` state expectations: literal hierarchy/name/visibility/mask semantics, 10,000 rows/depth
+64/long names, malformed localized patterns, sparse nonmaterialization, cancellation, independent remembered
+collapse bounds and copied/moved session read authority. Normal `HostTests` adds 59 `retained-job-memory.*`
+expectations plus its summary, including the exact final callback restriction, 64 slots, stale/foreign/reused
+tokens, original reservation, release-once, waiting admission and actual Close.
+
+The actual WARP self-test adds 107 `layer-rows-host.*` publication/lifetime expectations and 46
+`application-prepared-layer-rows-boundary.*` initial-refusal/changed-key/shutdown expectations, each with a
+separate summary. Current/stale/cancelled/failed/deleted-folder/copy-session cases use the real scheduler,
+owner capture, held worker, pinned Tree and deferred sink. Shutdown before/after preparation and with an active
+cache uses a fresh Application and its real shutdown event, detach and worker join. Complete source/private
+registry/stage and archive proofs remain required for every profile. These foundation gates keep production
+disabled; replacement pressure, explicit retry, remaining interaction/UIA/cost, Native activation and G1 remain
+open. See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
+
 ### Producer input ordering primitives
 
 The keyboard harness's system-menu timeout is armed only for synchronous key dispatch (including explicit

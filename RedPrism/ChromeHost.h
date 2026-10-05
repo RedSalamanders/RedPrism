@@ -7,6 +7,7 @@
 #include "CommandBindings.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "LayerRowsWork.h"
 #include "Resources.h"
 #include "TransformOverlay.h"
 
@@ -495,6 +496,12 @@ class ChromeHost final : public CommandIds
     void SetTool(EditorTool tool) noexcept;
     // `maskTargeted`: the active layer's mask is the target, so its row's Mask badge shows in the accent (RF-907).
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted);
+    // Borrowed immutable worker result. The publisher holds its exact admitted ticket/source reservation until
+    // this view is replaced or cleared; clear before retiring that owner or joining workers. No row traversal,
+    // string formatting, pixel access or large last-owner destruction is performed by this publication.
+    void SetPreparedLayers(const LayerRowsWork* rows, const std::optional<Guid>& active, bool maskTargeted);
+    void SetPreparedLayerInteraction(bool enabled) noexcept;
+
     // The layer a press at a point of the layers panel targets (RF-907, legacy NativeLayerList's thumbnails): the
     // row's mask when the point is on its Mask badge, else the row's pixels when that row's mask is the target; nullopt
     // anywhere else, a floating card over the panel included.
@@ -796,6 +803,19 @@ class ChromeHost final : public CommandIds
         explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
         ChromeEvents& events;
         std::vector<HierarchyEntry> rows;
+        const LayerRowsWork* preparedRows = nullptr; // borrowed from the publisher's still-live admitted job
+        bool preparedMode = false;
+        [[nodiscard]] std::span<const HierarchyEntry> RowsView() const noexcept
+        {
+            return preparedMode ? (preparedRows ? preparedRows->Rows() : std::span<const HierarchyEntry>{})
+                                : std::span<const HierarchyEntry>(rows);
+        }
+        [[nodiscard]] std::span<const std::wstring> TextView() const noexcept
+        {
+            return preparedMode ? (preparedRows ? preparedRows->DisplayText() : std::span<const std::wstring>{})
+                                : std::span<const std::wstring>(displayText);
+        }
+
         // Each row's display text (the name, or the "(hidden)" suffixed form), built once by SetRows so
         // GetVisibleItem's per-paint call is an assignment into the caller's reused buffer, never a
         // FormatStringResource call.
@@ -814,6 +834,7 @@ class ChromeHost final : public CommandIds
         // rows directly so a settled layers panel does not re-format every row's name on every repaint.
         void SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive, bool newMaskTargeted);
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
+        [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;
         void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;

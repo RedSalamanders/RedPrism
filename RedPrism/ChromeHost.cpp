@@ -167,6 +167,8 @@ void AppendSeparator(HMENU menu) noexcept
 void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive,
                                          bool newMaskTargeted)
 {
+    preparedRows = nullptr;
+    preparedMode = false;
     rows = std::move(newRows);
     active = newActive;
     maskTargeted = newMaskTargeted;
@@ -194,59 +196,66 @@ void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows, co
 
 size_t ChromeHost::LayerTreeModel::GetVisibleItemCount() const noexcept
 {
-    return rows.size();
+    return RowsView().size();
+}
+
+std::optional<std::size_t> ChromeHost::LayerTreeModel::FindVisibleItemById(uint64_t itemId) const noexcept
+{
+    return itemId != 0 && itemId <= RowsView().size() ? std::optional<std::size_t>(static_cast<std::size_t>(itemId - 1))
+                                                      : std::nullopt;
 }
 
 void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const
 {
-    if (visibleIndex >= rows.size())
+    const auto current = RowsView();
+    if (visibleIndex >= current.size())
     {
         outItem = {};
         return;
     }
-    // DxUi's Tree::Paint declares one TreeItemData outside its per-row loop and reuses it for every visible row
-    // (Tree::Paint, DxUi.Tree.cpp): assigning into each field, rather than resetting the whole struct first,
-    // keeps outItem.text's existing heap buffer instead of dropping it every row of every paint.
-    const HierarchyEntry& row = rows[visibleIndex];
+    // DxUi reuses this item's strings for visible rows. Prepared text stays owned by the admitted publisher;
+    // painting borrows only a visible row, without hierarchy traversal or formatting.
+    const HierarchyEntry& row = current[visibleIndex];
     outItem.id = visibleIndex + 1;
     outItem.parentId.reset();
-    outItem.text = displayText[visibleIndex];
+    outItem.text = TextView()[visibleIndex];
     outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
-    if (badgeText[visibleIndex] != nullptr)
-    {
-        outItem.badgeText = *badgeText[visibleIndex];
-    }
+    if (row.hasMask)
+        outItem.badgeText = row.maskEnabled ? maskBadge : maskOffBadge;
     else
-    {
         outItem.badgeText.clear();
-    }
     outItem.tooltipText.clear();
     outItem.depth = static_cast<uint32_t>(row.depth);
     outItem.hasChildren = row.isGroup;
     outItem.expanded = row.isGroup && !row.collapsed;
-    outItem.badgeTone = badgeTone[visibleIndex];
+    const bool targeted = row.hasMask && maskTargeted && active == std::optional<Guid>(row.id);
+    outItem.badgeTone = targeted           ? DxUi::AdornmentTone::Accent
+                        : !row.maskEnabled ? DxUi::AdornmentTone::Error
+                                           : DxUi::AdornmentTone::Info;
 }
 
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
 {
-    if (drop.sourceId == 0 || drop.targetId == 0 || drop.sourceId > rows.size() || drop.targetId > rows.size())
+    const auto visibleRows = RowsView();
+    if (drop.sourceId == 0 || drop.targetId == 0 || drop.sourceId > visibleRows.size() ||
+        drop.targetId > visibleRows.size())
     {
         return;
     }
-    const Guid source = rows[drop.sourceId - 1].id;
-    const Guid target = rows[drop.targetId - 1].id;
+    const Guid source = visibleRows[drop.sourceId - 1].id;
+    const Guid target = visibleRows[drop.targetId - 1].id;
     std::optional<Guid> parent;
     if (drop.place != DxUi::TreeDropPlace::Inside)
     {
-        const int depth = rows[drop.targetId - 1].depth;
+        const int depth = visibleRows[drop.targetId - 1].depth;
         if (depth > 0)
         {
             for (std::size_t index = drop.targetId - 1; index > 0;)
             {
                 --index;
-                if (rows[index].depth == depth - 1)
+                if (visibleRows[index].depth == depth - 1)
                 {
-                    parent = rows[index].id;
+                    parent = visibleRows[index].id;
                     break;
                 }
             }
@@ -305,20 +314,22 @@ void ChromeHost::ShortcutListModel::OnTreeItemInvoked(uint64_t itemId)
 
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
 {
-    if (itemId == 0 || itemId > rows.size())
+    const auto visibleRows = RowsView();
+    if (itemId == 0 || itemId > visibleRows.size())
     {
         return;
     }
-    events.OnLayerSelected(rows[itemId - 1].id);
+    events.OnLayerSelected(visibleRows[itemId - 1].id);
 }
 
 void ChromeHost::LayerTreeModel::OnTreeToggleExpanded(uint64_t itemId, bool expanded)
 {
-    if (itemId == 0 || itemId > rows.size())
+    const auto visibleRows = RowsView();
+    if (itemId == 0 || itemId > visibleRows.size())
     {
         return;
     }
-    events.OnLayerExpanded(rows[itemId - 1].id, expanded);
+    events.OnLayerExpanded(visibleRows[itemId - 1].id, expanded);
 }
 
 ChromeHost::ChromeHost(ChromeEvents& events) noexcept : _events(events), _shortcutModel(*this), _treeModel(events) {}
@@ -398,6 +409,8 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
+    _treeModel.preparedRows = nullptr;
+    _treeModel.preparedMode = false;
     NotePickerOpening();
     DetachAccessibility();
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
@@ -1519,7 +1532,7 @@ D2D1_RECT_F ChromeHost::LayerRowBoundsDip(std::size_t index) const noexcept
 
 D2D1_RECT_F ChromeHost::LayerMaskBadgeBoundsDip(std::size_t index) const noexcept
 {
-    if (!_attached || _layers == nullptr || index >= _treeModel.rows.size())
+    if (!_attached || _layers == nullptr || index >= _treeModel.RowsView().size())
     {
         return D2D1::RectF();
     }
@@ -1536,7 +1549,7 @@ D2D1_RECT_F ChromeHost::FlipHorizontalBoundsDipForTest() const noexcept
 
 std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPixels, float yPixels) const
 {
-    if (!_attached || _layers == nullptr || !_layers->IsVisible())
+    if (!_attached || _layers == nullptr || !_layers->IsVisible() || !_layers->IsEnabled())
     {
         return std::nullopt;
     }
@@ -1552,11 +1565,11 @@ std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPix
         }
     }
     const std::optional<std::size_t> row = _layers->FindVisibleItemAtPoint(point);
-    if (!row.has_value() || row.value() >= _treeModel.rows.size() || _treeModel.badgeText[row.value()] == nullptr)
+    if (!row.has_value() || row.value() >= _treeModel.RowsView().size() || !_treeModel.RowsView()[row.value()].hasMask)
     {
         return std::nullopt;
     }
-    const Guid id = _treeModel.rows[row.value()].id;
+    const Guid id = _treeModel.RowsView()[row.value()].id;
     const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), row.value());
     if (metrics.hasBadge && inside(metrics.badgeRect))
     {
@@ -3110,8 +3123,9 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
                left.isGroup == right.isGroup && left.collapsed == right.collapsed && left.hasMask == right.hasMask &&
                left.maskEnabled == right.maskEnabled && left.name == right.name;
     };
-    if (!TakeResync(kResyncLayers) && active == _treeModel.active && maskTargeted == _treeModel.maskTargeted &&
-        std::equal(rows.begin(), rows.end(), _treeModel.rows.begin(), _treeModel.rows.end(), sameRow))
+    if (!_treeModel.preparedMode && !TakeResync(kResyncLayers) && active == _treeModel.active &&
+        maskTargeted == _treeModel.maskTargeted &&
+        std::equal(rows.begin(), rows.end(), _treeModel.RowsView().begin(), _treeModel.RowsView().end(), sameRow))
     {
         return;
     }
@@ -3125,9 +3139,9 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
         std::optional<uint64_t> selected;
         if (active.has_value())
         {
-            for (size_t index = 0; index < _treeModel.rows.size(); ++index)
+            for (size_t index = 0; index < _treeModel.RowsView().size(); ++index)
             {
-                if (_treeModel.rows[index].id == active.value())
+                if (_treeModel.RowsView()[index].id == active.value())
                 {
                     selected = index + 1;
                     break;
@@ -3136,6 +3150,39 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
         }
         _layers->SetSelectedItemId(selected);
     }
+}
+
+void ChromeHost::SetPreparedLayers(const LayerRowsWork* rows, const std::optional<Guid>& active, bool maskTargeted)
+{
+    const bool resync = TakeResync(kResyncLayers);
+    if (!resync && _treeModel.preparedMode && rows == _treeModel.preparedRows && active == _treeModel.active &&
+        maskTargeted == _treeModel.maskTargeted)
+        return;
+    ++_syncCounters.layerRows;
+    _accessibleStructureChanged = true;
+    // String-table badge captions are small, cached once; row names/hidden labels are already prepared.
+    if (_treeModel.maskBadge.empty())
+    {
+        _treeModel.maskBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE);
+        _treeModel.maskOffBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_OFF_BADGE);
+    }
+    _treeModel.preparedMode = true;
+    _treeModel.preparedRows = rows;
+    _treeModel.active = active;
+    _treeModel.maskTargeted = maskTargeted;
+    if (_layers)
+    {
+        const auto index = rows && active ? rows->FindVisibleRow(active.value()) : std::nullopt;
+        const auto selected = index ? std::optional<uint64_t>(index.value() + 1) : std::nullopt;
+        _layers->SetSelectedItemId(selected);
+        _layers->NotifyDataChanged();
+    }
+}
+
+void ChromeHost::SetPreparedLayerInteraction(bool enabled) noexcept
+{
+    if (_layers && _layers->IsEnabled() != enabled)
+        _layers->SetEnabled(enabled);
 }
 
 void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept

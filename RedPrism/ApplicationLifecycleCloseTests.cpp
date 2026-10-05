@@ -162,7 +162,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.history.Reset();
         _session.history.MarkSaved();
-        _session.CollapsedGroupIDs().insert(groupID);
+        _session.SetGroupCollapsed(groupID, true);
         _session.SetForegroundColor(0xFF3167A9u);
         _session.SetBackgroundColor(0xFFE2B45Cu);
         _documentPath = L"Z:\\lifecycle-close-test\\source.prism";

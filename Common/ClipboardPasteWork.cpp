@@ -134,7 +134,7 @@ bool DocumentSession::ApplyPreparedClipboardPasteIfCurrent(PreparedClipboardPast
         return false;
     // GUID erasure cannot allocate or fail. Expand only the inserted layer's parent, preserving other UI state.
     if (prepared._parent)
-        _collapsed.erase(prepared._parent.value());
+        SetGroupCollapsed(prepared._parent.value(), false);
     return true;
 }
 

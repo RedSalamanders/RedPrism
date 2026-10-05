@@ -21,6 +21,7 @@
 #include "Jobs.h"
 #include "LayerCopyWork.h"
 #include "LayerMetadataWork.h"
+#include "LayerRowsWork.h"
 #include "MaskEditWork.h"
 #include "OwnerWorkMultiplexer.h"
 #include "PathClassificationWork.h"
@@ -62,6 +63,7 @@ struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
 struct HistoryResidencyTestGate;
+struct LayerRowsTestGate;
 struct SelectionCommandTestGate;
 struct LayerMetadataTestGate;
 struct SelectionNudgeTestGate;
@@ -125,6 +127,7 @@ class Application final : public ChromeEvents
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -455,6 +458,45 @@ class Application final : public ChromeEvents
         bool _attached = false;
         bool _deferred = false;
     };
+    struct LayerRowsKey final
+    {
+        std::uint64_t documentSerial = 0;
+        std::uint64_t generation = 0;
+        std::uint64_t collapseRevision = 0;
+        std::optional<DocumentReadAuthority> authority;
+        const void* root = nullptr; // descriptor only; capture follows successful original admission
+        [[nodiscard]] bool operator==(const LayerRowsKey&) const noexcept = default;
+    };
+    class LayerRowsSource final : public OwnerWorkPump
+    {
+      public:
+        explicit LayerRowsSource(Application& owner) noexcept : _owner(owner) {}
+        [[nodiscard]] bool Start() noexcept;
+        void StopNotifications() noexcept;
+        void CloseAfterWorkers() noexcept;
+        void Request() noexcept;
+        [[nodiscard]] bool HasPending() const noexcept override
+        {
+            return HasReady();
+        }
+        [[nodiscard]] bool HasReady() const noexcept override
+        {
+            return _enabled && _ready;
+        }
+        void Pump() noexcept override;
+
+      private:
+        Application& _owner;
+        bool _enabled = false;
+        bool _attached = false;
+        bool _ready = false;
+    };
+    class LayerRowsJob;
+    [[nodiscard]] LayerRowsKey CurrentLayerRowsKey() const noexcept;
+    [[nodiscard]] bool EnablePreparedLayerRows() noexcept;
+    void SyncPreparedLayerRows() noexcept;
+    void ClearPreparedLayerRows() noexcept;
+    int RunPreparedLayerRowsSelfTest() noexcept;
     class HistoryResidencyJob;
     [[nodiscard]] bool CanStartHistoryResidencyMaintenance() const noexcept;
     [[nodiscard]] HRESULT StartHistoryResidencyMaintenance() noexcept;
@@ -974,6 +1016,16 @@ class Application final : public ChromeEvents
     HRESULT _gpuBindingError = E_PENDING;
     HistoryWork _historyWork;
     HistoryResidencySource _historyResidencySource{*this};
+    LayerRowsSource _layerRowsSource{*this};
+    LayerRowsWork::Handle _preparedLayerRows;
+    std::optional<RetainedMemoryTicket> _layerRowsMemory;
+    std::optional<LayerRowsKey> _layerRowsPublishedKey;
+    std::optional<LayerRowsKey> _layerRowsRequestedKey;
+    std::optional<JobTicket> _layerRowsTicket;
+    std::wstring _layerRowsHiddenPattern;
+    bool _preparedLayerRowsEnabled = false;
+    std::shared_ptr<LayerRowsTestGate> _layerRowsTestGate;
+
     std::optional<JobTicket> _historyResidencyTicket;
     std::optional<HistoryWorkStamp> _historyResidencyStamp;
     std::shared_ptr<HistoryResidencyTestGate> _historyResidencyTestGate;

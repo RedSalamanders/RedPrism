@@ -8,6 +8,7 @@
 #include "CanvasSize.h"
 #include "ClipboardCommandTests.h"
 #include "ClipboardPasteTests.h"
+#include "CollapseRevisionTests.h"
 #include "ColorDismissalTests.h"
 #include "ColorDisplayPublicationTests.h"
 #include "ColorDisplayWorkTests.h"
@@ -48,6 +49,7 @@
 #include "LayerMetadataWorkTests.h"
 #include "LayerOpacityWorkTests.h"
 #include "LayerReadViewTests.h"
+#include "LayerRowsWorkTests.h"
 #include "LiftReferenceTests.h"
 #include "MaskEditWorkExtraTests.h"
 #include "MaskEditWorkTests.h"
@@ -322,10 +324,10 @@ void TestSessionGroups()
     Expect(session.ActiveLayer() != nullptr && session.ActiveLayer()->parentID == inner, "session.child-parent");
     Expect(!session.PlaceLayer(outer, inner), "session.reject-outer-into-inner");
     Expect(!session.PlaceLayer(inner, inner), "session.reject-self-parent");
-    session.CollapsedGroupIDs().insert(outer);
+    session.SetGroupCollapsed(outer, true);
     const std::vector<HierarchyEntry> collapsed = session.LayerRows();
     Expect(collapsed.size() == 1 && collapsed[0].id == outer, "session.collapse-hides-children");
-    session.CollapsedGroupIDs().erase(outer);
+    session.SetGroupCollapsed(outer, false);
     const std::vector<HierarchyEntry> expanded = session.LayerRows();
     Expect(expanded.size() == 3 && expanded[0].depth == 0 && expanded[1].depth == 1 && expanded[2].depth == 2,
            "session.expand-depths");
@@ -613,14 +615,14 @@ void TestCollapsedRows()
     session.AddBlankLayer();
     std::vector<HierarchyEntry> rows = session.LayerRows();
     Expect(rows.size() == 2 && rows[0].isGroup && !rows[0].collapsed, "rows.expanded-flag");
-    session.CollapsedGroupIDs().insert(folder);
+    session.SetGroupCollapsed(folder, true);
     rows = session.LayerRows();
     Expect(rows.size() == 1 && rows[0].collapsed && rows[0].isGroup, "rows.collapsed-flag");
     Expect(!HierarchyEntries(session.Document().value().layers)[0].collapsed, "rows.default-not-collapsed");
     // RF-907: a row carries its layer's mask for the layers panel's badge, and whether the mask is on.
     rows = session.LayerRows();
     const bool bare = rows.size() == 1 && !rows[0].hasMask && rows[0].maskEnabled;
-    session.CollapsedGroupIDs().clear();
+    session.ClearCollapsedGroups();
     session.SelectLayer(session.LayerRows()[1].id);
     session.AddLayerMask(true);
     session.ToggleLayerMask(session.ActiveLayerID().value());
@@ -8045,6 +8047,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRasterUploadLayoutTests();
     gFailures += RunRasterResidencyPlanTests();
     gFailures += RunRasterResidencyManifestTests();
+    gFailures += RunCollapseRevisionTests();
+    gFailures += RunLayerRowsWorkTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();

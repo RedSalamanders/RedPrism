@@ -508,6 +508,34 @@ operations away from the UI thread, operation-specific peak estimates and retain
 
 ### Admission, release and recycled buffers
 
+The experimental prepared layer-row path is enabled only explicitly by self-tests until full H4 activation and
+G1 qualification. Admission reads sealed source/name bounds before retaining the source; unavailable/overflowed
+bounds refuse the complete operation. It conservatively charges the source's complete retirement ownership,
+row/name/lookup/traversal capacities, pattern/collapse storage, job/input wrappers and construction overlap.
+The one owner capture copies the immutable document handle and at most 10,000 collapse Guids (160 KB); it never
+walks rows, names, history, selection geometry or pixels. This bounded metadata copy still requires owner timing
+qualification. Locale input is the process-startup STRINGTABLE pattern, captured once before enabling.
+
+Workers prepare and finally destroy the entire immutable source, rows, localized labels, collapse IDs, pattern
+and Guid lookup together. Owner lookup has at most 14 binary-search iterations at 10,000 layers, including hash
+collisions; each iteration performs one equality and at most one ordering comparison. Publication validates
+document serial, generation, separate collapse revision, session document read
+authority and held layer root; the source owns every pointer identity. One active request and one newest key
+bound refreshes. Cancellation retains original record/source/accounting until acknowledgement.
+
+A successful, nonzero, uncancelled original job reservation may transfer to one of 64 fixed retained-memory
+slots only during that exact job's owner final apply or `Completed` callback. Pump/progress, foreign/stale/reused
+jobs and another job's final callback (including a custom apply handler) have no such authority. Transfer performs
+no second admission, memory query or allocation; tokens bind scheduler lifetime, slot and generation. Retained cache
+accounting alone does not keep useful work awake. Replacement/clear detaches every chrome borrow before the
+old cache's final handle queues its complete graph on the worker release lane. Queueing charges
+`releasingBytes` before publication; worker destruction finishes before that charge is removed. Only after
+queueing may the exact retained ticket be released once. Close performs owner detach while the sink/pool are
+live, joins complete retirement before final MTA teardown, and invalidates residual tokens. Tokens own
+accounting, never source lifetime. Replacement admission pressure and explicit retry still need resolution
+before activation; the current default memory-wait policy alone does not break a replacement's dependency on
+the cache it needs to replace.
+
 Settled layer metadata jobs reserve the complete private record/history graph, request and replacement name
 overlap, publication/control storage and retirement before capturing document/history. Borrowed rename text must
 refer to the exact selected request; only the owner capture reads it, copies it under admission and clears the

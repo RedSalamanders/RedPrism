@@ -342,6 +342,30 @@ The 183 independent controls include every protected row's missing/duplicate/unk
 refusal, extreme bounds, direct-entry and backward-target cases, metadata/target/tail refusals, and real VEX/EVEX
 in the body or adjacent to the table. This proof adds no runtime instruction, module or allowlist exemption.
 
+The observed Release `std::format::_Visit` terminal switch instead uses exactly 40 contiguous bytes:
+`MOVZX EAX,byte [RCX]`; three fixed register-preserving moves; `CMP AL,imm8`; `JA rel32`;
+`LEA R10,imagebase`; `MOV ECX,[R10+4*RAX+table]`; `ADD RCX,R10`; `JMP RCX`.
+Full EAX zero extension, all ten exact rows and the complete known procedure body must agree with PE bytes and
+nonoverlapping decoded boundaries. The unsigned maximum is 1…127. Anonymous untyped same-owner PDB data begins
+at the DWORD load's displacement, and max+1 DWORDs end exactly at that procedure's end. No intervening symbol
+may alter the count. Every table/default target is a known body boundary after dispatch, before the exact cold
+CALL/INT3/NOP tail. Direct branches may not bypass the protected guard, enter tail alignment or target table
+bytes. Reported table bytes must match PE bytes too. The 141 independent controls include every protected/body/
+tail-row proof failure, ownership/count/target corruption, bounds and genuine body/adjacent vector rejection.
+This proof recognizes data only; ordinary instructions and the runtime allowlist remain gated.
+
+The observed ASan menu tracing remap uses a different exact 45-byte form: `CMP dword [RSP+disp8],imm32`;
+`JA rel32`; zero-extending `MOV EAX,[RSP+the same disp8]`; the contiguous RCX image-base LEA, byte remap load,
+DWORD target load, ADD RAX,RCX and JMP RAX. All eight rows, their lengths and PE/listing bytes must agree without
+unknown/duplicate/overlapping boundaries. The unsigned maximum is 1…4095; max+1 byte indices end at the exact
+same-owner procedure end inside its contribution. Anonymous untyped same-owner symbols bound both tables;
+the byte table begins at the DWORD end, every byte index is below the DWORD count, and every target/default is
+a decoded body boundary before the DWORD table. Earlier contradictory or unrelated later symbols cannot rescue
+a malformed/missing guard. Reported DWORD rows must agree with PE bytes; genuine body/adjacent VEX/EVEX remain
+instructions. The 115 independent controls cover 15 valid bound/displacement combinations, all eight row-proof
+failure classes, operand/owner/range/count corruption and genuine body/adjacent vector rejection. This adds no
+module or allowlist exemption.
+
 The ASan `Application::EndCanvasEdit` terminal switch uses exactly `CMP dword [RSP+disp32],imm8;
 JA rel32; MOVSXD RAX,dword [RSP+the same disp32]`, followed by the contiguous RCX image-base DWORD dispatch,
 ADD and JMP RAX. All seven guard/dispatch rows must match their PE bytes, decoded lengths and nonoverlapping

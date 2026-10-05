@@ -42,6 +42,7 @@
 #include "PointerInputStreamTests.h"
 #include "PreviewMailboxTests.h"
 #include "Resources.h"
+#include "RetainedJobMemoryTests.h"
 #include "RetryWaitCancellationTests.h"
 #include "RetryWaitQueueTests.h"
 #include "SamplerInputTests.h"
@@ -530,6 +531,25 @@ void TestCommandLine() noexcept
            "cli.help-text");
 }
 
+// Separate runtime metadata queries retain their normal guarded switch entry points; do not duplicate four
+// hoisted switch dispatches inside the container-heavy test. Every existing numeric/control expectation stays.
+__declspec(noinline) wchar_t RuntimeEditorToolKey(EditorTool tool) noexcept
+{
+    return EditorToolKey(tool);
+}
+__declspec(noinline) wchar_t RuntimeEditorToolGlyph(EditorTool tool) noexcept
+{
+    return EditorToolGlyph(tool);
+}
+__declspec(noinline) UINT RuntimeEditorToolName(EditorTool tool) noexcept
+{
+    return EditorToolNameId(tool);
+}
+__declspec(noinline) EditorTool RuntimeEditorToolForCommand(UINT command) noexcept
+{
+    return CommandIds::ToolForSelectCommand(command);
+}
+
 void TestEditorTools() noexcept
 {
     std::set<wchar_t> keys;
@@ -538,13 +558,13 @@ void TestEditorTools() noexcept
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
         const EditorTool tool = EditorToolAt(index);
-        keys.insert(EditorToolKey(tool));
-        glyphs.insert(EditorToolGlyph(tool));
-        names.insert(EditorToolNameId(tool));
+        keys.insert(RuntimeEditorToolKey(tool));
+        glyphs.insert(RuntimeEditorToolGlyph(tool));
+        names.insert(RuntimeEditorToolName(tool));
         // A tool's key is the default chord of its select command, and that command selects the tool.
         Expect(PrimaryDefaultChord(CommandIds::SelectToolCommand(tool)) ==
-                       Key(static_cast<std::uint16_t>(EditorToolKey(tool))) &&
-                   CommandIds::ToolForSelectCommand(CommandIds::SelectToolCommand(tool)) == tool,
+                       Key(static_cast<std::uint16_t>(RuntimeEditorToolKey(tool))) &&
+                   RuntimeEditorToolForCommand(CommandIds::SelectToolCommand(tool)) == tool,
                "tools.key-is-the-select-command-default");
         Expect(EditorToolIndex(tool) == index, "tools.index-round-trip");
     }
@@ -644,7 +664,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 488> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 489> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -781,6 +801,7 @@ void TestStringTable() noexcept
                                          IDS_CMD_LOAD_LAYER_SELECTION,
                                          IDS_CMD_LOAD_MASK_SELECTION,
                                          IDS_ERROR_WAND_DETAILED,
+                                         IDS_ERROR_LAYER_ROWS,
                                          IDS_ERROR_WAND_MEMORY,
                                          IDS_UNIT_PIXELS,
                                          IDS_SELECTION_RECTANGLE,
@@ -1812,6 +1833,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPerfRootTests();
     gFailures += RunPipelineTraceTests();
     gFailures += RunJobMemoryTests();
+    gFailures += RunRetainedJobMemoryTests();
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();

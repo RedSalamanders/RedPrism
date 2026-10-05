@@ -1893,7 +1893,7 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     _document = std::move(document);
     ++_documentSerial;
     SetActiveLayerID(active);
-    _collapsed.clear();
+    ClearCollapsedGroups();
     EndEdit();
 }
 
@@ -1930,7 +1930,7 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
     }
     if (layer.parentID.has_value())
     {
-        _collapsed.erase(layer.parentID.value());
+        SetGroupCollapsed(layer.parentID.value(), false);
     }
     std::size_t insertion = _document.value().layers.size();
     if (_activeLayerID.has_value())
@@ -2031,7 +2031,7 @@ void DocumentSession::AddGroup()
     SetActiveLayerID(groupId);
     if (groupParent.has_value())
     {
-        _collapsed.erase(groupParent.value());
+        SetGroupCollapsed(groupParent.value(), false);
     }
     EndEdit();
 }
@@ -2161,7 +2161,7 @@ bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& pare
     SetActiveLayerID(id);
     if (destination.has_value())
     {
-        _collapsed.erase(destination.value());
+        SetGroupCollapsed(destination.value(), false);
     }
     EndEdit();
     return true;
@@ -2418,7 +2418,7 @@ void DocumentSession::GroupSelectedLayers()
     SetActiveLayerID(group.id);
     if (parent.has_value())
     {
-        _collapsed.erase(parent.value());
+        SetGroupCollapsed(parent.value(), false);
     }
     EndEdit();
 }
@@ -2514,7 +2514,7 @@ void DocumentSession::ClearDocument()
     _document.reset();
     ++_documentSerial;
     SetActiveLayerID(std::nullopt);
-    _collapsed.clear();
+    ClearCollapsedGroups();
     _transformEdit.reset();
     _transformDuplicate.reset();
     _cropRect.reset();
@@ -3315,6 +3315,26 @@ bool DocumentSession::LinkMask(const Guid& source, const Guid& target)
     std::swap(_document.value(), after.value());
     EndEdit();
     return true;
+}
+
+void DocumentSession::SetGroupCollapsed(const Guid& id, bool collapsed)
+{
+    if (collapsed)
+    {
+        if (_collapsed.size() < kMaxLayerCount && _collapsed.insert(id).second)
+            _collapseRevision.Advance();
+    }
+    else if (_collapsed.erase(id) != 0)
+        _collapseRevision.Advance();
+}
+
+void DocumentSession::ClearCollapsedGroups() noexcept
+{
+    if (!_collapsed.empty())
+    {
+        _collapsed.clear();
+        _collapseRevision.Advance();
+    }
 }
 
 std::vector<HierarchyEntry> DocumentSession::LayerRows() const

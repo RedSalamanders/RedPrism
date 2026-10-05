@@ -2192,9 +2192,17 @@ class DocumentSession
     }
     void SelectLayer(const std::optional<Guid>& id);
     [[nodiscard]] const ImageLayer* ActiveLayer() const noexcept;
-    [[nodiscard]] std::unordered_set<Guid>& CollapsedGroupIDs() noexcept
+    [[nodiscard]] const std::unordered_set<Guid>& CollapsedGroupIDs() const noexcept
     {
         return _collapsed;
+    }
+    // Explicit collapse writes advance separate display authority, including collapse/expand A-B-A. This
+    // state stays outside document history; callers never retain a mutable set across worker capture.
+    void SetGroupCollapsed(const Guid& id, bool collapsed);
+    void ClearCollapsedGroups() noexcept;
+    [[nodiscard]] std::uint64_t CollapseRevision() const noexcept
+    {
+        return _collapseRevision.Current();
     }
     [[nodiscard]] std::vector<HierarchyEntry> LayerRows() const;
     [[nodiscard]] bool CanPlaceLayer(const Guid& id, const std::optional<Guid>& parent) const;
@@ -3121,6 +3129,7 @@ class DocumentSession
     std::optional<Guid> _activeLayerID;
     std::unordered_set<Guid> _selected;
     std::unordered_set<Guid> _collapsed;
+    InputRevision _collapseRevision;
     uint32_t _foregroundArgb = kDefaultForegroundArgb;
     uint32_t _backgroundArgb = kDefaultBackgroundArgb;
     InputRevision _paletteRevision;

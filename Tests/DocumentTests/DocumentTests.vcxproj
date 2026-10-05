@@ -181,6 +181,12 @@
     <ClInclude Include="..\..\Common\LayerMetadataWork.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Common\LayerRowsWork.cpp" />
+    <ClInclude Include="..\..\Common\LayerRowsWork.h" />
+    <ClCompile Include="LayerRowsWorkTests.cpp" />
+    <ClInclude Include="LayerRowsWorkTests.h" />
+    <ClCompile Include="CollapseRevisionTests.cpp" />
+    <ClInclude Include="CollapseRevisionTests.h" />
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="DocumentLifecycleTests.cpp" />
     <ClCompile Include="DuplicateOpeningLimitTests.cpp" />

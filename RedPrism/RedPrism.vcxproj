@@ -323,6 +323,12 @@
     <ClCompile Include="..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
+    <ClCompile Include="..\Common\LayerRowsWork.cpp" />
+    <ClInclude Include="..\Common\LayerRowsWork.h" />
+    <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsTests.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsBoundaryTests.cpp" />
+    <ClInclude Include="LayerRowsTestGate.h" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationClipboardJobs.cpp" />
     <ClCompile Include="ApplicationClipboardTests.cpp" />

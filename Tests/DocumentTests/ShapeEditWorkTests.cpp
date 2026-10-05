@@ -333,7 +333,7 @@ void AtomicGroupSelectionMaskAndRedo()
     session.SetOpacity(0.5);
     session.Undo();
     session.SelectLayerTarget(sourceID, true);
-    session.CollapsedGroupIDs().insert(groupID);
+    session.SetGroupCollapsed(groupID, true);
     const auto selection = session.Selection();
     const auto sourceDocument = session.Document();
     const auto priorCount = session.history.UndoCount();
@@ -489,8 +489,8 @@ void ActiveGroupSubtreeAndUnsettledDraft()
     const auto unrelated = ImageLayer::Blank(L"Root sibling", {2, 2});
     document.layers = {group, nested, child, unrelated};
     session.ReplaceDocument(std::move(document).Seal(), group.id);
-    session.CollapsedGroupIDs().insert(group.id);
-    session.CollapsedGroupIDs().insert(nested.id);
+    session.SetGroupCollapsed(group.id, true);
+    session.SetGroupCollapsed(nested.id, true);
     InlineExecutor executor;
     auto result = Prepare(session, Draft(ShapeKind::Rectangle, 4, 5, 8, 6), 0xFF0033AAu, executor);
     const bool applied = result.publication && session.ApplyPreparedShapeEditIfCurrent(result.publication.value());

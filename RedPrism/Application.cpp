@@ -2657,6 +2657,10 @@ int Application::RunSelfTest() noexcept
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)
         return exported;
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
+    std::printf("BEGIN self-test.RunPreparedLayerRowsSelfTest\n");
+    if (const int rows = RunPreparedLayerRowsSelfTest(); rows != 0)
+        return rows;
+
     std::printf("BEGIN self-test.RunChromeSyncSelfTest\n");
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
@@ -2924,12 +2928,14 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 {
     if (expanded)
     {
-        _session.CollapsedGroupIDs().erase(id);
+        _session.SetGroupCollapsed(id, false);
     }
     else
     {
-        _session.CollapsedGroupIDs().insert(id);
+        _session.SetGroupCollapsed(id, true);
     }
+    if (_session.CollapsedGroupIDs().contains(id) != !expanded)
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
     SyncChrome();
     _frameInvalidated = true;
 }
@@ -3085,7 +3091,10 @@ void Application::SyncChrome() noexcept
     const ImageLayer* maskOwner = _session.ActiveLayer();
     const bool hasMask = maskOwner != nullptr && maskOwner->mask.has_value();
     const bool maskTargeted = hasMask && _session.IsMaskSelected();
-    _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
+    if (_preparedLayerRowsEnabled)
+        SyncPreparedLayerRows();
+    else
+        _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked,
                              !hasMask || maskOwner->mask->enabled);
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
@@ -3500,6 +3509,7 @@ void Application::Shutdown() noexcept
     _shutdownStarted = true;
     _shutdownDeferred = false;
     _historyResidencySource.StopNotifications();
+    _layerRowsSource.StopNotifications();
     StopHostContinuations();
     CancelColorJobs();
     CancelGradientJobs();
@@ -3527,6 +3537,8 @@ void Application::Shutdown() noexcept
              owner._session.DetachCoverageForShutdown();
              owner._brushEngine.Release();
              owner._retryWait.CloseAfterWorkers();
+             owner.ClearPreparedLayerRows();
+             owner._layerRowsSource.CloseAfterWorkers();
              owner._historyResidencySource.CloseAfterWorkers();
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;

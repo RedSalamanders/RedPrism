@@ -282,7 +282,7 @@ bool DocumentSession::ApplyPreparedShapeEditIfCurrent(PreparedShapeEdit& prepare
         !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     if (prepared._parent)
-        _collapsed.erase(prepared._parent.value());
+        SetGroupCollapsed(prepared._parent.value(), false);
     return true;
 }
 

@@ -626,6 +626,18 @@ indentation. Selecting a row selects the layer; toggling a group's expander upda
 line and, on release, calls `DocumentSession::PlaceLayer`: the top or bottom of a row inserts beside it, the middle
 of a folder drops inside it, and Escape or capture loss cancels. A folder cannot be dropped into its own descendant.
 
+The experimental prepared-row path, currently enabled only explicitly by self-tests, borrows its immutable
+row graph from the Application's admitted publisher. Chrome MUST detach that borrow before final retirement
+or replacement. During same-document refresh, previous labels may remain visible but the stale tree is disabled:
+selection, reorder and mask-badge hits cannot mutate through its obsolete hierarchy. Document replacement clears
+old labels immediately. A candidate publishes only against its exact current document/generation/collapse/read
+authority/root. Prepared top-first depth, inherited visibility, collapsed descendants, localized hidden labels
+and mask flags preserve `HierarchyEntries` semantics. Active selection uses the owning Guid index; a collapsed
+descendant has no selected row. An unchanged borrowed graph/active target causes no row rewrite.
+Process-startup localization supplies the hidden pattern once; per-row painting and settled sync do not load it.
+Full interaction, accessibility/reentrancy, largest-count/name owner cost, production activation and G1 remain
+separate qualification requirements; prepared publication alone does not close them.
+
 Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`ITreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
 holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK

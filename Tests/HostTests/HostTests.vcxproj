@@ -114,6 +114,8 @@
     <ClInclude Include="..\..\Common\SamplerIntentInput.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="RetainedJobMemoryTests.cpp" />
+    <ClInclude Include="RetainedJobMemoryTests.h" />
     <ClCompile Include="HostTests.cpp" />
     <ClCompile Include="OwnerWorkMultiplexerTests.cpp" />
     <ClCompile Include="RetryWaitQueueTests.cpp" />

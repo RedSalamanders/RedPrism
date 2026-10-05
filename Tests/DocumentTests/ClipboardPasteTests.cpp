@@ -291,8 +291,8 @@ void GroupInsertionAndSiblingPlacement()
     session.ReplaceDocument(std::move(document).Seal(), Guid::Parse(childID).value());
     static_cast<void>(session.CopySelection());
     session.SelectLayer(Guid::Parse(activeID).value());
-    session.CollapsedGroupIDs().insert(Guid::Parse(activeID).value());
-    session.CollapsedGroupIDs().insert(Guid::Parse(unrelatedID).value());
+    session.SetGroupCollapsed(Guid::Parse(activeID).value(), true);
+    session.SetGroupCollapsed(Guid::Parse(unrelatedID).value(), true);
     auto prepared = PreparePrivate(session);
     const Guid unrelated = Guid::Parse(unrelatedID).value();
     const auto applied = prepared && session.ApplyPreparedClipboardPasteIfCurrent(prepared.value());

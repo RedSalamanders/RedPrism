@@ -308,6 +308,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             std::swap(_colorEdit, drafts.color);
             ++_documentSerial;
             std::swap(_collapsed, prepared._retiredCollapsed);
+            _collapseRevision.Advance();
             std::swap(_lastBrushCommit, prepared._retiredBrushCommit);
             std::swap(_adjustmentOriginal, prepared._retiredAdjustment);
             std::swap(_snapGuides, prepared._retiredSnapGuides);

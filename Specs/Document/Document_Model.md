@@ -226,6 +226,15 @@ set) lists itself with `collapsed = true` and hides its subtree. A row carries i
 panel's badge (`hasMask`, and `maskEnabled`, true without a mask; RF-907). `RenderLayerIds` is the visible, non-group
 subset in bottom-to-top order.
 
+Collapsed IDs are session-only panel state, outside document equality, the project format and history. The
+read-only set has a new bound of 10,000 IDs independently of live layer count, including remembered deleted
+folders. Adding at capacity is ignored; removal remains allowed. Explicit `SetGroupCollapsed` and
+`ClearCollapsedGroups` advance a separate monotonic `CollapseRevision` only on membership change. Clearing or
+replacement that discards a nonempty set also advances it. No-op requests leave document generation and history
+unchanged. Exhaustion invalidates this authority rather than wrapping. Returning to an earlier collapsed set
+cannot authorize a delayed prepared result. Copied/moved sessions renew their document read authority, so even
+equal roots, IDs and counters cannot authorize another session's row publication.
+
 ## Session edits
 
 ### Mutation ownership and result tokens

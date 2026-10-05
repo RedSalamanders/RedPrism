@@ -61,6 +61,17 @@ struct JobEventTicket final
     std::uint64_t generation = 0;
 };
 
+// Exact original reservation transferred from a finished job into a live immutable cache. This value owns
+// accounting only: the host must detach borrowed views and defer the cache's whole graph before releasing it.
+// Scheduler lifetime and slot generation prevent foreign, stale and reused-slot release.
+struct RetainedMemoryTicket final
+{
+    std::size_t slot = 64;
+    std::uint64_t generation = 0;
+    std::uint64_t owner = 0;
+    [[nodiscard]] bool operator==(const RetainedMemoryTicket&) const noexcept = default;
+};
+
 enum class JobNoticeKind
 {
     Submitted,
@@ -168,6 +179,7 @@ class JobScheduler final
   public:
     static constexpr std::size_t kCapacity = 128;
     static constexpr std::size_t kUiActionCapacity = 8;
+    static constexpr std::size_t kRetainedMemoryCapacity = 64;
     JobScheduler() noexcept;
     ~JobScheduler();
     JobScheduler(const JobScheduler&) = delete;
@@ -182,6 +194,15 @@ class JobScheduler final
     [[nodiscard]] bool EnableMemoryRecycling() noexcept;
     [[nodiscard]] std::uint64_t ReservedMemoryBytes() const noexcept;
     [[nodiscard]] std::uint64_t ReleasingMemoryBytes() const noexcept;
+    // Completed callback only for the exact successful, uncancelled job. Transfers its entire original
+    // reservation without a new admission/query/allocation. Fixed-capacity cache records do not count as
+    // pending useful work; an otherwise settled scheduler stays idle while their bytes remain charged.
+    [[nodiscard]] std::int32_t RetainMemory(JobTicket job, RetainedMemoryTicket& retained) noexcept;
+    // Owner only, once the borrowed cache is detached and its whole graph is queued for worker retirement.
+    // The release sink's in-flight bytes then protect admission until destruction is acknowledged. Close's
+    // owner hook performs this cleanup before final worker retirement; Close invalidates residual tickets.
+    [[nodiscard]] bool ReleaseRetainedMemory(RetainedMemoryTicket retained) noexcept;
+
     // Event sources call this without waiting, only while the initialized scheduler is alive. The caller joins
     // external producers before Close; Close joins its own worker/wait sources. The next owner drain retries
     // admission from a fresh snapshot.

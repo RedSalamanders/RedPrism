@@ -508,7 +508,7 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _adjustmentOriginal.reset();
     _warpSource.image = {};
     _selected.clear();
-    _collapsed.clear();
+    ClearCollapsedGroups();
     std::vector<double>{}.swap(_snapGuides.xs);
     std::vector<double>{}.swap(_snapGuides.ys);
     for (auto& channel : filterSettings.curves.channels)

@@ -258,7 +258,7 @@ void GroupInsertionAndMaskTargetCopy()
         document.layers.insert(document.layers.begin(), std::move(group));
         const Guid sourceID = document.layers[1].id;
         session.ReplaceDocument(std::move(document).Seal(), sourceID);
-        session.CollapsedGroupIDs().insert(groupID);
+        session.SetGroupCollapsed(groupID, true);
         session.SetSelection(Rect(1, 1, 2, 2), L"Grouped selection");
         ExecutorSerial executor;
         LayerCopyResult prepared = Prepare(session, executor);

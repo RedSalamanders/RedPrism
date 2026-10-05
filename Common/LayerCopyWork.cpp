@@ -201,6 +201,6 @@ bool DocumentSession::ApplyPreparedLayerCopyIfCurrent(PreparedLayerCopy& prepare
         _selectionMoveOrigin || _lassoDraft || !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     if (prepared._expandParent)
-        _collapsed.erase(prepared._expandParent.value());
+        SetGroupCollapsed(prepared._expandParent.value(), false);
     return true;
 }

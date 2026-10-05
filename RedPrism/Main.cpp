@@ -264,6 +264,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneCanvasLifetimeShutdownSelfTest\n");
         if (const int failed = Application::RunStandaloneCanvasLifetimeShutdownSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsBoundarySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsBoundarySelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneProcessingSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneLeaseShutdownSelfTest(instance); failed != 0)
