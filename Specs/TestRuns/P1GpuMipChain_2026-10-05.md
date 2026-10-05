@@ -7,13 +7,14 @@
 - [x] Primary implement one owner draw per pump, real completion acknowledgement and original-ticket continuation.
 - [x] Preserve whole admitted raster charges through failure, cancellation, quarantine and joined shutdown.
 - [x] Private strict WARP r7 passes 173 new mip controls and the exact 726 preceding controls.
-- [ ] Fresh Main source integration and private reference, normal registration and independent reviewer findings.
-- [ ] Identical-source Debug/Release/real ASan, analysis, ARM64 cross-builds and predecessor registry proof.
-- [ ] Independently archive qualification, reconcile contracts, commit and push this step.
+- [x] Fresh Main source integration/private reference, exact normal registration and independent reviewer findings are reviewed; actual shared-context consumer qualification remains below.
+- [x] Identical-source Debug/Release/real ASan, analysis, ARM64 cross-builds and predecessor registry proof.
+- [x] Independently archive qualification and reconcile contracts.
+- [x] Commit and push this qualified step (`af7986f`).
 - [ ] Complete document graphs, generation/consumer/fallback activation and the original largest-fixture G1 gates.
   - [ ] Qualify actual composition/chrome/brush rendering after a mip pump on the shared context.
 
-**Status: private Caller draft qualified; Main integration and normal qualification pending.**
+**Status: managed normal qualification passes on the identical 825-input source; committed/pushed as `af7986f`.**
 
 Parent: [bounded upload and first display](../Plans/WIP/BoundedRasterUploads_2026-10-05.md), U4.
 This is one admitted raster's chain. It does not qualify an entire document's resources or first composition.
@@ -90,3 +91,23 @@ before RenderFrame, CanvasRenderer RunPass and BlitToTarget establish their view
 Renderer passes its window viewport to ChromeHost Composite. The mip API now explicitly requires pumping outside
 frame recording and complete state binding by following consumers. Arbitrary state preservation is not promised.
 This does not close the unchecked actual post-mip composition/chrome/brush validation before live activation.
+
+## Fresh Main reference and running normal qualification
+
+Main private r1 actual child PID 76656 exits 0, 2026-10-05T17:10:07.441826Z -> 17:11:19.006217Z; 407 frozen inputs, SHA-256 `008C46D84FD015BB2DE0DA7223194BB37073033DA933E427D8D667B0012AE4F8`. Stdout `78DE691BDF914C9F2BA852FE2E59DDD3392E18D32C135A8E58729E2290C76841`. The fresh driver owns frozen sources, compiled strict shaders and actual process receipt before later hashing; scope explicitly covers mip draws. All 726 predecessors and 173 new mip controls pass. Agent registrations were independently reviewed for exact uniqueness, complete FXC metadata and preserved entries; no whole Caller project was copied. Skills validate 15 and formatting checks 704 files.
+
+## Complete normal qualification
+
+All gates below pass on the identical 825-input freeze `87EF15D69384FDF174B89616E2D957D467562C3D644BDB98110B2A821CC0E18F`. Strict source/registry proof preserves every predecessor: Document 7,081, Host 7,525, application 9,744 controls and 79 ordered stages; Composition 1,495 → 1,668 adds exactly the 173 private mip controls. ASan's independent stress registry remains 7,922. Skills (15) and formatting (704) pass. These are the repository entrypoint runs; incremental product reuse is scoped in their receipts, not claimed as clean full rebuilds.
+
+| Gate | Actual child / exit | UTC interval | Verified archive completion SHA-256 |
+| --- | --- | --- | --- |
+| x64 Debug test r146 | 82276 / 0 | 2026-10-05T17:13:59.475872+00:00 → 2026-10-05T17:24:22.934606+00:00 | `2CFE32B8CD5154A20B63F61BCEA7C8E9EE7612644526CFAC1DD654B62289AF76` |
+| x64 Release analysis r147 | 97064 / 0 | 2026-10-05T17:14:53.989121+00:00 → 2026-10-05T17:22:05.632849+00:00 | `E4125E149D498B3A633323EEE6C80BF946443CF071CF0567EEA011CB11298BAE` |
+| x64 Release test r148 | 83084 / 0 | 2026-10-05T17:28:25.645117+00:00 → 2026-10-05T17:34:52.827613+00:00 | `65197FB392D169A1E054B05D80A1A52D549222222BDF0E87CE33637D91EDB3FA` |
+| x64 ASan Debug test r149 | 100764 / 0 | 2026-10-05T17:35:27.969620+00:00 → 2026-10-05T17:47:41.110541+00:00 | `B63AA9B7DC5ED56CECD2A0D3E71E422751BAADE5B97D1860CDC560510EFACC14` |
+| ARM64 Debug r13 cross-build | 61364 / 0 | 2026-10-05T17:14:28.596809+00:00 → 2026-10-05T17:14:54.420879+00:00 | `AFBA23C99F5C5DD0EA0FA11C761873BA88731F4FFDFCB3B8241154BFBC73922C` |
+| ARM64 Release r13 cross-build | 92320 / 0 | 2026-10-05T17:14:58.394408+00:00 → 2026-10-05T17:17:09.830415+00:00 | `863792F830618A703009213DCB75BBAEDE5BFF061F4E605739C47028816B3D52` |
+| ARM64 ASan Debug r13 cross-build | 96764 / 0 | 2026-10-05T17:17:18.830820+00:00 → 2026-10-05T17:18:55.625345+00:00 | `383B55E7F254E2652524F359A86C00F729CFB97D2D54CC92F49D178F12B6E504` |
+
+Archives are under `C:\Users\eric\AppData\Local\RedPrism\QualificationArchives`, named by gate above. Sources, products/PDB/provenance, logs, screenshots and registry proof were independently copied/read back after actual child exit. The current real sanitizer probe diagnosed expected heap-use-after-free; its diagnostic hash is `1F82C180A1710DE2D10C760EC9F879DC76724B50DF04AD4AF3B31BBF811B05DC`, supplement receipt `4E909841D39F0596DDFD0EEB5E9674B1ECB5800D0290D49B07FBDCB7B170C42E`. ARM64 results are compilation only. Complete resource graphs, shared-context actual consumers, fallback/native activation and original first-display G1 remain unchecked requirements.
