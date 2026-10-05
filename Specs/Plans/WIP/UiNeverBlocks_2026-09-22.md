@@ -9,6 +9,7 @@ The image-wrapper residency and original worker/upload transport step is fully q
 
 ## Delivery checklist
 
+- [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
 - [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
 - [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.
