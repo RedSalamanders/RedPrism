@@ -2,9 +2,10 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: H3 remaining image import/replacement, mask, copy and shape residency callers;
-registered worker upload rows and bounded first-display/GPU preparation.
-The managed residency core and scoped metadata/maintenance slices are qualified; Native activation remains open.
+Current work: terminal upload acknowledgement, complete first-display resource admission and remaining P1 callers/timing.
+The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
+([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). Newer private GPU/retirement drafts need qualification;
+Native activation and G1 remain open.
 
 ## Delivery checklist
 
@@ -16,7 +17,8 @@ The managed residency core and scoped metadata/maintenance slices are qualified;
   - [x] Qualified core committed/pushed as `ce4f8b4`; Native checklist/evidence pushed as `88b9b1b`.
   - [x] Combined metadata/maintenance source committed and pushed as `8ab921d` after the full identical-source matrix; six sampler measurement children pass, with original first/warmup overruns retained ([record](../../TestRuns/P1SamplerMeasurements_2026-10-05.md)).
   - [x] Qualify the integrated Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown group. Full Debug r109, Release r108 and real ASan r110 pass on the same 775 inputs as analysis r106 and all three r4 ARM64 cross-builds. All 6,841 document / 9,446 application controls and 79 stages preserve predecessors; 15 skills / 655 formatted files pass. Earlier fixture/clipboard failures remain archived; Native activation and G1 remain open ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
-  - [ ] Integrate and qualify image import/replacement, mask, layer-copy and shape residency callers plus registered worker upload rows. Private codegen and linked CPU diagnostics pass; actual host/normal matrix and first-upload/G1 remain open ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)).
+  - [x] Integrate and qualify image import/replacement, mask, layer-copy and shape residency callers plus worker upload rows and the dormant bounded upload transport. Full Debug r122, Release r126 and real ASan r124 pass on the same 787 inputs as analysis r123 and three r7 ARM64 cross-builds: 6,963 document / 911 composition / 9,744 host controls and 79 stages. Earlier fixture and clipboard failures remain archived; 15 skills / 667 formatted files pass ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)).
+  - [ ] Qualify/integrate the newer private proxy/layout, queue faults, terminal-retirement acknowledgement and upload job; then finish complete first-display resource admission, Native activation and measured G1.
   - [x] Qualify combined cancellation/notification/metadata refresh and scoped live-history maintenance; Debug r89/r90 fixture failures preserved and repaired; build r91 and actual host runtime r92 pass (9,362 controls / 79 stages). Full Debug r93, analysis r94, Release r95 and all ARM64 cross-builds pass on the same 774 inputs. ASan r96 also passes with all prior controls/routes/stages preserved. Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown remain drafted separately.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.

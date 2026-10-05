@@ -1484,3 +1484,22 @@ the replacement. Fixture helpers use bounded event waits for external listeners;
   transfer retry budget is unchanged. Exhausted fixture acquisition still fails the original assertion.
   Full frozen native qualification is required before closing these foundations. Production host,
 retry/lifetime, G1 and native ARM64 runtime claims remain separate.
+
+### P1 worker upload and image-wrapper residency foundations
+
+`RasterUploadWorkTests` requires 73 literal pitched-row/crop/guard/invalid/sparse/cancellation controls.
+`GpuUploadAdmissionTests` and `GpuUploadTransportTests` require 58 admission and 107 real WARP transport
+controls: exact destination crops, untouched guards, bounded slots/staging, nonblocking Map and one event-driven
+Busy retry, exact-generation loans, cancellation, rebind and held-worker shutdown. Queue receivers outlive
+their final callback; shutdown joins notifications and filling workers before owner Unmap/close. These suites
+exercise the dormant queue without activating composition consumers or establishing a frame-time bound.
+
+Document image publication adds 44 import and five layer-copy controls. The actual host registers nine
+image-import/replacement cases (118 controls) and fifteen mask/copy/shape cases (180 controls): original
+ticket/ordinal/reservation, immutable captured intent, refresh OOM/cancel, one atomic history publication,
+eager semantic mask thumbnails, literal Undo/Redo, no-trim single-image replacement and off-owner retirement.
+All preceding controls and the 79-stage host registry remain unchanged. Full managed Debug/Release/real ASan,
+Release analysis and three ARM64 cross-builds qualify this source; see
+[the bound record](../TestRuns/P1UploadCpuPreparation_2026-10-05.md#image-wrapper-residency-and-original-upload-transport-complete-managed-qualification).
+Private later fault/layout/retirement drafts, production upload consumers, G1 and Native activation remain
+separate P1 requirements. No RAW or Photoshop speed claim follows from these functional gates.
