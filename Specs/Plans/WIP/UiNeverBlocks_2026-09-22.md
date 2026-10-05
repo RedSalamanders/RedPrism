@@ -1,6 +1,11 @@
 # P1 — Responsive raster editor delivery milestone
 
+**Paused at the user’s request on 2026-10-05.** Source, qualified receipts and local helpers are saved.
+Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) before continuing.
+
 ## Delivery checklist
+
+- [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
 - [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.
@@ -46,7 +51,7 @@
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.
 
-**Status: ACTIVE / P1.** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
+**Status: HOLD / P1 (user pause 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
