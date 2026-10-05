@@ -248,6 +248,119 @@ void LargeHistoryNamesHaveIndependentCapacityFloors()
            "large-entry-name-retained-capacity-floor");
 }
 
+void ShapeSourceStorageParticipatesInHistoryBudget()
+{
+    constexpr std::array<std::uint8_t, 4> assetBytes{1, 2, 3, 255};
+    const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, assetBytes.data(), assetBytes.size());
+    const Raster shapeSource = HeldBgra(12);
+    std::optional<CanvasDocument> before{DocumentWithRaster(image, L"Shape source cache")};
+    EditDocumentFixture(before.value(),
+                        [&shapeSource](DocumentFixture& fixture) { fixture.layers[0].shapeImage = shapeSource; });
+    auto after = before;
+    EditDocumentFixture(after.value(),
+                        [](DocumentFixture& fixture)
+                        {
+                            fixture.layers[0].name = L"Renamed shape source";
+                            fixture.layers[0].shapeImage = Raster{};
+                        });
+    DocumentHistory retained;
+    retained.Begin(L"Retire shape source", before, {});
+    retained.End(after, {});
+    constexpr std::size_t expectedBytes = 512 * 512 * 4;
+    Expect(shapeSource.ByteSize() == expectedBytes && retained.UndoCount() == 1 &&
+               retained.RetainedBytes(after) == expectedBytes,
+           "shape-source-only-history-owner-counts-one-literal-mib");
+    Expect(retained.RetainedBytes(before) == 0, "live-shape-source-owner-excludes-the-same-history-storage");
+
+    DocumentHistory directBudget(100, expectedBytes / 2);
+    directBudget.Begin(L"Budgeted shape source", before, {});
+    directBudget.End(after, {});
+    Expect(directBudget.UndoCount() == 0 && directBudget.RetainedBytes(after) == 0,
+           "shape-source-direct-trim-drops-entry-above-half-mib-budget");
+    DocumentHistory preparedBudget(100, expectedBytes / 2);
+    auto publication =
+        DocumentHistory::PrepareEdit(preparedBudget.CaptureState(), before, {}, after, {}, L"Prepared shape source");
+    Expect(publication && preparedBudget.Publish(publication.value()) && preparedBudget.UndoCount() == 0 &&
+               preparedBudget.RetainedBytes(after) == 0,
+           "shape-source-prepared-trim-has-the-same-literal-budget-decision");
+}
+
+void CachedHistoryBoundsPreserveSourceAndPublication()
+{
+    DocumentHistory::Snapshot absent;
+    const auto absentBounds = absent.OwnershipBounds();
+    Expect(absentBounds && absentBounds->ownershipBytes >= sizeof(DocumentHistory::Snapshot) &&
+               absentBounds->metadataBytes <= absentBounds->ownershipBytes && absentBounds->rasterNodes == 0,
+           "cached-absent-snapshot-has-complete-own-header-bound");
+
+    const Raster base = HeldBgra(9);
+    const Raster sparse = Raster::MakeSparse(512, 512, RasterFormat::Bgra8888, base, 0, 0, {}, 0);
+    const std::optional<CanvasDocument> before{DocumentWithRaster(sparse, L"Cached history source")};
+    auto after = before;
+    after->width = 2;
+    DocumentHistory history;
+    history.Begin(L"Cached bound edit", before, {});
+    history.End(after, {});
+    const auto state = history.CaptureState();
+    const auto retainedRevision = history.CurrentRevision();
+    const auto graphBound = history.RetirementMemoryBytes(after);
+    const auto editBound = history.EditMemoryBytes(after);
+    Expect(history.UndoCount() == 1 && graphBound >= sparse.RetirementMemoryBytes() && editBound != 0 &&
+               !sparse.IsMaterialized(),
+           "cached-stack-admission-covers-held-sparse-source-without-materializing");
+    bool repeatedStable = graphBound != 0;
+    for (unsigned int query = 0; query < 1024; ++query)
+        repeatedStable = repeatedStable && history.RetirementMemoryBytes(after) == graphBound &&
+                         history.EditMemoryBytes(after) == editBound;
+    Expect(repeatedStable && history.IsCurrent(state) && history.CurrentRevision() == retainedRevision,
+           "cached-stack-repeated-admission-queries-preserve-original-roots-and-epoch");
+    Expect(sparse.Data() && sparse.IsMaterialized() && history.RetirementMemoryBytes(after) == graphBound &&
+               history.EditMemoryBytes(after) == editBound && history.IsCurrent(state),
+           "cached-stack-potential-assembly-charge-stays-valid-after-materialization");
+
+    const auto restored = history.Undo();
+    Expect(restored && restored->document == before && history.CanRedo() && history.UndoCount() == 0 &&
+               history.RetirementMemoryBytes(before) != 0 && history.RestoreMemoryBytes(before, true) != 0,
+           "cached-future-stack-bounds-preserve-exact-undo-source-and-redo-admission");
+    const auto redone = history.Redo();
+    Expect(redone && redone->document == after && history.UndoCount() == 1 && !history.CanRedo() &&
+               history.RetirementMemoryBytes(after) != 0,
+           "cached-past-stack-bounds-follow-redo-with-original-document-values");
+    const auto baseline = history.RetirementMemoryBytes(std::nullopt);
+    std::wstring pendingName(128 * 1024, L'p');
+    history.Begin(std::move(pendingName), before, {});
+    Expect(history.RetirementMemoryBytes(std::nullopt) >= baseline + 128 * 1024 * sizeof(wchar_t) &&
+               history.EditMemoryBytes(before) != 0,
+           "cached-pending-bound-retains-complete-name-and-snapshot-owners");
+    history.End(before, {});
+    history.Reset();
+    Expect(history.RetirementMemoryBytes(std::nullopt) != 0 && history.RetirementMemoryBytes(std::nullopt) < baseline &&
+               !history.CanUndo() && !history.CanRedo(),
+           "cached-reset-removes-old-stack-and-pending-ownership-from-admission");
+
+    Raster deep = Raster::Make(1, 1, RasterFormat::Bgra8888);
+    for (int depth = 0; depth < 130; ++depth)
+        deep = Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, deep}}, 0);
+    const std::optional<CanvasDocument> unavailable{DocumentWithRaster(deep, L"Unavailable snapshot")};
+    DocumentHistory::Snapshot unavailableSnapshot{unavailable, {}, Guid::Generate()};
+    Expect(deep.HasStorage() && !deep.RetirementMemoryBytes() && !unavailableSnapshot.OwnershipBounds(),
+           "cached-snapshot-propagates-unavailable-complete-child-bound");
+    auto unavailableAfter = unavailable;
+    unavailableAfter->width = 2;
+    DocumentHistory unmeasurableHistory;
+    unmeasurableHistory.Begin(L"Unmeasurable", unavailable, {});
+    unmeasurableHistory.End(unavailableAfter, {});
+    const auto unmeasurableState = unmeasurableHistory.CaptureState();
+    const auto unmeasurableRevision = unmeasurableHistory.CurrentRevision();
+    Expect(unmeasurableHistory.UndoCount() == 1 && unmeasurableHistory.RetirementMemoryBytes(std::nullopt) == 0 &&
+               unmeasurableHistory.EditMemoryBytes(std::nullopt) == 0 &&
+               unmeasurableHistory.RestoreMemoryBytes(std::nullopt, false) == 0,
+           "cached-stack-refuses-unavailable-history-even-without-live-document");
+    Expect(unmeasurableHistory.IsCurrent(unmeasurableState) &&
+               unmeasurableHistory.CurrentRevision() == unmeasurableRevision && !deep.IsMaterialized(),
+           "cached-unavailable-queries-never-mutate-history-or-expand-sparse-source");
+}
+
 void CachedRasterBoundsCoverAdoptionCachesAndSharedDags()
 {
     PixelBuffer pixels = PixelBuffer::TryAllocate(4);
@@ -296,5 +409,7 @@ int RunHistoryRetirementBoundTests()
     ExcessiveSparseTileDepthRefusesEstimate();
     LargeHistoryNamesHaveIndependentCapacityFloors();
     CachedRasterBoundsCoverAdoptionCachesAndSharedDags();
+    CachedHistoryBoundsPreserveSourceAndPublication();
+    ShapeSourceStorageParticipatesInHistoryBudget();
     return gFailures;
 }

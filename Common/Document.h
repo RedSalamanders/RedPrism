@@ -1470,6 +1470,7 @@ class DocumentHistory
         std::optional<CanvasDocument> document;
         std::optional<Guid> activeLayerID;
         Guid revision;
+        [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept;
     };
 
     explicit DocumentHistory(int entryLimit = kHistoryEntryLimit,
@@ -1744,7 +1745,7 @@ class DocumentHistory
     // Conservative held-graph capacity for retirement, including current, pending, past/future and an optional
     // additional raster owner. Occurrences deliberately overcount sharing; no set/allocation/materialization.
     // Includes a possible sparse materialization cache. Zero refuses overflow or a graph deeper than 128.
-    // H2/H3 replace this traversal with cached immutable record/storage indexes.
+    // Reads construction-cached immutable stack/document bounds only. Exact retained-storage indexes remain H3.
     [[nodiscard]] std::uint64_t RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
                                                       const Raster& additional = {}) const noexcept;
     [[nodiscard]] int EntryLimit() const noexcept
@@ -1762,6 +1763,7 @@ class DocumentHistory
         std::wstring name;
         std::shared_ptr<const Snapshot> before;
         std::shared_ptr<const Snapshot> after;
+        [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept;
     };
 
     void Trim(const std::optional<CanvasDocument>& current);
@@ -1772,6 +1774,7 @@ class DocumentHistory
     {
         std::wstring name;
         std::shared_ptr<const Snapshot> before;
+        [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept;
     };
     HistoryEntries<EntryHandle> _past;
     HistoryEntries<EntryHandle> _future;

@@ -1,6 +1,6 @@
 # P1 sampler repeated-pixel prerequisite — evidence
 
-Status: the latest combined caller snapshot passes full Release r65 with bounded Map failure/recovery and focused sampler smoke. ASan Debug r64 and Debug r63 qualify their recorded source. Later shutdown source, final combined matrix, native activation and G1 remain open. First hardware timing r1 is refused with display off; all original failures are preserved below.
+Status: latest qualified combined snapshot passes full Debug r71: cached history admission, shape-source trim and actual sampler memory-policy controls. ASan Debug r68 and Release r65 qualify their earlier snapshots. Later topology/Escape, current matrix, native activation and original G1 remain open. Hardware timing r1 is refused with display off; all failures and receipts are preserved below.
 Worktree: `C:\Users\eric\.codex\worktrees\p1-sampler\RedPrism`, based on `b49e4b4` plus the assertion-preserving
 six-kind test fixture isolation from color qualification. Active [plan](../Plans/WIP/SamplerReadback_2026-10-04.md).
 
@@ -534,3 +534,90 @@ verified 2026-10-05T02:26:31.2968689Z. Completion
 
 Cached history-stack admission and actual sampler memory-wait/refusal controls are absent from r68. Current
 Debug/Release/analysis/ARM64, native activation, broader callers/H3/H4 and original G1 remain due.
+
+## Combined cached history and sampler memory-pressure candidate - r69 compilation failure
+
+Primary implements immutable history-stack ownership caches and replaces layer/entry walks in edit/restore/
+retirement admission with cached queries. The complete conservative bound intentionally overcounts sharing and
+potential sparse assembly; it does not close unique retained-storage accounting or late-residency enforcement.
+Secondary review finds no separate cache undercount/lifetime defect and identifies the existing shape-source
+trim omission. Primary verifies both walks, adds that field, and writes four independent 1 MiB / half-MiB checks.
+Nineteen agent root-cache tests are reviewed and corrected before integration: a mismatched shared-pointer type,
+erasing the wrong expected child/capacity, and iterator dereference. Private syntax r2 preserves C2039; repaired
+r3 passes all three TUs under stdcpplatest, W4/WX and permissive-. These probes are not full runtime qualification.
+
+The cheaper agent writes a fresh actual WARP sampler memory fixture using the existing startup MemorySource
+probe. Primary catches unsupported Guid boolean and JobStatus enum use; the agent repairs them. Primary removes
+a first-pump refusal assumption because recycling may require acknowledgement, and observes only registered
+source readiness when checking idle self-rearm. Three cases have 23 assertions: waiting then recovery, exact-ticket
+cancel while waiting, and hard memory refusal. Literal blue/brown, original receipt/ticket/history, zero captures
+before admission, one on recovery, complete retirement and joined shutdown are required. These are injected
+memory-policy cases, not observations of system-wide low memory. Existing stages and numeric goldens remain.
+
+Actual child 23348, 2026-10-05T02:39:28.516033Z-02:40:37.143011Z, exit **1**, 771 unchanged inputs.
+The full Debug build reports C4702/C2220 in `HistoryEntries::Publish`: unsupported ownership policies
+instantiate a loop whose branch always breaks. Runtime is not reached. Primary moves the compile-time policy
+branch outside the loop, preserving empty-root bounds, unavailable nonempty policies and immutable publication.
+Warnings and expectations remain unchanged; private syntax-only success did not cover code generation.
+
+Freeze `AF2A5C7B053507502971AFA9F65FE6200F32674334254B724F72076BB6B62CFE`; stdout
+`6894070368502C47BEE7597907F53106FF4D4E4E1B792761B62F1D114FBFBBCE`; stderr
+`A8A4252C62957836AF4D50437F1F3B8C24BB1945D8E3E2F5B7FD1DA6346E00C7`.
+Archive `p1-history-cache-sampler-memory-x64-Debug-r69-failed` independently verifies **1,040 copies**, zero
+current runtime stages, at 2026-10-05T02:48:46.4141267Z. Completion
+`67D88A8FD3F6B001D5A9BFA6378605C74ECF3AF90BDBCF5A5B07946D896AD560`; source manifest
+`8CF551DF341E970F7CE31743DE3275BEF47E9350A1BC7B002DCB7606B154C665`; evidence manifest
+`A7C90DDEC81933A2282645FA428BDEB9F8FD2698E3BEAFF048BB962644933B95`.
+Older output logs are preserved and do not qualify this attempt. Fresh full Debug r70 tests the repaired
+candidate; current matrix, exact accounting, native activation and G1 remain open.
+
+## Combined history cache - r70 document fixture failure
+
+Actual child 21716, 2026-10-05T02:50:21.365986Z-02:56:39.343250Z, exit **1**, 771 unchanged inputs.
+Compilation and ISA/PDB/scanner gates pass. DocumentTests fails one new assertion,
+`history-retirement-bound.shape-source-only-history-owner-counts-one-literal-mib`. The fixture clears only
+`shapeImage`; existing layer equality deliberately excludes this derived cache, so no history entry is created.
+Primary changes the fixture to perform a real rename while clearing the cache. The original one-MiB charge,
+live exclusion and half-MiB trim expectations stay unchanged. Production equality and all legacy goldens stay unchanged.
+The application runtime and sampler memory fixture are not reached.
+
+Freeze `B4AF0FAA4EC5BD542A53E8D46CCC9FDE63CCA3D72F1C895289F95100EA83FEF8`; stdout
+`094E60DBFF1AF49439E4BFA3E514494A61B0498ABD70105CC62DE9A52CD31E2F`; stderr
+`D7A6F383AB79B73F669914EDB26859DF411BE623D0C9B9F27EBD57C1FFD9D479`.
+Archive `p1-history-cache-sampler-memory-x64-Debug-r70-document-failed` independently verifies **1,040 copies**,
+zero current application stages, at 2026-10-05T02:57:26.2169207Z. Completion
+`EF53B99D4D7087C2D62CCC4E0411D87644458DA168A877D068626DA51831494A`; source manifest
+`5B7FBA392AF92BED18DBEDC91B58A0F4236B4F0E1874BB04A975954ED579DB68`; evidence manifest
+`E9D1E23B5BC820366CEE0E0FA6C6EB5A89EA8AAC4AFFC7BF321EAE6C928C3220`.
+Fresh r71 tests this repaired candidate; later topology source is private and absent from this freeze.
+
+## Cached history and sampler memory policy - full Debug r71
+
+Actual child 10300, 2026-10-05T02:59:00.008441Z-03:08:18.431111Z, exit **0**, 771 unchanged inputs.
+Freeze `F4C557B79769A2C76E0EB7E687C95612AB2A7A9587753E1B99D4EF8CFAA37C2A`; stdout
+`034AA58019AA7C58FE704CF75BFBD27237EDA748B8F6758291B729A2DF0E47AB`; stderr
+`EE58B58EF4D73C62CBB27E4C01476FDB347C0D14C6A63D006F90753C13B2DFB6`.
+Skills/format, all full suites, unchanged ISA/PDB/scanner controls, WARP/crash/CLI/build/RAW probes,
+27-operation/focused sampler smoke and harness screenshots pass. No legacy golden or warning gate changes.
+
+Exactly 34 new document controls (19 cache + 11 snapshot/history + four shape budget) and 23 sampler-memory
+application controls pass: **6,658 document / 9,289 application**, all original PASS-line multiplicities and
+ordered **79 stages** preserved. The first independent proof script uses the wrong exact document-stage marker
+and fails before writing its proof; repaired extraction matches the observed `Running document model tests...`
+marker. This changes neither runtime nor source. Proof SHA-256
+`D9AC4AC19B113B7FABDE427EF6B3A6488C9518CE840E056F648FB3745AD410BB`.
+
+Archive `p1-history-cache-sampler-memory-x64-Debug-r71-full-qualified` independently verifies **1,040 copies / 79
+stages** at 2026-10-05T03:10:50.1510965Z. Completion
+`B69C7F629A271548C80B789260BE9EFED3F679A52369118EAF06F5B6641E5314`; source manifest
+`E248B4171414C905EC8AD283718612911048041E3FD32A664EA52F8E657B3208`; evidence manifest
+`97D29B7B76A12A74317E5FD12D49D06DBF3BE739E474EFFDCD7912423EF379AA`.
+The registry proof and its eight exact inputs are independently copied/read back in
+`p1-history-cache-sampler-memory-r71-registry-proof`, verified 2026-10-05T03:12:35.359605Z, input manifest
+`4DDFB5216C61D3CBB557B8ABE268479FB7AB68DF701BCE789BD02B619C2BF096`, receipt
+`930E730791D2CA904D57B99313AE4B6363FB462D1B30A34CC0B663F52449383C`.
+
+Secondary reviews find no separate cache undercount/lifetime or memory-fixture false-success defect. They confirm
+that nested closure/late sparse residency and physical Escape during admission waiting remain unproven by r71.
+Later topology and Escape source is absent. Current Release/ASan/analysis/ARM64, exact H3/H4, native activation
+and original G1 remain required; this slice is a qualified WIP checkpoint, not P1 completion.

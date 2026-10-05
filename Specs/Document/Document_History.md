@@ -18,7 +18,8 @@ The application supplies an explicit session limit of **min(physical RAM / 4, 2 
 a failed physical-memory query falls back to 256 MiB. The limit is selected once at application construction.
 `retainedBytes(current)` counts unique raster storage that appears only in history snapshots
 (before/after), excluding images still referenced by the live document, using pointer identity of `Raster`
-storage (Swift `ObjectIdentifier` of `CGImage`). Thumbnails count separately when they are distinct storage.
+storage (Swift `ObjectIdentifier` of `CGImage`). Thumbnails and the retained `shapeImage` source count separately when they are distinct storage. The live
+document excludes those same owners before history charges are accumulated.
 Immutable selection storage also counts once by its held `SelectionLoops` identity, excluding the live
 document's selection identity. Its cached charge includes the outer vector object, outer retained capacity
 and each loop's retained point capacity; spare capacity counts. Opaque allocator/control-block overhead is
@@ -70,7 +71,13 @@ handles and the pending handle without allocation or per-entry traversal. Reads,
 never clone. Detached mutation constructs a completed private root before replacing the previous root; a relaxed
 `shared_ptr::use_count` is never permission to mutate formerly shared storage. Failed construction leaves both
 captured and live roots unchanged. Prepared stack growth/trim charges its private container and handle peaks;
-retirement includes retained root capacity. Full document record capture and admission traversal remain H2 work.
+retirement includes retained root capacity. Each completed stack root additionally caches complete conservative
+metadata, ownership and raster-node occurrence bounds. Its producer measures immutable entry/snapshot bounds
+before publication; queries and handle copies never revisit entries, layers, names, curves or selection points.
+Default roots own nothing and have valid zero bounds. Null/unavailable/inconsistent/overflowed child bounds make
+the complete bound unavailable while preserving the valid root and contents. Admission MUST refuse unavailable
+bounds. Current/pending/selected-restore documents use their sealed layer/selection caches. Full document record
+capture, exact unique retained-storage accounting and native activation remain separately qualified.
 Begin, End (including nested/no-op completion), Undo, Redo, Reset and prepared publication invalidate that epoch.
 `MarkSaved` remains independent and does not invalidate a prepared edit or allow it to replace a later saved
 revision. A view from another history owner, or a moved-from view, has no publication authority.
@@ -103,7 +110,8 @@ plus private preparation and replaced-preview headroom. Cached raster bounds inc
 and nested descendants; reads do not recursively expand shared sparse graphs. Sharing may be overcounted;
 overflow or excessive depth refuses admission. This transient bound remains at least the worker release
 threshold through every failure/apply/drop path. It does not replace unique retained-byte accounting or change
-the oldest-first trim policy. Whole document metadata traversal/capture remains H2 work.
+the oldest-first trim policy. Construction-cached stack/document bounds remove metadata traversal from these history admission queries. Other
+callers and full native record capture remain H2 work; unique storage topology and late residency remain H3.
 
 Direct reference methods retain their existing behavior; caller migration remains P1.9 H1.4/H1.5. The prepared
 boundary does not qualify constant-time document capture, incremental storage accounting, other operation

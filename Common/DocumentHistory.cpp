@@ -505,6 +505,7 @@ void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unorde
     };
     for (const ImageLayer& layer : document.value().layers)
     {
+        add(layer.shapeImage);
         if (layer.asset.has_value())
         {
             add(layer.asset.value().image);
@@ -528,60 +529,106 @@ void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unorde
 }
 } // namespace
 
+namespace
+{
+class HistoryBoundSum final
+{
+  public:
+    explicit HistoryBoundSum(std::uint64_t header) noexcept : bounds{header, header, 0} {}
+    [[nodiscard]] bool Add(std::uint64_t& total, std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - total)
+            return false;
+        total += amount;
+        return true;
+    }
+    [[nodiscard]] bool Child(const std::optional<RecordOwnershipBounds>& child) noexcept
+    {
+        return child && child->ownershipBytes >= child->metadataBytes &&
+               Add(bounds.metadataBytes, child->metadataBytes) && Add(bounds.ownershipBytes, child->ownershipBytes) &&
+               Add(bounds.rasterNodes, child->rasterNodes);
+    }
+    [[nodiscard]] bool Text(const std::wstring& text) noexcept
+    {
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (text.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
+            return false;
+        const auto bytes = (text.capacity() + 1) * sizeof(wchar_t) + 64;
+        return Add(bounds.metadataBytes, bytes) && Add(bounds.ownershipBytes, bytes);
+    }
+    RecordOwnershipBounds bounds;
+};
+} // namespace
+
+std::optional<RecordOwnershipBounds> DocumentHistory::Snapshot::OwnershipBounds() const noexcept
+{
+    HistoryBoundSum sum(sizeof(Snapshot) + 64);
+    if (document)
+    {
+        const auto sourceBytes = document->RetirementMemoryBytes();
+        const auto layers = document->layers.OwnershipBounds();
+        if (!sourceBytes || (!layers && document->layers.Identity()))
+            return std::nullopt;
+        if ((layers && (!sum.Add(sum.bounds.metadataBytes, layers->metadataBytes) ||
+                        !sum.Add(sum.bounds.rasterNodes, layers->rasterNodes))) ||
+            !sum.Add(sum.bounds.ownershipBytes, sourceBytes) ||
+            (document->selection && document->selection->loops.Identity() && !sum.Add(sum.bounds.rasterNodes, 1)))
+            return std::nullopt;
+    }
+    return sum.bounds;
+}
+
+std::optional<RecordOwnershipBounds> DocumentHistory::Entry::OwnershipBounds() const noexcept
+{
+    HistoryBoundSum sum(sizeof(Entry) + 64);
+    if (!sum.Text(name) || !before || !after || !sum.Child(before->OwnershipBounds()) ||
+        !sum.Child(after->OwnershipBounds()))
+        return std::nullopt;
+    return sum.bounds;
+}
+
+std::optional<RecordOwnershipBounds> DocumentHistory::Pending::OwnershipBounds() const noexcept
+{
+    HistoryBoundSum sum(sizeof(Pending) + 64);
+    if (!sum.Text(name) || !before || !sum.Child(before->OwnershipBounds()))
+        return std::nullopt;
+    return sum.bounds;
+}
+
 std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept
 {
     std::uint64_t bytes = 64 * 1024;
     const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
     {
-        if ((size != 0 && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
+        if ((size && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
             count * size > (std::numeric_limits<std::uint64_t>::max)() - bytes)
             return false;
         bytes += count * size;
         return true;
     };
-    const auto references = [&](const Raster& raster) noexcept
+    const auto past = _past.OwnershipBounds();
+    const auto future = _future.OwnershipBounds();
+    if (!past || !future || !add(past->rasterNodes, 128) || !add(future->rasterNodes, 128))
+        return 0;
+    if (_pending)
     {
-        if (!raster.HasStorage())
-            return true;
-        // Counting occurrences bounds the deduplicating trim set's entries, buckets and rehash overlap without
-        // allocating an admission set. Cached node counts avoid expanding repeatedly shared sparse DAGs on the
-        // owner. Every held identity may repeat; conservative overcount is intentional until H3's exact index.
-        const auto nodes = raster.RetirementNodeCount();
-        return nodes && add(nodes, 128);
-    };
-    const auto snapshot = [&](const std::optional<CanvasDocument>& document, bool copies) noexcept
+        const auto pending = _pending->OwnershipBounds();
+        if (!pending || !add(pending->rasterNodes, 128))
+            return 0;
+    }
+    if (current)
     {
-        if (!document)
-            return true;
-        for (const auto& layer : document->layers)
-        {
-            if (!references(layer.shapeImage) ||
-                (layer.asset && (!references(layer.asset->image) || !references(layer.asset->thumbnail))) ||
-                (layer.mask && (!references(layer.mask->asset.image) || !references(layer.mask->asset.thumbnail))))
-                return false;
-            if (!copies)
-                continue;
-            if (!add(8, sizeof(ImageLayer) + 256) || !add(layer.name.size() + 1, 8 * sizeof(wchar_t)) ||
-                (layer.asset && !add(layer.asset->name.size() + 1, 8 * sizeof(wchar_t))) ||
-                (layer.mask && !add(layer.mask->asset.name.size() + 1, 8 * sizeof(wchar_t))))
-                return false;
-            if (layer.adjustment)
-                for (const auto& channel : layer.adjustment->curves.channels)
-                    if (!add(channel.size(), 8 * sizeof(CurvePoint)))
-                        return false;
-        }
-        return !document->selection || add(1, 128); // retained geometry is shared, only its set entry is new
-    };
-    if (!snapshot(current, true) || (_pending && !snapshot(_pending->before->document, false)) ||
-        !add(_past.size() + 1, 4 * sizeof(Entry)) || !add(4, sizeof(HistoryEntries<EntryHandle>::Container) + 64) ||
+        const auto layers = current->layers.OwnershipBounds();
+        if ((!layers && current->layers.Identity()) ||
+            (layers && (!add(layers->rasterNodes, 128) || !add(8, layers->metadataBytes))) ||
+            !add(current->layers.size(), 8 * 256) || (current->selection && !add(1, 128)))
+            return 0;
+    }
+    // Buffer growth and trim bookkeeping retain the same conservative per-entry allowance. Metadata and
+    // complete raster-node occurrence counts now come from immutable producer caches, never layer traversal.
+    if (!add(_past.size() + 1, 4 * sizeof(Entry)) || !add(4, sizeof(HistoryEntries<EntryHandle>::Container) + 64) ||
         !add(_past.size() + _future.size() + 1, 8 * sizeof(EntryHandle)))
         return 0;
-    for (const auto& entry : _past)
-        if (!snapshot(entry->before->document, false) || !snapshot(entry->after->document, false))
-            return 0;
-    for (const auto& entry : _future)
-        if (!snapshot(entry->before->document, false) || !snapshot(entry->after->document, false))
-            return 0;
     return bytes;
 }
 
@@ -605,78 +652,48 @@ std::uint64_t DocumentHistory::RestoreMemoryBytes(const std::optional<CanvasDocu
         bytes += count * size;
         return true;
     };
-    // The selected restore snapshot can contain far more metadata than the live document. Charge its copied
-    // records/strings/curves separately; immutable pixels and selection geometry remain shared.
-    for (const auto& layer : restore->layers)
-    {
-        if (!add(8, sizeof(ImageLayer) + 256) || !add(layer.name.size() + 1, 8 * sizeof(wchar_t)) ||
-            (layer.asset && !add(layer.asset->name.size() + 1, 8 * sizeof(wchar_t))) ||
-            (layer.mask && !add(layer.mask->asset.name.size() + 1, 8 * sizeof(wchar_t))))
-            return 0;
-        if (layer.adjustment)
-            for (const auto& channel : layer.adjustment->curves.channels)
-                if (!add(channel.size(), 8 * sizeof(CurvePoint)))
-                    return 0;
-    }
+    // The selected snapshot may contain far more metadata than the live document. Its sealed root retains
+    // complete names/curve/capacity bounds, including unedited record ownership, without a per-layer walk.
+    const auto layers = restore->layers.OwnershipBounds();
+    if ((!layers && restore->layers.Identity()) || (layers && !add(8, layers->metadataBytes)) ||
+        !add(restore->layers.size(), 8 * 256))
+        return 0;
     return bytes;
 }
 
 std::uint64_t DocumentHistory::RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
                                                      const Raster& additional) const noexcept
 {
-    std::uint64_t bytes = 64 * 1024; // root/control records and rounding not separately exposed by their owners
-    const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
+    std::uint64_t bytes = 64 * 1024;
+    const auto add = [&bytes](std::uint64_t amount) noexcept
     {
-        if ((size && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
-            count * size > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
             return false;
-        bytes += count * size;
+        bytes += amount;
         return true;
     };
-    const auto raster = [&](const Raster& image) noexcept
-    { return !image.HasStorage() || (image.RetirementMemoryBytes() && add(1, image.RetirementMemoryBytes())); };
-    const auto document = [&](const std::optional<CanvasDocument>& value) noexcept
-    {
-        if (!value)
-            return true;
-        if (!add(1, sizeof(CanvasDocument)) || !add(value->layers.capacity(), sizeof(ImageLayer)) ||
-            (value->selection && !add(1, value->selection->loops.StorageBytes())))
-            return false;
-        for (const auto& layer : value->layers)
-        {
-            if (!add(layer.name.capacity() + 1, sizeof(wchar_t)) || !raster(layer.shapeImage))
-                return false;
-            if (layer.asset && (!add(layer.asset->name.capacity() + 1, sizeof(wchar_t)) ||
-                                !raster(layer.asset->image) || !raster(layer.asset->thumbnail)))
-                return false;
-            if (layer.mask && (!add(layer.mask->asset.name.capacity() + 1, sizeof(wchar_t)) ||
-                               !raster(layer.mask->asset.image) || !raster(layer.mask->asset.thumbnail)))
-                return false;
-            if (layer.adjustment)
-                for (const auto& channel : layer.adjustment->curves.channels)
-                    if (!add(channel.capacity(), sizeof(CurvePoint)))
-                        return false;
-        }
-        return true;
-    };
-    const auto snapshot = [&](const std::shared_ptr<const Snapshot>& value) noexcept
-    { return !value || (add(1, sizeof(Snapshot) + 64) && document(value->document)); };
-    const auto entry = [&](const EntryHandle& value) noexcept
-    {
-        return add(1, sizeof(Entry) + 64) && add(value->name.capacity() + 1, sizeof(wchar_t)) &&
-               snapshot(value->before) && snapshot(value->after);
-    };
-    if (!document(current) || !raster(additional) || !add(2, sizeof(HistoryEntries<EntryHandle>::Container) + 64) ||
-        !add(_past.capacity() + _future.capacity(), sizeof(EntryHandle)) ||
-        (_pending && (!add(1, sizeof(Pending) + 64) || !add(_pending->name.capacity() + 1, sizeof(wchar_t)) ||
-                      !snapshot(_pending->before))))
+    const auto past = _past.OwnershipBounds();
+    const auto future = _future.OwnershipBounds();
+    if (!past || !future || !add(past->ownershipBytes) || !add(future->ownershipBytes))
         return 0;
-    for (const auto& value : _past)
-        if (!entry(value))
+    if (current)
+    {
+        const auto source = current->RetirementMemoryBytes();
+        if (!source || !add(source))
             return 0;
-    for (const auto& value : _future)
-        if (!entry(value))
+    }
+    if (_pending)
+    {
+        const auto pending = _pending->OwnershipBounds();
+        if (!pending || !add(pending->ownershipBytes))
             return 0;
+    }
+    if (additional.HasStorage())
+    {
+        const auto source = additional.RetirementMemoryBytes();
+        if (!source || !add(source))
+            return 0;
+    }
     return bytes;
 }
 
@@ -781,7 +798,7 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
         };
         for (const auto& layer : document->layers)
         {
-            if (cancellation.IsCancelled() ||
+            if (cancellation.IsCancelled() || !rasterBytes(layer.shapeImage) ||
                 (layer.asset && (!rasterBytes(layer.asset->image) || !rasterBytes(layer.asset->thumbnail))) ||
                 (layer.mask && (!rasterBytes(layer.mask->asset.image) || !rasterBytes(layer.mask->asset.thumbnail))))
                 return false;

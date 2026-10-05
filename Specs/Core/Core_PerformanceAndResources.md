@@ -33,6 +33,15 @@ metadata. It neither captures nor walks unrelated history. Unavailable/overflowe
 capture. Layer-record measurement remains with the producer; owner admission performs only cached scalar queries.
 Exact retained-history accounting and bounded first uploads remain H3/H4 obligations.
 
+History edit/restore/retirement admission reads cached immutable stack bounds and current/pending/selected-restore
+source bounds. Producers measure stack entries before publishing each private root; reader queries allocate
+nothing and traverse no entries, layers, names, curves, raster DAGs or selection points. Complete ownership
+includes potential sparse assembly; occurrence sharing intentionally overcounts. Unavailable/overflowed bounds
+refuse admission. Extra per-root scalar storage is bounded and replaces repeated owner queries. This conservative
+admission cache does not replace incremental unique retained-storage accounting or its late-residency validation.
+History trim includes the retained shape-source raster as well as images, masks and thumbnails, deduplicated
+against those same owners in the live document.
+
 - Idle, hidden, minimized, suspended, display-off, and occluded execution MUST block on events. Busy polling is
   prohibited. The shell MUST NOT arm a periodic timer to keep the window alive.
 - Steady-state Present of an already-created swap chain MUST NOT heap-allocate. C1's clear-color frame uses the

@@ -31,11 +31,12 @@
 - [x] Sampler full Release r65 qualifies bounded physical Map recovery/failure and focused sampler benchmark smoke: 6,604 document / 9,248 application, original 79 stages and verified archive. First hardware timing attempt is refused by the awake-display guard; later shutdown source and G1 remain due.
 - [x] Sampler full Debug r66 qualifies exact shutdown acknowledgement before capture, at a live prefix and during held Map recovery: 6,604 document / 9,266 application, unchanged 79 stages and independently verified archive. Broader lifetime/admission, current matrix and G1 remain due.
 - [x] Sampler full ASan Debug r68 qualifies cached complete source-only admission, including selection, late sparse assembly and unavailable bounds: 6,624 document / 9,266 application, unchanged 79 stages and verified archive. Later history-cache and memory-waiting work, current matrix/native activation and G1 remain open.
+- [x] Full Debug r71 qualifies cached history admission, the shape-source trim repair and sampler memory waiting/recovery/cancel/refusal: 6,658 document / 9,289 application controls, original 79 stages and independently verified archive. Later topology/Escape, current matrix/native activation and G1 remain open.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
 - [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
-- [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
+- [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets. Cached conservative stack admission and the omitted shape-source charge pass full Debug r71 after archived r69 compilation and r70 fixture failures; exact topology/residency remains open.
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
@@ -45,7 +46,7 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current private integration passes full Debug r66, adding sampler post-join shutdown cleanup and three actual host phases
+Latest private integration passes full Debug r71: cached history admission, shape-source accounting and sampler memory policy have 6,658 document / 9,289 application controls and unchanged 79 stages. Latest ASan Debug r68 qualifies its earlier source; later topology and physical Escape are private and not in r71. Earlier full Debug r66 passes, adding sampler post-join shutdown cleanup and three actual host phases
 with 18 new assertions: 6,604 document / 9,266 application and unchanged 79 stages. Full Release r65 passes physical Map recovery/failure and focused benchmark
 smoke: 6,604 document / 9,248 application controls, original 79 stages, 27-operation and one-operation smoke.
 Admission/refusal/overflow previously passed ASan Debug r64, including sanitizer detection.

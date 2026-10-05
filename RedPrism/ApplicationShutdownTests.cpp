@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "ApplicationProcessingTestProbe.h"
 #include "ApplicationShutdownTestProbe.h"
 
 #include "BrushStroke.h"
@@ -11,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -214,7 +216,10 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
     if (failures)
         return 5;
     const int colorResult = RunStandaloneColorDisplayShutdownSelfTest(instance);
-    return colorResult ? colorResult : RunStandaloneSamplerShutdownSelfTest(instance);
+    if (colorResult)
+        return colorResult;
+    const int samplerResult = RunStandaloneSamplerShutdownSelfTest(instance);
+    return samplerResult ? samplerResult : RunStandaloneSamplerMemorySelfTest(instance);
 }
 
 int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexcept
@@ -323,7 +328,7 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
             reached = WaitForColorWorkTestEvent(owner->_jobs, acknowledged.get(), DispatchMessageThunk, owner.get()) &&
                       owner->_session.ForegroundColor() == 0xFF3366CCu && owner->_gpuWork.LentCount() == 0 &&
                       owner->_gpuWork.InFlightCount() == 0 && owner->_composition.UtilitySurfaceBytes() == 0 &&
-                      !RunUiActions(owner->_jobs) && !owner->_jobs.HasUiWork();
+                      !RunUiActions(owner->_jobs) && !owner->_jobs.UiReadinessForTest().source;
         else
         {
             const auto deadline = GetTickCount64() + 10000;
@@ -417,4 +422,332 @@ int Application::RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexce
     }
     std::printf("sampler-shutdown summary: %u checks, %u failures\n", checks, failures);
     return failures ? 5 : 0;
+}
+
+int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
+{
+    struct MemoryState final
+    {
+        std::atomic<std::uint64_t> physical{0};
+        std::atomic<std::uint64_t> commit{0};
+        std::atomic<std::uint64_t> sampledPhysical{0};
+        std::atomic<std::uint64_t> sampledCommit{0};
+        HANDLE sampled = nullptr;
+    };
+    struct BlockerGate final
+    {
+        wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        std::atomic<unsigned int> completions{0};
+        std::atomic<JobStatus> status{JobStatus::Failed};
+        std::atomic<std::int32_t> error{E_PENDING};
+    };
+    struct BlockerJob final : Job
+    {
+        explicit BlockerJob(BlockerGate& gate) noexcept : _gate(gate) {}
+        JobResult Run(JobContext& context) override
+        {
+            if (!SetEvent(_gate.entered.get()))
+                return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
+            const std::array<HANDLE, 2> waits{_gate.release.get(), static_cast<HANDLE>(context.shutdownEvent)};
+            const DWORD result =
+                WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
+            if (result == WAIT_OBJECT_0)
+                return {};
+            if (result == WAIT_OBJECT_0 + 1)
+                return {JobStatus::Cancelled};
+            return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
+        }
+        void Completed(JobResult result) noexcept override
+        {
+            _gate.error.store(result.error, std::memory_order_relaxed);
+            _gate.status.store(result.status, std::memory_order_relaxed);
+            _gate.completions.fetch_add(1, std::memory_order_release);
+        }
+        BlockerGate& _gate;
+    };
+    enum class Scenario : std::uint8_t
+    {
+        Recovery,
+        Cancel,
+        Refusal
+    };
+    struct Case final
+    {
+        const char* name;
+        Scenario scenario;
+    };
+    constexpr std::array cases{Case{"recovery", Scenario::Recovery}, Case{"cancel", Scenario::Cancel},
+                               Case{"refusal", Scenario::Refusal}};
+    constexpr std::uint64_t headroom = kMemoryAdmissionHeadroomBytes;
+    constexpr std::uint64_t ample = headroom + 32ull * 1024 * 1024;
+    constexpr std::uint64_t blockerBytes = 4096;
+    constexpr std::uint32_t blue = 0xFF3366CCu;
+    constexpr std::uint32_t brown = 0xFF804020u;
+    unsigned int checks = 0;
+    unsigned int failures = 0;
+    const auto expect = [&checks, &failures](bool condition, const char* scenario, const char* name) noexcept
+    {
+        ++checks;
+        failures += condition ? 0u : 1u;
+        std::printf("%s sampler-memory.%s.%s\n", condition ? "PASS" : "FAIL", scenario, name);
+    };
+
+    for (const Case& test : cases)
+    {
+        MemoryState memory;
+        memory.physical.store(ample, std::memory_order_relaxed);
+        memory.commit.store(ample, std::memory_order_relaxed);
+        wil::unique_handle sampled{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        BlockerGate blocker;
+        if (!sampled || !blocker.entered || !blocker.release)
+        {
+            SelfTestFailure(L"Standalone sampler-memory fixture could not create its event gates.\n");
+            return 5;
+        }
+        memory.sampled = sampled.get();
+        ApplicationProcessingTestProbe processingProbe;
+        processingProbe.memory = {[](void* context, MemorySnapshot& snapshot) noexcept
+                                  {
+                                      auto& memoryContext = *static_cast<MemoryState*>(context);
+                                      const std::uint64_t physical =
+                                          memoryContext.physical.load(std::memory_order_acquire);
+                                      const std::uint64_t commit = memoryContext.commit.load(std::memory_order_acquire);
+                                      snapshot = {physical, commit};
+                                      memoryContext.sampledPhysical.store(physical, std::memory_order_release);
+                                      memoryContext.sampledCommit.store(commit, std::memory_order_release);
+                                      if (memoryContext.sampled)
+                                          (void)SetEvent(memoryContext.sampled);
+                                      return true;
+                                  },
+                                  &memory};
+        std::uint32_t captures = 0;
+        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+        owner->_quietUi = true;
+        owner->_prompts = &QuietPrompts();
+        owner->_processingTestProbe = &processingProbe;
+        const auto clearBorrowedHooks = wil::scope_exit(
+            [&owner]() noexcept
+            {
+                if (owner)
+                {
+                    owner->_samplerSourceCapturesForTest = nullptr;
+                    owner->_processingTestProbe = nullptr;
+                }
+            });
+        const auto shutdown = wil::scope_exit(
+            [&owner]() noexcept
+            {
+                if (owner)
+                    owner->Shutdown();
+            });
+        if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) ||
+            FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+            FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
+        {
+            SelfTestFailure(L"Standalone sampler-memory fixture could not initialize its hidden WARP host.\n");
+            return 5;
+        }
+        owner->BindCompositionDevice();
+        owner->_samplerSourceCapturesForTest = &captures;
+        owner->_session.CreateDocument(4, 4, true);
+        const Guid layerId = InsertPaintedLayer(owner->_session, L"Sampler memory source", 4, 4, {}, 0, blue);
+        owner->_session.history.Reset();
+        owner->_session.SetForegroundColor(brown);
+        owner->_tool = EditorTool::Eyedropper;
+        owner->_viewport.Fit(owner->DocumentSize());
+        owner->DocumentChanged();
+        if (layerId == Guid{} ||
+            SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled ||
+            owner->_jobs.ReservedMemoryBytes() != 0 || owner->_jobs.ReleasingMemoryBytes() != 0)
+        {
+            SelfTestFailure(L"Standalone sampler-memory source fixture did not settle.\n");
+            return 5;
+        }
+        const auto source = owner->_session.CaptureDocumentReadAuthority();
+        if (!source || !owner->_session.ActiveLayer() || owner->_session.ActiveLayer()->id != layerId)
+        {
+            SelfTestFailure(L"Standalone sampler-memory fixture lost its literal source.\n");
+            return 5;
+        }
+        const auto revision = owner->_session.history.CurrentRevision();
+        const auto undoCount = owner->_session.history.UndoCount();
+        expect(owner->_renderer.IsWarp() && owner->_window && owner->_chrome && source &&
+                   owner->_session.ForegroundColor() == brown && captures == 0,
+               test.name, "fixture-ready-hidden-warp-blue-source-brown-baseline");
+
+        std::optional<JobTicket> blockerTicket;
+        if (test.scenario != Scenario::Refusal)
+        {
+            std::unique_ptr<Job> job = std::make_unique<BlockerJob>(blocker);
+            JobTicket ticket;
+            const HRESULT submitted =
+                static_cast<HRESULT>(owner->_jobs.Submit(job, {JobClass::Background, 0, blockerBytes}, ticket));
+            if (FAILED(submitted) ||
+                !WaitForColorWorkTestEvent(owner->_jobs, blocker.entered.get(), DispatchMessageThunk, owner.get()))
+            {
+                SelfTestFailure(L"Standalone sampler-memory blocker did not reach its real background-job gate.\n");
+                return 5;
+            }
+            blockerTicket = ticket;
+            expect(owner->_jobs.ReservedMemoryBytes() == blockerBytes &&
+                       blocker.completions.load(std::memory_order_acquire) == 0,
+                   test.name, "background-blocker-holds-exact-4096-byte-reservation");
+            (void)ResetEvent(sampled.get());
+            memory.physical.store(headroom + blockerBytes, std::memory_order_release);
+            memory.commit.store(headroom + blockerBytes, std::memory_order_release);
+            owner->_jobs.NotifyMemoryChanged();
+        }
+        else
+        {
+            (void)ResetEvent(sampled.get());
+            memory.physical.store(headroom, std::memory_order_release);
+            memory.commit.store(headroom, std::memory_order_release);
+            owner->_jobs.NotifyMemoryChanged();
+        }
+
+        const auto hole = owner->_chrome->HolePixels();
+        const auto view = owner->_viewport.ViewFromDocument({2.5, 2.5}, owner->DocumentSize());
+        const LPARAM pointer = MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
+                                          static_cast<int>(std::lround(hole.top + view.y)));
+        owner->OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, pointer);
+        const auto* sampling = std::get_if<ColorSampling>(&owner->_drag);
+        const auto openingId = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* opening = owner->FindSamplerOpening(openingId);
+        if (!opening)
+        {
+            SelfTestFailure(L"Physical sampler Down did not retain its opening receipt.\n");
+            return 5;
+        }
+        const ContinuationReceipt receipt = opening->receipt;
+        owner->OnPointer(WM_LBUTTONUP, 0, pointer);
+        for (std::size_t pass = 0; pass <= JobScheduler::kUiActionCapacity; ++pass)
+        {
+            (void)RunUiActions(owner->_jobs);
+            opening = owner->FindSamplerOpening(openingId);
+            if (opening && opening->ticket)
+                break;
+        }
+        if (!opening || !opening->ticket)
+        {
+            SelfTestFailure(L"Physical sampler did not retain its exact scheduler ticket.\n");
+            return 5;
+        }
+        const JobTicket samplerTicket = opening->ticket.value();
+        if (test.scenario == Scenario::Refusal)
+            expect(receipt.Read().outcome == HostOutcome::Pending && captures == 0 &&
+                       owner->_jobs.ReservedMemoryBytes() == 0 && owner->_samplerHostTicket == samplerTicket,
+                   test.name, "zero-headroom-refusal-keeps-original-live-ticket-before-acknowledgement");
+        if (!WaitForColorWorkTestEvent(owner->_jobs, sampled.get(), DispatchMessageThunk, owner.get()))
+        {
+            SelfTestFailure(L"Physical sampler admission did not sample its configured memory source.\n");
+            return 5;
+        }
+        opening = owner->FindSamplerOpening(openingId);
+
+        const auto waitingState = [&]() noexcept
+        {
+            return opening && receipt.Read().outcome == HostOutcome::Pending && opening->ticket == samplerTicket &&
+                   owner->_samplerHostTicket == samplerTicket && owner->_historyWork.Busy() && captures == 0 &&
+                   memory.sampledPhysical.load(std::memory_order_acquire) == headroom + blockerBytes &&
+                   memory.sampledCommit.load(std::memory_order_acquire) == headroom + blockerBytes &&
+                   owner->_jobs.ReservedMemoryBytes() == (blockerTicket ? blockerBytes : 0) &&
+                   owner->_composition.UtilitySurfaceBytes() == 0 && owner->_gpuWork.InFlightCount() == 0 &&
+                   owner->_gpuWork.LentCount() == 0 && owner->_session.ForegroundColor() == brown &&
+                   owner->_session.IsDocumentReadCurrent(source.value()) &&
+                   owner->_session.history.CurrentRevision() == revision &&
+                   owner->_session.history.UndoCount() == undoCount;
+        };
+
+        if (test.scenario != Scenario::Refusal)
+        {
+            expect(waitingState(), test.name,
+                   "low-memory-admission-retains-original-ticket-and-receipt-without-capture");
+            expect(!RunUiActions(owner->_jobs) && !owner->_jobs.HasUiWork() &&
+                       owner->_jobs.ReservedMemoryBytes() == blockerBytes,
+                   test.name, "waiting-sampler-has-no-idle-self-rearm-or-extra-reservation");
+            if (test.scenario == Scenario::Recovery)
+            {
+                memory.physical.store(ample, std::memory_order_release);
+                memory.commit.store(ample, std::memory_order_release);
+                owner->_jobs.NotifyMemoryChanged();
+            }
+            else
+            {
+                expect(owner->_jobs.Cancel(samplerTicket), test.name, "exact-live-sampler-ticket-cancelled");
+            }
+            (void)SetEvent(blocker.release.get());
+        }
+
+        const bool settled =
+            SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) == SettleResult::Settled;
+        const auto result = receipt.Read();
+        const bool commonRetired =
+            settled && !owner->_samplerHostTicket && !owner->_samplerHostStamp && !owner->_samplerHostJob &&
+            !owner->_historyWork.Busy() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+            owner->_jobs.ReleasingMemoryBytes() == 0 && owner->_composition.UtilitySurfaceBytes() == 0 &&
+            owner->_gpuWork.InFlightCount() == 0 && owner->_gpuWork.LentCount() == 0 && !owner->_gpuWork.HasPending() &&
+            owner->_jobs.IsIdle() && !owner->_activeHostRequest && owner->_hostRequests.Size() == 0 &&
+            owner->_samplerState &&
+            std::all_of(owner->_samplerState->openings.begin(), owner->_samplerState->openings.end(),
+                        [](const SamplerOpening& slot)
+                        { return slot.opening == 0 && !slot.jobAlive && slot.consumers == 0; });
+        if (test.scenario == Scenario::Recovery)
+        {
+            expect(result == ContinuationReceipt::Result{HostOutcome::Succeeded, S_OK} && captures == 1 &&
+                       owner->_session.ForegroundColor() == blue &&
+                       memory.sampledPhysical.load(std::memory_order_acquire) == ample &&
+                       memory.sampledCommit.load(std::memory_order_acquire) == ample,
+                   test.name, "memory-recovery-publishes-the-literal-blue-with-one-source-capture");
+            expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
+                       blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "recovery-acknowledges-both-jobs-and-retires-source-history-and-graph");
+        }
+        else if (test.scenario == Scenario::Cancel)
+        {
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
+                       owner->_session.ForegroundColor() == brown,
+                   test.name, "cancelled-receipt-preserves-original-brown-without-source-capture");
+            expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
+                       blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "cancel-acknowledges-jobs-and-retires-source-history-and-graph");
+        }
+        else
+        {
+            expect(result == ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} && captures == 0 &&
+                       owner->_session.ForegroundColor() == brown &&
+                       memory.sampledPhysical.load(std::memory_order_acquire) == headroom &&
+                       memory.sampledCommit.load(std::memory_order_acquire) == headroom,
+                   test.name, "hard-memory-refusal-acknowledges-eoutofmemory-without-capture");
+            expect(commonRetired && owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "refusal-keeps-zero-reservation-and-retires-source-history-and-graph");
+        }
+        expect(std::holds_alternative<std::monostate>(owner->_drag) && GetCapture() != owner->_window.get(), test.name,
+               "physical-up-closes-sampler-gesture-and-releases-capture");
+        owner->Shutdown();
+        owner->_samplerSourceCapturesForTest = nullptr;
+        owner->_processingTestProbe = nullptr;
+        owner.reset();
+        bool quit = false;
+        for (;;)
+        {
+            const auto drained = PumpMessages();
+            quit = quit || drained.quit;
+            if (!drained.quit)
+                break;
+        }
+        expect(quit, test.name, "fixture-quit-drained-after-joined-shutdown");
+    }
+    std::printf("sampler-memory summary: %u checks, %u failures\n", checks, failures);
+    return failures == 0 ? 0 : 5;
 }
