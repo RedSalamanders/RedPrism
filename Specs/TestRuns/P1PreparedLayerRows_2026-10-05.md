@@ -110,3 +110,29 @@ Independent archive completions: Debug `3D66C97DCEF6AA4D06DF599BA93D510A4B22A18E
 This closes the dormant row/accounting/publication foundation only. Complete display graph/consumer integration, explicit retry/pressure and real pointer qualification, drag/rename/reentrant UIA, largest-count/name timing, Native activation and G1 remain open. Lookup wording is reconciled with the implementation: 14 binary-search iterations, each with one equality and at most one ordering comparison, rather than 14 total comparisons.
 
 Qualified foundation committed and pushed on `codex/p1-opacity-host-proof` as `2aa2a11122d74dca62cae7e37551dbdbd2703e20`. This is the managed candidate; Native activation remains a separate integration gate.
+
+## Replacement pressure and actual pointer qualification — 2026-10-06 checkpoint
+
+The managed candidate integrates the optional no-memory-wait admission policy, localized Retry layers control and two standalone actual-host routes. This extension is not qualified or enabled in production. The initial 845-input source freeze is `8C421C9383F396014A87AC28A7FDFF5E7FDF3EF66E241C94F0D102BACEB72CD4`.
+
+Debug r172 actual child 60284 exits 1 (2026-10-05 21:50:38–21:59:14 UTC). The 17 new interaction controls report three failures: initial child pixel selection, child mask selection, and the held-worker stale-selection expectation. The retry route was not reached; it has no runtime pass. The failure is preserved in `p1-layer-rows-retry-x64-Debug-r172-interaction-failed`, 1,114 independently verified copies, completion `0BEFCDCDBDCDF5F37FE8B27178C7218BF1C58834AD5B01DDD6381420FCDEFDC2`.
+
+Release analysis r173 actual child 77804 exits 0 (21:54:02–22:03:10 UTC). Its independent archive contains 1,128 verified copies, completion `065153A3F9BEE67388700DFF180C376641291D99869050353AF9D79B3A2F3EC7`. ARM64 r21 cross-build children Debug 13612, Release 98364 and ASan Debug 98420 also exit 0; their independently verified archive completions are respectively `4CF7BE3315030845A0FE74B731689B430A5D153C5CFC4519F72ECB1E1A23C9DF` (916 copies), `22163C1BCF58A376373AB5EF6A3EE1C3A3017A0564EE48DF968C35D105188D56` (916), and `975DDB02A576C5053226A6BFB5A95AD01316E7C136C189D1D2CD2AC9CCBFD536` (920). These establish compilation and analysis only, with no native ARM64 execution or timing claim.
+
+The first ARM64 Debug archive attempt failed while copying a transient, unrelated x64 scanner-control file. Its partial archive is retained without a completion receipt. The repaired archive helper scopes scanner-control capture to x64; all three separate ARM64 archives above pass independent readback verification. No scanner, compiler or runtime gate was removed.
+
+Primary source verification of pinned `DxUi.Tree.cpp` confirms that pressing an expander selects its group before toggling it. The stale-input fixture now expects the group target to remain selected. Debug r174 is running on the revised frozen source with diagnostics for the two unresolved initial selection failures; it has no completion result at this checkpoint. Drag/rename remains a separate unqualified draft under primary review.
+
+### Extension checklist
+
+- [x] Preserve the qualified foundation commit `2aa2a11`, original failure products and actual source/exit/archive receipts.
+- [x] Integrate reviewed pressure refusal and explicit retry drafts into the dormant managed candidate.
+- [x] Preserve successful compiler analysis and ARM64 cross-build evidence for the first extension source.
+- [ ] Resolve the actual pointer-selection failures and qualify all interaction and retry controls.
+- [ ] Qualify the repaired identical-source Debug/Release/real ASan/analysis/ARM64 matrix and exact predecessor registry.
+- [ ] Qualify actual drag/rename, reentrant accessibility, largest-count/name costs, complete display consumers, Native activation and G1.
+- [ ] Commit and push the verified extension; close P1 only after all parent exit requirements pass.
+
+Debug r174 actual child 46340 exits 1 (22:07:42–22:12:40 UTC), freeze `32343302F76AC777F386BCBD278AF37206F78B5F8B404ABE58E0BD4F439FE7FE`. The corrected stale-group expectation passes; only the initial pixel/mask selections fail (17 controls, two failures). Independent archive completion `CE8A82790F50C20C80C88356930DD2DE078B86BDDF493EBFB6C97E1CEE8AAEF7` verifies 1,114 copies.
+
+The diagnostics and pinned Tree source establish the fixture ordering defect: `SetSelectedItemId`/`NotifyDataChanged` scroll to the selected sibling before any sized viewport exists; `EnsureVisibleIndex` uses its fallback viewport and later bounds changes do not clamp that offset. The returned child row (y=68–96 DIP) only touches the real content viewport, so its center and badge presses miss. The primary prepares the actual viewport before initial row publication, retains the post-publication preparation and rejects offscreen child test bounds. No production selection logic or expected document pixels/history changed. Fresh Debug r175 began at 22:17:06 UTC; it remains unqualified until its actual exit and independent archive are verified. Production resize/activation costs remain separate open requirements.

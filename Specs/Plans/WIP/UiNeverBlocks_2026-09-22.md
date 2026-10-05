@@ -2,12 +2,14 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: complete first-display resource admission/creation, stage measurements and remaining P1 callers/timing.
+Current work: qualify actual prepared-row pointer interactions and explicit retry under memory pressure; then complete first-display consumers, remaining P1 callers and measured latency gates.
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
 ([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
+
+- [ ] Current prepared-row extension: r172/r174 preserve actual pointer fixture failures; r174 verifies the corrected stale-group expectation. Primary traced initial selection failure to publishing into an unsized Tree viewport and corrected the fixture ordering. Fresh Debug r175 is running; the identical-source matrix, drag/rename/UIA/cost, production activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
 
 - [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
