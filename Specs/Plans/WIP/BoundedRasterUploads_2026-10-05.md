@@ -20,7 +20,7 @@
 - [ ] U8: fix first-display, warmup and large-fixture owner/apply/frame overruns; retain Release/ETW evidence.
 - [ ] Reconcile owning contracts, commit/push qualified steps, and close only after all H4 requirements pass.
 
-**Status: ACTIVE; design and private helper draft, no production activation.**
+**Status: ACTIVE; original row-copy/transport foundations qualified and pushed (`74c327d`); newer private drafts and production activation remain open.**
 Parent: [P1 delivery milestone](UiNeverBlocks_2026-09-22.md), P1.9 H4.
 Owners: Application, Renderer, CanvasRenderer, GPU upload queue, JobScheduler and worker preparation.
 Contracts: Rendering_Composition, Core_Architecture, Core_PerformanceAndResources, UI_Windowing,

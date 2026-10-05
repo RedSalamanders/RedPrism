@@ -1,8 +1,11 @@
-# P1 private import-residency and raster-upload CPU probes — 2026-10-05
+# P1 import-residency and raster-upload qualification — 2026-10-05
 
-Status: private diagnostics only; not a normal application/registry/configuration or phase-exit qualification.
+Status: original managed residency/row-copy/transport foundations qualified and pushed as `74c327d`.
+Later private proxy/layout, GPU faults and terminal-retirement drafts remain unqualified for activation.
+The earlier sections below retain their historical scope; the complete managed matrix and commit are recorded
+at the end. Native activation, G1 and the P1 phase exit remain open.
 
-## Reviewed work
+## Initially reviewed private work
 
 Primary implementation adds history permit/refresh forwarding for replacement publications and prepared image
 imports, with explicit move/no-op/single-use authority. The original pixel candidate and saved baseline survive
@@ -307,3 +310,10 @@ The queue is compiled but unused by the application. The newer private proxy red
 opt-in terminal-retirement hook and upload job need review, normal registration and their full matrix before
 activation. Complete CPU/VRAM graph admission, first display/mips/chrome/retirement, Native activation,
 largest-fixture G1 and P1 Done remain open. Native ARM64 execution is unavailable; cross-builds make no runtime claim.
+
+### Qualified step committed and pushed
+
+Managed code/spec/test step `74c327d133503908ee5f35578c1b930898a8df05` is committed and pushed to `origin/codex/p1-opacity-host-proof`.
+The exact working-source input hashes remain bound to the completed matrix above. This preserves the
+qualified foundations while work continues on terminal upload ownership and full first display.
+No Native activation, overall G1, RAW/Photoshop speed or P1 Done claim is made.

@@ -2,9 +2,10 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: H3 remaining image import/replacement, mask, copy and shape residency callers;
-registered worker upload rows and bounded first-display/GPU preparation.
-The managed residency core and scoped metadata/maintenance slices are qualified; Native activation remains open.
+Current work: terminal upload acknowledgement, complete first-display resource admission and remaining P1 callers/timing.
+The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
+([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). Newer private GPU/retirement drafts need qualification;
+Native activation and G1 remain open.
 
 ## Delivery checklist
 
