@@ -2,14 +2,16 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: complete first-display resource admission/creation, stage measurements and remaining P1 callers/timing.
+Current work: qualify actual prepared-row pointer interactions and explicit retry under memory pressure; then complete first-display consumers, remaining P1 callers and measured latency gates.
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
 ([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
 
-- [x] Qualify the dormant prepared layer-row and retained-accounting foundation: full identical-source Debug r170 / Release r171 / real ASan r168, analysis r169 and all ARM64 r20 cross-builds; exact private/predecessor/control/stage and archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Normal use remains disabled; explicit replacement retry/pressure, remaining interactions/UIA/cost and complete H4/Native/G1 remain open.
+- [x] Current prepared-row extension fully qualified: full Debug r180, Release r182 and real ASan r183 plus strict private/predecessor/registry proof pass all 18 interaction +18 retry controls (9,943 application controls /83 stages). Release analysis r181 and ARM64 r23 cross-builds pass on the same 845 frozen inputs; every archive copy verifies. Actual sanitizer diagnosis and 7,994 stress controls are preserved. Earlier r179 ISA failure remains archived; scanner rules are unchanged. Drag/rename/UIA/cost, complete consumers, Native activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
+
+- [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
 - [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
 - [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.

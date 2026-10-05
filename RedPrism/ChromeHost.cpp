@@ -449,6 +449,7 @@ void ChromeHost::ResetControlPointers() noexcept
     _jobProgress = nullptr;
     _deferredJobProgress.reset();
     _layersTitle = nullptr;
+    _layerRetry = nullptr;
     _splitter = nullptr;
     _railPalette = nullptr;
     _opacity = nullptr;
@@ -910,6 +911,9 @@ HRESULT ChromeHost::Build() noexcept
                                [this](DxUi::NumericStepperChange change)
                                { _events.OnLayerOpacity(change.value / 100.0, EditPhase(change.phase)); });
         _opacity->SetEnabled(false);
+        _layerRetry =
+            MakeButton(*root, {.labelId = IDS_CMD_RETRY_LAYER_LIST}, [this] { RunCommand(kCommandRetryLayerList); });
+        _layerRetry->SetVisible(false);
         _layers = root->AddChild<DxUi::Tree>();
         _layers->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LAYERS));
         _layers->SetModel(&_treeModel);
@@ -1440,6 +1444,11 @@ void ChromeHost::Arrange() noexcept
     {
         PlaceControl(_layers, D2D1::RectF(layersLeft, tabBottom + kLayersTitleDip, widthDip, statusTop));
     }
+    if (_layerRetry)
+    {
+        PlaceControl(_layerRetry, D2D1::RectF(widthDip - 4.0f - kOpacityWidthDip, tabBottom + 2.0f, widthDip - 4.0f,
+                                              tabBottom + kLayersTitleDip - 2.0f));
+    }
     if (_status)
     {
         PlaceControl(_status, D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
@@ -1538,6 +1547,14 @@ D2D1_RECT_F ChromeHost::LayerMaskBadgeBoundsDip(std::size_t index) const noexcep
     }
     const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), index);
     return metrics.hasBadge ? metrics.badgeRect : D2D1::RectF();
+}
+
+D2D1_RECT_F ChromeHost::LayerRowExpanderBoundsDipForTest(std::size_t index) const noexcept
+{
+    if (!_attached || _layers == nullptr || index >= _treeModel.RowsView().size())
+        return D2D1::RectF();
+    const auto metrics = _layers->GetItemLayoutMetrics(_view.Controls(), index);
+    return metrics.hasExpander ? metrics.expanderRect : D2D1::RectF();
 }
 
 D2D1_RECT_F ChromeHost::FlipHorizontalBoundsDipForTest() const noexcept
@@ -3183,6 +3200,17 @@ void ChromeHost::SetPreparedLayerInteraction(bool enabled) noexcept
 {
     if (_layers && _layers->IsEnabled() != enabled)
         _layers->SetEnabled(enabled);
+}
+
+void ChromeHost::SetPreparedLayerRetry(bool available) noexcept
+{
+    ShowControl(_layerRetry, available);
+    ShowControl(_opacity, !available);
+}
+
+D2D1_RECT_F ChromeHost::LayerRetryBoundsDipForTest() const noexcept
+{
+    return _layerRetry && _layerRetry->IsVisible() ? _layerRetry->GetBounds() : D2D1::RectF();
 }
 
 void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept

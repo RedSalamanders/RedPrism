@@ -10,13 +10,14 @@
 - [x] Debug r158 qualifies actual current/stale/cancelled/failed publication, pinned-tree text/mask/group semantics, message/view input during held work, unchanged history, active cache accounting and worker retirement.
 - [x] Full identical-source Debug/Release/real ASan, Release analysis and ARM64 cross-builds, original registry/stage proof and independent archival for the dormant foundation (r168/r170/r171/r169/r20).
   - [x] r164 Debug, r165 Release analysis, r166 Release runtime and all three r19 ARM64 cross-builds pass on the same 842-input freeze; strict predecessor/private-source/control checks and separate archives verify.
-  - [ ] r167 ASan stopped at the pinned-library menu switch-table ISA gate before runtime; preserve the failure, add exact disp8 stack-remap recognition and rejection controls, then requalify identical repaired source in every required profile.
+  - [x] Preserve r167's ASan failure before runtime at the pinned-library menu switch-table ISA gate; exact disp8 stack-remap recognition and rejection controls were subsequently qualified with the complete repaired foundation matrix (r168/r170/r171/r169/r20).
 - [x] Actual initial admission refusal, unchanged-key dormancy, changed-key retry and held-worker/active-cache shutdown: Debug r162 passes 46 independent named boundary controls.
-- [ ] Replacement-cache pressure, explicit retry UX, reentrant accessibility, drag/selection/expansion and largest-count/name owner costs before live activation.
+- [x] Replacement-cache pressure and actual retry/selection/expansion extension: full Debug r180, Release r182 and real ASan r183, strict predecessor/private/registry proof, Release analysis r181 and ARM64 r23 cross-builds pass on identical 845 inputs. Every archive copy verifies; actual sanitizer diagnosis and 7,994 stress controls are preserved.
+- [ ] Integrate and qualify actual drag/rename, reentrant accessibility and largest-count/name owner costs before live activation.
 - [ ] Integrate complete H4 display consumers and largest-fixture frame/ETW measurements; resolve G1 overruns.
-- [ ] Commit and push the qualified slice; preserve all parent P1 gates until proved.
+- [x] Commit and push the qualified dormant foundation as `2aa2a11`; preserve all parent P1 gates until proved.
 
-Status: ACTIVE / repaired 843-input foundation fully qualified; replacement pressure/retry and remaining integration are open. Private proofs do not establish G1, Native activation or P1 completion.
+Status: ACTIVE / repaired 843-input foundation and newer 845-input pressure/retry extension fully qualified. Remaining interactions, consumers and activation are open. Neither these functional matrices nor the private proofs establish G1, Native activation or P1 completion.
 
 ## Ownership and authority
 
@@ -28,7 +29,7 @@ The admitted owner stage captures the document in constant size and copies at mo
 
 Successful completion transfers the original reservation into a fixed retained-memory slot with no second admission/query/allocation. Charged cache bytes do not keep useful work awake. Chrome borrows the prepared result; replacement changes the borrow before retiring the old owner. Complete worker retirement is queued before releasing retained accounting, with deferred-release bytes protecting the destruction interval. Close detaches borrowing while sink/pool lifetime remains valid. A token owns accounting only, never source lifetime.
 
-Current refresh keeps same-document labels visible with the stale tree disabled; document replacement clears old labels immediately. Disabled rows refuse mask-target hits too. Current failure reports the localized layer-list error and publishes no candidate. Waiting memory admission retries via the original ticket/readiness event. Hard failure has no periodic retry; explicit retry UX and complete interaction/reentrancy qualification remain due.
+Current refresh keeps same-document labels visible with the stale tree disabled; document replacement clears old labels immediately. Disabled rows refuse mask-target hits too. Current failure reports the localized layer-list error and publishes no candidate. The newer replacement extension refuses insufficient admission once while preserving the old cache charge; only explicit Retry or a changed key requests another ticket. Ordinary jobs retain their original event-driven memory waiting semantics. Complete runtime and interaction/reentrancy qualification remain due.
 
 ## Private evidence
 
@@ -108,3 +109,96 @@ Debug r170 actual child 38704 exits 0 (21:27:11–21:34:47 UTC); full Release r1
 Independent archive completions: Debug `3D66C97DCEF6AA4D06DF599BA93D510A4B22A18E6ED26AA79D127F8C057A4B75` (1,113 verified copies); Release `8C68C847E3E827F4353A13DEAA6FF24278ADC6A72BB84B7405B1A3EAF264ECF5` (1,113). The ASan, analysis and separate ARM64 archives are listed above. All 15 skills and 720 formatted files pass for this code; `git diff --check` passes. Earlier failures and their owned inputs/products remain preserved.
 
 This closes the dormant row/accounting/publication foundation only. Complete display graph/consumer integration, explicit retry/pressure and real pointer qualification, drag/rename/reentrant UIA, largest-count/name timing, Native activation and G1 remain open. Lookup wording is reconciled with the implementation: 14 binary-search iterations, each with one equality and at most one ordering comparison, rather than 14 total comparisons.
+
+Qualified foundation committed and pushed on `codex/p1-opacity-host-proof` as `2aa2a11122d74dca62cae7e37551dbdbd2703e20`. This is the managed candidate; Native activation remains a separate integration gate.
+
+## Replacement pressure and actual pointer qualification — 2026-10-06 checkpoint
+
+The managed candidate integrates the optional no-memory-wait admission policy, localized Retry layers control and two standalone actual-host routes. This extension is not qualified or enabled in production. The initial 845-input source freeze is `8C421C9383F396014A87AC28A7FDFF5E7FDF3EF66E241C94F0D102BACEB72CD4`.
+
+Debug r172 actual child 60284 exits 1 (2026-10-05 21:50:38–21:59:14 UTC). The 17 new interaction controls report three failures: initial child pixel selection, child mask selection, and the held-worker stale-selection expectation. The retry route was not reached; it has no runtime pass. The failure is preserved in `p1-layer-rows-retry-x64-Debug-r172-interaction-failed`, 1,114 independently verified copies, completion `0BEFCDCDBDCDF5F37FE8B27178C7218BF1C58834AD5B01DDD6381420FCDEFDC2`.
+
+Release analysis r173 actual child 77804 exits 0 (21:54:02–22:03:10 UTC). Its independent archive contains 1,128 verified copies, completion `065153A3F9BEE67388700DFF180C376641291D99869050353AF9D79B3A2F3EC7`. ARM64 r21 cross-build children Debug 13612, Release 98364 and ASan Debug 98420 also exit 0; their independently verified archive completions are respectively `4CF7BE3315030845A0FE74B731689B430A5D153C5CFC4519F72ECB1E1A23C9DF` (916 copies), `22163C1BCF58A376373AB5EF6A3EE1C3A3017A0564EE48DF968C35D105188D56` (916), and `975DDB02A576C5053226A6BFB5A95AD01316E7C136C189D1D2CD2AC9CCBFD536` (920). These establish compilation and analysis only, with no native ARM64 execution or timing claim.
+
+The first ARM64 Debug archive attempt failed while copying a transient, unrelated x64 scanner-control file. Its partial archive is retained without a completion receipt. The repaired archive helper scopes scanner-control capture to x64; all three separate ARM64 archives above pass independent readback verification. No scanner, compiler or runtime gate was removed.
+
+Primary source verification of pinned `DxUi.Tree.cpp` confirms that pressing an expander selects its group before toggling it. The stale-input fixture now expects the group target to remain selected. Debug r174 is running on the revised frozen source with diagnostics for the two unresolved initial selection failures; it has no completion result at this checkpoint. Drag/rename remains a separate unqualified draft under primary review.
+
+### Extension checklist
+
+- [x] Preserve the qualified foundation commit `2aa2a11`, original failure products and actual source/exit/archive receipts.
+- [x] Integrate reviewed pressure refusal and explicit retry drafts into the dormant managed candidate.
+- [x] Preserve successful compiler analysis and ARM64 cross-build evidence for the first extension source.
+- [ ] Resolve the actual pointer-selection failures and qualify all interaction and retry controls.
+- [ ] Qualify the repaired identical-source Debug/Release/real ASan/analysis/ARM64 matrix and exact predecessor registry.
+- [ ] Qualify actual drag/rename, reentrant accessibility, largest-count/name costs, complete display consumers, Native activation and G1.
+- [ ] Commit and push the verified extension; close P1 only after all parent exit requirements pass.
+
+Debug r174 actual child 46340 exits 1 (22:07:42–22:12:40 UTC), freeze `32343302F76AC777F386BCBD278AF37206F78B5F8B404ABE58E0BD4F439FE7FE`. The corrected stale-group expectation passes; only the initial pixel/mask selections fail (17 controls, two failures). Independent archive completion `CE8A82790F50C20C80C88356930DD2DE078B86BDDF493EBFB6C97E1CEE8AAEF7` verifies 1,114 copies.
+
+The diagnostics and pinned Tree source establish the fixture ordering defect: `SetSelectedItemId`/`NotifyDataChanged` scroll to the selected sibling before any sized viewport exists; `EnsureVisibleIndex` uses its fallback viewport and later bounds changes do not clamp that offset. The returned child row (y=68–96 DIP) only touches the real content viewport, so its center and badge presses miss. The primary prepares the actual viewport before initial row publication, retains the post-publication preparation and rejects offscreen child test bounds. No production selection logic or expected document pixels/history changed. Fresh Debug r175 began at 22:17:06 UTC; it remains unqualified until its actual exit and independent archive are verified. Production resize/activation costs remain separate open requirements.
+
+Debug r175 actual child 30576 exits 1 (22:17:10–22:21:34 UTC), freeze `ADFA4FFDB16931BE38885FC6763AAB8E4339B2A5D047F28D583442DDFD388733`. All 17 interaction checks pass. The real child row now occupies y=124–152 DIP; badge hit-testing and actual pixel/mask selection succeed. The overall run remains a failure: the next retry fixture exits before settling its initial worker. Independent failure archive completion `E3CCCC5E59BA65543CDEECB809B0702D9BE159129D81396D2F8B4C83EE938D60` verifies 1,114 copies.
+
+Primary source review confirms that fixture `Shutdown` destroys its HWND and posts `WM_QUIT`, which `SettleJobs` treats as an owner-stop request. The interaction fixture did not consume its own shutdown message before the retry route created a fresh owner. Interaction and retry now each require one additional independent closeout expectation: consume the exact zero-exit fixture quit and leave no further quit queued. Both registries therefore require 18 named controls plus summary. The new full Debug r176 recorder began at 22:23:12 UTC; actual test child started at 22:23:15. It has no qualification claim at this checkpoint. Strict verifier r6 requires the unchanged predecessor registries and exact 18+18 additions (9,943 named application controls, 83 stages), with the same complete 845-input source across configurations.
+
+A cheaper agent repaired only Caller `RedPrism/ApplicationPreparedLayerRowsEditTests.cpp`: sized-viewport initialization, supported embedded double-click leaf invocation, literal drag/hierarchy expectations, actual WM_CHAR rename input and settlement. Primary source review checks the pinned Tree drop translation and existing hierarchy implementation; primary also added exact fixture quit consumption. Current draft SHA-256 `F17151720389F33AAEBEBB816FB086ABD7B7259BB330089FE6339EC1356AE8BB` is preserved in Caller. It is unregistered and unbuilt; no drag/rename runtime result is claimed. The agent is closed.
+
+Debug r176 actual child 79508 exits 1 (22:23:15–22:27:33 UTC), freeze `7CCD40C9C771C97CAFA611C1B2478257C8CBB3C09CF5CB43F4821C8056BA41CC`. All 18 interaction expectations pass, including exact shutdown quit consumption; retry still exits before initial publication. Independent archive completion `C60B630D9E041271A2077A7886B020D46CF966090F64E01E6E573F4A1B1C0333` verifies 1,114 copies. The prior quit cleanup was required but did not close the retry failure.
+
+Primary review found an additional fixture defect: `LayerRowsTestGate` defaults to `hold=true`, whereas retry's initial gate was intended only to observe publication and had no release event. The initial observer now explicitly sets `hold=false`; only the later explicit retry uses its real event gate. The dispatcher refuses an unexpected initial hold without dereferencing a missing gate, and early viewport/enable/settlement failures now print their actual result/stage. These are fixture repairs, with no production job changes. Fresh Debug r177 began at 22:29:15 UTC and remains in progress. Any future strict verifier must reference the final successful source, not the failed r176 source used by preserved draft r6.
+
+## Current completion boundary — 2026-10-06
+
+Debug r178 actual child 46020 exits 0 (2026-10-05 22:36:53–22:46:23 UTC), with 845 inputs and freeze `264E74F889CEF906A167FD20C615570B4AC26AEF61DE2446E76F9B676DE17DE6`. All 18 interaction and 18 retry expectations plus exact summaries pass. The actual diagnostic confirms the prior fit zoom was 32; the real Actual Size command gives zoom 1 and the held worker still allows Zoom In to 1.25. A frame preparation after control visibility changes restores coherent pointer input. The actual button sets ready once, clears retry and preserves document generation; duplicate input during the held worker is ignored. Original document pixels/mask/history and cache reservation/retirement checks pass.
+
+Strict verifier r7 independently binds the complete frozen source to the private row/collapse/retained-pressure probes and exact predecessor registries: 7,197 document, 7,596 host, 1,668 composition and 9,943 named application controls in 83 stages, with exact 18+18 additions and no captured FAIL output. All 141 R10/ECX and 115 disp8 RCX controls and summaries pass. Debug archive completion `F4B29888F29722BA31A776B5B208694AD969414F432059C1D8E1208268D3A2E6` verifies 1,114 copies. The later strict proof is preserved separately in the attempt as `strict-layer-row-proof-r7.json`; it does not change that archive's original completion receipt.
+
+Release analysis r179 actual child 94640 exits 1 (22:39:11–22:43:09 UTC). The ISA scanner rejects bytes at `0x14029cf40` owned by `ApplicationLifecycleCloseTests.obj`. The captured listing places them among compiler-generated DWORD branch targets following the function body; the exact current guard/data proof or an equivalent source repair still requires qualification. This is not an analysis pass. Failure archive completion `152D6FE1E7717137308131CB6A2224EA11D2CACE56E5E874F7050C8D5820EFDB` verifies 1,128 copies; the matching binary, PDB, disassembly, symbols and contributions remain preserved. No ISA allowlist, architecture or gate was changed.
+
+All ARM64 r22 cross-builds exit 0 on the same 845-input source. Independently verified archive completions are Debug `F0329D5B3335BC6A97A6216B7A4CD9E913F393F0187354A2F0A396CE3ED6F607` (916 copies), Release `BE22576C4C88CDE16E778573CF7F3F73415B2DB3AE81D6D428AB41D0F24F0CA0` (916), and ASan Debug `90CAF37B4DDBFF287D60CE23C9627022DE11F24942AA08DCF34B5D2EF28221D5` (920). Cross-build driver r3 and every actual exit/source receipt are owned by `residency-arm-builds-r22`; no native ARM64 runtime claim follows.
+
+### Next work
+
+- [x] Resolve actual row/mask selection and fixture lifetime defects; complete the strict full Debug extension proof.
+- [x] Preserve actual Release analysis failure and all three independently archived ARM64 cross-builds.
+- [ ] Repair and prove the Release ISA rejection; preserve predecessors and required compiler/scanner constraints.
+- [ ] Run fresh identical-source Debug, Release, real ASan, analysis and ARM64 qualification after any source repair; preserve the sanitizer diagnostic and worker stress.
+- [ ] Commit/push the fully verified pressure/retry extension. Managed source is still uncommitted WIP; the qualified foundation remains `2aa2a11`.
+- [ ] Integrate/qualify the reviewed Caller drag/rename draft, reentrant accessibility and largest-row/name costs.
+- [ ] Complete H4 display/resource consumers, remaining P1 sampler/tool/selection/clipboard/file routes, Native activation and measured G1 exits before moving the parent plan to Done.
+
+All qualification children and the assigned cheaper agent have exited. No user application was terminated. Required source edits may now resume after the archived r178/r179/r22 barriers. Continue in Main `C:\Users\eric\.codex\worktrees\p1-opacity-host-proof\RedPrism`; never copy the older Caller Application/Document headers wholesale. Fresh normal receipts must use a new r180+ name. The three frozen Native helper files remain unchanged.
+
+## Repaired-source qualification — 2026-10-06
+
+The r179 ISA rejection originated in repeated diagnostic label switch tables in the existing lifecycle-close fixture. The primary replaced only that label selection with one noinline, bounded seven-entry constant pointer lookup; the seven mode strings and every state/pixel/history expectation remain unchanged. No ISA recognizer, allowlist, architecture setting, warning gate or legacy golden was changed. The rejected r179 binary and matching PDB/listing remain in their original failed archive.
+
+All new attempts bind 845 source inputs to freeze `2494BEB0B43428B74CB4DDE47578D72E1F71AFAABAE8B9C0DDD1BB12C675275C`:
+
+| Attempt | Actual child / UTC interval | Result | Independently verified archive |
+| --- | --- | --- | --- |
+| Full x64 Debug r180 | 98256; 2026-10-05 22:57:39–23:07:14 | Exit 0; 18 interaction +18 retry controls and exact summaries | `p1-layer-rows-retry-x64-Debug-r180-full-owned`; 1,114 copies; completion `71D5A0D446738F2B1601E6135C5754C4E80CF64AE9FB56791CA01AFEB7122ED8` |
+| x64 Release analysis r181 | 42120; 23:00:26–23:07:12 | Exit 0; all five images, compiler analysis, ISA/PDB controls and provenance pass | `p1-layer-rows-retry-x64-analysis-Release-r181-owned`; 1,128 copies; completion `C707989ED26F2AFC3C785B9511CB53472C06701A2B1DA3CF2CE73751387BC078` |
+| Full x64 Release r182 | 83664; 23:13:54–23:20:51 | Exit 0; full runtime and exact 18+18 expectations/summaries pass | `p1-layer-rows-retry-x64-Release-r182-full-owned`; 1,114 copies; completion `2E89BEA816023505250B8727D6DD56B77BB76183DBC653A5D8834F9EDBE02E27` |
+| Full x64 ASan Debug r183 | 85468; 23:21:44–23:33:09 | Exit 0; full runtime, stress and actual sanitizer detection pass | `p1-layer-rows-retry-x64-ASanDebug-r183-full-owned`; 1,121 copies; completion `ACBA57503354D424B298BC63C337B14DD820F2EEE4D604EB72D9DF5AACD9B13F` |
+| ARM64 Debug r23 | 86780; 23:00:26–23:01:33 | Exit 0; cross compilation only | `p1-layer-rows-retry-ARM64-Debug-r23-owned`; 916 copies; completion `496F42A0F2C6FADEBFD1FAF12A200B8657439BD257393449BDA652DBE2F9E888` |
+| ARM64 Release r23 | 18496; 23:01:38–23:03:04 | Exit 0; cross compilation only | `p1-layer-rows-retry-ARM64-Release-r23-owned`; 916 copies; completion `8048511DCB07A10629E9F4F95501ADB2A0FCB02794C6D1F29F63BC40B1BA3D05` |
+| ARM64 ASan Debug r23 | 68968; 23:03:13–23:04:08 | Exit 0; cross compilation only | `p1-layer-rows-retry-ARM64-ASanDebug-r23-owned`; 920 copies; completion `D20B4B9D5875411C44C39CED660100E4B2E939434CB7F9CA3B6B23815DB3B54B` |
+
+Strict verifier r8 uses the successful r180 Debug source as its reference. Full Debug, Release and ASan proofs pass exact predecessor/private-source/registration/stage checks: 7,197 document, 7,596 host (7,597 under ASan), 1,668 composition and 9,943 named application controls in 83 stages. The 141 R10/ECX and 115 disp8 RCX controls and summaries remain exact. Later Debug/Release strict reports and both exact verifier sources are separately copied/readback-verified under each archive's `Supplements/registry-r8`, leaving original completion receipts unchanged. Supplement receipts are Debug `5D830D291768EAC091E45AC6298028BCF9BE73441A0B8C0E8C30D9F2B3075B27` and Release `90D0247FE60CD00BD25EA21B0A20F43139C64CC04FDCBC3B32129C67D0A73E01`. All 15 skills and 722 formatted files pass.
+
+ASan r183 completes with exactly 7,994 worker-stress controls: all 7,922 predecessors plus 67 retained-memory controls and five string/catalog controls. The actual deliberate heap-use-after-free diagnostic is copied and readback-verified with the full ASan registry proof under `Supplements/asan-diagnostic-r1`; receipt `4F467C8FE53231359014985F5CA3C4CA897870F56F5084075B968065ABE656FD`, probe hash `D74AADEBC4E14375CE71A9A789EAFE1F4B9DBCC398C40E116DD5BAC7790053AD`, registry hash `02E842B359898537D60DAB0C5DED0F7528A4F827A103B0A0BCEB04A9AC38BAA5`. The probe's write time lies within the actual attempt interval; instrumentation is observed, not inferred from the profile name.
+
+### Current next work
+
+- [x] Repair and prove the diagnostic label source without changing ISA rules; preserve the original rejection evidence.
+- [x] Complete strict full Debug r180, Release analysis r181 and all three ARM64 r23 cross-builds; independently verify every archive copy.
+- [x] Finish identical-source full Release r182 and real ASan r183 runtime, exact predecessor/control proof, worker stress and the actual sanitizer diagnostic.
+- [ ] Commit/push the fully verified pressure/retry extension; production prepared rows remain disabled.
+- [ ] Integrate the reviewed cheaper-agent drag/rename draft; qualify reentrant accessibility and largest-row/name costs separately.
+- [ ] Complete H4 consumers and the other parent P1 routes, Native activation and measured G1 before Done.
+
+Every current qualification child has exited and every archive has independently verified readback. The primary-reviewed cheaper-agent Edit draft retains 17 named checks and an exact summary; a checked Prepare now follows Rename opening before text/key input, and exact quit cleanup is present. Its current Caller source hash is `3FBC57B35D24AC71C6BE99586B22BA1645D16FDA88C223714BFE53C12A16117B`; it is still unregistered/unexecuted and gains no qualification from this pressure/retry matrix. Main integration needs only the new C++ file, static declaration, project entry and runner route, plus fresh registry/norm and full matrix proof; never copy older Caller headers or projects wholesale. Prepared helper r9/ARM driver r5 target a future successful r184 source and are not proof of that draft.
+
+Required source edits may resume after the r180/r181/r182/r183/r23 actual-exit/archive barriers. Documentation was excluded from the input freeze. The three frozen Native launcher helpers remain unchanged. The assigned cheaper agent is closed. No user application was terminated and no native ARM64 runtime, first-display G1, RAW or Photoshop performance result is claimed.

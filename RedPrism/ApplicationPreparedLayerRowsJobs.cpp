@@ -107,8 +107,12 @@ bool Application::EnablePreparedLayerRows() noexcept
 
 void Application::ClearPreparedLayerRows() noexcept
 {
+    _layerRowsRetryAvailable = false;
     if (_chrome && _preparedLayerRowsEnabled)
+    {
         _chrome->SetPreparedLayers(nullptr, std::nullopt, false);
+        _chrome->SetPreparedLayerRetry(false);
+    }
     _preparedLayerRows.reset(); // Queue the entire active source/name graph before returning its reservation.
     if (_layerRowsMemory)
     {
@@ -124,6 +128,8 @@ void Application::SyncPreparedLayerRows() noexcept
     if (!_preparedLayerRowsEnabled || !_chrome || _shutdownStarted)
         return;
     const auto current = CurrentLayerRowsKey();
+    if (_layerRowsRequestedKey && _layerRowsRequestedKey.value() != current)
+        _layerRowsRetryAvailable = false;
     const bool same = _layerRowsPublishedKey && _layerRowsPublishedKey.value() == current;
     // Keep same-document labels visible during a refresh, but an obsolete hierarchy cannot accept a drag or
     // selection. Document replacement clears the borrowed model before any younger interaction can see it.
@@ -132,6 +138,7 @@ void Application::SyncPreparedLayerRows() noexcept
     _chrome->SetPreparedLayers(sameDocument ? _preparedLayerRows.get() : nullptr, _session.ActiveLayerID(),
                                _session.IsMaskSelected());
     _chrome->SetPreparedLayerInteraction(same);
+    _chrome->SetPreparedLayerRetry(_layerRowsRetryAvailable && !same && !_layerRowsTicket);
     if (!same && (!_layerRowsRequestedKey || _layerRowsRequestedKey.value() != current))
     {
         _layerRowsRequestedKey = current;
@@ -140,6 +147,28 @@ void Application::SyncPreparedLayerRows() noexcept
         else
             _layerRowsSource.Request();
     }
+}
+
+void Application::ReportLayerRowsFailure() noexcept
+{
+    if (_shutdownStarted || !_preparedLayerRowsEnabled)
+        return;
+    _layerRowsRetryAvailable = true;
+    SyncPreparedLayerRows();
+    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+    _frameInvalidated = true;
+    _layoutDirty = true;
+}
+
+void Application::RetryPreparedLayerRows() noexcept
+{
+    if (_shutdownStarted || !_preparedLayerRowsEnabled || !_layerRowsRetryAvailable || _layerRowsTicket)
+        return;
+    _layerRowsRetryAvailable = false;
+    SyncPreparedLayerRows();
+    _layerRowsSource.Request(); // One new ticket for explicit input; unchanged-key memory events never rearm it.
+    _frameInvalidated = true;
+    _layoutDirty = true;
 }
 
 class Application::LayerRowsJob final : public Job
@@ -254,7 +283,7 @@ class Application::LayerRowsJob final : public Job
         if (ownsTicket && Current() &&
             (!_owner._layerRowsPublishedKey || _owner._layerRowsPublishedKey.value() != _key) &&
             result.status != JobStatus::Cancelled)
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+            _owner.ReportLayerRowsFailure();
         // A changed key schedules exactly one newest request after this old record acknowledges. Hard current
         // failures remain dormant until a new explicit key/event; no self-rearm or memory-pressure polling.
         if (ownsTicket && !_owner._shutdownStarted && _owner._preparedLayerRowsEnabled &&
@@ -309,7 +338,7 @@ void Application::LayerRowsSource::Pump() noexcept
     }
     if (key.collapseRevision == 0)
     {
-        _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+        _owner.ReportLayerRowsFailure();
         return;
     }
     const auto admission = LayerRowsAdmission::Estimate(
@@ -317,7 +346,7 @@ void Application::LayerRowsSource::Pump() noexcept
     constexpr auto overhead = sizeof(LayerRowsJob) + sizeof(RowsInput) + 64 * 1024;
     if (!admission.IsValid() || admission.Bytes() > (std::numeric_limits<std::uint64_t>::max)() - overhead)
     {
-        _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+        _owner.ReportLayerRowsFailure();
         return;
     }
     try
@@ -326,8 +355,8 @@ void Application::LayerRowsSource::Pump() noexcept
         auto* submitted = concrete.get();
         std::unique_ptr<Job> job = std::move(concrete);
         JobTicket ticket;
-        const auto submittedResult =
-            _owner._jobs.Submit(job, {JobClass::Background, key.documentSerial, admission.Bytes() + overhead}, ticket);
+        const auto submittedResult = _owner._jobs.Submit(
+            job, {JobClass::Background, key.documentSerial, admission.Bytes() + overhead, false, false}, ticket);
         if (SUCCEEDED(submittedResult))
         {
             submitted->BindOwnerTicket(ticket);
@@ -335,10 +364,10 @@ void Application::LayerRowsSource::Pump() noexcept
             _owner._layerRowsRequestedKey = key;
         }
         else
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+            _owner.ReportLayerRowsFailure();
     }
     catch (const std::bad_alloc&)
     {
-        _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
+        _owner.ReportLayerRowsFailure();
     }
 }

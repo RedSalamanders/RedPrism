@@ -46,6 +46,9 @@ struct JobOptions final
     // Opt in only when external mapped/device ownership can survive a worker's terminal result. The owner
     // acknowledgement hook retains this exact record and reservation on success, failure and cancellation.
     bool deferredRetirement = false;
+    // Cache replacement may depend on ownership that remains resident until a successful replacement.
+    // Refuse insufficient admission once instead of waiting on that retained cache. Ordinary jobs wait.
+    bool allowMemoryWaiting = true;
 };
 
 struct JobTicket final

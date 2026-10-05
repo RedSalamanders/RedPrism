@@ -4373,6 +4373,11 @@ bool Application::SkipsTransformSettle(int command) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    if (command == ChromeHost::kCommandRetryLayerList)
+    {
+        RetryPreparedLayerRows();
+        return; // Derived display retry neither settles nor changes an open editing transaction.
+    }
     if (!_hostExecuting &&
         (command == ChromeHost::kCommandSwapPalette || command == ChromeHost::kCommandResetPalette) &&
         CanChangePaletteDuringSampling())

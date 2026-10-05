@@ -89,6 +89,8 @@ struct CallbackState final
     std::int32_t result = E_UNEXPECTED;
     std::int32_t secondResult = E_UNEXPECTED;
     unsigned int callbacks = 0;
+    unsigned int runs = 0;
+    JobResult completedResult{};
     unsigned int samplesBeforeCallback = 0;
     unsigned int* samples = nullptr;
     bool attempt = true;
@@ -104,11 +106,13 @@ class BasicJob final : public Job
     BasicJob(CallbackState& state, JobResult result = {}) noexcept : _state(state), _result(result) {}
     JobResult Run(JobContext&) override
     {
+        ++_state.runs;
         return _result;
     }
     void Completed(JobResult result) noexcept override
     {
         ++_state.callbacks;
+        _state.completedResult = result;
         _state.sawReservation = _state.scheduler->ReservedMemoryBytes() == kBytes;
         if (_state.attempt)
         {
@@ -130,12 +134,12 @@ class BasicJob final : public Job
     JobResult _result;
 };
 
-bool Submit(JobScheduler& scheduler, CallbackState& state, std::uint64_t bytes, int& failures,
-            const char* name) noexcept
+bool Submit(JobScheduler& scheduler, CallbackState& state, std::uint64_t bytes, int& failures, const char* name,
+            bool allowMemoryWaiting = true) noexcept
 {
     std::unique_ptr<Job> job = std::make_unique<BasicJob>(state);
     JobTicket ticket;
-    const auto hr = scheduler.Submit(job, {JobClass::Background, 0, bytes}, ticket);
+    const auto hr = scheduler.Submit(job, {JobClass::Background, 0, bytes, false, allowMemoryWaiting}, ticket);
     static_cast<void>(name);
     static_cast<void>(failures);
     if (SUCCEEDED(hr))
@@ -607,6 +611,55 @@ void TestReleaseWakesWaitingAdmission(int& failures)
     scheduler.Close();
 }
 
+void TestReplacementRefusesRetainedCacheWait(int& failures)
+{
+    JobScheduler scheduler;
+    MemoryProbe memory;
+    const auto sample = [](void* context, MemorySnapshot& snapshot) noexcept
+    {
+        ++static_cast<MemoryProbe*>(context)->samples;
+        snapshot = {kMemoryAdmissionHeadroomBytes + kBytes, kMemoryAdmissionHeadroomBytes + kBytes};
+        return true;
+    };
+    if (FAILED(scheduler.Initialize(1, {}, {sample, &memory})))
+        SetupFailure("replacement.initialize");
+    CallbackState retained;
+    retained.scheduler = &scheduler;
+    if (!Submit(scheduler, retained, kBytes, failures, "replacement.cache-submit"))
+        SetupFailure("replacement.cache-submit");
+    Settle(scheduler, "replacement.cache-settles", failures);
+    Expect(retained.retained.owner != 0 && retained.runs == 1 && scheduler.ReservedMemoryBytes() == kBytes,
+           "replacement.original-cache-keeps-its-full-reservation", failures);
+    CallbackState replacement;
+    replacement.scheduler = &scheduler;
+    replacement.attempt = false;
+    const auto before = memory.samples;
+    Expect(Submit(scheduler, replacement, kBytes, failures, "replacement.submit", false),
+           "replacement.insufficient-cache-replacement-accepts-one-original-ticket", failures);
+    Settle(scheduler, "replacement.refusal-settles", failures);
+    Expect(replacement.runs == 0 && replacement.callbacks == 1 &&
+               replacement.completedResult.status == JobStatus::Failed &&
+               replacement.completedResult.error == E_OUTOFMEMORY && memory.samples == before + 1,
+           "replacement.refuses-once-without-running-or-reserving", failures);
+    Expect(scheduler.IsIdle() && scheduler.ReservedMemoryBytes() == kBytes && scheduler.ReleasingMemoryBytes() == 0,
+           "replacement.refusal-preserves-the-original-cache-and-idle", failures);
+    scheduler.NotifyMemoryChanged();
+    Settle(scheduler, "replacement.memory-event-settles", failures);
+    Expect(replacement.callbacks == 1 && replacement.runs == 0 && memory.samples == before + 1,
+           "replacement.memory-event-never-rearms-a-refused-ticket", failures);
+    Expect(scheduler.ReleaseRetainedMemory(retained.retained), "replacement.exact-cache-release", failures);
+    CallbackState retry;
+    retry.scheduler = &scheduler;
+    retry.attempt = false;
+    if (!Submit(scheduler, retry, kBytes, failures, "replacement.explicit-retry-submit", false))
+        SetupFailure("replacement.explicit-retry-submit");
+    Settle(scheduler, "replacement.explicit-retry-settles", failures);
+    Expect(retry.runs == 1 && retry.callbacks == 1 && retry.completedResult.status == JobStatus::Finished &&
+               scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(),
+           "replacement.new-explicit-ticket-runs-when-whole-peak-fits", failures);
+    scheduler.Close();
+}
+
 struct CloseState final
 {
     JobScheduler* scheduler = nullptr;
@@ -658,6 +711,7 @@ int RunRetainedJobMemoryTests()
     TestTokenOwnershipAndGeneration(failures);
     TestCapacityRefusal(failures);
     TestReleaseWakesWaitingAdmission(failures);
+    TestReplacementRefusesRetainedCacheWait(failures);
     TestCloseCleanup(failures);
     std::printf("%s retained-job-memory.summary failures=%d\n", failures == 0 ? "PASS" : "FAIL", failures);
     return failures;

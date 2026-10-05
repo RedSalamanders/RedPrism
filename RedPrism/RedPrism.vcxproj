@@ -328,6 +328,8 @@
     <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsBoundaryTests.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsInteractionTests.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsRetryTests.cpp" />
     <ClInclude Include="LayerRowsTestGate.h" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationClipboardJobs.cpp" />

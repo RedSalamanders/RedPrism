@@ -156,6 +156,7 @@ BEGIN
     IDS_ERROR_MISSING_IMAGE         "An image inside the project is missing or damaged. The current document has not been replaced."
     IDS_ERROR_WAND_DETAILED         "That selection is too detailed to outline. Try a different Tolerance, or turn on Contiguous."
     IDS_ERROR_LAYER_ROWS            "RedPrism could not prepare the layer list. The document is unchanged."
+    IDS_CMD_RETRY_LAYER_LIST        "Retry layers"
     IDS_ERROR_WAND_MEMORY           "There is not enough memory to make that selection."
     IDS_ERROR_BRUSH_BUDGET          "That stroke would take the layer past the 100-megapixel limit."
     IDS_ERROR_PIXEL_EDIT            "The pixel edit could not be completed."

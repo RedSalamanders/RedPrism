@@ -18,7 +18,9 @@ Normal `DocumentTests` preserves all predecessor goldens and adds 42 `layer-rows
 64/long names, malformed localized patterns, sparse nonmaterialization, cancellation, independent remembered
 collapse bounds and copied/moved session read authority. Normal `HostTests` adds 59 `retained-job-memory.*`
 expectations plus its summary, including the exact final callback restriction, 64 slots, stale/foreign/reused
-tokens, original reservation, release-once, waiting admission and actual Close.
+tokens, original reservation, release-once, waiting admission and actual Close. The replacement-pressure extension
+adds seven state expectations (66 named controls plus the summary): one original refusal, unchanged cache/charge,
+dormancy on memory events, exact release and a fresh explicit ticket when the entire peak fits.
 
 The actual WARP self-test adds 107 `layer-rows-host.*` publication/lifetime expectations and 46
 `application-prepared-layer-rows-boundary.*` initial-refusal/changed-key/shutdown expectations, each with a
@@ -27,7 +29,13 @@ owner capture, held worker, pinned Tree and deferred sink. Shutdown before/after
 cache uses a fresh Application and its real shutdown event, detach and worker join. Complete source/private
 registry/stage and archive proofs remain required for every profile. These foundation gates keep production
 disabled; replacement pressure, explicit retry, remaining interaction/UIA/cost, Native activation and G1 remain
-open. See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
+open. The interaction/retry extension requires separate real hidden-WARP fixtures with 18 named expectations
+each and their exact summaries: actual pointer row/mask selection, expander collapse/expand A-B-A, stale row/mask
+refusal while a real worker is held, retained-cache pressure/refusal, repeated refusal, actual accessible retry
+button input, duplicate suppression, continued view input, exact literal source/history and worker retirement.
+These source additions need the same normal-profile/private/predecessor/stage and archive proof before they are
+qualified. Drag/rename, client-reentrant UIA and largest-count/name owner cost remain separate gates.
+See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
 
 ### Producer input ordering primitives
 

@@ -500,6 +500,7 @@ class ChromeHost final : public CommandIds
     // this view is replaced or cleared; clear before retiring that owner or joining workers. No row traversal,
     // string formatting, pixel access or large last-owner destruction is performed by this publication.
     void SetPreparedLayers(const LayerRowsWork* rows, const std::optional<Guid>& active, bool maskTargeted);
+    void SetPreparedLayerRetry(bool available) noexcept;
     void SetPreparedLayerInteraction(bool enabled) noexcept;
 
     // The layer a press at a point of the layers panel targets (RF-907, legacy NativeLayerList's thumbnails): the
@@ -700,6 +701,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F LayerRowBoundsDip(std::size_t index) const noexcept;
     // A row's Mask badge in DIP (empty without one) and the row as the tree paints it (RF-907 self-test).
     [[nodiscard]] D2D1_RECT_F LayerMaskBadgeBoundsDip(std::size_t index) const noexcept;
+    [[nodiscard]] D2D1_RECT_F LayerRowExpanderBoundsDipForTest(std::size_t index) const noexcept;
+    [[nodiscard]] D2D1_RECT_F LayerRetryBoundsDipForTest() const noexcept;
     // The Move tool header's Flip Horizontal button, for a self-test click; empty while hidden.
     [[nodiscard]] D2D1_RECT_F FlipHorizontalBoundsDipForTest() const noexcept;
     [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
@@ -1155,6 +1158,7 @@ class ChromeHost final : public CommandIds
     DxUi::StatusStrip* _status = nullptr;
     DxUi::ProgressBar* _jobProgress = nullptr;
     DxUi::Label* _layersTitle = nullptr;
+    DxUi::Button* _layerRetry = nullptr;
     DxUi::Splitter* _splitter = nullptr;
     PaletteControl* _railPalette = nullptr;
     DxUi::NumericStepper* _opacity = nullptr;

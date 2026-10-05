@@ -635,6 +635,10 @@ authority/root. Prepared top-first depth, inherited visibility, collapsed descen
 and mask flags preserve `HierarchyEntries` semantics. Active selection uses the owning Guid index; a collapsed
 descendant has no selected row. An unchanged borrowed graph/active target causes no row rewrite.
 Process-startup localization supplies the hidden pattern once; per-row painting and settled sync do not load it.
+If preparation fails or replacement admission refuses, a STRINGTABLE-named Retry layers button replaces the
+opacity control in the layer header. One explicit press requests one new original ticket; further input while
+that ticket is pending is ignored. Memory events or unchanged-key sync alone do not retry. Success restores the
+opacity control. Retry changes derived display state and does not settle or mutate an open document edit.
 Full interaction, accessibility/reentrancy, largest-count/name owner cost, production activation and G1 remain
 separate qualification requirements; prepared publication alone does not close them.
 

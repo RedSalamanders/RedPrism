@@ -267,6 +267,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsBoundarySelfTest\n");
         if (const int failed = Application::RunStandalonePreparedLayerRowsBoundarySelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsInteractionSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsInteractionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsRetrySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsRetrySelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneProcessingSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneLeaseShutdownSelfTest(instance); failed != 0)

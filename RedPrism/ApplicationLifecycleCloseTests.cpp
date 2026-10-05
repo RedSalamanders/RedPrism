@@ -15,18 +15,33 @@
 #include <string>
 #include <unordered_set>
 
+namespace
+{
+enum class LifecycleCloseMode : std::uint8_t
+{
+    CancelBeforePreparation,
+    CancelAfterPreparation,
+    WorkerPreparationFailure,
+    OwnerCaptureFailure,
+    AdmissionFailure,
+    ReplacementSnapshotFailure,
+    ReplacementResetFailure,
+};
+
+// Keep one bounded runtime label lookup instead of duplicating switch tables throughout the fixture body.
+__declspec(noinline) const char* LifecycleCloseCaseName(LifecycleCloseMode mode) noexcept
+{
+    static constexpr std::array<const char*, 7> names{
+        "cancel-before-prepare", "cancel-after-ready",       "worker-prepare-oom",   "owner-capture-oom",
+        "admission-oom",         "replacement-snapshot-oom", "replacement-reset-oom"};
+    const auto index = static_cast<std::uint8_t>(mode);
+    return index < names.size() ? names[index] : "unknown";
+}
+} // namespace
+
 int Application::RunDocumentLifecycleCloseSelfTest() noexcept
 {
-    enum class Mode : std::uint8_t
-    {
-        CancelBeforePreparation,
-        CancelAfterPreparation,
-        WorkerPreparationFailure,
-        OwnerCaptureFailure,
-        AdmissionFailure,
-        ReplacementSnapshotFailure,
-        ReplacementResetFailure,
-    };
+    using Mode = LifecycleCloseMode;
     struct State final
     {
         Application& owner;
@@ -63,27 +78,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         std::printf("%s lifecycle-close.%s.%s\n", condition ? "PASS" : "FAIL", caseName, fact);
         std::fflush(stdout);
     };
-    const auto caseName = [](Mode mode) noexcept -> const char*
-    {
-        switch (mode)
-        {
-        case Mode::CancelBeforePreparation:
-            return "cancel-before-prepare";
-        case Mode::CancelAfterPreparation:
-            return "cancel-after-ready";
-        case Mode::WorkerPreparationFailure:
-            return "worker-prepare-oom";
-        case Mode::OwnerCaptureFailure:
-            return "owner-capture-oom";
-        case Mode::AdmissionFailure:
-            return "admission-oom";
-        case Mode::ReplacementSnapshotFailure:
-            return "replacement-snapshot-oom";
-        case Mode::ReplacementResetFailure:
-            return "replacement-reset-oom";
-        }
-        return "unknown";
-    };
+    const auto caseName = LifecycleCloseCaseName;
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);

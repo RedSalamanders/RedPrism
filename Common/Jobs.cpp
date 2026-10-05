@@ -350,14 +350,17 @@ struct JobScheduler::Impl final
             const bool cancelled = selected->cancel->Token().IsCancelled();
             MemorySnapshot snapshot{};
             const bool sampled = cancelled || selected->options.memoryBytes == 0 || SampleMemory(snapshot);
-            const auto decision = cancelled ? MemoryAdmission::Refused
-                                  : sampled ? memory
-                                                  .Reserve(selected->options.memoryBytes, snapshot,
-                                                           releasingBytes.load(std::memory_order_acquire) +
-                                                               (trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0))
-                                                  .admission
-                                            : MemoryAdmission::Refused;
-            if (!cancelled && sampled && decision != MemoryAdmission::Ready && PixelBufferRecycleBytes() != 0)
+            auto decision = cancelled ? MemoryAdmission::Refused
+                            : sampled ? memory
+                                            .Reserve(selected->options.memoryBytes, snapshot,
+                                                     releasingBytes.load(std::memory_order_acquire) +
+                                                         (trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0))
+                                            .admission
+                                      : MemoryAdmission::Refused;
+            if (decision == MemoryAdmission::Waiting && !selected->options.allowMemoryWaiting)
+                decision = MemoryAdmission::Refused;
+            if (!cancelled && sampled && selected->options.allowMemoryWaiting && decision != MemoryAdmission::Ready &&
+                PixelBufferRecycleBytes() != 0)
             {
                 RequestTrim();
                 continue;

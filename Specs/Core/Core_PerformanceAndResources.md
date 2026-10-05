@@ -532,9 +532,16 @@ old cache's final handle queues its complete graph on the worker release lane. Q
 `releasingBytes` before publication; worker destruction finishes before that charge is removed. Only after
 queueing may the exact retained ticket be released once. Close performs owner detach while the sink/pool are
 live, joins complete retirement before final MTA teardown, and invalidates residual tokens. Tokens own
-accounting, never source lifetime. Replacement admission pressure and explicit retry still need resolution
-before activation; the current default memory-wait policy alone does not break a replacement's dependency on
-the cache it needs to replace.
+accounting, never source lifetime.
+
+Cache-replacement jobs opt out of memory waiting (`JobOptions::allowMemoryWaiting = false`); ordinary jobs retain
+the default event-driven waiting policy. An insufficient replacement peak finishes once with `E_OUTOFMEMORY`
+without source capture, worker execution, automatic recycle-trim retry or dependence on its own retained cache.
+The old cache stays charged and same-document labels remain visible with their stale tree disabled. An unchanged
+key or memory event cannot rearm the refused ticket. Explicit Retry layers input admits one fresh original ticket;
+duplicate input while a ticket is pending is ignored. A still-unaffordable explicit retry may refuse once again.
+Failure exposes the localized retry control; success hides it. This experimental path still requires complete
+interaction, owner-cost, Native activation and G1 qualification.
 
 Settled layer metadata jobs reserve the complete private record/history graph, request and replacement name
 overlap, publication/control storage and retirement before capturing document/history. Borrowed rename text must

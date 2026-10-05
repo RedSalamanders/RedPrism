@@ -128,6 +128,8 @@ class Application final : public ChromeEvents
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -496,6 +498,8 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool EnablePreparedLayerRows() noexcept;
     void SyncPreparedLayerRows() noexcept;
     void ClearPreparedLayerRows() noexcept;
+    void ReportLayerRowsFailure() noexcept;
+    void RetryPreparedLayerRows() noexcept;
     int RunPreparedLayerRowsSelfTest() noexcept;
     class HistoryResidencyJob;
     [[nodiscard]] bool CanStartHistoryResidencyMaintenance() const noexcept;
@@ -1024,6 +1028,7 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _layerRowsTicket;
     std::wstring _layerRowsHiddenPattern;
     bool _preparedLayerRowsEnabled = false;
+    bool _layerRowsRetryAvailable = false;
     std::shared_ptr<LayerRowsTestGate> _layerRowsTestGate;
 
     std::optional<JobTicket> _historyResidencyTicket;
