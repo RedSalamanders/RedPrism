@@ -1,6 +1,11 @@
 # P1 — Responsive raster editor delivery milestone
 
+**Paused at the user’s request on 2026-10-05.** Source, qualified receipts and local helpers are saved.
+Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) before continuing.
+
 ## Delivery checklist
+
+- [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
 - [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.
@@ -20,13 +25,13 @@
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
 - [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
 - [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
-  - [x] Main-integrated immutable history-index slice passes scoped x64 Debug r74: unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+  - [x] Main-integrated immutable history-index slice passes full x64 Debug r74, Release r75 and ASan Debug r76 on identical inputs (`1936fe6`): unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.
 
-**Status: ACTIVE / P1.** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
+**Status: HOLD / P1 (user pause 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 

@@ -1,6 +1,6 @@
 # History storage index integration candidate — 2026-10-05
 
-## Status: full managed x64 Debug and Release qualification; remaining gates open
+## Status: full managed x64 Debug, Release and ASan qualification; remaining gates open
 
 The Main candidate's integrated P1.9 H3 history-storage index passed the scoped normal x64 Debug r74 run. The
 run qualifies only the index slice described here, not H3 or P1. Archive
@@ -53,7 +53,7 @@ policy and late-budget changes. These probes do not qualify the integrated candi
 ## Open qualification
 
 Concurrent late sparse-cache publication and history trim/reprepare synchronization remain unresolved. A private
-Smudge/Liquify private source-copy candidate is still under preparation and is not integrated in Main. Full x64 ASan, current analysis, ARM64
+Smudge/Liquify private source-copy candidate is still under preparation and is not integrated in Main. Current analysis, ARM64
 cross-builds, native activation, G1 timing, caller/delta cost and final H3 gates remain open. No legacy golden has
 been changed, and this scoped Debug result does not close P1.9 H3 or P1.
 
@@ -71,6 +71,26 @@ Archive `p1-history-unique-index-x64-Release-r75-full-qualified`: 1,041 copies i
 evidence: `AFC3BBFEBC3A5EE1C97D64E56FEBF4668B5C89A7D24442D45B99EAB6DC26597A`;
 completion: `8A2214E1769A7B66BA2C96D86F085E091F284AA69098580FFA549749DFE81D27`.
 
-ASan Debug r76 is pending on this same source. This report refers to the managed candidate at
+ASan Debug r76 passes on this same source; its exact receipt follows. This report refers to the managed candidate at
 `C:/Users/eric/.codex/worktrees/p1-opacity-host-proof/RedPrism`; it records no activation of that source in the
 native `Z:/src/RedPrism` application checkout. Published r74/r75 source archives remain authoritative.
+
+## r76 full ASan Debug result on identical source
+
+Actual child PID 47476: `2026-10-05T04:54:15.975864Z` to `2026-10-05T05:10:33.392854Z`, exit 0.
+All 771 inputs match r74/r75. The complete observed registry remains 6,729 document / 9,298 application controls,
+79 ordered stages and preceding multiplicities/output routes; all nine owner-policy HostTests controls pass.
+The real sanitizer probe and full in-process/runtime/screenshot gates pass. Registry proof:
+`618D8FCE5DE428EC2DA12300F594BA9868A99E67CE7503486A481E60359AAEC2`.
+Stdout: `15BA61D49A49C635758B7D874B2BC7E5EB189CFE7D834329079631B1469CA995`;
+stderr: `BAA11F5ADF585D950136E39048178258C1BC8945BFB5A16BF0EF5BF915B034B5`.
+Archive `p1-history-unique-index-x64-ASanDebug-r76-full-qualified`: 1,048 independently verified copies at
+`2026-10-05T05:15:26.0823496Z`. Source manifest:
+`4C6DB9D5BD067DFB0050D9DF1F500B48B1E622CFAC934BB939FE2DC7FE362772`;
+evidence: `6962802B347F1D02AB8CED442012DD02C4F37D38AB197DC4B37C204C8781FE4F`;
+completion: `4136663CFD7D88D370AA5167277450BE996F219AF8A06769029F0CA55432D0C5`.
+
+A later private residency-epoch/owner-permit/worker-refresh protocol, eager fitting sparse Gray8 thumbnails and
+Smudge/Liquify source-copy candidate are not in this freeze. Strict private four-TU code-generation probe r6
+exits 0; it is not linked/runtime qualification. Host same-ticket refresh, complete admission, live-history
+notification/maintenance and all remaining H3/P1 gates remain open.
