@@ -623,7 +623,12 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
   Gradient pointer movement preserves captured colors/settings; explicit palette/header input to the already-open
   gradient adopts live values. Shape preview and commit use the same accepted color. Escape cancels pending samples
   through acknowledgement and keeps colors already published. Exact cancelled/failed outcomes cannot become success
-  just because the FIFO is empty. Current private qualification and remaining native/matrix/G1 work are recorded
+  just because the FIFO is empty. A matching cancellation or boundary also releases this HWND's mouse capture.
+  Foreground/background picker sampling previews only the chosen chrome color until OK; Canvas Size sampling
+  previews only its custom extension draft. Gradient Map sampling updates only the bound endpoint. A live
+  adjustment's own Preview can renew generation authority within the same owner/document/restore/grid while
+  subsequent points continue to read the single admitted original root. Manual input and replacement picker
+  openings still refuse old publication. Current private qualification and remaining native/matrix/G1 work are recorded
   in [SamplerReadback](../TestRuns/SamplerReadback_2026-10-04.md).
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.

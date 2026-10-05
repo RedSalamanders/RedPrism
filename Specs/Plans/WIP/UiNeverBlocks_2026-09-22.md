@@ -26,6 +26,7 @@
 - [x] Private full Debug r61 qualifies cross-opening color inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup readiness; 6,604 document / 9,192 application controls, unchanged 79 stages and verified archive. Broader physical terminals, final matrix, H3/H4 and G1 remain due.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [x] Private full Release r62 passes physical sampler leave/loss/Cancel Mode/Escape and partial alpha: 6,604 document / 9,207 application controls and unchanged 79 stages. Combined Debug/ASan/analysis/ARM64, native activation and G1 remain due.
+- [x] Private full Debug r63 passes 31 actual picker-target controls and the sampler benchmark smoke row; 6,604 document / 9,238 application, original 79 stages and 27 benchmark rows. Final matrix, larger Release measurements and G1 remain due.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
 - [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
@@ -40,8 +41,9 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current private integration passes full Release r62 with physical sampler terminals and numeric alpha:
-6,604 document / 9,207 application controls and the original 79 stages. Preceding Debug r61 qualifies
+Current private integration passes full Debug r63 with actual picker targets and the sampler benchmark:
+6,604 document / 9,238 application controls, original 79 stages and 27 smoke rows. Physical terminals and numeric
+alpha previously passed full Release r62. Preceding Debug r61 qualifies
 cross-opening color, actual Alt callers and guarded cleanup readiness; it is pushed as `af99efe`.
 Current combined Debug/ASan/analysis/ARM64, broader callers, native activation and G1 remain open. The reviewed clipboard-scope
 fix previously passed ASan r51 and Debug analysis r52; earlier receipts qualify their recorded snapshots only.

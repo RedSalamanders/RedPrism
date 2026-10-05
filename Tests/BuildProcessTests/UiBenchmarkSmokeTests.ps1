@@ -47,7 +47,7 @@ $expectedNames = @(
     'exposure-update', 'gaussian-update', 'noise-update', 'grain-update', 'lens-update',
     'invert', 'fill', 'clear', 'undo', 'canvas-size-fill', 'image-size-nearest', 'image-size-resolution', 'project-save', 'project-open',
     'png-export', 'image-import-new-canvas', 'image-import-existing-layer', 'jpeg-export',
-    'gradient-preview-coalesced', 'gradient-apply-ordered'
+    'gradient-preview-coalesced', 'gradient-apply-ordered', 'sampler-accepted-prefix'
 )
 $operationRows = @($lines | Where-Object { $_ -match '^UI BENCH name=' })
 if ($operationRows.Count -ne $expectedNames.Count) {
@@ -95,6 +95,9 @@ foreach ($row in $operationRows) {
     if ($name -in @('png-export', 'jpeg-export') -and $readback.readbackCopies -ne 2) {
         throw "Each smoke export trial must traverse one GPU tile: $row"
     }
+    if ($name -eq 'sampler-accepted-prefix' -and $readback.readbackCopies -ne 6) {
+        throw "Each smoke sampler trial must read its three accepted coordinates: $row"
+    }
 }
 foreach ($name in $expectedNames) {
     if (-not $seenNames.Contains($name)) {
@@ -104,9 +107,9 @@ foreach ($name in $expectedNames) {
 
 $reports = @($lines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
 if ($reports.Count -ne 1 -or
-    $reports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=26(?:\s+.*)?$') {
+    $reports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=27(?:\s+.*)?$') {
     throw "UI benchmark smoke did not print exactly one valid completion report ($stdoutPath)."
 }
 
-Write-Host 'PASS UI benchmark smoke: 26 operations, 64x48, 2 samples after one warmup'
+Write-Host 'PASS UI benchmark smoke: 27 operations, 64x48, 2 samples after one warmup'
 $global:LASTEXITCODE = 0

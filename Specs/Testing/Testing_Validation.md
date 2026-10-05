@@ -1207,7 +1207,9 @@ are interpretable. This is instrumentation overhead only; operation baselines an
 
 `RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
 [`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
-its 24 operation rows include production project open/save, image imports and PNG/JPEG export workers.
+its 27 operation rows include production project open/save, image imports, PNG/JPEG export, ordered gradient
+preview/apply and an accepted sampler prefix. Sampler trials require three point copies each, the independent
+composite color, unchanged source/history and complete graph retirement.
 normal test runs never download the RAW corpus.
 
 Smoke may render with the session display off, while full measurements refuse that state. It validates ordered

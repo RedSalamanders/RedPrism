@@ -3,6 +3,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "CanvasViewport.h"
 #include "ChromeHost.h"
+#include "ColorWorkTestGate.h"
 #include "KeyboardState.h"
 
 #include <algorithm>
@@ -583,6 +584,165 @@ int Application::RunSamplerCallerSelfTest() noexcept
                "sampler-caller.younger-press-paints-captured-magenta"))
         return 5;
 
+    enum class PickerCaseMode : std::uint8_t
+    {
+        Success,
+        EqualInput,
+        ManualAba,
+        Reopen
+    };
+    const auto runPickerCase = [this, &installFixture, &pointer, &check, &settle, &samplerSlotsClear](
+                                   PickerTarget target, std::uint32_t openingColor, std::uint32_t alternateColor,
+                                   PickerCaseMode mode, const char* prefixControl, const char* settledControl) noexcept
+    {
+        if (!settle())
+            return false;
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        const Guid fixtureRevision = _session.history.CurrentRevision();
+        const int fixtureUndo = _session.history.UndoCount();
+        const std::uint64_t fixtureGeneration = _session.Generation();
+        const std::uint32_t fixtureForeground = _session.ForegroundColor();
+        const std::uint32_t fixtureBackground = _session.BackgroundColor();
+
+        _chrome->OpenColorPicker(target, openingColor);
+        const auto originalAuthority = _chrome->CapturePickerIntentAuthority();
+        const bool pickerOpened = _chrome->ColorPickerOpen() && originalAuthority.has_value() &&
+                                  originalAuthority->target == target && _chrome->PickerColor() == openingColor;
+        if (!pickerOpened)
+            return check(false, L"The requested palette picker did not open with its literal baseline.\n",
+                         prefixControl);
+        const auto pickerCleanup = wil::scope_exit(
+            [this]() noexcept
+            {
+                if (_chrome && _chrome->ColorPickerOpen())
+                    _chrome->CloseColorPicker(false);
+            });
+        pointer(WM_LBUTTONDOWN, Vec2{0.0, 15.0}); // Opaque blue.
+        pointer(WM_MOUSEMOVE, Vec2{20.0, 15.0});  // Opaque brown.
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const std::uint64_t opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = opening != 0 ? FindSamplerOpening(opening) : nullptr;
+        const ContinuationReceipt originalReceipt = pending ? pending->receipt : ContinuationReceipt{};
+        const SamplerPickerBinding originalBinding =
+            pending && pending->picker ? pending->picker.value() : SamplerPickerBinding{};
+        std::optional<SamplerPointIntent> acceptedIntent;
+        if (pending)
+            acceptedIntent = pending->latestAcceptedIntent;
+        pointer(WM_LBUTTONUP, Vec2{0.0, 15.0}); // The release over blue must not add a point.
+
+        bool inputApplied = pickerOpened && opening != 0 && pending && pending->points.PendingCount() == 2 &&
+                            acceptedIntent.has_value() && acceptedIntent->pickerIntent == originalAuthority->revision;
+        std::optional<ChromeHost::PickerIntentAuthority> replacementAuthority;
+        switch (mode)
+        {
+        case PickerCaseMode::Success:
+            break;
+        case PickerCaseMode::EqualInput:
+            _chrome->SampleColor(openingColor);
+            break;
+        case PickerCaseMode::ManualAba:
+            _chrome->SampleColor(openingColor);
+            _chrome->SampleColor(alternateColor);
+            _chrome->SampleColor(openingColor);
+            break;
+        case PickerCaseMode::Reopen:
+            _chrome->CloseColorPicker(false);
+            _chrome->OpenColorPicker(target, openingColor);
+            replacementAuthority = _chrome->CapturePickerIntentAuthority();
+            break;
+        }
+        const auto currentAuthority = _chrome->CapturePickerIntentAuthority();
+        const bool originalIntentCurrent = _chrome->IsPickerIntentCurrent(originalAuthority.value());
+        inputApplied =
+            inputApplied && originalReceipt.Read().outcome == ContinuationOutcome::Pending &&
+            currentAuthority.has_value() && currentAuthority->target == target &&
+            originalBinding.host == originalAuthority->host && originalBinding.opening == originalAuthority->opening &&
+            originalBinding.target == target && _session.ForegroundColor() == fixtureForeground &&
+            _session.BackgroundColor() == fixtureBackground && _session.history.CurrentRevision() == fixtureRevision &&
+            _session.history.UndoCount() == fixtureUndo && _session.Generation() == fixtureGeneration;
+        if (mode == PickerCaseMode::Success)
+            inputApplied =
+                inputApplied && originalIntentCurrent && currentAuthority->opening == originalBinding.opening;
+        else if (mode == PickerCaseMode::Reopen)
+            inputApplied = inputApplied && !originalIntentCurrent && replacementAuthority.has_value() &&
+                           replacementAuthority->target == target &&
+                           replacementAuthority->opening != originalBinding.opening &&
+                           _chrome->IsPickerIntentCurrent(replacementAuthority.value());
+        else
+            inputApplied =
+                inputApplied && !originalIntentCurrent && currentAuthority->opening == originalBinding.opening;
+        if (!check(inputApplied,
+                   L"A physical picker-bound sampler did not retain its exact receipt, opening binding, and input "
+                   L"ordering.\n",
+                   prefixControl))
+            return false;
+
+        if (!settle())
+        {
+            SelfTestFailure(L"A physical picker-bound sampler did not settle.\n");
+            return false;
+        }
+        const std::uint32_t expectedChosen = mode == PickerCaseMode::Success ? 0xFF804020u : openingColor;
+        const std::uint32_t chosenBeforeCancel = _chrome->PickerColor();
+        const auto liveAuthority = _chrome->CapturePickerIntentAuthority();
+        const bool publicationGuard =
+            mode == PickerCaseMode::Success
+                ? liveAuthority.has_value() && _chrome->IsPickerIntentCurrent(originalAuthority.value())
+            : mode == PickerCaseMode::Reopen
+                ? liveAuthority.has_value() && replacementAuthority.has_value() &&
+                      liveAuthority->opening == replacementAuthority->opening &&
+                      !_chrome->IsPickerOpeningCurrent(originalAuthority.value())
+                : liveAuthority.has_value() && !_chrome->IsPickerIntentCurrent(originalAuthority.value());
+        _chrome->CloseColorPicker(false);
+        const bool retired =
+            originalReceipt.Read().outcome == ContinuationOutcome::Succeeded && !_chrome->ColorPickerOpen() &&
+            _chrome->PickerColor() == openingColor && _session.ForegroundColor() == fixtureForeground &&
+            _session.BackgroundColor() == fixtureBackground && _session.history.CurrentRevision() == fixtureRevision &&
+            _session.history.UndoCount() == fixtureUndo && _session.Generation() == fixtureGeneration &&
+            (!_window || GetCapture() != _window.get()) && !_canvasBrushInput.Busy() && !_activeHostRequest &&
+            !_hostRequests.Size() && !_historyWork.Busy() && !_samplerHostTicket && !_samplerHostStamp &&
+            _samplerHostJob == nullptr && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0 &&
+            samplerSlotsClear() && FindSamplerOpening(opening) == nullptr;
+        return check(
+            chosenBeforeCancel == expectedChosen && publicationGuard && retired,
+            L"A picker-bound sampler overwrote superseding input, changed the palette/document, or leaked work.\n",
+            settledControl);
+    };
+
+    if (!runPickerCase(PickerTarget::Foreground, 0xFF112233u, 0xFFABCDEFu, PickerCaseMode::Success,
+                       "sampler-caller.picker.foreground.success-prefix-bound",
+                       "sampler-caller.picker.foreground.success-published-and-retired"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Foreground, 0xFF112233u, 0xFFABCDEFu, PickerCaseMode::EqualInput,
+                       "sampler-caller.picker.foreground.equal-input-prefix-bound",
+                       "sampler-caller.picker.foreground.equal-input-suppresses-old-sample"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Foreground, 0xFF112233u, 0xFFABCDEFu, PickerCaseMode::ManualAba,
+                       "sampler-caller.picker.foreground.aba-prefix-bound",
+                       "sampler-caller.picker.foreground.aba-suppresses-old-sample"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Foreground, 0xFF112233u, 0xFFABCDEFu, PickerCaseMode::Reopen,
+                       "sampler-caller.picker.foreground.reopen-prefix-bound",
+                       "sampler-caller.picker.foreground.equal-reopen-refuses-old-opening"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Background, 0xFF445566u, 0xFFABCDEFu, PickerCaseMode::Success,
+                       "sampler-caller.picker.background.success-prefix-bound",
+                       "sampler-caller.picker.background.success-published-and-retired"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Background, 0xFF445566u, 0xFFABCDEFu, PickerCaseMode::EqualInput,
+                       "sampler-caller.picker.background.equal-input-prefix-bound",
+                       "sampler-caller.picker.background.equal-input-suppresses-old-sample"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Background, 0xFF445566u, 0xFFABCDEFu, PickerCaseMode::ManualAba,
+                       "sampler-caller.picker.background.aba-prefix-bound",
+                       "sampler-caller.picker.background.aba-suppresses-old-sample"))
+        return 5;
+    if (!runPickerCase(PickerTarget::Background, 0xFF445566u, 0xFFABCDEFu, PickerCaseMode::Reopen,
+                       "sampler-caller.picker.background.reopen-prefix-bound",
+                       "sampler-caller.picker.background.equal-reopen-refuses-old-opening"))
+        return 5;
+
     enum class Terminal : std::uint8_t
     {
         CapturedLeave,
@@ -680,6 +840,205 @@ int Application::RunSamplerCallerSelfTest() noexcept
                     !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() &&
                     _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
                 L"A physical sampler terminal changed its outcome/prefix or retained graph resources.\n", test.retired))
+            return 5;
+    }
+
+    // The size picker updates its draft only. Sampling and cancelling its preview cannot resize the document.
+    if (!settle())
+        return 5;
+    installFixture();
+    OnTool(EditorTool::Eyedropper);
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    if (!settle() || _sizeDialog.kind != SizeCardKind::CanvasSize)
+    {
+        SelfTestFailure(L"The Canvas Size sampler picker fixture did not open.\n");
+        return 5;
+    }
+    _sizeDialog.customArgb = 0xFF112233u; // Independent opening swatch; only fixture metadata changes.
+    OnSizeAction(SizeAction::SetExtension, 5);
+    const auto sizeAuthority = _session.CaptureDocumentReadAuthority();
+    const auto sizeRevision = _session.history.CurrentRevision();
+    const auto sizeUndo = _session.history.UndoCount();
+    const auto sizeForeground = _session.ForegroundColor();
+    const auto sizeBackground = _session.BackgroundColor();
+    const auto sizePicker = _chrome->CapturePickerIntentAuthority();
+    pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+    pointer(WM_MOUSEMOVE, Vec2{20, 15});
+    const auto* sizeSampling = std::get_if<ColorSampling>(&_drag);
+    const auto sizeOpening = sizeSampling && sizeSampling->opening ? sizeSampling->opening.value() : 0;
+    const auto* sizePending = FindSamplerOpening(sizeOpening);
+    const auto sizeReceipt = sizePending ? sizePending->receipt : ContinuationReceipt{};
+    pointer(WM_LBUTTONUP, Vec2{0, 15});
+    if (!check(sizePicker && sizePicker->target == PickerTarget::SizeExtension && sizePending &&
+                   sizePending->points.PendingCount() == 2 && sizeReceipt.Read().outcome == HostOutcome::Pending &&
+                   _sizeDialog.customArgb == 0xFF112233u && !_samplerHostTicket && !_samplerHostJob,
+               L"Canvas Size sampling did not retain its scalar draft-target prefix.\n",
+               "sampler-caller.picker.size.scalar-prefix-before-pump"))
+        return 5;
+    if (!check(settle() && sizeReceipt.Read().outcome == HostOutcome::Succeeded && _chrome->ColorPickerOpen() &&
+                   _chrome->PickerColor() == 0xFF804020u && _sizeDialog.kind == SizeCardKind::CanvasSize &&
+                   _sizeDialog.customArgb == 0xFF804020u && _sizeDialog.customBefore == 0xFF112233u && sizeAuthority &&
+                   _session.IsDocumentReadCurrent(sizeAuthority.value()) &&
+                   _session.history.CurrentRevision() == sizeRevision && _session.history.UndoCount() == sizeUndo &&
+                   _session.ForegroundColor() == sizeForeground && _session.BackgroundColor() == sizeBackground &&
+                   samplerSlotsClear() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
+               L"Canvas Size sampler preview changed the document or missed its exact extension-color target.\n",
+               "sampler-caller.picker.size.only-draft-color-previews"))
+        return 5;
+    _chrome->CloseColorPicker(false);
+    const bool sizeRestored = _sizeDialog.customArgb == 0xFF112233u && !_chrome->ColorPickerOpen();
+    OnSizeAction(SizeAction::Cancel, 0);
+    if (!check(sizeRestored && !SizeCardOpen() && settle() && sizeAuthority &&
+                   _session.IsDocumentReadCurrent(sizeAuthority.value()) &&
+                   _session.history.CurrentRevision() == sizeRevision && _session.history.UndoCount() == sizeUndo,
+               L"Cancelling sampled Canvas Size colors did not restore the swatch without resizing.\n",
+               "sampler-caller.picker.size.cancel-restores-opening-without-resize"))
+        return 5;
+
+    struct GradientPickerCase final
+    {
+        bool highlights;
+        const char* scalar;
+        const char* preview;
+        const char* cancelled;
+    };
+    constexpr std::array<GradientPickerCase, 2> gradientPickers{{
+        {false, "sampler-caller.picker.gradient-shadows.scalar-prefix-before-pump",
+         "sampler-caller.picker.gradient-shadows.exact-endpoint-only",
+         "sampler-caller.picker.gradient-shadows.cancel-restores-opening"},
+        {true, "sampler-caller.picker.gradient-highlights.scalar-prefix-before-pump",
+         "sampler-caller.picker.gradient-highlights.exact-endpoint-only",
+         "sampler-caller.picker.gradient-highlights.cancel-restores-opening"},
+    }};
+    constexpr AdjustmentColor kBrownColor{128.0 / 255.0, 64.0 / 255.0, 32.0 / 255.0};
+    for (const auto& test : gradientPickers)
+    {
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        if (!BeginColorEdit(ChromeHost::kCommandGradientMap) || !settle() || !_session.PendingColorEdit())
+        {
+            SelfTestFailure(L"The destructive Gradient Map picker fixture did not open.\n");
+            return 5;
+        }
+        const auto openingSettings = _session.PendingColorEdit()->settings.gradientMap;
+        const auto readAuthority = _session.CaptureDocumentReadAuthority();
+        const auto revision = _session.history.CurrentRevision();
+        const auto undo = _session.history.UndoCount();
+        OnAdjustAction(test.highlights ? AdjustAction::OpenHighlights : AdjustAction::OpenShadows, 0);
+        pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+        pointer(WM_MOUSEMOVE, Vec2{20, 15});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = FindSamplerOpening(opening);
+        const auto receipt = pending ? pending->receipt : ContinuationReceipt{};
+        pointer(WM_LBUTTONUP, Vec2{0, 15});
+        if (!check(pending && pending->picker && pending->points.PendingCount() == 2 &&
+                       pending->picker->target ==
+                           (test.highlights ? PickerTarget::GradientHighlights : PickerTarget::GradientShadows) &&
+                       receipt.Read().outcome == HostOutcome::Pending && !_samplerHostTicket && !_samplerHostJob,
+                   L"Gradient Map sampling did not retain its exact endpoint-target prefix.\n", test.scalar))
+            return 5;
+        if (!settle() || !_session.PendingColorEdit())
+            return 5;
+        const auto changed = _session.PendingColorEdit()->settings.gradientMap;
+        if (!check(receipt.Read().outcome == HostOutcome::Succeeded && _chrome->PickerColor() == 0xFF804020u &&
+                       (test.highlights
+                            ? changed.highlights == kBrownColor && changed.shadows == openingSettings.shadows
+                            : changed.shadows == kBrownColor && changed.highlights == openingSettings.highlights) &&
+                       readAuthority && _session.IsDocumentReadCurrent(readAuthority.value()) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
+                       _session.ForegroundColor() == kBlue && _session.BackgroundColor() == kBackground &&
+                       samplerSlotsClear() && _jobs.ReservedMemoryBytes() == 0 &&
+                       _composition.UtilitySurfaceBytes() == 0,
+                   L"Gradient Map sampler missed its endpoint, sampled its preview, or changed committed history.\n",
+                   test.preview))
+            return 5;
+        _chrome->CloseColorPicker(false);
+        const bool endpointRestored =
+            _session.PendingColorEdit() && _session.PendingColorEdit()->settings.gradientMap == openingSettings;
+        CancelColorEditForTest();
+        if (!check(endpointRestored && settle() && !_session.HasColorEdit() && !_chrome->ColorPickerOpen() &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo,
+                   L"Cancelling a sampled Gradient Map endpoint did not restore its opening settings.\n",
+                   test.cancelled))
+            return 5;
+    }
+
+    // A live adjustment picker mutates document generation after its own Preview. The next real Move still
+    // reads the single admitted original root, with only this own callback renewing the source authority.
+    constexpr std::array<GradientPickerCase, 2> adjustmentPickers{{
+        {false, "sampler-caller.picker.adjustment-shadows.first-ack-renews-own-source",
+         "sampler-caller.picker.adjustment-shadows.next-move-samples-original-root",
+         "sampler-caller.picker.adjustment-shadows.cancel-acknowledges"},
+        {true, "sampler-caller.picker.adjustment-highlights.first-ack-renews-own-source",
+         "sampler-caller.picker.adjustment-highlights.next-move-samples-original-root",
+         "sampler-caller.picker.adjustment-highlights.cancel-acknowledges"},
+    }};
+    for (const auto& test : adjustmentPickers)
+    {
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        _session.SetForegroundColor(0xFF000000u);
+        _session.SetBackgroundColor(0xFFFFFFFFu);
+        AddAdjustmentLayer(ChromeHost::kCommandNewGradientMapAdjustment);
+        if (!settle() || !_session.PendingColorEdit() || !_session.AdjustmentOriginal())
+        {
+            SelfTestFailure(L"The live Gradient Map adjustment picker fixture did not open.\n");
+            return 5;
+        }
+        const auto openingSettings = _session.PendingColorEdit()->settings.gradientMap;
+        const auto revision = _session.history.CurrentRevision();
+        const auto undo = _session.history.UndoCount();
+        const auto generation = _session.Generation();
+        OnAdjustAction(test.highlights ? AdjustAction::OpenHighlights : AdjustAction::OpenShadows, 0);
+        wil::unique_handle acknowledged{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        if (!acknowledged || _samplerAcknowledgedForTest)
+        {
+            SelfTestFailure(L"The adjustment sampler acknowledgement fixture could not begin.\n");
+            return 5;
+        }
+        _samplerAcknowledgedForTest = acknowledged.get();
+        const auto clearAcknowledgement = wil::scope_exit([this]() noexcept { _samplerAcknowledgedForTest = nullptr; });
+        pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = FindSamplerOpening(opening);
+        const auto receipt = pending ? pending->receipt : ContinuationReceipt{};
+        if (!check(pending && WaitForColorWorkTestEvent(_jobs, acknowledged.get(), DispatchMessageThunk, this) &&
+                       _chrome->PickerColor() == 0xFF636363u && _session.Generation() > generation &&
+                       _session.IsDocumentReadCurrent(pending->source) && _samplerHostTicket &&
+                       receipt.Read().outcome == HostOutcome::Pending && _composition.UtilitySurfaceBytes() == 0,
+                   L"The live adjustment's first sample did not renew only its own admitted source authority.\n",
+                   test.scalar))
+            return 5;
+        pointer(WM_MOUSEMOVE, Vec2{20, 15});
+        pointer(WM_LBUTTONUP, Vec2{0, 15});
+        _samplerAcknowledgedForTest = nullptr;
+        if (!settle() || !_session.PendingColorEdit())
+            return 5;
+        constexpr AdjustmentColor kOriginalBrownLuminance{75.0 / 255.0, 75.0 / 255.0, 75.0 / 255.0};
+        const auto changed = _session.PendingColorEdit()->settings.gradientMap;
+        if (!check(receipt.Read().outcome == HostOutcome::Succeeded && _chrome->PickerColor() == 0xFF4B4B4Bu &&
+                       (test.highlights ? changed.highlights == kOriginalBrownLuminance &&
+                                              changed.shadows == openingSettings.shadows
+                                        : changed.shadows == kOriginalBrownLuminance &&
+                                              changed.highlights == openingSettings.highlights) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
+                       _session.ForegroundColor() == 0xFF000000u && _session.BackgroundColor() == 0xFFFFFFFFu &&
+                       samplerSlotsClear() && _jobs.ReservedMemoryBytes() == 0 &&
+                       _composition.UtilitySurfaceBytes() == 0,
+                   L"The next live adjustment sample captured its mutated preview instead of the original root.\n",
+                   test.preview))
+            return 5;
+        _chrome->CloseColorPicker(false);
+        const bool restored =
+            _session.PendingColorEdit() && _session.PendingColorEdit()->settings.gradientMap == openingSettings;
+        CancelColorEditForTest();
+        if (!check(
+                restored && settle() && !_session.HasColorEdit() && !_chrome->ColorPickerOpen() &&
+                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo,
+                L"The sampled adjustment picker did not acknowledge cancellation and restore its original settings.\n",
+                test.cancelled))
             return 5;
     }
 

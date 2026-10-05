@@ -18,6 +18,7 @@
 - [ ] Bind publication to the exact document session, gesture opening and foreground/picker input authority, including equal-value reopen and A–B–A changes.
 - [ ] Preserve older sample / younger palette-dependent brush, gradient and shape ordering through terminal acknowledgement.
 - [ ] Qualify actual press/move/Up, pointer leave/loss, Escape, failure, memory wait, shutdown and device fallback controls with unchanged numeric goldens.
+- [x] Full Debug r63 passes 31 actual picker controls (FG/BG, Canvas Size, destructive/live Gradient Map) and the added sampler benchmark row: 6,604 document / 9,238 application, original 79 stages and 27 smoke rows. Skills/format and 1,038 archived copies verify. Newer admission/cleanup controls and final matrix/G1 remain due.
 - [ ] Measure sampler owner capture, utility record/first upload, completion/chrome and invalidated-frame G1 rows on A/B; fix overruns.
 - [ ] Complete required x64 suites, analysis, ARM64 cross-builds, contracts/guide and native integration; commit/push the qualified slice.
 
@@ -26,8 +27,8 @@ Baseline: managed `b49e4b4`; the candidate now includes the wand descriptor repa
 Reviewed intent sidecar builds r53/r54 and full Debug r55 pass on their recorded snapshots. The admitted scalar source authority, distinct picker opening identity and reader graph pass full Debug r57.
 The physical Eyedropper routing, younger Brush/Gradient/Shape dependency and selected-cancellation fix pass full
 Debug r60. Cross-opening prefix inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup-readiness ordering
-pass full Debug r61 in the private integration. Native activation, remaining profiles, broader physical terminals,
-live picker contexts, largest-fixture admission and G1 remain due.
+pass full Debug r61. Physical terminals/alpha pass Release r62; actual picker targets and sampler smoke pass Debug
+r63. Native activation, current matrix, broader lifetime/admission, H3/H4 and G1 remain due.
 Owners: `Application`, `DocumentReadbackJob`, `GpuWorkQueue`, palette/picker input and selected host continuations.
 Contracts: `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `UI_ApplicationChrome`, `Core_PerformanceAndResources`, `Testing_Validation`.
 

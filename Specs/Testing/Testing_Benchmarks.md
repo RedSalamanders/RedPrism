@@ -1,7 +1,7 @@
 # Application and image benchmarks
 
 Status: current normative diagnostic contract
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-05
 Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Build/bench/`
 
 ## Immutable record primitive comparison
@@ -91,7 +91,7 @@ Clear Pixels is preceded by Select All during untimed preparation. At 100 MP, Ga
 refusal without a document or history change. It does not report that refusal as successful image processing.
 The colored Canvas Size extension is likewise `canvas-size-fill-refused-pixel-budget` wherever the fixture's
 existing layers plus the requested extension exceed the pixel ceiling (the current 45 MP and 100 MP fixtures), with the unchanged
-document/history required. The smoke gate covers all 26 operation rows, including `project-save`, which measures
+document/history required. The smoke gate covers all 27 operation rows, including `project-save`, which measures
 the production project-save continuation through worker completion and a presented frame, plus `png-export`
 and `jpeg-export` through their production graph. The saved result must
 reach its expected state. This row is a harness measurement only; no hardware timing result or threshold follows
@@ -107,6 +107,17 @@ gone, and one `Gradient` history entry replaces the source raster. Its independe
 last pixels on the gradient row: opaque foreground BGRA `(39,100,147,255)` and white background BGRA
 `(255,255,255,255)`. These operations use the existing dispatch, message, completion-drain, result-apply, UI-action,
 frame, and outer elapsed metrics. Smoke timings remain correctness-only; no timing threshold is introduced.
+
+`sampler-accepted-prefix` drives the actual accepted Down, Move and end producers at exact document coordinates
+(0.5,0.5), (1.5,0.5), (0.5,0.5). Fit-zoom client integer rounding is excluded from the coordinate fixture; source
+capture, admission, repeated 1x1 GPU readback, checked palette publication, aggregate retirement and final frame
+remain inside the real measured message/job loop. The end seals accepted points and adds no release sample.
+The row requires a successful original receipt, exactly three GPU copies, unchanged document serial/history/
+modified state/raster identity and no retained sampler ticket, barrier, reservation or utility surface. Its
+independent final-pixel oracle is gray 55 for layered A: masked gray 29 over gray 71 with coverage 128 rounds to
+50, and linear-sRGB exposure +0.25 rounds that to 55. Ceiling B contains only opaque gray 29. Smoke requires six
+point copies over its two recorded trials. These correctness conditions do not establish the original P1 G1
+timing gates; use qualified Release A/B hardware/WARP measurements and retain the full raw timing rows.
 
 `Build/bench/run-gradient-bench.ps1` requires an immutable qualified Release snapshot, exact executable/runtime
 hashes and a matching `ui-gradient-ops-v1` capability declaration before launching the six hardware/WARP runs.

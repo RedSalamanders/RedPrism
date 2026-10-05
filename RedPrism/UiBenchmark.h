@@ -78,4 +78,5 @@ struct UiBenchmarkState final
     std::optional<ContinuationReceipt> pngExportReceipt;
     std::optional<ContinuationReceipt> importReceipt;
     std::optional<ContinuationReceipt> gradientApplyReceipt;
+    std::optional<ContinuationReceipt> samplerReceipt;
 };

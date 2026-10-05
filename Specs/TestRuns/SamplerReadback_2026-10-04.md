@@ -329,3 +329,52 @@ history and generation stay exact and all sampler resources retire.
 
 This is Release correctness qualification, not a latency measurement. Current combined Debug/ASan/analysis/ARM64,
 actual picker target/lifetime/admission breadth, native activation, H3/H4 and original G1 remain open.
+
+
+## Actual picker targets and sampler benchmark - r63 pending
+
+The cheaper agent adds 16 actual foreground/background picker controls: successful preview, equal manual input,
+A-B-A and same-color reopen. Primary reviews receipt/binding capture, chosen-color/cancel behavior and unchanged
+palette/history/source. Primary adds three Canvas Size custom-extension controls, six destructive Gradient Map
+endpoint controls and six live adjustment endpoint controls. The live cases wait on an owner-only acknowledgement
+event, require generation renewal after their own Preview, then send a real Move. Original identity-map blue and
+brown luminances are independently fixed at bytes 99 and 75. The second sample must read that admitted original
+root; using the changed adjustment produces a different byte and fails.
+
+A new `sampler-accepted-prefix` real-loop row drives actual Down/Move/end producers at exact document coordinates
+(0.5,0.5), (1.5,0.5), (0.5,0.5), without client-coordinate rounding at Fit zoom. It validates original history/image,
+receipt, three GPU copies, released reservation/utility and literal gray 55 on A (masked composite gray 50 plus
+linear-sRGB exposure 0.25), or gray 29 on ceiling B. Timing covers posted owner dispatch, capture, readback,
+publication and the final invalidated frame. The smoke contract retains all 26 prior operations and adds one;
+its counter requires six point copies across two trials. No timing thresholds are placed in tests.
+
+Skills validate 15 skills and format/check pass 651 files. Full Debug r63 began at
+2026-10-05T01:01:03.824631Z, recorder 85192. Actual result and archive are pending. Source stays frozen.
+Newer caller-root opening/FIFO capacity and submission-refusal controls are not in r63. No new matrix/G1 claim.
+
+
+## Actual picker targets and sampler smoke - full Debug r63
+
+Actual child 19744, 2026-10-05T01:01:08.467024Z-01:09:02.685416Z, exit **0**; 771 unchanged inputs,
+freeze `A667299643C63B91C6A5DDD4680D1EB1B0CCBC49717606B5FEBCE5D5FBD2C6ED`.
+Stdout `5379DA4C5E6F3EC344D08B3693C85175C028DAF7FCD0A9C92631DEDEAFC362EC`, stderr
+`75B25DD34B2017262D670B82A2B1B5F1AF16C43252DB45AF941629B2D8D5A28C`.
+All full suites, unchanged instruction/PDB/scanner controls, WARP host, crash probes, CLI/build/RAW fixtures,
+27-row UI smoke and screenshots pass. Skills/format pass before the freeze.
+
+Independent archived literal counters preserve **6,604 document / 9,238 application** controls (9,207 + 31 picker),
+all **79 stages** and the exact preceding 26 benchmark rows plus `sampler-accepted-prefix`.
+Proof `verified-picker-benchmark-registries.json` SHA-256
+`896756B95E1C83CD5BB013E2689006F90A2718FD3EBD22C4310A30406496776A`.
+The new smoke row reports six copies/maps, zero busy failures and two presentations. Its Debug 64x48 durations
+are correctness diagnostics only and cannot qualify Release A/B or G1.
+
+Archive `p1-sampler-picker-benchmark-x64-Debug-r63-full-qualified` verifies **1,038 copies / 79 stages** at
+2026-10-05T01:09:55.9573878Z; completion `0A7620477E56653AEFFB1882DF6FC3C98211FB09E0D525C6BAB3AFFD7CE518B0`,
+source manifest `A09FD9D9C1A46B048FC15E1D2B241837964BC3733917D5C8A3D6481C98C156BA`, evidence manifest
+`2052A812DACA2FD381607E9402EB4C5FDBE78CAB29DA295ACAA57CC007D0AFE4`.
+
+Secondary review found the new fixture should explicitly reject a pre-existing size card or color edit and clear
+those states on failure cleanup. That repair is in newer caller-root source, absent from r63. Its reviewed
+capacity/refusal/overflow controls and owner-only source-capture counter are likewise newer and unqualified.
+Current combined Release/ASan/analysis/ARM64, native activation, broader lifetime/admission, H3/H4 and G1 remain open.

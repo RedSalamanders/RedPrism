@@ -36,7 +36,8 @@ enum class Expected
     ImportedLayers,
     ImportedLayersRefused,
     GradientPreview,
-    GradientApplied
+    GradientApplied,
+    SampledPrefix
 };
 
 struct Operation final
@@ -50,7 +51,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 26> kOperations{{
+constexpr std::array<Operation, 27> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -77,6 +78,7 @@ constexpr std::array<Operation, 26> kOperations{{
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
     {"gradient-preview-coalesced", 0, 0, {}, 0, Expected::GradientPreview},
     {"gradient-apply-ordered", 0, 0, {}, 0, Expected::GradientApplied},
+    {"sampler-accepted-prefix", 0, 0, {}, 0, Expected::SampledPrefix},
 }};
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
@@ -555,6 +557,11 @@ void Application::PrepareUiBenchmarkStep() noexcept
         state.exportReceipt.reset();
     if (operation.expected == Expected::GradientApplied)
         state.gradientApplyReceipt.reset();
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        state.samplerReceipt.reset();
+        OnTool(EditorTool::Eyedropper);
+    }
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
@@ -631,7 +638,34 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.expected == Expected::GradientPreview)
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        // Exact document coordinates avoid fit-zoom integer client rounding. These are the actual accepted
+        // Down/Move/end producers; the posted harness message, admission, readback, publication and final frame
+        // remain inside the measured outer application loop. End never samples a release coordinate.
+        DxUi::PointerEvent down{};
+        down.action = DxUi::PointerAction::Down;
+        down.modifiers = MK_LBUTTON;
+        const Vec2 first{0.5, 0.5};
+        PressCanvas(down, WM_LBUTTONDOWN, _viewport.ViewFromDocument(first, DocumentSize()), POINT{});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto* opening = sampling && sampling->opening ? FindSamplerOpening(sampling->opening.value()) : nullptr;
+        if (!opening || sampling->composite || _samplerHostTicket || _samplerHostJob)
+        {
+            FailUiBenchmark("sampler-scalar-admission");
+            return;
+        }
+        _uiBenchmark->samplerReceipt = opening->receipt;
+        SampleColorAt(_viewport.ViewFromDocument(Vec2{1.5, 0.5}, DocumentSize()));
+        SampleColorAt(_viewport.ViewFromDocument(first, DocumentSize()));
+        if (opening->points.PendingCount() != 3)
+        {
+            FailUiBenchmark("sampler-three-point-prefix");
+            return;
+        }
+        EndColorSampling();
+    }
+    else if (operation.expected == Expected::GradientPreview)
     {
         auto& state = *_uiBenchmark;
         const double startX = 1.5;
@@ -922,9 +956,26 @@ void Application::AdvanceUiBenchmark() noexcept
         layer->asset->image != state.previousImage && _session.history.CurrentRevision() != state.previousRevision &&
         _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Gradient" &&
         GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
+    const auto samplerResult = state.samplerReceipt ? state.samplerReceipt->Read() : ContinuationReceipt::Result{};
+    const auto samplerReadback = _gpuWork.Statistics();
+    // Independent fixture oracle at (0,0): top gray 29 over bottom gray 71 with mask 128 rounds to 50.
+    // Exposure +0.25 in linear sRGB rounds that byte to 55. The ceiling fixture has only opaque top gray 29.
+    const auto expectedSample = state.fixture.width == 10000 ? 0xFF1D1D1Du : 0xFF373737u;
+    const bool sampledPrefix =
+        expected == Expected::SampledPrefix && state.samplerReceipt &&
+        samplerResult.outcome == HostOutcome::Succeeded && _session.ForegroundColor() == expectedSample &&
+        _session.DocumentSerial() == state.previousSessionSerial &&
+        _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount &&
+        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
+        layer->asset->image == state.previousImage && !edit && !std::holds_alternative<ColorSampling>(_drag) &&
+        !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
+        !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0 &&
+        samplerReadback.copies - state.previousReadback.copies == 3 &&
+        samplerReadback.busyFailures == state.previousReadback.busyFailures;
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
         !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
-          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied ||
+          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied || sampledPrefix ||
           (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
