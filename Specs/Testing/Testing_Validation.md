@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-05
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -384,7 +384,11 @@ before acknowledgement, and aggregate retirement off owner. Reached generation/a
 lasso/brush changes refuse stale output. Capture and six history-stage allocation faults preserve live state;
 actual full scheduler records refuse admission and a later command recovers after drain. The mask fixture MUST
 begin on image pixels with an existing mask, so its held target switch is a reached change.
-These 162 unique checks across 28 modes run inside the full application suite; they do not qualify live gesture
+These 208 unique checks across 34 modes retain all preceding 162 checks/28 modes and add six actual late-residency
+success, refresh-failure and cancellation cases for Select All and Deselect. They require the literal four-byte
+leaf/eight-byte assembly charge, original source/outline/saved lineage, one capture/preparation and retained refresh
+reservation, one current failure notice and off-owner retirement. They run inside the full application suite and
+do not qualify live gesture
 or header routing, every retained raster's last-release thread, allocator/API faults, constant-time capture or G1.
 Harness setup/cleanup waits for queued selection acknowledgement before starting later pointer gestures.
 
@@ -939,13 +943,30 @@ tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
 actual-restore crop removal/no-entry crop retention, no-document Redo, selected-snapshot memory floors,
 default/foreign/moved/single-use authority, exact history epoch and both directions of all three restore allocation
 and cancellation stages. A later saved revision and newly begun unrecorded lasso cannot corrupt live state.
-The production self-test adds 28 `history-restore-host.mode=` scenarios, including ordered younger edits,
+The production self-test retains all 28 preceding `history-restore-host.mode=` scenarios and adds six actual
+late-residency Undo/Redo success, refresh-allocation failure and cancellation scenarios, for 34 total. Original cases include ordered younger edits,
 selected receipt lineage across document removal, empty/nested no-op, stale active/mask/crop/generation/epoch/lasso,
 capture/worker/history refusal, cancellation acknowledgement and complete aggregate retirement off the owner.
 Every terminal case requires no hidden Present and returned reservations/barrier/ticket. Crop/opacity host tests
 wait for acknowledged real restores before inspecting results; pending-edit consumes retain their immediate rules.
 All six configurations qualify this slice ([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
 these functional gates assert no latency threshold.
+
+The managed staged-residency caller slice adds 10 `HistoryRestoreTests`, 14 `SelectionCommandTests` and eight
+`SelectionNudgeTests` controls. They bind refresh to the original prepared optional document/after-outline,
+preserve no-op redo/saved state, reject moved/applied reuse, and exercise reached allocation/cancellation and
+checked refresh-admission bounds. Three actual selection-nudge cases add 24 named controls for late-cache
+success/fault/cancel, including original moved outline, one entry and independent saved-revision truth.
+
+`history-residency-shutdown.*` adds 14 actual standalone hidden-WARP owner controls inside the existing shutdown
+stage. A notice ready before capture owns no payload; a worker held after preparation must wake from actual
+RequestStop and join without the test signalling its gate. Both retain original document/generation/revisions,
+publish no trim and Present no frame, release source/ticket/barrier/reservation/worker ownership, retire captured
+payloads off owner, refuse later global notifications into stopped contexts and pass a second shutdown.
+Structural deadlines detect a deadlock and do not supply performance thresholds. Preserve every preceding
+literal control, multiplicity, output route and all 79 ordered application stages through the full x64 Debug,
+Release, real ASan Debug, analysis and ARM64 cross-build matrix. Native ARM64 execution and G1 require separate
+runtime evidence; this caller slice is recorded in [P1ResidencyCore](../TestRuns/P1ResidencyCore_2026-10-05.md).
 
 `ImportHistoryTests` adds 55 independent reset/baseline/edit/trim-publication assertions, including literal
 Undo/Redo and all six replacement/edit construction and cancellation checkpoints with the old state preserved.

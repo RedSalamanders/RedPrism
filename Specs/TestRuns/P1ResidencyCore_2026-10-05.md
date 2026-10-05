@@ -269,3 +269,92 @@ Full real ASan Debug r96 also passes on the unchanged 774-input freeze: actual c
 Archive `p1-residency-host-x64-ASanDebug-r96-full-qualified`: 1051 copies reread and verified; completion `31BEE63DE352A3511E6E3B86A700E8DAD34A504A2DEB833766B6AF4467C40FDB`. Source manifest `C4FE4719E9BF92BC9E05E25A5554D62A07C545FB1241C70992E4552E6B022491`; evidence manifest `21B9F93BEB4CC60B47D7CC050DE79786CE98141458AAA3D8E0A0F861AF6A8CA2`.
 
 This qualifies the combined cancellation, growth notification, metadata opt-in and scoped maintenance host slice in Debug/Release/ASan, Release analysis and all three ARM64 cross-builds. Normal maintenance startup, remaining writers, Native activation, delta cost and G1 remain open. The next 13-TU draft probe r1's nonexistent checkpoint was corrected to `StorageIndexClone`; r2 passes 319 immutable inputs, freeze `1643C0EAB9F8A88963B214BA31E2C95DA7A66FB64DC37FFECDDD41F97D6290D2`, with no linked/runtime claim.
+
+### Integrated restore/selection/nudge and maintenance shutdown candidate
+
+The next 21-file source group is integrated narrowly, preserving Main's newer continuation diagnostics and
+no-growth refresh fast path. It adds same-ticket history refresh to Undo/Redo, Select All/Deselect and nudge,
+complete candidate/index overlap reservation, single-use/moved/no-op checks and actual standalone shutdown
+with a pending growth notice or a held prepared maintenance worker. It is not yet qualified or committed.
+
+The first full Debug attempt passed the CPU suites and new restore cases, then found that the restore fixture
+leaked its 8-byte history budget into the preceding Select All control. The repair restores the original
+budget on test exit and starts each case with it. The next Debug attempt preserved the original selection
+controls but exposed the new Deselect fixture's historical outline sharing the current selection identity;
+live-identity exclusion correctly removed its byte charge. The repaired private fixture uses a distinct
+literal rectangle. These are fixture corrections; trimming/selection goldens and latency thresholds are unchanged.
+
+Release analysis r98 passes on the original 775-input candidate; it does not qualify the later fixture repair.
+r100 was refused by vcpkg's exclusive install lock before compilation while Debug dependency preparation
+ran. Its failure is retained. A fresh analysis r101 starts after the Debug build stage; no lock is removed
+and no running application is terminated. Source inputs remain frozen until that attempt finishes/archives.
+
+| Attempt | Actual child / exit | UTC interval | Inputs / source freeze | Verified archive completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| incremental-x64-test-Debug-r97: Debug full; fixture failure | 10684 / 1 | 2026-10-05T09:17:26.318080+00:00 to 2026-10-05T09:26:46.219048+00:00 | 775 / `93662A6DC698BC352631ADD22FDF238DCDBA8C0E5DF2D7F40A132AD592E52362` | `p1-history-callers-x64-Debug-r97-runtime-failure` / `50F1321BC63E1CE587BF4316BDCCB0C1E7DD96D4D6A8044BD1A45990FC0B8794` |
+| incremental-x64-analysis-Release-r98: Release analysis; original candidate | 30444 / 0 | 2026-10-05T09:18:11.113360+00:00 to 2026-10-05T09:25:02.295458+00:00 | 775 / `93662A6DC698BC352631ADD22FDF238DCDBA8C0E5DF2D7F40A132AD592E52362` | `p1-history-callers-x64-Release-r98-analysis-qualified` / `1411BF4433B92A08A260CF15D563B7ACA550D81401FDE0706D8DF061DC4268CA` |
+| incremental-x64-test-Debug-r99: Debug full; second fixture failure | 5552 / 1 | 2026-10-05T09:32:53.315042+00:00 to 2026-10-05T09:40:12.764113+00:00 | 775 / `55178994ED11207EDA1E253EB7707733C77EBDFB1947BDB9B00C44EA0171325A` | `p1-history-callers-x64-Debug-r99-fixture-failure` / `74EB52973F8AB03062E3CB019D88E47B029DEDAA02FCB0CC70CEC4B9531F15EC` |
+| incremental-x64-analysis-Release-r100: Release analysis; dependency lock refusal | 48824 / 1 | 2026-10-05T09:32:54.121709+00:00 to 2026-10-05T09:32:57.065669+00:00 | 775 / `55178994ED11207EDA1E253EB7707733C77EBDFB1947BDB9B00C44EA0171325A` | `p1-history-callers-x64-Release-r100-analysis-start-failure` / `EA6E46C36CBBC7E140FD634AD5DB2DD6B3C4037DF639D05B4CF618ED96A2978A` |
+
+The full current Debug/Release/ASan runtime matrix, repaired-source analysis, all ARM64 cross-builds,
+predecessor registry proof and measured costs remain required. Original failed receipts and copied
+source/product evidence remain under the named QualificationArchives folders. No native activation,
+normal maintenance startup, remaining-writer coverage, H3 completion or G1 result follows from these attempts.
+The separately indexed H4 upload plan and private row-copy/helper tests have no linked production qualification.
+
+### Sparse fixture diagnosis corrected; charged leaf repair
+
+r101 analysis passes after budget isolation. r102 then disproves the initial attribution of Deselect's failure
+to its outline: constructing another SelectionLoops already gives a distinct held identity, even for equal
+coordinates. The explicit different rectangle remains useful as a literal fixture, but did not fix the charge.
+The actual error is `lateResidencySource.ByteSize()`: an unmaterialized sparse root owns zero resident pixel
+bytes, while its retained leaf owns four. The fixture used zero instead of four in its budget and separately
+asserted the root was four. The repaired fixture charges `leaf.ByteSize()==4`, asserts root bytes zero and
+retains the original selection charge. It changes no production accounting rule or golden threshold.
+
+r103 analysis and three ARM64 cross-builds pass on the distinct-outline source before this charged-leaf repair;
+they do not qualify its later source. Build-only r104 is running on the repaired candidate before another
+actual-host diagnostic runtime. Full required configuration/analysis/cross-build qualification still follows.
+
+| Attempt | Actual child / exit | UTC interval | Source freeze | Verified archive completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| `incremental-x64-analysis-Release-r101` | 86504 / 0 | 2026-10-05T09:38:21.489321+00:00 to 2026-10-05T09:45:13.671883+00:00 | `55178994ED11207EDA1E253EB7707733C77EBDFB1947BDB9B00C44EA0171325A` | `p1-history-callers-x64-Release-r101-budget-repair-analysis-qualified` / `29645DACE4E2E91BA5F600C475DC96B4D0458EC8FD381B1BB003BA7BF78A7EE5` |
+| `incremental-x64-test-Debug-r102` | 30424 / 1 | 2026-10-05T09:46:23.034657+00:00 to 2026-10-05T09:57:13.816907+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-x64-Debug-r102-selection-fixture-failure` / `0B1E44F282248448E8DFE6B3033657BAA7EF729B1962AF7EF980386606AF9A7C` |
+| `incremental-x64-analysis-Release-r103` | 72644 / 0 | 2026-10-05T09:49:32.917809+00:00 to 2026-10-05T09:58:06.881385+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-x64-Release-r103-distinct-outline-analysis-qualified` / `87F02C61D39E1BE47A6CAA4972B7A066B8ABACEB47FEE396590B4D89B2D68BC2` |
+| `residency-arm-builds-r3-callers/Debug` | 87548 / 0 | 2026-10-05T09:49:34.256917+00:00 to 2026-10-05T09:52:05.466805+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-ARM64-Debug-r3-cross-qualified` / `D709E392A8DF31434DFDC7CBA55D9D3FEA626C152414AF26C2B4456CFE26E98B` |
+| `residency-arm-builds-r3-callers/Release` | 39592 / 0 | 2026-10-05T09:52:50.329061+00:00 to 2026-10-05T09:55:20.739223+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-ARM64-Release-r3-cross-qualified` / `C8784146D2D54B3692652060A2812C377D3E6122C9A3E2C3434F4C05297EA8C8` |
+| `residency-arm-builds-r3-callers/ASanDebug` | 83548 / 0 | 2026-10-05T09:55:23.778548+00:00 to 2026-10-05T09:56:14.649964+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-ARM64-ASanDebug-r3-cross-qualified` / `D59F4E25AE477D4A83543F3ED01A25E315AA7E188E09617F46118A9FA2A02C46` |
+
+The current integrated writer/shutdown group remains uncommitted pending complete runtime qualification.
+
+### Repaired leaf charge: runtime, analysis, cross-build and Release qualification
+
+The current 775-input repaired source has freeze
+`7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073`.
+r104 builds; r105 actual application runtime passes 9,446 named controls and all 79 stages; r106 Release analysis
+and all three r4 ARM64 cross-builds pass. r108 full Release passes 6,841 document and 9,446 application controls,
+preserving all preceding literal controls, multiplicities, output routes and ordered stages. Its only aggregate
+adapter changes selection-host's summary from 162 checks/28 modes to 208 checks/34 modes; the preceding individual
+controls remain mandatory. The 32 new document controls cover Restore, selection commands and nudge. The 84 new
+named host controls include 14 actual shutdown checks, 46 selection checks and 24 nudge checks; six coarse Restore
+mode reports are additionally retained. Registry helper hash is
+`DD3E8ED56C596577EEA39D298A15707DF5105568EA94378E5186A9DD9EF5172E`; r108 proof hash is
+`786A4B995A935A085B1103E06AB619A39BD85A37FE2288021FFCCABB803A093A`.
+
+r107 full Debug stops in the existing clipboard-preservation fixture: "The self-test could not set the user's
+clipboard aside." Its actual run overlapped r108 on the default desktop. This does not qualify Debug or prove
+a production defect; no fixture or clipboard guard was weakened. Both attempts are archived. The fresh r109
+full Debug attempt is now isolated from another application test. Real ASan Debug follows sequentially.
+
+| Attempt | Actual child / exit | UTC interval | Source freeze | Verified archive completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| `incremental-x64-build-Debug-r104` | 50096 / 0 | 2026-10-05T09:59:38.331887+00:00 to 2026-10-05T10:03:36.818241+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r104-leaf-repair-build-qualified` / `8513EC1BC01812AC243431936F66960D5C553B293F981144AE0A1BADDBDF945B` |
+| `incremental-x64-runtime-Debug-r105` | 87896 / 0 | 2026-10-05T10:04:42.381942+00:00 to 2026-10-05T10:08:42.010740+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r105-runtime-qualified` / `0000E1E9B4B3F4FEE996A57E9A8D29C9B5BB809F1AFA0576A0ED2E54F39B499F` |
+| `incremental-x64-analysis-Release-r106` | 3040 / 0 | 2026-10-05T10:04:43.412383+00:00 to 2026-10-05T10:11:34.301970+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Release-r106-leaf-repair-analysis-qualified` / `64FB19F4A9BCC88024A5A44C154E514771626D4E79B90EFA8CD8D4D7339AB74B` |
+| `residency-arm-builds-r4-leaf/Debug` | 90780 / 0 | 2026-10-05T10:05:55.051530+00:00 to 2026-10-05T10:06:42.114465+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-Debug-r4-leaf-cross-qualified` / `9F939E92B052D402B9A18A99168078C3CAB970712846BF3D2660998E839C4BDA` |
+| `residency-arm-builds-r4-leaf/Release` | 65964 / 0 | 2026-10-05T10:06:51.694175+00:00 to 2026-10-05T10:08:50.844961+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-Release-r4-leaf-cross-qualified` / `D2087BB7B450F76ED8F1C6438385B8FE568203249D25F141DEFDE05FE437B555` |
+| `residency-arm-builds-r4-leaf/ASanDebug` | 46412 / 0 | 2026-10-05T10:08:53.913512+00:00 to 2026-10-05T10:09:19.020114+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-ASanDebug-r4-leaf-cross-qualified` / `100257C05BF2B15A93F151F17FB53A7A867D3F514FEFE8F236B93B0B90FA98FC` |
+| `incremental-x64-test-Debug-r107` | 21704 / 1 | 2026-10-05T10:16:42.228064+00:00 to 2026-10-05T10:24:28.162137+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r107-clipboard-start-failure` / `C8D9D4CEA1C10928C6C2EB71ABA11EA7BA6796398683BD6DD81014CC9B0AE4F9` |
+| `incremental-x64-test-Release-r108` | 91260 / 0 | 2026-10-05T10:18:10.849652+00:00 to 2026-10-05T10:24:59.716817+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Release-r108-full-qualified` / `F3B1DF2F63982B7BCB4007EECCE33C55903E4B96FE1410E1441246CEC4383F6F` |
+
+Native activation, normal maintenance startup, remaining-writer/delta accounting and G1 remain open.

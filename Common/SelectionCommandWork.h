@@ -85,6 +85,10 @@ class PreparedSelectionCommand final
     PreparedSelectionCommand& operator=(const PreparedSelectionCommand&) = delete;
     PreparedSelectionCommand(PreparedSelectionCommand&&) noexcept = default;
     PreparedSelectionCommand& operator=(PreparedSelectionCommand&&) noexcept = default;
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ChangesSelection() const noexcept
     {
         return _history.has_value();

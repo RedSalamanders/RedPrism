@@ -76,6 +76,10 @@ class PreparedSelectionNudge final
     PreparedSelectionNudge& operator=(const PreparedSelectionNudge&) = delete;
     PreparedSelectionNudge(PreparedSelectionNudge&&) noexcept = default;
     PreparedSelectionNudge& operator=(PreparedSelectionNudge&&) noexcept = default;
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
 
   private:
     friend class DocumentSession;

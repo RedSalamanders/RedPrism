@@ -117,6 +117,23 @@ std::optional<PreparedSelectionCommand> DocumentSession::PrepareSelectionCommand
     return result;
 }
 
+DocumentHistory::ResidencyValidation PreparedSelectionCommand::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_input._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedSelectionCommand::RefreshHistoryResidency(CancelToken cancellation,
+                                                       DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_input._valid || cancellation.IsCancelled())
+        return false;
+    return !_history || (_document && DocumentHistory::RefreshPreparedResidency(_history.value(), _document,
+                                                                                cancellation, observer));
+}
+
 bool DocumentSession::IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept
 {
     return !prepared._applied && prepared._input._valid &&
@@ -149,7 +166,11 @@ std::uint64_t DocumentSession::SelectionCommandMemoryBytes(SelectionCommandKind 
 {
     if (!_document || kind > SelectionCommandKind::Deselect)
         return 0;
-    const auto bytes = history.EditMemoryBytes(_document);
+    auto bytes = history.EditMemoryBytes(_document);
+    // Reserve the original history candidate and one refreshed private index/stack concurrently, before capture.
+    if (!bytes || bytes > (std::numeric_limits<std::uint64_t>::max)() / 2)
+        return 0;
+    bytes *= 2;
     // EditMemoryBytes bounds eight record copies, immutable stack growth and trim workspace. This graph uses
     // owner capture, private after-document and before/after snapshots (four copies). No raster/coverage output
     // or Clipper workspace is created; Select All adds exactly one four-point loop plus shared root/control.

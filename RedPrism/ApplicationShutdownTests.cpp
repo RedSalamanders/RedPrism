@@ -216,6 +216,9 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
     std::printf("application-shutdown summary: %u checks, %d failures\n", checks, failures);
     if (failures)
         return 5;
+    const int residencyResult = RunStandaloneHistoryResidencyShutdownSelfTest(instance);
+    if (residencyResult)
+        return residencyResult;
     const int colorResult = RunStandaloneColorDisplayShutdownSelfTest(instance);
     if (colorResult)
         return colorResult;

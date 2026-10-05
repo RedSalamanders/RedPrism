@@ -18,7 +18,9 @@ struct SelectionCommandTestGate final
     JobResult result;
     bool hold = true, throwCaptureFailure = false;
     std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
+    Raster lateResidencySource;
+    bool throwResidencyRefresh = false, cancelResidencyRefresh = false;
     std::uint64_t reservationBytes = 0;
-    std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};
-    std::atomic<unsigned int> visits{0}, historyFaultHits{0}, captures{0};
+    std::atomic<bool> reservationHeld{false}, refreshReservationHeld{false}, retired{false}, retiredOffOwner{false};
+    std::atomic<unsigned int> visits{0}, captures{0}, historyFaultHits{0}, residentGrowths{0}, residencyRefreshes{0};
 };

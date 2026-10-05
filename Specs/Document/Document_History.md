@@ -303,11 +303,24 @@ read pixels, enter subscription management, decide a trim, or authorize publicat
 belong to startup/teardown outside residency leases and callbacks. Stop is a fence: when it returns, no in-flight
 callback can still access its borrowed context. Teardown MUST Stop subscriptions before destroying those contexts.
 
-Only the current metadata host is opted into staged sparse-residency publication. The history-only source path is
+The managed metadata, Undo/Redo, settled Select All/Deselect and discrete selection-nudge hosts opt into staged
+sparse-residency publication. Each reserves the original prepared graph plus one refresh candidate before capture.
+Restore refresh uses the original selected optional document, including no-document Undo; selection refresh uses
+the original prepared after-document, and zero-offset nudge keeps its original source witness. Refresh MUST NOT
+recapture session input, reconstruct pixel edits, regenerate the intended user revision or replace the saved marker.
+Moved and applied wrappers refuse reuse; a changing candidate cannot apply using a stale sampled charge.
+No-op selection candidates retain the original no-history-change acknowledgement.
+
+The history-only source path is
 scoped to self-test until activation and its full gates are complete. All other source callers and the reference
 history methods remain required P1 migration work. This scoped opt-in does not qualify G1, O(delta) work, native
 configuration coverage, or live-source behavior. Preserve the legacy oldest-past-then-oldest-future trim order,
 revision assignment, no-op redo preservation, and saved-revision semantics above.
+
+The actual shutdown path MUST suppress an uncaptured ready maintenance notice and cancel/join a held prepared
+maintenance worker without publishing history or changing document, generation, user or saved revision. No caller
+may release the borrowed subscription context or worker input before this join. Stopping subscriptions fences
+later process-wide cache notifications; repeated shutdown is idempotent.
 
 ## Trim
 

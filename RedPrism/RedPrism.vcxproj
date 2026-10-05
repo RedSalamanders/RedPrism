@@ -256,6 +256,7 @@
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationHistoryResidencyJobs.cpp" />
     <ClCompile Include="ApplicationHistoryResidencySelfTest.cpp" />
+    <ClCompile Include="ApplicationHistoryResidencyShutdownSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
     <ClCompile Include="ApplicationLayerMetadataJobs.cpp" />
     <ClCompile Include="ApplicationLayerMetadataSelfTest.cpp" />

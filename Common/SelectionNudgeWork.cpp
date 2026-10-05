@@ -124,6 +124,25 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
     return result._history && !cancellation.IsCancelled() ? std::optional(std::move(result)) : std::nullopt;
 }
 
+DocumentHistory::ResidencyValidation PreparedSelectionNudge::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_input._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedSelectionNudge::RefreshHistoryResidency(CancelToken cancellation,
+                                                     DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_input._valid || cancellation.IsCancelled())
+        return false;
+    // A real nudge sampled the after-document's outline; the zero offset has no after-document and sampled
+    // no new trim decision. Preserve each publication's exact current-topology witness during refresh.
+    return !_history || DocumentHistory::RefreshPreparedResidency(
+                            _history.value(), _document ? _document : _input._document, cancellation, observer);
+}
+
 bool DocumentSession::IsPreparedSelectionNudgeCurrent(const PreparedSelectionNudge& prepared) const noexcept
 {
     return !prepared._applied && prepared._input._valid && prepared._history &&
@@ -154,8 +173,10 @@ std::uint64_t DocumentSession::SelectionNudgeMemoryBytes() const noexcept
     if (!_document || !_document.value().selection || _document.value().selection.value().IsEmpty())
         return 0;
     auto bytes = history.EditMemoryBytes(_document);
-    if (!bytes)
+    // Preparation may overlap the original history and a refreshed index/container set.
+    if (!bytes || bytes > (std::numeric_limits<std::uint64_t>::max)() / 2)
         return 0;
+    bytes *= 2;
     const auto add = [&](std::uint64_t count, std::uint64_t size)
     {
         const auto maximum = (std::numeric_limits<std::uint64_t>::max)();

@@ -11,6 +11,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -591,6 +592,220 @@ void PreparationFailures()
         Expect(!prepared && SameState(session, before), "pre-cancelled-input-refuses-without-owner-mutation");
     }
 }
+
+Raster HistoricalSparseImage()
+{
+    constexpr std::array<std::uint8_t, 4> pixel{17, 39, 83, 255};
+    const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
+    return Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, 0);
+}
+
+DocumentSession ResidencySession(SelectionCommandKind kind, Raster& historicalRaster)
+{
+    constexpr Guid layerId{{0x73, 0, 0, 1, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1}};
+    constexpr Guid documentId{{0x73, 0, 0, 2, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 2}};
+    DocumentSession session(8);
+    ImageLayer layer = ImageLayer::Blank(L"Sparse history source", Vec2{2, 1});
+    layer.id = layerId;
+    historicalRaster = HistoricalSparseImage();
+    layer.asset = RasterAsset{historicalRaster, {}, L"literal sparse image"};
+    DocumentFixture fixture;
+    fixture.id = documentId;
+    fixture.width = 2;
+    fixture.height = 1;
+    fixture.layers.push_back(std::move(layer));
+    if (kind == SelectionCommandKind::Deselect)
+        fixture.selection = DocumentSelection{true, {}};
+    session.ReplaceDocument(std::move(fixture).Seal(), layerId);
+
+    constexpr std::array<std::uint8_t, 8> replacementPixels{1, 2, 3, 255, 4, 5, 6, 255};
+    const Raster replacement =
+        Raster::Make(2, 1, RasterFormat::Bgra8888, replacementPixels.data(), replacementPixels.size());
+    session.BeginEdit(L"Replace sparse source");
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                            { document.layers.front().asset = RasterAsset{replacement, {}, L"replacement image"}; });
+    session.EndEdit();
+    return session;
+}
+
+struct ResidencyRefreshFailure final
+{
+    bool reached = false;
+};
+
+void FailResidencyRefreshAtBounds(void* raw, DocumentHistory::PrepareStage stage)
+{
+    if (stage == DocumentHistory::PrepareStage::StorageIndexBounds)
+    {
+        static_cast<ResidencyRefreshFailure*>(raw)->reached = true;
+        throw std::bad_alloc{};
+    }
+}
+
+bool LiteralResidencySelection(const std::optional<CanvasDocument>& document)
+{
+    const auto expected =
+        std::optional<DocumentSelection>{DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)}};
+    return document && document->width == 2 && document->height == 1 && document->selection == expected;
+}
+
+void PreparedSelectionHistoryResidency()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    for (const SelectionCommandKind kind : {SelectionCommandKind::SelectAll, SelectionCommandKind::Deselect})
+    {
+        Raster historicalRaster;
+        DocumentSession session = ResidencySession(kind, historicalRaster);
+        const Guid openingRevision = session.history.CurrentRevision();
+        auto input = session.PrepareSelectionCommandInput(kind);
+        auto prepared =
+            input ? DocumentSession::PrepareSelectionCommandPublication(std::move(input.value())) : std::nullopt;
+        Expect(prepared && session.history.RetainedBytes(session.Document()) == 4,
+               kind == SelectionCommandKind::SelectAll
+                   ? "residency-all-starts-with-literal-four-historical-bytes"
+                   : "residency-deselect-starts-with-literal-four-historical-bytes");
+
+        const std::uint64_t residencyEpoch = Raster::ResidencyEpoch();
+        const std::uint8_t* pixels = historicalRaster.Data();
+        const bool literalGrowth =
+            pixels && pixels[0] == 17 && pixels[1] == 39 && pixels[2] == 83 && pixels[3] == 255 && pixels[4] == 0 &&
+            pixels[5] == 0 && pixels[6] == 0 && pixels[7] == 0 && historicalRaster.ByteSize() == 8 &&
+            Raster::ResidencyEpoch() == residencyEpoch + 1 && session.history.RetainedBytes(session.Document()) == 12;
+        const State beforeRefresh(session);
+        DocumentHistory::ResidencyPermit permit;
+        const auto refreshNeeded = prepared ? prepared->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+        CancelSource cancellation;
+        (void)cancellation.Cancel();
+        bool cancelledRefresh = false;
+        if (prepared)
+        {
+            bool returned = true;
+            std::thread worker([&] { returned = prepared->RefreshHistoryResidency(cancellation.Token()); });
+            worker.join();
+            cancelledRefresh = !returned && prepared->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                               SameState(session, beforeRefresh) &&
+                               session.history.CurrentRevision() == openingRevision;
+        }
+        ResidencyRefreshFailure failure;
+        bool allocationPropagated = false;
+        if (prepared)
+        {
+            bool caught = false;
+            std::thread worker(
+                [&]
+                {
+                    try
+                    {
+                        (void)prepared->RefreshHistoryResidency({}, {&FailResidencyRefreshAtBounds, &failure});
+                    }
+                    catch (const std::bad_alloc&)
+                    {
+                        caught = true;
+                    }
+                });
+            worker.join();
+            allocationPropagated = caught;
+        }
+        const bool failedRefreshPreserves = prepared && failure.reached && allocationPropagated &&
+                                            prepared->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                                            SameState(session, beforeRefresh) &&
+                                            session.history.CurrentRevision() == openingRevision;
+        bool refreshed = false;
+        if (prepared)
+        {
+            std::thread worker([&] { refreshed = prepared->RefreshHistoryResidency(); });
+            worker.join();
+        }
+        const auto ready = prepared ? prepared->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+        const State beforeApply(session);
+        const bool applied = refreshed && ready == Validation::Ready && SameState(session, beforeApply) &&
+                             session.history.CurrentRevision() == openingRevision &&
+                             session.ApplyPreparedSelectionCommandIfCurrent(prepared.value());
+        const bool selectionMatches = kind == SelectionCommandKind::SelectAll
+                                          ? LiteralResidencySelection(session.Document())
+                                          : !session.Document()->selection;
+        const bool oneNamedRevision =
+            session.history.CurrentRevision() != openingRevision &&
+            session.history.UndoName() == (kind == SelectionCommandKind::SelectAll ? L"Select All" : L"Deselect");
+        const Guid publishedRevision = session.history.CurrentRevision();
+        permit.Reset();
+        Expect(prepared && literalGrowth && refreshNeeded == Validation::Refresh,
+               kind == SelectionCommandKind::SelectAll ? "residency-all-late-four-to-twelve-exceeds-eight-cap"
+                                                       : "residency-deselect-late-four-to-twelve-exceeds-eight-cap");
+        Expect(cancelledRefresh, kind == SelectionCommandKind::SelectAll
+                                     ? "residency-all-cancelled-refresh-retains-intent-and-history"
+                                     : "residency-deselect-cancelled-refresh-retains-intent-and-history");
+        Expect(failedRefreshPreserves, kind == SelectionCommandKind::SelectAll
+                                           ? "residency-all-failed-refresh-retains-intent-and-history"
+                                           : "residency-deselect-failed-refresh-retains-intent-and-history");
+        Expect(applied && selectionMatches && oneNamedRevision && session.history.UndoCount() == 1 &&
+                   session.history.RetainedBytes(session.Document()) == 0,
+               kind == SelectionCommandKind::SelectAll
+                   ? "residency-all-worker-refresh-applies-original-one-revision"
+                   : "residency-deselect-worker-refresh-applies-original-one-revision");
+        if (applied)
+        {
+            session.Undo();
+            const bool undoRestoresIntentSource =
+                kind == SelectionCommandKind::SelectAll
+                    ? !session.Document()->selection
+                    : session.Document()->selection == std::optional<DocumentSelection>{DocumentSelection{true, {}}};
+            const bool undoRestoresOpeningRevision = session.history.CurrentRevision() == openingRevision;
+            if (kind == SelectionCommandKind::SelectAll)
+            {
+                // The future full-canvas outline is no longer live after Undo. Its retained capacity exceeds
+                // this literal eight-byte cap, so the reference trim correctly discards that redo entry.
+                Expect(undoRestoresIntentSource && undoRestoresOpeningRevision && !session.history.CanRedo() &&
+                           session.history.RetainedBytes(session.Document()) == 0,
+                       "residency-all-undo-restores-opening-and-trims-unaffordable-redo-outline");
+            }
+            else
+            {
+                session.Redo();
+                Expect(undoRestoresIntentSource && undoRestoresOpeningRevision &&
+                           session.history.CurrentRevision() == publishedRevision && !session.Document()->selection,
+                       "residency-deselect-intent-survives-undo-redo");
+            }
+        }
+    }
+    {
+        DocumentSession session = Session();
+        auto input = session.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll);
+        auto source =
+            input ? DocumentSession::PrepareSelectionCommandPublication(std::move(input.value())) : std::nullopt;
+        std::optional<PreparedSelectionCommand> moved;
+        if (source)
+            moved.emplace(std::move(source.value()));
+        DocumentHistory::ResidencyPermit permit;
+        const bool movedFromInvalid = source && moved &&
+                                      source->TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                      !source->RefreshHistoryResidency();
+        const bool destinationReady = moved && moved->TryAcquireHistoryResidency(permit) == Validation::Ready &&
+                                      session.ApplyPreparedSelectionCommandIfCurrent(moved.value());
+        const bool appliedInvalid = moved && moved->TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                    !moved->RefreshHistoryResidency();
+        permit.Reset();
+        Expect(movedFromInvalid && destinationReady && appliedInvalid,
+               "residency-moved-and-applied-selection-output-refusals");
+    }
+    {
+        DocumentSession session = Session();
+        session.SelectAll();
+        session.Undo();
+        const State before(session);
+        auto input = session.PrepareSelectionCommandInput(SelectionCommandKind::Deselect);
+        auto prepared =
+            input ? DocumentSession::PrepareSelectionCommandPublication(std::move(input.value())) : std::nullopt;
+        DocumentHistory::ResidencyPermit permit;
+        const bool readyAndApplied = prepared && !prepared->ChangesSelection() &&
+                                     prepared->TryAcquireHistoryResidency(permit) == Validation::Ready &&
+                                     session.ApplyPreparedSelectionCommandIfCurrent(prepared.value());
+        const bool preservesRedo =
+            SameState(session, before) && session.history.CanRedo() && session.history.RedoName() == L"Select All";
+        permit.Reset();
+        Expect(readyAndApplied && preservesRedo, "residency-noop-ready-preserves-redo");
+    }
+}
 } // namespace
 
 int RunSelectionCommandTests()
@@ -604,6 +819,7 @@ int RunSelectionCommandTests()
     AdmissionAndOwnershipRefusals();
     Staleness();
     PreparationFailures();
+    PreparedSelectionHistoryResidency();
     std::printf("%d selection-command assertions; %d failed.\n", gAssertions, gFailures);
     return gFailures;
 }
