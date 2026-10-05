@@ -815,3 +815,13 @@ keeps its direct file stream. This bound does not include opaque WIC workspace, 
 history graphs, conversion rows, simultaneous PNG/DIB vectors/globals, receipt/hash owners or retirement.
 Complete clipboard admission must add those overlapping owners and retain codec/native headroom. The primitive
 cannot close F5b.2b, F5d or G1 by itself.
+
+### Prepared history storage topology
+
+History preparation owns complete immutable storage indexes before publication. Cached keys hold their raster,
+layer and selection owners. Fixed recent-root matching reuses a compatible index without layer/point traversal.
+Index vector capacity and object/control allowances are covered by cached snapshot bounds; worker construction
+and temporary pending/dedup storage stay inside admitted history preparation peaks. No index producer runs during
+owner publication. Reference methods keep a single document scan and iterative nested closure without constructing
+an index object; their final caller migration and comparative cost measurements remain P1 work. The index caches
+no resident byte total: late sparse-cache growth and its publication/trim synchronization remain required H3 work.

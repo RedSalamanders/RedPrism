@@ -189,18 +189,25 @@
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
     - [x] Cached immutable history-stack metadata/ownership/node bounds and constant-time edit/restore/retirement admission pass full Debug r71: 19 reviewed root-cache and 11 snapshot/history controls preserve the preceding registry. r69 compilation and r70 fixture failures remain archived. This conservative occurrence bound does not close exact identity accounting or late residency; current Release/ASan/analysis/ARM64 and native activation remain open.
     - [x] Shape-source trim omission repair passes full Debug r71: both direct/prepared paths charge history-only `shapeImage` and exclude the same live owner; four literal 1 MiB / half-MiB controls pass after the fixture performs a real rename. Original derived-cache equality and legacy goldens remain unchanged. Current matrix and native activation remain open.
-    - [ ] Qualify the private `HistoryStorageTopology` prerequisite: iterative complete nested closure with held raster/layer/selection owners, cached topology metadata and fixed recent-root reuse. Prepared snapshots own the index; constant-time source matching validates it. Direct reference Begin remains a shared-handle capture. A private strict Debug code-generation probe passes one TU, without runtime/integration claims. Primary-owned source and reviewed independent tests precede a fresh normal candidate; the current r71 freeze does not contain them.
-    - [ ] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
+    - [x] Qualify `HistoryStorageTopology`: complete iterative nested closure with held raster/layer/selection owners, cached index metadata and fixed recent-root reuse. Worker-prepared snapshots retain it; source matching is constant-time. Reference Begin stays a shared-handle capture; reference trim uses its existing layer scan and dedup set plus one pending-owner vector for complete closure, avoiding temporary topology objects. The mixed cached-history/live-exclusion repair and four literal reference/mixed budget checks pass in full ASan Debug r72 (25 topology/reference checks); the same run qualifies actual sampler Escape after pointer Up. Incremental unique accounting, reference caller migration, mutation cost, late residency and G1 remain open.
+    - [x] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
       key. Include nested sparse tiles/bases, distinct optional thumbnails and selection capacity without
-      repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged.
+      repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged. Full ASan
+      Debug r72 qualifies this topology implementation on its frozen snapshot; current matrix/native activation
+      and late-residency synchronization remain open.
     - [ ] Account for late sparse materialization: `ByteSize()` grows from zero to the assembled allocation when
       `Data()` publishes its cache. A topology cache alone cannot authorize a stale byte total. Define the
       resident-charge epoch/notification and off-owner reprepare/trim path before using cached totals for
-      publication. A captured export can materialize a raster now owned only by history while another history
-      worker prepares trim; neither operation may silently exceed the retained limit or traverse history on UI.
-    - [ ] Add independent shared/nested topology, address-reuse, live-document exclusion, capacity, checked overflow
-      and oldest-first cases; gate an export's materialization before/after trim preparation and publication.
-      Verify cancellation/allocation refusal preserves revision/redo and releases every replaced index owner.
+      publication. Current ImageCodecs and ProjectStore encoders read through `ReadRasterRegionForWork` bands
+      (ImageCodecs.cpp:425,545; ProjectStore.cpp:1451,1465,1480); they do not materialize a captured history-only
+      raster through `Data()`. Keep the late-residency gate for actual `Data()` materializers and direct readers,
+      including `TransformEdit::PixelsOf`, the `WarpStroke` constructor and nested sparse tile reads used by
+      `Raster::ReadRegion`/`MakeThumbnail` in `Document.cpp`; concurrency and retained-charge synchronization
+      are not qualified by r72.
+    - [ ] Qualify address reuse, checked overflow and oldest-first cases, plus concurrent late sparse materialization
+      and resident-charge synchronization before trim preparation/publication. Current image/project encoders use
+      private read bands; exercise actual `Data()` materializers. Verify cancellation/allocation refusal preserves
+      revision/redo and releases every replaced index owner.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
     - [x] H4.1 — Image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,

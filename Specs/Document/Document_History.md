@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-05
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -230,6 +230,27 @@ record capture/accounting remain separate work.
 The native settled slice also preserves the reference route for commands during live gestures and nested
 transactions. Its literal host checks retain the gesture, edited field and outer transaction name/depth. Migrating
 that route to preserving worker authority remains required before metadata coverage or root activation is complete.
+
+## Storage topology
+
+Worker-prepared opening/final snapshots retain an immutable `HistoryStorageTopology`. Its producer holds the
+layer root, selection loops and every distinct raster owner while taking the complete iterative base/tile
+closure, including sparse tiles nested inside sparse tiles. Image/mask thumbnails and shape caches participate.
+No pixel cache is materialized. Matching checks held layer and selection identities in constant time; a
+mismatched topology refuses the snapshot admission bound. Recent pending/past/future snapshots can supply an
+exact matching topology through a fixed five-candidate check, avoiding repeated producer walks for those roots.
+Index object/control allowances and retained vector capacity are included in snapshot ownership bounds.
+
+The index stores owners, not cached resident totals. Trim reads each unique owner's current `ByteSize()` and
+cached selection capacity, excluding every owner held by the current document. Prepared trim builds/reuses
+its live-source index on the worker. Reference methods retain their existing document scan with one iterative
+pending-owner vector and their shared dedup set; they construct no temporary topology object. Both routes take
+the complete nested closure and preserve oldest-first removal. Migrating the remaining synchronous reference
+callers and measuring their costs remain P1 requirements. `RetainedBytes` remains a reference/diagnostic query.
+
+Late materialization may change byte charges after preparation. This topology prerequisite does not authorize
+a stale trim decision or close the residency notification/reprepare protocol; that protocol, incremental unique
+accounting and final native qualification remain tracked by P1.9 H3 before the milestone can be complete.
 
 ## Trim
 

@@ -7,6 +7,7 @@
 #include "ColorWorkTestGate.h"
 #include "DeferredRelease.h"
 #include "DocumentLifecycleTestGate.h"
+#include "KeyboardState.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 
@@ -470,6 +471,7 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
     {
         Recovery,
         Cancel,
+        Escape,
         Refusal
     };
     struct Case final
@@ -478,7 +480,7 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         Scenario scenario;
     };
     constexpr std::array cases{Case{"recovery", Scenario::Recovery}, Case{"cancel", Scenario::Cancel},
-                               Case{"refusal", Scenario::Refusal}};
+                               Case{"escape", Scenario::Escape}, Case{"refusal", Scenario::Refusal}};
     constexpr std::uint64_t headroom = kMemoryAdmissionHeadroomBytes;
     constexpr std::uint64_t ample = headroom + 32ull * 1024 * 1024;
     constexpr std::uint64_t blockerBytes = 4096;
@@ -672,9 +674,33 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                 memory.commit.store(ample, std::memory_order_release);
                 owner->_jobs.NotifyMemoryChanged();
             }
-            else
+            else if (test.scenario == Scenario::Cancel)
             {
                 expect(owner->_jobs.Cancel(samplerTicket), test.name, "exact-live-sampler-ticket-cancelled");
+            }
+            else
+            {
+                std::array<BYTE, 256> savedKeyboard{};
+                const bool restoreKeyboard = KeyboardState::Read(savedKeyboard);
+                [[maybe_unused]] const auto restore = wil::scope_exit(
+                    [&savedKeyboard, restoreKeyboard]() noexcept
+                    {
+                        if (restoreKeyboard)
+                            KeyboardState::Write(savedKeyboard);
+                    });
+                std::array<BYTE, 256> keys{};
+                keys[VK_ESCAPE] = 0x80;
+                KeyboardState::Write(keys);
+                const LPARAM escapeDown = 1 | (static_cast<LPARAM>(MapVirtualKeyW(VK_ESCAPE, MAPVK_VK_TO_VSC)) << 16);
+                (void)SendMessageW(owner->_window.get(), WM_KEYDOWN, VK_ESCAPE, escapeDown);
+                const bool handled = owner->_lastKeyHandled;
+                keys[VK_ESCAPE] = 0;
+                KeyboardState::Write(keys);
+                (void)SendMessageW(owner->_window.get(), WM_KEYUP, VK_ESCAPE, escapeDown | (1ll << 31));
+                expect(handled && owner->_samplerHostTicket == samplerTicket && owner->_samplerHostStamp &&
+                           owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
+                           receipt.Read().outcome == HostOutcome::Pending,
+                       test.name, "physical-escape-routes-to-pending-sampler-cancellation");
             }
             (void)SetEvent(blocker.release.get());
         }
@@ -719,6 +745,22 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                        owner->_session.history.CurrentRevision() == revision &&
                        owner->_session.history.UndoCount() == undoCount,
                    test.name, "cancel-acknowledges-jobs-and-retires-source-history-and-graph");
+        }
+        else if (test.scenario == Scenario::Escape)
+        {
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
+                       owner->_session.ForegroundColor() == brown &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "escape-cancelled-receipt-preserves-palette-source-and-history");
+            expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
+                       blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "escape-acknowledges-blocker-and-retires-source-history-and-graph");
         }
         else
         {

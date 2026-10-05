@@ -1,9 +1,108 @@
 #include "Document.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <unordered_set>
 #include <utility>
+
+std::shared_ptr<const HistoryStorageTopology> HistoryStorageTopology::Prepare(
+    const std::optional<CanvasDocument>& document, CancelToken cancellation)
+{
+    if (cancellation.IsCancelled())
+        return {};
+    auto result = std::make_shared<HistoryStorageTopology>(ConstructionTag{});
+    result->_hasDocument = document.has_value();
+    std::unordered_set<const void*> seen;
+    std::vector<Raster> pending;
+    const auto queue = [&](const Raster& raster)
+    {
+        if (raster.HasStorage() && seen.insert(raster.Identity()).second)
+            pending.push_back(raster);
+    };
+    if (document)
+    {
+        result->_layers = document->layers;
+        if (document->selection)
+            result->_selection = document->selection->loops;
+        for (const auto& layer : document->layers)
+        {
+            if (cancellation.IsCancelled())
+                return {};
+            queue(layer.shapeImage);
+            if (layer.asset)
+            {
+                queue(layer.asset->image);
+                queue(layer.asset->thumbnail);
+            }
+            if (layer.mask)
+            {
+                queue(layer.mask->asset.image);
+                queue(layer.mask->asset.thumbnail);
+            }
+        }
+    }
+    // Every key is backed by a pending or completed Raster owner. Iterative closure visits each storage once,
+    // including sparse tiles of sparse tiles, without recursion or materializing any pixel allocation.
+    while (!pending.empty())
+    {
+        if (cancellation.IsCancelled())
+            return {};
+        Raster raster = std::move(pending.back());
+        pending.pop_back();
+        queue(raster.Base());
+        for (const auto& tile : raster.Tiles())
+        {
+            if (cancellation.IsCancelled())
+                return {};
+            queue(tile.pixels);
+        }
+        result->_rasters.push_back(std::move(raster));
+    }
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (result->_rasters.capacity() <= (maximum - sizeof(HistoryStorageTopology) - 64) / sizeof(Raster))
+    {
+        result->_metadataBytes = sizeof(HistoryStorageTopology) + 64 + result->_rasters.capacity() * sizeof(Raster);
+        const auto source = document ? document->RetirementMemoryBytes() : 0;
+        if ((!document || source) && source <= maximum - result->_metadataBytes)
+            result->_retirementBytes = source + result->_metadataBytes;
+    }
+    return cancellation.IsCancelled() ? nullptr : result;
+}
+
+bool HistoryStorageTopology::Matches(const std::optional<CanvasDocument>& document) const noexcept
+{
+    return _hasDocument == document.has_value() &&
+           (!document ||
+            (_layers.Identity() == document->layers.Identity() &&
+             _selection.Identity() == (document->selection ? document->selection->loops.Identity() : nullptr)));
+}
+
+std::shared_ptr<const HistoryStorageTopology> DocumentHistory::PrepareTopology(
+    const std::optional<CanvasDocument>& document, const StateView& state, CancelToken cancellation)
+{
+    if (cancellation.IsCancelled())
+        return {};
+    const std::array candidates{state.pending ? state.pending->before : nullptr,
+                                state.past.empty() ? nullptr : state.past.back()->before,
+                                state.past.empty() ? nullptr : state.past.back()->after,
+                                state.future.empty() ? nullptr : state.future.back()->before,
+                                state.future.empty() ? nullptr : state.future.back()->after};
+    for (const auto& candidate : candidates)
+        if (candidate && candidate->storageTopology && candidate->storageTopology->Matches(document))
+            return candidate->storageTopology;
+    return HistoryStorageTopology::Prepare(document, cancellation);
+}
+
+std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(Snapshot snapshot,
+                                                                               const StateView& state,
+                                                                               CancelToken cancellation)
+{
+    snapshot.storageTopology = PrepareTopology(snapshot.document, state, cancellation);
+    if (!snapshot.storageTopology || cancellation.IsCancelled())
+        return {};
+    return std::make_shared<const Snapshot>(std::move(snapshot));
+}
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
     : _entryLimit(std::max(0, entryLimit)), _retainedByteLimit(retainedByteLimit)
@@ -161,11 +260,15 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::BeforeSnapshot, cancellation) ||
         !CopyHistoryDocument(before, opening.document, cancellation))
         return std::nullopt;
-    auto openingOwner = std::make_shared<const Snapshot>(std::move(opening));
+    auto openingOwner = SealSnapshot(std::move(opening), result.state, cancellation);
+    if (!openingOwner)
+        return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::AfterSnapshot, cancellation) ||
         !CopyHistoryDocument(after, finished.document, cancellation))
         return std::nullopt;
-    auto finishedOwner = std::make_shared<const Snapshot>(std::move(finished));
+    auto finishedOwner = SealSnapshot(std::move(finished), result.state, cancellation);
+    if (!finishedOwner)
+        return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
         return std::nullopt;
     auto entry = std::make_shared<const Entry>(std::move(name), std::move(openingOwner), std::move(finishedOwner));
@@ -196,6 +299,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareRestore(Stat
     const auto entry = source.back();
     const auto& snapshot = *(redo ? entry->after : entry->before);
     Snapshot restore{{}, snapshot.activeLayerID, snapshot.revision};
+    restore.storageTopology = snapshot.storageTopology;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::RestoreSnapshot, cancellation) ||
         !CopyHistoryDocument(snapshot.document, restore.document, cancellation))
         return std::nullopt;
@@ -281,7 +385,9 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateV
         if (!HistoryPrepareCheckpoint(observer, PrepareStage::PendingSnapshot, cancellation) ||
             !CopyHistoryDocument(before, opening.document, cancellation))
             return std::nullopt;
-        auto openingOwner = std::make_shared<const Snapshot>(std::move(opening));
+        auto openingOwner = SealSnapshot(std::move(opening), result.state, cancellation);
+        if (!openingOwner)
+            return std::nullopt;
         if (!HistoryPrepareCheckpoint(observer, PrepareStage::PendingRecord, cancellation))
             return std::nullopt;
         result.state.pending = std::make_shared<const Pending>(std::move(name), std::move(openingOwner));
@@ -317,7 +423,9 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::AfterSnapshot, cancellation) ||
         !CopyHistoryDocument(after, finished.document, cancellation))
         return std::nullopt;
-    auto finishedOwner = std::make_shared<const Snapshot>(std::move(finished));
+    auto finishedOwner = SealSnapshot(std::move(finished), result.state, cancellation);
+    if (!finishedOwner)
+        return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
         return std::nullopt;
     const auto entry = std::make_shared<const Entry>(pending->name, pending->before, std::move(finishedOwner));
@@ -479,54 +587,104 @@ const std::wstring& DocumentHistory::RedoName() const noexcept
 
 namespace
 {
-// A painted layer shares its base and untouched tiles with earlier snapshots, and a snapshot shares unedited
-// layers with the document around it: each live storage counts once, the first time `seen` meets it. Also how
-// RetainedBytes seeds `seen` with the current document's own storages (with a throwaway `bytes`), so they are
-// never counted as retained by history. Selection identities are held by the same snapshots and charged once
-// from their construction-time capacity cache; no point traversal or borrowed identity survives this call.
-void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unordered_set<const void*>& seen,
+// Keys never outlive the immutable topology that owns them. Charges are sampled on the worker/reference
+// lane at use time; topology publication does not cache a resident total or authorize late-cache races.
+bool AddTopologyBytes(const HistoryStorageTopology& topology, std::unordered_set<const void*>& seen, std::size_t& bytes,
+                      CancelToken cancellation = {})
+{
+    const auto add = [&](const void* identity, std::uint64_t amount)
+    {
+        if (!identity || !seen.insert(identity).second)
+            return true;
+        if (amount > (std::numeric_limits<std::size_t>::max)() - bytes)
+            return false;
+        bytes += static_cast<std::size_t>(amount);
+        return true;
+    };
+    for (const auto& raster : topology.RasterOwners())
+        if (cancellation.IsCancelled() || !add(raster.Identity(), raster.ByteSize()))
+            return false;
+    const auto& selection = topology.SelectionOwner();
+    return !cancellation.IsCancelled() && add(selection.Identity(), selection.StorageBytes());
+}
+
+std::shared_ptr<const HistoryStorageTopology> SnapshotTopology(const DocumentHistory::Snapshot& snapshot,
+                                                               CancelToken cancellation = {})
+{
+    if (snapshot.storageTopology && snapshot.storageTopology->Matches(snapshot.document))
+        return snapshot.storageTopology;
+    return HistoryStorageTopology::Prepare(snapshot.document, cancellation);
+}
+
+void AddDocumentBytes(const std::optional<CanvasDocument>& document, std::unordered_set<const void*>& seen,
                       std::size_t& bytes)
 {
-    if (!document.has_value())
-    {
+    if (!document)
         return;
-    }
-    const auto add = [&](const Raster& raster)
+    // Reference callers keep one document scan, without constructing a topology object or retained owner
+    // vector. Reuse their existing dedup set for iterative nested closure; no recursion or pixel assembly.
+    std::vector<Raster> pending;
+    const auto queue = [&](const Raster& raster)
     {
-        raster.ForEachStorage(
-            [&](const Raster& storage)
-            {
-                const void* identity = storage.Identity();
-                if (identity != nullptr && seen.insert(identity).second)
-                {
-                    bytes += storage.ByteSize();
-                }
-            });
+        if (raster.HasStorage() && seen.insert(raster.Identity()).second)
+            pending.push_back(raster);
     };
-    for (const ImageLayer& layer : document.value().layers)
+    for (const auto& layer : document->layers)
     {
-        add(layer.shapeImage);
-        if (layer.asset.has_value())
+        queue(layer.shapeImage);
+        if (layer.asset)
         {
-            add(layer.asset.value().image);
-            add(layer.asset.value().thumbnail);
+            queue(layer.asset->image);
+            queue(layer.asset->thumbnail);
         }
-        if (layer.mask.has_value())
+        if (layer.mask)
         {
-            add(layer.mask.value().asset.image);
-            add(layer.mask.value().asset.thumbnail);
+            queue(layer.mask->asset.image);
+            queue(layer.mask->asset.thumbnail);
         }
     }
-    if (document.value().selection.has_value())
+    while (!pending.empty())
     {
-        const SelectionLoops& loops = document.value().selection.value().loops;
-        const void* identity = loops.Identity();
-        if (identity != nullptr && seen.insert(identity).second)
+        Raster raster = std::move(pending.back());
+        pending.pop_back();
+        const auto amount = raster.ByteSize();
+        if (amount > (std::numeric_limits<std::size_t>::max)() - bytes)
         {
-            bytes += static_cast<std::size_t>(loops.StorageBytes());
+            bytes = (std::numeric_limits<std::size_t>::max)();
+            return;
+        }
+        bytes += amount;
+        queue(raster.Base());
+        for (const auto& tile : raster.Tiles())
+            queue(tile.pixels);
+    }
+    if (document->selection)
+    {
+        const auto& loops = document->selection->loops;
+        if (loops.Identity() && seen.insert(loops.Identity()).second)
+        {
+            const auto amount = loops.StorageBytes();
+            bytes = amount > (std::numeric_limits<std::size_t>::max)() - bytes
+                        ? (std::numeric_limits<std::size_t>::max)()
+                        : bytes + static_cast<std::size_t>(amount);
         }
     }
 }
+
+void AddSnapshotBytes(const DocumentHistory::Snapshot& snapshot, std::unordered_set<const void*>& seen,
+                      std::size_t& bytes)
+{
+    if (snapshot.storageTopology && snapshot.storageTopology->Matches(snapshot.document))
+    {
+        if (!AddTopologyBytes(*snapshot.storageTopology, seen, bytes))
+            bytes = (std::numeric_limits<std::size_t>::max)();
+        return;
+    }
+    // Compatibility/reference callers do not construct an index on the owner. Their single scan uses
+    // complete iterative closure; migrating these synchronous callers remains H3/native activation work.
+    AddDocumentBytes(snapshot.document, seen, bytes);
+}
+
 } // namespace
 
 namespace
@@ -573,6 +731,13 @@ std::optional<RecordOwnershipBounds> DocumentHistory::Snapshot::OwnershipBounds(
                         !sum.Add(sum.bounds.rasterNodes, layers->rasterNodes))) ||
             !sum.Add(sum.bounds.ownershipBytes, sourceBytes) ||
             (document->selection && document->selection->loops.Identity() && !sum.Add(sum.bounds.rasterNodes, 1)))
+            return std::nullopt;
+    }
+    if (storageTopology)
+    {
+        if (!storageTopology->Matches(document) || !storageTopology->RetirementMemoryBytes() ||
+            !sum.Add(sum.bounds.metadataBytes, storageTopology->MetadataBytes()) ||
+            !sum.Add(sum.bounds.ownershipBytes, storageTopology->MetadataBytes()))
             return std::nullopt;
     }
     return sum.bounds;
@@ -701,17 +866,17 @@ std::size_t DocumentHistory::RetainedBytes(const std::optional<CanvasDocument>& 
 {
     std::unordered_set<const void*> seen;
     std::size_t discard = 0;
-    AddSnapshotBytes(current, seen, discard);
+    AddDocumentBytes(current, seen, discard);
     std::size_t bytes = 0;
     for (const EntryHandle& entry : _past)
     {
-        AddSnapshotBytes(entry->before->document, seen, bytes);
-        AddSnapshotBytes(entry->after->document, seen, bytes);
+        AddSnapshotBytes(*entry->before, seen, bytes);
+        AddSnapshotBytes(*entry->after, seen, bytes);
     }
     for (const EntryHandle& entry : _future)
     {
-        AddSnapshotBytes(entry->before->document, seen, bytes);
-        AddSnapshotBytes(entry->after->document, seen, bytes);
+        AddSnapshotBytes(*entry->before, seen, bytes);
+        AddSnapshotBytes(*entry->after, seen, bytes);
     }
     return bytes;
 }
@@ -735,7 +900,7 @@ void DocumentHistory::Trim(const std::optional<CanvasDocument>& current)
     // recomputing the whole document's retained bytes after every single removal.
     std::unordered_set<const void*> seen;
     std::size_t discard = 0;
-    AddSnapshotBytes(current, seen, discard);
+    AddDocumentBytes(current, seen, discard);
     std::size_t bytes = 0;
     std::size_t keep = 0;
     const std::size_t entryLimit = static_cast<std::size_t>(_entryLimit);
@@ -748,8 +913,8 @@ void DocumentHistory::Trim(const std::optional<CanvasDocument>& current)
         }
         const Entry& candidate = *removalOrder[index - 1];
         std::size_t trialBytes = bytes;
-        AddSnapshotBytes(candidate.before->document, seen, trialBytes);
-        AddSnapshotBytes(candidate.after->document, seen, trialBytes);
+        AddSnapshotBytes(*candidate.before, seen, trialBytes);
+        AddSnapshotBytes(*candidate.after, seen, trialBytes);
         if (trialBytes > byteLimit)
         {
             break;
@@ -768,54 +933,14 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
                                    CancelToken cancellation)
 {
     std::unordered_set<const void*> seen;
-    const auto snapshotBytes = [&](const std::optional<CanvasDocument>& document, std::size_t& bytes) -> bool
+    const auto snapshotBytes = [&](const Snapshot& snapshot, std::size_t& bytes) -> bool
     {
-        if (!document)
-            return !cancellation.IsCancelled();
-        const auto storageBytes = [&](const Raster& raster) -> bool
-        {
-            if (cancellation.IsCancelled())
-                return false;
-            if (raster.HasStorage() && seen.insert(raster.Identity()).second)
-            {
-                const auto amount = raster.ByteSize();
-                if (amount > (std::numeric_limits<std::size_t>::max)() - bytes)
-                    return false;
-                bytes += amount;
-            }
-            return true;
-        };
-        // Match today's ForEachStorage charge (raster, contiguous base, replacement windows). H3 owns the
-        // complete cached storage index and nested-sparse closure; this slice does not invent different trim math.
-        const auto rasterBytes = [&](const Raster& raster) -> bool
-        {
-            if (!storageBytes(raster) || !storageBytes(raster.Base()))
-                return false;
-            for (const auto& tile : raster.Tiles())
-                if (!storageBytes(tile.pixels))
-                    return false;
-            return true;
-        };
-        for (const auto& layer : document->layers)
-        {
-            if (cancellation.IsCancelled() || !rasterBytes(layer.shapeImage) ||
-                (layer.asset && (!rasterBytes(layer.asset->image) || !rasterBytes(layer.asset->thumbnail))) ||
-                (layer.mask && (!rasterBytes(layer.mask->asset.image) || !rasterBytes(layer.mask->asset.thumbnail))))
-                return false;
-        }
-        if (document->selection)
-        {
-            const auto& loops = document->selection->loops;
-            if (loops.Identity() && seen.insert(loops.Identity()).second)
-            {
-                const auto amount = loops.StorageBytes();
-                if (amount > (std::numeric_limits<std::size_t>::max)() - bytes)
-                    return false;
-                bytes += static_cast<std::size_t>(amount);
-            }
-        }
-        return !cancellation.IsCancelled();
+        const auto topology = SnapshotTopology(snapshot, cancellation);
+        return topology && AddTopologyBytes(*topology, seen, bytes, cancellation);
     };
+    const auto currentTopology = PrepareTopology(current, state, cancellation);
+    if (!currentTopology)
+        return false;
     std::vector<const Entry*> removalOrder;
     removalOrder.reserve(state.past.size() + state.future.size());
     for (const auto& entry : state.past)
@@ -823,7 +948,7 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
     for (const auto& entry : state.future)
         removalOrder.push_back(entry.get());
     std::size_t discard = 0;
-    if (!snapshotBytes(current, discard))
+    if (!AddTopologyBytes(*currentTopology, seen, discard, cancellation))
         return false;
     std::size_t retained = 0;
     std::size_t keep = 0;
@@ -835,7 +960,7 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
             break;
         const auto& entry = *removalOrder[index - 1];
         auto trial = retained;
-        if (!snapshotBytes(entry.before->document, trial) || !snapshotBytes(entry.after->document, trial))
+        if (!snapshotBytes(*entry.before, trial) || !snapshotBytes(*entry.after, trial))
             return false;
         if (trial > state.byteLimit)
             break;

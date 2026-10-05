@@ -1457,6 +1457,47 @@ struct HierarchyEntry
 // `id`'s position in `layers`; nullopt when it is not there.
 [[nodiscard]] std::optional<std::size_t> IndexOf(std::span<const ImageLayer> layers, const Guid& id) noexcept;
 
+// Immutable owning closure of one document's storage graph. Prepared on a worker; copies retain one handle.
+// Raster charges are read at use time so a sparse cache published later is not represented by a stale total.
+// This is storage topology, not the resident-charge/publication synchronization protocol.
+class HistoryStorageTopology final
+{
+  private:
+    struct ConstructionTag final
+    {
+    };
+
+  public:
+    explicit HistoryStorageTopology(ConstructionTag) noexcept {}
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> Prepare(
+        const std::optional<CanvasDocument>& document, CancelToken cancellation = {});
+    [[nodiscard]] bool Matches(const std::optional<CanvasDocument>& document) const noexcept;
+    [[nodiscard]] const std::vector<Raster>& RasterOwners() const noexcept
+    {
+        return _rasters;
+    }
+    [[nodiscard]] const SelectionLoops& SelectionOwner() const noexcept
+    {
+        return _selection;
+    }
+    [[nodiscard]] std::uint64_t MetadataBytes() const noexcept
+    {
+        return _metadataBytes;
+    }
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept
+    {
+        return _retirementBytes;
+    }
+
+  private:
+    RecordRoot<ImageLayer> _layers;
+    SelectionLoops _selection;
+    std::vector<Raster> _rasters;
+    std::uint64_t _metadataBytes = 0;
+    std::uint64_t _retirementBytes = 0;
+    bool _hasDocument = false;
+};
+
 class DocumentHistory
 {
   private:
@@ -1470,6 +1511,9 @@ class DocumentHistory
         std::optional<CanvasDocument> document;
         std::optional<Guid> activeLayerID;
         Guid revision;
+        // Public value snapshots may be edited by reference tests. Consumers validate Matches before using
+        // this immutable index; published entry snapshots are const and keep their complete owners alive.
+        std::shared_ptr<const HistoryStorageTopology> storageTopology;
         [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept;
     };
 
@@ -1767,6 +1811,10 @@ class DocumentHistory
     };
 
     void Trim(const std::optional<CanvasDocument>& current);
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareTopology(
+        const std::optional<CanvasDocument>& document, const StateView& state, CancelToken cancellation);
+    [[nodiscard]] static std::shared_ptr<const Snapshot> SealSnapshot(Snapshot snapshot, const StateView& state,
+                                                                      CancelToken cancellation = {});
     [[nodiscard]] static bool TrimPrepared(StateView& state, const std::optional<CanvasDocument>& current,
                                            CancelToken cancellation);
 

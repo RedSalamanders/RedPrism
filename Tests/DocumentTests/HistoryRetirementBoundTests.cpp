@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -19,6 +20,15 @@ int gFailures = 0;
 void Expect(bool condition, const char* name) noexcept
 {
     std::printf("%s history-retirement-bound.%s\n", condition ? "PASS" : "FAIL", name);
+    if (!condition)
+    {
+        ++gFailures;
+    }
+}
+
+void ExpectTopology(bool condition, const char* name) noexcept
+{
+    std::printf("%s history-topology.%s\n", condition ? "PASS" : "FAIL", name);
     if (!condition)
     {
         ++gFailures;
@@ -398,6 +408,363 @@ void CachedRasterBoundsCoverAdoptionCachesAndSharedDags()
                history.EditMemoryBytes(document) == 0,
            "cached-overflow-refuses-shared-dag-without-owner-expansion");
 }
+
+Raster TinyBgra(int width, int height, std::uint8_t seed)
+{
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+    for (std::size_t index = 0; index < pixels.size(); index += 4)
+    {
+        pixels[index] = seed;
+        pixels[index + 1] = static_cast<std::uint8_t>(seed + 1);
+        pixels[index + 2] = static_cast<std::uint8_t>(seed + 2);
+        pixels[index + 3] = 255;
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+}
+
+bool HasEachExpectedRasterOnce(const HistoryStorageTopology& topology, const void* const* identities,
+                               std::size_t expectedCount) noexcept
+{
+    if (topology.RasterOwners().size() != expectedCount)
+        return false;
+    for (std::size_t expectedIndex = 0; expectedIndex < expectedCount; ++expectedIndex)
+    {
+        std::size_t matches = 0;
+        for (const Raster& raster : topology.RasterOwners())
+        {
+            if (raster.Identity() == identities[expectedIndex])
+                ++matches;
+        }
+        if (matches != 1)
+            return false;
+    }
+    for (const Raster& raster : topology.RasterOwners())
+    {
+        std::size_t matches = 0;
+        for (std::size_t expectedIndex = 0; expectedIndex < expectedCount; ++expectedIndex)
+        {
+            if (raster.Identity() == identities[expectedIndex])
+                ++matches;
+        }
+        if (matches != 1)
+            return false;
+    }
+    return true;
+}
+
+SelectionLoops TopologySelection(std::size_t outerCapacity, std::size_t pointCapacity)
+{
+    std::vector<SelectionLoop> loops;
+    loops.reserve(outerCapacity);
+    loops.emplace_back();
+    loops.back().reserve(pointCapacity);
+    loops.back().push_back(Vec2{1, 2});
+    loops.back().push_back(Vec2{5, 2});
+    loops.back().push_back(Vec2{5, 7});
+    loops.back().push_back(Vec2{1, 7});
+    return SelectionLoops(std::move(loops));
+}
+
+std::uint64_t LiteralSelectionCapacityBytes(const SelectionLoops& loops) noexcept
+{
+    std::uint64_t bytes = sizeof(std::vector<SelectionLoop>) + loops.Get().capacity() * sizeof(SelectionLoop);
+    for (const SelectionLoop& loop : loops)
+        bytes += loop.capacity() * sizeof(Vec2);
+    return bytes;
+}
+
+void TopologyCapturesNestedSharedGraphAndEveryLayerOwner()
+{
+    const Raster base = TinyBgra(2, 1, 11);
+    const Raster leaf = TinyBgra(2, 1, 21);
+    const Raster inner =
+        Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0,
+                           {RasterTile{0, 0, leaf, 0, 0, 1, 1}, RasterTile{1, 0, leaf, 1, 0, 1, 1}}, 3);
+    const Raster outer = Raster::MakeSparse(4, 2, RasterFormat::Bgra8888, base, 0, 0,
+                                            {RasterTile{1, 0, inner}, RasterTile{3, 1, leaf, 1, 0, 1, 1}}, 5);
+    const Raster imageThumbnail = TinyBgra(1, 1, 31);
+    const Raster maskImage = TinyBgra(2, 1, 41);
+    const Raster maskThumbnail = TinyBgra(1, 1, 51);
+    const Raster shapeSource = TinyBgra(1, 2, 61);
+    if (!base.HasStorage() || !leaf.HasStorage() || !inner.HasStorage() || !outer.HasStorage() ||
+        !imageThumbnail.HasStorage() || !maskImage.HasStorage() || !maskThumbnail.HasStorage() ||
+        !shapeSource.HasStorage())
+    {
+        ExpectTopology(false, "nested-owner-fixtures-created");
+        return;
+    }
+
+    ImageLayer layer = ImageLayer::Blank(L"topology owner layer", Vec2{4, 2});
+    layer.asset = RasterAsset{outer, imageThumbnail, L"image asset"};
+    LayerMask mask;
+    mask.asset = RasterAsset{maskImage, maskThumbnail, L"mask asset"};
+    layer.mask = std::move(mask);
+    layer.shapeImage = shapeSource;
+    DocumentFixture fixture{};
+    fixture.layers.push_back(std::move(layer));
+    fixture.selection = DocumentSelection{true, TopologySelection(17, 29)};
+    const CanvasDocument document = std::move(fixture).Seal();
+
+    const void* const expectedRasterIdentities[]{
+        outer.Identity(),          base.Identity(),      inner.Identity(),         leaf.Identity(),
+        imageThumbnail.Identity(), maskImage.Identity(), maskThumbnail.Identity(), shapeSource.Identity()};
+    constexpr std::uint64_t kLiteralResidentFloor = 8 + 8 + 4 + 8 + 4 + 8;
+    const auto topology = HistoryStorageTopology::Prepare(document);
+    const std::uint64_t minimumTopologyHeader = sizeof(HistoryStorageTopology) + 64 + 8 * sizeof(Raster);
+    ExpectTopology(topology && topology->Matches(document) &&
+                       HasEachExpectedRasterOnce(*topology, expectedRasterIdentities, 8),
+                   "nested-shared-dag-and-all-layer-raster-owners-appear-once");
+    ExpectTopology(topology && topology->MetadataBytes() >= minimumTopologyHeader &&
+                       topology->RetirementMemoryBytes() >= topology->MetadataBytes() + kLiteralResidentFloor,
+                   "topology-metadata-and-retirement-cover-independent-literal-floor");
+    ExpectTopology(topology && topology->SelectionOwner().Identity() == document.selection->loops.Identity() &&
+                       topology->SelectionOwner().StorageBytes() ==
+                           LiteralSelectionCapacityBytes(document.selection->loops),
+                   "topology-retains-selection-owner-and-literal-spare-capacities");
+    ExpectTopology(!inner.IsMaterialized() && !outer.IsMaterialized(),
+                   "nested-topology-construction-does-not-materialize-sparse-pixels");
+}
+
+void TopologyOwnsSourcesAndTracksLateMaterialization()
+{
+    std::shared_ptr<const HistoryStorageTopology> topology;
+    std::optional<DocumentHistory::Snapshot> retainedSnapshot;
+    const void* expectedIdentities[8]{};
+    const void* selectionIdentity = nullptr;
+    {
+        const Raster base = TinyBgra(2, 1, 71);
+        const Raster leaf = TinyBgra(2, 1, 81);
+        const Raster nested =
+            Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0,
+                               {RasterTile{0, 0, leaf, 0, 0, 1, 1}, RasterTile{1, 0, leaf, 1, 0, 1, 1}}, 2);
+        const Raster sparse = Raster::MakeSparse(4, 2, RasterFormat::Bgra8888, base, 0, 0,
+                                                 {RasterTile{1, 0, nested}, RasterTile{3, 1, leaf, 1, 0, 1, 1}}, 4);
+        const Raster imageThumbnail = TinyBgra(1, 1, 91);
+        const Raster maskImage = TinyBgra(1, 2, 101);
+        const Raster maskThumbnail = TinyBgra(1, 1, 111);
+        const Raster shapeSource = TinyBgra(2, 1, 121);
+        ImageLayer layer = ImageLayer::Blank(L"source owner", Vec2{4, 2});
+        layer.asset = RasterAsset{sparse, imageThumbnail, L"source image"};
+        LayerMask mask;
+        mask.asset = RasterAsset{maskImage, maskThumbnail, L"source mask"};
+        layer.mask = std::move(mask);
+        layer.shapeImage = shapeSource;
+        DocumentFixture fixture{};
+        fixture.layers.push_back(std::move(layer));
+        fixture.selection = DocumentSelection{false, TopologySelection(13, 23)};
+        const CanvasDocument document = std::move(fixture).Seal();
+        expectedIdentities[0] = sparse.Identity();
+        expectedIdentities[1] = base.Identity();
+        expectedIdentities[2] = nested.Identity();
+        expectedIdentities[3] = leaf.Identity();
+        expectedIdentities[4] = imageThumbnail.Identity();
+        expectedIdentities[5] = maskImage.Identity();
+        expectedIdentities[6] = maskThumbnail.Identity();
+        expectedIdentities[7] = shapeSource.Identity();
+        selectionIdentity = document.selection->loops.Identity();
+        topology = HistoryStorageTopology::Prepare(document);
+        ExpectTopology(topology && topology->Matches(document), "prepared-topology-matches-source-document");
+        DocumentHistory::Snapshot snapshot;
+        snapshot.document = document;
+        snapshot.storageTopology = topology;
+        retainedSnapshot = std::move(snapshot);
+    }
+
+    ExpectTopology(retainedSnapshot && retainedSnapshot->storageTopology &&
+                       retainedSnapshot->storageTopology->Matches(retainedSnapshot->document) &&
+                       retainedSnapshot->OwnershipBounds().has_value(),
+                   "topology-matches-retained-old-root-after-source-document-release");
+    if (retainedSnapshot && retainedSnapshot->storageTopology && retainedSnapshot->document)
+    {
+        auto mismatchedDocument = retainedSnapshot->document;
+        EditDocumentFixture(mismatchedDocument.value(), [](DocumentFixture& fixture)
+                            { fixture.layers.front().name = L"Different immutable root"; });
+        retainedSnapshot->document = std::move(mismatchedDocument);
+        ExpectTopology(!retainedSnapshot->storageTopology->Matches(retainedSnapshot->document) &&
+                           !retainedSnapshot->OwnershipBounds().has_value(),
+                       "stale-topology-refuses-mismatched-root-bound");
+    }
+    retainedSnapshot.reset();
+    const std::optional<CanvasDocument> absent;
+    ExpectTopology(topology && !topology->Matches(absent) &&
+                       HasEachExpectedRasterOnce(*topology, expectedIdentities, 8) &&
+                       topology->SelectionOwner().Identity() == selectionIdentity,
+                   "topology-alone-owns-all-raster-and-selection-identities-after-source-release");
+    const auto originalRetirementBound = topology ? topology->RetirementMemoryBytes() : 0;
+    bool foundSparse = false;
+    bool identitiesStable = true;
+    if (!topology)
+    {
+        ExpectTopology(false, "late-materialization-topology-was-prepared");
+        return;
+    }
+    for (const Raster& raster : topology->RasterOwners())
+    {
+        identitiesStable = identitiesStable && raster.Identity() != nullptr;
+        if (raster.Identity() == expectedIdentities[0])
+        {
+            foundSparse = true;
+            ExpectTopology(!raster.IsMaterialized() && raster.ByteSize() == 0,
+                           "sparse-topology-owner-starts-unmaterialized");
+            ExpectTopology(raster.Data() != nullptr && raster.IsMaterialized() && raster.ByteSize() == 32,
+                           "sparse-topology-owner-reports-late-literal-resident-bytes");
+        }
+    }
+    const Raster replacement = TinyBgra(1, 1, 131);
+    bool replacementIdentityIsDistinct = replacement.HasStorage();
+    for (const void* identity : expectedIdentities)
+        replacementIdentityIsDistinct = replacementIdentityIsDistinct && replacement.Identity() != identity;
+    ExpectTopology(foundSparse && identitiesStable && replacementIdentityIsDistinct && topology &&
+                       topology->RetirementMemoryBytes() == originalRetirementBound &&
+                       HasEachExpectedRasterOnce(*topology, expectedIdentities, 8),
+                   "late-materialization-keeps-topology-owners-and-construction-upper-bound");
+}
+
+void TopologyMatchesAbsentDefaultEmptyAndCancellation()
+{
+    const std::optional<CanvasDocument> absent;
+    const auto absentTopology = HistoryStorageTopology::Prepare(absent);
+    const std::optional<CanvasDocument> defaultDocument{CanvasDocument{}};
+    const auto defaultTopology = HistoryStorageTopology::Prepare(defaultDocument);
+    ExpectTopology(absentTopology && absentTopology->Matches(absent) && absentTopology->RasterOwners().empty() &&
+                       absentTopology->SelectionOwner().Identity() == nullptr && absentTopology->MetadataBytes() > 0 &&
+                       absentTopology->RetirementMemoryBytes() >= absentTopology->MetadataBytes(),
+                   "absent-source-has-empty-valid-topology");
+    ExpectTopology(defaultTopology && defaultTopology->Matches(defaultDocument) && !defaultTopology->Matches(absent) &&
+                       defaultTopology->RasterOwners().empty() && defaultTopology->RetirementMemoryBytes() > 0,
+                   "default-empty-document-remains-distinct-from-absent-source");
+
+    auto explicitEmptySelection = defaultDocument;
+    explicitEmptySelection->selection = DocumentSelection{};
+    const auto emptySelectionTopology = HistoryStorageTopology::Prepare(explicitEmptySelection);
+    ExpectTopology(emptySelectionTopology && emptySelectionTopology->Matches(explicitEmptySelection) &&
+                       emptySelectionTopology->Matches(defaultDocument) &&
+                       emptySelectionTopology->RasterOwners().empty() &&
+                       emptySelectionTopology->SelectionOwner().Identity() == nullptr,
+                   "empty-selection-adds-no-storage-owner");
+
+    CancelSource cancellation;
+    const bool cancellationRequested = cancellation.Cancel();
+    ExpectTopology(cancellationRequested && !HistoryStorageTopology::Prepare(defaultDocument, cancellation.Token()),
+                   "pre-cancelled-topology-preparation-refuses-result");
+}
+
+void PreparedTopologyChargesCompleteNestedGraphAgainstEmptyLiveRoot()
+{
+    const Raster base = TinyBgra(2, 1, 141);
+    const Raster leaf = TinyBgra(2, 1, 151);
+    const Raster nested = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0,
+                                             {RasterTile{0, 0, leaf}, RasterTile{1, 0, leaf, 1, 0, 1, 1}}, 2);
+    const Raster sparse = Raster::MakeSparse(4, 2, RasterFormat::Bgra8888, base, 0, 0,
+                                             {RasterTile{1, 0, nested}, RasterTile{3, 1, leaf, 1, 0, 1, 1}}, 4);
+    const Raster imageThumbnail = TinyBgra(1, 1, 161);
+    const Raster maskImage = TinyBgra(2, 1, 171);
+    const Raster maskThumbnail = TinyBgra(1, 1, 181);
+    const Raster shapeSource = TinyBgra(1, 2, 191);
+    ImageLayer layer = ImageLayer::Blank(L"prepared nested owner", Vec2{4, 2});
+    layer.asset = RasterAsset{sparse, imageThumbnail, L"prepared image"};
+    LayerMask mask;
+    mask.asset = RasterAsset{maskImage, maskThumbnail, L"prepared mask"};
+    layer.mask = std::move(mask);
+    layer.shapeImage = shapeSource;
+    DocumentFixture fixture{};
+    fixture.layers.push_back(std::move(layer));
+    const std::optional<CanvasDocument> before{std::move(fixture).Seal()};
+    const std::optional<CanvasDocument> emptyLiveRoot{CanvasDocument{}};
+    auto after = emptyLiveRoot;
+    after->width = 2;
+
+    // Independent sum of the distinct dense buffers: base 8, leaf 8, image thumbnail 4,
+    // mask image 8, mask thumbnail 4, and shape source 8 bytes.
+    constexpr std::uint64_t kLiteralNestedOwnerCharge = 8 + 8 + 4 + 8 + 4 + 8;
+    DocumentHistory history;
+    auto publication = DocumentHistory::PrepareEdit(history.CaptureState(), before, {}, after, {},
+                                                    L"Prepared nested topology admission");
+    const bool published = publication && history.Publish(publication.value());
+    ExpectTopology(published && history.UndoCount() == 1 &&
+                       history.RetainedBytes(emptyLiveRoot) == kLiteralNestedOwnerCharge && !sparse.IsMaterialized() &&
+                       !nested.IsMaterialized(),
+                   "prepared-publication-charges-complete-nested-owners-with-empty-live-root");
+
+    DocumentHistory direct;
+    direct.Begin(L"Reference complete nested topology", before, {});
+    direct.End(after, {});
+    ExpectTopology(direct.UndoCount() == 1 && direct.RetainedBytes(emptyLiveRoot) == kLiteralNestedOwnerCharge,
+                   "reference-trim-charges-the-same-complete-nested-owners");
+    DocumentHistory directBudget(100, kLiteralNestedOwnerCharge - 1);
+    directBudget.Begin(L"Reference nested budget", before, {});
+    directBudget.End(after, {});
+    ExpectTopology(directBudget.UndoCount() == 0 && directBudget.RetainedBytes(emptyLiveRoot) == 0,
+                   "reference-nested-budget-refuses-one-byte-over-literal-charge");
+
+    auto renamed = before;
+    EditDocumentFixture(renamed.value(),
+                        [](DocumentFixture& value) { value.layers[0].name = L"Renamed nested owner"; });
+    DocumentHistory live(100, 0);
+    auto first = DocumentHistory::PrepareEdit(live.CaptureState(), {}, {}, before, {}, L"Prepared live nested source");
+    const bool firstPublished = first && live.Publish(first.value());
+    ExpectTopology(firstPublished && live.UndoCount() == 1 && live.RetainedBytes(before) == 0,
+                   "prepared-nested-history-excludes-every-live-descendant");
+    live.Begin(L"Mixed reference rename", before, {});
+    live.End(renamed, {});
+    ExpectTopology(firstPublished && live.UndoCount() == 2 && live.RetainedBytes(renamed) == 0 &&
+                       !sparse.IsMaterialized() && !nested.IsMaterialized(),
+                   "mixed-prepared-reference-trim-keeps-live-nested-owners-with-zero-budget");
+}
+
+void SelectionTopologyHonorsLiveExclusionInDirectAndPreparedTrim()
+{
+    const SelectionLoops loops = TopologySelection(37, 257);
+    const std::uint64_t literalSelectionBytes = LiteralSelectionCapacityBytes(loops);
+    ExpectTopology(literalSelectionBytes > 1 && loops.StorageBytes() == literalSelectionBytes,
+                   "selection-charge-matches-literal-outer-and-inner-capacities");
+
+    std::optional<CanvasDocument> before{CanvasDocument{}};
+    before->selection = DocumentSelection{true, loops};
+    auto sameSelectionAfter = before;
+    sameSelectionAfter->width = 2;
+
+    DocumentHistory directLive(8, 0);
+    directLive.Begin(L"Live selection remains excluded", before, {});
+    directLive.End(sameSelectionAfter, {});
+    ExpectTopology(directLive.UndoCount() == 1 && directLive.RetainedBytes(sameSelectionAfter) == 0,
+                   "direct-trim-excludes-current-selection-capacity-by-identity");
+
+    DocumentHistory preparedLive(8, 0);
+    auto livePublication = DocumentHistory::PrepareEdit(preparedLive.CaptureState(), before, {}, sameSelectionAfter, {},
+                                                        L"Prepared live selection remains excluded");
+    const bool livePublished = livePublication && preparedLive.Publish(livePublication.value());
+    ExpectTopology(livePublished && preparedLive.UndoCount() == 1 &&
+                       preparedLive.RetainedBytes(sameSelectionAfter) == 0,
+                   "prepared-trim-excludes-current-selection-capacity-by-identity");
+
+    auto selectionRemovedAfter = before;
+    selectionRemovedAfter->selection.reset();
+    selectionRemovedAfter->width = 3;
+    DocumentHistory directRetired(8, 1);
+    directRetired.Begin(L"Retired selection is charged", before, {});
+    directRetired.End(selectionRemovedAfter, {});
+    ExpectTopology(directRetired.UndoCount() == 0 && directRetired.RetainedBytes(selectionRemovedAfter) == 0,
+                   "direct-trim-drops-history-only-selection-capacity");
+
+    DocumentHistory preparedRetired(8, 1);
+    auto retiredPublication =
+        DocumentHistory::PrepareEdit(preparedRetired.CaptureState(), before, {}, selectionRemovedAfter, {},
+                                     L"Prepared retired selection is charged");
+    const bool retiredPublished = retiredPublication && preparedRetired.Publish(retiredPublication.value());
+    ExpectTopology(retiredPublished && preparedRetired.UndoCount() == 0 &&
+                       preparedRetired.RetainedBytes(selectionRemovedAfter) == 0,
+                   "prepared-trim-drops-history-only-selection-capacity");
+}
+
+void TestHistoryStorageTopology()
+{
+    TopologyCapturesNestedSharedGraphAndEveryLayerOwner();
+    TopologyOwnsSourcesAndTracksLateMaterialization();
+    TopologyMatchesAbsentDefaultEmptyAndCancellation();
+    PreparedTopologyChargesCompleteNestedGraphAgainstEmptyLiveRoot();
+    SelectionTopologyHonorsLiveExclusionInDirectAndPreparedTrim();
+}
 } // namespace
 
 int RunHistoryRetirementBoundTests()
@@ -411,5 +778,6 @@ int RunHistoryRetirementBoundTests()
     CachedRasterBoundsCoverAdoptionCachesAndSharedDags();
     CachedHistoryBoundsPreserveSourceAndPublication();
     ShapeSourceStorageParticipatesInHistoryBudget();
+    TestHistoryStorageTopology();
     return gFailures;
 }

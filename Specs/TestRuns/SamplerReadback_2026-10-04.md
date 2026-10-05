@@ -548,8 +548,9 @@ r3 passes all three TUs under stdcpplatest, W4/WX and permissive-. These probes 
 
 The cheaper agent writes a fresh actual WARP sampler memory fixture using the existing startup MemorySource
 probe. Primary catches unsupported Guid boolean and JobStatus enum use; the agent repairs them. Primary removes
-a first-pump refusal assumption because recycling may require acknowledgement, and observes only registered
-source readiness when checking idle self-rearm. Three cases have 23 assertions: waiting then recovery, exact-ticket
+a first-pump refusal assumption because recycling may require acknowledgement. The idle check is
+`!RunUiActions && !HasUiWork`; scoped source readiness was checked by the r66 shutdown fixture, not this test.
+Three cases have 23 assertions: waiting then recovery, exact-ticket
 cancel while waiting, and hard memory refusal. Literal blue/brown, original receipt/ticket/history, zero captures
 before admission, one on recovery, complete retirement and joined shutdown are required. These are injected
 memory-policy cases, not observations of system-wide low memory. Existing stages and numeric goldens remain.
@@ -621,3 +622,41 @@ Secondary reviews find no separate cache undercount/lifetime or memory-fixture f
 that nested closure/late sparse residency and physical Escape during admission waiting remain unproven by r71.
 Later topology and Escape source is absent. Current Release/ASan/analysis/ARM64, exact H3/H4, native activation
 and original G1 remain required; this slice is a qualified WIP checkpoint, not P1 completion.
+
+## Complete storage topology and physical sampler Escape - full ASan Debug r72
+
+Primary integrates four source files only after preserving and committing r71. No older Caller specifications
+or continuation diagnostics are copied. Skills validate all 15, formatting checks all 651 and diff checks pass.
+Strict private frozen Common-header/DocumentHistory Debug code-generation probes r1/r2 pass without linked
+runtime claims. Their output/source receipts stay under native `.build/history-topology-codegen-r*-20261005`.
+
+Cheaper-agent tests are reviewed: primary requires literal nested charge equality, required PrepareEdit names
+and topology-only lifetime after releasing the separate snapshot. Twenty-one topology controls cover complete
+nested/shared owners, capacity, source lifetime, stale matching, late Data without cached totals, absent/empty
+states, cancellation and selection/live exclusion. Primary adds four reference/mixed-path checks: exactly forty
+bytes, one-byte-over-budget refusal and complete live nested exclusion at a zero budget. The review also prevents
+temporary topology construction in reference End; its existing scan now uses complete iterative closure. These
+changes do not solve concurrent late-cache growth, incremental unique accounting or native caller migration.
+
+The physical Escape fixture sends real hidden-window key messages during memory waiting after pointer Up; the
+existing exact-ticket cancellation case remains unchanged. Nine new fourth-case evaluations pass for cancellation
+authority, original pending receipt, Cancelled/E_ABORT, zero capture, unchanged source/history/palette and joined
+retirement. Pointer-held waiting remains unproven. The same run qualifies 25 new topology/reference checks.
+
+Actual child **108668**, 2026-10-05T03:22:01.321444Z–03:36:49.015623Z, exit **0**, 771 unchanged inputs.
+Full ASan Debug passes **6,683 document / 9,298 application controls** and all original **79 ordered stages**;
+relative to r71, this adds 25 topology/reference controls and nine physical Escape evaluations. Archive
+`p1-history-topology-sampler-escape-x64-ASanDebug-r72-full-qualified` independently verifies **1,048 copies / 79
+stages** at 2026-10-05T03:41:16.6295970Z.
+
+Freeze `4E4C78B06D8AB39C6B28BEF479F2F42DEE9ABF265AE07DC00AF101EDCA51CC23`; stdout
+`0BFE5579EC374D7B9AFE979746408601ABCEF9F2C3AA932E7F8C17508AE49C86`; stderr
+`4D8A3B4F0FA75DBB2108CFBBEB8B38B738AA5EA58F4FEF263F5EFE9DB5C0EC98`.
+Proof `EF6F09A69B12B71701DAB9632632C336F1B31E9D60D1AE4C004FE6132DAAFB5F`; source manifest
+`2E128FF93C9C0C5D951AF7BC4F07C301BB02667510E149306BBA033861BF26D2`; evidence manifest
+`67B2ACD6E3B4CA2FE5B067B93144C3A92A388675E2BE6F1EC6A216882F79A602`; completion
+`40E3795F6ADCA97A955AE6DAE17D26F11379294FCD757F47520C2A96DDDD52C6`.
+
+This is a qualified ASan Debug snapshot only. Current full Debug/Release/analysis/ARM64 matrix and native
+activation remain due. H3 exact unique accounting, late-residency synchronization, reference-path cost, pointer-held
+Escape and G1 remain open; r72 does not close the P1 phase.
