@@ -16,6 +16,7 @@ class ImageImportAuthority final
 
   private:
     friend class DocumentSession;
+    friend class PreparedImageImport;
     Guid _session;
     std::uint64_t _documentSerial = 0, _generation = 0, _restoreSerial = 0;
     std::optional<Guid> _documentID, _active;
@@ -29,8 +30,12 @@ class PreparedImageImport final
   public:
     PreparedImageImport(const PreparedImageImport&) = delete;
     PreparedImageImport& operator=(const PreparedImageImport&) = delete;
-    PreparedImageImport(PreparedImageImport&&) noexcept = default;
-    PreparedImageImport& operator=(PreparedImageImport&&) noexcept = default;
+    PreparedImageImport(PreparedImageImport&& source) noexcept;
+    PreparedImageImport& operator=(PreparedImageImport&& source) noexcept;
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ReplacesDocument() const noexcept
     {
         return _replacement.has_value();
@@ -70,5 +75,5 @@ class PreparedImageImport final
     std::optional<LayerAdjustment> _retiredAdjustment;
     SnapGuides _retiredSnapGuides;
     Raster _retiredWarpImage;
-    bool _maskSelected = false, _changesDocument = false;
+    bool _maskSelected = false, _changesDocument = false, _applied = false;
 };

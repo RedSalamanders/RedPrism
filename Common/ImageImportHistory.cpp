@@ -21,6 +21,67 @@ namespace
 }
 } // namespace
 
+PreparedImageImport::PreparedImageImport(PreparedImageImport&& source) noexcept
+    : _authority(std::move(source._authority)), _retiredDrafts(std::move(source._retiredDrafts)),
+      _view(std::move(source._view)), _history(std::move(source._history)),
+      _replacement(std::move(source._replacement)), _source(std::move(source._source)),
+      _baseline(std::move(source._baseline)), _document(std::move(source._document)),
+      _retiredDisplay(std::move(source._retiredDisplay)), _active(std::move(source._active)),
+      _selected(std::move(source._selected)), _retiredCollapsed(std::move(source._retiredCollapsed)),
+      _retiredBrushCommit(std::move(source._retiredBrushCommit)),
+      _retiredAdjustment(std::move(source._retiredAdjustment)),
+      _retiredSnapGuides(std::move(source._retiredSnapGuides)), _retiredWarpImage(std::move(source._retiredWarpImage)),
+      _maskSelected(source._maskSelected), _changesDocument(source._changesDocument),
+      _applied(std::exchange(source._applied, true))
+{
+}
+
+PreparedImageImport& PreparedImageImport::operator=(PreparedImageImport&& source) noexcept
+{
+    if (this != &source)
+    {
+        _authority = std::move(source._authority);
+        _retiredDrafts = std::move(source._retiredDrafts);
+        _view = std::move(source._view);
+        _history = std::move(source._history);
+        _replacement = std::move(source._replacement);
+        _source = std::move(source._source);
+        _baseline = std::move(source._baseline);
+        _document = std::move(source._document);
+        _retiredDisplay = std::move(source._retiredDisplay);
+        _active = std::move(source._active);
+        _selected = std::move(source._selected);
+        _retiredCollapsed = std::move(source._retiredCollapsed);
+        _retiredBrushCommit = std::move(source._retiredBrushCommit);
+        _retiredAdjustment = std::move(source._retiredAdjustment);
+        _retiredSnapGuides = std::move(source._retiredSnapGuides);
+        _retiredWarpImage = std::move(source._retiredWarpImage);
+        _maskSelected = source._maskSelected;
+        _changesDocument = source._changesDocument;
+        _applied = std::exchange(source._applied, true);
+    }
+    return *this;
+}
+
+DocumentHistory::ResidencyValidation PreparedImageImport::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_authority._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    if (_replacement)
+        return permit.TryAcquire(_replacement.value());
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedImageImport::RefreshHistoryResidency(CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_authority._valid || cancellation.IsCancelled())
+        return false;
+    if (_replacement)
+        return DocumentHistory::RefreshPreparedResidency(_replacement.value(), _document, cancellation, observer);
+    return !_history || DocumentHistory::RefreshPreparedResidency(_history.value(), _document, cancellation, observer);
+}
+
 ImageImportAuthority DocumentSession::CaptureImageImportAuthority() const noexcept
 {
     ImageImportAuthority result;
@@ -201,7 +262,8 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
     static_assert(std::is_nothrow_swappable_v<std::optional<GradientEdit>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<PixelMove>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<ColorEdit>>);
-    if (!CanApplyImageImport(prepared._authority) || (prepared._replacement && !prepared._retiredDrafts) ||
+    if (prepared._applied || !CanApplyImageImport(prepared._authority) ||
+        (prepared._replacement && !prepared._retiredDrafts) ||
         (prepared._replacement ? !history.CanPublishReplacement(prepared._replacement.value())
          : prepared._history   ? !history.CanPublish(prepared._history.value())
                                : !history.IsCurrent(prepared._view)))
@@ -262,6 +324,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
         }
         NoteDocumentMutation();
     }
+    prepared._applied = true;
     prepared._authority._valid = false;
     return true;
 }

@@ -289,6 +289,8 @@
     <ClCompile Include="ApplicationSamplerCallerSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
+    <ClCompile Include="ApplicationImageImportResidencySelfTest.cpp" />
+    <ClCompile Include="ApplicationImageWrapperResidencySelfTest.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
@@ -387,6 +389,7 @@
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="GpuCapabilities.cpp" />
     <ClCompile Include="GpuWork.cpp" />
+    <ClCompile Include="GpuUploadWork.cpp" />
     <ClCompile Include="DocumentReadbackJob.cpp" />
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />

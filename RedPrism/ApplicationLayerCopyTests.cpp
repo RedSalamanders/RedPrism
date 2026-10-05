@@ -250,5 +250,5 @@ int Application::RunLayerCopyWorkSelfTest() noexcept
             }
     std::printf("layer-copy-host summary: %u checks, %d failures\n", checks, failures);
     std::fflush(stdout);
-    return failures ? 5 : 0;
+    return failures ? 5 : RunImageWrapperResidencySelfTest(1);
 }

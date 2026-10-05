@@ -19,6 +19,11 @@ struct MaskWorkTestGate final
     std::atomic<unsigned int> visits{0};
     std::atomic<bool> retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> historyFaultHits{0};
+    std::atomic<unsigned int> captures{0}, preparations{0}, residentGrowths{0}, residencyRefreshes{0};
+    std::atomic<bool> refreshReservationHeld{false}, refreshTicketMatches{false};
+    std::optional<JobTicket> capturedTicket; // Owner-only capture/completion witness.
+    Raster lateResidencySource;
+    bool throwResidencyRefresh = false, cancelResidencyRefresh = false;
     bool afterPreparation = false, throwAllocationFailure = false, throwAdmissionFailure = false;
     bool throwCaptureFailure = false, captureReservationHeld = false;
     std::uint64_t reservationBytes = 0;

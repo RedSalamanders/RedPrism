@@ -89,6 +89,16 @@ class Application::ImageImportJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed =
+                _payload->publication && _payload->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         if (_payload->files && !_snapshotReady)
             return {}; // admitted record reaches its owner capture hook before any document copy
         const auto phase = _payload->files ? ImageImportTestPhase::Prepare : ImageImportTestPhase::Probe;
@@ -106,6 +116,8 @@ class Application::ImageImportJob final : public Job
         const auto paths = std::span<const std::wstring_view>(views.data(), _payload->paths.size());
         if (_payload->files)
         {
+            if (_gate)
+                _gate->preparations.fetch_add(1);
             ImageImportBatchInput input{_payload->source, _active, paths, _newProject, _center};
             input.files = _payload->files.value();
             input.maximumAddedPixels = _maximumAddedPixels;
@@ -146,6 +158,12 @@ class Application::ImageImportJob final : public Job
             if (!_payload->publication)
                 return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
                                                           : JobResult{JobStatus::Failed, E_UNEXPECTED};
+            if (_gate && _gate->lateResidencySource.HasStorage())
+            {
+                if (!_gate->lateResidencySource.Data())
+                    return {JobStatus::Failed, E_FAIL};
+                _gate->residentGrowths.fetch_add(1);
+            }
         }
         else
             _payload->probed = ProbeImageImportBatch(paths, context.cancellation);
@@ -163,16 +181,47 @@ class Application::ImageImportJob final : public Job
                    : JobResult{};
     }
 
-    bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (!_payload->files || _snapshotReady)
+        if (result.status != JobStatus::Finished || !_payload->files || !Current() ||
+            _owner._historyWork.CancelRequested(_stamp))
             return false;
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (_snapshotReady)
+        {
+            if (!_payload->publication)
+                return false;
+            const auto decision = _payload->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false;
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _snapshotError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshTicketMatches.store(_gate->capturedTicket == ticket);
+                _gate->refreshReservationHeld.store(_gate->preparationReservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >=
+                                                        _gate->preparationReservationBytes);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket);
+                return true;
+            }
+            _snapshotError = E_UNEXPECTED;
             return false;
+        }
         try
         {
             if (_gate)
             {
+                _gate->captures.fetch_add(1);
+                _gate->capturedTicket = ticket;
                 _gate->captureReservationHeld =
                     _owner._jobs.ReservedMemoryBytes() != 0 &&
                     _owner._jobs.ReservedMemoryBytes() == _gate->preparationReservationBytes;
@@ -196,6 +245,7 @@ class Application::ImageImportJob final : public Job
 
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         const bool current = Current();
         HostOutcome outcome = !current ? HostOutcome::Stale
                               : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
@@ -226,7 +276,8 @@ class Application::ImageImportJob final : public Job
                 error = E_ABORT;
                 replaced = false;
             }
-            else if (changes)
+            _residencyPermit.Reset(); // No borrowed lease survives chrome, replacement, or another owner pump.
+            if (outcome == HostOutcome::Succeeded && changes)
             {
                 if (replaced)
                 {
@@ -243,6 +294,7 @@ class Application::ImageImportJob final : public Job
                 error = _payload->tooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : E_FAIL;
             }
         }
+        _residencyPermit.Reset();
         if (outcome == HostOutcome::Failed)
         {
             if (!FAILED(error))
@@ -301,7 +353,8 @@ class Application::ImageImportJob final : public Job
     const int _maximumAddedPixels;
     const std::shared_ptr<ImageImportTestGate> _gate;
     const DWORD _ownerThread;
-    bool _snapshotReady = false;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _snapshotReady = false, _refreshResidency = false;
     HRESULT _snapshotError = S_OK;
 };
 
@@ -332,9 +385,9 @@ HRESULT Application::SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t gen
         {
             const auto history = _session.history.EditMemoryBytes(_session.Document());
             retirement = _session.ImageImportRetirementMemoryBytes();
-            if (!history || !retirement || history > maximum - memory)
+            if (!history || !retirement || history > maximum / 2 || history * 2 > maximum - memory)
                 return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-            memory += history;
+            memory += history * 2; // Original private history and one same-ticket refresh candidate coexist.
             // Derived previews already in flight remain allowed; later mutating inputs wait behind this ordinal.
             const auto previews = _jobs.ReservedMemoryBytes();
             if (previews > maximum - retirement)
@@ -1024,5 +1077,6 @@ int Application::RunImageImportSelfTest() noexcept
             return 5;
         }
     }
-    return 0;
+    const std::array<std::wstring_view, 2> residencyPaths{first, second};
+    return RunImageImportResidencySelfTest(residencyPaths);
 }

@@ -460,6 +460,268 @@ void CheckLiveDraftReplacement()
 }
 } // namespace
 
+void CheckImportResidencyMoveAndNoOp()
+{
+    auto owner = std::make_unique<SessionFixture>();
+    auto& session = owner->session;
+    const auto before = session.Document();
+    const auto history = session.history.CaptureState();
+    auto prepared = PrepareCurrent(session, ImageImportBatchResult{});
+    if (!prepared)
+    {
+        Expect(false, "residency-no-op-prepared");
+        return;
+    }
+    auto destination = std::move(prepared.value());
+    DocumentHistory::ResidencyPermit permit;
+    Expect(prepared->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !prepared->RefreshHistoryResidency() && !session.ApplyPreparedImageImportIfCurrent(prepared.value()),
+           "residency-moved-no-op-has-no-authority");
+    Expect(destination.TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready &&
+               destination.RefreshHistoryResidency() && session.ApplyPreparedImageImportIfCurrent(destination),
+           "residency-no-op-destination-acknowledges-once");
+    Expect(destination.TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !destination.RefreshHistoryResidency() && !session.ApplyPreparedImageImportIfCurrent(destination) &&
+               session.Document() == before && session.history.IsCurrent(history),
+           "residency-applied-no-op-refuses-reuse-and-preserves-lineage");
+    auto from = PrepareCurrent(session, ImageImportBatchResult{});
+    auto to = PrepareCurrent(session, ImageImportBatchResult{});
+    if (!from || !to)
+    {
+        Expect(false, "residency-no-op-assignment-prepared");
+        return;
+    }
+    to.value() = std::move(from.value());
+    Expect(from->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !session.ApplyPreparedImageImportIfCurrent(from.value()) &&
+               session.ApplyPreparedImageImportIfCurrent(to.value()) &&
+               !session.ApplyPreparedImageImportIfCurrent(to.value()),
+           "residency-no-op-assignment-consumes-original-authority");
+}
+
+void CheckImportResidencyLateCache(bool allocationFailure, bool cancel)
+{
+    auto owner = std::make_unique<DocumentSession>(8);
+    auto& session = *owner;
+    const auto current = PixelDocument(L"Current dense image", {11, 12, 13, 255});
+    session.ReplaceDocument(current, current.layers.front().id);
+    const Raster leaf =
+        Raster::Make(1, 1, RasterFormat::Bgra8888, std::array<std::uint8_t, 4>{21, 22, 23, 255}.data(), 4);
+    const Raster late = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    auto historical = DocumentFixture::Copy(current);
+    historical.layers.front().asset = RasterAsset{late, {}, L"Literal history-only sparse image"};
+    auto baseline = DocumentHistory::PrepareEdit(session.history.CaptureState(), std::move(historical).Seal(),
+                                                 session.ActiveLayerID(), session.Document(), session.ActiveLayerID(),
+                                                 L"Historical sparse cache");
+    if (!baseline || !session.history.Publish(baseline.value()))
+    {
+        Expect(false, "residency-literal-baseline-prepared");
+        return;
+    }
+    const auto original = session.Document();
+    const auto history = session.history.CaptureState();
+    const Guid originalRevision = session.history.CurrentRevision();
+    const auto generation = session.Generation();
+    session.history.MarkSaved();
+    auto publication = PrepareCurrent(
+        session, ExistingImageBatch(WithPixel(current, {31, 32, 33, 255}), session.ActiveLayerID().value()));
+    Expect(publication && session.history.RetainedBytes(original) == 4 && !late.IsMaterialized(),
+           "residency-literal-four-byte-sparse-baseline");
+    if (!publication)
+        return;
+    const auto* bytes = late.Data();
+    Expect(bytes && late.ByteSize() == 8 && session.history.RetainedBytes(original) == 12,
+           "residency-late-eight-byte-cache-plus-four-byte-leaf");
+    DocumentHistory::ResidencyPermit permit;
+    Expect(publication->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Refresh &&
+               !session.ApplyPreparedImageImportIfCurrent(publication.value()) && session.Document() == original &&
+               session.history.IsCurrent(history),
+           "residency-late-growth-requires-refresh-before-any-publication");
+    CancelSource stop;
+    if (cancel)
+        (void)stop.Cancel();
+    unsigned int faultHits = 0;
+    const DocumentHistory::PrepareObserver fault{[](void* context, DocumentHistory::PrepareStage stage)
+                                                 {
+                                                     if (stage == DocumentHistory::PrepareStage::StorageIndexClone)
+                                                     {
+                                                         ++*static_cast<unsigned int*>(context);
+                                                         throw std::bad_alloc{};
+                                                     }
+                                                 },
+                                                 &faultHits};
+    bool refreshed = false;
+    bool threw = false;
+    try
+    {
+        refreshed = publication->RefreshHistoryResidency(
+            stop.Token(), allocationFailure ? fault : DocumentHistory::PrepareObserver{});
+    }
+    catch (const std::bad_alloc&)
+    {
+        threw = true;
+    }
+    if (allocationFailure || cancel)
+    {
+        Expect(!refreshed && threw == allocationFailure && faultHits == (allocationFailure ? 1U : 0U),
+               "residency-refresh-fault-or-cancel-refuses-original-candidate");
+        Expect(session.Document() == original && session.Generation() == generation &&
+                   session.history.IsCurrent(history) && session.history.CurrentRevision() == originalRevision &&
+                   !session.history.IsModified(),
+               "residency-refusal-preserves-document-generation-user-and-saved-revision");
+        refreshed = publication->RefreshHistoryResidency(); // Same pixel/history candidate, no recapture or new edit.
+    }
+    Expect(refreshed &&
+               publication->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready &&
+               session.ApplyPreparedImageImportIfCurrent(publication.value()),
+           "residency-refreshed-original-import-publishes-once");
+    permit.Reset();
+    Expect(HasActivePixel(session, {31, 32, 33, 255}) && session.history.UndoCount() == 1 &&
+               session.history.UndoName() == L"Import Image" &&
+               session.history.RetainedBytes(session.Document()) == 4 && session.history.IsModified(),
+           "residency-import-trims-old-cache-keeps-one-entry-and-original-saved-marker");
+    const Guid committedRevision = session.history.CurrentRevision();
+    session.Undo();
+    Expect(session.Document() == original && session.history.CurrentRevision() == originalRevision &&
+               !session.history.IsModified(),
+           "residency-import-undo-restores-original-document-and-saved-revision");
+    session.Redo();
+    Expect(HasActivePixel(session, {31, 32, 33, 255}) && session.history.CurrentRevision() == committedRevision &&
+               session.history.IsModified() && !session.ApplyPreparedImageImportIfCurrent(publication.value()),
+           "residency-import-redo-keeps-original-prepared-revision-and-refuses-reuse");
+}
+
+void CheckImportPermitMoves()
+{
+    auto owner = std::make_unique<DocumentSession>();
+    auto& session = *owner;
+    const auto document = PixelDocument(L"Moved saved canvas", {81, 82, 83, 255});
+    auto prepared = DocumentSession::PrepareDocumentLifecyclePublication(session.CaptureImageImportAuthority(),
+                                                                         session.history.CaptureState(), document,
+                                                                         document.layers.front().id, L"New Canvas");
+    if (!prepared)
+    {
+        Expect(false, "residency-permit-move-prepared");
+        return;
+    }
+    DocumentHistory::ResidencyPermit permit;
+    Expect(prepared->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready,
+           "residency-replacement-permit-held-before-move");
+    auto destination = std::move(prepared.value());
+    {
+        auto lease = Raster::TryResidencyLease();
+        Expect(lease.Held(), "residency-replacement-move-releases-old-borrowed-permit");
+    }
+    Expect(prepared->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !session.ApplyPreparedImageImportIfCurrent(prepared.value()) &&
+               !session.ApplyPreparedImageImportIfCurrent(destination) && !session.Document(),
+           "residency-moved-replacement-needs-fresh-permit-before-publication");
+    Expect(destination.TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready &&
+               session.ApplyPreparedImageImportIfCurrent(destination) &&
+               session.Document() == std::optional(document) && session.history.UndoCount() == 1 &&
+               !session.history.IsModified(),
+           "residency-moved-replacement-publishes-once-with-fresh-permit");
+    permit.Reset();
+    auto consumed = std::move(destination);
+    Expect(consumed.TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !consumed.RefreshHistoryResidency() && !session.ApplyPreparedImageImportIfCurrent(consumed),
+           "residency-moving-applied-replacement-cannot-revive-authority");
+}
+
+void CheckReplacementLateResidency()
+{
+    const auto dense = PixelDocument(L"Final replacement", {71, 72, 73, 255});
+    const Raster leaf =
+        Raster::Make(1, 1, RasterFormat::Bgra8888, std::array<std::uint8_t, 4>{61, 62, 63, 255}.data(), 4);
+    const Raster late = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    auto baselineDraft = DocumentFixture::Copy(dense);
+    baselineDraft.layers.front().asset = RasterAsset{late, {}, L"Sparse imported baseline"};
+    const std::optional<CanvasDocument> baseline = std::move(baselineDraft).Seal();
+    const std::optional<CanvasDocument> after = dense;
+    DocumentHistory history{100, 8};
+    auto replacement =
+        DocumentHistory::PrepareReplacement(history.CaptureState(), baseline, dense.layers.front().id, after,
+                                            dense.layers.front().id, L"Additional imported image");
+    if (!replacement)
+    {
+        Expect(false, "residency-replacement-late-candidate-prepared");
+        return;
+    }
+    const Guid savedBaseline = replacement->BaselineRevision();
+    const auto original = history.CaptureState();
+    (void)late.Data();
+    DocumentHistory::ResidencyPermit permit;
+    Expect(replacement->BaselineRevision() == savedBaseline && late.ByteSize() == 8 &&
+               permit.TryAcquire(replacement.value()) == DocumentHistory::ResidencyValidation::Refresh &&
+               !history.PublishReplacement(replacement.value()) && history.IsCurrent(original),
+           "residency-replacement-late-cache-refuses-unrefreshed-original-lineage");
+    CancelSource stop;
+    (void)stop.Cancel();
+    Expect(!DocumentHistory::RefreshPreparedResidency(replacement.value(), after, stop.Token()) &&
+               replacement->BaselineRevision() == savedBaseline && history.IsCurrent(original),
+           "residency-replacement-cancel-preserves-saved-baseline-and-live-history");
+    Expect(DocumentHistory::RefreshPreparedResidency(replacement.value(), after) &&
+               replacement->BaselineRevision() == savedBaseline &&
+               permit.TryAcquire(replacement.value()) == DocumentHistory::ResidencyValidation::Ready &&
+               history.PublishReplacement(replacement.value()),
+           "residency-replacement-refresh-preserves-original-saved-baseline");
+    permit.Reset();
+    Expect(history.UndoCount() == 0 && !history.CanRedo() && history.RetainedBytes(after) == 0 &&
+               history.CurrentRevision() != savedBaseline && history.IsModified() &&
+               !history.PublishReplacement(replacement.value()),
+           "residency-replacement-trim-drops-oversized-baseline-entry-without-new-revision");
+
+    auto owner = std::make_unique<DocumentSession>();
+    auto& session = *owner;
+    auto newCanvas = DocumentHistory::PrepareSavedReplacement(session.history.CaptureState(), after,
+                                                              dense.layers.front().id, L"New Canvas");
+    if (!newCanvas)
+    {
+        Expect(false, "residency-new-canvas-saved-candidate-prepared");
+        return;
+    }
+    const Guid savedFinal = newCanvas->BaselineRevision();
+    const Raster secondLate = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 2);
+    (void)secondLate.Data();
+    Expect(permit.TryAcquire(newCanvas.value()) == DocumentHistory::ResidencyValidation::Refresh &&
+               DocumentHistory::RefreshPreparedResidency(newCanvas.value(), after) &&
+               newCanvas->BaselineRevision() == savedFinal &&
+               permit.TryAcquire(newCanvas.value()) == DocumentHistory::ResidencyValidation::Ready &&
+               session.history.PublishReplacement(newCanvas.value()),
+           "residency-new-canvas-refresh-keeps-original-final-saved-revision");
+    permit.Reset();
+    Expect(session.history.CurrentRevision() == savedFinal && !session.history.IsModified() &&
+               session.history.UndoCount() == 1 && session.history.UndoName() == L"New Canvas",
+           "residency-new-canvas-remains-saved-with-one-entry-after-unrelated-growth");
+}
+
+void CheckReplacementResidency()
+{
+    auto owner = std::make_unique<DocumentSession>();
+    auto& session = *owner;
+    auto replacement = PixelDocument(L"New saved canvas", {41, 42, 43, 255});
+    auto prepared = DocumentSession::PrepareDocumentLifecyclePublication(session.CaptureImageImportAuthority(),
+                                                                         session.history.CaptureState(), replacement,
+                                                                         replacement.layers.front().id, L"New Canvas");
+    DocumentHistory::ResidencyPermit permit;
+    Expect(prepared && prepared->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready &&
+               session.ApplyPreparedImageImportIfCurrent(prepared.value()),
+           "residency-saved-replacement-uses-underlying-history-permit");
+    permit.Reset();
+    Expect(session.Document() == std::optional(replacement) && session.history.UndoCount() == 1 &&
+               session.history.UndoName() == L"New Canvas" && !session.history.IsModified(),
+           "residency-saved-replacement-keeps-new-canvas-entry-and-saved-lineage");
+    session.Undo();
+    auto closing = DocumentSession::PrepareDocumentLifecyclePublication(
+        session.CaptureImageImportAuthority(), session.history.CaptureState(), std::nullopt, std::nullopt, {});
+    Expect(closing && closing->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Ready &&
+               session.ApplyPreparedImageImportIfCurrent(closing.value()) && session.history.CanRedo(),
+           "residency-absent-close-no-op-preserves-redo");
+    Expect(closing && closing->TryAcquireHistoryResidency(permit) == DocumentHistory::ResidencyValidation::Invalid &&
+               !closing->RefreshHistoryResidency() && !session.ApplyPreparedImageImportIfCurrent(closing.value()),
+           "residency-absent-close-no-op-is-single-use");
+}
+
 int RunImportPublicationTests()
 {
     gFailures = 0;
@@ -798,6 +1060,13 @@ int RunImportPublicationTests()
                    "replacement-snapshot-refusal-preserves-literal-original-pixels");
         }
     CheckLiveDraftReplacement();
+    CheckImportResidencyMoveAndNoOp();
+    CheckImportResidencyLateCache(false, false);
+    CheckImportResidencyLateCache(true, false);
+    CheckImportResidencyLateCache(false, true);
+    CheckReplacementResidency();
+    CheckReplacementLateResidency();
+    CheckImportPermitMoves();
     std::printf("import-publication.assertions=%d failed=%d\n", gAssertions, gFailures);
     return gFailures;
 }

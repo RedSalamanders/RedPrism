@@ -108,9 +108,13 @@
     <ClCompile Include="CompositionTests.cpp" />
     <ClCompile Include="GpuCapabilityTests.cpp" />
     <ClCompile Include="GpuWorkTests.cpp" />
+    <ClCompile Include="GpuUploadAdmissionTests.cpp" />
+    <ClCompile Include="GpuUploadTransportTests.cpp" />
     <ClCompile Include="DocumentReadbackTests.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
+    <ClCompile Include="..\..\RedPrism\GpuUploadWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />

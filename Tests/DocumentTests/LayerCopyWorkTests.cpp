@@ -10,10 +10,12 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <new>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -178,11 +180,11 @@ bool SameOwnerState(DocumentSession& session, const OwnerState& before)
 }
 
 LayerCopyResult Prepare(DocumentSession& session, Executor& executor, CancelToken cancellation = {},
-                        LayerCopyObserver observer = {})
+                        LayerCopyObserver observer = {}, DocumentHistory::PrepareObserver historyObserver = {})
 {
     auto input = session.PrepareLayerCopyInput();
     return input ? DocumentSession::PrepareLayerCopyPublication(std::move(input.value()), executor, cancellation,
-                                                                observer)
+                                                                observer, historyObserver)
                  : LayerCopyResult{};
 }
 
@@ -578,6 +580,148 @@ void StalePublicationRefusals()
         Expect(changed && !applied && SameOwnerState(session, changedState), names[i]);
     }
 }
+
+struct ResidencyRefreshFault final
+{
+    bool reached = false;
+};
+
+void FailLayerCopyRefreshAtStorageClone(void* raw, DocumentHistory::PrepareStage stage)
+{
+    if (stage == DocumentHistory::PrepareStage::StorageIndexClone)
+    {
+        static_cast<ResidencyRefreshFault*>(raw)->reached = true;
+        throw std::bad_alloc{};
+    }
+}
+
+void PreparedLayerCopyResidencyRefresh()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    constexpr std::array<std::uint8_t, 4> leafPixels{81, 82, 83, 255};
+    constexpr std::array<std::uint8_t, 8> duplicatePixels{81, 82, 83, 255, 0, 0, 0, 0};
+    const Raster leaf = Bgra(1, 1, leafPixels);
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {RasterTile{0, 0, leaf}}, 0);
+    ImageLayer layer = ImageLayer::Blank(L"Sparse source", Vec2{2, 1});
+    layer.id = Id("61000000-0000-4000-8000-000000000041");
+    layer.asset = RasterAsset{sparse, {}, L"Sparse source pixels"};
+    DocumentFixture fixture;
+    fixture.id = Id("61000000-0000-4000-8000-000000000040");
+    fixture.width = 2;
+    fixture.height = 1;
+    fixture.layers.push_back(std::move(layer));
+    const Guid layerID = fixture.layers.front().id;
+    DocumentSession session;
+    session.ReplaceDocument(std::move(fixture).Seal(), layerID);
+    for (int edit = 1; edit <= 100; ++edit)
+    {
+        const std::wstring name = L"Cap edit " + std::to_wstring(edit);
+        session.RenameLayer(layerID, name);
+    }
+    session.history.MarkSaved();
+    const Guid savedRevision = session.history.CurrentRevision();
+    const OwnerState before(session);
+    ExecutorSerial executor;
+    LayerCopyResult prepared = Prepare(session, executor);
+    DocumentHistory::ResidencyPermit permit;
+    const auto initial =
+        prepared.publication ? prepared.publication->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+    const bool sparseBeforeWorker = sparse.IsSparse() && !sparse.IsMaterialized() && sparse.ByteSize() == 0 &&
+                                    leaf.ByteSize() == 4 && initial == Validation::Ready &&
+                                    session.history.UndoCount() == 100 &&
+                                    session.Document()->layers.front().name == L"Cap edit 100" &&
+                                    session.history.CurrentRevision() == savedRevision && !session.history.IsModified();
+    permit.Reset();
+    const std::uint64_t epoch = Raster::ResidencyEpoch();
+    const std::uint8_t* assembled = nullptr;
+    std::thread worker([&] { assembled = sparse.Data(); });
+    worker.join();
+    const bool literalAssembly = assembled && std::equal(duplicatePixels.begin(), duplicatePixels.end(), assembled) &&
+                                 sparse.ByteSize() == 8 && leaf.ByteSize() == 4 &&
+                                 sparse.ByteSize() + leaf.ByteSize() == 12 && Raster::ResidencyEpoch() == epoch + 1;
+    const auto refresh =
+        prepared.publication ? prepared.publication->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+
+    CancelSource cancellation;
+    (void)cancellation.Cancel();
+    const bool cancelledRefresh = prepared.publication &&
+                                  !prepared.publication->RefreshHistoryResidency(cancellation.Token()) &&
+                                  prepared.publication->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                                  SameOwnerState(session, before) &&
+                                  session.history.CurrentRevision() == savedRevision && !session.history.IsModified();
+    ResidencyRefreshFault fault;
+    bool allocationPropagated = false;
+    if (prepared.publication)
+    {
+        try
+        {
+            (void)prepared.publication->RefreshHistoryResidency({}, {&FailLayerCopyRefreshAtStorageClone, &fault});
+        }
+        catch (const std::bad_alloc&)
+        {
+            allocationPropagated = true;
+        }
+    }
+    const bool failedRefresh = fault.reached && allocationPropagated && prepared.publication &&
+                               prepared.publication->TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                               SameOwnerState(session, before) && session.history.CurrentRevision() == savedRevision &&
+                               !session.history.IsModified();
+    const bool refreshed = prepared.publication && prepared.publication->RefreshHistoryResidency();
+    const auto ready =
+        prepared.publication ? prepared.publication->TryAcquireHistoryResidency(permit) : Validation::Invalid;
+    const bool originalIntentSurvivedRefresh = refreshed && ready == Validation::Ready &&
+                                               SameOwnerState(session, before) && session.history.UndoCount() == 100 &&
+                                               session.history.CurrentRevision() == savedRevision &&
+                                               !session.history.IsModified();
+    Expect(sparseBeforeWorker && literalAssembly && refresh == Validation::Refresh,
+           "residency-late-sparse-growth-requests-same-duplicate-refresh-with-literal-bytes");
+    Expect(cancelledRefresh && failedRefresh,
+           "residency-cancelled-and-storage-clone-failed-refresh-preserve-live-intent");
+    Expect(originalIntentSurvivedRefresh, "residency-refresh-preserves-saved-revision-and-entry-cap-trim-decision");
+
+    if (!prepared.publication)
+    {
+        permit.Reset();
+        Expect(false, "residency-moved-from-and-applied-layer-copy-refuse-reuse");
+        Expect(false, "residency-publish-undo-redo-exact-duplicate-and-trim-oldest-entry");
+        return;
+    }
+    PreparedLayerCopy moved(std::move(prepared.publication.value()));
+    const bool movedFromRefused = prepared.publication->TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                  !prepared.publication->RefreshHistoryResidency();
+    const bool movedRequiresFreshPermit =
+        !session.ApplyPreparedLayerCopyIfCurrent(moved) && SameOwnerState(session, before);
+    const bool movedReady = moved.TryAcquireHistoryResidency(permit) == Validation::Ready;
+    const bool applied = session.ApplyPreparedLayerCopyIfCurrent(moved);
+    permit.Reset(); // Publication acknowledgement releases the lease before restore callbacks or queries.
+    const ImageLayer* duplicate = session.ActiveLayer();
+    const bool appliedRefused = applied && moved.TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                !moved.RefreshHistoryResidency() && !session.ApplyPreparedLayerCopyIfCurrent(moved);
+    const Guid duplicateID = duplicate ? duplicate->id : Guid{};
+    const bool duplicatePublished = applied && appliedRefused && duplicate && duplicate->name == L"Cap edit 100 copy" &&
+                                    duplicate->asset && duplicate->asset->image == sparse &&
+                                    session.history.UndoCount() == 100 &&
+                                    session.history.UndoName() == L"Duplicate Layer" && session.history.IsModified();
+    session.Undo();
+    const bool undoRestoresSavedUserState =
+        session.Document() && session.Document()->layers.front().name == L"Cap edit 100" &&
+        session.ActiveLayerID() == layerID && session.history.CurrentRevision() == savedRevision &&
+        !session.history.IsModified();
+    session.Redo();
+    duplicate = session.ActiveLayer();
+    const bool redoRestoresExactDuplicate = duplicate && duplicate->id == duplicateID && duplicate->asset &&
+                                            RasterEquals(duplicate->asset->image, 2, 1, duplicatePixels) &&
+                                            session.history.UndoName() == L"Duplicate Layer";
+    for (int undo = 0; undo < 100; ++undo)
+        session.Undo();
+    const bool oldestEntryTrimmed = session.history.UndoCount() == 0 && session.Document() &&
+                                    session.Document()->layers.front().name == L"Cap edit 1";
+    permit.Reset();
+    Expect(movedFromRefused && movedRequiresFreshPermit && movedReady && appliedRefused,
+           "residency-moved-from-and-applied-layer-copy-refuse-reuse");
+    Expect(duplicatePublished && undoRestoresSavedUserState && redoRestoresExactDuplicate && oldestEntryTrimmed,
+           "residency-publish-undo-redo-exact-duplicate-and-trim-oldest-entry");
+}
 } // namespace
 
 int RunLayerCopyWorkTests()
@@ -589,5 +733,6 @@ int RunLayerCopyWorkTests()
     RefusalsAndSparseBudgets();
     CancellationAndMovedFromInput();
     StalePublicationRefusals();
+    PreparedLayerCopyResidencyRefresh();
     return gFailures;
 }

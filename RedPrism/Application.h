@@ -525,6 +525,8 @@ class Application final : public ChromeEvents
                                             std::optional<std::vector<ImageImportFilePlan>> files, bool newProject,
                                             std::optional<Vec2> center) noexcept;
     int RunImageImportSelfTest() noexcept;
+    int RunImageImportResidencySelfTest(std::span<const std::wstring_view> paths) noexcept;
+    int RunImageWrapperResidencySelfTest(unsigned int kind) noexcept;
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;

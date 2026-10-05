@@ -1,0 +1,94 @@
+#pragma once
+
+#include "GpuCapabilities.h"
+#include "Jobs.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+
+struct GpuUploadLease final
+{
+    std::size_t slot = 8;
+    std::uint64_t generation = 0;
+    std::uint64_t queueIdentity = 0;
+    [[nodiscard]] bool operator==(const GpuUploadLease&) const noexcept = default;
+};
+
+struct GpuUploadRows final
+{
+    std::uint8_t* data = nullptr;
+    std::size_t capacity = 0;
+    std::size_t rowPitch = 0;
+    unsigned int width = 0;
+    unsigned int height = 0;
+    GpuUploadLease lease;
+    std::uint64_t deviceGeneration = 0;
+};
+
+enum class GpuUploadFill : std::uint8_t
+{
+    Ready,
+    Cancelled,
+    Failed,
+};
+
+class GpuUploadReceiver
+{
+  public:
+    virtual ~GpuUploadReceiver() = default;
+    // Owner callbacks. On successful admission WritableRowsReady is called at most once, then UploadFinished
+    // exactly once. Failure before mapping calls only UploadFinished. The receiver survives the final callback.
+    virtual void WritableRowsReady(JobTicket ticket, GpuUploadRows rows) noexcept = 0;
+    virtual void UploadFinished(JobTicket ticket, HRESULT result) noexcept = 0;
+};
+
+class OwnerWorkMultiplexer;
+
+// A bounded chunk transport. It never publishes display/document owners or prepares pixels. A job owns the
+// source and destination reservation; it must acknowledge each mapped loan even after cancellation/removal.
+class GpuUploadQueue final : public OwnerWorkPump
+{
+  public:
+    static constexpr std::size_t kCapacity = 8;
+    static constexpr std::size_t kMaxInFlight = 2;
+    static constexpr std::uint64_t kChunkBytes = 1024ULL * 1024;
+    static constexpr std::uint64_t kMaxRowBytes = 128ULL * 1024;
+    static constexpr std::uint64_t kStagingCapBytes = 16ULL * 1024 * 1024;
+
+    GpuUploadQueue() noexcept;
+    ~GpuUploadQueue();
+    GpuUploadQueue(const GpuUploadQueue&) = delete;
+    GpuUploadQueue& operator=(const GpuUploadQueue&) = delete;
+    [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer* routes = nullptr) noexcept;
+    [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context,
+                               bool forceEventForTest = false) noexcept;
+    // Owner only. The precreated destination must belong to the bound device and be DEFAULT, single-sample,
+    // BGRA8 or Gray8. One Pump transition maps or records at most one admitted chunk; no owner pixel copying.
+    [[nodiscard]] HRESULT Enqueue(ID3D11Texture2D* destination, unsigned int subresource, unsigned int x,
+                                  unsigned int y, unsigned int width, unsigned int height, JobTicket ticket,
+                                  GpuUploadReceiver& receiver) noexcept;
+    // Worker-safe exact-generation acknowledgement. This is the final access to the lent rows. Duplicate,
+    // foreign and unpublished leases cannot acknowledge a newer loan. Only atomics and a scheduler wake run.
+    [[nodiscard]] bool PublishFilled(GpuUploadLease lease, GpuUploadFill result) noexcept;
+    void Cancel(JobTicket ticket) noexcept;
+    void RetireDevice() noexcept;
+    void StopNotifications() noexcept;
+    // Must follow joining every filling worker. Acknowledges Unmap on the retained original contexts, even
+    // after removal; callbacks are suppressed during shutdown. It never touches another generation's rows.
+    void CloseAfterWorkers() noexcept;
+    [[nodiscard]] bool HasPending() const noexcept override;
+    [[nodiscard]] bool HasReady() const noexcept override;
+    void Pump() noexcept override;
+    [[nodiscard]] std::uint64_t StagingBytes() const noexcept;
+    [[nodiscard]] std::size_t InFlightCount() const noexcept;
+    [[nodiscard]] std::size_t LentCount() const noexcept;
+    [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept;
+    [[nodiscard]] GpuCapabilities::CompletionRoute CompletionRoute() const noexcept;
+    void SetMapBusyForTest(unsigned int attempts) noexcept;
+    [[nodiscard]] unsigned int MapAttemptsForTest() const noexcept;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> _impl;
+};

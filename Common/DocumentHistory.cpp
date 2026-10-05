@@ -1396,6 +1396,19 @@ void DocumentHistory::ResidencyPermit::Reset() noexcept
     _lease.Reset();
 }
 
+DocumentHistory::ResidencyValidation DocumentHistory::ResidencyPermit::TryAcquire(
+    ReplacementPublication& publication) noexcept
+{
+    return TryAcquire(publication.history);
+}
+
+bool DocumentHistory::RefreshPreparedResidency(ReplacementPublication& publication,
+                                               const std::optional<CanvasDocument>& current, CancelToken cancellation,
+                                               PrepareObserver observer)
+{
+    return RefreshPreparedResidency(publication.history, current, cancellation, observer);
+}
+
 bool DocumentHistory::RefreshPreparedResidency(Publication& publication, const std::optional<CanvasDocument>& current,
                                                CancelToken cancellation, PrepareObserver observer)
 {

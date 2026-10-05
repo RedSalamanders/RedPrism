@@ -29,6 +29,12 @@ struct ImageImportTestGate final
     bool captureReservationHeld = false; // observed in the real admitted owner capture hook
     std::atomic<bool> retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> historyFaultHits{0};
+    std::atomic<unsigned int> captures{0}, preparations{0}, residentGrowths{0}, residencyRefreshes{0};
+    std::atomic<bool> refreshReservationHeld{false};
+    std::atomic<bool> refreshTicketMatches{false};
+    std::optional<JobTicket> capturedTicket; // owner-only capture/completion witness
+    Raster lateResidencySource;
+    bool throwResidencyRefresh = false, cancelResidencyRefresh = false;
     std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
     std::uint64_t preparationReservationBytes = 0; // owner-only assertion
     JobResult result{};

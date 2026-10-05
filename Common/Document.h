@@ -1709,6 +1709,7 @@ class DocumentHistory
     };
 
     class ResidencyPermit;
+    class ReplacementPublication;
     struct Publication final
     {
         Publication() = default;
@@ -1768,6 +1769,7 @@ class DocumentHistory
         ResidencyPermit(const ResidencyPermit&) = delete;
         ResidencyPermit& operator=(const ResidencyPermit&) = delete;
         [[nodiscard]] ResidencyValidation TryAcquire(Publication& publication) noexcept;
+        [[nodiscard]] ResidencyValidation TryAcquire(ReplacementPublication& publication) noexcept;
         void Reset() noexcept;
 
       private:
@@ -1832,6 +1834,7 @@ class DocumentHistory
 
       private:
         friend class DocumentHistory;
+        friend class ResidencyPermit;
         ReplacementPublication(Publication prepared, Guid baseline) noexcept
             : history(std::move(prepared)), savedRevision(baseline)
         {
@@ -1839,6 +1842,9 @@ class DocumentHistory
         Publication history;
         Guid savedRevision;
     };
+    [[nodiscard]] static bool RefreshPreparedResidency(ReplacementPublication& publication,
+                                                       const std::optional<CanvasDocument>& current,
+                                                       CancelToken cancellation = {}, PrepareObserver observer = {});
     [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(
         StateView view, const std::optional<CanvasDocument>& baseline, const std::optional<Guid>& baselineActive,
         const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,

@@ -114,6 +114,8 @@
     <ClInclude Include="HistoryRestoreTests.h" />
     <ClInclude Include="ImportHistoryTests.h" />
     <ClInclude Include="ImportPublicationTests.h" />
+    <ClInclude Include="RasterUploadWorkTests.h" />
+    <ClInclude Include="..\..\Common\RasterUploadWork.h" />
     <ClInclude Include="HistoryEntriesTests.h" />
     <ClInclude Include="RecordRootTests.h" />
     <ClInclude Include="RecordOwnershipBoundsTests.h" />
@@ -214,6 +216,8 @@
     <ClCompile Include="HistoryRestoreTests.cpp" />
     <ClCompile Include="ImportHistoryTests.cpp" />
     <ClCompile Include="ImportPublicationTests.cpp" />
+    <ClCompile Include="RasterUploadWorkTests.cpp" />
+    <ClCompile Include="..\..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="HistoryEntriesTests.cpp" />
     <ClCompile Include="RecordRootTests.cpp" />
     <ClCompile Include="RecordOwnershipBoundsTests.cpp" />

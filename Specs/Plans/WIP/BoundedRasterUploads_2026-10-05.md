@@ -5,9 +5,14 @@
 - [x] Identify current owner costs and preserve the six qualified sampler measurements.
 - [x] Specify admission, row leases, completion, cancellation, generation and retirement below.
 - [ ] U1: review/register the worker row-copy helper; qualify independent pitched-row and sparse goldens.
-  - [x] Primary-reviewed helper and literal CPU cases pass private strict compilation and linked CPU probes ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)); normal registered matrix remains open.
+  - [x] Registered worker row-copy helper passes 73 independent CPU controls in the full identical-source Debug/Release/real ASan matrix, Release analysis and three ARM64 cross-builds ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). Proxy reduction and consumer qualification remain open.
+  - [x] Private strict CPU copy/reduction probe preserves 73 copy controls and adds 41 independent crop-grid/rounding/edge/scratch/sparse/cancellation controls. Normal registration, resource-plan admission and consumer activation remain open.
 - [ ] U2: implement the bounded owner upload queue and event-driven staging reuse; qualify real WARP copies.
+  - [x] Original registered transport passes 165 controls with all 746 predecessors preserved in full Debug r122, Release r126 and real ASan r124 on the same source as analysis/cross-builds (admission, crops/guards, events, cancellation, rebind, staging reuse and held-worker shutdown). The newer private fault/receiver integration and consumer activation remain open ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)).
+  - [x] Private strict WARP startup/fault probe preserves the 165 queue controls and adds 181 independent partial-initialization/loan/Map/pitch/rearm/signal/quarantine checks. Normal configuration and consumer qualification remain open.
 - [ ] U3: prepare complete raster residency plans on workers after admission; account for every resident owner.
+  - [x] Private immutable arithmetic layout passes 34 literal mip/crop/chunk/scratch/retention/sparse controls. It does not implement complete resource-plan admission or device/display publication.
+  - [ ] Qualify the opt-in terminal retirement acknowledgement protocol before a job can own an upload receiver across cancellation or failure.
 - [ ] U4: stage resource creation and preserve the old display until a complete current plan can publish.
 - [ ] U5: integrate display and utility consumers, sparse/proxy/mask/preview sources and borrowed brush adoption.
 - [ ] U6: bound layer/chrome synchronization and retire replaced CPU/GPU owners through their correct lanes.

@@ -313,5 +313,5 @@ int Application::RunShapeWorkSelfTest() noexcept
     }
     std::printf("shape-host summary: %u checks, %d failures\n", checks, failures);
     std::fflush(stdout);
-    return failures ? 5 : 0;
+    return failures ? 5 : RunImageWrapperResidencySelfTest(2);
 }
