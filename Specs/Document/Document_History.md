@@ -26,7 +26,7 @@ covered by global headroom. The byte query never traverses selection points. Emp
 
 ## P1.9 H3 candidate contract (scoped Debug qualification)
 
-The integrated candidate maintains an immutable `HistoryStorageIndex` with owning entry, raster and selection
+The managed candidate maintains an immutable `DocumentHistory::StorageIndex` with owning entry, raster and selection
 membership records. Preparation diffs changed entries; Undo/Redo move entry handles between past and future
 without changing membership. The index holds every identity owner and excludes identities still owned by the
 live document. `RetainedBytes` reads current resident bytes from each unique retained raster and selection; it
