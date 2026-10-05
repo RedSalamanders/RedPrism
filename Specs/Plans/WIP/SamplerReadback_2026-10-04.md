@@ -2,6 +2,8 @@
 
 ## Delivery checklist
 
+- [ ] Qualify new pointer-held memory-wait Escape: primary reviewed the delegated fixture and seals/releases the gesture before requesting cancellation; original ticket/receipt owners await acknowledgement. Current normal matrix is required.
+
 - [x] Audit the synchronous press/move/release path and its committed-source, palette, picker and shutdown consumers.
 - [x] Implement repeated-pixel continuation; full Debug r10 passes its WARP controls, including between-point device replacement. Other profiles remain due.
 - [x] Implement fixed scalar session/picker input authority; full Debug r10 passes all 13 palette and eight picker controls. Other profiles remain due.

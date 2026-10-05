@@ -197,3 +197,12 @@ reason, the posted prompt's Cancel keeps the window, Don't Save posts a close th
 is allowed) and `WM_ENDSESSION(TRUE)` (the settings file is written), and sends `WM_CAPTURECHANGED`, `WM_KILLFOCUS`,
 `WM_ACTIVATEAPP` and `WM_MOUSELEAVE` mid-gesture (a stroke commits, a Move drag goes back, a splitter drag
 restores, Space panning ends).
+
+### Sampler Escape while admission waits
+
+Escape on a live sampler MUST seal accepted input and release its pointer gesture/capture immediately,
+including while the original scheduler ticket awaits memory admission. It requests cancellation without
+publishing or releasing unfinished source/row/GPU owners. The selected receipt, ticket, history barrier and
+reservation survive until acknowledgement; then the original receipt reports cancellation and joined cleanup
+drains all opening references. Previously published color remains selected. No source is captured on refusal
+or cancellation before admission; palette, document and history stay unchanged in that case.

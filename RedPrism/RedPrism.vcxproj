@@ -135,6 +135,7 @@
     <ClInclude Include="..\Common\RasterUploadWork.h" />
     <ClInclude Include="..\Common\RasterUploadLayout.h" />
     <ClInclude Include="..\Common\RasterResidencyPlanWork.h" />
+    <ClInclude Include="..\Common\RasterResidencyManifestWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
     <ClInclude Include="..\Common\Selection.h" />
     <ClInclude Include="..\Common\BrushStroke.h" />
@@ -258,6 +259,7 @@
     <ClCompile Include="..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="..\Common\RasterUploadLayout.cpp" />
     <ClCompile Include="..\Common\RasterResidencyPlanWork.cpp" />
+    <ClCompile Include="..\Common\RasterResidencyManifestWork.cpp" />
     <ClCompile Include="..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\Common\DocumentSizeHistory.cpp" />

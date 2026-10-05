@@ -2,6 +2,14 @@
 
 ## Implementation checklist
 
+- [ ] U5 chrome: prepare immutable hierarchy rows/localized labels/ID lookup on a worker under complete metadata/source admission; preserve collapse/locale/source authority and atomically adopt. Qualify actual pinned DxUi notification/layout/accessibility costs and largest layer-count G1.
+  - [x] Primary-reviewed private CPU preparation passes 39 literal/max-count/depth/name/formatting/sparse/admission/cancellation/off-owner retirement checks. Published lookup uses at most 14 Guid comparisons, including adversarial hash collisions. This establishes no normal or chrome qualification.
+  - [x] Primary-reviewed private scheduler accounting passes 39 transfer/callback/refusal/token reuse/capacity/admission-wakeup/Close checks. Successful callback transfer preserves the original reservation with no second admission; 64 retained slots remain charged while useful jobs are idle.
+  - [ ] Qualify collapse revision and read-authority fixtures and the actual admitted owner job with stale/cancel/pre-admission/refusal/failure/shutdown paths, one newest refresh and worker retirement.
+  - [ ] Integrate borrowed prepared rows into the exact API-3 pinned tree; atomically replace borrowing before retiring old source/name ownership. Disabled stale rows must refuse mask-target presses too.
+  - [ ] Qualify actual tree selection/drag/expansion, accessibility/locale behavior, normal configuration matrix and largest layer-count owner/frame costs. No production activation is authorized by the private components.
+  - [ ] After metadata-source capture, preserve the original reservation through active cache ownership; queue the complete graph for worker destruction before releasing cache accounting. Validate the separately charged deferred-release interval.
+
 - [ ] U3 resource manifest: qualify CPU-first immutable description, deduplicated raster/live coverage resources, per-kind lookup and stack/group requirements, then reserve the complete described GPU graph from actual adapter usage before creation. Preserve original conservative two-domain preparation and all its literals.
 
 - [x] Identify current owner costs and preserve the six qualified sampler measurements.

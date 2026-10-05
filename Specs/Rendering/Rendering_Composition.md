@@ -419,3 +419,21 @@ MipsComplete authority, which moves and clears with the owner. Future graphics u
 completion before retirement. This is one raster chain, not complete document/display qualification. Whole
 graph admission, shared-context consumer/fallback tests, live activation and original first-display/G1 remain
 required.
+
+### Dormant committed-resource description before GPU admission
+
+A separate CPU-only planning admission MUST reserve the immutable source/root, complete CPU plan/descriptor/hash
+capacities and serial upload scratch before capture. Worker preparation deduplicates owned raster layouts and
+live coverage keys, describes two mipped canvases, possible clipping stacks, enabled group coverage and per-kind
+adjustment resources. Missing live-source IDs need blank coverage. Tables are 256x1 RGBA32F; HSV uses a 33-cubed
+RGBA32F texture; grain needs no lookup. Distinct group/live roles retain their ID even when they name the same
+layer. Hidden inputs and unused potential stacks may conservatively overcount. Preparation neither reads or
+materializes source pixels, computes adjustment lookups, nor creates/records/publishes GPU work.
+
+The completed scalar requirement includes these logical textures and declared staging/driver allowances.
+Before any GPU creation the graphics owner MUST reserve the complete described graph against actual adapter
+usage and live/retired reservations. CPU admission/source ownership survives both phases, cancellation, refusal,
+partial output and deferred worker retirement. This description cannot approve driver usage or replace the
+separate preview/brush/utility/pipeline graph and its CPU/device metadata. Original conservative two-domain
+RasterResidencyAdmission/Prepare remains available with its original contract. This dormant description alone
+does not qualify live display integration, oversized mapping, complete resource creation/fallback or G1.

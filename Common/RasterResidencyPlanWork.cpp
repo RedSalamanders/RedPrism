@@ -137,6 +137,13 @@ RasterResidencyPlanWork::Handle RasterResidencyPlanWork::Prepare(CanvasDocument 
                                                                  const RasterResidencyAdmission& admission,
                                                                  CancelToken cancellation)
 {
+    return PrepareCpu(std::move(source), admission, cancellation);
+}
+
+RasterResidencyPlanWork::Handle RasterResidencyPlanWork::PrepareCpu(CanvasDocument source,
+                                                                    const RasterResidencyAdmission& admission,
+                                                                    CancelToken cancellation)
+{
     if (cancellation.IsCancelled() || !admission.IsValid() || source.id != admission._documentId ||
         source.layers.Identity() != admission._layerIdentity || source.layers.size() != admission._layerCount ||
         source.width != admission._width || source.height != admission._height ||

@@ -9,6 +9,9 @@
 #include <span>
 #include <vector>
 
+class RasterResidencyManifestWork;
+class RasterResidencyCpuAdmission;
+
 // Dormant committed-document preparation. No preview/brush override, utility tile, device allocation, mip
 // recording or display publication is included. Those consumers must admit their additional overlapping graph.
 struct RasterResidencyPlanOptions final
@@ -59,6 +62,7 @@ class RasterResidencyAdmission final
 
   private:
     friend class RasterResidencyPlanWork;
+    friend class RasterResidencyCpuAdmission;
     Guid _documentId;
     const void* _layerIdentity = nullptr; // immediate descriptor; never a cache key or owning authority
     std::size_t _layerCount = 0;
@@ -148,6 +152,11 @@ class RasterResidencyPlanWork final : public DeferredReleaseNode
     }
 
   private:
+    friend class RasterResidencyManifestWork;
+    // Shared CPU preparation only. The public legacy entry requires both domains; the manifest entry requires
+    // its separately admitted CPU envelope and cannot create, upload or publish GPU resources.
+    [[nodiscard]] static Handle PrepareCpu(CanvasDocument source, const RasterResidencyAdmission& admission,
+                                           CancelToken cancellation);
     CanvasDocument _source;
     std::vector<RasterUploadLayout> _layouts;
     std::vector<RasterResidencyBinding> _bindings;

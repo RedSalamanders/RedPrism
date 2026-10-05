@@ -475,6 +475,7 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         Recovery,
         Cancel,
         Escape,
+        EscapeHeld,
         Refusal
     };
     struct Case final
@@ -483,7 +484,8 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         Scenario scenario;
     };
     constexpr std::array cases{Case{"recovery", Scenario::Recovery}, Case{"cancel", Scenario::Cancel},
-                               Case{"escape", Scenario::Escape}, Case{"refusal", Scenario::Refusal}};
+                               Case{"escape", Scenario::Escape}, Case{"escape-held", Scenario::EscapeHeld},
+                               Case{"refusal", Scenario::Refusal}};
     constexpr std::uint64_t headroom = kMemoryAdmissionHeadroomBytes;
     constexpr std::uint64_t ample = headroom + 32ull * 1024 * 1024;
     constexpr std::uint64_t blockerBytes = 4096;
@@ -625,7 +627,8 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
             return 5;
         }
         const ContinuationReceipt receipt = opening->receipt;
-        owner->OnPointer(WM_LBUTTONUP, 0, pointer);
+        if (test.scenario != Scenario::EscapeHeld)
+            owner->OnPointer(WM_LBUTTONUP, 0, pointer);
         for (std::size_t pass = 0; pass <= JobScheduler::kUiActionCapacity; ++pass)
         {
             (void)RunUiActions(owner->_jobs);
@@ -668,6 +671,22 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
         {
             expect(waitingState(), test.name,
                    "low-memory-admission-retains-original-ticket-and-receipt-without-capture");
+            if (test.scenario == Scenario::EscapeHeld)
+            {
+                const auto* heldSampling = std::get_if<ColorSampling>(&owner->_drag);
+                const auto* heldOpening = owner->FindSamplerOpening(openingId);
+                expect(heldSampling && heldSampling->opening == openingId && heldOpening &&
+                           heldOpening->ticket == samplerTicket &&
+                           heldOpening->receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0} &&
+                           receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0} &&
+                           GetCapture() == owner->_window.get() && captures == 0 &&
+                           owner->_jobs.ReservedMemoryBytes() == blockerBytes &&
+                           owner->_session.ForegroundColor() == brown &&
+                           owner->_session.IsDocumentReadCurrent(source.value()) &&
+                           owner->_session.history.CurrentRevision() == revision &&
+                           owner->_session.history.UndoCount() == undoCount,
+                       test.name, "live-color-sampling-opening-and-capture-wait-on-memory-admission");
+            }
             expect(!RunUiActions(owner->_jobs) && !owner->_jobs.HasUiWork() &&
                        owner->_jobs.ReservedMemoryBytes() == blockerBytes,
                    test.name, "waiting-sampler-has-no-idle-self-rearm-or-extra-reservation");
@@ -697,13 +716,23 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                 const LPARAM escapeDown = 1 | (static_cast<LPARAM>(MapVirtualKeyW(VK_ESCAPE, MAPVK_VK_TO_VSC)) << 16);
                 (void)SendMessageW(owner->_window.get(), WM_KEYDOWN, VK_ESCAPE, escapeDown);
                 const bool handled = owner->_lastKeyHandled;
+                const bool heldGestureReleased = test.scenario == Scenario::EscapeHeld &&
+                                                 std::holds_alternative<std::monostate>(owner->_drag) &&
+                                                 GetCapture() != owner->_window.get();
                 keys[VK_ESCAPE] = 0;
                 KeyboardState::Write(keys);
                 (void)SendMessageW(owner->_window.get(), WM_KEYUP, VK_ESCAPE, escapeDown | (1ll << 31));
-                expect(handled && owner->_samplerHostTicket == samplerTicket && owner->_samplerHostStamp &&
-                           owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
-                           receipt.Read().outcome == HostOutcome::Pending,
-                       test.name, "physical-escape-routes-to-pending-sampler-cancellation");
+                if (test.scenario == Scenario::EscapeHeld)
+                    expect(handled && heldGestureReleased && owner->_samplerHostTicket == samplerTicket &&
+                               owner->_samplerHostStamp &&
+                               owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
+                               receipt.Read() == ContinuationReceipt::Result{HostOutcome::Pending, 0},
+                           test.name, "physical-escape-releases-held-gesture-and-capture-immediately");
+                else
+                    expect(handled && owner->_samplerHostTicket == samplerTicket && owner->_samplerHostStamp &&
+                               owner->_historyWork.CancelRequested(owner->_samplerHostStamp.value()) && captures == 0 &&
+                               receipt.Read().outcome == HostOutcome::Pending,
+                           test.name, "physical-escape-routes-to-pending-sampler-cancellation");
             }
             (void)SetEvent(blocker.release.get());
         }
@@ -765,6 +794,22 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                        owner->_session.history.UndoCount() == undoCount,
                    test.name, "escape-acknowledges-blocker-and-retires-source-history-and-graph");
         }
+        else if (test.scenario == Scenario::EscapeHeld)
+        {
+            expect(result == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT} && captures == 0 &&
+                       owner->_session.ForegroundColor() == brown &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "escape-held-cancelled-same-receipt-preserves-palette-source-and-history");
+            expect(commonRetired && blocker.completions.load(std::memory_order_acquire) == 1 &&
+                       blocker.status.load(std::memory_order_acquire) == JobStatus::Finished &&
+                       blocker.error.load(std::memory_order_acquire) == S_OK &&
+                       owner->_session.IsDocumentReadCurrent(source.value()) &&
+                       owner->_session.history.CurrentRevision() == revision &&
+                       owner->_session.history.UndoCount() == undoCount,
+                   test.name, "escape-held-acknowledges-blocker-and-retires-memory-gpu-and-opening-references");
+        }
         else
         {
             expect(result == ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} && captures == 0 &&
@@ -778,7 +823,9 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                    test.name, "refusal-keeps-zero-reservation-and-retires-source-history-and-graph");
         }
         expect(std::holds_alternative<std::monostate>(owner->_drag) && GetCapture() != owner->_window.get(), test.name,
-               "physical-up-closes-sampler-gesture-and-releases-capture");
+               test.scenario == Scenario::EscapeHeld
+                   ? "physical-escape-closes-held-sampler-gesture-and-releases-capture"
+                   : "physical-up-closes-sampler-gesture-and-releases-capture");
         owner->Shutdown();
         owner->_samplerSourceCapturesForTest = nullptr;
         owner->_processingTestProbe = nullptr;

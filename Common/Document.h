@@ -2409,12 +2409,10 @@ class DocumentSession
                                                          std::size_t nameUnits = 0) const noexcept;
     [[nodiscard]] std::uint64_t PreservedLayerMetadataMemoryBytes(LayerMetadataKind kind,
                                                                   std::size_t nameUnits = 0) const noexcept;
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
-                                                                                        WandSettings settings,
-                                                                                        bool antialiased) const;
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(Vec2 point,
-                                                                                            WandSettings settings,
-                                                                                            bool antialiased) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(
+        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(
+        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
         WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
@@ -3045,7 +3043,7 @@ class DocumentSession
 
   private:
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(Vec2 point, WandSettings settings,
-                                                                                   bool antialiased,
+                                                                                   bool antialiased, SelectionMode mode,
                                                                                    bool composite) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
         WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,

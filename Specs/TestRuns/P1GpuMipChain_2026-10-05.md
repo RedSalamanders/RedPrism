@@ -10,11 +10,11 @@
 - [x] Fresh Main source integration/private reference, exact normal registration and independent reviewer findings are reviewed; actual shared-context consumer qualification remains below.
 - [x] Identical-source Debug/Release/real ASan, analysis, ARM64 cross-builds and predecessor registry proof.
 - [x] Independently archive qualification and reconcile contracts.
-- [ ] Commit and push this qualified step.
+- [x] Commit and push this qualified step (`af7986f`).
 - [ ] Complete document graphs, generation/consumer/fallback activation and the original largest-fixture G1 gates.
   - [ ] Qualify actual composition/chrome/brush rendering after a mip pump on the shared context.
 
-**Status: managed normal qualification passes on the identical 825-input source; commit/push is next.**
+**Status: managed normal qualification passes on the identical 825-input source; committed/pushed as `af7986f`.**
 
 Parent: [bounded upload and first display](../Plans/WIP/BoundedRasterUploads_2026-10-05.md), U4.
 This is one admitted raster's chain. It does not qualify an entire document's resources or first composition.

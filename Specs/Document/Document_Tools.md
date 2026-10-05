@@ -1562,3 +1562,13 @@ block reconstructs within 1 everywhere as one `Content-Aware Fill` entry and und
 and a no-source fill leave the original and the failed fill refuses to commit; no selection refuses) and adds the
 grown grid (a selection past a 40 × 30 layer's edge fills a 50 × 36 layer with opaque pixels). The WARP self-test
 drives Shift+Delete, Enter and the no-source refusal through `Application`.
+
+### Prepared wand mode and antialiasing authority
+
+The prepared wand layer/composite API captures New/Add/Subtract and antialiasing with the event settings.
+Invalid modes refuse before source capture. Matched New replaces, Add unions and Subtract removes the clipped
+outline from the captured selection. Matched changes use captured antialiasing; no-match Add/Subtract preserve
+null, explicit-empty or nonempty selections and their antialiasing/history. New no-match deselects. Publication
+remains bound to the original session/document/selection/history authority. Boolean outputs may retain
+collinear edge vertices and have a cyclic starting vertex; their exact geometry/winding remains required.
+This core preparation contract alone does not activate Add/Subtract in the host's asynchronous New route.

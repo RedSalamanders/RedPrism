@@ -406,6 +406,7 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
         (_samplerHostTicket || (std::get_if<ColorSampling>(&_drag) && std::get<ColorSampling>(_drag).opening)))
     {
+        SealSamplerForBoundary();  // Release the gesture/capture even while memory admission awaits cancellation.
         CancelHostContinuations(); // Retain published color; acknowledge cancellation of the remaining prefix.
         return true;
     }

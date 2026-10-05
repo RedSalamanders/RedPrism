@@ -52,23 +52,26 @@ class WandByteSum final
 
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandLayerSelectionInput(Vec2 point,
                                                                                        WandSettings settings,
-                                                                                       bool antialiased) const
+                                                                                       bool antialiased,
+                                                                                       SelectionMode mode) const
 {
-    return PrepareWandSelectionInput(point, settings, antialiased, false);
+    return PrepareWandSelectionInput(point, settings, antialiased, mode, false);
 }
 
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandCompositeSelectionInput(Vec2 point,
                                                                                            WandSettings settings,
-                                                                                           bool antialiased) const
+                                                                                           bool antialiased,
+                                                                                           SelectionMode mode) const
 {
-    return PrepareWandSelectionInput(point, settings, antialiased, true);
+    return PrepareWandSelectionInput(point, settings, antialiased, mode, true);
 }
 
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInput(Vec2 point, WandSettings settings,
-                                                                                  bool antialiased,
+                                                                                  bool antialiased, SelectionMode mode,
                                                                                   bool composite) const
 {
-    if (!_document || !ValidSettings(settings, composite) || !ValidPoint(point, _document->width, _document->height))
+    if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
+        !ValidPoint(point, _document->width, _document->height))
         return std::nullopt;
     auto authority = CaptureHistoryRestoreAuthority();
     if (!CanApplyHistoryRestore(authority))
@@ -76,7 +79,7 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInpu
     auto token = CaptureJobToken();
     if (!token)
         return std::nullopt;
-    return WandLayerSelectionInput(point, settings, antialiased, std::move(authority), std::move(token.value()),
+    return WandLayerSelectionInput(point, settings, antialiased, mode, std::move(authority), std::move(token.value()),
                                    history.CaptureState(), _document.value(), _activeLayerID, composite);
 }
 
@@ -119,7 +122,7 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     };
     if (cancellation.IsCancelled())
         return refused(WandFailure::Cancelled);
-    if (!input._valid || !input._document || input._token.target ||
+    if (!input._valid || !input._document || input._token.target || input._mode > SelectionMode::Subtract ||
         !ValidSettings(input._settings, input._usesComposite) || input._document->width != input._token.canvasWidth ||
         input._document->height != input._token.canvasHeight ||
         !ValidPoint(input._point, input._document->width, input._document->height))
@@ -164,10 +167,41 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     }
     if (!Checkpoint(observer, WandLayerSelectionStage::OutlineReady, cancellation))
         return refused(WandFailure::Cancelled);
-    std::optional<DocumentSelection> selection;
     const bool matched = outline.has_value();
+    std::optional<DocumentSelection> selection = before.selection;
     if (matched)
-        selection = DocumentSelection{input._antialiased, std::move(outline.value())};
+    {
+        switch (input._mode)
+        {
+        case SelectionMode::New:
+            selection = DocumentSelection{input._antialiased, std::move(outline.value())};
+            break;
+        case SelectionMode::Add:
+        {
+            const auto clipped = SelectionGeometry::Intersect(
+                outline.value(), SelectionGeometry::Rect(0, 0, before.width, before.height));
+            auto loops =
+                before.selection.has_value() ? SelectionGeometry::Union(before.selection->loops, clipped) : clipped;
+            // legacy Selection.swift applySelection uses the captured current AA option for a matched result.
+            // No-match paths below retain the exact old selection and its AA instead.
+            selection = DocumentSelection{input._antialiased, std::move(loops)};
+            break;
+        }
+        case SelectionMode::Subtract:
+            if (before.selection.has_value())
+            {
+                const auto clipped = SelectionGeometry::Intersect(
+                    outline.value(), SelectionGeometry::Rect(0, 0, before.width, before.height));
+                selection = DocumentSelection{input._antialiased,
+                                              SelectionGeometry::Subtract(before.selection->loops, clipped)};
+            }
+            break;
+        }
+    }
+    else if (input._mode == SelectionMode::New)
+    {
+        selection.reset();
+    }
     if (!Checkpoint(observer, WandLayerSelectionStage::SelectionReady, cancellation))
         return refused(WandFailure::Cancelled);
     const bool unchanged = selection == before.selection;

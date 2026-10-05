@@ -42,7 +42,7 @@ struct WandLayerSelectionMemoryPlan
     bool transparentShortcut = false;
 };
 
-// Immutable New-selection capture. Separate entry points bind an active layer or a detached full composite.
+// Immutable selection-mode capture. Separate entry points bind an active layer or a detached full composite.
 // Complete graph admission must precede owner capture; neither entry point owns a GPU device.
 class WandLayerSelectionInput final
 {
@@ -50,7 +50,7 @@ class WandLayerSelectionInput final
     WandLayerSelectionInput(const WandLayerSelectionInput&) = delete;
     WandLayerSelectionInput& operator=(const WandLayerSelectionInput&) = delete;
     WandLayerSelectionInput(WandLayerSelectionInput&& source) noexcept
-        : _point(source._point), _settings(source._settings), _antialiased(source._antialiased),
+        : _point(source._point), _settings(source._settings), _antialiased(source._antialiased), _mode(source._mode),
           _usesComposite(source._usesComposite), _authority(std::move(source._authority)),
           _token(std::move(source._token)), _history(std::move(source._history)),
           _document(std::move(source._document)), _active(std::move(source._active)),
@@ -64,6 +64,7 @@ class WandLayerSelectionInput final
             _point = source._point;
             _settings = source._settings;
             _antialiased = source._antialiased;
+            _mode = source._mode;
             _usesComposite = source._usesComposite;
             _authority = std::move(source._authority);
             _token = std::move(source._token);
@@ -83,10 +84,10 @@ class WandLayerSelectionInput final
   private:
     friend class DocumentSession;
     friend class PreparedWandLayerSelection;
-    WandLayerSelectionInput(Vec2 point, WandSettings settings, bool antialiased, HistoryRestoreAuthority authority,
-                            JobToken token, DocumentHistory::StateView history, CanvasDocument document,
-                            std::optional<Guid> active, bool usesComposite = false) noexcept
-        : _point(point), _settings(settings), _antialiased(antialiased), _usesComposite(usesComposite),
+    WandLayerSelectionInput(Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode,
+                            HistoryRestoreAuthority authority, JobToken token, DocumentHistory::StateView history,
+                            CanvasDocument document, std::optional<Guid> active, bool usesComposite = false) noexcept
+        : _point(point), _settings(settings), _antialiased(antialiased), _mode(mode), _usesComposite(usesComposite),
           _authority(std::move(authority)), _token(std::move(token)), _history(std::move(history)),
           _document(std::move(document)), _active(std::move(active))
     {
@@ -94,6 +95,7 @@ class WandLayerSelectionInput final
     Vec2 _point;
     WandSettings _settings;
     bool _antialiased;
+    SelectionMode _mode = SelectionMode::New;
     bool _usesComposite = false;
     HistoryRestoreAuthority _authority;
     JobToken _token;

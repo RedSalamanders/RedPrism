@@ -67,6 +67,7 @@
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
+#include "RasterResidencyManifestTests.h"
 #include "RasterResidencyPlanTests.h"
 #include "RasterUploadLayoutTests.h"
 #include "RasterUploadReductionWorkTests.h"
@@ -8043,6 +8044,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRasterUploadReductionWorkTests();
     gFailures += RunRasterUploadLayoutTests();
     gFailures += RunRasterResidencyPlanTests();
+    gFailures += RunRasterResidencyManifestTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();

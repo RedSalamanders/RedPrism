@@ -53,3 +53,5 @@ deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-22.m
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be
 indexed here before they authorize implementation.
+
+P1 H4 explicit raster mip qualification: [record](../../TestRuns/P1GpuMipChain_2026-10-05.md), managed commit `af7986f`; document resource graphs/consumer activation/G1 remain open.
