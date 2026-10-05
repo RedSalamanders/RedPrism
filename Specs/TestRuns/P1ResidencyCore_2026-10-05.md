@@ -326,3 +326,35 @@ actual-host diagnostic runtime. Full required configuration/analysis/cross-build
 | `residency-arm-builds-r3-callers/ASanDebug` | 83548 / 0 | 2026-10-05T09:55:23.778548+00:00 to 2026-10-05T09:56:14.649964+00:00 | `20A81E079147F79AE4A23A39E3D14A2513325E23C3BFA0AE5E0CF6EDCB7C951F` | `p1-history-callers-ARM64-ASanDebug-r3-cross-qualified` / `D59F4E25AE477D4A83543F3ED01A25E315AA7E188E09617F46118A9FA2A02C46` |
 
 The current integrated writer/shutdown group remains uncommitted pending complete runtime qualification.
+
+### Repaired leaf charge: runtime, analysis, cross-build and Release qualification
+
+The current 775-input repaired source has freeze
+`7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073`.
+r104 builds; r105 actual application runtime passes 9,446 named controls and all 79 stages; r106 Release analysis
+and all three r4 ARM64 cross-builds pass. r108 full Release passes 6,841 document and 9,446 application controls,
+preserving all preceding literal controls, multiplicities, output routes and ordered stages. Its only aggregate
+adapter changes selection-host's summary from 162 checks/28 modes to 208 checks/34 modes; the preceding individual
+controls remain mandatory. The 32 new document controls cover Restore, selection commands and nudge. The 84 new
+named host controls include 14 actual shutdown checks, 46 selection checks and 24 nudge checks; six coarse Restore
+mode reports are additionally retained. Registry helper hash is
+`DD3E8ED56C596577EEA39D298A15707DF5105568EA94378E5186A9DD9EF5172E`; r108 proof hash is
+`786A4B995A935A085B1103E06AB619A39BD85A37FE2288021FFCCABB803A093A`.
+
+r107 full Debug stops in the existing clipboard-preservation fixture: "The self-test could not set the user's
+clipboard aside." Its actual run overlapped r108 on the default desktop. This does not qualify Debug or prove
+a production defect; no fixture or clipboard guard was weakened. Both attempts are archived. The fresh r109
+full Debug attempt is now isolated from another application test. Real ASan Debug follows sequentially.
+
+| Attempt | Actual child / exit | UTC interval | Source freeze | Verified archive completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| `incremental-x64-build-Debug-r104` | 50096 / 0 | 2026-10-05T09:59:38.331887+00:00 to 2026-10-05T10:03:36.818241+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r104-leaf-repair-build-qualified` / `8513EC1BC01812AC243431936F66960D5C553B293F981144AE0A1BADDBDF945B` |
+| `incremental-x64-runtime-Debug-r105` | 87896 / 0 | 2026-10-05T10:04:42.381942+00:00 to 2026-10-05T10:08:42.010740+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r105-runtime-qualified` / `0000E1E9B4B3F4FEE996A57E9A8D29C9B5BB809F1AFA0576A0ED2E54F39B499F` |
+| `incremental-x64-analysis-Release-r106` | 3040 / 0 | 2026-10-05T10:04:43.412383+00:00 to 2026-10-05T10:11:34.301970+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Release-r106-leaf-repair-analysis-qualified` / `64FB19F4A9BCC88024A5A44C154E514771626D4E79B90EFA8CD8D4D7339AB74B` |
+| `residency-arm-builds-r4-leaf/Debug` | 90780 / 0 | 2026-10-05T10:05:55.051530+00:00 to 2026-10-05T10:06:42.114465+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-Debug-r4-leaf-cross-qualified` / `9F939E92B052D402B9A18A99168078C3CAB970712846BF3D2660998E839C4BDA` |
+| `residency-arm-builds-r4-leaf/Release` | 65964 / 0 | 2026-10-05T10:06:51.694175+00:00 to 2026-10-05T10:08:50.844961+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-Release-r4-leaf-cross-qualified` / `D2087BB7B450F76ED8F1C6438385B8FE568203249D25F141DEFDE05FE437B555` |
+| `residency-arm-builds-r4-leaf/ASanDebug` | 46412 / 0 | 2026-10-05T10:08:53.913512+00:00 to 2026-10-05T10:09:19.020114+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-ARM64-ASanDebug-r4-leaf-cross-qualified` / `100257C05BF2B15A93F151F17FB53A7A867D3F514FEFE8F236B93B0B90FA98FC` |
+| `incremental-x64-test-Debug-r107` | 21704 / 1 | 2026-10-05T10:16:42.228064+00:00 to 2026-10-05T10:24:28.162137+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Debug-r107-clipboard-start-failure` / `C8D9D4CEA1C10928C6C2EB71ABA11EA7BA6796398683BD6DD81014CC9B0AE4F9` |
+| `incremental-x64-test-Release-r108` | 91260 / 0 | 2026-10-05T10:18:10.849652+00:00 to 2026-10-05T10:24:59.716817+00:00 | `7C8011BCFE89E48D6C4423B431C56B39DC912A8D49026103231380D072B48073` | `p1-history-callers-x64-Release-r108-full-qualified` / `F3B1DF2F63982B7BCB4007EECCE33C55903E4B96FE1410E1441246CEC4383F6F` |
+
+Native activation, normal maintenance startup, remaining-writer/delta accounting and G1 remain open.
