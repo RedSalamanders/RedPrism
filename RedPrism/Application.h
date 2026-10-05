@@ -626,6 +626,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool CanChangePaletteDuringSampling() const noexcept;
     class SamplerHostJob;
     HANDLE _samplerAcknowledgedForTest = nullptr; // Owner-only borrowed harness event, cleared before its owner exits.
+    std::uint32_t* _samplerSourceCapturesForTest = nullptr; // Borrowed owner-only counter; never read by a worker.
     [[nodiscard]] SamplerOpening* FindSamplerOpening(std::uint64_t opening) noexcept;
     [[nodiscard]] const SamplerOpening* FindSamplerOpening(std::uint64_t opening) const noexcept;
     void SweepSamplerOpenings() noexcept;

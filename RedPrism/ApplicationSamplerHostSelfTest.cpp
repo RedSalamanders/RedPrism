@@ -4,13 +4,28 @@
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
+
+namespace
+{
+class OccupySamplerHostTestSlot final : public Job
+{
+  public:
+    JobResult Run(JobContext&) override
+    {
+        return {};
+    }
+    void Completed(JobResult) noexcept override {}
+};
+} // namespace
 
 int Application::RunSamplerHostSelfTest() noexcept
 {
@@ -363,6 +378,102 @@ int Application::RunSamplerHostSelfTest() noexcept
                "sampler-host.picker.close-reopen-refuses-old-gesture"))
         return 5;
     _chrome->CloseColorPicker(false);
+
+    // Nine fixed opening slots serve one selected input and eight queued inputs. Empty live input needs no
+    // admission/capture, and cancellation must retire every scalar slot before a later gesture can reuse it.
+    std::uint32_t sourceCaptures = 0;
+    if (_samplerSourceCapturesForTest)
+        return fail(L"The sampler source-capture harness counter was already borrowed.\n");
+    _samplerSourceCapturesForTest = &sourceCaptures;
+    const auto clearCaptureCounter = wil::scope_exit([this]() noexcept { _samplerSourceCapturesForTest = nullptr; });
+    const auto sourceBeforeLimits = _session.CaptureDocumentReadAuthority();
+    const auto revisionBeforeLimits = _session.history.CurrentRevision();
+    const auto undoBeforeLimits = _session.history.UndoCount();
+    const auto paletteBeforeLimits = _session.ForegroundColor();
+    std::array<ContinuationReceipt, SamplerState::kOpeningCapacity> capacityReceipts;
+    const auto selectedEmpty = BeginSamplerOpening({-1, 0});
+    if (!selectedEmpty)
+        return fail(L"The sampler slot-limit selected opening was not admitted.\n");
+    capacityReceipts[0] = FindSamplerOpening(selectedEmpty.value())->receipt;
+    (void)RunUiActions(_jobs);
+    for (std::size_t i = 1; i < capacityReceipts.size(); ++i)
+    {
+        const auto queued = BeginSamplerOpening({-1, 0});
+        if (!queued)
+            return fail(L"A valid fixed sampler opening slot was refused before capacity.\n");
+        capacityReceipts[i] = FindSamplerOpening(queued.value())->receipt;
+        SealSamplerOpening(queued.value());
+    }
+    const auto refusedOpening = BeginSamplerOpening({0.2, 0.2});
+    if (!check(!refusedOpening && _activeHostRequest && _hostRequests.Size() == 8 && sourceCaptures == 0 &&
+                   !_samplerHostTicket && !_samplerHostJob && _jobs.ReservedMemoryBytes() == 0 &&
+                   _composition.UtilitySurfaceBytes() == 0 &&
+                   std::all_of(capacityReceipts.begin(), capacityReceipts.end(), [](const ContinuationReceipt& receipt)
+                               { return receipt.Read().outcome == HostOutcome::Pending; }),
+               L"Sampler opening capacity captured pixels, dropped accepted inputs, or admitted an extra slot.\n",
+               "sampler-host.admission.nine-scalar-openings-tenth-refused-before-capture"))
+        return 5;
+    CancelHostContinuations();
+    if (!check(settled() && graphClear() && sourceCaptures == 0 &&
+                   std::all_of(capacityReceipts.begin(), capacityReceipts.end(), [](const ContinuationReceipt& receipt)
+                               { return receipt.Read().outcome == HostOutcome::Cancelled; }) &&
+                   std::all_of(_samplerState->openings.begin(), _samplerState->openings.end(),
+                               [](const SamplerOpening& slot)
+                               { return slot.opening == 0 && !slot.jobAlive && slot.consumers == 0; }) &&
+                   _session.ForegroundColor() == paletteBeforeLimits && sourceBeforeLimits &&
+                   _session.IsDocumentReadCurrent(sourceBeforeLimits.value()) &&
+                   _session.history.CurrentRevision() == revisionBeforeLimits &&
+                   _session.history.UndoCount() == undoBeforeLimits,
+               L"Cancelling full sampler opening capacity did not acknowledge each original input cleanly.\n",
+               "sampler-host.admission.full-opening-cancel-retires-all-exact-receipts"))
+        return 5;
+
+    // Queued, running and completed-but-undrained jobs all retain their records. Fill the actual table
+    // to refuse the sampler before its owner capture callback; completion itself cannot free these slots.
+    for (std::size_t i = 0; i < JobScheduler::kCapacity; ++i)
+    {
+        std::unique_ptr<Job> job = std::make_unique<OccupySamplerHostTestSlot>();
+        JobTicket ticket;
+        if (FAILED(_jobs.Submit(job, {JobClass::Background}, ticket)))
+            return fail(L"The sampler scheduler-capacity fixture could not fill its real records.\n");
+    }
+    const auto rejected = BeginSamplerOpening({0.2, 0.2});
+    if (!rejected)
+        return fail(L"The scheduler-refusal sampler descriptor was not queued.\n");
+    const auto rejectedReceipt = FindSamplerOpening(rejected.value())->receipt;
+    SealSamplerOpening(rejected.value());
+    for (unsigned int pass = 0; pass < 4 && rejectedReceipt.Read().outcome == HostOutcome::Pending; ++pass)
+        (void)RunUiActions(_jobs);
+    if (!check(rejectedReceipt.Read().outcome == HostOutcome::Failed &&
+                   rejectedReceipt.Read().error ==
+                       static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+                   sourceCaptures == 0 && graphClear() && !FindSamplerOpening(rejected.value()) &&
+                   _session.ForegroundColor() == paletteBeforeLimits && sourceBeforeLimits &&
+                   _session.IsDocumentReadCurrent(sourceBeforeLimits.value()) &&
+                   _session.history.CurrentRevision() == revisionBeforeLimits &&
+                   _session.history.UndoCount() == undoBeforeLimits,
+               L"Refused sampler scheduling captured its source, changed palette/history or retained graph work.\n",
+               "sampler-host.admission.scheduler-refusal-captures-no-source-and-publishes-no-color"))
+        return 5;
+    if (!settled())
+        return fail(L"Scheduler refusal left undelivered sampler readiness.\n");
+    const auto recovered = BeginSamplerOpening({1.2, 0.2});
+    if (!recovered)
+        return fail(L"Sampler admission did not recover after scheduler refusal.\n");
+    RecordSamplerPoint(recovered.value(), {0.2, 0.2});
+    RecordSamplerPoint(recovered.value(), {1.2, 0.2});
+    const auto recoveredReceipt = FindSamplerOpening(recovered.value())->receipt;
+    SealSamplerOpening(recovered.value());
+    if (!check(settled() && recoveredReceipt.Read().outcome == HostOutcome::Succeeded && sourceCaptures == 1 &&
+                   _session.ForegroundColor() == 0xFF804020u && graphClear() &&
+                   !FindSamplerOpening(recovered.value()) && sourceBeforeLimits &&
+                   _session.IsDocumentReadCurrent(sourceBeforeLimits.value()) &&
+                   _session.history.CurrentRevision() == revisionBeforeLimits &&
+                   _session.history.UndoCount() == undoBeforeLimits,
+               L"A fresh sampler did not recover with exactly one source capture across repeated pixels.\n",
+               "sampler-host.admission.fresh-prefix-recovers-with-one-capture"))
+        return 5;
+    _samplerSourceCapturesForTest = nullptr;
 
     // Scope cleanup restores the exact pre-test app document, path and palette after all owners acknowledged.
     std::printf("PASS sampler-host.fixture.restore-scheduled\n");

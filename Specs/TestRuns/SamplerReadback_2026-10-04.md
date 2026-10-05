@@ -1,6 +1,6 @@
 # P1 sampler repeated-pixel prerequisite — evidence
 
-Status: full Debug r10 passed the repaired combined prerequisite snapshot. Other required profiles, combined analysis/ARM64, production sampler integration and G1 remain open; all original failures are preserved below.
+Status: the latest combined caller snapshot passes full ASan Debug r64, including admission/refusal/overflow; preceding Debug r63 and Release r62 qualify their recorded source. Later Map-recovery/focused-benchmark source, final combined matrix, native activation and G1 remain open. All original failures are preserved below.
 Worktree: `C:\Users\eric\.codex\worktrees\p1-sampler\RedPrism`, based on `b49e4b4` plus the assertion-preserving
 six-kind test fixture isolation from color qualification. Active [plan](../Plans/WIP/SamplerReadback_2026-10-04.md).
 
@@ -378,3 +378,35 @@ Secondary review found the new fixture should explicitly reject a pre-existing s
 those states on failure cleanup. That repair is in newer caller-root source, absent from r63. Its reviewed
 capacity/refusal/overflow controls and owner-only source-capture counter are likewise newer and unqualified.
 Current combined Release/ASan/analysis/ARM64, native activation, broader lifetime/admission, H3/H4 and G1 remain open.
+
+## Actual admission and physical FIFO overflow - full ASan Debug r64
+
+Actual child 76532, 2026-10-05T01:13:25.273055Z-01:26:03.740941Z, exit **0**; 771 unchanged inputs,
+freeze `428BE42FF87DEFFB6AE759A9213835BB936FA88D41E2B2C7F762370D987759B7`.
+Stdout `31BB36D5A08404477737CD55F09068A29605AAB298785B39DFED37B17AFAD44F`, stderr
+`5698AF0EC364CB8BBC4C3DA43DBD4DC025947813D36F5BC4B6B6472DAFC2F7C5`.
+All full suites, unchanged ISA/PDB/scanner controls, actual ASan detection, WARP host, crash probes, CLI/build/RAW
+fixtures, 27-row smoke and screenshots pass. Skills/format pass before the freeze.
+
+Four host controls fill all nine actual scalar openings, cancel every exact receipt, fill the real 128-record
+scheduler table to refuse before capture, then recover after draining. Two physical pointer controls fill 512
+distinct accepted points, reject the next blue point and seal without a release sample. The accepted brown
+endpoint remains selected; the original receipt reports quota failure and all graph owners retire. An owner-only
+borrowed counter proves exactly one immutable document capture per admitted prefix and zero on refusal. It is
+cleared before its harness storage dies. The fixture now refuses pre-existing size/color cards and clears its own
+cards on failure cleanup. Secondary review confirmed actual capacity and checked pointer/source lifetimes.
+
+Independent counters preserve **6,604 document / 9,244 application** controls (9,238 + six) and all **79 stages**.
+The first proof assertion excluded the original parameterized `sparse.concurrent-readers` PASS line from the
+document count; the corrected helper preserves that line and multiplicity. No source or runtime was changed.
+Proof `verified-admission-overflow-registries.json` SHA-256
+`71842E08E55D6033926FCB6B78CE83A236313442DFBA95BFBA027D342C70BB94`.
+
+Archive `p1-sampler-admission-overflow-x64-ASanDebug-r64-full-qualified` independently verifies **1,046 copies / 79
+stages** at 2026-10-05T01:28:32.4388838Z. Completion
+`4198170DDD916FE416EECCC3DB14EF35CDC1D6AABFDDEB26168F16A441476261`, source manifest
+`7A811B14089503DBE89B82C1901B04A5CC1A8FC1B9F43B5E32263796A01134B7`, evidence manifest
+`7BE423AD81D7E1A9245BF333AE09F664E54D6EC88CEC04D7140A3D2B4B16E43F`.
+
+Later physical Map-busy/recovery controls and focused sampler benchmark modes are absent from r64. Current
+combined Debug/Release/analysis/ARM64, native activation, broader memory/device/shutdown, H3/H4 and G1 remain due.

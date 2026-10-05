@@ -22,7 +22,7 @@
 int Application::RunSamplerCallerSelfTest() noexcept
 {
     if (!_chrome || !_window || !_session.Document() || !_samplerState || !_hostSourceRegistered ||
-        _chrome->ColorPickerOpen())
+        _chrome->ColorPickerOpen() || SizeCardOpen() || _session.HasColorEdit())
     {
         SelfTestFailure(L"The sampler caller self-test requires an initialized, idle host and a closed picker.\n");
         return 5;
@@ -77,6 +77,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
             }
             if (!settle())
                 std::_Exit(5);
+            CancelSizeCard();
+            if (_session.HasColorEdit())
+                CancelColorEditForTest();
             CancelGradient();
             _session.CancelShape();
             _session.CancelBrush();
@@ -1041,6 +1044,58 @@ int Application::RunSamplerCallerSelfTest() noexcept
                 test.cancelled))
             return 5;
     }
+
+    // Fill the actual accepted-coordinate FIFO before pumping. Overflow seals the 512 accepted positions;
+    // the rejected blue point and opaque release position must not replace the last accepted brown point.
+    installFixture();
+    OnTool(EditorTool::Eyedropper);
+    const auto overflowAuthority = _session.CaptureDocumentReadAuthority();
+    const auto overflowRevision = _session.history.CurrentRevision();
+    const auto overflowUndo = _session.history.UndoCount();
+    std::uint32_t overflowSourceCaptures = 0;
+    if (_samplerSourceCapturesForTest)
+    {
+        SelfTestFailure(L"The sampler FIFO source-capture counter was already borrowed.\n");
+        return 5;
+    }
+    _samplerSourceCapturesForTest = &overflowSourceCaptures;
+    const auto clearOverflowCaptureCounter =
+        wil::scope_exit([this]() noexcept { _samplerSourceCapturesForTest = nullptr; });
+    pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+    const auto* overflowSampling = std::get_if<ColorSampling>(&_drag);
+    const auto overflowOpening = overflowSampling && overflowSampling->opening ? overflowSampling->opening.value() : 0;
+    const auto* overflowPending = FindSamplerOpening(overflowOpening);
+    const auto overflowReceipt = overflowPending ? overflowPending->receipt : ContinuationReceipt{};
+    for (std::uint32_t i = 1; i < SamplerIntentInput::kPendingCapacity; ++i)
+        pointer(WM_MOUSEMOVE, Vec2{(i & 1u) ? 20.0 : 0.0, 15.0});
+    const bool fullBeforeOverflow = overflowPending &&
+                                    overflowPending->points.PendingCount() == SamplerIntentInput::kPendingCapacity &&
+                                    !overflowPending->overflow;
+    pointer(WM_MOUSEMOVE, Vec2{0, 15});
+    pointer(WM_LBUTTONUP, Vec2{0, 15});
+    if (!check(
+            fullBeforeOverflow && overflowPending->overflow &&
+                overflowPending->points.PendingCount() == SamplerIntentInput::kPendingCapacity &&
+                overflowReceipt.Read().outcome == HostOutcome::Pending && overflowSourceCaptures == 0 &&
+                !_samplerHostTicket && !_samplerHostJob && _session.ForegroundColor() == kBlue &&
+                std::holds_alternative<std::monostate>(_drag) && GetCapture() != _window.get(),
+            L"The physical sampler overflow dropped accepted points, captured inline, or invented its release point.\n",
+            "sampler-caller.capacity.full-prefix-seals-on-rejected-point"))
+        return 5;
+    if (!check(settle() && overflowReceipt.Read().outcome == HostOutcome::Failed &&
+                   overflowReceipt.Read().error ==
+                       static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+                   _session.ForegroundColor() == 0xFF804020u && overflowSourceCaptures == 1 && overflowAuthority &&
+                   _session.IsDocumentReadCurrent(overflowAuthority.value()) &&
+                   _session.history.CurrentRevision() == overflowRevision &&
+                   _session.history.UndoCount() == overflowUndo && samplerSlotsClear() && !_samplerHostTicket &&
+                   !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
+                   !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
+               L"Sampler overflow lost its accepted brown prefix, recaptured the source, or failed exact terminal "
+               L"retirement.\n",
+               "sampler-caller.capacity.overflow-retains-brown-one-source-and-exact-failure"))
+        return 5;
+    _samplerSourceCapturesForTest = nullptr;
 
     std::printf("PASS sampler-caller.fixture-restore-scheduled\n");
     return 0;

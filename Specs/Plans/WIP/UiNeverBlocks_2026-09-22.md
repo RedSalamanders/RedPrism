@@ -21,6 +21,7 @@
 - [x] Full Debug r55 qualifies explicit sampler intent and per-point context: 16 new palette, 23 new picker and 1,757 FIFO controls; exact preceding registries remain (6,571 document / 9,122 application, 79 stages). Actual sampler/younger consumer integration and remaining matrix/G1 stay open.
 - [x] Actual settled All Layers wand New passes full Debug r12: 51 new core and 111 host checks; exact preceding registries/stage order are preserved (6,555 document / 9,099 application controls, 79 stages). Complete matrix, graph-specific shutdown, larger supported fixtures, remaining wand modes/callers and G1 remain open.
 - [ ] P1.3: finish [real sampler](SamplerReadback_2026-10-04.md), [All Layers wand New](WandCompositeReadback_2026-10-04.md), remaining wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
+- [x] Sampler full ASan Debug r64 qualifies actual opening/scheduler refusal and recovery, physical input overflow and source-capture counts: 6,604 document / 9,244 application, unchanged 79 stages, sanitizer detection, 27 smoke rows and 1,046 verified copies. Later source, final matrix and G1 remain due.
 - [x] Sampler graph prerequisite full Debug r57 preserves 6,588 document / 9,147 application controls and 79 stages; format failed before that snapshot. Physical callers, selected cancellation and event-time Brush/Gradient/Shape are implemented privately for r58; runtime, remaining matrix and G1 are pending.
 - [x] Private full Debug r60 qualifies actual Eyedropper, queued Brush/Gradient/Shape and selected/idle cancellation; 6,604 document / 9,178 application controls, original 79 stages and skills/format pass. Cross-opening fix, Alt/live cases, final matrix, H3/H4 and G1 remain due.
 - [x] Private full Debug r61 qualifies cross-opening color inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup readiness; 6,604 document / 9,192 application controls, unchanged 79 stages and verified archive. Broader physical terminals, final matrix, H3/H4 and G1 remain due.
@@ -41,9 +42,10 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current private integration passes full Debug r63 with actual picker targets and the sampler benchmark:
-6,604 document / 9,238 application controls, original 79 stages and 27 smoke rows. Physical terminals and numeric
-alpha previously passed full Release r62. Preceding Debug r61 qualifies
+Current private integration passes full ASan Debug r64 with actual opening/scheduler refusal and physical FIFO
+overflow: 6,604 document / 9,244 application controls, original 79 stages, sanitizer detection and 27 smoke rows.
+Actual picker targets and sampler smoke previously passed Debug r63; physical terminals and numeric
+alpha passed full Release r62. Preceding Debug r61 qualifies
 cross-opening color, actual Alt callers and guarded cleanup readiness; it is pushed as `af99efe`.
 Current combined Debug/ASan/analysis/ARM64, broader callers, native activation and G1 remain open. The reviewed clipboard-scope
 fix previously passed ASan r51 and Debug analysis r52; earlier receipts qualify their recorded snapshots only.

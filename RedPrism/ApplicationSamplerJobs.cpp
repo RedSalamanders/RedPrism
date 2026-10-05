@@ -127,6 +127,8 @@ class Application::SamplerHostJob final : public DocumentReadbackJob
             _payload.reset(new SamplerReadbackPayload);
             _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
             document = _owner._session.Document().value(); // The admitted immutable committed root, once.
+            if (_owner._samplerSourceCapturesForTest)
+                ++*_owner._samplerSourceCapturesForTest;
             return S_OK;
         }
         catch (const std::bad_alloc&)
