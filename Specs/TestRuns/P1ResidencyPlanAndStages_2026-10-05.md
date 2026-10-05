@@ -10,10 +10,10 @@
 - [x] Register plan application/DocumentTests sources and new Document/Composition entrypoints exactly once.
 - [x] Full identical-source Debug, Release, real ASan Debug, Release analysis and three ARM64 cross-builds.
 - [x] Preserve all 805-input predecessor controls, application routes/stages and separate ASan stress controls.
-- [ ] Verify archive copies, commit and push the qualified dormant step.
+- [x] Verify archive copies, commit and push the qualified dormant step (`e0a9c67`).
 - [ ] Complete actual device resources, live admission/publication/retirement and largest-fixture G1.
 
-**Status: registered dormant matrix qualified; commit/push pending. Native activation and P1 exit remain open.**
+**Status: registered dormant matrix qualified; committed/pushed as `e0a9c67`. Native activation and P1 exit remain open.**
 
 ## Scope and reference
 

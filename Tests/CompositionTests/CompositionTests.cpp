@@ -10,7 +10,10 @@
 #include "DocumentReadbackTests.h"
 #include "FrameScheduler.h"
 #include "GpuCapabilityTests.h"
+#include "GpuCreatedUploadJobTests.h"
+#include "GpuRasterTextureCreationTests.h"
 #include "GpuRasterUploadJobTests.h"
+#include "GpuResidencyBudgetTests.h"
 #include "GpuUploadAdmissionTests.h"
 #include "GpuUploadFaultTests.h"
 #include "GpuUploadInitializationTests.h"
@@ -2090,6 +2093,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuUploadInitializationTests();
     gFailures += RunGpuUploadFaultTests();
     gFailures += RunGpuRasterUploadJobTests();
+    gFailures += RunGpuResidencyBudgetTests();
+    gFailures += RunGpuRasterTextureCreationTests();
+    gFailures += RunGpuCreatedUploadJobTests();
     gFailures += RunCompositionStageTimingTests();
     gFailures += RunDocumentReadbackTests();
     TestFrameLoop();

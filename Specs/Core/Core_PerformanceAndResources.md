@@ -870,3 +870,20 @@ An intrusive plan cannot copy or move. Live owner consumers MUST keep the admitt
 installed until all handles drain; release queues the CPU graph with AlwaysOnOwner. Without that sink the
 fallback destroys inline and is permitted only on workers or after the window is hidden during shutdown.
 Device/resource/mip/display publication and complete actual admission remain dormant and unqualified.
+
+
+### Dormant worker-created raster residency
+
+The optional worker creation route holds an owner-captured exact device/generation and permits resource creation
+only when its successful actual threading feature query advertises DriverConcurrentCreates. A worker never
+receives an immediate context. Texture/view failure and cancellation retain partial owners until owner retirement;
+no resource may be borrowed before producer join and owner acknowledgement. Unsupported concurrency refuses
+without an owner allocation fallback. It requires live whole CPU/GPU admission and a production fallback before activation.
+
+GPU admission uses fixed unique nonwrapping reservation records, conservative overlap and explicit driver headroom.
+The admitting domain outlives its reservations. Persistent reusable staging retains an independent charge; uncertain
+copies and joined mapped shutdown retain the exact request's charge until owner graphics/context release.
+Only a final successful original-ticket callback may transfer the created destination, held source Raster and
+reservation. All old job graphics references are removed before charge transfer. Its lower mips remain undefined;
+no sampling or display publication precedes the consumer's admitted complete mip/fence stage. Full document
+resources, actual DXGI snapshots, consumer/fallback integration and first-display G1 remain unqualified.

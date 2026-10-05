@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GpuCapabilities.h"
+#include "GpuResidencyBudget.h"
 #include "Jobs.h"
 
 #include <cstddef>
@@ -78,6 +79,11 @@ class GpuUploadQueue final : public OwnerWorkPump
     [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer* routes = nullptr) noexcept;
     [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context,
                                bool forceEventForTest = false) noexcept;
+    // Optional explicit charge for the reusable staging pool, independent of any adopted destination. Required
+    // by the worker creation route. Admit before the first pool allocation; replace only after old storage drains.
+    // Refusal leaves ownership with the caller. Includes the fixed staging cap and opaque driver headroom.
+    [[nodiscard]] bool AdmitPersistentResidency(GpuResidencyReservation& reservation) noexcept;
+    [[nodiscard]] bool HasAdmittedPersistentResidency() const noexcept;
     // Owner only. The precreated destination must belong to the bound device and be DEFAULT, single-sample,
     // BGRA8 or Gray8. One Pump transition maps or records at most one admitted chunk; no owner pixel copying.
     [[nodiscard]] HRESULT Enqueue(ID3D11Texture2D* destination, unsigned int subresource, unsigned int x,
@@ -87,6 +93,10 @@ class GpuUploadQueue final : public OwnerWorkPump
     // foreign and unpublished leases cannot acknowledge a newer loan. Only atomics and a scheduler wake run.
     [[nodiscard]] bool PublishFilled(GpuUploadLease lease, GpuUploadFill result) noexcept;
     void Cancel(JobTicket ticket) noexcept;
+    // After joining the producer, transfer its creation reservation if this exact request still owns a
+    // mapped/quarantined context. It stays charged through owner Unmap/storage release at joined shutdown.
+    // No match leaves the caller's reservation untouched. No other ticket/generation can take that charge.
+    [[nodiscard]] bool RetainRetiredResidency(JobTicket ticket, GpuResidencyReservation& reservation) noexcept;
     void RetireDevice() noexcept;
     void StopNotifications() noexcept;
     // Must follow joining every filling worker. Acknowledges Unmap on the retained original contexts, even
@@ -96,6 +106,7 @@ class GpuUploadQueue final : public OwnerWorkPump
     [[nodiscard]] bool HasReady() const noexcept override;
     void Pump() noexcept override;
     [[nodiscard]] std::uint64_t StagingBytes() const noexcept;
+    [[nodiscard]] std::uint64_t RetiredResidencyBytes() const noexcept;
     [[nodiscard]] std::size_t InFlightCount() const noexcept;
     [[nodiscard]] std::size_t LentCount() const noexcept;
     [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept;

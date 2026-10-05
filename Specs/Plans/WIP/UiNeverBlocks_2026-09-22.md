@@ -46,6 +46,7 @@ The image-wrapper residency and original worker/upload transport step is fully q
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
   - [x] Create and index the detailed [bounded upload/first-display plan](BoundedRasterUploads_2026-10-05.md); worker row-copy draft awaits registered qualification. No upload/G1 activation is claimed.
   - [x] Review/register committed-document preparation and resource stage capture; current private proofs pass 43 CPU / 23 WARP / 31 ETL controls. Full 811-input matrix now passes: Debug r135, Release r137, real ASan r138, analysis r136 and all three ARM64 r10 cross-builds, with exact predecessor preservation. Production activation remains due ([record](../../TestRuns/P1ResidencyPlanAndStages_2026-10-05.md)).
+  - [x] Worker GPU creation/admission/adoption step qualifies full identical-source Debug r142 / Release r144 / real ASan r145, analysis r143 and ARM64 r12 cross-builds (253 new controls and every predecessor preserved); complete graph/mip/consumer/G1 work remains due ([record](../../TestRuns/P1GpuCreationAndAdmission_2026-10-05.md)).
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.

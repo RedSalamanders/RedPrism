@@ -1,6 +1,8 @@
 #pragma once
 
 #include "DeferredRelease.h"
+#include "GpuRasterTextureCreation.h"
+#include "GpuResidencyBudget.h"
 #include "GpuUploadWork.h"
 #include "RasterUploadLayout.h"
 
@@ -33,9 +35,58 @@ struct GpuRasterUploadInput final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
-// One precreated DEFAULT destination, one original scheduler record and one serial base-level chunk at a
-// time. No useful work runs on the owner. This leaf does not create device resources, build mips, publish a
-// display or mutate a document. Caller options MUST set deferredRetirement and reserve the complete graph.
+struct GpuRasterCreationRequest final
+{
+    ID3D11Device* device = nullptr; // borrowed for immediate owner capture only
+    GpuResidencyReservation reservation;
+};
+
+// Adopted base-upload owner. Its reservation and held Raster survive the producing job. All lower mips and
+// any graphics use still require the consumer's explicit recording/fence protocol before sampling/retirement.
+// Borrowed views may not escape their admitted owner. Reset/replacement happens only after those users join.
+class GpuRasterCreatedResidency final
+{
+  public:
+    GpuRasterCreatedResidency() noexcept = default;
+    ~GpuRasterCreatedResidency();
+    GpuRasterCreatedResidency(const GpuRasterCreatedResidency&) = delete;
+    GpuRasterCreatedResidency& operator=(const GpuRasterCreatedResidency&) = delete;
+    GpuRasterCreatedResidency(GpuRasterCreatedResidency&& other) noexcept;
+    GpuRasterCreatedResidency& operator=(GpuRasterCreatedResidency&& other) noexcept;
+    [[nodiscard]] explicit operator bool() const noexcept
+    {
+        return static_cast<bool>(_reservation);
+    }
+    [[nodiscard]] ID3D11Texture2D* TextureOwner() const noexcept;
+    [[nodiscard]] ID3D11ShaderResourceView* ShaderViewOwner() const noexcept;
+    [[nodiscard]] const Raster& Source() const noexcept
+    {
+        return _source;
+    }
+    [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept
+    {
+        return _reservation.DeviceGeneration();
+    }
+    [[nodiscard]] std::uint64_t ReservedBytes() const noexcept
+    {
+        return _reservation.Bytes();
+    }
+    void ResetOwner() noexcept;
+
+  private:
+    friend class GpuRasterUploadJob;
+    GpuResidencyReservation _reservation; // last release, after graphics and CPU source ownership
+    Raster _source;
+    wil::com_ptr_nothrow<ID3D11Texture2D> _texture;
+    wil::com_ptr_nothrow<ID3D11ShaderResourceView> _view;
+    std::uint32_t _ownerThread = 0;
+};
+
+// One DEFAULT destination, one original scheduler record and one serial base-level chunk at a time. The
+// optional creation route retains an actual GPU reservation and exact device, creates texture/view on a
+// worker only when reported concurrency permits, and publishes no resource before owner acknowledgement.
+// This leaf does not build mips, publish a display or mutate a document. Caller options MUST set
+// deferredRetirement and reserve the complete CPU graph; externally created resources keep external GPU admission.
 // Both the queue and the caller's device owner survive this job and the shutdown owner cleanup hook.
 class GpuRasterUploadJob : public Job, public GpuUploadReceiver
 {
@@ -43,6 +94,8 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue, std::unique_ptr<GpuRasterUploadInput> input,
                        ID3D11Texture2D* destination, unsigned int subresource = 0, unsigned int x = 0,
                        unsigned int y = 0) noexcept;
+    GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue, std::unique_ptr<GpuRasterUploadInput> input,
+                       GpuRasterCreationRequest creation) noexcept;
     ~GpuRasterUploadJob() override;
     [[nodiscard]] JobResult Run(JobContext& context) final;
     [[nodiscard]] bool DeferRetirement(JobResult result, JobTicket ticket) noexcept final;
@@ -62,6 +115,16 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     {
         return _chunk;
     }
+    // Base upload is complete, but lower mips still require the caller's admitted recording/completion stage.
+    // Never publish/sample this view until that stage acknowledges. Null for an externally created destination.
+    [[nodiscard]] ID3D11ShaderResourceView* DestinationShaderView() const noexcept
+    {
+        return _creationMode ? _creation.ShaderViewOwner() : nullptr;
+    }
+    // Exactly one successful final callback may take the complete created destination/source/reservation.
+    // Refused/outside/failed/duplicate adoption returns an empty owner. New consumers use this transfer rather
+    // than retaining a borrowed texture/view after the job's GPU reservation would have ended.
+    [[nodiscard]] GpuRasterCreatedResidency TakeCreatedResidencyOwner() noexcept;
     [[nodiscard]] JobTicket UploadTicket() const noexcept
     {
         return _ticket;
@@ -94,6 +157,8 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     JobScheduler& _scheduler;
     GpuUploadQueue& _queue;
     std::unique_ptr<GpuRasterUploadInput, RetireInput> _input;
+    GpuResidencyReservation _gpuReservation; // destroyed AFTER the exact created graphics owners
+    GpuRasterTextureCreation _creation;
     wil::com_ptr_nothrow<ID3D11Texture2D> _destination;
     JobTicket _ticket;
     GpuUploadRows _rows;
@@ -103,6 +168,7 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     void* _publicationContext = nullptr;
     JobResult _workerResult;
     HRESULT _queueResult = S_OK;
+    HRESULT _creationCaptureResult = S_OK;
     std::uint64_t _chunk = 0;
     std::uint64_t _deviceGeneration = 0;
     unsigned int _subresource = 0;
@@ -111,4 +177,6 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     Phase _phase = Phase::Prepare;
     bool _queueFinished = true;    // owner-only; a receiver never reads the unfinished worker's result
     bool _workerPublished = false; // read on owner only after scheduler producer acknowledgement
+    bool _creationMode = false;
+    bool _canAdoptCreated = false;
 };

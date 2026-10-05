@@ -60,6 +60,7 @@ struct GpuUploadQueue::Impl final
         bool retry = false;
         wil::unique_handle event;
         JobEventTicket wait;
+        GpuResidencyReservation retirementReservation; // last release after retained graphics storage
         wil::com_ptr_nothrow<ID3D11Texture2D> destination;
         wil::com_ptr_nothrow<ID3D11Texture2D> staging;
         wil::com_ptr_nothrow<ID3D11DeviceContext> context;
@@ -80,6 +81,7 @@ struct GpuUploadQueue::Impl final
     const std::uint64_t identity = AllocateUploadQueueIdentity();
     JobScheduler* scheduler = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
+    GpuResidencyReservation persistentReservation; // survives every reusable/retired staging allocation
     std::array<Slot, kCapacity> slots;
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> context;
@@ -120,6 +122,7 @@ struct GpuUploadQueue::Impl final
         slot.context.reset();
         slot.completionFence.reset();
         slot.poisoned = false;
+        slot.retirementReservation.ResetOwner();
     }
     void Finish(Slot& slot, HRESULT result) noexcept
     {
@@ -393,6 +396,29 @@ HRESULT GpuUploadQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context,
     return S_OK;
 }
 
+bool GpuUploadQueue::AdmitPersistentResidency(GpuResidencyReservation& reservation) noexcept
+{
+    if (!_impl || !reservation)
+        return false;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.stopped || self.stagingBytes || self.inFlight || HasPending() ||
+        reservation.DeviceGeneration() != self.deviceGeneration ||
+        reservation.Bytes() < kStagingCapBytes + GpuResidencyBudget::kMinimumHeadroom)
+        return false;
+    self.persistentReservation = std::move(reservation);
+    return true;
+}
+
+bool GpuUploadQueue::HasAdmittedPersistentResidency() const noexcept
+{
+    if (!_impl)
+        return false;
+    _impl->CheckOwner();
+    return !_impl->stopped && _impl->persistentReservation &&
+           _impl->persistentReservation.DeviceGeneration() == _impl->deviceGeneration;
+}
+
 HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subresource, unsigned int x, unsigned int y,
                                 unsigned int width, unsigned int height, JobTicket ticket,
                                 GpuUploadReceiver& receiver) noexcept
@@ -472,6 +498,23 @@ void GpuUploadQueue::Cancel(JobTicket ticket) noexcept
         if (slot.state != Impl::State::Free && slot.ticket == ticket)
             slot.cancelled = true;
     _impl->scheduler->NotifyOwnerWork();
+}
+
+bool GpuUploadQueue::RetainRetiredResidency(JobTicket ticket, GpuResidencyReservation& reservation) noexcept
+{
+    if (!_impl || !reservation || ticket.slot >= JobScheduler::kCapacity || !ticket.generation)
+        return false;
+    _impl->CheckOwner();
+    for (auto& slot : _impl->slots)
+    {
+        if (slot.ticket == ticket && slot.deviceGeneration == reservation.DeviceGeneration() &&
+            (slot.poisoned || (_impl->stopped && slot.state != Impl::State::Free)) && !slot.retirementReservation)
+        {
+            slot.retirementReservation = std::move(reservation);
+            return true;
+        }
+    }
+    return false;
 }
 
 void GpuUploadQueue::RetireDevice() noexcept
@@ -629,6 +672,21 @@ void GpuUploadQueue::Pump() noexcept
 std::uint64_t GpuUploadQueue::StagingBytes() const noexcept
 {
     return _impl ? _impl->stagingBytes : 0;
+}
+std::uint64_t GpuUploadQueue::RetiredResidencyBytes() const noexcept
+{
+    if (!_impl)
+        return 0;
+    _impl->CheckOwner();
+    std::uint64_t bytes = 0;
+    for (const auto& slot : _impl->slots)
+    {
+        const auto retained = slot.retirementReservation.Bytes();
+        if (retained > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return (std::numeric_limits<std::uint64_t>::max)(); // distinct admitting domains fail closed
+        bytes += retained;
+    }
+    return bytes;
 }
 std::size_t GpuUploadQueue::InFlightCount() const noexcept
 {

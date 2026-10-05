@@ -1,8 +1,56 @@
 #include "GpuRasterUploadJob.h"
 
 #include <cassert>
+#include <exception>
 #include <limits>
 #include <utility>
+
+GpuRasterCreatedResidency::~GpuRasterCreatedResidency()
+{
+    ResetOwner();
+}
+
+GpuRasterCreatedResidency::GpuRasterCreatedResidency(GpuRasterCreatedResidency&& other) noexcept
+    : _reservation(std::move(other._reservation)), _source(std::move(other._source)),
+      _texture(std::move(other._texture)), _view(std::move(other._view)),
+      _ownerThread(std::exchange(other._ownerThread, 0))
+{
+}
+
+GpuRasterCreatedResidency& GpuRasterCreatedResidency::operator=(GpuRasterCreatedResidency&& other) noexcept
+{
+    if (this != &other)
+    {
+        ResetOwner();
+        _reservation = std::move(other._reservation);
+        _source = std::move(other._source);
+        _texture = std::move(other._texture);
+        _view = std::move(other._view);
+        _ownerThread = std::exchange(other._ownerThread, 0);
+    }
+    return *this;
+}
+
+ID3D11Texture2D* GpuRasterCreatedResidency::TextureOwner() const noexcept
+{
+    return _ownerThread == GetCurrentThreadId() && _reservation ? _texture.get() : nullptr;
+}
+
+ID3D11ShaderResourceView* GpuRasterCreatedResidency::ShaderViewOwner() const noexcept
+{
+    return _ownerThread == GetCurrentThreadId() && _reservation ? _view.get() : nullptr;
+}
+
+void GpuRasterCreatedResidency::ResetOwner() noexcept
+{
+    if (_ownerThread && _ownerThread != GetCurrentThreadId())
+        std::terminate();
+    _view.reset();
+    _texture.reset();
+    _source = {};
+    _reservation.ResetOwner();
+    _ownerThread = 0;
+}
 
 std::unique_ptr<GpuRasterUploadInput> GpuRasterUploadInput::Make(RasterUploadLayout layout)
 {
@@ -52,6 +100,21 @@ GpuRasterUploadJob::~GpuRasterUploadJob()
         _queue.Cancel(_ticket);
         AcknowledgeUnpublished({JobStatus::Cancelled});
     }
+    if (_gpuReservation)
+        (void)_queue.RetainRetiredResidency(_ticket, _gpuReservation);
+}
+
+GpuRasterUploadJob::GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& queue,
+                                       std::unique_ptr<GpuRasterUploadInput> input,
+                                       GpuRasterCreationRequest creation) noexcept
+    : _scheduler(scheduler), _queue(queue), _input(input.release()), _gpuReservation(std::move(creation.reservation)),
+      _creationMode(true)
+{
+    _deviceGeneration = _gpuReservation.DeviceGeneration();
+    _creationCaptureResult =
+        !_gpuReservation || !_deviceGeneration || _deviceGeneration != _queue.DeviceGeneration() ? E_ABORT
+        : !_queue.HasAdmittedPersistentResidency()                                               ? E_UNEXPECTED
+                                                   : _creation.CaptureOwner(creation.device, _deviceGeneration);
 }
 
 void GpuRasterUploadJob::SetRowObserverForTest(RasterUploadRowObserver observer, void* context) noexcept
@@ -76,11 +139,24 @@ JobResult GpuRasterUploadJob::Run(JobContext& context)
     {
         if (!context.deferredRetirement)
             return {JobStatus::Failed, E_UNEXPECTED}; // refuse before a receiver can escape its scheduler record
-        if (!_input || !_input->Layout().IsValid() || !_destination)
+        if (!_input || !_input->Layout().IsValid() || (!_creationMode && !_destination))
             return {JobStatus::Failed, E_INVALIDARG};
         if (context.reservedMemoryBytes < _input->WorkerAllocationBytes())
             return {JobStatus::Failed, E_OUTOFMEMORY};
         const auto& layout = _input->Layout();
+        if (_creationMode)
+        {
+            if (FAILED(_creationCaptureResult))
+                return {JobStatus::Failed, _creationCaptureResult};
+            constexpr auto headroom = GpuResidencyBudget::kMinimumHeadroom + GpuUploadQueue::kStagingCapBytes;
+            if (layout.LogicalTextureBytes() > (std::numeric_limits<std::uint64_t>::max)() - headroom ||
+                _gpuReservation.Bytes() < layout.LogicalTextureBytes() + headroom)
+                return {JobStatus::Failed, E_OUTOFMEMORY};
+            const auto created = _creation.CreateOnWorker(layout, context.cancellation);
+            if (FAILED(created))
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, created};
+        }
         if (layout.SourceRowScratchBytes() > (std::numeric_limits<std::size_t>::max)() ||
             layout.ChannelSumElements() > (std::numeric_limits<std::size_t>::max)())
             return {JobStatus::Failed, E_INVALIDARG};
@@ -123,6 +199,9 @@ void GpuRasterUploadJob::AcknowledgeUnpublished(JobResult result) noexcept
 
 bool GpuRasterUploadJob::DeferRetirement(JobResult result, JobTicket ticket) noexcept
 {
+    if (!_ticket.generation)
+        _ticket = ticket; // retains original identity even when preparation/refusal precedes the first chunk
+    assert(_ticket == ticket);
     if (_phase == Phase::AwaitRows || _phase == Phase::AwaitCopy)
     {
         assert(ticket == _ticket);
@@ -193,7 +272,25 @@ bool GpuRasterUploadJob::RequestChunk(JobTicket ticket) noexcept
 bool GpuRasterUploadJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
 {
     if (_phase == Phase::Ready)
+    {
+        if (_creationMode)
+        {
+            if (_deviceGeneration != _queue.DeviceGeneration() || !_creation.AcknowledgeOwner())
+            {
+                _queueResult = _deviceGeneration != _queue.DeviceGeneration() ? E_ABORT : E_UNEXPECTED;
+                _phase = Phase::AfterChunk;
+                return false;
+            }
+            _destination = _creation.TextureOwner();
+            if (!_destination || !_creation.ShaderViewOwner())
+            {
+                _queueResult = E_UNEXPECTED;
+                _phase = Phase::AfterChunk;
+                return false;
+            }
+        }
         return RequestChunk(ticket);
+    }
     if (_phase != Phase::AfterChunk || FAILED(_queueResult))
         return false;
     ++_chunk;
@@ -230,5 +327,25 @@ void GpuRasterUploadJob::Completed(JobResult result) noexcept
 {
     if (result.status == JobStatus::Finished && FAILED(_queueResult))
         result = {JobStatus::Failed, _queueResult}; // caller distinguishes device retirement from local Cancel
+    _canAdoptCreated = _creationMode && result.status == JobStatus::Finished;
     RasterUploadCompleted(result);
+    _canAdoptCreated = false;
+}
+
+GpuRasterCreatedResidency GpuRasterUploadJob::TakeCreatedResidencyOwner() noexcept
+{
+    if (!_canAdoptCreated || !_gpuReservation || !_input || !_destination || !_creation.ShaderViewOwner())
+        return {};
+    GpuRasterCreatedResidency residency;
+    residency._ownerThread = GetCurrentThreadId();
+    residency._source = _input->Layout().Source();
+    residency._texture = _destination.get();
+    residency._view = _creation.ShaderViewOwner();
+    const bool retired = _creation.ReleaseOwner();
+    assert(retired);
+    if (!retired)
+        std::terminate();
+    _destination.reset(); // the adopted owner now holds every graphics reference from this job
+    residency._reservation = std::move(_gpuReservation);
+    return residency;
 }

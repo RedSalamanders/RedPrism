@@ -106,10 +106,15 @@
     <ClInclude Include="GpuUploadInitializationTests.h" />
     <ClInclude Include="GpuUploadFaultTests.h" />
     <ClInclude Include="GpuRasterUploadJobTests.h" />
+    <ClInclude Include="GpuResidencyBudgetTests.h" />
+    <ClInclude Include="GpuRasterTextureCreationTests.h" />
+    <ClInclude Include="GpuCreatedUploadJobTests.h" />
     <ClInclude Include="CompositionStageTimingTests.h" />
     <ClInclude Include="..\..\Common\RasterUploadReductionWork.h" />
     <ClInclude Include="..\..\Common\RasterUploadLayout.h" />
     <ClInclude Include="..\..\RedPrism\GpuRasterUploadJob.h" />
+    <ClInclude Include="..\..\RedPrism\GpuResidencyBudget.h" />
+    <ClInclude Include="..\..\RedPrism\GpuRasterTextureCreation.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CompositionTests.cpp" />
@@ -121,6 +126,9 @@
     <ClCompile Include="GpuUploadInitializationTests.cpp" />
     <ClCompile Include="GpuUploadFaultTests.cpp" />
     <ClCompile Include="GpuRasterUploadJobTests.cpp" />
+    <ClCompile Include="GpuResidencyBudgetTests.cpp" />
+    <ClCompile Include="GpuRasterTextureCreationTests.cpp" />
+    <ClCompile Include="GpuCreatedUploadJobTests.cpp" />
     <ClCompile Include="CompositionStageTimingTests.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
@@ -129,6 +137,8 @@
     <ClCompile Include="..\..\Common\RasterUploadReductionWork.cpp" />
     <ClCompile Include="..\..\Common\RasterUploadLayout.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuRasterUploadJob.cpp" />
+    <ClCompile Include="..\..\RedPrism\GpuResidencyBudget.cpp" />
+    <ClCompile Include="..\..\RedPrism\GpuRasterTextureCreation.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />

@@ -145,6 +145,8 @@
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
     <ClInclude Include="GpuRasterUploadJob.h" />
+    <ClInclude Include="GpuResidencyBudget.h" />
+    <ClInclude Include="GpuRasterTextureCreation.h" />
     <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ClipboardDibWork.h" />
@@ -400,6 +402,8 @@
     <ClCompile Include="GpuWork.cpp" />
     <ClCompile Include="GpuUploadWork.cpp" />
     <ClCompile Include="GpuRasterUploadJob.cpp" />
+    <ClCompile Include="GpuResidencyBudget.cpp" />
+    <ClCompile Include="GpuRasterTextureCreation.cpp" />
     <ClCompile Include="DocumentReadbackJob.cpp" />
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />
