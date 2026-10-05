@@ -398,7 +398,7 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
-    NotePickerInput();
+    NotePickerOpening();
     DetachAccessibility();
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
     // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
@@ -2547,6 +2547,12 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
     _events.OnChromeLayout();
 }
 
+void ChromeHost::NotePickerOpening() noexcept
+{
+    _pickerOpeningRevision.Advance();
+    NotePickerInput();
+}
+
 void ChromeHost::NotePickerInput(bool sampledPublication) noexcept
 {
     _pickerInputRevision.Advance();
@@ -2585,7 +2591,7 @@ void ChromeHost::ClosePickerCard() noexcept
     {
         return;
     }
-    NotePickerInput();
+    NotePickerOpening();
     // The keyboard goes back where it was: the well or swatch that opened the picker.
     PopCard(ModalCard::Picker);
     _pickerCard->SetVisible(false);
@@ -2615,7 +2621,7 @@ void ChromeHost::OpenColorPicker(PickerTarget target, uint32_t argb) noexcept
         return;
     }
     _pickerTarget = target;
-    NotePickerInput();
+    NotePickerOpening();
     _picker->SetColor(argb | 0xFF000000u);
     ArrangePicker();
     _pickerCard->SetVisible(true);
@@ -4098,17 +4104,23 @@ std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerSample
     return PickerSampleAuthority{_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
 }
 
-std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerIntentAuthority() const noexcept
+std::optional<ChromeHost::PickerIntentAuthority> ChromeHost::CapturePickerIntentAuthority() const noexcept
 {
-    if (!ColorPickerOpen() || _pickerIntentRevision.Current() == 0)
+    if (!ColorPickerOpen() || _pickerIntentRevision.Current() == 0 || _pickerOpeningRevision.Current() == 0)
         return std::nullopt;
-    return PickerSampleAuthority{_pickerInstance, _pickerIntentRevision.Current(), _pickerTarget};
+    return PickerIntentAuthority{_pickerInstance, _pickerOpeningRevision.Current(), _pickerIntentRevision.Current(),
+                                 _pickerTarget};
 }
 
-bool ChromeHost::IsPickerIntentCurrent(const PickerSampleAuthority& authority) const noexcept
+bool ChromeHost::IsPickerIntentCurrent(const PickerIntentAuthority& authority) const noexcept
+{
+    return IsPickerOpeningCurrent(authority) && _pickerIntentRevision.Matches(authority.revision);
+}
+
+bool ChromeHost::IsPickerOpeningCurrent(const PickerIntentAuthority& authority) const noexcept
 {
     return ColorPickerOpen() && authority.host == _pickerInstance && authority.target == _pickerTarget &&
-           _pickerIntentRevision.Matches(authority.revision);
+           _pickerOpeningRevision.Matches(authority.opening);
 }
 
 bool ChromeHost::ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept

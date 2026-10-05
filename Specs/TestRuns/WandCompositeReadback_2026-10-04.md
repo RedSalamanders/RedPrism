@@ -5,10 +5,51 @@
 Private graph on `codex/p1-sampler`, based on `2cfabe9`. r11 compiled and passed Host/Document/Composition/Io,
 including all 51 new `wand-composite-core` checks. Its application stage failed one new device fixture; it is not
 a complete Debug qualification. Original assertions, numeric goldens and gates are unchanged. The repaired
-fixture passes full Debug r12 and full Release r14. The shared request descriptor repair passes full ASan r16; current Debug/Release, analysis, ARM64, shutdown and G1 remain due.
+fixture passes full Debug r12 and full Release r14. The shared request descriptor repair passes full ASan r16 and Release r19. The canvas-dimension fixture repair passes Debug analysis r21. The combined current runtime matrix, ARM64, shutdown and G1 remain due.
 
 Skills: 15 pass. Formatting: 642 files pass before r11 and after the new fixture repair. No current G1 timing,
-large-fixture admission, static-analysis or native ARM64 execution claim is made here. Profile results below are tied to their frozen snapshots.
+large-fixture admission or native ARM64 execution claim is made here. The r21 static-analysis result and all profile results below are tied to their frozen snapshots.
+
+## Attempts r17–r21 — latest runtime, build and analysis receipts
+
+These are five distinct child attempts. The freeze hash is the exact `result.json` `FreezeHash`; do not combine
+configuration results into a matrix claim.
+
+| Attempt | Scope / result | Freeze hash | Preserved archive |
+| --- | --- | --- | --- |
+| r17 | x64 Debug `test`, exit 1. Existing other-history readiness assertion fails; cause unassigned. | `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826` | `p1-wand-composite-x64-Debug-r17-independent-history-failure` |
+| r18 | x64 Release `build`, exit 1. vcpkg lock check stops before compilation. | `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826` | `p1-wand-composite-x64-Release-r18-vcpkg-lock-failure` |
+| r19 | Full x64 Release `test`, exit 0, repaired snapshot. | `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826` | `p1-wand-composite-x64-Release-r19-repaired-full-qualified` |
+| r20 | x64 Debug `analysis`, exit 1. The new constant-size assertion was tautological for its test fixture. | `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826` | `p1-wand-composite-x64-Debug-r20-analysis-failure` |
+| r21 | x64 Debug `analysis`, exit 0, repaired fixture. Logical byte count now uses captured canvas width and height; expected value remains literal `32`. | `1B98AA514D4105212784C41205917FE1BA449752B537821CC5FF9A7C5950CDC4` | `p1-wand-composite-x64-Debug-r21-analysis-qualified` |
+
+The archived `result.json` records 762 frozen inputs for every attempt. Archive completion metadata records source/evidence
+counts and manifest hashes as follows:
+
+| Attempt | Source / evidence files | Source manifest SHA-256 | Evidence manifest SHA-256 |
+| --- | ---: | --- | --- |
+| r17 | 762 / 267 | `27495AA1DC47341D85DC2812547897663BCB3BB2899CD34437B6A584E0980E1D` | `F9F3BAB2910FD3D57828FD46656968625EFB655E9EB1F91D8D9A508E6E4C6426` |
+| r18 | 762 / 257 | `9374E654984FB5CC00BBE97DE778F32EBB1E8CFF19D7A7614F9AB7BC417278BB` | `38318E3D5E7BCEA8A5E8A6B96C2D61ECE8B6887690DC21D147B3836EDFD55771` |
+| r19 | 762 / 266 | `813615F328FA5FF76E6B6B88D990B5BA43A4B13A01ED5E5A386A9EC77C46794A` | `F4B860756D22FF9C527291D84C61605C03712F467FC90B7A7B4CACE5C8657169` |
+| r20 | 762 / 276 | `650242C8FD5C42939CF4291916F7D4D05B402AEC8495F977DC9E51C427789239` | `31DAE5F2F1BA4656FED633788C8063649B1CE7A3748627864EA9778D0F6FA75E` |
+| r21 | 762 / 283 | `6C65862327CB3D91E56CB4E603FF8AA802DCC19A5A439D67215F56AE632442AD` | `0F26835C94509D0C46C29628F6CAB6CED74596E739ED5B14E48ACE673CAB4658` |
+
+The attempt-root `independently-verified-archive.json` receipts were checked against each archive's
+`archive-completed.json`, `source-manifest.json` and `evidence-manifest.json`. For all five, archive path, copy count,
+source/evidence manifest hashes, completion hash (SHA-256 of `archive-completed.json`) and actual exit match. The
+verified copy totals include each archive's source and evidence files; attempt stages distinguish executed runtime
+stages from build/analysis-only attempts.
+
+| Attempt | Verified copies | Stages | Completion SHA-256 | Verified UTC |
+| --- | ---: | ---: | --- | --- |
+| r17 | 1,029 | 64 | `4C47BDBA238D55A710F005FA8AF47E940175A98ABEC411CB3FC0DF36C3A0198C` | 2026-10-04T22:39:47.5039727+00:00 |
+| r18 | 1,019 | 0 | `06A3201F95D77038701CFAF463C7C25D7E9CE2675D1D92DA71C971F252CDEABD` | 2026-10-04T22:35:02.0436530+00:00 |
+| r19 | 1,028 | 79 | `7F4D9FA68C05F97C7DD8EA8D1C1F7AC0EFD83AB74F079C440302EBCB602E28D4` | 2026-10-04T22:54:22.3007673+00:00 |
+| r20 | 1,038 | 0 | `0543BCC93269D2A072B9D1652D0E00373B01A23D7A5B0F14EB3459C9DC91D1BA` | 2026-10-04T23:06:31.1225635+00:00 |
+| r21 | 1,045 | 0 | `F89B0CB71A56FEF51877B239E6E54B0FA0289D430616AA5900804CCE0E61EF40` | 2026-10-04T23:19:39.1294900+00:00 |
+
+The independent archive verification confirms preservation and identity only; it does not upgrade a failed attempt or
+combine the separate r19 Release and r21 analysis runs into a full matrix qualification.
 
 ## Full Debug r11 — original new-fixture failure
 
@@ -125,6 +166,6 @@ source manifest `419C46952D37EE759895B12280D02526C34633EB7B79FC9E45CF5267506C21A
 
 ## Current remaining qualification
 
-Debug/Release on the repaired descriptor, current static analysis, ARM64 cross-builds, graph-specific shutdown,
+The full combined current runtime/analysis matrix, ARM64 cross-builds, graph-specific shutdown,
 A/B capacity/G1 and complete parent P1 integration remain due. No profile result is generalized across a changed
 snapshot. The actual sampler remains synchronous; its separate prerequisite/caller work is still active.

@@ -942,6 +942,259 @@ void TestPaletteIntentAuthority()
            "palette-intent.moved-session-and-source-refuse-original-manual-authority");
 }
 
+void TestDocumentReadAuthority()
+{
+    auto empty = std::make_unique<DocumentSession>();
+    Expect(!empty->CaptureDocumentReadAuthority(), "document-read.no-document-has-no-authority");
+
+    auto owner = std::make_unique<DocumentSession>();
+    owner->CreateDocument(3, 2, true);
+    const auto captured = owner->CaptureDocumentReadAuthority();
+    if (!captured.has_value())
+    {
+        Expect(false, "document-read.created-document-captures-authority");
+        return;
+    }
+    const DocumentReadAuthority authority = captured.value();
+    const Guid historyRevision = owner->history.CurrentRevision();
+    const int undoCount = owner->history.UndoCount();
+    const std::uint64_t generation = owner->Generation();
+    const std::uint64_t documentSerial = owner->DocumentSerial();
+    Expect(owner->IsDocumentReadCurrent(authority) && authority.canvasWidth == 3 && authority.canvasHeight == 2 &&
+               authority.generation == generation && authority.documentSerial == documentSerial &&
+               owner->history.CurrentRevision() == historyRevision && owner->history.UndoCount() == undoCount,
+           "document-read.capture-check-keeps-history-state");
+
+    DocumentReadAuthority wrongOwner = authority;
+    wrongOwner.sessionIdentity = Guid::Generate();
+    DocumentReadAuthority wrongSerial = authority;
+    ++wrongSerial.documentSerial;
+    DocumentReadAuthority wrongGeneration = authority;
+    ++wrongGeneration.generation;
+    DocumentReadAuthority wrongRestore = authority;
+    ++wrongRestore.restoreSerial;
+    DocumentReadAuthority wrongWidth = authority;
+    ++wrongWidth.canvasWidth;
+    DocumentReadAuthority wrongHeight = authority;
+    ++wrongHeight.canvasHeight;
+    Expect(!owner->IsDocumentReadCurrent(wrongOwner), "document-read.foreign-owner-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongSerial), "document-read.mismatched-document-serial-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongGeneration), "document-read.mismatched-generation-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongRestore), "document-read.mismatched-restore-serial-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongWidth), "document-read.mismatched-width-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongHeight), "document-read.mismatched-height-refused");
+    Expect(owner->IsDocumentReadCurrent(authority) && owner->Generation() == generation &&
+               owner->DocumentSerial() == documentSerial && owner->history.CurrentRevision() == historyRevision &&
+               owner->history.UndoCount() == undoCount,
+           "document-read.mismatch-refusals-are-atomic");
+
+    auto foreign = std::make_unique<DocumentSession>();
+    foreign->CreateDocument(3, 2, true);
+    auto copied = std::make_unique<DocumentSession>(*owner);
+    Expect(!foreign->IsDocumentReadCurrent(authority) && !copied->IsDocumentReadCurrent(authority),
+           "document-read.foreign-and-copied-session-refuse-owner-authority");
+    auto moved = std::make_unique<DocumentSession>(std::move(*owner));
+    Expect(!moved->IsDocumentReadCurrent(authority) && !owner->IsDocumentReadCurrent(authority),
+           "document-read.moved-session-and-source-refuse-owner-authority");
+
+    auto changed = std::make_unique<DocumentSession>();
+    changed->CreateDocument(3, 2, true);
+    const auto beforeMutation = changed->CaptureDocumentReadAuthority().value();
+    changed->AddBlankLayer();
+    const auto afterMutation = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(beforeMutation) && changed->IsDocumentReadCurrent(afterMutation),
+           "document-read.real-document-mutation-invalidates-old-authority");
+    changed->Undo();
+    const auto afterUndo = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(afterMutation) && changed->IsDocumentReadCurrent(afterUndo),
+           "document-read.undo-restore-invalidates-prior-authority");
+    changed->Redo();
+    const auto afterRedo = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(afterUndo) && changed->IsDocumentReadCurrent(afterRedo),
+           "document-read.redo-restore-invalidates-prior-authority");
+
+    auto replaced = std::make_unique<DocumentSession>();
+    replaced->CreateDocument(3, 2, true);
+    const auto beforeReplace = replaced->CaptureDocumentReadAuthority().value();
+    const Guid originalDocumentId = replaced->Document().value().id;
+    CanvasDocument sameIdReplacement = replaced->Document().value();
+    replaced->ReplaceDocument(std::move(sameIdReplacement), std::nullopt);
+    Expect(!replaced->IsDocumentReadCurrent(beforeReplace) && replaced->Document().value().id == originalDocumentId,
+           "document-read.replace-same-document-id-invalidates-authority");
+
+    auto reopened = std::make_unique<DocumentSession>();
+    reopened->CreateDocument(3, 2, true);
+    const auto beforeReopen = reopened->CaptureDocumentReadAuthority().value();
+    const Guid closedDocumentId = reopened->Document().value().id;
+    reopened->ClearDocument();
+    reopened->CreateDocument(3, 2, true);
+    Expect(!reopened->IsDocumentReadCurrent(beforeReopen) && reopened->Document().value().id != closedDocumentId,
+           "document-read.close-and-reopen-equal-size-invalidates-authority");
+
+    auto previews = std::make_unique<DocumentSession>();
+    previews->CreateDocument(2, 2, true);
+    const std::array<std::uint8_t, 16> previewPixels{0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 32, 64, 128, 255};
+    const Raster previewSource = Raster::Make(2, 2, RasterFormat::Bgra8888, previewPixels.data(), previewPixels.size());
+    if (!previewSource.HasStorage())
+    {
+        Expect(false, "document-read.preview-fixture-raster-created");
+        return;
+    }
+    EditLayerRecordsForTest(
+        *previews, [&previewSource](DocumentFixture& fixture)
+        { fixture.layers.front().asset = RasterAsset{previewSource, {}, L"Read authority preview"}; });
+    const auto beforePaletteAndPreview = previews->CaptureDocumentReadAuthority().value();
+    const Guid previewHistoryRevision = previews->history.CurrentRevision();
+    const std::uint64_t previewGeneration = previews->Generation();
+    const int previewUndoCount = previews->history.UndoCount();
+    previews->SetForegroundColor(0xFF2468ACu);
+    const bool paletteKeptReadCurrent = previews->IsDocumentReadCurrent(beforePaletteAndPreview);
+    previews->BeginColorEdit(FilterKind::GaussianBlur);
+    FilterSettings blur;
+    blur.radius = 1.75;
+    previews->UpdateColorEdit(blur, true);
+    const bool destructivePreviewLive =
+        previews->PendingColorEdit().has_value() && previews->PendingColorEdit().value().preview;
+    const bool previewKeptReadCurrent = previews->IsDocumentReadCurrent(beforePaletteAndPreview);
+    previews->CancelColorEdit();
+    Expect(paletteKeptReadCurrent && destructivePreviewLive && previewKeptReadCurrent &&
+               previews->IsDocumentReadCurrent(beforePaletteAndPreview) &&
+               previews->history.CurrentRevision() == previewHistoryRevision &&
+               previews->Generation() == previewGeneration && previews->history.UndoCount() == previewUndoCount,
+           "document-read.palette-input-and-live-destructive-preview-do-not-require-history-restore-guard");
+}
+
+void TestCapturedToolInputs()
+{
+    constexpr GradientEdit::CapturedInputs imageInputs{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToBackground, true, 0.375}, 0xFF2468ACu,
+        0xFFCF7135u, false};
+    auto image = std::make_unique<DocumentSession>();
+    image->CreateDocument(3, 1, false);
+    image->AddBlankLayer();
+    image->SetForegroundColor(0xFF112233u);
+    image->SetBackgroundColor(0xFF445566u);
+    image->gradientSettings =
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, false, 1.0};
+    Expect(image->BeginDeferredGradient(Vec2{0, 0}, imageInputs), "captured-tool.image-deferred-opening");
+    image->MoveGradient(std::nullopt, Vec2{2, 0});
+    const GradientEdit* const imagePending = image->PendingGradient();
+    const auto imageColors = image->GradientColors();
+    Expect(imagePending != nullptr && imagePending->capturedInputs == imageInputs &&
+               imagePending->start == Vec2{0, 0} && imagePending->end == Vec2{2, 0} &&
+               imageColors[0] == std::array<double, 4>{207.0 / 255.0, 113.0 / 255.0, 53.0 / 255.0, 1.0} &&
+               imageColors[1] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 1.0},
+           "captured-tool.image-fg-bg-reverse-settings-and-move-retain-event-inputs");
+
+    constexpr GradientEdit::CapturedInputs transparentInputs{
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, true, 0.625}, 0xFF5A2DC1u,
+        0xFF19A477u, false};
+    auto transparent = std::make_unique<DocumentSession>();
+    transparent->CreateDocument(2, 1, false);
+    transparent->AddBlankLayer();
+    Expect(transparent->BeginDeferredGradient(Vec2{0, 0}, transparentInputs),
+           "captured-tool.transparent-deferred-opening");
+    transparent->MoveGradient(std::nullopt, Vec2{1, 0});
+    const auto transparentColors = transparent->GradientColors();
+    Expect(transparent->PendingGradient()->capturedInputs == transparentInputs &&
+               transparentColors[0] == std::array<double, 4>{90.0 / 255.0, 45.0 / 255.0, 193.0 / 255.0, 0.0} &&
+               transparentColors[1] == std::array<double, 4>{90.0 / 255.0, 45.0 / 255.0, 193.0 / 255.0, 1.0},
+           "captured-tool.reverse-transparent-endpoints-use-event-foreground");
+
+    auto mask = std::make_unique<DocumentSession>();
+    mask->CreateDocument(2, 1, false);
+    mask->AddBlankLayer();
+    mask->AddLayerMask(true);
+    const auto maskLayer = mask->ActiveLayerID();
+    if (maskLayer.has_value())
+        mask->SelectLayerTarget(maskLayer.value(), true);
+    mask->maskPaintWhite = false;
+    mask->SetForegroundColor(0xFF778899u);
+    mask->SetBackgroundColor(0xFFAABBCCu);
+    mask->gradientSettings =
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, false, 1.0};
+    constexpr GradientEdit::CapturedInputs maskInputs{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToBackground, true, 0.25}, 0xFF010203u,
+        0xFF040506u, true};
+    const bool maskOpened = mask->IsMaskSelected() && mask->BeginDeferredGradient(Vec2{0, 0}, maskInputs);
+    mask->MoveGradient(std::nullopt, Vec2{1, 0});
+    const auto maskColors = mask->GradientColors();
+    Expect(maskOpened && mask->PendingGradient()->capturedInputs == maskInputs &&
+               maskColors[0] == std::array<double, 4>{0.0, 0.0, 0.0, 1.0} &&
+               maskColors[1] == std::array<double, 4>{1.0, 1.0, 1.0, 1.0},
+           "captured-tool.mask-event-inputs-override-pre-opening-live-palette-and-settings");
+
+    constexpr GradientEdit::CapturedInputs initialLiveProbe{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToTransparent, true, 0.2}, 0xFF010101u,
+        0xFF020202u, false};
+    auto live = std::make_unique<DocumentSession>();
+    live->CreateDocument(2, 1, false);
+    live->AddBlankLayer();
+    live->gradientSettings = GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToBackground, false, 1.0};
+    Expect(live->BeginDeferredGradient(Vec2{0, 0}, initialLiveProbe), "captured-tool.live-refresh-opening");
+    live->SetForegroundColor(0xFF102030u);
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{16.0 / 255.0, 32.0 / 255.0, 48.0 / 255.0, 1.0},
+           "captured-tool.foreground-input-adopts-live-value");
+    live->SetBackgroundColor(0xFF405060u);
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[1] == std::array<double, 4>{64.0 / 255.0, 80.0 / 255.0, 96.0 / 255.0, 1.0},
+           "captured-tool.background-input-adopts-live-value");
+    live->SwapPaletteColors();
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{64.0 / 255.0, 80.0 / 255.0, 96.0 / 255.0, 1.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{16.0 / 255.0, 32.0 / 255.0, 48.0 / 255.0, 1.0},
+           "captured-tool.palette-swap-adopts-live-values");
+    live->ResetPaletteColors();
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{0.0, 0.0, 0.0, 1.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{1.0, 1.0, 1.0, 1.0},
+           "captured-tool.palette-reset-adopts-live-values");
+    live->SetForegroundColor(0xFF2468ACu);
+    live->SetBackgroundColor(0xFFCF7135u);
+    live->gradientSettings =
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToTransparent, true, 0.75};
+    const bool refreshedOpening = live->BeginDeferredGradient(Vec2{0, 0}, initialLiveProbe);
+    live->RefreshGradient();
+    Expect(refreshedOpening && live->PendingGradient() != nullptr &&
+               live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 0.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 1.0},
+           "captured-tool.header-refresh-adopts-live-settings-and-palette");
+
+    auto click = std::make_unique<DocumentSession>();
+    click->CreateDocument(1, 1, false);
+    click->AddBlankLayer();
+    Expect(click->BeginDeferredGradient(Vec2{0, 0}, imageInputs), "captured-tool.click-opening");
+    click->EndGradientDrag();
+    Expect(click->PendingGradient() == nullptr, "captured-tool.click-without-line-drops-metadata");
+
+    auto shapes = std::make_unique<DocumentSession>();
+    shapes->CreateDocument(8, 6, false);
+    const ShapeKind originalKind = shapes->shapeKind;
+    const double originalRadius = shapes->shapeCornerRadius;
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Rectangle, 2.5);
+    const auto rectangleOpening = shapes->PendingShapeOpening();
+    Expect(rectangleOpening.has_value() &&
+               shapes->PendingShape() ==
+                   ShapeDraft{ShapeKind::Rectangle, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 2.5} &&
+               shapes->shapeKind == originalKind && shapes->shapeCornerRadius == originalRadius,
+           "captured-tool.shape-rectangle-kind-radius-and-rounded-anchor-are-event-values");
+    shapes->CancelShape();
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Ellipse, 9.0);
+    const auto ellipseOpening = shapes->PendingShapeOpening();
+    Expect(ellipseOpening.has_value() && rectangleOpening.has_value() && ellipseOpening != rectangleOpening &&
+               shapes->PendingShape() == ShapeDraft{ShapeKind::Ellipse, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 0.0} &&
+               shapes->shapeKind == originalKind && shapes->shapeCornerRadius == originalRadius,
+           "captured-tool.shape-explicit-ellipse-kind-radius-do-not-change-global-defaults");
+    shapes->CancelShape();
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Ellipse, 9.0);
+    const auto reopenedShapeOpening = shapes->PendingShapeOpening();
+    Expect(reopenedShapeOpening.has_value() && reopenedShapeOpening != ellipseOpening &&
+               shapes->PendingShape() == ShapeDraft{ShapeKind::Ellipse, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 0.0},
+           "captured-tool.shape-cancel-and-equal-reopen-issue-new-opening");
+}
+
 // ── Transform (C8, ported from legacy TransformTests, MaskTransformTests and DistortTests) ────────────────
 
 [[nodiscard]] bool Near(double a, double b, double epsilon = 0.0001) noexcept
@@ -7649,6 +7902,8 @@ int wmain(int argc, wchar_t** argv)
     TestPaletteColors();
     TestPaletteSampleAuthority();
     TestPaletteIntentAuthority();
+    TestDocumentReadAuthority();
+    TestCapturedToolInputs();
     TestTransformGeometry();
     TestTransformDrag();
     TestTransformSnap();

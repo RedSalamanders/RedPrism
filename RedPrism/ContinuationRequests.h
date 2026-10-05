@@ -130,10 +130,17 @@ struct HostLayerOpacityInput final
     ChromeEditPhase phase;
     OpacityInputOrder::Stamp order{}; // producer field stream; separate from the acknowledged model opening
 };
+enum class HostCanvasInputKind
+{
+    Brush,
+    Sampler
+};
 struct HostCanvasBrushInput final
 {
     std::uint64_t opening; // owner-only fixed stream; no borrowed pointer or later view interpretation
+    HostCanvasInputKind kind = HostCanvasInputKind::Brush;
 };
+using HostSamplerInput = HostCanvasBrushInput;
 struct HostWriteInput final
 {
     HostWriteFormat format;

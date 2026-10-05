@@ -205,7 +205,8 @@ Synchronous callers take the `ComposeReadback(document, Raster&)` overload: stag
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
 are never published. Merge, adjustment opening and PNG/JPEG export use the asynchronous utility path below. Settled
 New-mode All Layers wand uses the admitted `DocumentReadbackJob` graph below; Add/Subtract and live-context wand
-requests and Clone Stamp/eyedropper sampling retain their existing synchronous composition callers. Clipboard
+requests and Clone Stamp retain their existing synchronous composition callers. The P1 canvas color sampler uses
+one admitted source and repeated 1×1 requests with no owner pixel copy; current qualification is scoped below. Clipboard
 actions use worker and readback graphs; prefill/inspection retries and final transfer/publication sequencing retain
 their separate clipboard contracts.
 
@@ -284,12 +285,15 @@ original immutable document, reservation and total two-restart allowance. Refuse
 or out-of-bounds requests change no state. Previous CPU output retires on the next worker; utility targets
 are released before that detached boundary. Input may leave the record suspended until a message arrives,
 without polling, a timer or a dummy worker turn. This primitive does not activate the production sampler;
-its gesture, picker/palette authority, terminal ordering and G1 qualification remain P1.3 requirements.
+the canvas color sampler uses this continuation with exact gesture/source/manual/picker-opening authority and
+terminal acknowledgement. Current private Debug qualification is recorded in
+[SamplerReadback](../TestRuns/SamplerReadback_2026-10-04.md); broader profiles, native activation and G1 remain due.
 
 Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
 through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Settled
 New-mode All Layers wand also uses this path as specified above. Add/Subtract and live-context wand plus
-Clone Stamp/eyedropper composition remain synchronous callers. Clipboard readback and transfer use their worker
+Clone Stamp composition remain synchronous callers. Eyedropper and Alt-tool sampling use the admitted 1×1 graph,
+with current actual caller/profile qualification and remaining work scoped in the sampler record. Clipboard readback and transfer use their worker
 graphs; prefill/inspection retries and final transfer/publication sequencing remain governed by the clipboard
 contract. Synchronous readback remains the diagnostic numeric reference; application-wide nonblocking readbacks
 and G1 are not yet established.

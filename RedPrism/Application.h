@@ -31,6 +31,7 @@
 #include "RasterEditWork.h"
 #include "Renderer.h"
 #include "RetryWaitQueue.h"
+#include "SamplerState.h"
 #include "SettingsStore.h"
 #include "ShapeEditWork.h"
 #include "TransformEdit.h"
@@ -218,17 +219,26 @@ class Application final : public ChromeEvents
         BrushSettings settings;
         bool mask;
         bool maskWhite;
+        std::optional<SamplerColorDependency> sampledColor;
+        GradientSettings gradient;
+        std::uint32_t foreground = 0xFF000000u;
+        std::uint32_t background = 0xFFFFFFFFu;
+        ShapeKind shape = ShapeKind::Rectangle;
+        double cornerRadius = 0;
     };
     struct CanvasBrushSample final
     {
         Vec2 point; // document coordinates at physical event time, including moves after a view change
         unsigned int modifiers;
+        bool alt = false;
+        bool keepShapeOnLoss = false;
     };
     using CanvasBrushInput = PointerInputStream<CanvasBrushContext, CanvasBrushSample, 512>;
     [[nodiscard]] bool CanDeferCanvasBrush() const noexcept;
+    [[nodiscard]] EditorTool CapturedCanvasTool() const noexcept;
     [[nodiscard]] bool QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
     void RecordCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
-    void LoseCanvasBrush() noexcept;
+    void LoseCanvasBrush(bool keepShape = false) noexcept;
     void SealCanvasBrushForBoundary() noexcept;
     [[nodiscard]] bool CancelCanvasBrush() noexcept;
     void ReplayCanvasBrush() noexcept;
@@ -254,6 +264,7 @@ class Application final : public ChromeEvents
     std::uint64_t _canvasBrushCancelledOpening = 0;
     std::optional<std::uint64_t> _canvasBrushSessionOpening;
     bool _canvasBrushReplayed = false;
+    std::uint32_t _canvasResolvedForeground = 0xFF000000u;
     // A key, a command or a header button ended what a `Drag` drags: the drag ends with it.
     template <class Drag> void DropDrag() noexcept
     {
@@ -609,6 +620,29 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept;
     int RunWandCompositeHostSelfTest() noexcept;
     [[nodiscard]] bool RunSamplerIntentHostSelfTest() noexcept;
+    int RunSamplerHostSelfTest() noexcept;
+    int RunSamplerCallerSelfTest() noexcept;
+    [[nodiscard]] bool CanQueueSampler(bool paletteInput = false) const noexcept;
+    [[nodiscard]] bool CanChangePaletteDuringSampling() const noexcept;
+    class SamplerHostJob;
+    HANDLE _samplerAcknowledgedForTest = nullptr; // Owner-only borrowed harness event, cleared before its owner exits.
+    [[nodiscard]] SamplerOpening* FindSamplerOpening(std::uint64_t opening) noexcept;
+    [[nodiscard]] const SamplerOpening* FindSamplerOpening(std::uint64_t opening) const noexcept;
+    void SweepSamplerOpenings() noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> BeginSamplerOpening(Vec2 pixel) noexcept;
+    void RecordSamplerPoint(std::uint64_t opening, Vec2 pixel) noexcept;
+    void SealSamplerOpening(std::uint64_t opening) noexcept;
+    void SealSamplerForBoundary() noexcept;
+    void ReplaySamplerOpening(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartSamplerReadback(std::uint64_t opening) noexcept;
+    void AdvanceSamplerReadback() noexcept;
+    void CancelSamplerReadback() noexcept;
+    void RetireSamplerOpening(std::uint64_t opening) noexcept;
+    void PublishSamplerPoint(std::uint64_t opening, const SamplerIntentPoint& point,
+                             std::optional<std::uint32_t> opaqueArgb) noexcept;
+    [[nodiscard]] std::optional<SamplerColorDependency> CaptureSamplerColorDependency() noexcept;
+    [[nodiscard]] std::uint32_t ResolveSamplerColor(const SamplerColorDependency& dependency) const noexcept;
+    void ReleaseSamplerColorDependency(const SamplerColorDependency& dependency) noexcept;
     class HistoryRestoreJob;
     [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
     int RunHistoryRestoreSelfTest() noexcept;
@@ -722,6 +756,7 @@ class Application final : public ChromeEvents
     void CancelWarpStroke() noexcept;
     void OnGradientAction(GradientAction action, double value) noexcept override;
     void BeginGradientDrag(Vec2 view) noexcept;
+    [[nodiscard]] static Vec2 SnappedGradientPoint(Vec2 point, Vec2 anchor) noexcept;
     void DragGradient(Vec2 view, UINT modifiers) noexcept;
     void EndGradientDrag() noexcept;
     void CommitGradient() noexcept;
@@ -754,6 +789,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] const ImageLayer* OpacityEditLayer() noexcept;
     int RunLayerEditsSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
+    [[nodiscard]] bool SamplesColor(EditorTool tool) const noexcept;
     void SampleColorAt(Vec2 view) noexcept;
     void EndColorSampling() noexcept;
     void SyncToolOverlays() noexcept;
@@ -977,6 +1013,7 @@ class Application final : public ChromeEvents
     std::shared_ptr<ShapeWorkTestGate> _shapeWorkTestGate;
     std::optional<ShapeDraft> _shapeCommitPreview;
     std::uint64_t _shapePreviewDocumentSerial = 0;
+    std::uint32_t _shapePreviewArgb = DocumentSession::kDefaultForegroundArgb;
     std::optional<JobTicket> _pathClassificationTicket;
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;
@@ -1006,6 +1043,7 @@ class Application final : public ChromeEvents
         Settle,
         OpacitySettle,
         CanvasBrush,
+        Sampler,
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,
@@ -1192,9 +1230,10 @@ class Application final : public ChromeEvents
     };
     struct ColorSampling
     {
-        uint32_t original = 0xFF000000u; // the color before the press (the sample ring's lower half)
-        std::optional<Raster> composite; // the canvas read at the press
-        std::optional<Vec2> point;       // the document point sampled last
+        uint32_t original = 0xFF000000u;      // the color before the press (the sample ring's lower half)
+        std::optional<Raster> composite;      // the canvas read at the press
+        std::optional<Vec2> point;            // the document point sampled last
+        std::optional<std::uint64_t> opening; // asynchronous opening; the production caller migrates with its consumers
     };
     struct HueTargetDrag
     {
@@ -1203,6 +1242,10 @@ class Application final : public ChromeEvents
     using PointerDrag = std::variant<std::monostate, PanDrag, ZoomDrag, MoveToolDrag, CropDrag, OutlineDrag, DraftDrag,
                                      PixelDrag, GradientDrag, ColorSampling, HueTargetDrag>;
     PointerDrag _drag;
+    std::unique_ptr<SamplerState> _samplerState;
+    SamplerHostJob* _samplerHostJob = nullptr; // borrowed only until acknowledged job destruction
+    std::optional<JobTicket> _samplerHostTicket;
+    std::optional<HistoryWorkStamp> _samplerHostStamp;
     std::optional<TransformOverlayGeometry> _overlayGeometry;
     GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
     DWORD _clipboardSequence = 0; // the system clipboard's sequence number right after the last copy was offered to it

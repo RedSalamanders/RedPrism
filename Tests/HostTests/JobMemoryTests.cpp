@@ -648,6 +648,21 @@ void TestTrimBeforeRefusal()
            "trim-before-refusal-resamples-after-worker-trim");
     scheduler.Close();
 }
+
+void TestSettledReadiness()
+{
+    JobScheduler scheduler;
+    Snapshots memory;
+    Expect(scheduler.Initialize(1, {}, {Sample, &memory}) == S_OK, "settled-readiness-initialize");
+    Settle(scheduler, "settled-readiness-initial-drain");
+    Expect(scheduler.IsIdle() && !scheduler.HasUiWork(), "settled-readiness-initially-empty");
+    scheduler.NotifyMemoryChanged();
+    Expect(scheduler.HasUiWork() && !scheduler.IsIdle(), "settled-readiness-memory-notification-is-outstanding");
+    Settle(scheduler, "settled-readiness-notification-drained");
+    Expect(scheduler.IsIdle() && !scheduler.HasUiWork(), "settled-readiness-no-undelivered-owner-work");
+    scheduler.Close();
+    Expect(scheduler.IsIdle() && !scheduler.HasUiWork(), "settled-readiness-closed-is-empty");
+}
 } // namespace
 
 int RunJobMemoryTests()
@@ -661,6 +676,7 @@ int RunJobMemoryTests()
     TestDeferredReleaseIntegration();
     TestReleaseEventRetriesAdmission();
     TestTrimBeforeRefusal();
+    TestSettledReadiness();
     std::fflush(stdout);
     return g_failures;
 }

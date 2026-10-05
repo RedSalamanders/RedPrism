@@ -21,6 +21,8 @@
 - [x] Full Debug r55 qualifies explicit sampler intent and per-point context: 16 new palette, 23 new picker and 1,757 FIFO controls; exact preceding registries remain (6,571 document / 9,122 application, 79 stages). Actual sampler/younger consumer integration and remaining matrix/G1 stay open.
 - [x] Actual settled All Layers wand New passes full Debug r12: 51 new core and 111 host checks; exact preceding registries/stage order are preserved (6,555 document / 9,099 application controls, 79 stages). Complete matrix, graph-specific shutdown, larger supported fixtures, remaining wand modes/callers and G1 remain open.
 - [ ] P1.3: finish [real sampler](SamplerReadback_2026-10-04.md), [All Layers wand New](WandCompositeReadback_2026-10-04.md), remaining wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
+- [x] Sampler graph prerequisite full Debug r57 preserves 6,588 document / 9,147 application controls and 79 stages; format failed before that snapshot. Physical callers, selected cancellation and event-time Brush/Gradient/Shape are implemented privately for r58; runtime, remaining matrix and G1 are pending.
+- [x] Private full Debug r60 qualifies actual Eyedropper, queued Brush/Gradient/Shape and selected/idle cancellation; 6,604 document / 9,178 application controls, original 79 stages and skills/format pass. Cross-opening fix, Alt/live cases, final matrix, H3/H4 and G1 remain due.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
@@ -47,7 +49,8 @@ recorded snapshots only; original failures and diagnostic uncertainty remain pre
 
 The actual All Layers wand New-selection graph passes full Debug r12 and Release r14 with original registries preserved.
 Debug r11's fixture failure and ASan r15's dispatch-table ISA rejection are archived. The shared request descriptor
-repair passes full ASan r16; Debug/Release on that repair, analysis, ARM64 cross-builds, shutdown and G1 remain due.
+repair passes full ASan r16, Release r19 and repaired Debug analysis r21. Debug r17 remains an unassigned
+ordering failure; the current combined matrix, ARM64 cross-builds, shutdown and G1 remain due.
 [Its checklist](WandCompositeReadback_2026-10-04.md) distinguishes implementation from qualification.
 Remaining P1 callers, admission on the largest supported fixtures, original G1 measurements and native activation
 still precede P1 Done.

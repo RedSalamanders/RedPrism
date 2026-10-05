@@ -170,3 +170,82 @@ The separate wand Debug r17 failure does not reproduce in r55; its cause remains
 `UiReadinessForTest` distinguishes source readiness from memory/owner/completion notifications if it recurs.
 This pass qualifies the intent prerequisites on the frozen snapshot, not the newer caller checkout's source
 and opening APIs, admitted sampler graph, physical callers, younger consumers, final matrix or G1.
+
+
+## Admitted sampler graph — r56 failure, r57 full Debug
+
+r56 failed to compile the new self-test: a named lambda was passed to `wil::scope_exit`; the WIL contract
+requires a directly constructed scope lambda. Primary repaired this new fixture only. Actual child 85044,
+23:23:01.443349Z–23:24:11.247766Z, exit 1; 770 frozen inputs, freeze
+`BD830A1C981F940C06CDF7D929EE1A12EFDEA2F521516C13355D747D16DC2836`.
+Independent archive `p1-sampler-graph-x64-Debug-r56-build-failure`: 1,028 copies, zero runtime stages, completion
+`9F99737FEF5C96680D9CB4CA2A80AA908D46F8EEEA32EEF472732B306D9B5553`.
+
+Full Debug r57 ran child 43124, 2026-10-04T23:27:36.566161Z–23:36:23.126801Z, actual exit 0.
+770 inputs match freeze `F9B7A1059AE065052792550C322032633BCAB187BD555EBD32E6C0260EB321BC`.
+Stdout `2ABF7AA13FB5AB340A8BDA09A82CE62F4902D153269F2C950E0F650F2D2F47D5`,
+stderr `7FFC5661AE790C8FF17F4D9FD29DA3D246284CE82156E718E63AD010EBCB8EF5`.
+All full runtime suites, build, ISA/PDB/scanner controls, WARP application, crash/CLI fixtures and screenshots pass.
+The formatting check failed before this run on a copied self-test; this result does not qualify that gate.
+
+Independent literal-registry comparison verifies **6,588 document** (6,571 preceding + 17 document-read),
+**9,147 application** (9,122 preceding + eight picker-opening + 17 graph), and unchanged **79 stages**.
+Proof `verified-graph-registries.json` SHA-256 `D47D29A842EF0C9FAE975D2854CA8A0417A8B136162657F47510B34B717CAE8A`.
+This corrects a preliminary count of 19 document-read checks; the archived literal registry contains 17.
+Archive `p1-sampler-graph-x64-Debug-r57-full-qualified` verifies 1,037 copies at 23:38:44.1536587Z; completion
+`B920DA8D0C023A8197DA5FB81CFBBA4CDDDA30A70BEE837689D011DD9C4091D6`, source manifest
+`D20FA620BB19B30B66513965FA7253C7142CD4D36DA79105ACEDD24108975733`, evidence manifest
+`F5E1883F89D8371AA07CDD49889DB47356E6B5142F4475F4955BCB16480E4CC5`.
+
+Physical sampling was still synchronous in r57. Follow-up primary review fixed the selected sampler's terminal
+cancel/failure outcome being inferred as success from an exhausted FIFO. The newer r58 candidate adds exact
+selected/live cancellation controls, physical Eyedropper/Alt routing, accepted-color dependencies for Brush,
+Gradient and Shape, and captured shape-preview color. A cheap agent wrote independent actual-pointer caller
+controls; primary reviewed and registered them. Original numeric expectations and ordering assertions remain.
+
+Primary also found a scheduler readiness publication gap in current code: a final release/trim count reached
+zero before its memory notification. The candidate publishes readiness before decrement and wakes after it;
+idle includes undelivered owner readiness. A deterministic NotifyMemoryChanged/Settle regression is added.
+This is a source-backed race correction, not a confirmed diagnosis of the earlier wand r17 failure.
+
+r58 skills validate all 15 skills; formatting/check pass 651 files. Full Debug started 2026-10-05T00:02:33Z,
+result pending. No r58 runtime, final matrix, native activation or G1 claim is established yet.
+
+
+## Physical caller fixture compile repairs — r58/r59
+
+r58: new caller lambda omitted its pixel and scalar-slot helper captures (C3493/C2326). Actual child 31140, 2026-10-05T00:02:40.203282+00:00–2026-10-05T00:03:52.020481+00:00, exit 1; 771 inputs, freeze `3EFE909D449415602AA5ECAAFBE5C17665298EF6E2F6B664E8B82299CFC336E5`. Primary repaired only the new fixture. Archive `p1-sampler-callers-x64-Debug-r58-build-failure` verifies 1,038 copies / zero runtime stages; completion `B9A2B335AA1A56C3FB4F3A164AAEA8A5AD75EB2913648B78CDD0B7E271F5F9C2`.
+
+r59: new fixture vector fill forwarded unsigned int to uint8_t under warnings-as-errors (C2220/C4244). Actual child 108292, 2026-10-05T00:06:38.722933+00:00–2026-10-05T00:06:59.089853+00:00, exit 1; 771 inputs, freeze `619672692C72C3A1E9AA61D8381BEE413AB96ACC0B3D53458237E23AFFC6E24D`. Primary repaired only the new fixture. Archive `p1-sampler-callers-x64-Debug-r59-byte-construction-failure` verifies 1,038 copies / zero runtime stages; completion `32E12FFCCE6BCBF0AA6DE05572678B426BADD454D57037DDDD9F90AE51C1B9BC`.
+
+r60 started full Debug at 2026-10-05T00:07:47Z after the exact byte constructor repair; result pending. The caller-root follow-up additionally preserves the accepted opaque color across ordered sampler openings of unchanged manual intent; transparent later openings cannot revert a younger brush to an unpublished baseline. This newer fix and its independent controls are not in r60 and remain unqualified.
+
+
+## Actual sampler callers — full Debug r60
+
+Full Debug r60: child 50388, 2026-10-05T00:07:52.545831Z–00:17:29.545837Z, exit **0**.
+771 inputs match freeze `9BD23DD13F9C30CEE000C483A167D4F86DE2E18DB64E39991E3A17738FFBF6CA`.
+Stdout `6DE4A593ECDB1C55BE479DA9B5C9337BED29F5D2F0D37F23B4DD6FB8A824D816`, stderr
+`6934544EBD7758169735434A50F4FAFB9B2E006152665F522FCAE30ED06F187E`.
+All suites, five images, unchanged ISA/PDB/scanner controls, WARP host, crash/CLI/build/RAW fixtures and harness
+screenshots pass. Skills validate 15 skills and format/check pass 651 files before the freeze.
+
+Exact archived literal registry comparison preserves all r57 controls and 79 ordered stages:
+**6,604 document** (6,588 + 16 captured-tool), **9,178 application** (9,147 + five cancellation + 26 physical caller).
+Proof `verified-caller-registries.json` SHA-256 `53416A4E4CD66A22E08FDB837F8BBE626CD8395A2B4249247BF21F389C41732C`.
+Original 2,653 sampler FIFO and 146 clipboard controls remain passing. Actual physical caller controls verify
+blue Down/brown Move/transparent tail/Up without a release sample, queued tool selection before sample ack,
+manual magenta supersession, exact brown Brush/Shape pixels, captured Gradient settings/endpoints and one entry.
+Selected and acknowledged idle cancellation retain the original ticket through exact cancelled acknowledgement.
+
+Independent archive `p1-sampler-callers-x64-Debug-r60-full-qualified` verifies 1,038 copies / 79 stages at
+00:18:17.9420134Z; completion `C635050EC66DAD182D8BC23594DD078246DA9387E33E5D25B8DFD2564FA82D40`,
+source manifest `4213EFB7C9E1EC62C9C084F0C8DE4A201D5E2F4C3AA8A8D7ACF77658DD2F6FF4`, evidence manifest
+`074C14EB3D43B01EA6F92B1E46470FED11D0869140BFB7FFAC68E7CD6AFDAF4F`.
+
+The next candidate includes eight cross-opening opaque-prefix controls and six actual Alt-tool controls;
+they are absent from r60. Review also refines release/trim readiness publication: a guarded publication counter
+keeps idle false until readiness is published after the completed count decrement, preserving recycle-cap
+restoration while issuing one wake. The first flag-before-count version in r60 could consume the notification
+before trim completion; the next version requires its own qualification. Release/ASan/analysis/ARM64, native
+activation, broader live contexts, largest-fixture admission, H3/H4 and G1 remain open. This is a WIP checkpoint.

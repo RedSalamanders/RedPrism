@@ -613,7 +613,18 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
   `IsPaletteIntentCurrent` track explicit input only: successful checked samples retain that intent while renewing
   publication authority. This permits ordered accepted sample prefixes without treating an earlier sample as a
   manual edit. A new manual input still invalidates both old publication and manual authority.
-  This authority prerequisite does not activate asynchronous sampling or qualify G1.
+  The P1 sampler host captures only a scalar document-read authority and opening at physical Down. An admitted
+  immutable committed source and one scheduler ticket/reservation serve its fixed FIFO of 1×1 samples. Manual
+  intent is captured with each accepted point; same-pixel coalescing also requires equal intent. Transparent/outside
+  points preserve color, and Up/leave/loss seal only accepted points without sampling the release coordinate.
+  Foreground/picker publication checks manual intent and exact picker opening; a younger accepted Brush/Gradient/
+  Shape owns the earlier scalar prefix even when a later manual edit suppresses the sample's palette publication.
+  Tool selection, accepted path/settings and final worker edit preserve the original ordinal and one undo entry.
+  Gradient pointer movement preserves captured colors/settings; explicit palette/header input to the already-open
+  gradient adopts live values. Shape preview and commit use the same accepted color. Escape cancels pending samples
+  through acknowledgement and keeps colors already published. Exact cancelled/failed outcomes cannot become success
+  just because the FIFO is empty. Current private qualification and remaining native/matrix/G1 work are recorded
+  in [SamplerReadback](../TestRuns/SamplerReadback_2026-10-04.md).
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.
 

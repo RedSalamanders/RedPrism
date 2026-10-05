@@ -272,6 +272,7 @@ HRESULT Application::StartShape(const ShapeDraft& draft, std::uint32_t foregroun
     _hostAfterPrerequisite = HostStage::Complete;
     _shapeCommitPreview = draft;
     _shapePreviewDocumentSerial = _session.DocumentSerial();
+    _shapePreviewArgb = foreground;
     SyncToolOverlays();
     _frameInvalidated = true;
     return S_OK;

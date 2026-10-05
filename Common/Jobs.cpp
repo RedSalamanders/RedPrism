@@ -177,8 +177,11 @@ struct JobScheduler::Impl final
             const std::uint64_t bytes = node->bytes;
             node->destroy(node);
             releasingBytes.fetch_sub(bytes, std::memory_order_relaxed);
+            // Publish readiness before the last outstanding count can become zero. Wake after the
+            // decrement so an owner which consumed readiness early still observes completed retirement.
+            memoryChanged.store(true, std::memory_order_release);
             releasingCount.fetch_sub(1, std::memory_order_release);
-            MemoryChanged();
+            (void)SetEvent(wake.get());
         }
     }
 
@@ -204,8 +207,9 @@ struct JobScheduler::Impl final
         if (trimPending.exchange(false, std::memory_order_acq_rel))
         {
             TrimPixelBufferRecycle();
+            memoryChanged.store(true, std::memory_order_release);
             trimCount.fetch_sub(1, std::memory_order_release);
-            MemoryChanged();
+            (void)SetEvent(wake.get());
         }
     }
 
@@ -1029,7 +1033,7 @@ bool JobScheduler::IsIdle() const noexcept
     return _impl->liveCount == 0 && _impl->actionCount == 0 && !_impl->sourceReady &&
            (!_impl->ownerWork || (!_impl->ownerWork->HasPending() && !_impl->ownerWork->HasReady())) &&
            _impl->releasingCount.load(std::memory_order_acquire) == 0 &&
-           _impl->trimCount.load(std::memory_order_acquire) == 0;
+           _impl->trimCount.load(std::memory_order_acquire) == 0 && !HasUiWork();
 }
 
 unsigned int JobScheduler::WorkerCount() const noexcept

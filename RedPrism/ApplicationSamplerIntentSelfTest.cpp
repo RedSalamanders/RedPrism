@@ -281,6 +281,92 @@ bool Application::RunSamplerIntentHostSelfTest() noexcept
         return false;
     }
 
+    constexpr std::uint32_t openingBaseline = 0xFF13579Bu;
+    constexpr std::uint32_t ownPreview = 0xFF2468ACu;
+    _chrome->OpenColorPicker(PickerTarget::Foreground, openingBaseline);
+    const auto openingManual = _chrome->CapturePickerIntentAuthority();
+    const auto openingPublication = _chrome->CapturePickerSampleAuthority();
+    if (!check(openingManual.has_value() && openingPublication.has_value(),
+               L"The picker opening authorities were unavailable.\n",
+               "sampler-intent.picker.opening-authorities-captured"))
+    {
+        return false;
+    }
+    const auto originalOpeningIntent = openingManual.value();
+    const auto originalOpeningPublication = openingPublication.value();
+    auto openingPreviewPublication = originalOpeningPublication;
+    if (!check(_chrome->ApplySampledPickerColor(openingPreviewPublication, ownPreview) &&
+                   _chrome->IsPickerOpeningCurrent(originalOpeningIntent) &&
+                   _chrome->IsPickerIntentCurrent(originalOpeningIntent) && _chrome->PickerColor() == ownPreview &&
+                   sessionUnchanged(),
+               L"An owned preview invalidated its opening or manual intent.\n",
+               "sampler-intent.picker.own-preview-keeps-opening-and-manual-intent"))
+    {
+        return false;
+    }
+    _chrome->SampleColor(openingBaseline);
+    const auto acceptedManual = _chrome->CapturePickerIntentAuthority();
+    if (!check(!_chrome->IsPickerIntentCurrent(originalOpeningIntent) &&
+                   _chrome->IsPickerOpeningCurrent(originalOpeningIntent) && acceptedManual.has_value() &&
+                   acceptedManual.value().opening == originalOpeningIntent.opening &&
+                   _chrome->IsPickerOpeningCurrent(acceptedManual.value()) &&
+                   _chrome->IsPickerIntentCurrent(acceptedManual.value()) && sessionUnchanged(),
+               L"Equal manual input did not renew intent within the still-current picker opening.\n",
+               "sampler-intent.picker.equal-input-keeps-opening-and-new-intent-valid"))
+    {
+        return false;
+    }
+    _chrome->CloseColorPicker(false);
+    if (!check(!_chrome->ColorPickerOpen() && _chrome->PickerColor() == openingBaseline && sessionUnchanged(),
+               L"Cancel did not restore the sampled picker opening.\n",
+               "sampler-intent.picker.opening-preview-cancel-restores-baseline"))
+    {
+        return false;
+    }
+
+    constexpr std::uint32_t reopenedBaseline = 0xFF369ACBu;
+    _chrome->OpenColorPicker(PickerTarget::Background, reopenedBaseline);
+    const auto priorOpening = _chrome->CapturePickerIntentAuthority();
+    if (!check(priorOpening.has_value(), L"The prior picker opening authority was unavailable.\n",
+               "sampler-intent.picker.reopen-original-opening-captured"))
+    {
+        return false;
+    }
+    _chrome->CloseColorPicker(false);
+    _chrome->OpenColorPicker(PickerTarget::Background, reopenedBaseline);
+    const auto currentOpening = _chrome->CapturePickerIntentAuthority();
+    if (!check(currentOpening.has_value(), L"The reopened picker authority was unavailable.\n",
+               "sampler-intent.picker.reopen-current-opening-captured"))
+    {
+        return false;
+    }
+    auto foreignOpening = currentOpening.value();
+    foreignOpening.host = Guid::Generate();
+    auto wrongTargetOpening = currentOpening.value();
+    wrongTargetOpening.target = PickerTarget::Foreground;
+    auto wrongOpeningSerial = currentOpening.value();
+    ++wrongOpeningSerial.opening;
+    if (!check(currentOpening.value().opening != priorOpening.value().opening &&
+                   !_chrome->IsPickerOpeningCurrent(priorOpening.value()) &&
+                   !_chrome->IsPickerIntentCurrent(priorOpening.value()) &&
+                   _chrome->IsPickerOpeningCurrent(currentOpening.value()) &&
+                   !_chrome->IsPickerOpeningCurrent(foreignOpening) &&
+                   !_chrome->IsPickerOpeningCurrent(wrongTargetOpening) &&
+                   !_chrome->IsPickerOpeningCurrent(wrongOpeningSerial) && _chrome->PickerColor() == reopenedBaseline &&
+                   sessionUnchanged(),
+               L"Equal target and color reopening accepted a prior or mutated picker opening.\n",
+               "sampler-intent.picker.equal-reopen-refuses-prior-and-mutated-opening-authorities"))
+    {
+        return false;
+    }
+    _chrome->CloseColorPicker(false);
+    if (!check(!_chrome->ColorPickerOpen() && _chrome->PickerColor() == reopenedBaseline && sessionUnchanged(),
+               L"Cancel did not restore the equal-reopened picker baseline.\n",
+               "sampler-intent.picker.equal-reopen-cancel-restores-baseline"))
+    {
+        return false;
+    }
+
     return check(!_chrome->ColorPickerOpen() && sessionUnchanged(),
                  L"The picker intent self-test did not restore the closed picker and original palette.\n",
                  "sampler-intent.picker.finishes-closed-with-original-palette-and-history");

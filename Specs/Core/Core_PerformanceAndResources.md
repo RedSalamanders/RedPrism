@@ -383,6 +383,11 @@ before chrome, device, satellite and COM teardown. The job runner catches only `
 to a failed operation with `E_OUTOFMEMORY`; explicit `noexcept` construction/admission boundaries may return that
 error, while other allocation failures remain fatal.
 
+Scheduler idle requires both zero outstanding jobs/releases/trims and no undelivered owner readiness. Deferred
+release and recycle-trim completion publish memory readiness before decrementing the outstanding count, then
+wake after the decrement. `SettleJobs` cannot return between a final decrement and a later readiness publication;
+it drains finite memory notifications before declaring settled. A closed, joined scheduler is idle.
+
 `PreviewMailbox` retains one active interactive request and one newest pending request. A new tick replaces only
 the pending input and invalidates a refinement; it never repeatedly cancels the interactive worker. The command
 queue is a fixed eight-entry ring. Both structures allocate no container storage. `HistoryWork` and `StrokeReplay`

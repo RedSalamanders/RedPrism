@@ -895,6 +895,18 @@ struct JobToken
     std::uint64_t sequence = 0;
 };
 
+// A descriptor-only read authority: no layer, raster or selection owner is captured before admission.
+struct DocumentReadAuthority final
+{
+    Guid sessionIdentity;
+    std::uint64_t documentSerial = 0;
+    std::uint64_t generation = 0;
+    std::uint64_t restoreSerial = 0;
+    int canvasWidth = 0;
+    int canvasHeight = 0;
+    bool operator==(const DocumentReadAuthority&) const noexcept = default;
+};
+
 // The Crop tool's frame in document pixels (C16, Common/Crop.h holds its geometry, drag and snap).
 struct CropRect
 {
@@ -1082,6 +1094,14 @@ class WarpStroke;
 // stroke's tiles and never touches the document until commit.
 struct GradientEdit
 {
+    struct CapturedInputs final
+    {
+        GradientSettings settings;
+        std::uint32_t foreground;
+        std::uint32_t background;
+        bool maskWhite;
+        [[nodiscard]] bool operator==(const CapturedInputs&) const noexcept = default;
+    };
     std::shared_ptr<BrushStroke> raster;
     Vec2 start;
     Vec2 end;
@@ -1092,6 +1112,7 @@ struct GradientEdit
     std::uint64_t sequence = 1;
     std::uint64_t publishedSequence = 0;
     std::uint64_t publishedGeneration = 0;
+    std::optional<CapturedInputs> capturedInputs; // Event-time values of an admitted, delayed pointer opening.
     [[nodiscard]] bool HasLine() const noexcept
     {
         return std::hypot(end.x - start.x, end.y - start.y) >= 0.5;
@@ -1972,6 +1993,20 @@ class DocumentSession
     {
         return _documentSerial;
     }
+    [[nodiscard]] std::optional<DocumentReadAuthority> CaptureDocumentReadAuthority() const noexcept
+    {
+        if (!_document)
+            return std::nullopt;
+        return DocumentReadAuthority{_tokenIdentity.value, _documentSerial,  _generation,
+                                     _restoreSerial,       _document->width, _document->height};
+    }
+    [[nodiscard]] bool IsDocumentReadCurrent(const DocumentReadAuthority& authority) const noexcept
+    {
+        return _document && authority.sessionIdentity == _tokenIdentity.value &&
+               authority.documentSerial == _documentSerial && authority.generation == _generation &&
+               authority.restoreSerial == _restoreSerial && authority.canvasWidth == _document->width &&
+               authority.canvasHeight == _document->height;
+    }
     [[nodiscard]] std::optional<JobToken> CaptureJobToken(const std::optional<Guid>& target = std::nullopt,
                                                           std::uint64_t sequence = 0) const;
     // UI-thread apply check. The caller supplies its current sequence and separately checks cancellation and
@@ -2328,6 +2363,7 @@ class DocumentSession
     bool BeginGradient(Vec2 point);
     // Metadata-only opening; the host prepares/publishes its private preview and settles before mutations.
     [[nodiscard]] bool BeginDeferredGradient(Vec2 point);
+    [[nodiscard]] bool BeginDeferredGradient(Vec2 point, GradientEdit::CapturedInputs inputs);
     [[nodiscard]] bool PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
                                               std::uint64_t opening, std::uint64_t sequence) noexcept;
     [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
@@ -2336,7 +2372,7 @@ class DocumentSession
                                                       std::uint64_t sequence) noexcept;
     void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
     // Re-renders the pending gradient from the current endpoints, settings and palette.
-    void RefreshGradient();
+    void RefreshGradient(bool useLiveInputs = true);
     // Straight red, green, blue, alpha of both ends after the style and Reverse. On a mask (the pending gradient's
     // target, else the current one) the ends come from the mask palette: black or white per `maskPaintWhite` for the
     // foreground and the other for the background; the mask takes the first component.
@@ -2362,6 +2398,7 @@ class DocumentSession
     // the selection is left alone. Shift-U switches the kind.
     static constexpr std::int64_t kMaxShapePixels = 100'000'000;
     void BeginShape(Vec2 point);
+    void BeginShape(Vec2 point, ShapeKind kind, double cornerRadius);
     void DragShape(Vec2 point, bool square, bool fromCenter);
     void CancelShape() noexcept;
     void ToggleShapeKind();
@@ -2377,6 +2414,10 @@ class DocumentSession
     [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
     {
         return _shapeDraft;
+    }
+    [[nodiscard]] std::optional<std::uint64_t> PendingShapeOpening() const noexcept
+    {
+        return _shapeDraft ? std::optional(_shapeOpening) : std::nullopt;
     }
     // "Rectangle 1", "Ellipse 2", … skipping names already in the document.
     [[nodiscard]] std::wstring NextShapeName(ShapeKind kind) const;
@@ -2748,17 +2789,23 @@ class DocumentSession
         std::uint64_t revision = 0;
         bool operator==(const PaletteSampleAuthority&) const noexcept = default;
     };
+    struct PaletteIntentAuthority final
+    {
+        Guid session;
+        std::uint64_t revision = 0;
+        bool operator==(const PaletteIntentAuthority&) const noexcept = default;
+    };
     [[nodiscard]] PaletteSampleAuthority CapturePaletteSampleAuthority() const noexcept
     {
         return {_tokenIdentity.value, _paletteRevision.Current()};
     }
     // Explicit palette intent stays stable across this sampler's own publications. Pending points and
     // younger captured tools bind this authority separately from the per-publication revision above.
-    [[nodiscard]] PaletteSampleAuthority CapturePaletteIntentAuthority() const noexcept
+    [[nodiscard]] PaletteIntentAuthority CapturePaletteIntentAuthority() const noexcept
     {
         return {_tokenIdentity.value, _paletteIntentRevision.Current()};
     }
-    [[nodiscard]] bool IsPaletteIntentCurrent(PaletteSampleAuthority authority) const noexcept
+    [[nodiscard]] bool IsPaletteIntentCurrent(PaletteIntentAuthority authority) const noexcept
     {
         return authority.session == _tokenIdentity.value && _paletteIntentRevision.Matches(authority.revision);
     }

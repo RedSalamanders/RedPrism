@@ -465,8 +465,17 @@ class ChromeHost final : public CommandIds
     };
     [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerSampleAuthority() const noexcept;
     // Explicit picker input is independent of the revision renewed by a checked sample's preview callback.
-    [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerIntentAuthority() const noexcept;
-    [[nodiscard]] bool IsPickerIntentCurrent(const PickerSampleAuthority& authority) const noexcept;
+    struct PickerIntentAuthority final
+    {
+        Guid host;
+        std::uint64_t opening = 0;
+        std::uint64_t revision = 0;
+        PickerTarget target = PickerTarget::Foreground;
+        bool operator==(const PickerIntentAuthority&) const noexcept = default;
+    };
+    [[nodiscard]] std::optional<PickerIntentAuthority> CapturePickerIntentAuthority() const noexcept;
+    [[nodiscard]] bool IsPickerIntentCurrent(const PickerIntentAuthority& authority) const noexcept;
+    [[nodiscard]] bool IsPickerOpeningCurrent(const PickerIntentAuthority& authority) const noexcept;
     [[nodiscard]] bool ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept;
     // A checkable View menu item (Sample Ring).
     void SetCommandChecked(int command, bool checked) noexcept;
@@ -958,6 +967,7 @@ class ChromeHost final : public CommandIds
     void OnSplitterChange(DxUi::SplitterChange change) noexcept;
     void OnPickerChange(DxUi::ColorPickerChange change) noexcept;
     void NotePickerInput(bool sampledPublication = false) noexcept;
+    void NotePickerOpening() noexcept;
     // A palette well shows `argb` (the picker's working color while it previews there).
     void ShowPaletteWell(PickerTarget target, uint32_t argb) noexcept;
     // Hides the picker card without reporting a pick (its target's card closed).
@@ -1362,6 +1372,7 @@ class ChromeHost final : public CommandIds
     Guid _pickerInstance = Guid::Generate();
     InputRevision _pickerInputRevision;
     InputRevision _pickerIntentRevision;
+    InputRevision _pickerOpeningRevision;
     bool _sampledPickerPublication = false;
     bool _canvasFocused = true;
     bool _attached = false;

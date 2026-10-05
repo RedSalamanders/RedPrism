@@ -31,6 +31,13 @@ void Application::ContinuationAction::Run() noexcept
 
 bool Application::InitializeHostContinuations() noexcept
 {
+    if (!_samplerState)
+    {
+        static_assert(std::is_nothrow_default_constructible_v<SamplerState>);
+        _samplerState.reset(new (std::nothrow) SamplerState);
+        if (!_samplerState)
+            return false;
+    }
     if (_hostSourceRegistered || !_jobs.RegisterUiActionSource(_continuationAction))
     {
         return false;
@@ -352,6 +359,8 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
 {
     const auto receipt = request.Receipt();
+    const auto* canvasInput = std::get_if<HostCanvasBrushInput>(&request.Input());
+    const bool samplerInput = canvasInput && canvasInput->kind == HostCanvasInputKind::Sampler;
     const bool endsCanvasBrush = std::holds_alternative<HostToolInput>(request.Input()) ||
                                  std::holds_alternative<HostLayerSelectInput>(request.Input()) ||
                                  std::holds_alternative<HostLayerTargetInput>(request.Input()) ||
@@ -398,6 +407,11 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
     else if (endsCanvasBrush)
     {
         SealCanvasBrushForBoundary();
+    }
+    if (admission == ContinuationAdmission::Queued || admission == ContinuationAdmission::Coalesced)
+    {
+        if (!samplerInput)
+            SealSamplerForBoundary();
     }
     return receipt;
 }
@@ -454,8 +468,13 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     CompleteDuplicateGestureInput(result.outcome);
-    if (const auto* brush = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input()))
-        RetireCanvasBrush(result.outcome, brush->opening);
+    if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input()))
+    {
+        if (canvas->kind == HostCanvasInputKind::Brush)
+            RetireCanvasBrush(result.outcome, canvas->opening);
+        else
+            RetireSamplerOpening(canvas->opening);
+    }
     if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
         close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
         _pendingSelectionMoveCloseCancel == close->cancel &&
@@ -472,6 +491,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _frameInvalidated = true;
     }
     _activeHostRequest.reset();
+    SweepSamplerOpenings();
     _pendingPanelOpening.reset();
     _hostCommitStamp.reset();
     _hostFinishedStamp.reset();
@@ -502,6 +522,29 @@ void Application::RunHostContinuation() noexcept
     RunCanvasLifetimePreflight();
     if (_shutdownStarted)
         return;
+    SweepSamplerOpenings();
+    if (_activeHostRequest)
+    {
+        const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input());
+        if (canvas && canvas->kind == HostCanvasInputKind::Sampler)
+        {
+            if (_samplerHostTicket)
+            {
+                AdvanceSamplerReadback();
+                return;
+            }
+            if (_hostPrerequisite.outcome != HostOutcome::Pending)
+            {
+                FinishHostContinuation(_hostPrerequisite); // Preserve the exact graph's failed/stale/cancel outcome.
+                return;
+            }
+            if (_hostStage == HostStage::Sampler)
+            {
+                ReplaySamplerOpening(canvas->opening);
+                return;
+            }
+        }
+    }
     if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
     // Preview completion rearms this source so the old record and its full reservation retire before the next
@@ -550,6 +593,8 @@ void Application::RunHostContinuation() noexcept
         auto taken = _activeHostRequest
                          ? HostRequestQueue::Taken{}
                          : _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
+        // A stale queued reader has no selected job destructor to release its scalar opening.
+        SweepSamplerOpenings();
         // TakeReady may retire a stale queued brush. Its fixed stream must retire in this same action,
         // including when no selected request remains to rearm the source.
         if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
@@ -966,6 +1011,13 @@ void Application::RunHostContinuation() noexcept
         case HostStage::CanvasBrush:
             ReplayCanvasBrush();
             return; // One sample per owner action; pending physical input rearms an otherwise idle stream.
+        case HostStage::Sampler:
+            if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+                canvas && canvas->kind == HostCanvasInputKind::Sampler)
+                ReplaySamplerOpening(canvas->opening);
+            else
+                FinishHostContinuation({HostOutcome::Failed, E_UNEXPECTED});
+            return;
         case HostStage::GradientSettle:
         {
             const auto* command = std::get_if<HostCommandInput>(&input);
@@ -1290,7 +1342,8 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
-            if (const auto* brush = std::get_if<HostCanvasBrushInput>(&input))
+            if (const auto* brush = std::get_if<HostCanvasBrushInput>(&input);
+                brush && brush->kind == HostCanvasInputKind::Brush)
             {
                 const auto* captured = _canvasBrushInput.CapturedContext(brush->opening);
                 if (!captured || captured->documentSerial != _session.DocumentSerial() ||
@@ -1328,7 +1381,10 @@ void Application::RunHostContinuation() noexcept
                 !std::holds_alternative<HostLayerOpacityInput>(input) && !std::holds_alternative<HostNewInput>(input) &&
                 !std::holds_alternative<HostCloseProjectInput>(input) &&
                 !std::holds_alternative<HostCloseWindowInput>(input) &&
-                !std::holds_alternative<HostEndSessionInput>(input) && OpacityEditLayer())
+                !std::holds_alternative<HostEndSessionInput>(input) &&
+                !(std::get_if<HostCanvasBrushInput>(&input) &&
+                  std::get<HostCanvasBrushInput>(input).kind == HostCanvasInputKind::Sampler) &&
+                OpacityEditLayer())
             {
                 const auto result = StartOpacityClosure();
                 if (FAILED(result))
@@ -1362,8 +1418,13 @@ void Application::RunHostContinuation() noexcept
                 break;
             }
             _hostExecutionError = S_OK;
-            if (std::holds_alternative<HostCanvasBrushInput>(input))
+            if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input))
             {
+                if (canvas->kind == HostCanvasInputKind::Sampler)
+                {
+                    ReplaySamplerOpening(canvas->opening);
+                    return;
+                }
                 _hostStage = HostStage::CanvasBrush;
                 ReplayCanvasBrush();
                 return;
@@ -1510,6 +1571,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionMoveCloseTicket.value());
         }
+        else if (_samplerHostTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            CancelSamplerReadback();
+        }
         else if (_wandLayerHostTicket)
         {
             (void)_historyWork.RequestCancel();
@@ -1566,10 +1632,12 @@ void Application::CancelHostContinuations() noexcept
                                 : ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT};
         FinishHostContinuation(result);
     }
+    SweepSamplerOpenings(); // Also covers requests cancelled while still queued, before a source was captured.
 }
 
 void Application::StopHostContinuations() noexcept
 {
+    CancelSamplerReadback();
     FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _startupPaths.reset();
     if (_hostSourceRegistered)
@@ -1581,6 +1649,7 @@ void Application::StopHostContinuations() noexcept
     FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
     if (_canvasBrushInput.Busy())
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    SweepSamplerOpenings();
 }
 
 namespace

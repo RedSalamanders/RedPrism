@@ -2179,12 +2179,15 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
     const bool mask = _gradient ? _gradient->mask : _maskSelected;
     constexpr std::array<double, 4> kBlack{0.0, 0.0, 0.0, 1.0};
     constexpr std::array<double, 4> kWhite{1.0, 1.0, 1.0, 1.0};
+    const auto* captured = _gradient && _gradient->capturedInputs ? &_gradient->capturedInputs.value() : nullptr;
+    const auto& settings = captured ? captured->settings : gradientSettings;
+    const bool white = captured ? captured->maskWhite : maskPaintWhite;
     const std::array<double, 4> foreground =
-        mask ? (maskPaintWhite ? kWhite : kBlack) : StraightColor(_foregroundArgb, 1.0);
+        mask ? (white ? kWhite : kBlack) : StraightColor(captured ? captured->foreground : _foregroundArgb, 1.0);
     const std::array<double, 4> background =
-        mask ? (maskPaintWhite ? kBlack : kWhite) : StraightColor(_backgroundArgb, 1.0);
+        mask ? (white ? kBlack : kWhite) : StraightColor(captured ? captured->background : _backgroundArgb, 1.0);
     std::array<std::array<double, 4>, 2> colors{foreground, foreground};
-    if (gradientSettings.style == GradientStyle::ForegroundToBackground)
+    if (settings.style == GradientStyle::ForegroundToBackground)
     {
         colors[1] = background;
     }
@@ -2192,7 +2195,7 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
     {
         colors[1][3] = 0.0;
     }
-    if (gradientSettings.reversed)
+    if (settings.reversed)
     {
         std::swap(colors[0], colors[1]);
     }
@@ -2207,6 +2210,14 @@ bool DocumentSession::BeginGradient(Vec2 point)
 bool DocumentSession::BeginDeferredGradient(Vec2 point)
 {
     return BeginGradientImpl(point, true);
+}
+
+bool DocumentSession::BeginDeferredGradient(Vec2 point, GradientEdit::CapturedInputs inputs)
+{
+    if (!BeginGradientImpl(point, true))
+        return false;
+    _gradient->capturedInputs = inputs;
+    return true;
 }
 
 bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
@@ -2271,15 +2282,17 @@ void DocumentSession::MoveGradient(std::optional<Vec2> start, std::optional<Vec2
     {
         _gradient->end = end.value();
     }
-    RefreshGradient();
+    RefreshGradient(false); // Pointer motion preserves the admitted opening's captured settings and palette.
 }
 
-void DocumentSession::RefreshGradient()
+void DocumentSession::RefreshGradient(bool useLiveInputs)
 {
     if (!_gradient)
     {
         return;
     }
+    if (useLiveInputs)
+        _gradient->capturedInputs.reset(); // An explicit palette/header input after opening follows the live UI.
     if (_gradient->sequence == (std::numeric_limits<std::uint64_t>::max)())
     {
         CancelGradient();
@@ -2369,14 +2382,19 @@ bool DocumentSession::ResolveGradient()
 
 void DocumentSession::BeginShape(Vec2 point)
 {
+    BeginShape(point, shapeKind, shapeCornerRadius);
+}
+
+void DocumentSession::BeginShape(Vec2 point, ShapeKind kind, double cornerRadius)
+{
     if (!_document.has_value() || _transformEdit.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
     ++_shapeOpening;
-    _shapeDraft = ShapeDraft{shapeKind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
-                             shapeKind == ShapeKind::Rectangle ? std::max(0.0, shapeCornerRadius) : 0.0};
+    _shapeDraft = ShapeDraft{kind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
+                             kind == ShapeKind::Rectangle ? std::max(0.0, cornerRadius) : 0.0};
 }
 
 void DocumentSession::DragShape(Vec2 point, bool square, bool fromCenter)

@@ -8,6 +8,10 @@
 - [x] Implement bounded accepted-coordinate FIFO input and qualify its 2,653 controls in full Debug r10, preserving opaque-prefix, exact acknowledgement, wrap, cancellation and capacity behavior.
 - [x] Full Debug r10 qualifies repeated 1×1 readbacks on one acknowledged ticket, source and reservation; exact pixels, refusal, cancellation, device replacement and retirement. Final required matrix remains due.
 - [x] Full Debug r55 qualifies separate explicit palette/picker intent and intent-sensitive FIFO context: 16 new palette, 23 new picker and 1,757 FIFO controls pass; original controls and 79 stage order are preserved. Remaining matrix and actual callers are due.
+- [x] Full Debug r57 passes the admitted scalar sampler graph prerequisite: 17 document-read, eight picker-opening and 17 graph controls; exact preceding registries and 79 stages remain. Its format check failed before the run; physical callers were still synchronous on that snapshot.
+- [x] Implement physical sampler routing and captured Brush/Gradient/Shape dependencies in the private caller candidate; reviewed pixels, settings, cancellation and preview color are awaiting runtime qualification.
+- [x] Skills and formatting pass the combined r58 candidate (651 files); r58/r59 compile failures in the new fixture are archived and repaired; full Debug r60 is pending.
+- [x] Full Debug r60 passes actual Eyedropper plus queued Brush/Gradient/Shape and selected/idle cancellation: 6,604 document / 9,178 application controls, unchanged 79 stages, skills/format gates and 1,038 verified archive copies. Remaining profiles, Alt/live contexts, cross-opening fix and G1 stay due.
 - [ ] Integrate and runtime-qualify the actual Eyedropper and Alt Brush/Heal/Gradient callers with bounded accepted-coordinate FIFO input and one admitted source capture.
 - [ ] Bind publication to the exact document session, gesture opening and foreground/picker input authority, including equal-value reopen and A–B–A changes.
 - [ ] Preserve older sample / younger palette-dependent brush, gradient and shape ordering through terminal acknowledgement.
@@ -17,9 +21,11 @@
 
 Status: ACTIVE prerequisite and caller work under [P1](UiNeverBlocks_2026-09-22.md). Full Debug r10 passed the repaired combined snapshot, including all eight picker controls, 13 palette controls, 2,653 FIFO checks and repeated readback controls. r8 analysis predates clipboard integration; Release, ASan, current combined analysis/ARM64, actual sampler callers and G1 remain due.
 Baseline: managed `b49e4b4`; the candidate now includes the wand descriptor repair from `e0360b0`.
-Reviewed intent sidecar builds r53/r54 and full Debug r55 pass on their recorded snapshots. The separate caller
-checkout adds scalar source authority, distinct picker opening identity and the admitted reader graph; its new
-source/opening tests and graph are unbuilt and unqualified. Physical callers and younger tool dependencies remain due.
+Reviewed intent sidecar builds r53/r54 and full Debug r55 pass on their recorded snapshots. The admitted scalar source authority, distinct picker opening identity and reader graph pass full Debug r57.
+The physical Eyedropper/Alt routing, younger Brush/Gradient/Shape dependency and selected-cancellation fix are
+pass full Debug r60 in the private integration. Cross-opening prefix and Alt-tool controls are newer and
+unqualified. Native activation, remaining
+profiles, live contexts and G1 are still due.
 Owners: `Application`, `DocumentReadbackJob`, `GpuWorkQueue`, palette/picker input and selected host continuations.
 Contracts: `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `UI_ApplicationChrome`, `Core_PerformanceAndResources`, `Testing_Validation`.
 
@@ -58,8 +64,8 @@ This prerequisite alone does not activate a sampler, qualify owner uploads, or p
 The guarded foreground and picker APIs are now implemented. Both bind an owner lifetime and monotonic input
 revision, renew a successful caller's stamp, and permanently invalidate exhausted counters. Existing inline
 palette/picker paths preserve their color semantics. Independent core controls and actual picker calls are in the
-candidate; a fresh build/runtime matrix is required. They are prerequisites only: the current canvas sampler still
-uses synchronous `WandComposite`, and selected younger tool dependencies below are not yet migrated.
+candidate; a fresh build/runtime matrix is required. The r57 snapshot was prerequisite-only. The newer private r58 candidate uses an admitted scalar opening and
+1×1 repeated readback; physical caller and selected younger tool qualification is pending.
 
 The current sidecar adds explicit manual intent counters. `CapturePaletteIntentAuthority` and
 `IsPaletteIntentCurrent` remain stable across checked foreground/background samples, while public setters,
@@ -188,8 +194,8 @@ The r3 failures and their source fixes remain as recorded above. Subsequent evid
 After the r8 archive was verified, the primary integrated seven clipboard-fix code/contract files from main r51, covering `ClipboardTransfer.*`, `ApplicationClipboardJobs`/delayed tests, `IoClipboardTests`, `Core_PerformanceAndResources` and `Testing_Validation`, plus a new scope block in `Document_Tools`. The clipboard fix has a separate main-branch full ASan r51 pass; that result does not qualify this combined sampler snapshot. Full Debug r9 was started after archive verification. Its 758-input freeze includes the integration, and source is frozen for the run. No analysis result exists for the combined snapshot yet.
 
 The current eight picker controls, manual routing and accepted-coordinate FIFO passed full Debug r10 below.
-The actual canvas sampler still uses synchronous `WandComposite`, and younger palette-dependent tools remain
-unintegrated. No G1 or end-to-end sampler qualification is implied by these prerequisites.
+At r10, physical sampling still used synchronous `WandComposite`; r60 below later qualifies the first actual
+Eyedropper/younger-tool integration. These earlier prerequisites did not establish G1.
 
 ## Qualification update — r9 failure and r10
 
