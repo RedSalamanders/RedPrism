@@ -11,6 +11,7 @@
 #include "FrameScheduler.h"
 #include "GpuCapabilityTests.h"
 #include "GpuCreatedUploadJobTests.h"
+#include "GpuMipChainJobTests.h"
 #include "GpuRasterTextureCreationTests.h"
 #include "GpuRasterUploadJobTests.h"
 #include "GpuResidencyBudgetTests.h"
@@ -2096,6 +2097,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuResidencyBudgetTests();
     gFailures += RunGpuRasterTextureCreationTests();
     gFailures += RunGpuCreatedUploadJobTests();
+    gFailures += RunGpuMipChainJobTests();
     gFailures += RunCompositionStageTimingTests();
     gFailures += RunDocumentReadbackTests();
     TestFrameLoop();

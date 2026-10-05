@@ -39,10 +39,11 @@ struct GpuRasterCreationRequest final
 {
     ID3D11Device* device = nullptr; // borrowed for immediate owner capture only
     GpuResidencyReservation reservation;
+    bool completeMips = false;
 };
 
-// Adopted base-upload owner. Its reservation and held Raster survive the producing job. All lower mips and
-// any graphics use still require the consumer's explicit recording/fence protocol before sampling/retirement.
+// Adopted raster owner. Its reservation and held Raster survive the producing job. MipsComplete reports only
+// acknowledged mip initialization; future graphics users still need their own completion before retirement.
 // Borrowed views may not escape their admitted owner. Reset/replacement happens only after those users join.
 class GpuRasterCreatedResidency final
 {
@@ -71,6 +72,10 @@ class GpuRasterCreatedResidency final
     {
         return _reservation.Bytes();
     }
+    [[nodiscard]] bool MipsComplete() const noexcept
+    {
+        return _mipsComplete;
+    }
     void ResetOwner() noexcept;
 
   private:
@@ -80,13 +85,15 @@ class GpuRasterCreatedResidency final
     wil::com_ptr_nothrow<ID3D11Texture2D> _texture;
     wil::com_ptr_nothrow<ID3D11ShaderResourceView> _view;
     std::uint32_t _ownerThread = 0;
+    bool _mipsComplete = false;
 };
 
 // One DEFAULT destination, one original scheduler record and one serial base-level chunk at a time. The
 // optional creation route retains an actual GPU reservation and exact device, creates texture/view on a
 // worker only when reported concurrency permits, and publishes no resource before owner acknowledgement.
-// This leaf does not build mips, publish a display or mutate a document. Caller options MUST set
-// deferredRetirement and reserve the complete CPU graph; externally created resources keep external GPU admission.
+// Optional completeMips records/fences one parent-to-child draw per owner pump before final adoption. This leaf
+// never publishes a display or mutates a document. Caller options MUST set deferredRetirement and reserve the
+// complete CPU graph; externally created resources keep external GPU admission.
 // Both the queue and the caller's device owner survive this job and the shutdown owner cleanup hook.
 class GpuRasterUploadJob : public Job, public GpuUploadReceiver
 {
@@ -115,8 +122,8 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     {
         return _chunk;
     }
-    // Base upload is complete, but lower mips still require the caller's admitted recording/completion stage.
-    // Never publish/sample this view until that stage acknowledges. Null for an externally created destination.
+    // Complete sampling is allowed only when the adopted residency reports MipsComplete. A base-only request
+    // leaves lower levels undefined. Null for an externally created destination.
     [[nodiscard]] ID3D11ShaderResourceView* DestinationShaderView() const noexcept
     {
         return _creationMode ? _creation.ShaderViewOwner() : nullptr;
@@ -136,6 +143,8 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     // This observes the final row-lease publication while the producer is still running. It may wait on test
     // gates/shutdown but must not access rows, UI or graphics. Production leaves both observers empty.
     void SetPublicationObserverForTest(PublicationObserver observer, void* context) noexcept;
+    [[nodiscard]] bool SetMipViewFailureForTest(unsigned int slice, HRESULT error) noexcept;
+    [[nodiscard]] bool SetCreationFailureForTest(GpuRasterCreationFailure point, HRESULT error) noexcept;
 
   private:
     enum class Phase
@@ -146,12 +155,15 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
         Filling,
         AwaitCopy,
         AfterChunk,
+        AwaitMip,
+        AfterMip,
     };
     struct RetireInput final
     {
         void operator()(GpuRasterUploadInput* input) const noexcept;
     };
     [[nodiscard]] bool RequestChunk(JobTicket ticket) noexcept;
+    [[nodiscard]] bool RequestMip(JobTicket ticket) noexcept;
     void AcknowledgeUnpublished(JobResult result) noexcept;
 
     JobScheduler& _scheduler;
@@ -159,6 +171,7 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     std::unique_ptr<GpuRasterUploadInput, RetireInput> _input;
     GpuResidencyReservation _gpuReservation; // destroyed AFTER the exact created graphics owners
     GpuRasterTextureCreation _creation;
+    CancelToken _cancellation;
     wil::com_ptr_nothrow<ID3D11Texture2D> _destination;
     JobTicket _ticket;
     GpuUploadRows _rows;
@@ -170,6 +183,7 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     HRESULT _queueResult = S_OK;
     HRESULT _creationCaptureResult = S_OK;
     std::uint64_t _chunk = 0;
+    unsigned int _mipSlice = 0;
     std::uint64_t _deviceGeneration = 0;
     unsigned int _subresource = 0;
     unsigned int _x = 0;
@@ -179,4 +193,6 @@ class GpuRasterUploadJob : public Job, public GpuUploadReceiver
     bool _workerPublished = false; // read on owner only after scheduler producer acknowledgement
     bool _creationMode = false;
     bool _canAdoptCreated = false;
+    bool _completeMips = false;
+    bool _mipsComplete = false;
 };

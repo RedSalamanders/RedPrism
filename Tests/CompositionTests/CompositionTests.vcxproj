@@ -109,6 +109,8 @@
     <ClInclude Include="GpuResidencyBudgetTests.h" />
     <ClInclude Include="GpuRasterTextureCreationTests.h" />
     <ClInclude Include="GpuCreatedUploadJobTests.h" />
+    <ClInclude Include="GpuMipChainJobTests.h" />
+    <ClInclude Include="..\..\RedPrism\GpuMipSlice.h" />
     <ClInclude Include="CompositionStageTimingTests.h" />
     <ClInclude Include="..\..\Common\RasterUploadReductionWork.h" />
     <ClInclude Include="..\..\Common\RasterUploadLayout.h" />
@@ -129,6 +131,7 @@
     <ClCompile Include="GpuResidencyBudgetTests.cpp" />
     <ClCompile Include="GpuRasterTextureCreationTests.cpp" />
     <ClCompile Include="GpuCreatedUploadJobTests.cpp" />
+    <ClCompile Include="GpuMipChainJobTests.cpp" />
     <ClCompile Include="CompositionStageTimingTests.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
@@ -210,6 +213,16 @@
       <HeaderFileOutput>$(IntDir)BrushCoverageShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)BrushCoverageShader.cso</ObjectFileOutput>
       <VariableName>g_BrushCoverageShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
+    </FxCompile>
+    <FxCompile Include="..\..\RedPrism\Shaders\RasterMip.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.0</ShaderModel>
+      <EntryPointName>PixelMain</EntryPointName>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <HeaderFileOutput>$(IntDir)RasterMipPixelShader.h</HeaderFileOutput>
+      <ObjectFileOutput>$(IntDir)RasterMipPixelShader.cso</ObjectFileOutput>
+      <VariableName>g_RasterMipPixelShader</VariableName>
       <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <FxCompile Include="..\..\RedPrism\Shaders\CompositionBlit.hlsl">

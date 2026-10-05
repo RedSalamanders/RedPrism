@@ -147,6 +147,7 @@
     <ClInclude Include="GpuRasterUploadJob.h" />
     <ClInclude Include="GpuResidencyBudget.h" />
     <ClInclude Include="GpuRasterTextureCreation.h" />
+    <ClInclude Include="GpuMipSlice.h" />
     <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ClipboardDibWork.h" />
@@ -446,6 +447,16 @@
       <HeaderFileOutput>$(IntDir)BrushCoverageShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)BrushCoverageShader.cso</ObjectFileOutput>
       <VariableName>g_BrushCoverageShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
+    </FxCompile>
+    <FxCompile Include="Shaders\RasterMip.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.0</ShaderModel>
+      <EntryPointName>PixelMain</EntryPointName>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <HeaderFileOutput>$(IntDir)RasterMipPixelShader.h</HeaderFileOutput>
+      <ObjectFileOutput>$(IntDir)RasterMipPixelShader.cso</ObjectFileOutput>
+      <VariableName>g_RasterMipPixelShader</VariableName>
       <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <FxCompile Include="Shaders\CompositionBlit.hlsl">

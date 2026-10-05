@@ -2,6 +2,8 @@
 
 ## Implementation checklist
 
+- [ ] U3 resource manifest: qualify CPU-first immutable description, deduplicated raster/live coverage resources, per-kind lookup and stack/group requirements, then reserve the complete described GPU graph from actual adapter usage before creation. Preserve original conservative two-domain preparation and all its literals.
+
 - [x] Identify current owner costs and preserve the six qualified sampler measurements.
 - [x] Specify admission, row leases, completion, cancellation, generation and retirement below.
 - [ ] U1: review/register the worker row-copy helper; qualify independent pitched-row and sparse goldens.
@@ -20,6 +22,7 @@
   - [x] Committed-document plan and six resource timing stages are primary-reviewed and registered; private CPU/WARP/ETL proofs pass. Full Debug r135 / Release r137 / real ASan r138, analysis r136 and ARM64 r10 pass on the same 811 inputs; every predecessor is preserved. Qualified step is pushed as `e0a9c67`; live consumers remain due ([record](../../TestRuns/P1ResidencyPlanAndStages_2026-10-05.md)).
 - [ ] U4: stage resource creation and preserve the old display until a complete current plan can publish.
   - [x] Primary-reviewed fixed GPU reservations, capability-qualified worker texture/view creation, original-ticket base uploads and exactly-once adoption qualify in full Debug r142 / Release r144 / real ASan r145, analysis r143 and all three ARM64 r12 cross-builds on identical 821 inputs. Strict registry proofs preserve every predecessor, 9,744 application controls / 79 stages and 7,922 ASan stress controls. All sources/products/diagnostics are independently archived ([record](../../TestRuns/P1GpuCreationAndAdmission_2026-10-05.md)). Complete document graphs/mips, actual snapshots and live activation remain open.
+  - [x] Private strict WARP mip-chain draft passes 173 new independent pixel/fault/cancellation controls and all 726 predecessors; fresh Main integration/normal qualification remains pending ([record](../../TestRuns/P1GpuMipChain_2026-10-05.md)).
 - [ ] U5: integrate display and utility consumers, sparse/proxy/mask/preview sources and borrowed brush adoption.
 - [ ] U6: bound layer/chrome synchronization and retire replaced CPU/GPU owners through their correct lanes.
 - [ ] U7: run the fault/lifetime matrix, full required configurations and unchanged predecessor registries.
@@ -190,3 +193,9 @@ Design constraints above follow the primary Microsoft contracts for
 [driver threading capabilities](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_feature_data_threading)
 and [multithreaded resource creation](https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-render-multi-thread-create).
 Capability reports and actual measurements select the route; hardware names do not.
+
+## U3 two-stage admission refinement (2026-10-05 draft)
+
+The current conservative envelope charges two coverage targets and a table/cube per record. A separate CPU-only planning descriptor reserves the immutable source, plan/vector/hash capacities and scratch before capture. Its worker describes all committed raster/mask layouts, two canvas targets, possible stack targets, distinct live/group coverage and adjustment resources by kind. Shared raster owners and live coverage IDs deduplicate; hidden inputs and potentially unused clipped stacks may conservatively overcount. Missing live-source IDs require blank coverage. Grain has no lookup texture.
+
+No GPU creation or publication is permitted by the CPU phase. The owner uses the completed scalar GPU requirement, declared staging/driver allowance and actual adapter usage/retired reservations for the second admission before worker GPU creation. CPU ownership remains charged throughout both phases, failure and deferred retirement. Existing RasterResidencyAdmission/Prepare still require both conservative domains; their contract and 43 literals stay unchanged. Preview, brush, utility and pipeline graphs require additional admission. Oversized/proxy mapping, consumer integration, complete create/record/fallback matrix and G1 remain open. This draft has no qualification or activation claim.

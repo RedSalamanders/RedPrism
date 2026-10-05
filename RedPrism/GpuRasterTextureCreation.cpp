@@ -1,5 +1,8 @@
 #include "GpuRasterTextureCreation.h"
+#include "CompositionVertexShader.h"
+#include "RasterMipPixelShader.h"
 
+#include <algorithm>
 #include <cassert>
 #include <exception>
 
@@ -57,6 +60,8 @@ HRESULT GpuRasterTextureCreation::CreateOnWorker(const RasterUploadLayout& layou
         return _result = E_INVALIDARG;
     if (!_concurrentCreates)
         return _result = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (_prepareMipSlices && layout.MipLevels() > kMipSliceCapacity + 1)
+        return _result = E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC description{};
     description.Width = static_cast<unsigned int>(layout.Width());
@@ -71,7 +76,18 @@ HRESULT GpuRasterTextureCreation::CreateOnWorker(const RasterUploadLayout& layou
     if (description.MipLevels > 1)
     {
         description.BindFlags |= D3D11_BIND_RENDER_TARGET;
-        description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        description.MiscFlags = _prepareMipSlices ? 0 : D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
+    if (_prepareMipSlices && description.MipLevels > 1)
+    {
+        unsigned int support = 0;
+        _result = _device->CheckFormatSupport(description.Format, &support);
+        if (FAILED(_result))
+            return _result;
+        constexpr auto required =
+            D3D11_FORMAT_SUPPORT_TEXTURE2D | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE | D3D11_FORMAT_SUPPORT_RENDER_TARGET;
+        if ((support & required) != required)
+            return _result = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
     if (_failure == GpuRasterCreationFailure::Texture)
         return _result = _failureResult;
@@ -83,8 +99,101 @@ HRESULT GpuRasterTextureCreation::CreateOnWorker(const RasterUploadLayout& layou
         return _result = _failureResult;
     ++_resourceCalls;
     _result = _device->CreateShaderResourceView(_texture.get(), nullptr, _view.put());
+    if (FAILED(_result))
+        return _result;
+    if (_prepareMipSlices)
+    {
+        if (description.MipLevels > 1)
+        {
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (_failure == GpuRasterCreationFailure::MipVertexShader)
+                return _result = _failureResult;
+            ++_resourceCalls;
+            _result = _device->CreateVertexShader(g_CompositionVertexShader, sizeof(g_CompositionVertexShader), nullptr,
+                                                  _mipVertex.put());
+            if (FAILED(_result))
+                return _result;
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (_failure == GpuRasterCreationFailure::MipPixelShader)
+                return _result = _failureResult;
+            ++_resourceCalls;
+            _result = _device->CreatePixelShader(g_RasterMipPixelShader, sizeof(g_RasterMipPixelShader), nullptr,
+                                                 _mipPixel.put());
+            if (FAILED(_result))
+                return _result;
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (_failure == GpuRasterCreationFailure::MipSampler)
+                return _result = _failureResult;
+            D3D11_SAMPLER_DESC sampler{};
+            sampler.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+            sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+            sampler.MaxAnisotropy = 1;
+            sampler.ComparisonFunc = D3D11_COMPARISON_NEVER;
+            ++_resourceCalls;
+            _result = _device->CreateSamplerState(&sampler, _mipSampler.put());
+            if (FAILED(_result))
+                return _result;
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (_failure == GpuRasterCreationFailure::MipRasterizer)
+                return _result = _failureResult;
+            D3D11_RASTERIZER_DESC rasterizer{};
+            rasterizer.FillMode = D3D11_FILL_SOLID;
+            rasterizer.CullMode = D3D11_CULL_NONE;
+            rasterizer.DepthClipEnable = TRUE;
+            ++_resourceCalls;
+            _result = _device->CreateRasterizerState(&rasterizer, _mipRasterizer.put());
+            if (FAILED(_result))
+                return _result;
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (_failure == GpuRasterCreationFailure::MipDepthStencil)
+                return _result = _failureResult;
+            D3D11_DEPTH_STENCIL_DESC depth{};
+            depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+            depth.DepthFunc = D3D11_COMPARISON_ALWAYS;
+            depth.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+            depth.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+            depth.FrontFace = depth.BackFace = {D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP, D3D11_STENCIL_OP_KEEP,
+                                                D3D11_COMPARISON_ALWAYS};
+            ++_resourceCalls;
+            _result = _device->CreateDepthStencilState(&depth, _mipDepth.put());
+            if (FAILED(_result))
+                return _result;
+        }
+        for (unsigned int slice = 0; slice + 1 < description.MipLevels; ++slice)
+        {
+            if (cancelled())
+                return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if (slice == _mipFailureSlice)
+                return _result = _mipFailureResult;
+            D3D11_SHADER_RESOURCE_VIEW_DESC view{};
+            view.Format = description.Format;
+            view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            view.Texture2D.MostDetailedMip = slice;
+            view.Texture2D.MipLevels = 1;
+            ++_resourceCalls;
+            _result = _device->CreateShaderResourceView(_texture.get(), &view, _mipViews[slice].put());
+            if (FAILED(_result))
+                return _result;
+            D3D11_RENDER_TARGET_VIEW_DESC target{};
+            target.Format = description.Format;
+            target.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            target.Texture2D.MipSlice = slice + 1;
+            ++_resourceCalls;
+            _result = _device->CreateRenderTargetView(_texture.get(), &target, _mipTargets[slice].put());
+            if (FAILED(_result))
+                return _result;
+            _mipWidths[slice] = (std::max)(1U, description.Width >> (slice + 1));
+            _mipHeights[slice] = (std::max)(1U, description.Height >> (slice + 1));
+            ++_mipCount;
+        }
+    }
     if (cancelled())
-        _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        return _result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
     return _result;
 }
 
@@ -137,8 +246,50 @@ bool GpuRasterTextureCreation::ReleaseOwner() noexcept
     // Finished means final member writes are published. The caller separately joins the producer; retirement
     // does not expose a failed/partial resource and permits owner cleanup on joined scheduler shutdown.
     _view.reset();
+    for (auto& view : _mipViews)
+        view.reset();
+    for (auto& target : _mipTargets)
+        target.reset();
+    _mipVertex.reset();
+    _mipPixel.reset();
+    _mipSampler.reset();
+    _mipRasterizer.reset();
+    _mipDepth.reset();
     _texture.reset();
     _device.reset();
+    return true;
+}
+
+bool GpuRasterTextureCreation::PrepareMipSlicesOwner() noexcept
+{
+    if (!IsOwner() || _state.load(std::memory_order_relaxed) != State::Captured)
+        return false;
+    _prepareMipSlices = true;
+    return true;
+}
+
+unsigned int GpuRasterTextureCreation::MipSliceCountOwner() const noexcept
+{
+    return ShaderViewOwner() ? _mipCount : 0;
+}
+
+GpuMipSlice GpuRasterTextureCreation::MipSliceOwner(unsigned int slice) const noexcept
+{
+    return slice < MipSliceCountOwner() ? GpuMipSlice{_mipViews[slice].get(), _mipTargets[slice].get(),
+                                                      _mipVertex.get(),       _mipPixel.get(),
+                                                      _mipSampler.get(),      _mipRasterizer.get(),
+                                                      _mipDepth.get(),        _mipWidths[slice],
+                                                      _mipHeights[slice],     _generation}
+                                        : GpuMipSlice{};
+}
+
+bool GpuRasterTextureCreation::SetMipViewFailureForTest(unsigned int slice, HRESULT error) noexcept
+{
+    if (!IsOwner() || _state.load(std::memory_order_relaxed) != State::Captured || !_prepareMipSlices ||
+        slice >= kMipSliceCapacity || SUCCEEDED(error))
+        return false;
+    _mipFailureSlice = slice;
+    _mipFailureResult = error;
     return true;
 }
 
@@ -153,7 +304,8 @@ bool GpuRasterTextureCreation::RestrictConcurrencyForTest() noexcept
 bool GpuRasterTextureCreation::SetFailureForTest(GpuRasterCreationFailure point, HRESULT error) noexcept
 {
     if (!IsOwner() || _state.load(std::memory_order_relaxed) != State::Captured || SUCCEEDED(error) ||
-        point > GpuRasterCreationFailure::ShaderView)
+        point > GpuRasterCreationFailure::MipDepthStencil ||
+        (point > GpuRasterCreationFailure::ShaderView && !_prepareMipSlices))
         return false;
     _failure = point;
     _failureResult = error;

@@ -399,6 +399,23 @@ GPU admission uses fixed unique nonwrapping reservation records, conservative ov
 The admitting domain outlives its reservations. Persistent reusable staging retains an independent charge; uncertain
 copies and joined mapped shutdown retain the exact request's charge until owner graphics/context release.
 Only a final successful original-ticket callback may transfer the created destination, held source Raster and
-reservation. All old job graphics references are removed before charge transfer. Its lower mips remain undefined;
+reservation. All old job graphics references are removed before charge transfer. A base-only request leaves
+lower mips undefined;
 no sampling or display publication precedes the consumer's admitted complete mip/fence stage. Full document
 resources, actual DXGI snapshots, consumer/fallback integration and first-display G1 remain unqualified.
+
+### Dormant explicit raster mip recording
+
+An optional complete-chain request creates its bounded parent SRV/next-level RTV pairs and
+shader/sampler/rasterizer/depth objects on the capability-qualified worker, observing cancellation between
+creation calls. An owner pump records at most one linear-clamp premultiplied BGRA/R8 parent-to-child draw and
+arms a real completion event. Only acknowledgement resumes the original ticket to advance another level. No
+mip stage copies pixels on the owner, maps, polls or creates resources. It changes the immediate-context
+state; pump outside frame recording and fully bind following consumers.
+
+Partial/faulted/cancelled chains cannot be adopted as complete. All raster CPU/GPU reservations remain held
+through the last level and uncertain signal/shutdown references. Final successful adoption carries
+MipsComplete authority, which moves and clears with the owner. Future graphics users still require their own
+completion before retirement. This is one raster chain, not complete document/display qualification. Whole
+graph admission, shared-context consumer/fallback tests, live activation and original first-display/G1 remain
+required.

@@ -17,11 +17,11 @@
 - [x] Preserve every predecessor control, application route/stage and separate ASan stress registry across the full matrix and all configurations.
   - [x] Debug r142 registry proof records 9,744 named application controls, 79 stages, and preserved route counters/ordered stages; all three new suites/register entries are present.
   - [x] Strict per-configuration registry comparisons preserve all predecessors, 9,744 application controls / 79 ordered stages, and all 7,922 separate ASan stress controls.
-- [ ] Commit and push the qualified step.
+- [x] Commit and push the qualified step as `c6145c0` on `codex/p1-opacity-host-proof`.
   - [x] Independent archives verify Debug142, analysis143, Release144, real ASan145 and all three ARM12 cross-builds; the unique current ASan diagnostic is independently copied/hashed too.
 - [ ] Complete full document allocation, mips/fences, actual budget snapshots, consumer activation and G1.
 
-**Status: Main creation/admission step qualifies the full required matrix; commit/push pending. Live activation and P1 completion remain open.**
+**Status: Main creation/admission step qualifies the full required matrix and is pushed as `c6145c0`. Live activation and P1 completion remain open.**
 
 ## Scope and ownership
 

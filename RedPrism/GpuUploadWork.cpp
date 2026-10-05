@@ -1,5 +1,6 @@
 #include "GpuUploadWork.h"
 #include "OwnerWorkMultiplexer.h"
+#include "UiTiming.h"
 
 #include <algorithm>
 #include <array>
@@ -62,6 +63,16 @@ struct GpuUploadQueue::Impl final
         JobEventTicket wait;
         GpuResidencyReservation retirementReservation; // last release after retained graphics storage
         wil::com_ptr_nothrow<ID3D11Texture2D> destination;
+        wil::com_ptr_nothrow<ID3D11ShaderResourceView> mipView;
+        CancelToken mipCancellation;
+        wil::com_ptr_nothrow<ID3D11RenderTargetView> mipTarget;
+        wil::com_ptr_nothrow<ID3D11VertexShader> mipVertex;
+        wil::com_ptr_nothrow<ID3D11PixelShader> mipPixel;
+        wil::com_ptr_nothrow<ID3D11SamplerState> mipSampler;
+        wil::com_ptr_nothrow<ID3D11RasterizerState> mipRasterizer;
+        wil::com_ptr_nothrow<ID3D11DepthStencilState> mipDepth;
+        unsigned int mipWidth = 0;
+        unsigned int mipHeight = 0;
         wil::com_ptr_nothrow<ID3D11Texture2D> staging;
         wil::com_ptr_nothrow<ID3D11DeviceContext> context;
         wil::com_ptr_nothrow<ID3D11Fence> completionFence;
@@ -92,6 +103,7 @@ struct GpuUploadQueue::Impl final
     std::uint64_t deviceGeneration = 0;
     std::uint64_t fenceValue = 0;
     std::uint64_t stagingBytes = 0;
+    std::uint64_t mipSlices = 0;
     std::size_t inFlight = 0;
     std::size_t next = 0;
     bool registered = false;
@@ -113,12 +125,24 @@ struct GpuUploadQueue::Impl final
         slot.signalled.store(true, std::memory_order_release);
         slot.owner->scheduler->NotifyOwnerWork();
     }
+    static void DropMipState(Slot& slot) noexcept
+    {
+        slot.mipView.reset();
+        slot.mipTarget.reset();
+        slot.mipVertex.reset();
+        slot.mipPixel.reset();
+        slot.mipSampler.reset();
+        slot.mipRasterizer.reset();
+        slot.mipDepth.reset();
+        slot.mipCancellation = {};
+    }
     void DropStorage(Slot& slot) noexcept
     {
         assert(slot.state != State::Lent);
         stagingBytes -= slot.bytes;
         slot.bytes = 0;
         slot.staging.reset();
+        DropMipState(slot);
         slot.context.reset();
         slot.completionFence.reset();
         slot.poisoned = false;
@@ -138,7 +162,10 @@ struct GpuUploadQueue::Impl final
         slot.receiver = nullptr;
         slot.destination.reset();
         if (!slot.poisoned)
+        {
+            DropMipState(slot);
             slot.completionFence.reset();
+        }
         if (slot.retired && !slot.poisoned)
             DropStorage(slot);
         receiver->UploadFinished(ticket, result);
@@ -197,8 +224,10 @@ struct GpuUploadQueue::Impl final
             if (!scheduler->RearmEventWait(slot.wait))
                 return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
-        if (queue.FailAt(recovery ? GpuUploadFailurePoint::RecoverySignal : GpuUploadFailurePoint::CopySignal,
-                         injected))
+        const auto signalPoint = recovery       ? GpuUploadFailurePoint::RecoverySignal
+                                 : slot.mipView ? GpuUploadFailurePoint::MipSignal
+                                                : GpuUploadFailurePoint::CopySignal;
+        if (queue.FailAt(signalPoint, injected))
             return injected;
         if (recovery)
             return dxgiDevice2 ? dxgiDevice2->EnqueueSetEvent(slot.event.get()) : E_NOINTERFACE;
@@ -214,6 +243,69 @@ struct GpuUploadQueue::Impl final
             return result;
         }
         return dxgiDevice2->EnqueueSetEvent(slot.event.get());
+    }
+    void RecordMip(Slot& slot) noexcept
+    {
+        HRESULT result = device->GetDeviceRemovedReason();
+        if (FAILED(result) || queue.FailAt(GpuUploadFailurePoint::MipRecording, result))
+        {
+            Finish(slot, result);
+            return;
+        }
+        if (queue.FailAt(GpuUploadFailurePoint::WaitRearm, result))
+        {
+            Finish(slot, result);
+            return;
+        }
+        if (!scheduler->RearmEventWait(slot.wait))
+        {
+            Finish(slot, HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
+            return;
+        }
+        slot.context = context;
+        ++inFlight;
+        slot.state = State::CopyBarrier;
+        {
+            const ScopedUiTiming timing{UiTimingKind::MipGeneration};
+            auto* source = slot.mipView.get();
+            auto* target = slot.mipTarget.get();
+            auto* sampler = slot.mipSampler.get();
+            const D3D11_VIEWPORT viewport{0, 0, static_cast<float>(slot.mipWidth), static_cast<float>(slot.mipHeight),
+                                          0, 1};
+            slot.context->IASetInputLayout(nullptr);
+            slot.context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            slot.context->VSSetShader(slot.mipVertex.get(), nullptr, 0);
+            slot.context->HSSetShader(nullptr, nullptr, 0);
+            slot.context->DSSetShader(nullptr, nullptr, 0);
+            slot.context->GSSetShader(nullptr, nullptr, 0);
+            slot.context->PSSetShader(slot.mipPixel.get(), nullptr, 0);
+            slot.context->RSSetState(slot.mipRasterizer.get());
+            slot.context->RSSetViewports(1, &viewport);
+            slot.context->OMSetDepthStencilState(slot.mipDepth.get(), 0);
+            slot.context->OMSetBlendState(nullptr, nullptr, 0xffffffffU);
+            slot.context->OMSetRenderTargets(1, &target, nullptr);
+            slot.context->PSSetShaderResources(0, 1, &source);
+            slot.context->PSSetSamplers(0, 1, &sampler);
+            slot.context->Draw(3, 0);
+            // Remove persistent context references; the admitted queue/creator holds objects until the fence.
+            source = nullptr;
+            sampler = nullptr;
+            slot.context->PSSetShaderResources(0, 1, &source);
+            slot.context->PSSetSamplers(0, 1, &sampler);
+            slot.context->OMSetRenderTargets(0, nullptr, nullptr);
+            slot.context->VSSetShader(nullptr, nullptr, 0);
+            slot.context->PSSetShader(nullptr, nullptr, 0);
+            slot.context->RSSetState(nullptr);
+            slot.context->OMSetDepthStencilState(nullptr, 0);
+        }
+        if (mipSlices != std::numeric_limits<std::uint64_t>::max())
+            ++mipSlices;
+        result = Arm(slot, false, true);
+        if (FAILED(result))
+        {
+            slot.poisoned = true; // the command may still reference the exact view/resource/context
+            Finish(slot, result);
+        }
     }
     void Map(Slot& slot, std::size_t index) noexcept
     {
@@ -285,7 +377,8 @@ struct GpuUploadQueue::Impl final
         case State::Free:
             return false;
         case State::Pending:
-            return slot.retired || slot.cancelled || inFlight < kMaxInFlight;
+            return slot.retired || slot.cancelled || (slot.mipView && slot.mipCancellation.IsCancelled()) ||
+                   inFlight < kMaxInFlight;
         case State::MapBarrier:
         case State::CopyBarrier:
             return slot.retired || slot.signalled.load(std::memory_order_acquire);
@@ -451,12 +544,91 @@ HRESULT GpuUploadQueue::Enqueue(ID3D11Texture2D* destination, unsigned int subre
         if (slot.state != Impl::State::Free || slot.poisoned || slot.generation == Impl::kGenerationLimit)
             continue;
         slot.destination = destination;
+        slot.mipView.reset();
         slot.subresource = subresource;
         slot.x = x;
         slot.y = y;
         slot.width = width;
         slot.height = height;
         slot.format = desc.Format;
+        slot.ticket = ticket;
+        slot.receiver = &receiver;
+        slot.cancelled = false;
+        slot.retired = false;
+        slot.retry = false;
+        slot.deviceGeneration = self.deviceGeneration;
+        ++slot.generation;
+        slot.state = Impl::State::Pending;
+        self.scheduler->NotifyOwnerWork();
+        return S_OK;
+    }
+    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+}
+
+HRESULT GpuUploadQueue::EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, GpuUploadReceiver& receiver,
+                                        CancelToken cancellation) noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device || !HasAdmittedPersistentResidency())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (!slice.source || !slice.destination || !slice.vertex || !slice.pixel || !slice.sampler || !slice.rasterizer ||
+        !slice.depth || !slice.width || !slice.height || ticket.slot >= JobScheduler::kCapacity || !ticket.generation)
+        return E_INVALIDARG;
+    if (slice.deviceGeneration != self.deviceGeneration)
+        return E_ABORT;
+    D3D11_SHADER_RESOURCE_VIEW_DESC view{};
+    slice.source->GetDesc(&view);
+    D3D11_RENDER_TARGET_VIEW_DESC target{};
+    slice.destination->GetDesc(&target);
+    if (view.ViewDimension != D3D11_SRV_DIMENSION_TEXTURE2D || view.Texture2D.MipLevels != 1 ||
+        target.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2D ||
+        target.Texture2D.MipSlice != view.Texture2D.MostDetailedMip + 1 || target.Format != view.Format)
+        return E_INVALIDARG;
+    wil::com_ptr_nothrow<ID3D11Resource> sourceResource;
+    wil::com_ptr_nothrow<ID3D11Resource> targetResource;
+    slice.source->GetResource(sourceResource.put());
+    slice.destination->GetResource(targetResource.put());
+    if (!sourceResource || sourceResource.get() != targetResource.get())
+        return E_INVALIDARG;
+    wil::com_ptr_nothrow<ID3D11Texture2D> texture;
+    if (FAILED(sourceResource->QueryInterface(IID_PPV_ARGS(texture.put()))))
+        return E_INVALIDARG;
+    D3D11_TEXTURE2D_DESC description{};
+    texture->GetDesc(&description);
+    const auto first = view.Texture2D.MostDetailedMip;
+    if (description.Usage != D3D11_USAGE_DEFAULT || description.SampleDesc.Count != 1 || description.ArraySize != 1 ||
+        description.MipLevels < 2 || first >= description.MipLevels - 1 || first >= 31 ||
+        (std::max)(1U, description.Width >> (first + 1)) != slice.width ||
+        (std::max)(1U, description.Height >> (first + 1)) != slice.height || view.Format != description.Format ||
+        (description.Format != DXGI_FORMAT_R8_UNORM && description.Format != DXGI_FORMAT_B8G8R8A8_UNORM) ||
+        (description.BindFlags & (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE)) !=
+            (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE))
+        return E_INVALIDARG;
+    const std::array<ID3D11DeviceChild*, 8> children{texture.get(), slice.source,  slice.destination, slice.vertex,
+                                                     slice.pixel,   slice.sampler, slice.rasterizer,  slice.depth};
+    for (auto* child : children)
+    {
+        wil::com_ptr_nothrow<ID3D11Device> device;
+        child->GetDevice(device.put());
+        if (device.get() != self.device.get())
+            return E_INVALIDARG;
+    }
+    for (auto& slot : self.slots)
+    {
+        if (slot.state != Impl::State::Free || slot.poisoned || slot.generation == Impl::kGenerationLimit)
+            continue;
+        slot.destination = texture.get();
+        slot.mipView = slice.source;
+        slot.mipTarget = slice.destination;
+        slot.mipVertex = slice.vertex;
+        slot.mipPixel = slice.pixel;
+        slot.mipSampler = slice.sampler;
+        slot.mipRasterizer = slice.rasterizer;
+        slot.mipDepth = slice.depth;
+        slot.mipWidth = slice.width;
+        slot.mipHeight = slice.height;
+        slot.mipCancellation = std::move(cancellation);
         slot.ticket = ticket;
         slot.receiver = &receiver;
         slot.cancelled = false;
@@ -638,8 +810,10 @@ void GpuUploadQueue::Pump() noexcept
         }
         else if (slot.state == Impl::State::Pending)
         {
-            if (slot.cancelled || slot.retired)
+            if (slot.cancelled || slot.retired || (slot.mipView && slot.mipCancellation.IsCancelled()))
                 self.Finish(slot, E_ABORT);
+            else if (slot.mipView)
+                self.RecordMip(slot);
             else
                 self.Map(slot, index);
         }
@@ -672,6 +846,13 @@ void GpuUploadQueue::Pump() noexcept
 std::uint64_t GpuUploadQueue::StagingBytes() const noexcept
 {
     return _impl ? _impl->stagingBytes : 0;
+}
+std::uint64_t GpuUploadQueue::RecordedMipSlices() const noexcept
+{
+    if (!_impl)
+        return 0;
+    _impl->CheckOwner();
+    return _impl->mipSlices;
 }
 std::uint64_t GpuUploadQueue::RetiredResidencyBytes() const noexcept
 {

@@ -13,7 +13,7 @@ GpuRasterCreatedResidency::~GpuRasterCreatedResidency()
 GpuRasterCreatedResidency::GpuRasterCreatedResidency(GpuRasterCreatedResidency&& other) noexcept
     : _reservation(std::move(other._reservation)), _source(std::move(other._source)),
       _texture(std::move(other._texture)), _view(std::move(other._view)),
-      _ownerThread(std::exchange(other._ownerThread, 0))
+      _ownerThread(std::exchange(other._ownerThread, 0)), _mipsComplete(std::exchange(other._mipsComplete, false))
 {
 }
 
@@ -27,6 +27,7 @@ GpuRasterCreatedResidency& GpuRasterCreatedResidency::operator=(GpuRasterCreated
         _texture = std::move(other._texture);
         _view = std::move(other._view);
         _ownerThread = std::exchange(other._ownerThread, 0);
+        _mipsComplete = std::exchange(other._mipsComplete, false);
     }
     return *this;
 }
@@ -50,6 +51,7 @@ void GpuRasterCreatedResidency::ResetOwner() noexcept
     _source = {};
     _reservation.ResetOwner();
     _ownerThread = 0;
+    _mipsComplete = false;
 }
 
 std::unique_ptr<GpuRasterUploadInput> GpuRasterUploadInput::Make(RasterUploadLayout layout)
@@ -108,13 +110,15 @@ GpuRasterUploadJob::GpuRasterUploadJob(JobScheduler& scheduler, GpuUploadQueue& 
                                        std::unique_ptr<GpuRasterUploadInput> input,
                                        GpuRasterCreationRequest creation) noexcept
     : _scheduler(scheduler), _queue(queue), _input(input.release()), _gpuReservation(std::move(creation.reservation)),
-      _creationMode(true)
+      _creationMode(true), _completeMips(creation.completeMips)
 {
     _deviceGeneration = _gpuReservation.DeviceGeneration();
     _creationCaptureResult =
         !_gpuReservation || !_deviceGeneration || _deviceGeneration != _queue.DeviceGeneration() ? E_ABORT
         : !_queue.HasAdmittedPersistentResidency()                                               ? E_UNEXPECTED
                                                    : _creation.CaptureOwner(creation.device, _deviceGeneration);
+    if (SUCCEEDED(_creationCaptureResult) && _completeMips && !_creation.PrepareMipSlicesOwner())
+        _creationCaptureResult = E_UNEXPECTED;
 }
 
 void GpuRasterUploadJob::SetRowObserverForTest(RasterUploadRowObserver observer, void* context) noexcept
@@ -131,12 +135,23 @@ void GpuRasterUploadJob::SetPublicationObserverForTest(PublicationObserver obser
     _publicationContext = context;
 }
 
+bool GpuRasterUploadJob::SetMipViewFailureForTest(unsigned int slice, HRESULT error) noexcept
+{
+    return _phase == Phase::Prepare && _completeMips && _creation.SetMipViewFailureForTest(slice, error);
+}
+
+bool GpuRasterUploadJob::SetCreationFailureForTest(GpuRasterCreationFailure point, HRESULT error) noexcept
+{
+    return _phase == Phase::Prepare && _creationMode && _creation.SetFailureForTest(point, error);
+}
+
 JobResult GpuRasterUploadJob::Run(JobContext& context)
 {
     if (context.cancellation.IsCancelled())
         return {JobStatus::Cancelled};
     if (_phase == Phase::Prepare)
     {
+        _cancellation = context.cancellation;
         if (!context.deferredRetirement)
             return {JobStatus::Failed, E_UNEXPECTED}; // refuse before a receiver can escape its scheduler record
         if (!_input || !_input->Layout().IsValid() || (!_creationMode && !_destination))
@@ -185,7 +200,8 @@ JobResult GpuRasterUploadJob::Run(JobContext& context)
             _publicationObserver(_publicationContext, context);
         return _workerPublished ? result : JobResult{JobStatus::Failed, E_UNEXPECTED};
     }
-    return _phase == Phase::AfterChunk ? _workerResult : JobResult{JobStatus::Failed, E_UNEXPECTED};
+    return _phase == Phase::AfterChunk || _phase == Phase::AfterMip ? _workerResult
+                                                                    : JobResult{JobStatus::Failed, E_UNEXPECTED};
 }
 
 void GpuRasterUploadJob::AcknowledgeUnpublished(JobResult result) noexcept
@@ -202,8 +218,9 @@ bool GpuRasterUploadJob::DeferRetirement(JobResult result, JobTicket ticket) noe
     if (!_ticket.generation)
         _ticket = ticket; // retains original identity even when preparation/refusal precedes the first chunk
     assert(_ticket == ticket);
-    if (_phase == Phase::AwaitRows || _phase == Phase::AwaitCopy)
+    if (_phase == Phase::AwaitRows || _phase == Phase::AwaitCopy || _phase == Phase::AwaitMip)
     {
+        const bool mip = _phase == Phase::AwaitMip;
         assert(ticket == _ticket);
         _workerResult = result;
         _queue.Cancel(ticket);
@@ -212,10 +229,10 @@ bool GpuRasterUploadJob::DeferRetirement(JobResult result, JobTicket ticket) noe
         // that exact request. Repeated scheduler cancellation must retain this same reservation too.
         if (!_queueFinished)
         {
-            _phase = Phase::AwaitCopy;
+            _phase = mip ? Phase::AwaitMip : Phase::AwaitCopy;
             return true;
         }
-        _phase = Phase::AfterChunk;
+        _phase = mip ? Phase::AfterMip : Phase::AfterChunk;
         return false;
     }
     if (_phase != Phase::Filling)
@@ -230,6 +247,26 @@ bool GpuRasterUploadJob::DeferRetirement(JobResult result, JobTicket ticket) noe
     // Keep the complete reservation even when Run was skipped/cancelled or threw before publishing its loan.
     // A queue result that arrived early is already safe; otherwise only its real completion resumes this job.
     return !_queueFinished;
+}
+
+bool GpuRasterUploadJob::RequestMip(JobTicket ticket) noexcept
+{
+    const auto slice = _creation.MipSliceOwner(_mipSlice);
+    if (!slice.source || _deviceGeneration != _queue.DeviceGeneration())
+    {
+        _queueResult = !slice.source ? E_UNEXPECTED : E_ABORT;
+        return false;
+    }
+    _queueFinished = false;
+    _phase = Phase::AwaitMip;
+    _queueResult = _queue.EnqueueMipSlice(slice, ticket, *this, _cancellation);
+    if (FAILED(_queueResult))
+    {
+        _queueFinished = true;
+        _phase = Phase::AfterMip;
+        return false;
+    }
+    return true;
 }
 
 bool GpuRasterUploadJob::RequestChunk(JobTicket ticket) noexcept
@@ -291,10 +328,25 @@ bool GpuRasterUploadJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
         }
         return RequestChunk(ticket);
     }
-    if (_phase != Phase::AfterChunk || FAILED(_queueResult))
+    if (FAILED(_queueResult))
+        return false;
+    if (_phase == Phase::AfterMip)
+    {
+        ++_mipSlice;
+        if (_mipSlice < _creation.MipSliceCountOwner())
+            return RequestMip(ticket);
+        _mipsComplete = true;
+        return false;
+    }
+    if (_phase != Phase::AfterChunk)
         return false;
     ++_chunk;
-    return _chunk < _input->Layout().BaseChunkCount() ? RequestChunk(ticket) : false;
+    if (_chunk < _input->Layout().BaseChunkCount())
+        return RequestChunk(ticket);
+    _mipsComplete = _input->Layout().MipLevels() == 1;
+    if (_completeMips && _creation.MipSliceCountOwner())
+        return RequestMip(ticket);
+    return false;
 }
 
 void GpuRasterUploadJob::WritableRowsReady(JobTicket ticket, GpuUploadRows rows) noexcept
@@ -312,9 +364,9 @@ void GpuRasterUploadJob::UploadFinished(JobTicket ticket, HRESULT result) noexce
     assert(ticket == _ticket);
     _queueResult = result;
     _queueFinished = true;
-    if (_phase == Phase::AwaitRows || _phase == Phase::AwaitCopy)
+    if (_phase == Phase::AwaitRows || _phase == Phase::AwaitCopy || _phase == Phase::AwaitMip)
     {
-        _phase = Phase::AfterChunk;
+        _phase = _phase == Phase::AwaitMip ? Phase::AfterMip : Phase::AfterChunk;
         const bool resumed = _scheduler.Resume(ticket);
         assert(resumed);
         (void)resumed;
@@ -327,7 +379,7 @@ void GpuRasterUploadJob::Completed(JobResult result) noexcept
 {
     if (result.status == JobStatus::Finished && FAILED(_queueResult))
         result = {JobStatus::Failed, _queueResult}; // caller distinguishes device retirement from local Cancel
-    _canAdoptCreated = _creationMode && result.status == JobStatus::Finished;
+    _canAdoptCreated = _creationMode && result.status == JobStatus::Finished && (!_completeMips || _mipsComplete);
     RasterUploadCompleted(result);
     _canAdoptCreated = false;
 }
@@ -338,6 +390,7 @@ GpuRasterCreatedResidency GpuRasterUploadJob::TakeCreatedResidencyOwner() noexce
         return {};
     GpuRasterCreatedResidency residency;
     residency._ownerThread = GetCurrentThreadId();
+    residency._mipsComplete = _mipsComplete;
     residency._source = _input->Layout().Source();
     residency._texture = _destination.get();
     residency._view = _creation.ShaderViewOwner();

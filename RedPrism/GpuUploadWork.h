@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GpuCapabilities.h"
+#include "GpuMipSlice.h"
 #include "GpuResidencyBudget.h"
 #include "Jobs.h"
 
@@ -47,14 +48,16 @@ enum class GpuUploadFailurePoint : std::uint8_t
     WaitRearm,
     RecoverySignal,
     CopySignal,
+    MipRecording,
+    MipSignal,
 };
 
 class GpuUploadReceiver
 {
   public:
     virtual ~GpuUploadReceiver() = default;
-    // Owner callbacks. On successful admission WritableRowsReady is called at most once, then UploadFinished
-    // exactly once. Failure before mapping calls only UploadFinished. The receiver survives the final callback.
+    // Owner callbacks. A row admission calls WritableRowsReady at most once, then UploadFinished exactly once.
+    // Mip admission and failure before mapping call only UploadFinished. The receiver survives the final callback.
     virtual void WritableRowsReady(JobTicket ticket, GpuUploadRows rows) noexcept = 0;
     virtual void UploadFinished(JobTicket ticket, HRESULT result) noexcept = 0;
 };
@@ -89,6 +92,13 @@ class GpuUploadQueue final : public OwnerWorkPump
     [[nodiscard]] HRESULT Enqueue(ID3D11Texture2D* destination, unsigned int subresource, unsigned int x,
                                   unsigned int y, unsigned int width, unsigned int height, JobTicket ticket,
                                   GpuUploadReceiver& receiver) noexcept;
+    // Worker-prepared source/target/pipeline for one adjacent level. The parent must be initialized and its
+    // previous completion acknowledged. Records one draw slice per pump, then a real completion event.
+    // No mapped rows callback. The admitting destination graph survives this exact-ticket acknowledgement.
+    // Pump outside frame recording. It changes the immediate-context pipeline/viewport; every subsequent
+    // render or compute consumer must explicitly bind its own required state before recording work.
+    [[nodiscard]] HRESULT EnqueueMipSlice(GpuMipSlice slice, JobTicket ticket, GpuUploadReceiver& receiver,
+                                          CancelToken cancellation = {}) noexcept;
     // Worker-safe exact-generation acknowledgement. This is the final access to the lent rows. Duplicate,
     // foreign and unpublished leases cannot acknowledge a newer loan. Only atomics and a scheduler wake run.
     [[nodiscard]] bool PublishFilled(GpuUploadLease lease, GpuUploadFill result) noexcept;
@@ -107,6 +117,7 @@ class GpuUploadQueue final : public OwnerWorkPump
     void Pump() noexcept override;
     [[nodiscard]] std::uint64_t StagingBytes() const noexcept;
     [[nodiscard]] std::uint64_t RetiredResidencyBytes() const noexcept;
+    [[nodiscard]] std::uint64_t RecordedMipSlices() const noexcept;
     [[nodiscard]] std::size_t InFlightCount() const noexcept;
     [[nodiscard]] std::size_t LentCount() const noexcept;
     [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept;
