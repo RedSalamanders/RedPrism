@@ -313,10 +313,20 @@ void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerInte
     if (!opening)
         return;
     if (!opening->resolvedIntent || !SameSamplerIntent(opening->resolvedIntent.value(), point.intent))
+    {
         opening->resolvedArgb = point.intent.baselineArgb | 0xFF000000u;
+        const auto& prefix = _samplerState->palettePrefix;
+        if (!opening->picker && prefix && prefix->session == opening->source.sessionIdentity &&
+            prefix->documentSerial == opening->source.documentSerial && prefix->intent == point.intent.paletteIntent)
+            opening->resolvedArgb = prefix->argb;
+    }
     if (opaqueArgb)
         opening->resolvedArgb = opaqueArgb.value();
     opening->resolvedIntent = point.intent;
+    if (!opening->picker)
+        _samplerState->palettePrefix =
+            SamplerState::PalettePrefix{opening->source.sessionIdentity, opening->source.documentSerial,
+                                        point.intent.paletteIntent, opening->resolvedArgb};
     if (!opaqueArgb)
         return; // A transparent point carries the accepted prefix but performs no palette/picker write.
     if (opening->picker && _chrome)

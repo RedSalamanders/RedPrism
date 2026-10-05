@@ -23,6 +23,7 @@
 - [ ] P1.3: finish [real sampler](SamplerReadback_2026-10-04.md), [All Layers wand New](WandCompositeReadback_2026-10-04.md), remaining wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [x] Sampler graph prerequisite full Debug r57 preserves 6,588 document / 9,147 application controls and 79 stages; format failed before that snapshot. Physical callers, selected cancellation and event-time Brush/Gradient/Shape are implemented privately for r58; runtime, remaining matrix and G1 are pending.
 - [x] Private full Debug r60 qualifies actual Eyedropper, queued Brush/Gradient/Shape and selected/idle cancellation; 6,604 document / 9,178 application controls, original 79 stages and skills/format pass. Cross-opening fix, Alt/live cases, final matrix, H3/H4 and G1 remain due.
+- [x] Private full Debug r61 qualifies cross-opening color inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup readiness; 6,604 document / 9,192 application controls, unchanged 79 stages and verified archive. Broader physical terminals, final matrix, H3/H4 and G1 remain due.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
@@ -38,12 +39,12 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current integration: the reviewed clipboard-scope fix passes full x64 ASan Debug r51 and Debug analysis r52 in the
-color-display candidate. The consolidated sampler prerequisite passes full Debug r10 with 6,504 document /
-8,988 application controls, including the 146 clipboard-transfer controls, and the preceding 78 ordered stages.
-The checkpoints are pushed as `16d79fd`, `254fde9` and their consolidation `2cfabe9`. Current consolidated
-Release/ASan/analysis/ARM64 and native activation remain open. Earlier Release/ARM64 receipts qualify their
-recorded snapshots only; original failures and diagnostic uncertainty remain preserved in the
+Current private integration passes full Debug r61 with actual sampler and ordered captured-color consumers:
+6,604 document / 9,192 application controls and the original 79 ordered stages. The r60 checkpoint is pushed as
+`c9af200`; r61 adds cross-opening prefix inheritance, actual Alt sampling and guarded cleanup readiness.
+Current consolidated Release/ASan/analysis/ARM64 and native activation remain open. The reviewed clipboard-scope
+fix previously passed ASan r51 and Debug analysis r52; earlier receipts qualify their recorded snapshots only.
+Original failures and diagnostic uncertainty remain preserved in the
 [color-display evidence](../../TestRuns/DeferredColorDisplay_2026-10-04.md) and
 [sampler evidence](../../TestRuns/SamplerReadback_2026-10-04.md).
 

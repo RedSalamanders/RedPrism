@@ -47,8 +47,18 @@ struct SamplerOpening final
 
 struct SamplerState final
 {
+    struct PalettePrefix final
+    {
+        Guid session;
+        std::uint64_t documentSerial = 0;
+        std::uint64_t intent = 0;
+        std::uint32_t argb = 0xFF000000u;
+    };
     // One selected input and eight pending host inputs. Allocate this fixed storage once at initialization.
     static constexpr std::size_t kOpeningCapacity = 9;
     std::array<SamplerOpening, kOpeningCapacity> openings;
     std::uint64_t nextOpening = 0;
+    // Ordered foreground openings share their accepted opaque prefix while explicit intent is unchanged.
+    // This value owns no document or pixel storage and never adopts a later live manual palette edit.
+    std::optional<PalettePrefix> palettePrefix;
 };

@@ -249,3 +249,37 @@ keeps idle false until readiness is published after the completed count decremen
 restoration while issuing one wake. The first flag-before-count version in r60 could consume the notification
 before trim completion; the next version requires its own qualification. Release/ASan/analysis/ARM64, native
 activation, broader live contexts, largest-fixture admission, H3/H4 and G1 remain open. This is a WIP checkpoint.
+
+
+## Cross-opening prefix, actual Alt and cleanup readiness - full Debug r61
+
+Full Debug r61: child 83976, 2026-10-05T00:22:21.362724Z-00:32:20.405969Z, actual exit **0**.
+771 unchanged inputs match freeze `200A0071422868F02D7DD1B5FADA5156202CFCBACF13CCE8C14B4A3247EA96E8`.
+Stdout `5835FA702FA02983831BE818179894CC8331ACBB0B584EA3127BF55A2189AE9C`, stderr
+`7774B7E409D65346BD7A9117BECD6801CBB2C4569972AB4D80A12FA931C7BB18`.
+All full suites, ISA/PDB/scanner controls, WARP application, crash/CLI/build/RAW fixtures and harness screenshots
+pass. Skills validate 15 skills and format/check pass 651 files before the freeze.
+
+Independent literal comparison preserves all **6,604 document** controls, all preceding application controls and
+**79 ordered stages**. The application registry now has **9,192** controls: eight cross-opening prefix and six
+physical Alt Brush/Heal/Gradient controls added to r60's 9,178. Proof `verified-prefix-alt-registries.json` SHA-256
+`92B95A753A178953ADF36B7396093F46E01E805377B2A0DF018B54C60E4CC4D7`.
+
+The prefix cache contains only owner/session, document serial, manual intent and ARGB. An ordered transparent
+opening of unchanged intent inherits the preceding accepted opaque color; equal manual input severs inheritance.
+Actual Alt callers end their scalar prefix before pumping and publish the literal brown result without opening
+brush/gradient/shape work or changing document revision, undo count or generation.
+
+Release/trim completion now enters a publication guard, decrements its completed count, publishes readiness,
+leaves the guard and wakes once. Idle includes this guard and undelivered readiness. This fixes both the original
+late-notification idle gap and the intermediate version's early notification consumption before recycle-cap
+restoration. The change is not a confirmed diagnosis of the wand r17 ordering failure.
+
+Independent archive `p1-sampler-prefix-alt-x64-Debug-r61-full-qualified` verifies **1,038 copies / 79 stages** at
+2026-10-05T00:33:46.0757913Z; completion `98F92B6F9A09DA25367AA96C709B264E3A8738BC74DCA2821C56CBAFA75A86D8`,
+source manifest `E39F625FB31200D5400FE47E3059E08D7845134A255453373C06ACA317DCDC47`, evidence manifest
+`2B61F4E72B25DCC6979D1E5197BDCD17A41CAF2656014FCC04929BAEDE022E25`.
+
+Newer physical leave/capture-loss/Cancel Mode/Escape and partial-alpha fixtures are absent from r61.
+Release/ASan/current analysis/ARM64, native activation, broader picker/lifetime/admission cases, H3/H4 and G1 remain
+open. This qualifies its exact Debug snapshot only and remains a WIP checkpoint.

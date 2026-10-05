@@ -417,6 +417,85 @@ int Application::RunSamplerCallerSelfTest() noexcept
     if (!runCaller(EditorTool::Shape, Vec2{40, 10}, Vec2{50, 20}, "sampler-caller.shape.no-pending-graph"))
         return 5;
 
+    const auto setSyntheticAlt = [](bool held) noexcept
+    {
+        std::array<BYTE, 256> keys{};
+        if (held)
+            keys[static_cast<std::size_t>(VK_MENU)] = 0x80;
+        KeyboardState::Write(keys);
+    };
+    const auto runAltSampler = [this, &installFixture, &pointer, &check, &settle, &samplerSlotsClear, &setSyntheticAlt,
+                                kBlue](EditorTool tool, const char* inputControl, const char* settledControl) noexcept
+    {
+        if (!settle())
+            return false;
+        installFixture();
+        OnTool(tool);
+        const Guid fixtureRevision = _session.history.CurrentRevision();
+        const int fixtureUndo = _session.history.UndoCount();
+        const std::uint64_t fixtureGeneration = _session.Generation();
+        const auto sourceAuthority = _session.CaptureDocumentReadAuthority();
+
+        setSyntheticAlt(true);
+        const auto releaseAlt = wil::scope_exit([&setSyntheticAlt]() noexcept { setSyntheticAlt(false); });
+        pointer(WM_LBUTTONDOWN, Vec2{0, 15}); // Opaque blue.
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const std::uint64_t opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = opening != 0 ? FindSamplerOpening(opening) : nullptr;
+        const ContinuationReceipt receipt = pending ? pending->receipt : ContinuationReceipt{};
+        const bool scalarInput = KeyboardState::Held(VK_MENU) && _tool == tool && sampling &&
+                                 sampling->opening.has_value() && !sampling->composite.has_value() && pending &&
+                                 pending->points.PendingCount() == 1 &&
+                                 receipt.Read().outcome == ContinuationOutcome::Pending && !_samplerHostTicket &&
+                                 _samplerHostJob == nullptr && !_canvasBrushInput.Busy();
+        pointer(WM_MOUSEMOVE, Vec2{20, 15}); // Opaque brown.
+        pointer(WM_MOUSEMOVE, Vec2{40, 15}); // Transparent tail.
+        pointer(WM_LBUTTONUP, Vec2{60, 15}); // Release coordinate is not sampled.
+        setSyntheticAlt(false);
+        const bool altReleased = !KeyboardState::Held(VK_MENU);
+        const auto* ended = opening != 0 ? FindSamplerOpening(opening) : nullptr;
+        if (!check(scalarInput && altReleased && ended && ended->points.PendingCount() == 3 &&
+                       receipt.Read().outcome == ContinuationOutcome::Pending &&
+                       std::holds_alternative<std::monostate>(_drag) && _session.ForegroundColor() == kBlue &&
+                       _session.history.CurrentRevision() == fixtureRevision &&
+                       _session.history.UndoCount() == fixtureUndo && _session.Generation() == fixtureGeneration &&
+                       !_session.PendingBrush() && !_session.PendingGradient() && !_session.PendingShape() &&
+                       !_samplerHostTicket && _samplerHostJob == nullptr && !_canvasBrushInput.Busy(),
+                   L"Alt sampling ran inline, retained its drag after Up, or changed the document before pumping.\n",
+                   inputControl))
+            return false;
+
+        if (!settle())
+        {
+            SelfTestFailure(L"An Alt sampler caller did not settle its accepted prefix.\n");
+            return false;
+        }
+        if (!check(
+                receipt.Read().outcome == ContinuationOutcome::Succeeded && _session.ForegroundColor() == 0xFF804020u &&
+                    _session.history.CurrentRevision() == fixtureRevision &&
+                    _session.history.UndoCount() == fixtureUndo && _session.Generation() == fixtureGeneration &&
+                    sourceAuthority.has_value() && _session.IsDocumentReadCurrent(sourceAuthority.value()) &&
+                    !_session.PendingBrush() && !_session.PendingGradient() && !_session.PendingShape() &&
+                    !_canvasBrushInput.Busy() && !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() &&
+                    !_samplerHostTicket && !_samplerHostStamp && _samplerHostJob == nullptr &&
+                    !_gradientPreviewTicket && !_gradientCommitTicket && _jobs.ReservedMemoryBytes() == 0 &&
+                    _composition.UtilitySurfaceBytes() == 0 && samplerSlotsClear() &&
+                    FindSamplerOpening(opening) == nullptr,
+                L"Alt sampling failed to publish brown cleanly or left document/tool work behind.\n", settledControl))
+            return false;
+        return true;
+    };
+
+    if (!runAltSampler(EditorTool::Brush, "sampler-caller.alt-brush.scalar-prefix-ends-before-pump",
+                       "sampler-caller.alt-brush.opaque-middle-publishes-without-document-edit"))
+        return 5;
+    if (!runAltSampler(EditorTool::Heal, "sampler-caller.alt-heal.scalar-prefix-ends-before-pump",
+                       "sampler-caller.alt-heal.opaque-middle-publishes-without-document-edit"))
+        return 5;
+    if (!runAltSampler(EditorTool::Gradient, "sampler-caller.alt-gradient.scalar-prefix-ends-before-pump",
+                       "sampler-caller.alt-gradient.opaque-middle-publishes-without-document-edit"))
+        return 5;
+
     installFixture();
     _session.SetForegroundColor(kMagenta);
     OnTool(EditorTool::Brush);

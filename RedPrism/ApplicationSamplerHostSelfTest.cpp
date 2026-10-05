@@ -145,6 +145,92 @@ int Application::RunSamplerHostSelfTest() noexcept
                "sampler-host.graph.release-retires-opening"))
         return 5;
 
+    // A later transparent-only gesture inherits an earlier opaque prefix while explicit palette intent is stable.
+    constexpr std::uint32_t kBrown = 0xFF804020u;
+    constexpr std::uint32_t kBlue = 0xFF3366CCu;
+    _session.SetForegroundColor(kBrown);
+    const auto predecessorSource = _session.CaptureDocumentReadAuthority();
+    const auto predecessor = BeginSamplerOpening({0.2, 0.2});
+    if (!check(predecessor.has_value() && predecessorSource.has_value(),
+               L"The queued-opening predecessor was not admitted with its source authority.\n",
+               "sampler-host.prefix.predecessor-admitted"))
+        return 5;
+    const auto predecessorReceipt = FindSamplerOpening(predecessor.value())->receipt;
+    const auto predecessorCapturedSource = FindSamplerOpening(predecessor.value())->source;
+    SealSamplerOpening(predecessor.value());
+    const auto transparentSuccessor = BeginSamplerOpening({2.2, 0.2});
+    if (!check(transparentSuccessor.has_value() && predecessorReceipt.Read().outcome == ContinuationOutcome::Pending,
+               L"A second opening was not admitted while the predecessor remained unacknowledged.\n",
+               "sampler-host.prefix.transparent-successor-queued-before-predecessor-ack"))
+        return 5;
+    const auto successorReceipt = FindSamplerOpening(transparentSuccessor.value())->receipt;
+    const auto successorCapturedSource = FindSamplerOpening(transparentSuccessor.value())->source;
+    const auto successorDependency = CaptureSamplerColorDependency();
+    SealSamplerOpening(transparentSuccessor.value());
+    if (!check(successorDependency.has_value() && successorDependency->opening == transparentSuccessor.value() &&
+                   successorDependency->fallbackArgb == kBrown && settled() &&
+                   predecessorReceipt.Read().outcome == ContinuationOutcome::Succeeded &&
+                   successorReceipt.Read().outcome == ContinuationOutcome::Succeeded &&
+                   _session.ForegroundColor() == kBlue && ResolveSamplerColor(successorDependency.value()) == kBlue &&
+                   predecessorSource && predecessorCapturedSource == predecessorSource.value() &&
+                   successorCapturedSource == predecessorSource.value() &&
+                   _session.IsDocumentReadCurrent(predecessorCapturedSource) &&
+                   _session.IsDocumentReadCurrent(successorCapturedSource) &&
+                   FindSamplerOpening(predecessor.value()) == nullptr &&
+                   FindSamplerOpening(transparentSuccessor.value()) != nullptr,
+               L"A transparent successor lost its predecessor's opaque color or failed to retire the exact sources.\n",
+               "sampler-host.prefix.transparent-successor-inherits-blue-and-retains-younger-lease"))
+        return 5;
+    ReleaseSamplerColorDependency(successorDependency.value());
+    if (!check(FindSamplerOpening(transparentSuccessor.value()) == nullptr && graphClear(),
+               L"Releasing the successor lease did not retire both queued openings and their readback graph.\n",
+               "sampler-host.prefix.release-retires-queued-openings"))
+        return 5;
+
+    // An equal explicit write between openings severs the inherited prefix, so transparent successor uses brown.
+    _session.SetForegroundColor(kBrown);
+    const auto manualPredecessorSource = _session.CaptureDocumentReadAuthority();
+    const auto manualPredecessor = BeginSamplerOpening({0.2, 0.2});
+    if (!check(manualPredecessor.has_value() && manualPredecessorSource.has_value(),
+               L"The equal-manual-write predecessor was not admitted.\n",
+               "sampler-host.prefix.manual-predecessor-admitted"))
+        return 5;
+    const auto manualPredecessorReceipt = FindSamplerOpening(manualPredecessor.value())->receipt;
+    const auto manualPredecessorCapturedSource = FindSamplerOpening(manualPredecessor.value())->source;
+    SealSamplerOpening(manualPredecessor.value());
+    _session.SetForegroundColor(kBrown); // Equal input changes intent and clears the inherited opaque prefix.
+    const auto manualSuccessorSource = _session.CaptureDocumentReadAuthority();
+    const auto manualSuccessor = BeginSamplerOpening({2.2, 0.2});
+    if (!check(manualSuccessor.has_value() && manualPredecessorReceipt.Read().outcome == ContinuationOutcome::Pending &&
+                   manualSuccessorSource.has_value(),
+               L"The successor did not queue after equal explicit palette input.\n",
+               "sampler-host.prefix.equal-manual-write-before-transparent-successor"))
+        return 5;
+    const auto manualSuccessorReceipt = FindSamplerOpening(manualSuccessor.value())->receipt;
+    const auto manualSuccessorCapturedSource = FindSamplerOpening(manualSuccessor.value())->source;
+    const auto manualSuccessorDependency = CaptureSamplerColorDependency();
+    SealSamplerOpening(manualSuccessor.value());
+    if (!check(manualSuccessorDependency.has_value() && manualSuccessorDependency->opening == manualSuccessor.value() &&
+                   manualSuccessorDependency->fallbackArgb == kBrown && settled() &&
+                   manualPredecessorReceipt.Read().outcome == ContinuationOutcome::Succeeded &&
+                   manualSuccessorReceipt.Read().outcome == ContinuationOutcome::Succeeded &&
+                   _session.ForegroundColor() == kBrown &&
+                   ResolveSamplerColor(manualSuccessorDependency.value()) == kBrown &&
+                   manualPredecessorCapturedSource == manualPredecessorSource.value() &&
+                   manualSuccessorCapturedSource == manualSuccessorSource.value() &&
+                   _session.IsDocumentReadCurrent(manualPredecessorCapturedSource) &&
+                   _session.IsDocumentReadCurrent(manualSuccessorCapturedSource) &&
+                   FindSamplerOpening(manualPredecessor.value()) == nullptr &&
+                   FindSamplerOpening(manualSuccessor.value()) != nullptr,
+               L"Equal explicit palette input did not sever the blue prefix for the transparent successor.\n",
+               "sampler-host.prefix.equal-manual-write-severs-prefix-to-brown"))
+        return 5;
+    ReleaseSamplerColorDependency(manualSuccessorDependency.value());
+    if (!check(FindSamplerOpening(manualSuccessor.value()) == nullptr && graphClear(),
+               L"Releasing the post-manual successor lease did not clear its opening and graph.\n",
+               "sampler-host.prefix.manual-successor-lease-retires"))
+        return 5;
+
     // Reuse the just-released fixed slot and cancel before its queued source can select it.
     const auto reusable = BeginSamplerOpening({0.2, 0.2});
     if (!check(reusable.has_value() && FindSamplerOpening(reusable.value()) == retainedSlot,

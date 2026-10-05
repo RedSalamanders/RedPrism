@@ -383,10 +383,12 @@ before chrome, device, satellite and COM teardown. The job runner catches only `
 to a failed operation with `E_OUTOFMEMORY`; explicit `noexcept` construction/admission boundaries may return that
 error, while other allocation failures remain fatal.
 
-Scheduler idle requires both zero outstanding jobs/releases/trims and no undelivered owner readiness. Deferred
-release and recycle-trim completion publish memory readiness before decrementing the outstanding count, then
-wake after the decrement. `SettleJobs` cannot return between a final decrement and a later readiness publication;
-it drains finite memory notifications before declaring settled. A closed, joined scheduler is idle.
+Scheduler idle requires zero outstanding jobs/releases/trims, no active memory-readiness publication and no
+undelivered owner readiness. Deferred release and recycle-trim completion enter a publication guard, decrement
+the completed count, publish memory readiness, leave the guard and issue one wake. Acquire/release ordering
+prevents `SettleJobs` from observing the count as zero before the notification is visible. Notification consumers
+also see the completed trim count when restoring the recycle cap. The harness drains finite notifications before
+declaring settled; a closed, joined scheduler is idle.
 
 `PreviewMailbox` retains one active interactive request and one newest pending request. A new tick replaces only
 the pending input and invalidates a refinement; it never repeatedly cancels the interactive worker. The command

@@ -9,9 +9,10 @@
 - [x] Full Debug r10 qualifies repeated 1×1 readbacks on one acknowledged ticket, source and reservation; exact pixels, refusal, cancellation, device replacement and retirement. Final required matrix remains due.
 - [x] Full Debug r55 qualifies separate explicit palette/picker intent and intent-sensitive FIFO context: 16 new palette, 23 new picker and 1,757 FIFO controls pass; original controls and 79 stage order are preserved. Remaining matrix and actual callers are due.
 - [x] Full Debug r57 passes the admitted scalar sampler graph prerequisite: 17 document-read, eight picker-opening and 17 graph controls; exact preceding registries and 79 stages remain. Its format check failed before the run; physical callers were still synchronous on that snapshot.
-- [x] Implement physical sampler routing and captured Brush/Gradient/Shape dependencies in the private caller candidate; reviewed pixels, settings, cancellation and preview color are awaiting runtime qualification.
-- [x] Skills and formatting pass the combined r58 candidate (651 files); r58/r59 compile failures in the new fixture are archived and repaired; full Debug r60 is pending.
+- [x] Implement physical sampler routing and captured Brush/Gradient/Shape dependencies; selected pixels, settings, cancellation and preview color pass full Debug r60.
+- [x] Skills and formatting pass the combined r58 candidate (651 files); r58/r59 compile failures in the new fixture are archived and repaired; the repaired snapshot passes full Debug r60.
 - [x] Full Debug r60 passes actual Eyedropper plus queued Brush/Gradient/Shape and selected/idle cancellation: 6,604 document / 9,178 application controls, unchanged 79 stages, skills/format gates and 1,038 verified archive copies. Remaining profiles, Alt/live contexts, cross-opening fix and G1 stay due.
+- [x] Full Debug r61 passes eight cross-opening prefix and six actual Alt Brush/Heal/Gradient controls, plus guarded release/trim readiness: 6,604 document / 9,192 application controls, unchanged 79 stages and 1,038 verified copies. Physical terminal/alpha follow-ups and final matrix/G1 remain due.
 - [ ] Integrate and runtime-qualify the actual Eyedropper and Alt Brush/Heal/Gradient callers with bounded accepted-coordinate FIFO input and one admitted source capture.
 - [ ] Bind publication to the exact document session, gesture opening and foreground/picker input authority, including equal-value reopen and A–B–A changes.
 - [ ] Preserve older sample / younger palette-dependent brush, gradient and shape ordering through terminal acknowledgement.
@@ -22,10 +23,10 @@
 Status: ACTIVE prerequisite and caller work under [P1](UiNeverBlocks_2026-09-22.md). Full Debug r10 passed the repaired combined snapshot, including all eight picker controls, 13 palette controls, 2,653 FIFO checks and repeated readback controls. r8 analysis predates clipboard integration; Release, ASan, current combined analysis/ARM64, actual sampler callers and G1 remain due.
 Baseline: managed `b49e4b4`; the candidate now includes the wand descriptor repair from `e0360b0`.
 Reviewed intent sidecar builds r53/r54 and full Debug r55 pass on their recorded snapshots. The admitted scalar source authority, distinct picker opening identity and reader graph pass full Debug r57.
-The physical Eyedropper/Alt routing, younger Brush/Gradient/Shape dependency and selected-cancellation fix are
-pass full Debug r60 in the private integration. Cross-opening prefix and Alt-tool controls are newer and
-unqualified. Native activation, remaining
-profiles, live contexts and G1 are still due.
+The physical Eyedropper routing, younger Brush/Gradient/Shape dependency and selected-cancellation fix pass full
+Debug r60. Cross-opening prefix inheritance, actual Alt Brush/Heal/Gradient and guarded cleanup-readiness ordering
+pass full Debug r61 in the private integration. Native activation, remaining profiles, broader physical terminals,
+live picker contexts, largest-fixture admission and G1 remain due.
 Owners: `Application`, `DocumentReadbackJob`, `GpuWorkQueue`, palette/picker input and selected host continuations.
 Contracts: `Document_Tools`, `Rendering_Composition`, `UI_Windowing`, `UI_ApplicationChrome`, `Core_PerformanceAndResources`, `Testing_Validation`.
 
@@ -212,3 +213,17 @@ Fresh full Debug r10 passed at `2026-10-04T21:09:38.134690Z`, actual exit 0. All
 `64819CFFFC0925A5C9341B25E7EFCB770D79B58965938DE29DBE8C80AE899266`). Its unchanged preceding registries
 plus new controls are 6,504 document and 8,988 application controls, with the same 78 ordered application stages.
 This is the combined Debug prerequisite result, not actual asynchronous sampler activation or G1 compliance.
+
+
+## Latest qualified checkpoint - r61
+
+The complete Debug run qualifies the scalar prefix across ordered openings and actual Alt Brush/Heal/Gradient.
+A single fixed prefix record binds session identity, document serial and manual palette intent; it holds no
+raster/document owner. Successful foreground point resolution updates this record even when newer manual input
+suppresses publication. A later transparent opening inherits it only for the same authority. Equal manual
+writes, document replacement and foreign sessions cannot reuse it. Eight independent graph controls and six
+physical Alt controls pass alongside every preceding literal registry and ordered stage.
+
+Guarded release/trim readiness and the exact archive receipt are recorded in the
+[evidence](../../TestRuns/SamplerReadback_2026-10-04.md). Physical terminal and alpha additions are newer source,
+not part of this qualified snapshot. The full matrix and original P1 G1 gates remain required.
