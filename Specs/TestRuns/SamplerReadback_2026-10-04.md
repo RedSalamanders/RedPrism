@@ -660,3 +660,25 @@ Proof `EF6F09A69B12B71701DAB9632632C336F1B31E9D60D1AE4C004FE6132DAAFB5F`; source
 This is a qualified ASan Debug snapshot only. Current full Debug/Release/analysis/ARM64 matrix and native
 activation remain due. H3 exact unique accounting, late-residency synchronization, reference-path cost, pointer-held
 Escape and G1 remain open; r72 does not close the P1 phase.
+
+## Same-source full Release qualification - r73
+
+Actual child **102972**, 2026-10-05T03:56:35.738302Z–04:03:51.049489Z, exit **0**, same **771-input freeze** as r72:
+`4E4C78B06D8AB39C6B28BEF479F2F42DEE9ABF265AE07DC00AF101EDCA51CC23`. Full Release preserves the exact **6,683
+document / 9,298 application controls**, all **79 ordered stages**, and all PASS counters/routes.
+
+The first verifier expected the two command outputs to contain identical per-route registries and refused before
+writing proof. After fixing collection to keep both route registries separate and compare their combined counts,
+verification succeeded with no source or runtime changes. Proof `7314BDD8A6B4A8EABB0845E1EDD85D957C1A8326B2EA09EFE95F1FEFEE0CC1F7`; helper
+`D9FC9F256F45C06401FAE9CDF6E6F289A27AB2AE14B70A4DEF8B20B465FDD082`.
+
+Stdout `2EF4E4400D5658B7C21BB1B5237A807854B991ACAD5B0A98D6AF30AD25B6A563`; stderr
+`D80E52C0C7A6B24FE8166997E33EEFD2148A7FB1F7269B06EA542FFC443FE4BF`. Archive
+`p1-history-topology-sampler-escape-x64-Release-r73-full-qualified` independently verifies **1,041 copies / 79
+stages** at 2026-10-05T04:07:07.1088436Z. Source manifest
+`26EFFDC0B6E73FB0D7E7053D12F7AE047CF061C32FA687E829D9BA4DE3524F68`; evidence manifest
+`A56F1E289F6998DFE68FBFFDEF56C45FCEC0B74885BB30521F7E756CA9FB1C52`; completion
+`5F16165584D23F273395E4376BE2CE57B4EA8FE433C7FC9AFD986BCA1979496F`.
+
+This independently qualifies Release on r72's frozen source only. Full Debug, analysis, ARM64 cross-builds, native
+activation, H3 unique accounting, late-cache/reprepare synchronization, reference-path cost and G1 remain open.

@@ -193,8 +193,9 @@
     - [x] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
       key. Include nested sparse tiles/bases, distinct optional thumbnails and selection capacity without
       repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged. Full ASan
-      Debug r72 qualifies this topology implementation on its frozen snapshot; current matrix/native activation
-      and late-residency synchronization remain open.
+      Debug r72 and full Release r73 qualify this topology implementation on the same frozen snapshot; current
+      Debug/analysis/ARM64 matrix, native activation and late-residency synchronization remain open.
+    - [ ] Prototype private incremental `StorageIndex`: immutable unique-owner membership maps, changed-entry updates, current-document live exclusion, oldest-past-then-future trim and fresh `RetainedBytes` queries. Strict two-TU code-generation probe r2 exits 0, with no linked runtime claim; the self-bound integration and independent index tests remain under review. Late-cache publication/reprepare, reference-path cost, native activation and G1 remain open.
     - [ ] Account for late sparse materialization: `ByteSize()` grows from zero to the assembled allocation when
       `Data()` publishes its cache. A topology cache alone cannot authorize a stale byte total. Define the
       resident-charge epoch/notification and off-owner reprepare/trim path before using cached totals for
