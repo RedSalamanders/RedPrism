@@ -10,7 +10,8 @@
 - [x] Full Debug r77 and Release r78 pass on identical 771 inputs; independently verify every preceding PASS count/route and all 79 application stages, then archive every copy.
 - [x] ASan Debug r79 passes on the same source; all controls/stages and its archive copies verify.
 - [x] Repaired waitable core qualifies full x64 Debug r86, Release r87, ASan Debug r88, Release analysis r85 and all three ARM64 cross-builds; verify and archive every copied input.
-- [ ] Commit/push the qualified core slice, then integrate and qualify the separate host candidate.
+- [x] Commit/push the qualified core slice (`ce4f8b4`) and Native evidence/checklist (`88b9b1b`).
+- [ ] Qualify the combined cancellable-wait, notification, metadata-refresh and history-only maintenance host candidate.
 - [ ] Wire remaining callers, live-cache maintenance, native activation and original G1 gates before P1 Done.
 
 Status: ACTIVE resumed execution. This record qualifies only the named managed core snapshot. It does not
@@ -180,3 +181,91 @@ are untouched. Primary review corrected matched Add/Sub AA against legacy `Selec
 and AA, and New no-match deselects. Three new draft expectations were corrected before qualification; existing
 legacy goldens were unchanged. The candidate now has 15 new labels including invalid-mode refusal.
 Do not qualify or activate this candidate until complete admission and actual callers are integrated/tested.
+
+## Combined host candidate — qualification in progress
+
+The next managed slice has 774 owned inputs and three new normal application source/header files.
+The cancellable gate changes its private wake sequence on local/shutdown stop while retaining the ownership
+bit, allowing a waiter to leave before the holder releases. Stop notices leave the residency epoch unchanged.
+A worker retry with an unchanged witness now skips private index reconstruction; two controls inject the
+construction failure seam and verify the original edit still publishes once.
+
+The real metadata job retains its ticket, capture, prepared user revision and memory reservation through
+worker refresh. The separate source consumes bounded growth readiness, defers behind accepted/live edits,
+and prepares history-only trimming without changing document, generation, user revision or saved marker.
+Its startup remains self-test scoped. Six literal host cases cover success, younger ordering, cancellation,
+capture failure, worker failure and stale authority; transaction deferral and full scheduler refusal are added.
+Primary review corrected the sidecar's field/type mistakes, literal grown retained charge (12 bytes, not 4),
+and borrowed worker-counter lifetime. Full queue tests use completed-but-undrained records, without blocking
+worker threads. Original controls and Main continuation diagnostics remain intact.
+
+Debug r89 failed at compilation on two `const` cleanup guards whose new tests dismiss them; they are mutable
+in the repaired candidate. No product threshold or expected behavior changed. Actual child 69708, exit 1,
+08:12:41.093413–08:13:45.836483 UTC; freeze
+`A64E4ECC9DC47508A16A84F33807DF8F2AB3F056FDC7295DABB87362DA7A3A99`.
+Archive `p1-residency-host-x64-Debug-r89-build-failed`: 1,043 verified copies, completion
+`1A8C5A68957A8FBF82DE7D7295E42CFF1DBBF2D6871A4146BF9543245D29A130`.
+The repaired full Debug run is next. This slice does not qualify live source startup, every history writer,
+Native activation, H3 completion or G1.
+
+### Repaired actual-host diagnostic qualification
+
+Debug r90 passed the linked build and CPU suites, then failed at the first new metadata fixture because the
+blank layer had no raster asset. That test now explicitly constructs `RasterAsset` instead of dereferencing
+an empty optional. The failed actual child 83216 ran 08:17:16.151115–08:24:04.818266 UTC, exit 1, freeze
+`6B5E5A0CA6CD26C7E72391ECECA333A4D655C01BA7D52622B190A9BF07235DE7`.
+Archive `p1-residency-host-x64-Debug-r90-metadata-fixture-failed`: 1,043 verified copies, completion
+`09308EF209CFB7FD899D232D4357A0F1E64D04A979736B30D070B45D2730B7A9`.
+
+Repaired build r91 passes: child 84020, 08:25:40.718977–08:30:18.628394 UTC, exit 0. All five linked images,
+unchanged ISA/scanner controls and pinned-library provenance pass. Archive
+`p1-residency-host-x64-Debug-r91-build-qualified`: 1,034 verified copies; completion
+`10668931357F70C79421A8A296EC4D87D1DF8773FCC18DF1B22152F67910D408`.
+
+Actual hidden WARP runtime r92 passes: child 86956, 08:31:33.544670–08:33:37.833894 UTC, exit 0.
+The executable stays unchanged at SHA-256
+`7F74AB5B4AE40117004050AC073EE99E756AFC17890F21D16449EA4821A0E5DF`.
+It preserves all previous named controls, multiplicities, output routes and 79 ordered stages: **9,362 application
+controls**, 64 added (23 metadata refresh and 41 maintenance controls). The aggregate metadata summary necessarily
+changes from 139 checks / 43 cases to exactly 162 / 46, once on the same stderr route. No individual previous
+expectation is removed or rebaselined. The helper explicitly validates that aggregate replacement and every
+preceding named/literal control. Archive `p1-residency-host-x64-Debug-r92-runtime-qualified`: 1,034 verified copies;
+completion `C5480BCA95EBD393E9D64D89B55E8619EC2EDA59D3BD3CF5B45C1EE824B15741`.
+
+r91 and r92 share 774 owned inputs, freeze
+`F773A1EC601C3F94091CF20398E08A13EAE4F4A585F2A32521B9879F604FB3A7`.
+Full Debug r93 and Release analysis r94 are running on this source. Full Release/ASan, cross-builds and
+comparative memory/cost gates still remain. The extra candidate/index/container overlap is conservatively
+reserved before capture; its cost has not been justified by a measured speed or memory improvement.
+
+The independent Undo/Redo and Select All/Deselect drafts stay in the private Caller worktree. Restore adds six
+actual host late-growth/fault/cancel cases and ten unit controls; its repaired three-TU strict code-generation
+probe passes (r3). Selection adds three actual Select All host cases and unit controls for both commands;
+primary review corrected COW fixture writes, the two-pixel outline and the redo storage budget expectation.
+These drafts have no linked runtime result and cannot be counted as integrated or activated P1 exits.
+
+### Combined host matrix through r95; ASan r96 in progress
+
+All completed rows below bind the same 774-input freeze `F773A1EC601C3F94091CF20398E08A13EAE4F4A585F2A32521B9879F604FB3A7`.
+The full Debug and Release runtimes preserve every previous named control, route and ordered stage: 6,809 document / 9,362 application checks and 79 stages.
+Only the exact metadata aggregate changes from 139/43 to 162/46. Registry proof SHA-256 `A1A33B8430D9126DCD01454F895C243236FFCAD838DBDED46168E9C486434BBF`; checker `9DF840D1C7A0F314C3423CB3D767534E8AC72ED985C6AF442E88005FC0DF9126`.
+
+| Gate | Actual child / exit | UTC start to finish | Verified archive / copies | Completion SHA-256 |
+| --- | --- | --- | --- | --- |
+| Debug full | 56152 / 0 | 2026-10-05T08:36:29.814595+00:00 to 2026-10-05T08:45:49.919120+00:00 | `p1-residency-host-x64-Debug-r93-full-qualified` / 1044 | `4B187BFC3CC8253CD2A79B5E3AE401339FC7E5123CED8282166CC5B3E8D58DCF` |
+| Release analysis | 15500 / 0 | 2026-10-05T08:37:05.760818+00:00 to 2026-10-05T08:43:50.883023+00:00 | `p1-residency-host-x64-Release-r94-analysis-qualified` / 1057 | `90069AC6C64305769882527EFF06F3D26A492112EB6551F9A865D77B5BA08BBD` |
+| Release full | 79160 / 0 | 2026-10-05T08:51:07.235306+00:00 to 2026-10-05T08:59:59.739130+00:00 | `p1-residency-host-x64-Release-r95-full-qualified` / 1044 | `32D764DC7223619FF53B8EBAD82F6B92E05C65A266DEE5AFBB4E503E06098EA7` |
+| ARM64 Debug cross | 7384 / 0 | 2026-10-05T08:51:08.073570+00:00 to 2026-10-05T08:53:45.402042+00:00 | `p1-residency-host-ARM64-Debug-r2-cross-qualified` / 976 | `F3C1A5F7091701CA3E7C2A42879FCB7FFB7BAD40D178C782E94B8584DE714D86` |
+| ARM64 Release cross | 440 / 0 | 2026-10-05T08:53:48.559440+00:00 to 2026-10-05T08:55:35.672942+00:00 | `p1-residency-host-ARM64-Release-r2-cross-qualified` / 976 | `4DAC4C4123BC4E9A9AF73872780D2162C9E8365D9CC5444CDF918527F42BDA40` |
+| ARM64 ASan Debug cross | 80076 / 0 | 2026-10-05T08:55:39.570199+00:00 to 2026-10-05T08:56:53.742791+00:00 | `p1-residency-host-ARM64-ASanDebug-r2-cross-qualified` / 980 | `BA09BC75AD860F5137D78095CE948666AD7D10E5333DE03C78B6018FF2B912AB` |
+
+15 skills, formatting of all 654 files and `git diff --check` pass for the combined host candidate. ASan r96 still has no completion receipt and must finish before this source slice is committed. Cross-compilation supplies no native ARM64 runtime or G1 evidence.
+
+Private next drafts include Undo/Redo, Select All and Deselect late-growth/fault/cancel host paths; selection nudge refresh and zero-offset preservation; and actual standalone shutdown at a pending notice or held prepared maintenance worker. Primary review repaired the nudge after-document witness, reversed Deselect budget arguments, reused younger failure gate and saved-revision assertions. The first combined 13-TU probe failed on a nonexistent test checkpoint enumerator; the failed source/logs are preserved. No next draft has linked qualification yet.
+
+### Completed combined host matrix
+
+Full real ASan Debug r96 also passes on the unchanged 774-input freeze: actual child 19968, 2026-10-05T09:02:44.085555+00:00 to 2026-10-05T09:14:35.359450+00:00, exit 0. The original controls/routes/stages and the same 6,809 / 9,362 / 79 registries verify with proof `A1A33B8430D9126DCD01454F895C243236FFCAD838DBDED46168E9C486434BBF`.
+Archive `p1-residency-host-x64-ASanDebug-r96-full-qualified`: 1051 copies reread and verified; completion `31BEE63DE352A3511E6E3B86A700E8DAD34A504A2DEB833766B6AF4467C40FDB`. Source manifest `C4FE4719E9BF92BC9E05E25A5554D62A07C545FB1241C70992E4552E6B022491`; evidence manifest `21B9F93BEB4CC60B47D7CC050DE79786CE98141458AAA3D8E0A0F861AF6A8CA2`.
+
+This qualifies the combined cancellation, growth notification, metadata opt-in and scoped maintenance host slice in Debug/Release/ASan, Release analysis and all three ARM64 cross-builds. Normal maintenance startup, remaining writers, Native activation, delta cost and G1 remain open. The next 13-TU draft probe r1's nonexistent checkpoint was corrected to `StorageIndexClone`; r2 passes 319 immutable inputs, freeze `1643C0EAB9F8A88963B214BA31E2C95DA7A66FB64DC37FFECDDD41F97D6290D2`, with no linked/runtime claim.
