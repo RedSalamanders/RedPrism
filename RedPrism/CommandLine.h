@@ -90,13 +90,17 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate,
-            L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke|ui|ui45|ui100|ui-smoke>",
+            L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke|ui|ui45|ui100|ui-smoke|ui-sampler|"
+            L"ui-sampler45|ui-sampler100|ui-sampler-smoke>",
             L"Run the brush benchmark on the selected device, or the CPU kernel benchmark (kernels: 3840x2160, 10; "
             L"kernels45: 8192x5464, 10; kernels-smoke: 32x24, 2). The smoke mode is not a performance "
             L"measurement. buffers and buffers45 compare copy/adopt pairs at those same image sizes. UI benchmarks "
             L"exercise the application input loop (ui: 3840x2160 with two images, mask and adjustment; ui45: "
             L"8192x5464 with the same fixture; ui100: 10000x10000 with one image; each runs 10 samples after one "
-            L"warmup). ui-smoke runs the same path at 64x48 for two samples after one warmup.",
+            L"warmup). ui-smoke runs the same path at 64x48 for two samples after one warmup. The ui-sampler, "
+            L"ui-sampler45 and ui-sampler100 variants report only sampler-accepted-prefix on their corresponding "
+            L"UI fixture at 10 samples after one warmup; ui-sampler-smoke runs that row at 64x48 for two samples "
+            L"after one warmup.",
             L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::CrashProbe, L"--crash-probe", nullptr, RedPrismSwitchValue::Separate,
                                   L"<directory>",
@@ -400,7 +404,11 @@ struct RedPrismCommandLineScan final
                                                std::wstring_view{arguments[index + 1]} != L"ui" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui45" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui100" &&
-                                               std::wstring_view{arguments[index + 1]} != L"ui-smoke"))
+                                               std::wstring_view{arguments[index + 1]} != L"ui-smoke" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler100" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler-smoke"))
             {
                 if (errorToken)
                 {

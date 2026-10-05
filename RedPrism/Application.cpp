@@ -7221,7 +7221,9 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
-    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke")
+    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
+        _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
+        _bench == L"ui-sampler-smoke")
     {
         return RunUiBenchmark();
     }

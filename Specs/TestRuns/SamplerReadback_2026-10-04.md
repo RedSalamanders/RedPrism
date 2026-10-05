@@ -1,6 +1,6 @@
 # P1 sampler repeated-pixel prerequisite — evidence
 
-Status: the latest combined caller snapshot passes full ASan Debug r64, including admission/refusal/overflow; preceding Debug r63 and Release r62 qualify their recorded source. Later Map-recovery/focused-benchmark source, final combined matrix, native activation and G1 remain open. All original failures are preserved below.
+Status: the latest combined caller snapshot passes full Release r65 with bounded Map failure/recovery and focused sampler smoke. ASan Debug r64 and Debug r63 qualify their recorded source. Later shutdown source, final combined matrix, native activation and G1 remain open. First hardware timing r1 is refused with display off; all original failures are preserved below.
 Worktree: `C:\Users\eric\.codex\worktrees\p1-sampler\RedPrism`, based on `b49e4b4` plus the assertion-preserving
 six-kind test fixture isolation from color qualification. Active [plan](../Plans/WIP/SamplerReadback_2026-10-04.md).
 
@@ -410,3 +410,49 @@ stages** at 2026-10-05T01:28:32.4388838Z. Completion
 
 Later physical Map-busy/recovery controls and focused sampler benchmark modes are absent from r64. Current
 combined Debug/Release/analysis/ARM64, native activation, broader memory/device/shutdown, H3/H4 and G1 remain due.
+
+## Physical Map failure/recovery and focused sampler smoke - full Release r65
+
+Actual child 25828, 2026-10-05T01:31:30.898435Z-01:37:36.570286Z, exit **0**; 771 unchanged inputs,
+freeze `87DA5565ABFA0383550B4C01DE35004CEF46EE73C6E58D16AA4639EC14187C0D`.
+Stdout `78CB73FDC7A9B85FF0ADFDEA7A1D598B28175F689DC75F5AE4CC31FFF0DAC291`, stderr
+`4055458730DF784F72B52880CAF36881A1BD6D79A44BF1ECBC317D479B365CB2`.
+All full suites, unchanged instruction/PDB/scanner controls, WARP host, crash probes, CLI/build/RAW fixtures,
+27-operation UI smoke, focused one-operation smoke and screenshots pass. Skills/format pass before the freeze.
+
+The physical sampler cases inject one busy Map or two persistent busy Maps after the first real successful Map.
+The persistent case retains blue and fails locally after two copies, three Map attempts and one event barrier;
+the recovery case proceeds through brown/transparent with three copies, four Maps and one barrier. Each captures
+the original source exactly once and retires all graph ownership. Successful retry uses the real D3D context.
+These are deterministic policy controls, not observations of naturally occurring driver busy behavior. Secondary
+review finds no concrete defect in their counter, source, color or lifetime expectations.
+
+The cheaper agent adds exact focused CLI aliases, malformed-value controls and one-operation smoke validation.
+Primary implements runtime selection, unchanged fixtures, and separate initial-display/excluded-warmup rows.
+Review preserves the production allowance of one event barrier per copy instead of requiring zero real busy Maps.
+The smoke requires two boundaries with frames/valid clocks, six recorded copies and a single completion report;
+the original 27-operation table remains intact. Its 64x48 durations are correctness diagnostics, not A/B timing.
+
+Independent counters preserve **6,604 document / 9,248 application** controls (9,244 + four) and all **79 stages**.
+Proof `verified-map-focused-benchmark-registries.json` SHA-256
+`546A50736F45BE3CAB867106AC55D8D328919863EC518D6AA71F75FBD153D38B`.
+Archive `p1-sampler-map-focused-benchmark-x64-Release-r65-full-qualified` independently verifies **1,041 copies / 79
+stages** at 2026-10-05T01:40:05.5562835Z. Completion
+`1C790C862E000CD1398FCBA36A40D57555D5AE75CFCE0FF9C838950835D7CCC5`, source manifest
+`F8A9C6FAE574C289014D2FFAC28FDE7130D6759DF04AF1A19BBD01FEDB170868`, evidence manifest
+`0732E1E98AB1AC177F0228AE380441164161CC7319CA4600A97971711EFE02DE`.
+
+## Focused Release latency - r1 presentation refusal
+
+The serial recorder copies the exact r65 EXE/PDB/runtime DLLs from that verified archive into a fresh immutable
+snapshot and checks every hash before/after each run. Native `.build/p1-sampler-perf-r1-20261005/` preserves its
+source/helper, qualification binding, raw logs and observed results. First 4K hardware case reports Ryzen 9 9950X3D,
+64 GB physical memory, NVIDIA RTX 5080 driver 32.0.16.1714, scalar dispatch and 32 workers. It exits **5** at trial 0:
+`presentation-unavailable`, visible=1, displayOn=0, suspended=0, occluded=0, zero Presents and no frame/canvas error.
+The recorder stops without launching remaining cases. No timing row or G1 result exists. The user is asked to
+wake/unlock the desktop; correctness and shutdown work can continue independently. Preserve the refused attempt
+and use a fresh output directory after the display state changes. Do not bypass the guard.
+
+The newer shutdown audit identifies ticket/history-stamp fields that relied on a completion callback suppressed
+by shutdown. A post-join cleanup and three actual host phases are prepared separately and absent from r65.
+Final matrix, native activation, broader memory/device/shutdown, H3/H4 and original G1 remain due.

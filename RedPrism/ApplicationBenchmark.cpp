@@ -80,6 +80,7 @@ constexpr std::array<Operation, 27> kOperations{{
     {"gradient-apply-ordered", 0, 0, {}, 0, Expected::GradientApplied},
     {"sampler-accepted-prefix", 0, 0, {}, 0, Expected::SampledPrefix},
 }};
+static_assert(kOperations.back().expected == Expected::SampledPrefix);
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
 {
@@ -220,12 +221,17 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
     try
     {
         auto next = std::make_unique<UiBenchmarkState>();
-        const bool smoke = mode == L"ui-smoke";
-        const bool ceiling = mode == L"ui100";
-        const int width = smoke ? 64 : ceiling ? 10000 : mode == L"ui45" ? 8192 : 3840;
-        const int height = smoke ? 48 : ceiling ? 10000 : mode == L"ui45" ? 5464 : 2160;
+        const bool samplerOnly =
+            mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
+        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke";
+        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100";
+        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45";
+        const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
+        const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
+        next->samplerOnly = samplerOnly;
+        next->operation = samplerOnly ? kOperations.size() - 1 : 0;
         const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
         auto& temporary = *temporaryStorage;
         const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
@@ -400,6 +406,31 @@ void Report(const UiBenchmarkState& state)
                     .c_str());
     std::fflush(stdout);
 }
+
+void ReportSamplerBoundary(const UiBenchmarkState& state, const char* boundary)
+{
+    // Report the initial display preparation and excluded first sampler trial separately. The recorded
+    // distribution must not hide their owner-thread cost, and neither row is an isolated GPU upload timer.
+    const auto& timing = state.timing;
+    const auto& dispatch = timing.durations[static_cast<std::size_t>(UiTimingKind::MessageDispatch)];
+    const auto& message = timing.durations[static_cast<std::size_t>(UiTimingKind::WindowMessage)];
+    const auto& drain = timing.durations[static_cast<std::size_t>(UiTimingKind::CompletionDrain)];
+    const auto& apply = timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)];
+    const auto& action = timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)];
+    const auto& frame = timing.durations[static_cast<std::size_t>(UiTimingKind::Frame)];
+    std::printf("%s\n",
+                std::format("UI BENCH BOUNDARY name=sampler-accepted-prefix boundary={} width={} height={} "
+                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                            "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionMaxUs={} "
+                            "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={}",
+                            boundary, state.fixture.width, state.fixture.height, dispatch.PercentileUpperBound(99),
+                            dispatch.MaximumMicroseconds(), message.PercentileUpperBound(99),
+                            message.MaximumMicroseconds(), drain.PercentileUpperBound(99), drain.MaximumMicroseconds(),
+                            apply.MaximumMicroseconds(), action.MaximumMicroseconds(), frame.PercentileUpperBound(99),
+                            frame.MaximumMicroseconds(), frame.SampleCount(), timing.clockFailures)
+                    .c_str());
+    std::fflush(stdout);
+}
 } // namespace
 
 UiBenchmarkState::~UiBenchmarkState()
@@ -481,7 +512,7 @@ HRESULT Application::InitializeUiBenchmark() noexcept
         std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n", FormatBenchmarkMachineInfo(machine).c_str(),
                     _renderer.IsWarp() ? "WARP" : "hardware", static_cast<unsigned long long>(state.fixtureChecksum));
         // A single failure deadline for an opt-in harness, never a normal application polling timer.
-        if (SetTimer(_window.get(), kUiBenchmarkTimerId, _bench == L"ui-smoke" ? 90000 : 1800000, nullptr) == 0)
+        if (SetTimer(_window.get(), kUiBenchmarkTimerId, state.smoke ? 90000 : 1800000, nullptr) == 0)
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -837,6 +868,15 @@ void Application::AdvanceUiBenchmark() noexcept
         state.previousPreviewSequence = edit.has_value() ? edit->previewSequence : 0;
         state.previousZoom = _viewport.zoom;
         state.previousPan = _viewport.pan;
+        if (state.samplerOnly && state.trial == 0)
+        {
+            if (state.timing.clockFailures != 0)
+            {
+                FailUiBenchmark("sampler-preparation-clock");
+                return;
+            }
+            ReportSamplerBoundary(state, "initial-display");
+        }
         state.timing = {};
         state.previousPresents = _renderer.PresentCount();
         state.requestedAt = Now();
@@ -992,19 +1032,23 @@ void Application::AdvanceUiBenchmark() noexcept
                                            readback.readinessBarriers - state.previousReadback.readinessBarriers,
                                            readback.busyFailures - state.previousReadback.busyFailures}};
     }
+    else if (state.samplerOnly)
+    {
+        ReportSamplerBoundary(state, "excluded-warmup");
+    }
     if (saved)
         state.savedBaselineReady = true;
     if (++state.trial > state.runs)
     {
         Report(state);
         state.trial = 0;
-        if (++state.operation == kOperations.size())
+        if (state.samplerOnly || ++state.operation == kOperations.size())
         {
             state.phase = UiBenchmarkState::Phase::Done;
             state.complete = true;
             (void)KillTimer(_window.get(), kUiBenchmarkTimerId);
             std::printf("UI BENCH REPORT status=ok width=%d height=%d operations=%zu\n", state.fixture.width,
-                        state.fixture.height, kOperations.size());
+                        state.fixture.height, state.samplerOnly ? std::size_t{1} : kOperations.size());
             std::fflush(stdout);
             PostQuitMessage(0);
             return;

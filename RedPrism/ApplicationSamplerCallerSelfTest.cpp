@@ -1097,6 +1097,63 @@ int Application::RunSamplerCallerSelfTest() noexcept
         return 5;
     _samplerSourceCapturesForTest = nullptr;
 
+    // A busy Map uses one event barrier, without recopy or polling. Persistent busy on the second pixel must
+    // preserve the already acknowledged blue prefix, fail locally, and release every original graph owner.
+    const auto clearMapInjection = wil::scope_exit([this]() noexcept { _gpuWork.SetMapBusyForTest(0); });
+    for (const bool persistent : {true, false})
+    {
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        _session.SetForegroundColor(0xFF804020u);
+        const auto authority = _session.CaptureDocumentReadAuthority();
+        const auto revision = _session.history.CurrentRevision();
+        const auto undo = _session.history.UndoCount();
+        const auto before = _gpuWork.Statistics();
+        std::uint32_t captures = 0;
+        _samplerSourceCapturesForTest = &captures;
+        const auto clearCaptures = wil::scope_exit([this]() noexcept { _samplerSourceCapturesForTest = nullptr; });
+        _gpuWork.SetMapBusyForTest(persistent ? 2 : 1, 1);
+        pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto id = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = FindSamplerOpening(id);
+        const auto receipt = pending ? pending->receipt : ContinuationReceipt{};
+        pointer(WM_MOUSEMOVE, Vec2{20, 15});
+        pointer(WM_MOUSEMOVE, Vec2{40, 15});
+        pointer(WM_LBUTTONUP, Vec2{0, 15});
+        if (!check(pending && pending->points.PendingCount() == 3 && captures == 0 &&
+                       receipt.Read().outcome == HostOutcome::Pending && std::holds_alternative<std::monostate>(_drag),
+                   L"The physical Map-recovery sampler did not admit exactly its scalar prefix.\n",
+                   persistent ? "sampler-caller.map-busy.persistent-prefix-admitted"
+                              : "sampler-caller.map-busy.recovery-prefix-admitted"))
+            return 5;
+        const bool completed = settle();
+        const auto after = _gpuWork.Statistics();
+        const auto result = receipt.Read();
+        const bool expectedResult =
+            persistent ? result.outcome == HostOutcome::Failed &&
+                             result.error == static_cast<std::int32_t>(DXGI_ERROR_WAS_STILL_DRAWING) &&
+                             _session.ForegroundColor() == kBlue && after.copies - before.copies == 2 &&
+                             after.maps - before.maps == 3 && after.busyFailures - before.busyFailures == 1
+                       : result.outcome == HostOutcome::Succeeded && _session.ForegroundColor() == 0xFF804020u &&
+                             after.copies - before.copies == 3 && after.maps - before.maps == 4 &&
+                             after.busyFailures == before.busyFailures;
+        if (!check(
+                completed && expectedResult && captures == 1 &&
+                    after.readinessBarriers - before.readinessBarriers == 1 && authority &&
+                    _session.IsDocumentReadCurrent(authority.value()) &&
+                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
+                    samplerSlotsClear() && !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob &&
+                    !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() && _gpuWork.LentCount() == 0 &&
+                    _gpuWork.InFlightCount() == 0 && !_gpuWork.HasPending() && _jobs.ReservedMemoryBytes() == 0 &&
+                    _composition.UtilitySurfaceBytes() == 0 && GetCapture() != _window.get(),
+                L"The physical sampler Map recovery recopied, lost its accepted color, or retained graph ownership.\n",
+                persistent ? "sampler-caller.map-busy.persistent-keeps-first-prefix-and-retires"
+                           : "sampler-caller.map-busy.one-barrier-recovers-without-recopy"))
+            return 5;
+        _gpuWork.SetMapBusyForTest(0);
+    }
+
     std::printf("PASS sampler-caller.fixture-restore-scheduled\n");
     return 0;
 }

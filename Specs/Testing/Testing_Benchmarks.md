@@ -65,6 +65,19 @@ power/idle behavior is unchanged. See [SetThreadExecutionState](https://learn.mi
 | `ui100` | 10000×10000, one raster layer | 10 after one warmup |
 | `ui-smoke` | 64×48, same layered fixture | 2 after one warmup |
 
+`ui-sampler`, `ui-sampler45`, `ui-sampler100` and `ui-sampler-smoke` use those respective fixture sizes and run
+counts through the same production application loop, but report only `sampler-accepted-prefix` and
+`operations=1`. They avoid executing the preceding 26 unrelated operations. The focused smoke mode has the same
+display-power exception as `ui-smoke`; the performance modes retain every presentation guard.
+
+Focused modes additionally print exactly two `UI BENCH BOUNDARY` rows: `initial-display` captures owner timing
+from the application loop's initialization through the first prepared/presented fixture; `excluded-warmup`
+captures the first successful sampler trial. Both report the existing owner histogram p99 upper bounds and
+maxima, observed frame count and clock failures. They are separate from the ten-trial distribution. Initial
+display timing excludes fixture pixel construction before `Run` and does not isolate GPU upload time or scanout.
+Keep both rows when evaluating first-use cost; the warmed row alone cannot qualify H4 or cold G1. Smoke verifies
+both boundaries observe frames and no clock failures, without timing thresholds.
+
 The deterministic fixture checksum identifies generated pixel content; it is not a RAW corpus checksum.
 
 The panel readiness check accepts either a changed CPU preview raster or a newer published GPU lookup sequence, then

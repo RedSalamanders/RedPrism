@@ -41,7 +41,8 @@ struct UiBenchmarkState final
     std::size_t operation = 0;
     unsigned int trial = 0; // zero is the excluded warmup
     unsigned int runs = 10;
-    bool smoke = false; // bounded correctness harness; may render while session display power is off
+    bool smoke = false;       // bounded correctness harness; may render while session display power is off
+    bool samplerOnly = false; // same production loop and fixture; skips unrelated operation setup
     std::uint64_t previousPresents = 0;
     std::int64_t requestedAt = 0;
     std::uint64_t fixtureChecksum = 0;

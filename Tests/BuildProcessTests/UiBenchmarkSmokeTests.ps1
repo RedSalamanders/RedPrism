@@ -113,3 +113,75 @@ if ($reports.Count -ne 1 -or
 
 Write-Host 'PASS UI benchmark smoke: 27 operations, 64x48, 2 samples after one warmup'
 $global:LASTEXITCODE = 0
+
+$samplerStdoutPath = Join-Path $OutputDirectory 'RedPrism.ui-sampler-smoke.log'
+$samplerStderrPath = Join-Path $OutputDirectory 'RedPrism.ui-sampler-smoke.err.log'
+Remove-Item -LiteralPath $samplerStdoutPath, $samplerStderrPath -ErrorAction SilentlyContinue
+$samplerProcess = Start-Process -WindowStyle Hidden -FilePath $ExecutablePath `
+    -ArgumentList @('--warp', '--bench', 'ui-sampler-smoke', '--isa', 'scalar') -PassThru `
+    -RedirectStandardOutput $samplerStdoutPath -RedirectStandardError $samplerStderrPath
+$null = $samplerProcess.Handle # Retain exit-observation authority through the bounded wait on Windows PowerShell.
+if (-not $samplerProcess.WaitForExit($timeoutSeconds * 1000)) {
+    throw "RedPrism.exe --warp --bench ui-sampler-smoke --isa scalar did not finish within $timeoutSeconds s (PID $($samplerProcess.Id) is still running; report it, do not kill it)."
+}
+$samplerProcess.WaitForExit()
+
+$samplerStderr = if (Test-Path -LiteralPath $samplerStderrPath) { Get-Content -LiteralPath $samplerStderrPath -Raw } else { '' }
+if ($samplerProcess.ExitCode -ne 0) {
+    throw "RedPrism.exe --bench ui-sampler-smoke exited with code $($samplerProcess.ExitCode). $samplerStderr"
+}
+
+$samplerLines = @(Get-Content -LiteralPath $samplerStdoutPath)
+$samplerMachineRows = @($samplerLines | Where-Object { $_ -match '^BENCH MACHINE\b' })
+if ($samplerMachineRows.Count -ne 1) {
+    throw "UI sampler smoke printed $($samplerMachineRows.Count) BENCH MACHINE lines, expected exactly one ($samplerStdoutPath)."
+}
+$samplerRows = @($samplerLines | Where-Object { $_ -match '^UI BENCH name=' })
+if ($samplerRows.Count -ne 1 -or
+    $samplerRows[0] -notmatch '^UI BENCH name=sampler-accepted-prefix width=64 height=48 runs=2 warmup=1\b') {
+    throw "UI sampler smoke must print exactly one sampler-accepted-prefix row at 64x48 with two runs and one warmup ($samplerStdoutPath)."
+}
+
+$samplerReadback = @{}
+foreach ($field in 'readbackCopies', 'readbackMaps', 'readinessBarriers', 'busyFailures') {
+    if ($samplerRows[0] -notmatch "\b$field=(?<count>\d+)\b") {
+        throw "UI sampler smoke row is missing readback counter '$field': $($samplerRows[0])"
+    }
+    $samplerReadback[$field] = [long]$Matches['count']
+}
+if ($samplerReadback.readbackCopies -ne 6 -or
+    $samplerReadback.readbackMaps -ne ($samplerReadback.readbackCopies + $samplerReadback.readinessBarriers) -or
+    $samplerReadback.readinessBarriers -gt $samplerReadback.readbackCopies -or $samplerReadback.busyFailures -ne 0) {
+    throw "UI sampler smoke must read three accepted points per trial (six copies), allow bounded readiness barriers, and avoid busy failures: $($samplerRows[0])"
+}
+
+$samplerBoundaryRows = @($samplerLines | Where-Object { $_ -match '^UI BENCH BOUNDARY\b' })
+if ($samplerBoundaryRows.Count -ne 2) {
+    throw "UI sampler smoke printed $($samplerBoundaryRows.Count) boundary rows, expected exactly two ($samplerStdoutPath)."
+}
+$samplerBoundaries = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($row in $samplerBoundaryRows) {
+    if ($row -notmatch '^UI BENCH BOUNDARY name=sampler-accepted-prefix boundary=(?<boundary>initial-display|excluded-warmup) width=64 height=48\b') {
+        throw "Malformed UI sampler smoke boundary row: $row"
+    }
+    $boundary = $Matches['boundary']
+    if (-not $samplerBoundaries.Add($boundary)) {
+        throw "Duplicate UI sampler smoke boundary '$boundary': $row"
+    }
+    if ($row -notmatch '\bframes=(?<frames>\d+)\b' -or [long]$Matches['frames'] -lt 1 -or
+        $row -notmatch '\bclockFailures=(?<failures>\d+)\b' -or [long]$Matches['failures'] -ne 0) {
+        throw "UI sampler smoke boundary must observe at least one frame with zero clock failures: $row"
+    }
+}
+if (-not $samplerBoundaries.Contains('initial-display') -or -not $samplerBoundaries.Contains('excluded-warmup')) {
+    throw "UI sampler smoke must report initial-display and excluded-warmup boundaries exactly once."
+}
+
+$samplerReports = @($samplerLines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
+if ($samplerReports.Count -ne 1 -or
+    $samplerReports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=1(?:\s+.*)?$') {
+    throw "UI sampler smoke did not print exactly one successful one-operation report ($samplerStdoutPath)."
+}
+
+Write-Host 'PASS UI sampler smoke: sampler-accepted-prefix only, 64x48, 2 samples after one warmup'
+$global:LASTEXITCODE = 0
