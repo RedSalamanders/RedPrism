@@ -300,6 +300,23 @@ and G1 are not yet established.
 
 ## Failures
 
+### Dormant bounded upload leaf
+
+`GpuUploadQueue` transports admitted base-level chunks through owner WRITE/DO_NOT_WAIT Map, worker-only row
+filling, owner Unmap/copy and a real completion event. Its fixed records and staging charges remain owned through
+acknowledgement. Startup failure must unwind acquired event/wait/route prefixes. A failed completion signal
+after recording, including a Map-recovery barrier, quarantines the slot and retained context until joined
+shutdown; uncertain completion never permits reuse. Stale or foreign lease publication cannot acknowledge a
+new request. Only the owner records or releases graphics objects; workers receive writable rows, never a context.
+
+`RasterUploadLayout` is immutable arithmetic for an owned crop and exact proxy scale. Every chunk retains the
+same reduction grid and clipped-edge rounding. Its logical mip bytes and bounded reduction scratch are inputs
+to complete admission, not a VRAM reservation or a resource creation plan. `GpuRasterUploadJob` serially fills
+base chunks under the same opted-in scheduler record and complete reservation. Completion may precede producer
+return; the receiver remains alive until both acknowledge. Cancellation suppresses remaining chunks and holds
+pending map/fence receivers through final acknowledgement. The application still uses its current composition
+upload paths until complete resource admission, mip/display publication and measured first-display gates pass.
+
 A frame never closes the window on its own (RF-401):
 
 - **Device removal at any stage**: when chrome `Prepare`, the composition, the blit, chrome `Composite` or `Present`

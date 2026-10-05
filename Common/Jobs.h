@@ -43,6 +43,9 @@ struct JobOptions final
     // Additional allocation peak for the complete graph. Immutable inputs already resident are not charged
     // again. The reservation survives Run and UI apply/drop; children borrow it instead of reserving again.
     std::uint64_t memoryBytes = 0;
+    // Opt in only when external mapped/device ownership can survive a worker's terminal result. The owner
+    // acknowledgement hook retains this exact record and reservation on success, failure and cancellation.
+    bool deferredRetirement = false;
 };
 
 struct JobTicket final
@@ -88,6 +91,7 @@ class JobContext final
     CancelToken cancellation;
     void* const shutdownEvent; // borrowed manual-reset HANDLE, valid only during Run
     const std::uint64_t reservedMemoryBytes;
+    const bool deferredRetirement;
 
     // Concurrent calls coalesce without waiting. A report never allocates. Percentages are monotonic, and
     // publication is limited to one per 100 ms. Run must join every producer before returning.
@@ -95,9 +99,9 @@ class JobContext final
 
     using Report = void (*)(void*, unsigned int) noexcept;
     JobContext(Executor& execution, CancelToken token, void* event, Report report, void* context,
-               std::uint64_t reserved = 0) noexcept
+               std::uint64_t reserved = 0, bool externalRetirement = false) noexcept
         : executor(execution), cancellation(token), shutdownEvent(event), reservedMemoryBytes(reserved),
-          _report(report), _context(context)
+          deferredRetirement(externalRetirement), _report(report), _context(context)
     {
     }
 
@@ -117,6 +121,15 @@ class Job
     // ticket, reservation and FIFO position until Resume. Failed/cancelled stages skip this hook. Resume may
     // be requested here; the next worker stage cannot start until this hook returns. A false return finalizes.
     [[nodiscard]] virtual bool DeferCompletion(JobResult, JobTicket) noexcept
+    {
+        return false;
+    }
+    // Owner-only, before DeferCompletion/Completed, after all worker producers have returned. Called only for
+    // options.deferredRetirement, including failed/cancelled stages. True retains the original suspended ticket,
+    // FIFO and whole reservation until an external acknowledgement calls Resume. The hook must preserve a
+    // terminal failure in its own state, acknowledge unrun mapped loans, and never restart cancelled useful work.
+    // False finalizes even if Resume was requested; shutdown joins producers and drops hooks/callbacks.
+    [[nodiscard]] virtual bool DeferRetirement(JobResult, JobTicket) noexcept
     {
         return false;
     }

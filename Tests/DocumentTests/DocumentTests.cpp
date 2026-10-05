@@ -67,6 +67,8 @@
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
+#include "RasterUploadLayoutTests.h"
+#include "RasterUploadReductionWorkTests.h"
 #include "RasterUploadWorkTests.h"
 #include "RasterWork.h"
 #include "RasterWorkTests.h"
@@ -8037,6 +8039,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += internal::RunImportHistoryTests();
     gFailures += internal::RunImportPublicationTests();
     gFailures += RunRasterUploadWorkTests();
+    gFailures += RunRasterUploadReductionWorkTests();
+    gFailures += RunRasterUploadLayoutTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();

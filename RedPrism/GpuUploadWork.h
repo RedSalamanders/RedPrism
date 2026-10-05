@@ -33,6 +33,21 @@ enum class GpuUploadFill : std::uint8_t
     Failed,
 };
 
+enum class GpuUploadFailurePoint : std::uint8_t
+{
+    None,
+    ImplementationAllocation,
+    EventCreation,
+    WaitRegistration,
+    OwnerRegistration,
+    StagingCreation,
+    Map,
+    MappedPitch,
+    WaitRearm,
+    RecoverySignal,
+    CopySignal,
+};
+
 class GpuUploadReceiver
 {
   public:
@@ -87,8 +102,18 @@ class GpuUploadQueue final : public OwnerWorkPump
     [[nodiscard]] GpuCapabilities::CompletionRoute CompletionRoute() const noexcept;
     void SetMapBusyForTest(unsigned int attempts) noexcept;
     [[nodiscard]] unsigned int MapAttemptsForTest() const noexcept;
+    // Owner-only one-shot fault injection at the named real operation. Skip counts matching attempts only;
+    // production leaves None. ImplementationAllocation exercises the existing bad_alloc boundary. MappedPitch
+    // still performs a real Map and Unmap; its injected invalid pitch cannot escape into borrowed rows.
+    void SetFailureForTest(GpuUploadFailurePoint point, HRESULT error = E_FAIL, unsigned int skip = 0) noexcept;
+    [[nodiscard]] unsigned int FailureHitsForTest() const noexcept;
 
   private:
+    [[nodiscard]] bool FailAt(GpuUploadFailurePoint point, HRESULT& result) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
+    GpuUploadFailurePoint _failurePoint = GpuUploadFailurePoint::None;
+    HRESULT _failureResult = E_FAIL;
+    unsigned int _failureSkip = 0;
+    unsigned int _failureHits = 0;
 };

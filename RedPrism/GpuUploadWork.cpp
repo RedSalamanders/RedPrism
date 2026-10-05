@@ -30,6 +30,7 @@ std::uint64_t AllocateUploadQueueIdentity() noexcept
 
 struct GpuUploadQueue::Impl final
 {
+    explicit Impl(GpuUploadQueue& uploadQueue) noexcept : queue(uploadQueue) {}
     enum class State : std::uint8_t
     {
         Free,
@@ -75,6 +76,7 @@ struct GpuUploadQueue::Impl final
     };
 
     DWORD ownerThread = GetCurrentThreadId();
+    GpuUploadQueue& queue;
     const std::uint64_t identity = AllocateUploadQueueIdentity();
     JobScheduler* scheduler = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
@@ -168,7 +170,9 @@ struct GpuUploadQueue::Impl final
         desc.SampleDesc.Count = 1;
         desc.Usage = D3D11_USAGE_STAGING;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        const HRESULT result = device->CreateTexture2D(&desc, nullptr, slot.staging.put());
+        HRESULT result = S_OK;
+        if (!queue.FailAt(GpuUploadFailurePoint::StagingCreation, result))
+            result = device->CreateTexture2D(&desc, nullptr, slot.staging.put());
         if (SUCCEEDED(result))
         {
             slot.bytes = required;
@@ -182,8 +186,17 @@ struct GpuUploadQueue::Impl final
     {
         slot.signalled.store(false, std::memory_order_relaxed);
         slot.completionFence = fence;
-        if (!alreadyRearmed && !scheduler->RearmEventWait(slot.wait))
-            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        HRESULT injected = E_FAIL;
+        if (!alreadyRearmed)
+        {
+            if (queue.FailAt(GpuUploadFailurePoint::WaitRearm, injected))
+                return injected;
+            if (!scheduler->RearmEventWait(slot.wait))
+                return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+        if (queue.FailAt(recovery ? GpuUploadFailurePoint::RecoverySignal : GpuUploadFailurePoint::CopySignal,
+                         injected))
+            return injected;
         if (recovery)
             return dxgiDevice2 ? dxgiDevice2->EnqueueSetEvent(slot.event.get()) : E_NOINTERFACE;
         if (route == GpuCapabilities::CompletionRoute::MonitoredFence)
@@ -219,7 +232,7 @@ struct GpuUploadQueue::Impl final
             --busyMaps;
             result = DXGI_ERROR_WAS_STILL_DRAWING;
         }
-        else
+        else if (!queue.FailAt(GpuUploadFailurePoint::Map, result))
             result = slot.context->Map(slot.staging.get(), 0, D3D11_MAP_WRITE, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
         if (result == DXGI_ERROR_WAS_STILL_DRAWING && !slot.retry)
         {
@@ -227,6 +240,7 @@ struct GpuUploadQueue::Impl final
             result = Arm(slot, true);
             if (SUCCEEDED(result))
                 return;
+            slot.poisoned = true; // A failed signal may leave an old event producer; never reuse its wait class.
         }
         if (FAILED(result))
         {
@@ -235,6 +249,9 @@ struct GpuUploadQueue::Impl final
         }
         D3D11_TEXTURE2D_DESC desc{};
         slot.staging->GetDesc(&desc);
+        HRESULT pitchFailure = E_FAIL;
+        if (queue.FailAt(GpuUploadFailurePoint::MappedPitch, pitchFailure))
+            mapped.RowPitch = static_cast<UINT>(kMaxRowBytes + 1);
         const std::uint64_t actualBytes = static_cast<std::uint64_t>(mapped.RowPitch) * desc.Height;
         const std::uint64_t retained = stagingBytes - slot.bytes;
         if (!mapped.pData || mapped.RowPitch < static_cast<std::uint64_t>(slot.width) * Channels(slot.format) ||
@@ -293,7 +310,10 @@ HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     try
     {
-        _impl = std::make_unique<Impl>();
+        HRESULT injected = E_OUTOFMEMORY;
+        if (FailAt(GpuUploadFailurePoint::ImplementationAllocation, injected))
+            throw std::bad_alloc{}; // Test the same explicit noexcept allocation boundary as make_unique.
+        _impl = std::make_unique<Impl>(*this);
     }
     catch (const std::bad_alloc&)
     {
@@ -307,13 +327,21 @@ HRESULT GpuUploadQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer
     for (auto& slot : self.slots)
     {
         slot.owner = &self;
+        HRESULT injected = E_FAIL;
+        if (FailAt(GpuUploadFailurePoint::EventCreation, injected))
+            return injected;
         slot.event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
         if (!slot.event)
             return HRESULT_FROM_WIN32(GetLastError());
-        const HRESULT result = scheduler.RegisterEventWait(slot.event.get(), Impl::Signalled, &slot, slot.wait);
+        HRESULT result = S_OK;
+        if (!FailAt(GpuUploadFailurePoint::WaitRegistration, result))
+            result = scheduler.RegisterEventWait(slot.event.get(), Impl::Signalled, &slot, slot.wait);
         if (FAILED(result))
             return result;
     }
+    HRESULT injected = E_FAIL;
+    if (FailAt(GpuUploadFailurePoint::OwnerRegistration, injected))
+        return injected;
     if (!(routes ? routes->Attach(*this) : scheduler.RegisterOwnerWork(*this)))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     self.registered = true;
@@ -543,7 +571,10 @@ void GpuUploadQueue::Pump() noexcept
                 else
                 {
                     // Refusal to arm causes no copy. Arm() rearms as well, which is harmless before signalling.
-                    if (!self.scheduler->RearmEventWait(slot.wait))
+                    HRESULT rearmFailure = E_FAIL;
+                    if (self.queue.FailAt(GpuUploadFailurePoint::WaitRearm, rearmFailure))
+                        self.Finish(slot, rearmFailure);
+                    else if (!self.scheduler->RearmEventWait(slot.wait))
                         self.Finish(slot, HRESULT_FROM_WIN32(ERROR_INVALID_STATE));
                     else
                     {
@@ -629,4 +660,35 @@ void GpuUploadQueue::SetMapBusyForTest(unsigned int attempts) noexcept
 unsigned int GpuUploadQueue::MapAttemptsForTest() const noexcept
 {
     return _impl ? _impl->mapAttempts : 0;
+}
+
+void GpuUploadQueue::SetFailureForTest(GpuUploadFailurePoint point, HRESULT error, unsigned int skip) noexcept
+{
+    if (_impl)
+        _impl->CheckOwner();
+    assert(FAILED(error));
+    _failurePoint = point;
+    _failureResult = FAILED(error) ? error : E_FAIL;
+    _failureSkip = skip;
+    _failureHits = 0;
+}
+
+bool GpuUploadQueue::FailAt(GpuUploadFailurePoint point, HRESULT& result) noexcept
+{
+    if (_failurePoint != point)
+        return false;
+    if (_failureSkip != 0)
+    {
+        --_failureSkip;
+        return false;
+    }
+    ++_failureHits;
+    _failurePoint = GpuUploadFailurePoint::None;
+    result = _failureResult;
+    return true;
+}
+
+unsigned int GpuUploadQueue::FailureHitsForTest() const noexcept
+{
+    return _failureHits;
 }

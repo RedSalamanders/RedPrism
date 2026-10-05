@@ -9,7 +9,10 @@
 #include "DocumentReadbackTests.h"
 #include "FrameScheduler.h"
 #include "GpuCapabilityTests.h"
+#include "GpuRasterUploadJobTests.h"
 #include "GpuUploadAdmissionTests.h"
+#include "GpuUploadFaultTests.h"
+#include "GpuUploadInitializationTests.h"
 #include "GpuUploadTransportTests.h"
 #include "GpuWorkTests.h"
 #include "TransformOverlay.h"
@@ -2083,6 +2086,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuWorkTests();
     gFailures += RunGpuUploadAdmissionTests();
     gFailures += RunGpuUploadTransportTests();
+    gFailures += RunGpuUploadInitializationTests();
+    gFailures += RunGpuUploadFaultTests();
+    gFailures += RunGpuRasterUploadJobTests();
     gFailures += RunDocumentReadbackTests();
     TestFrameLoop();
     Harness harness;

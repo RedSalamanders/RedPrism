@@ -106,6 +106,7 @@
     <ClInclude Include="..\..\Common\InputRevision.h" />
     <ClInclude Include="JobCloseHookTests.h" />
     <ClInclude Include="JobSuspendedRetirementTests.h" />
+    <ClInclude Include="JobRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
     <ClInclude Include="SamplerInputTests.h" />
     <ClInclude Include="SamplerIntentInputTests.h" />
@@ -174,6 +175,7 @@
     <ClCompile Include="JobShutdownRetirementTests.cpp" />
     <ClCompile Include="JobCloseHookTests.cpp" />
     <ClCompile Include="JobSuspendedRetirementTests.cpp" />
+    <ClCompile Include="JobRetirementTests.cpp" />
     <ClCompile Include="PixelRecycleTests.cpp" />
     <ClCompile Include="PerfRootTests.cpp" />
     <ClCompile Include="..\..\Common\PerfRoot.cpp" />

@@ -528,6 +528,13 @@ no timer polls availability. An insufficient request waits only while a reservat
 return memory; otherwise it completes `Failed(E_OUTOFMEMORY)` without running. Snapshot failure also fails the
 operation. A cancelled waiter never runs. Same-key successors reserve only after predecessor retirement.
 
+An opted-in terminal-retirement stage holds that same reservation after failure or cancellation while an
+external map/copy owner still borrows its receiver or storage. No stage releases and reacquires its charge,
+changes its serial ordinal or admits a successor before acknowledgement. The upload layout reports only
+logical texture bytes and reduction scratch; callers MUST separately reserve resource/container capacities,
+driver/staging headroom, overlapping residents and complete retirement ownership before capture/allocation.
+The dormant base-chunk upload leaf does not establish whole-document CPU/VRAM admission or G1 compliance.
+
 Image Size and Canvas Size jobs declare rounded aggregate output and required semantic mask-thumbnail
 allocations, one maximum private sparse-source assembly, and conservative metadata for snapshot/result/validation/history.
 Optional image thumbnails are not required outputs and are excluded from these reservations. Immutable source pixels

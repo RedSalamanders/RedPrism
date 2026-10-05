@@ -131,6 +131,9 @@
     <ClInclude Include="..\Common\InputRevision.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
+    <ClInclude Include="..\Common\RasterUploadReductionWork.h" />
+    <ClInclude Include="..\Common\RasterUploadWork.h" />
+    <ClInclude Include="..\Common\RasterUploadLayout.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
     <ClInclude Include="..\Common\Selection.h" />
     <ClInclude Include="..\Common\BrushStroke.h" />
@@ -140,6 +143,7 @@
     <ClInclude Include="FileWorkTestGate.h" />
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
+    <ClInclude Include="GpuRasterUploadJob.h" />
     <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ClipboardDibWork.h" />
@@ -246,6 +250,9 @@
     <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\Common\RasterUploadReductionWork.cpp" />
+    <ClCompile Include="..\Common\RasterUploadWork.cpp" />
+    <ClCompile Include="..\Common\RasterUploadLayout.cpp" />
     <ClCompile Include="..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\Common\DocumentSizeHistory.cpp" />
@@ -390,6 +397,7 @@
     <ClCompile Include="GpuCapabilities.cpp" />
     <ClCompile Include="GpuWork.cpp" />
     <ClCompile Include="GpuUploadWork.cpp" />
+    <ClCompile Include="GpuRasterUploadJob.cpp" />
     <ClCompile Include="DocumentReadbackJob.cpp" />
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />

@@ -1555,3 +1555,18 @@ Release analysis and three ARM64 cross-builds qualify this source; see
 [the bound record](../TestRuns/P1UploadCpuPreparation_2026-10-05.md#image-wrapper-residency-and-original-upload-transport-complete-managed-qualification).
 Private later fault/layout/retirement drafts, production upload consumers, G1 and Native activation remain
 separate P1 requirements. No RAW or Photoshop speed claim follows from these functional gates.
+
+
+### P1 dormant raster upload lifetime foundations
+
+The managed source passes 41 independent worker reduction and 34 immutable layout controls, 88 opt-in
+scheduler terminal-acknowledgement controls, and 58 startup/123 fault/127 receiver controls on real WARP.
+All older literal controls, application routes and 79 ordered stages remain unchanged. Full x64 Debug,
+Release and real ASan Debug, Release analysis and all three ARM64 cross-builds bind the identical 805-input
+source; ASan's repeated worker-stress registry is compared independently. The actual heap-use-after-free
+sanitizer detection diagnostic and each raw source/log/archive receipt are retained in
+[the qualification record](../TestRuns/P1UploadLifetime_2026-10-05.md).
+
+These gates qualify dormant transport/receiver lifetime only. Complete CPU/VRAM plan admission, resource
+creation/mips, application consumers, bounded first composition/chrome/retirement and large-fixture G1 remain
+mandatory before H4/P1 completion. Native source activation and native ARM64 runtime are not inferred.

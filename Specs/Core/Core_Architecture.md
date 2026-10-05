@@ -77,6 +77,22 @@ returns. A false hook finalizes once even if it requested resume. Cancellation w
 external owner's acknowledgement, then skips the next Run and delivers one final Cancelled callback. Shutdown
 joins producers before destroying suspended payloads and drops callbacks.
 
+Jobs that lend mapped storage or retain an external receiver across a terminal worker result MUST opt in with
+`JobOptions::deferredRetirement`. After the worker has returned (or its cancelled Run has been skipped), the
+owner invokes `Job::DeferRetirement` for Finished, Failed and Cancelled results, before the success-only hook.
+Returning true retains the original job, exact ticket generation, serial position and complete reservation
+until its external owner acknowledges and resumes it. The job preserves its original terminal outcome across
+that acknowledgement; cancellation still wins. Returning false finalizes normally and cannot dispatch a
+requested resume. The default option and hook are disabled; existing failed/cancelled jobs do not acquire a
+new continuation. Hooks never run during joined shutdown, which destroys wrappers before owner cleanup.
+
+The dormant `GpuRasterUploadJob` is a leaf for one held raster layout and a precreated device destination.
+It MUST refuse before lending rows if its scheduler record has not opted in. Preparation/reduction/copying
+and CPU aggregate retirement belong to workers; queue recording, mapped-row acknowledgement and destination
+retirement belong to the owner. Pending map and copy-fence receivers, skipped fill stages and early queue
+completion retain their job/reservation until both producer and queue acknowledge. This leaf does not create
+whole-document resources, generate mips, publish a display or authorize production activation.
+
 One optional stable borrowed `OwnerWorkPump` shares completion draining with the production loop and `SettleJobs`.
 Its pending work prevents idle settlement; only ready work requests an owner pass. Pump runs under the same
 reentrancy guard as completion apply and MUST NOT wait, show a modal or recursively drain. Registration/removal

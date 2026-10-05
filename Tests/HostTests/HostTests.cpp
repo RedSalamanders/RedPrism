@@ -23,6 +23,7 @@
 #include "JobBenchmark.h"
 #include "JobCloseHookTests.h"
 #include "JobMemoryTests.h"
+#include "JobRetirementTests.h"
 #include "JobShutdownRetirementTests.h"
 #include "JobStageTests.h"
 #include "JobSuspendedRetirementTests.h"
@@ -1814,6 +1815,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();
+    gFailures += RunJobRetirementTests();
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();

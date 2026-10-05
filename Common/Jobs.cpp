@@ -432,7 +432,8 @@ struct JobScheduler::Impl final
                                  self.shutdown.get(),
                                  Report,
                                  record,
-                                 record->reserved};
+                                 record->reserved,
+                                 record->options.deferredRetirement};
             JobResult result{JobStatus::Cancelled};
             if (!execution.cancellation.IsCancelled())
             {
@@ -1186,6 +1187,23 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
         {
             result = {JobStatus::Cancelled};
+        }
+        if (record.options.deferredRetirement)
+        {
+            {
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Suspended;
+            }
+            if (record.job->DeferRetirement(result, ticket))
+                continue;
+            // Promotion is below this drain. A false acknowledgement hook cannot dispatch a resumed worker
+            // before final apply/destruction, exactly as the successful-stage continuation contract requires.
+            {
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Completed;
+            }
+            if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
+                result = {JobStatus::Cancelled};
         }
         if (result.status == JobStatus::Finished)
         {

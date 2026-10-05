@@ -13,14 +13,20 @@
 - [ ] U3: prepare complete raster residency plans on workers after admission; account for every resident owner.
   - [x] Private immutable arithmetic layout passes 34 literal mip/crop/chunk/scratch/retention/sparse controls. It does not implement complete resource-plan admission or device/display publication.
   - [ ] Qualify the opt-in terminal retirement acknowledgement protocol before a job can own an upload receiver across cancellation or failure.
+    - [x] Private strict scheduler probe preserves the successful-stage controls and passes 88 opt-in success/failure/cancellation/default/reuse/FIFO/reservation/joined-shutdown controls (actual child 55120, source freeze B49504BE539E19C2030E5144298050D4F58EDC76A542AD5CDF0EB8C7C746296C). Normal registration and GPU leaf/consumer qualification remain open.
+    - [ ] Qualify the new base-chunk upload job with both producer and queue acknowledgement, including skipped mapped fills, pending map/fence cancellation, early completion, device retirement and shutdown.
+      - [x] Primary-reviewed private Main WARP probe passes all 473 transport/fault/receiver controls, including 127 new receiver assertions. Full registered Debug r130, Release analysis r131 and all three ARM64 r9 cross-builds pass on the same 805 inputs; Release/real ASan and production activation remain open ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)).
+  - [ ] Review and qualify the separately drafted committed-document bound/enumeration plan (held immutable root, deduplicated raster layouts, separate live/retired CPU/GPU charges and declared surface/lookup/staging/driver allowances). Preview/brush/utility inputs, actual resource allocation and application admission remain open.
 - [ ] U4: stage resource creation and preserve the old display until a complete current plan can publish.
 - [ ] U5: integrate display and utility consumers, sparse/proxy/mask/preview sources and borrowed brush adoption.
 - [ ] U6: bound layer/chrome synchronization and retire replaced CPU/GPU owners through their correct lanes.
 - [ ] U7: run the fault/lifetime matrix, full required configurations and unchanged predecessor registries.
+  - [x] Dormant foundation matrix passes full Debug r130, Release r133, real ASan r134, Release analysis r131 and all three ARM64 r9 cross-builds on identical 805 inputs; 75 CPU/88 scheduler/308 GPU additions and every predecessor route/stage are verified ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)). Complete consumer/device/resource/retirement faults remain open.
 - [ ] U8: fix first-display, warmup and large-fixture owner/apply/frame overruns; retain Release/ETW evidence.
+  - [ ] Qualify the separately drafted fixed-storage texture/view/mip/upload/composition/chrome timing and real WARP/ETW controls; report inclusive first/warmup stages without treating absence as a timed zero.
 - [ ] Reconcile owning contracts, commit/push qualified steps, and close only after all H4 requirements pass.
 
-**Status: ACTIVE; original row-copy/transport foundations qualified and pushed (`74c327d`); newer private drafts and production activation remain open.**
+**Status: ACTIVE; original row-copy/transport foundations qualified and pushed (`74c327d`); lifetime foundations pass the complete normal matrix; production activation remains open.**
 Parent: [P1 delivery milestone](UiNeverBlocks_2026-09-22.md), P1.9 H4.
 Owners: Application, Renderer, CanvasRenderer, GPU upload queue, JobScheduler and worker preparation.
 Contracts: Rendering_Composition, Core_Architecture, Core_PerformanceAndResources, UI_Windowing,
