@@ -1,0 +1,182 @@
+# P1 resumed residency, mask and Warp core qualification — 2026-10-05
+
+## Execution checklist
+
+- [x] Verify the saved clean branches and resume after the user's “continue until done”.
+- [x] Replace movable residency leases with nonmovable scope owners and runtime thread-ownership checks.
+- [x] Add five normal-suite recursion, no-shared-assembly, dense-read and release/reacquire controls.
+- [x] Integrate prior 23 residency refresh controls, six semantic Gray8 thumbnail controls and Warp private-copy controls.
+- [x] Review the cheaper agent's local-buffer Warp cleanup and add its valid/failed retained-capacity expectations.
+- [x] Full Debug r77 and Release r78 pass on identical 771 inputs; independently verify every preceding PASS count/route and all 79 application stages, then archive every copy.
+- [x] ASan Debug r79 passes on the same source; all controls/stages and its archive copies verify.
+- [x] Repaired waitable core qualifies full x64 Debug r86, Release r87, ASan Debug r88, Release analysis r85 and all three ARM64 cross-builds; verify and archive every copied input.
+- [ ] Commit/push the qualified core slice, then integrate and qualify the separate host candidate.
+- [ ] Wire remaining callers, live-cache maintenance, native activation and original G1 gates before P1 Done.
+
+Status: ACTIVE resumed execution. This record qualifies only the named managed core snapshot. It does not
+activate it in Native or close H3, H4, G1 or P1. Later metadata-host and Wand changes remain private/unqualified.
+
+## Source and independent core checks
+
+Worktree `C:/Users/eric/.codex/worktrees/p1-opacity-host-proof/RedPrism`, branch `codex/p1-opacity-host-proof`.
+Parent source `1936fe6`; the pause checkpoint/docs are `e77e6e9`.
+Nine reviewed source/test counterparts were transferred with a create-new receipt:
+`Z:/src/RedPrism/.build/history-residency-integration-r1-20261005/receipt.json`, SHA-256
+`5C496B08B2532288A7579EB80D8104AF5B48CA0FD3D03DCC454D9AFBF013CE74`.
+The full `DocumentTests.cpp` was not copied: only its RasterWork include and new `TestSmearWarp` prefix were
+transferred, preserving every integration diagnostic and existing golden. Formatting checks all 651 files;
+all 15 skills and diff checks pass. Linked suite inputs are frozen independently of this evidence document.
+
+Scope includes opt-in history epoch/permit/worker reprepare, explicit publication move/destruction cleanup,
+private fitting sparse Gray8 mask thumbnails, and cancellable Smudge/Liquify source copy. Valid Warp buffers
+are staged locally and transferred only when complete; refusal/cancellation/allocation failure releases staged
+capacities and leaves zero dimensions. There is no constructor-specific deterministic allocation injection
+hook, so that catch is not directly exercised. The new linked normal controls preserve source caches and
+literal pixels, compare retained invalid storage, and check independent history/fault/latch expectations.
+No host is opted into the residency protocol in this frozen core snapshot.
+
+## Recorded full x64 suites
+
+Observed: **6,778 document / 9,298 application controls**, **79 ordered application stages**. There are exactly
+49 new document controls versus r74: 23 original residency, five scope-owner controls, six mask-thumbnail
+controls, 14 Warp source-copy expectations and one valid retained Warp expectation. All prior multiplicities,
+output routes and stages remain. All full command-line, ISA, crash, RAW offline corpus, runtime and harness
+screenshot gates pass in each named successful profile. Real sanitizer qualification belongs only to r79.
+
+Common 771-input freeze SHA-256:
+`676AB623E3E18A4CAB6641D1330F61C13E6D763C2ED0646BF640B7204F7F81CA`.
+
+### Debug r77
+
+Actual child PID 65796, `2026-10-05T06:12:07.114044+00:00` to
+`2026-10-05T06:21:10.016081+00:00`, exit 0.
+Stdout `A4A14F1685858D23B350801669856F34A0D0B03661D7FACEE9C1C8B6BD53373B`;
+stderr `54BD7380DCF8F63E40ED8C3125159908D076FF429B3F36F0590A422081E65321`.
+Registry proof `97BB1DBE5D07CF4403AE75C159322AA02CBDE08603B827FC4764C6CC9300D6BD`.
+Archive `p1-residency-core-mask-warp-x64-Debug-r77-full-qualified`, 1,041 copies reread/verified at
+`2026-10-05T06:22:53.6668063+00:00`. Source manifest
+`5CBE5DD9696C5353766DFD0C0AA8F462C88E8AC345342FDC983B7BC99C08F1D2`;
+evidence `D6303CA5171F7D02696C5638FDBB29B4C1F502F8F7042C333AEACE4A8A40D72F`;
+completion `C1D7CF04B2F05473C4DB394A52EE309F02921A129C6C81502D7F93B7A90AB8B0`.
+
+### Release r78
+
+Actual child PID 63204, `2026-10-05T06:23:21.438154+00:00` to
+`2026-10-05T06:29:14.417270+00:00`, exit 0. Identical freeze and complete registry.
+Stdout `A502B0326AE4D6BBE7AEFF09C4098171011C4F2DE69B687B2ED18AA4F1B37319`;
+stderr `9BECC521776735F46100B89B4FC33D7CED0F1D71A6F842E7C8B7D09F1A9A75AB`.
+Registry proof `D0CFA785B00B7B6339E8DE84BD5A1A76A3ACF79F73DDF19D92A6C033C7DAEBC1`.
+Archive `p1-residency-core-mask-warp-x64-Release-r78-full-qualified`, 1,041 copies reread/verified at
+`2026-10-05T06:34:37.5019821+00:00`. Source manifest
+`AB56B7E8E652203D41D04A0888B5802D599C1EBD15CC44643EA228C08790C380`;
+evidence `21F4A71998FE1AD7701253B6C3334D0CF173C168BA5EB4701A887B1CED230446`;
+completion `C4093EF1089B70C15811332ECBFE45E3FA75D9F2CEFF860436006210B474FCDA`.
+
+### ASan Debug r79
+
+Actual child PID 3180, `2026-10-05T06:34:40.795019+00:00` to
+`2026-10-05T06:48:08.846883+00:00`, exit 0. Identical freeze and complete registry.
+Stdout `F919865AAD730D3EAD1016C1B11C9BDC9310369EE9878DD3E4466CEA21E7DBE8`;
+stderr `48A1AD6BC6CEA654E82D90750ACAC902DE347DC65760B8DA6C813D145FD2E1AA`.
+Registry proof `D0CFA785B00B7B6339E8DE84BD5A1A76A3ACF79F73DDF19D92A6C033C7DAEBC1`.
+Archive `p1-residency-core-mask-warp-x64-ASanDebug-r79-full-qualified`, 1,048 copies reread/verified at
+`2026-10-05T06:49:36.5953946+00:00`. Source manifest
+`097FE54632C4AE9046B209A69B9DFCD22C34DC94A0C8091F49B054F1157C6BDC`;
+evidence `C029734328B5828643CCE3B2635AEDB8935298F04239140BCF38F2E248870FDB`;
+completion `34640C1D5A8BC6626E66AEAEB291CE4C29B0E5E37CFAAE77081B4B96304BCE64`.
+Real sanitizer execution is qualified for this core snapshot. Later analysis repairs require fresh runtime
+qualification; these three runs are not evidence for a later source snapshot.
+
+### Release analysis r80 failure and repair
+
+Actual child PID 73960, `2026-10-05T06:50:09.925934+00:00` to
+`2026-10-05T06:54:05.208678+00:00`, exit 1, on the original 771-input freeze.
+The gate found C26135 on the conditional residency-lock constructor, C6262 (164,656 bytes versus
+the unchanged 131,072-byte test limit) in `TestPaletteIntentAuthority`, and C6001 on the refresh test's
+conditional `intendedRevision` initialization. No runtime golden or warning/stack threshold was changed.
+The wrapper now describes its actual conditional acquire and lock identity with SAL; palette fixtures
+use heap-owned sessions with identical operations/assertions; the Guid is initialized explicitly before
+assignment. Primary review also corrected two unqualified agent wrapper tests before integration: a
+publication must keep its permit through apply, and the undo/redo result accumulator must be mutable.
+The claimed failure is one oversized test function and one initialization diagnostic.
+
+Failed archive `p1-residency-core-x64-Release-r80-analysis-failed` preserves all 992 copied inputs/evidence,
+verified `2026-10-05T06:54:47.4071061+00:00`. Source manifest
+`44C21C026CA38802781451C383803354CC786ED4A6528F5918DB3AEC4573AE07`;
+evidence `9953FFC3630304BFC2587007CE6C1B2B369308ACB8F1EDF9D93A9EF08E32609F`;
+completion `031B74BCED7DBCFCB62CF14990038FAE8FD959488822E71F2F0EA8CC6C32007B`.
+Stdout `0D71EAAABC9C62132388C9B1A43591D8814B20FE226E30A09663D0CE6C30305C`;
+stderr `A8A4252C62957836AF4D50437F1F3B8C24BB1945D8E3E2F5B7FD1DA6346E00C7`.
+### Later analysis diagnosis and waitable-gate decision
+
+Every subsequent failed analysis attempt is preserved with all copied inputs and evidence. No diagnostics,
+concurrency negative controls, ISA gates, stack limits or legacy expectations were disabled.
+
+| Attempt | Actual child / UTC span | Freeze / result | Diagnosis / archive completion hash |
+| --- | --- | --- | --- |
+| r81 | 65188 / 06:56:42.654078–06:59:46.595414 | `011867E5F0E5DC937B753B79E8667B19F38D369FDB628C6C5C1A4C5B78F178A2`, exit 1 | SAL cannot parse a member-function call in the conditional annotation; two sampler assertion helpers do not prove their pointer prerequisites. `p1-residency-core-x64-Release-r81-analysis-failed`, `1BACFFEC28046AF49AECA37188A02EE477CE94BA84C62863B2C97A5A856A4A18` |
+| r82 | 78296 / 07:02:27.526448–07:07:13.944028 | `F4976DEB222990EC21E52AD51C112BC4EA1DEBBCE3C507E95BDFC68F82C8F44F`, exit 1 | Conditional constructor witness compiles, but the unique-lock move/try path introduces C26115. `p1-residency-core-x64-Release-r82-analysis-failed`, `39158A08346087CCAE8838C1477F4D815B089B6DA89D2BA81455C0E8E3CEB4C2` |
+| r83 | 63444 / 07:09:27.295157–07:12:06.108008 | `1E09F5580836A1D14DD9F8EBB5171E8B95272144EECCC685EFB2A91A770D2225`, exit 1 | Scoped acquire/release annotations cannot prove the composite permit's second destructor/reset release (C26167/C26160). `p1-residency-core-x64-Release-r83-analysis-failed`, `41E604994B2FD40C0FD3C47D01B36197AA417122D9B4E8E2903F8598020BF4B1` |
+| r84 | 22724 / 07:18:01.107533–07:20:39.871267 | Same r83 freeze, exit 1 | Accidental duplicate launch after a helper's exact-text anchor refused before any edit. It supplies no new qualification. `p1-residency-core-x64-Release-r84-analysis-failed`, `373AA34A4F6C7DB53F6CEAA9FBB77594439203CBE707EAC433FEC209F56A6971` |
+
+The final core candidate uses a standard waitable atomic gate, with the same nonmovable same-thread scope
+owners. An owner performs exactly one acquire CAS and returns Busy on contention. Workers park with
+`atomic::wait`; release publishes with release ordering and `notify_one`. There is no timer/spin source, heap
+allocation or owner wait. Recursion is refused and foreign-thread release remains fatal before the gate changes.
+Per-storage assembly retains its independent standard mutex. Existing cache-publication/epoch, concurrent Busy,
+move/drop/refresh and literal-budget controls are preserved. This change needs fresh full runtime qualification;
+it is not justified by the earlier mutex candidate's green runs. Cancellation time and G1 remain measured exits.
+
+### Release analysis r85 — repaired waitable gate
+
+Actual child PID 40576, `2026-10-05T07:21:52.017991+00:00` to
+`2026-10-05T07:28:44.938042+00:00`, exit 0. All five images, unchanged analysis/concurrency controls,
+matching-PDB ISA/scanner controls and pinned DxUi provenance pass. 771-input freeze
+`B1F0B1F1CF31248D7F058A2CD1651F1963E302F035B987115B97679D001C754F`.
+Stdout `68821421042762D3ECA305782637AD8392EF6E9EF234A4AEE01163E08C860B85`;
+empty stderr `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`.
+Archive `p1-residency-waitable-gate-x64-Release-r85-analysis-qualified`, 1,054 copies reread/verified at
+`2026-10-05T07:29:37.1721719+00:00`. Source manifest
+`ED6E095A8EB6DE302738FEE0C137A9DCD4D264ABC46FA8249E342875C6D905B3`;
+evidence `F84A2909A8EA0C4EF94631AE5E4FE862FA5BC121B1A3E9C87AA16BC32235DAEC`;
+completion `6812632E1DD912CE8E09E8A8FB06CF3475D58ECCE0133E54287C6B4FDC1FE174`.
+
+Current repaired core passes Debug r86, Release r87 and real ASan Debug r88 on the same 771-input freeze.
+Every preceding control, route and all 79 stages remain intact: 6,778 document / 9,298 application checks.
+ARM64 Debug/Release/ASan Debug cross-builds also pass; every archive copy has been reread and verified.
+There is no native ARM64 runtime, Native activation or G1 claim.
+
+### Repaired core runtime and cross-build evidence
+
+| Configuration / attempt | Actual child / exit | UTC start to finish | Verified archive / copies | Completion SHA-256 |
+| --- | --- | --- | --- | --- |
+
+| Debug / `incremental-x64-test-Debug-r86` | 71996 / 0 | 2026-10-05T07:29:41.097913+00:00 to 2026-10-05T07:40:30.986302+00:00 | `p1-residency-waitable-gate-x64-Debug-r86-full-qualified` / 1041 | `377E373363B89ECCF00971CDF31DE5E239A23F2F5BCCFC22F4BDD74826FFD398` |
+| Release / `incremental-x64-test-Release-r87` | 65820 / 0 | 2026-10-05T07:42:21.639898+00:00 to 2026-10-05T07:48:35.519443+00:00 | `p1-residency-waitable-gate-x64-Release-r87-full-qualified` / 1041 | `2EAEB932FAF9D4824476054B34C3A383971439401B66823E6A83BA92F85F4754` |
+| ASan Debug / `incremental-x64-test-ASanDebug-r88` | 75620 / 0 | 2026-10-05T07:49:23.698011+00:00 to 2026-10-05T08:01:34.229208+00:00 | `p1-residency-waitable-gate-x64-ASanDebug-r88-full-qualified` / 1048 | `3ADFBC0EEE63DD1B352B59DE454B178B3917F7DF0B82D61B7CED5B8877A5EB31` |
+| ARM64 Debug / `residency-arm-builds-r1-20261005/Debug` | 65800 / 0 | 2026-10-05T07:29:41.499586+00:00 to 2026-10-05T07:31:59.341958+00:00 | `p1-residency-waitable-gate-ARM64-Debug-r1-cross-qualified` / 973 | `55ABF6C64B24AF7A9196AF66C1F1C141299D2EFE315B1D2F1945E2BD511DC76E` |
+| ARM64 Release / `residency-arm-builds-r1-20261005/Release` | 79380 / 0 | 2026-10-05T07:32:03.955104+00:00 to 2026-10-05T07:33:53.913114+00:00 | `p1-residency-waitable-gate-ARM64-Release-r1-cross-qualified` / 973 | `9B1E2931DBE2A6AB057D29875A6A9C2E600B9D49637B7A77ACA61E9A09232B0F` |
+| ARM64 ASanDebug / `residency-arm-builds-r1-20261005/ASanDebug` | 3040 / 0 | 2026-10-05T07:33:56.795809+00:00 to 2026-10-05T07:35:07.664240+00:00 | `p1-residency-waitable-gate-ARM64-ASanDebug-r1-cross-qualified` / 977 | `B572100C3604CDF090CD874E0589FE3F43C4EB8EB7E53094FD32D6E816CED09D` |
+
+The archive receipts bind the source/evidence manifests, actual child exits and logs. Registry proof for each
+x64 runtime is `D0CFA785B00B7B6339E8DE84BD5A1A76A3ACF79F73DDF19D92A6C033C7DAEBC1`.
+The next candidate adds cancellation while parked, bounded growth notifications and a real history-only
+maintenance source; it has strict nine-TU code generation only, without linked runtime qualification.
+
+All archives are beneath `C:/Users/eric/AppData/Local/RedPrism/QualificationArchives`.
+
+## Separate next candidates and review findings
+
+Private Caller now contains an admitted same-ticket metadata-host refresh: one completed edit, one input
+capture, unchanged reservation/FIFO position, worker-only index refresh and owner permit release before every
+callback/chrome operation. Extra clone/stack/root overlap is conservatively reserved before capture. Three
+actual-host success/allocation-failure/cancel cases are drafted. They have no linked runtime result yet.
+An independent live-cache notification/maintenance route remains necessary: failed or cancelled edits preserve
+the original history/revision even if a separate consumer has grown its resident cache.
+
+The cheaper Wand core sidecar is private in `p1-sampler`; host routing and complete checked Clipper admission
+are untouched. Primary review corrected matched Add/Sub AA against legacy `Selection.swift:227` and current
+`Document_Tools`: results use the captured current AA option; no-match Add/Sub preserve the exact old selection
+and AA, and New no-match deselects. Three new draft expectations were corrected before qualification; existing
+legacy goldens were unchanged. The candidate now has 15 new labels including invalid-mode refusal.
+Do not qualify or activate this candidate until complete admission and actual callers are integrated/tested.

@@ -1,11 +1,18 @@
 # P1 — Responsive raster editor delivery milestone
 
-**Paused at the user’s request on 2026-10-05.** Source, qualified receipts and local helpers are saved.
-Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) before continuing.
+**Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
+[checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
+Current work: H3 scope-bound waitable residency gate, same-ticket refresh and live-cache maintenance;
+bounded Wand mode and Warp cleanup sidecars.
+No later candidate is qualified or activated in Native yet.
 
 ## Delivery checklist
 
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
+- [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
+- [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.
+  - [x] Earlier mutex core/mask/Warp candidate passes full managed Debug r77, Release r78 and ASan Debug r79: 6,778 document / 9,298 application controls and unchanged 79 stages; all archive copies verify. Subsequent analysis failures r80–r84 are preserved and repaired with a waitable atomic gate and explicit test ownership/initialization/null guards ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
+  - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
 
 - [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
 - [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.
@@ -31,7 +38,7 @@ Read the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) be
 - [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
 - [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.
 
-**Status: HOLD / P1 (user pause 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
+**Status: ACTIVE / P1 (user resumed 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
