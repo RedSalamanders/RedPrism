@@ -7,10 +7,19 @@
 - [x] Preserve allocator ownership, allocation-before-move retry, equality, adopted buffer address and existing root goldens in the reviewed Debug candidate.
 - [x] Independently prove exact metadata/capacity accounting, conservative shared/sparse ownership, overflow/unavailable refusal, empty/moved/copy/swap behavior and unchanged source roots: 87 new controls plus the unchanged 6,226-control document suite pass Debug.
 - [x] Qualify the entire private DocumentTests suite in Debug/Release/ASan with 627 identical owned C++/header/HLSL/RC inputs, actual build/run exits, real ASan instrumentation and verified evidence.
-- [ ] Integrate into the managed/native candidate only after its current frozen matrix finishes; qualify all required normal profiles and update owning contracts.
-- [ ] Consume the cache in worker display preparation/admission/retirement; separately finish incremental history accounting and measured G1.
+- [x] Integrate cached root bounds into the managed candidate and update the owning contracts.
+- [x] Consume the cache in managed color-display worker preparation, admission, publication and retirement;
+  register root, planner and actual host controls.
+- [x] Qualify the current identical managed source: full Debug r267, Release r268, real ASan r270,
+  Release analysis r271 and all three ARM64 r38 cross-builds pass on the 867-input `023602…` freeze.
+  Exact predecessor/source/product proofs and independently verified archives pass. Native runtime and G1
+  remain separate below.
+- [ ] Integrate and qualify the cache and display consumer in `Z:\src\RedPrism`; that checkout still has the
+  older root implementation and lacks `DocumentDraft` and the color-display worker sources.
+- [ ] Complete separate incremental history accounting and measured G1; cached conservative bounds do not
+  establish those results.
 
-Status: ACTIVE private implementation; prerequisite of
+Status: ACTIVE managed implementation; native integration and complete qualification remain open. Prerequisite of
 [P1](UiNeverBlocks_2026-09-22.md) and [H2.2](HistoryStorageAccounting_2026-09-30.md).
 Owners: `Common/RecordRoot.h`, `Document.h`, `DocumentDraft.h`; contracts: `Document_Model`,
 `Document_History`, `Core_PerformanceAndResources` and `Testing_Validation`.
@@ -47,4 +56,11 @@ capacity and repeated-raster fixtures were corrected before qualification. The f
 6,313 controls in Debug/Release/ASan. Every archived copy is independently verified: 1,478, 1,476 and 1,481 copies
 respectively; the same 627 owned sources run in every profile. The ASan compiler command tracking contains
 `/fsanitize=address`. [Evidence](../../TestRuns/LayerRecordOwnershipBounds_2026-10-04.md).
-This candidate is not activated in the native application and does not qualify display preparation or G1.
+The managed candidate now uses `CanvasDocument::RetirementMemoryBytes` and
+`ColorDisplayMemoryBytes`/`ColorDisplayPreviewMemoryBytes` to consume the cached root envelope before
+worker construction and deferred retirement. `RecordOwnershipBoundsTests`, `ColorDisplayWorkTests`,
+`ColorDisplayPublicationTests` and the actual color-display host/admission fixtures are registered.
+The current integration's matrix is recorded in
+[Clone qualification](../../TestRuns/P1CloneReadback_2026-10-06.md); older private receipts above remain
+qualified for their exact snapshots. The native checkout still lacks these consumer sources. No source
+inspection or managed receipt establishes native activation, exact incremental history accounting or G1.

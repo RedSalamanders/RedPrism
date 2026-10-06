@@ -15,6 +15,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaCompactSignedRcxByteRemapTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Compact signed RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaDisp8RcxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaDisp8RcxImm8ByteRemapTests.ps1')

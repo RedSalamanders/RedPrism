@@ -360,6 +360,11 @@
     <ClCompile Include="ApplicationColorCancellationTests.cpp" />
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
+    <ClCompile Include="ApplicationCloneReadbackJobs.cpp" />
+    <ClCompile Include="Application.Tests.CloneReadback.cpp" />
+    <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" />
+    <ClInclude Include="CloneReadbackState.h" />
+    <ClInclude Include="CloneReadbackTestGate.h" />
     <ClCompile Include="ApplicationCanvasBrushInputSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushCancellationSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushPaletteSelfTest.cpp" />

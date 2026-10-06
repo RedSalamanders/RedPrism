@@ -141,8 +141,29 @@ int Application::RunSamplerHostSelfTest() noexcept
         return 5;
     const auto completed = savedReceipt.Read();
     const auto* completedOpening = FindSamplerOpening(opening.value());
-    if (!check(completed.outcome == ContinuationOutcome::Succeeded && completedOpening &&
-                   completedOpening->resolvedArgb == 0xFF804020u && _session.ForegroundColor() == 0xFF804020u,
+    const bool transparentTailKeptMiddle = completed.outcome == ContinuationOutcome::Succeeded && completedOpening &&
+                                           completedOpening->resolvedArgb == 0xFF804020u &&
+                                           _session.ForegroundColor() == 0xFF804020u;
+    if (!transparentTailKeptMiddle)
+    {
+        const auto lastOpaque = completedOpening ? completedOpening->points.LatestOpaqueColor() : std::nullopt;
+        std::printf("FAIL DETAIL sampler-host.graph.transparent-tail-keeps-middle: "
+                    "receiptOutcome=%d receiptError=0x%08X slot=%p slotOpening=%llu jobAlive=%d terminal=%d "
+                    "overflow=%d pendingPoints=%u consumers=%u resolvedArgb=0x%08X "
+                    "lastOpaque=%d lastOpaqueArgb=0x%08X lastOpaqueSequence=%llu foreground=0x%08X graphClear=%d\n",
+                    static_cast<int>(completed.outcome), static_cast<unsigned int>(completed.error),
+                    static_cast<const void*>(completedOpening),
+                    static_cast<unsigned long long>(completedOpening ? completedOpening->opening : 0),
+                    completedOpening && completedOpening->jobAlive, completedOpening && completedOpening->terminal,
+                    completedOpening && completedOpening->overflow,
+                    completedOpening ? completedOpening->points.PendingCount() : 0,
+                    completedOpening ? completedOpening->consumers : 0,
+                    static_cast<unsigned int>(completedOpening ? completedOpening->resolvedArgb : 0),
+                    lastOpaque.has_value(), static_cast<unsigned int>(lastOpaque ? lastOpaque->argb : 0),
+                    static_cast<unsigned long long>(lastOpaque ? lastOpaque->stamp.sequence : 0),
+                    static_cast<unsigned int>(_session.ForegroundColor()), graphClear());
+    }
+    if (!check(transparentTailKeptMiddle,
                L"The sealed first/middle/transparent stream did not publish the literal opaque middle color.\n",
                "sampler-host.graph.transparent-tail-keeps-middle"))
         return 5;

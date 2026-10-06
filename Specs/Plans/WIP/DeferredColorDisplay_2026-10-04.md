@@ -11,13 +11,16 @@
 - [x] Primary implements private full-source publication and prepared-owner transfer; independent session tests and actual host qualification remain open.
 - [x] Private core publication validates opening/source/settings and scalar history authority, swaps the complete display, and retains replaced owners in its move-only result. Actual host admission and worker retirement remain open.
 - [x] Fresh private Debug/Release/ASan suites pass all 6,392 preceding controls plus 96 publication/planning/owner-retention controls; 635 owned inputs match and every archive copy is verified.
-- [ ] Replace owned settings snapshots in the host's pending mailbox with bounded request descriptors; admit the whole graph before capture in the same resumable record.
+- [x] Replace owned settings snapshots in the host's pending mailbox with bounded request descriptors; admit the preview graph before capture in the same resumable record.
   Implementation is in the managed candidate: scalar mailbox requests, borrowed complete planning, admitted
   capture/resume, preallocated failure publication, histogram capture after admission, and retained cancelled
-  tickets. Fresh normal qualification is in progress; this row remains open until the actual host gates pass.
+  tickets. Current Debug r267 and real ASan r270 pass the actual admission-wait/resume and waiting-cancel
+  cases. Complete histogram/preview overlap and admission-boundary qualification remain separate below.
 - [x] Private core keeps a compatible completed display and selects committed data on invalidation/off/identity. Opt-in settings ticks retain invisible preview caches and one old grown cache until prepared transfer; shader visibility uses `ColorLookupPreviewReady`.
-- [ ] Reoffer a bounded latest display request after unrelated source metadata changes without changing the opening target token or restoring older metadata.
-- [ ] Qualify actual host before/after-preparation gates, intermediate/latest ordering, cancellation/close/reopen/device/shutdown, faults and off-owner retirement.
+- [x] Reoffer a bounded latest display request after unrelated source metadata changes without changing the opening target token or restoring older metadata. Retain the preceding ticket until its acknowledgement; the later request rebuilds current sibling metadata with the same panel opening/settings sequence.
+- [x] Qualify the named actual-host slice: 14 main-route, two admission and two shutdown checks pass in current Debug r267 and real ASan r270 on the same 867-input source. This includes latest-sequence coalescing, before/after-preparation device recovery, Cancel/reopen, source reoffer, maximum-record publication, faults and worker retirement.
+- [ ] Finish remaining admission and acceptance proof: complete histogram/preview/retirement overlap, refusal/overflow and changing-headroom boundaries, continuous settings and remaining failure/retry interleavings. The two blocker-based admission cases prove their bounded wait/resume/cancel state transitions.
+  Earlier checkpoint evidence follows; its source and failures remain preserved.
   The first actual host cases are integrated. Primary review corrected display-versus-committed readback,
   immutable fault configuration and the real Cancel acknowledgement before reopen. Device/shutdown,
   large-metadata and full acceptance coverage remain open.
@@ -30,7 +33,7 @@
   temporary WinSta0 desktop, closed after its child exited, and process-scoped `MSBUILDDISABLENODEREUSE=1`.
   The unchanged forced-rebuild `build.ps1` analysis entrypoint reached compiler diagnostics, then exited 1.
   Source repairs for in-place color results, heap path scratch, test splitting/array bounds and exact HRESULT
-  comparisons remain pending analysis and runtime qualification. The candidate has no passing current full
+  comparisons remained pending analysis and runtime qualification at that checkpoint. That candidate had no passing full
   matrix. Active-desktop G1/Release ETW remains an independent requirement.
 - [x] r31 default-desktop Debug analysis passes all five images, SAL controls, ISA/PDB/scanner gates and provenance on the repaired source; its complete archive is independently verified. Full Debug/Release/ASan runtime and ARM64 cross-build qualification remain open.
 - [x] Earlier 754-input candidate's fresh Debug full runtime passes every preceding control, all 99 publication and 18 actual-host controls; its three ARM64 cross-builds pass. These precede the current HWND fix and do not qualify it; current Debug/Release/static-analysis/ARM64 qualification remains open.
@@ -44,9 +47,18 @@
 - [x] Preserve build-only ASan r46 (exit 0; not analysis), focused runtime failures r47/r48 (clipboard errors 1418; archives independently verified), and read-only native diagnostics r49/r50. The concurrent null-owner scope failure and distinct-owner busy/close behavior are reproduced; the original r47/r48 actor remains unidentified.
 - [x] Complete full x64 ASan Debug `test.ps1` r51 after the worker-owned clipboard scope change: actual exit 0; all 146 clipboard-transfer checks; unchanged 8,980 application controls and 78 ordered stages; 6,491 document controls; crash, ASan-detection, ISA and other test gates pass; all 1,028 archive copies independently verified.
 - [x] Current Debug static analysis r52 passes after replacing constant template switches with `if constexpr`; all 17 fixture `Expect` expressions and all 983 whole-file expressions retain identical multisets. No production, golden, scanner, threshold or suppression changes.
-- [ ] Qualify the HWND fix with the current Debug, Release, static-analysis and ARM64 cross-build matrix, then complete immutable-root integration, native activation, owning contracts and measured due G1 rows. The ASan r51 pass alone does not satisfy this row.
+- [x] Finish the current exact-source matrix: full Debug r267, Release r268, real ASan r270,
+  Release analysis r271 and all three ARM64 r38 cross-builds pass with independently verified archives.
+  Old HWND receipts qualify their original snapshots only.
+- [ ] Finish native immutable-root/display activation, remaining owning-contract reconciliation and measured G1.
 
-**Current status: ACTIVE.** Fresh full Release r37 qualifies the fixture-isolated candidate, with exact
+**Current status: ACTIVE managed candidate.** The 18 named color-display host checks independently match in
+full Debug r267, Release r268 and real ASan r270 on 867 frozen inputs, hash
+`0236021DC5A19194AA4AC527FF628A7980A131A78D2A7337C7E40A5D157E75E4`. ARM64 r38 cross-builds pass all
+three configurations on that source; Release analysis r271 also passes. Native activation, complete
+admission accounting and G1 remain open. See the [current integration record](../../TestRuns/P1CloneReadback_2026-10-06.md).
+
+**Historical qualification:** Fresh full Release r37 qualifies the fixture-isolated candidate, with exact
 6,491 document / 8,980 application controls and 78 stages. Its 754 inputs and all archive copies are verified.
 ASan Debug r38 subsequently failed three `clipboard-delayed` controls (overall exit 1); its original archive is
 preserved and independently verified. ARM64 Debug/Release/ASan Debug r39–r41 each cross-built successfully on

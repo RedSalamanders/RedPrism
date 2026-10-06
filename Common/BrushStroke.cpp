@@ -1189,8 +1189,17 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
 }
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings,
-                                 bool maskWhite)
+                                 bool maskWhite, std::optional<Vec2> capturedCloneOffset)
 {
+    if (capturedCloneOffset && (kind != BrushKind::Clone || !_document || !composite || !composite->HasStorage() ||
+                                composite->Format() != RasterFormat::Bgra8888 ||
+                                composite->Width() != _document->width || composite->Height() != _document->height ||
+                                !std::isfinite(capturedCloneOffset->x) || !std::isfinite(capturedCloneOffset->y) ||
+                                std::round(capturedCloneOffset->x) < (std::numeric_limits<int>::min)() ||
+                                std::round(capturedCloneOffset->x) > (std::numeric_limits<int>::max)() ||
+                                std::round(capturedCloneOffset->y) < (std::numeric_limits<int>::min)() ||
+                                std::round(capturedCloneOffset->y) > (std::numeric_limits<int>::max)()))
+        return false; // Refuse captured input before resolving a gradient or touching alignment/history.
     if (_brushOpening == UINT64_MAX)
         return false;
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
@@ -1221,12 +1230,17 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     std::wstring editName;
     if (kind == BrushKind::Clone)
     {
-        const std::optional<Vec2> offset = CloneStrokeOffset(point);
+        const std::optional<Vec2> offset = capturedCloneOffset ? capturedCloneOffset : CloneStrokeOffset(point);
         if (!offset.has_value())
         {
             return false;
         }
-        sample = CloneSample(composite);
+        // The admitted host retains the event-time offset and a complete committed composite. Later live
+        // source/settings changes cannot reinterpret that accepted stroke. Direct callers retain their reference.
+        if (capturedCloneOffset)
+            sample = *composite;
+        else
+            sample = CloneSample(composite);
         if (!sample->HasStorage())
         {
             return false;

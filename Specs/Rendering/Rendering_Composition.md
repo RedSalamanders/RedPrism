@@ -291,8 +291,10 @@ terminal acknowledgement. Current private Debug qualification is recorded in
 
 Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
 through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Settled
-New-mode All Layers wand also uses this path as specified above. Add/Subtract and live-context wand plus
-Clone Stamp composition remain synchronous callers. Eyedropper and Alt-tool sampling use the admitted 1×1 graph,
+New-mode All Layers wand also uses this path as specified above. Eligible settled Clone All Layers input uses
+the detached full-document readback with captured offset and settings; its original reservation survives in
+the adopted live sample until worker retirement. Add/Subtract and live-context wand and remaining direct/live
+Clone Stamp composition retain synchronous paths. Eyedropper and Alt-tool sampling use the admitted 1×1 graph,
 with current actual caller/profile qualification and remaining work scoped in the sampler record. Clipboard readback and transfer use their worker
 graphs; prefill/inspection retries and final transfer/publication sequencing remain governed by the clipboard
 contract. Synchronous readback remains the diagnostic numeric reference; application-wide nonblocking readbacks

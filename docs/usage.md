@@ -85,6 +85,12 @@ matches what the canvas shows.
 | Space (held) | Pan; types a space in a text field, or presses a control reached by keyboard (Tab) instead |
 | Escape | Focus chrome |
 
+With Clone Stamp set to All Layers, after choosing a source with Alt-click, you can press and drag while the
+source image is preparing; your movement and release are kept. Zoom remains available during preparation.
+After releasing the stroke, hold Space and drag to pan while the source finishes preparing.
+Escape cancels before any pixels or undo history are published. If pointer capture is lost, the accepted part of
+the stroke is kept.
+
 ## Settings, crash reports and languages
 
 RedPrism keeps its settings in `%LocalAppData%\RedPrism\settings.json` (`settings.debug.json` for Debug builds), a

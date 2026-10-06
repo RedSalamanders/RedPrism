@@ -795,6 +795,18 @@ body/default targets are required. Missing/unknown/duplicate/overlapping or PE-m
 Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
 and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
 
+The 119 `isa-compact-signed-rcx-byte-remap.*` controls independently prove the compact disp32/MOVSXD variant:
+the unsigned imm8 guard, identical stack displacement, eight contiguous PE/listing rows, same-owner table
+symbols, valid body/default targets and an exact terminal or interior bound. For an interior table, the next
+same-owner anonymous symbol must be exactly the four-byte alignment of the guard-derived byte-table end,
+inside the same procedure. Only the exact zero-to-three-byte standard NOP alignment is accepted; those padding
+bytes receive no table exemption. Four valid padding lengths and ten independently malformed interior forms
+cover this additional boundary. The positive matrix includes maxima
+1, 67 and 127 with three displacements each; missing, duplicate, unknown, overlapping and mismatched rows,
+invalid bounds/owners/symbols/indices/targets and real body/adjacent VEX/EVEX are separate refusals.
+The archived r260 and r265 images additionally have independent literal PE/PDB byte proofs. No object, address or runtime
+allowance exempts the newly recognized encoding; its full configuration matrix remains required.
+
 `IsaRdiBaseByteRemapTests.ps1` adds 57 synthetic controls for Release OnCommand's RDI image-base remap:
 seven accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
 table row proved from PE bytes) and 50 refusals. The exact nine-row unsigned guard/CDQE/base/byte-and-DWORD
@@ -909,6 +921,29 @@ All x64 builds run the PE/PDB-attributed VEX/EVEX gate and compiled passing/fail
 not native execution. Pre-AVX execution under Intel SDE remains optional and must be recorded if performed.
 
 ### Job input and progress policies (P0.6b)
+
+`document.captured-clone-offset.*` pins independent BGRA source/target/untouched-neighbor pixels, captured
+offset/composite selection despite later live settings, one Clone Stamp entry, and refusal of missing, empty,
+wrong-size, Gray8, nonfinite or integer-overflow captured sources without document/history/alignment changes.
+The registered WARP `clone-readback.*` host cases exercise actual pointer admission and replay: success,
+cancellation while a copied worker is held, detached failure, capture allocation failure, stale authority,
+one device recovery, exhaustion of the total two-restart allowance, physical capture loss while readback is
+held, and a live stroke after readback retirement. Independent actual owners also shut down with a copied
+worker held or an adopted live stroke; the original live sample charge survives owner graphics detachment
+and retires only after the session's final worker releases the draft. Joined shutdown checks preserved
+document/history, cancelled receipts, MTA aggregate retirement, exact zero charge and no surviving sink.
+They retain literal source pixels and Undo/Redo expectations, verify view input while held, exact original
+capture/ticket/charge, no hidden Present, and full off-owner aggregate and reservation retirement. The live
+sample case checks that the original admission remains charged after the utility job retires. Timing and
+other live-context callers remain separate P1 requirements. Sampler transparent-tail failure diagnostics
+report actual receipt, slot/sequence/color and foreground values without changing its literal expectation.
+Three additional actual pointer cases start a separate physical Space pan after the original Clone producer
+is sealed. They preserve its FIFO, ordinal, ticket and source through completion, capture loss or cancellation;
+later pan Move/Up publishes no extra paint/history. The 12 readback modes total 81 named checks; independent
+shutdown owners add 14. The 15 `clone-input-policy.*` checks establish literal Alt-source selection without
+readback/history, mask refusal, event-time Shift continuation from the prior endpoint, exact red/green pixels,
+one entry per Clone, Undo/Redo and missing-composite refusal. At zoom 1 the policy fixture aligns its document
+grid to whole client pixels after layout, so odd canvas extents cannot alter its literal pointer coordinates.
 
 HostTests covers one-active/latest-pending preview ownership, stale epochs and refinements, all eight continuation
 slots, refusal ownership, ring wrap, wand coalescing, shared stroke ordinals, cross-class history exclusion and

@@ -1639,6 +1639,7 @@ void Application::CancelHostContinuations() noexcept
 
 void Application::StopHostContinuations() noexcept
 {
+    _canvasPanLast.reset();
     CancelSamplerReadback();
     FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _startupPaths.reset();

@@ -3,7 +3,17 @@
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
 
-Latest qualified slice: actual All Layers Wand pre-copy device recovery and the compact imm8 switch-table
+Latest qualified slice: All Layers Clone source readback, retained source/shutdown ownership, separate physical
+Space pan and event-time Clone input policy pass full x64 Debug r267 / Release r268 / real ASan r270,
+Release analysis r271 and all three ARM64 r38 cross-builds on 867 identical inputs, freeze
+`0236021DC5A19194AA4AC527FF628A7980A131A78D2A7337C7E40A5D157E75E4`.
+Independent proofs preserve all predecessors and verify 10,158 named application controls / 92 stages,
+110 new host checks, 12 core checks and 119 compact signed switch-table controls. All archives verify.
+The failed earlier scanner, fixture, screenshot and compiler-heap attempts remain preserved. Ordinary
+single-layer Clone, other live callers, native/resource activation and the P1/G1 exit remain open. See the
+[Clone qualification record](../../TestRuns/P1CloneReadback_2026-10-06.md).
+
+Preceding qualified slice: actual All Layers Wand pre-copy device recovery and the compact imm8 switch-table
 proof pass full x64 Debug r253 / Release r251 / real ASan Debug r254, Release analysis r249 and all
 three ARM64 r35 cross-builds on 859 identical inputs, freeze
 `4BF043FD0FD64F7B2B3614269A75D8552CB7CD7EB097E5567192975E4449E637`.
@@ -24,6 +34,31 @@ The image-wrapper residency and original worker/upload transport step is fully q
 
 ## Delivery checklist
 
+- [ ] Next caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
+  choice in the fixed press context, use an admitted worker placement sample for the active layer, and
+  retain the original source charge through stroke/shutdown retirement. The reviewed ignored draft adds
+  50 functional, five allocation-failure and 16 shutdown controls; none is qualified until registered and run.
+- [ ] Qualify the supported prepared-folder selection/grouping route with actual host Undo/Redo and literal
+  hierarchy/pixel expectations. The nine-control reviewed draft does not define new multi-row UI semantics.
+- [x] Migrate eligible real Clone All Layers press to admitted tiled readback, retain its event-time offset/input and original reservation through stroke/sample retirement, and qualify literal pixels, ordering, cancellation, failure and device recovery. Sampler diagnostics preserve its literal expectation.
+  - [x] Add and qualify real capture-loss and independent shutdown coverage. Primary review found the shutdown cancellation
+    runner would retire the live Clone sample before final CPU stroke retirement; keep its original retained
+    charge through owner graphics detachment and destroy it after the session's final worker release. Current
+    r255 is the pre-repair diagnostic source and must not qualify this corrected lifetime boundary.
+  - [x] Corrected Clone slice passes full Debug r258 and independent predecessor/source/product verification:
+    865-input freeze `6C8B3AC4ADB319FB8E011092DF84F11E08707B281B8D8FF816795AD9C49C9084`, 10,116 named
+    application controls / 91 stages, 68 new host and 12 new core expectations. Verified archive has 1,143
+    copies. Release, real ASan, analysis and the complete ARM64 matrix remain due. See the
+    [Clone qualification record](../../TestRuns/P1CloneReadback_2026-10-06.md).
+  - [x] P1.4 view/input follow-up is implemented and qualified in the current complete matrix: a separate physical Space pan after Up coexists with the
+    sealed Clone FIFO and preserves its source ordinal. Full Debug r263 passes all 81 readback/pan and 15
+    input-policy controls after fixture grid alignment, preserving all literal expectations. Analysis r264
+    and all three ARM64 r37 cross-builds pass on its 867-input `AD5015…` freeze. These older receipts do not
+    qualify the later scanner repair; the complete current `023602…` matrix now passes.
+  - [x] Qualify the strict compact MOVSXD switch-table proof and its 119 independent controls. Original ASan
+    r260 and r265 refuse before application runtime; independent archived-PE/PDB proofs identify bounded
+    DWORD table data. The second image requires the exact interior-table boundary and alignment proof.
+    Focused parser controls and the complete repaired-source matrix pass; both failures remain preserved.
 - [ ] Reliability follow-up: diagnose Debug r247's sampler middle-color failure. The failed executable is byte-identical to passing r243, isolated r252 and full r253; r252/r253 preserve all 10,048 controls / 89 stages without relaxing the literal expectation, but no root cause is established. Preserve ASan r250's clipboard sequence failure and run full desktop/clipboard gates sequentially. See the [failure and reproduction record](../../TestRuns/P1WandReadbackRebind_2026-10-06.md).
 - [x] Repaired Wand source cross-compiles in ARM64 Debug/Release/ASan Debug r35 on 859 identical frozen inputs (`4BF043FD0FD64F7B2B3614269A75D8552CB7CD7EB097E5567192975E4449E637`); all three archives independently verify. This is no native runtime or P1 exit claim.
 - [x] Qualify the compact imm8 switch-table proof in the complete registered matrix. The unchanged 115 imm32 controls, 116 new imm8 controls, exact failed-image replay and independent literal PE proof pass. Full Debug r253, Release r251, real ASan r254, analysis r249 and ARM64 r35 pass on identical source; all predecessor controls and original failures are preserved. See the [record](../../TestRuns/P1WandReadbackRebind_2026-10-06.md).

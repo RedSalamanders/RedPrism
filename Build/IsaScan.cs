@@ -1601,6 +1601,92 @@ namespace RedPrismBuild
             return 0;
         }
 
+        // ASan accessibility uses the compact disp32 guard with MOVSXD instead of MOV EAX. The
+        // unsigned guard limits every surviving index to 0..maximum (maximum 1..127), so sign extension cannot produce a
+        // negative table offset. Corroborate the complete eight-row dispatch and exact remap count. An
+        // interior remap additionally needs the next same-owner anonymous symbol at its DWORD-aligned
+        // end and exact compiler NOP alignment bytes. That padding receives no table exemption.
+        private static ulong CompactSignedRcxByteIndexEnd(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, List<Function> procedures, Dictionary<ulong, int> dataSymbols,
+            ulong imageBase, ulong dispatch,
+            ulong begin, InlineTable dwordTable, Dictionary<ulong, DecodedInstruction> decoded,
+            List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows, out bool candidate)
+        {
+            candidate = false;
+            if (dispatch < imageBase + 22 || dispatch - imageBase > UInt32.MaxValue) return 0;
+            ulong prefix = dispatch - 22;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return 0; }
+            if (raw > pe.Length - 49) return 0;
+            candidate = StartsWithAt(pe, raw + 14, 0x48, 0x63, 0x84, 0x24);
+            if (guardRows.TryGetValue(prefix + 14, out byte[] indexRow) && indexRow.Length == 8 &&
+                StartsWith(indexRow, 0x48, 0x63, 0x84, 0x24)) candidate = true;
+            // The established imm32/MOVSXD form has the same final index row, but its comparison
+            // starts three bytes earlier. Let its existing proof handle that distinct encoding.
+            if (dispatch >= imageBase + 25 && raw >= 3 &&
+                guardRows.TryGetValue(prefix - 3, out byte[] longComparison) && longComparison.Length == 11 &&
+                StartsWith(longComparison, 0x81, 0xbc, 0x24) &&
+                MatchesDecodedPe(pe, sections, imageBase, prefix - 3, longComparison,
+                    contributions, decoded, decodedStarts))
+            {
+                candidate = false;
+                return 0;
+            }
+            if (!candidate || begin != dwordTable.End ||
+                !StartsWithAt(pe, raw, 0x83, 0xbc, 0x24) ||
+                !StartsWithAt(pe, raw + 8, 0x0f, 0x87) ||
+                !StartsWithAt(pe, raw + 14, 0x48, 0x63, 0x84, 0x24) ||
+                BitConverter.ToUInt32(pe, raw + 3) != BitConverter.ToUInt32(pe, raw + 18) ||
+                !StartsWithAt(pe, raw + 22, 0x48, 0x8d, 0x0d) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 25) != (long)imageBase ||
+                !StartsWithAt(pe, raw + 29, 0x0f, 0xb6, 0x84, 0x01) ||
+                checked(imageBase + BitConverter.ToUInt32(pe, raw + 33)) != begin ||
+                !StartsWithAt(pe, raw + 37, 0x8b, 0x84, 0x81) ||
+                checked(imageBase + BitConverter.ToUInt32(pe, raw + 40)) != dwordTable.Begin ||
+                !StartsWithAt(pe, raw + 44, 0x48, 0x03, 0xc1, 0xff, 0xe0)) return 0;
+            uint maximum = pe[raw + 7];
+            if (maximum == 0 || maximum >= 128) return 0;
+            int[] starts = { 0, 8, 14, 22, 29, 37, 44, 47 };
+            int[] lengths = { 8, 6, 8, 7, 8, 7, 3, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+            {
+                ulong address = prefix + (ulong)starts[i];
+                if (!guardRows.TryGetValue(address, out byte[] reported) || reported.Length != lengths[i] ||
+                    !MatchesDecodedPe(pe, sections, imageBase, address, reported, contributions, decoded, decodedStarts))
+                    return 0;
+            }
+            long defaultAddress = (long)prefix + 14 + BitConverter.ToInt32(pe, raw + 10);
+            if (defaultAddress < 0 || !dwordTable.Targets.Contains((ulong)defaultAddress)) return 0;
+            ulong end = checked(begin + maximum + 1);
+            foreach (Function procedure in procedures)
+            {
+                if (procedure.Module != dwordTable.Module ||
+                    procedure.ContributionBegin != dwordTable.ContributionBegin ||
+                    procedure.ContributionEnd != dwordTable.ContributionEnd || prefix < procedure.Begin ||
+                    dispatch >= dwordTable.Begin || dwordTable.Begin < procedure.Begin || procedure.End < end) continue;
+                if (procedure.End != end)
+                {
+                    ulong nextSymbol = 0;
+                    foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                        if (symbol.Value == dwordTable.Module && symbol.Key > begin && symbol.Key < procedure.End &&
+                            (nextSymbol == 0 || symbol.Key < nextSymbol)) nextSymbol = symbol.Key;
+                    ulong alignedEnd = checked((end + 3) & ~3UL);
+                    if (nextSymbol == 0 || nextSymbol != alignedEnd) continue;
+                    int paddingLength = checked((int)(alignedEnd - end));
+                    byte[] padding = paddingLength == 1 ? new byte[] { 0x90 } :
+                        paddingLength == 2 ? new byte[] { 0x66, 0x90 } :
+                        paddingLength == 3 ? new byte[] { 0x0f, 0x1f, 0x00 } : new byte[0];
+                    if (paddingLength != 0 && !MatchesPe(pe, sections, imageBase, end, padding)) continue;
+                }
+                bool allTargetsInside = true;
+                foreach (ulong target in dwordTable.Targets)
+                    if (target < procedure.Begin || target >= dwordTable.Begin) { allTargetsInside = false; break; }
+                if (allTargetsInside) return end;
+            }
+            return 0;
+        }
+
         // ASan menu/color-picker tracing uses a disp8 stack slot with an imm32 or sign-extended imm8
         // unsigned guard and a zero-extending
         // EAX load. Its remap ends at the exact procedure inside a larger contribution. Corroborate all
@@ -1747,6 +1833,15 @@ namespace RedPrismBuild
                     dispatch, begin, dwordTable, decoded, decodedStarts, guardRows, out bool compactCandidate);
                 if (compactCandidate && compactEnd == 0) return null;
                 if (compactEnd != 0) guardedEnd = compactEnd;
+                ulong compactSignedEnd = CompactSignedRcxByteIndexEnd(pe, sections, contributions, procedures, dataSymbols,
+                    imageBase, dispatch, begin, dwordTable, decoded, decodedStarts, guardRows,
+                    out bool compactSignedCandidate);
+                if (compactSignedCandidate && compactSignedEnd == 0) return null;
+                if (compactSignedEnd != 0)
+                {
+                    guardedEnd = compactSignedEnd;
+                    dwordTable.VerifyReportedBytes = true;
+                }
                 ulong disp8End = Disp8RcxByteIndexEnd(pe, sections, contributions, procedures, imageBase,
                     dispatch, begin, dwordTable, decoded, decodedStarts, guardRows, out bool disp8Candidate);
                 if (disp8Candidate && disp8End == 0) return null;
@@ -1809,7 +1904,8 @@ namespace RedPrismBuild
             for (int i = 0; i < indexLength; ++i)
                 if (pe[raw + i] >= entryCount) return null;
             return new InlineTable { Begin = begin, End = end, Module = dwordTable.Module,
-                ContributionBegin = dwordTable.ContributionBegin, ContributionEnd = dwordTable.ContributionEnd };
+                ContributionBegin = dwordTable.ContributionBegin, ContributionEnd = dwordTable.ContributionEnd,
+                VerifyReportedBytes = dwordTable.VerifyReportedBytes };
         }
 
         // The observed Release std::variant destruction dispatch: the index is a signed byte read from the object, so the

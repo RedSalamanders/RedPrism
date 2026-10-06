@@ -7,6 +7,7 @@
 #include "ChromeEvents.h"
 #include "ClipboardFingerprint.h"
 #include "ClipboardTransfer.h"
+#include "CloneReadbackState.h"
 #include "ColorEditWork.h"
 #include "CommandBindings.h"
 #include "ContinuationRequests.h"
@@ -61,6 +62,7 @@ struct ApplicationShutdownTestProbe;
 struct ApplicationProcessingTestProbe;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
+struct CloneReadbackTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
 struct HistoryResidencyTestGate;
@@ -125,6 +127,7 @@ class Application final : public ChromeEvents
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -242,6 +245,7 @@ class Application final : public ChromeEvents
         std::uint32_t background = 0xFFFFFFFFu;
         ShapeKind shape = ShapeKind::Rectangle;
         double cornerRadius = 0;
+        std::optional<Vec2> cloneOffset;
     };
     struct CanvasBrushSample final
     {
@@ -252,6 +256,7 @@ class Application final : public ChromeEvents
     };
     using CanvasBrushInput = PointerInputStream<CanvasBrushContext, CanvasBrushSample, 512>;
     [[nodiscard]] bool CanDeferCanvasBrush() const noexcept;
+    [[nodiscard]] bool RouteDeferredCanvasPan(const DxUi::PointerEvent& event, UINT message) noexcept;
     [[nodiscard]] EditorTool CapturedCanvasTool() const noexcept;
     [[nodiscard]] bool QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
     void RecordCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
@@ -261,7 +266,14 @@ class Application final : public ChromeEvents
     void ReplayCanvasBrush() noexcept;
     void RetireCanvasBrush(ContinuationOutcome outcome, std::uint64_t opening) noexcept;
     void BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
-                            const CanvasBrushContext* captured = nullptr) noexcept;
+                            const CanvasBrushContext* captured = nullptr,
+                            const Raster* cloneComposite = nullptr) noexcept;
+    class CloneReadbackJob;
+    [[nodiscard]] HRESULT StartCloneReadback(std::uint64_t opening) noexcept;
+    int RunCloneReadbackSelfTest() noexcept;
+    int RunCloneInputPolicySelfTest() noexcept;
+    std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> _canvasCloneSample;
+    std::shared_ptr<CloneReadbackTestGate> _cloneReadbackTestGate;
     void ContinueBrushStrokeAt(Vec2 pixel) noexcept;
     int RunCanvasBrushOpacitySelfTest() noexcept;
     int RunCanvasBrushCancellationSelfTest() noexcept;
@@ -1240,6 +1252,8 @@ class Application final : public ChromeEvents
     int _selectionExpandAmount = 1; // 1…DocumentSession::kSelectionModifyLimit
     int _selectionContractAmount = 1;
     bool _spacePan = false;
+    // A new physical pan may follow a sealed deferred paint path. View points never enter that paint FIFO.
+    std::optional<Vec2> _canvasPanLast;
     bool _acceleratorShift = false;
     CommandBindings _bindings;        // the effective binding table: catalog defaults and the settings' replacements
     bool _suppressCharacter = false;  // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing

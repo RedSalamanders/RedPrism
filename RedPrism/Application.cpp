@@ -2446,6 +2446,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCanvasBrushOpacitySelfTest\n");
     if (const int canvasBrush = RunCanvasBrushOpacitySelfTest(); canvasBrush != 0)
         return canvasBrush;
+    std::printf("BEGIN self-test.RunCloneReadbackSelfTest\n");
+    if (const int cloneReadback = RunCloneReadbackSelfTest(); cloneReadback != 0)
+        return cloneReadback;
+    std::printf("BEGIN self-test.RunCloneInputPolicySelfTest\n");
+    if (const int clonePolicy = RunCloneInputPolicySelfTest(); clonePolicy != 0)
+        return clonePolicy;
     std::printf("BEGIN self-test.RunCanvasBrushCancellationSelfTest\n");
     if (const int canvasCancellation = RunCanvasBrushCancellationSelfTest(); canvasCancellation != 0)
         return canvasCancellation;
@@ -3574,6 +3580,7 @@ void Application::Shutdown() noexcept
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
+             owner._canvasCloneSample.reset();
              // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
              // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
              owner._drag.emplace<std::monostate>();
@@ -3629,6 +3636,12 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Utility completions are suppressed by Close too. Its join is the acknowledgement for retained
+    // readback/export/merge/clone tickets; retire their exact history stamp only after producers/maps join.
+    if (_utilityStamp)
+        (void)_historyWork.Finish(_utilityStamp.value());
+    _utilityStamp.reset();
+    _utilityTicket.reset();
     // Close suppresses Completed callbacks. Its completed worker/retirement join acknowledges the sampler's
     // original record; clearing these earlier would let its borrowed source or opening retire before that join.
     assert(_samplerHostJob == nullptr);
@@ -3846,7 +3859,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP)
     {
         event.action = DxUi::PointerAction::Up;
-        if (GetCapture() == _window.get() && !(message == WM_RBUTTONUP && _canvasBrushInput.Sampling()))
+        if (GetCapture() == _window.get() &&
+            !(message == WM_RBUTTONUP && (_canvasBrushInput.Sampling() || _canvasPanLast)))
         {
             // A refused right gesture cannot release an admitted left path's capture. Its own left release
             // below ends that path; this release is not a capture loss.
@@ -3871,6 +3885,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     event.yPixels = static_cast<float>(point.y);
     if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    if (RouteDeferredCanvasPan(event, message))
+        return;
     if (_canvasBrushInput.Busy() && event.action != DxUi::PointerAction::Wheel)
     {
         const CanvasHole capturedHole = _chrome->HolePixels();
@@ -6951,30 +6967,36 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
 }
 
 void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
-                                     const CanvasBrushContext* captured) noexcept
+                                     const CanvasBrushContext* captured, const Raster* cloneComposite) noexcept
 {
     if (!_session.Document().has_value() || _session.PendingBrush() != nullptr)
     {
         return;
     }
-    // The stroke's coverage and its preview live on the current device.
-    BindCompositionDevice();
+    // Clone is image-only. Refuse a mask before preparing graphics or a committed source.
+    if (kind == BrushKind::Clone && _session.IsMaskSelected())
+        return;
     const bool couldPaint = _session.CanPaint();
-    if (kind == BrushKind::Clone && !_session.CloneStrokeOffset(pixel).has_value())
+    if (kind == BrushKind::Clone && !(captured && captured->cloneOffset) &&
+        !_session.CloneStrokeOffset(pixel).has_value())
     {
         ShowError(IDS_ERROR_CLONE_SOURCE);
         return;
     }
-    std::optional<Raster> composite;
-    if (kind == BrushKind::Clone && _session.cloneSettings.sampleAllLayers)
+    if (kind == BrushKind::Clone && !cloneComposite && _session.cloneSettings.sampleAllLayers)
     {
-        composite = WandComposite();
+        // Every host All Layers stroke requires its admitted source readback. A refused or unsupported
+        // input must not fall through to synchronous composition/readback on the owner.
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
     }
-    const Raster* sample = composite.has_value() ? &composite.value() : nullptr;
-    const auto begin = [this, kind, sample, captured](Vec2 point)
+    // The stroke's coverage and its preview live on the current device.
+    BindCompositionDevice();
+    const auto begin = [this, kind, cloneComposite, captured](Vec2 point)
     {
-        return captured ? _session.BeginBrush(point, kind, sample, captured->settings, captured->maskWhite)
-                        : _session.BeginBrush(point, kind, sample);
+        return captured ? _session.BeginBrush(point, kind, cloneComposite, captured->settings, captured->maskWhite,
+                                              captured->cloneOffset)
+                        : _session.BeginBrush(point, kind, cloneComposite);
     };
     bool begun = false;
     if ((modifiers & MK_SHIFT) != 0)

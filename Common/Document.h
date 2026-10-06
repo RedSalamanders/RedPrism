@@ -2488,7 +2488,10 @@ class DocumentSession
     // (`SetCloneSource`) and, with `cloneSettings.sampleAllLayers`, the host's composite of the visible canvas at
     // document size.
     bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite = nullptr);
-    bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings, bool maskWhite);
+    // A captured clone offset selects exactly the supplied committed BGRA canvas, without consulting later
+    // clone source/alignment/sample settings. Invalid captured input refuses before any live edit is resolved.
+    bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings, bool maskWhite,
+                    std::optional<Vec2> capturedCloneOffset = std::nullopt);
     // Alt-click: where Clone Stamp copies from. A new source starts a new alignment.
     void SetCloneSource(Vec2 point) noexcept;
     // The whole-pixel offset a stroke starting at `point` would copy with: aligned strokes keep the first

@@ -26,8 +26,10 @@ bool Application::CanDeferCanvasBrush() const noexcept
     // its own source/closure policy. The fixed context owns settings and an exact older color dependency.
     const auto tool = CapturedCanvasTool();
     const bool brush = tool == EditorTool::Brush || tool == EditorTool::Eraser;
+    const bool clone = tool == EditorTool::Clone && _session.cloneSettings.sampleAllLayers &&
+                       !KeyboardState::Held(VK_MENU) && !_session.IsMaskSelected() && _session.cloneSource;
     const bool colorTool = tool == EditorTool::Gradient || tool == EditorTool::Shape;
-    if ((!brush && !colorTool) || SamplesColor(tool) || _canvasBrushInput.Busy() || PointerBusy() ||
+    if ((!brush && !colorTool && !clone) || SamplesColor(tool) || _canvasBrushInput.Busy() || PointerBusy() ||
         (tool != EditorTool::Shape && !_session.CanPaint()) || !_session.ActiveLayerID() ||
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return false;
@@ -60,7 +62,7 @@ bool Application::CanDeferCanvasBrush() const noexcept
             return false;
         precedingInput = true;
     }
-    return precedingInput && (brush || samplerPending);
+    return clone || (precedingInput && (brush || samplerPending));
 }
 
 bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept
@@ -77,7 +79,7 @@ bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) n
         CapturedCanvasTool(),      CapturedCanvasTool() == EditorTool::Eraser ? BrushKind::Erase : BrushKind::Paint,
         _session.brushSettings,    _session.IsMaskSelected(),
         _session.maskPaintWhite};
-    if (!captured.mask && captured.tool != EditorTool::Eraser)
+    if (!captured.mask && captured.tool != EditorTool::Eraser && captured.tool != EditorTool::Clone)
         captured.sampledColor = CaptureSamplerColorDependency();
     captured.gradient = _session.gradientSettings;
     captured.foreground = _session.ForegroundColor();
@@ -86,6 +88,17 @@ bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) n
     captured.cornerRadius = _session.shapeCornerRadius;
     const CanvasBrushSample down{_viewport.DocumentFromView(view, DocumentSize()), event.modifiers,
                                  KeyboardState::Held(VK_MENU)};
+    if (captured.tool == EditorTool::Clone)
+    {
+        captured.kind = BrushKind::Clone;
+        const auto start = (event.modifiers & MK_SHIFT) != 0 ? _session.ShiftLineStart() : std::nullopt;
+        captured.cloneOffset = _session.CloneStrokeOffset(start.value_or(down.point));
+        if (!captured.cloneOffset)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(E_ABORT));
+            return true;
+        }
+    }
     const auto opening = ++_canvasBrushOpening;
     if (!_canvasBrushInput.Begin(opening, captured, down))
     {
@@ -139,6 +152,12 @@ bool Application::CancelCanvasBrush() noexcept
     // Cancellation owns the same admitted ordinal. Do not mutate a replayed transaction in a key callback,
     // drop its context before the selected owner retires, or wait for a physical Up that may never arrive.
     _canvasBrushCancelledOpening = _canvasBrushInput.Opening();
+    const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushCancelledOpening);
+    if (captured && captured->kind == BrushKind::Clone && _utilityTicket)
+    {
+        (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_utilityTicket.value());
+    }
     (void)_jobs.RequestUiActionSource(_continuationAction);
     return true;
 }
@@ -187,6 +206,8 @@ void Application::RetireCanvasBrush(HostOutcome outcome, std::uint64_t opening) 
         (void)_canvasBrushInput.Drop(opening);
     _canvasBrushReplayed = false;
     _canvasBrushSessionOpening.reset();
+    if (!_shutdownStarted)
+        _canvasCloneSample.reset(); // Shutdown retains this charge until the final worker retires the stroke.
     if (_canvasBrushCancelledOpening == opening)
         _canvasBrushCancelledOpening = 0;
 }
@@ -217,6 +238,13 @@ void Application::ReplayCanvasBrush() noexcept
     {
         FinishHostContinuation({HostOutcome::Stale, E_ABORT});
         return; // An accepted old path must never append to a replacement core stroke.
+    }
+    if (captured->kind == BrushKind::Clone && !_canvasBrushReplayed && !_canvasCloneSample)
+    {
+        const HRESULT result = StartCloneReadback(input->opening);
+        if (FAILED(result))
+            FinishHostContinuation({HostOutcome::Failed, result});
+        return; // The Down event stays in the original FIFO until complete readback acknowledges.
     }
     const auto event = _canvasBrushInput.Take(input->opening);
     if (!event)
@@ -320,7 +348,8 @@ void Application::ReplayCanvasBrush() noexcept
                 resolved.settings.green = static_cast<double>((argb >> 8) & 0xFFu) / 255.0;
                 resolved.settings.blue = static_cast<double>(argb & 0xFFu) / 255.0;
             }
-            BeginBrushStrokeAt(event->sample.point, event->sample.modifiers, captured->kind, &resolved);
+            BeginBrushStrokeAt(event->sample.point, event->sample.modifiers, captured->kind, &resolved,
+                               _canvasCloneSample ? &_canvasCloneSample->composite : nullptr);
         }
         _canvasBrushSessionOpening = _session.PendingBrushOpening();
         _canvasBrushReplayed = _canvasBrushSessionOpening.has_value();
@@ -359,4 +388,37 @@ void Application::ReplayCanvasBrush() noexcept
     }
     if (_canvasBrushInput.PendingCount() != 0)
         (void)_jobs.RequestUiActionSource(_continuationAction);
+}
+bool Application::RouteDeferredCanvasPan(const DxUi::PointerEvent& event, UINT message) noexcept
+{
+    const bool starts = !_canvasPanLast && message == WM_LBUTTONDOWN && _spacePan && _canvasBrushInput.Busy() &&
+                        !_canvasBrushInput.Sampling() && _canvasBrushReceipt.Read().outcome == HostOutcome::Pending &&
+                        !(_canvasLifetime && _canvasLifetime->presenting) &&
+                        std::holds_alternative<std::monostate>(_drag);
+    if (!_canvasPanLast && !starts)
+        return false;
+    if (event.action == DxUi::PointerAction::Wheel)
+        return false;
+    const auto hole = _chrome->HolePixels();
+    const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
+    if (starts)
+    {
+        if (view.x < 0 || view.y < 0 || view.x >= hole.width || view.y >= hole.height)
+            return false;
+        _canvasPanLast = view;
+        _frameInvalidated = true;
+        return true;
+    }
+    if (event.action == DxUi::PointerAction::Move)
+    {
+        const Vec2 delta{view.x - _canvasPanLast->x, view.y - _canvasPanLast->y};
+        _canvasPanLast = view;
+        _viewport.Translate(delta);
+        SyncView();
+    }
+    else if (message == WM_LBUTTONUP || event.action == DxUi::PointerAction::Leave)
+        _canvasPanLast.reset();
+    else if (event.action == DxUi::PointerAction::Down)
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+    return true; // This physical view gesture never appends samples to the older, sealed paint FIFO.
 }

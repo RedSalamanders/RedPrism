@@ -285,6 +285,15 @@ allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 
+The eligible host Clone All Layers readback reserves the complete tiled output, immutable document retirement
+bound and bounded job/payload metadata before source capture or GPU recording. Copied bytes detach from the
+utility targets before worker completion. On current-only adoption, a `SharedRetainedMemoryLease` transfers
+that same reservation into the live clone sample graph, without a second admission. The lease is declared
+before all pixel/document owners and released last, after aggregate worker retirement following stroke finish,
+cancel or stale drop. A finished readback job therefore does not expose uncharged live clone source bytes.
+No partial source is published; device recovery keeps the original capture/ticket and total two-restart limit.
+This source-readback slice does not establish bounded owner painting or first-display upload.
+
 The managed H3 candidate seals a `DocumentHistory::StorageIndex` of owning unique entries, raster storage and
 selections. Its worker clones containers, diffs changed-entry membership and samples distinct owners; Undo/Redo
 transfer unchanged entry membership between stacks. This is not a measured delta-cost guarantee. Live identities

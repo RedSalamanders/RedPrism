@@ -558,6 +558,20 @@ composite)`; the kernels, the tile composition and the warp model live in
   `CloneSamplePoint(point)` is where the crosshair sits; `CloneSample(composite)` is what a stroke copies from at
   document size (the active layer's pixels as placed, or the host's composite, required for All Layers). A stroke
   without a source does not start. Records `Clone Stamp`. Never on a mask.
+  The eligible settled host All Layers press captures its whole-pixel offset and tip settings at pointer press,
+  queues pointer samples in the original continuation ordinal, and obtains the committed composite through
+  admitted tiled readback before beginning the stroke. Later live source/alignment/All Layers settings cannot
+  reinterpret this accepted input. The explicit captured-offset `BeginBrush` overload requires a complete BGRA8
+  composite of exactly the document dimensions and finite offsets rounding within the integer range; invalid
+  captured input refuses before gradient resolution, alignment changes or history. Direct core callers retain
+  the original `CloneSample` behavior. Cancellation, stale document authority and readback failure publish no
+  Clone pixels or history. A host All Layers stroke without its admitted composite refuses before graphics
+  preparation; it cannot fall back to synchronous readback. Alt-click changes only the source; mask targets
+  refuse before source capture. After the recorded paint producer closes, a new Space pan owns separate view
+  coordinates, survives readback completion and cannot append paint samples or change the original ordinal.
+  Physical pan loss ends the view gesture while the already sealed paint prefix remains queued.
+  This migration covers source readback; stroke painting/commit and the remaining
+  live-context routes still require their P1 ownership and timing qualification.
 - **Smear** (`smearMode`: Liquify default, Blur, Smudge). Blur is a brush stroke that paints `BlurSample(mask)`, the
   layer (or its mask, with its edge tone beyond its pixels; `RenderMaskPixels` samples a placed mask the same way
   `RenderLayerPixels` samples a layer, nearest included) softened by sigma = diameter / 10 clamped to 1.5–30,

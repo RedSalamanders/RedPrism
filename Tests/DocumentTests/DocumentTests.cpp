@@ -18,6 +18,7 @@
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
 #include "DistortWorkTests.h"
+#include "Document.Tests.CapturedCloneOffset.h"
 #include "Document.h"
 #include "DocumentDraftTests.h"
 #include "DocumentFixtureTests.h"
@@ -8208,6 +8209,7 @@ int wmain(int argc, wchar_t** argv)
     TestBrushSelectionClip();
     TestSpotHealing();
     TestCloneStamp();
+    gFailures += RunDocumentTestsCapturedCloneOffset();
     TestBlurTool();
     TestSmearWarp();
     TestGradientTool();

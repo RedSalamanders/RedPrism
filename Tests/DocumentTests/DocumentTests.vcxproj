@@ -77,6 +77,7 @@
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
+    <ClInclude Include="Document.Tests.CapturedCloneOffset.h" />
     <ClInclude Include="DuplicateOpeningLimitTests.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
@@ -188,6 +189,7 @@
     <ClCompile Include="CollapseRevisionTests.cpp" />
     <ClInclude Include="CollapseRevisionTests.h" />
     <ClCompile Include="DocumentTests.cpp" />
+    <ClCompile Include="Document.Tests.CapturedCloneOffset.cpp" />
     <ClCompile Include="DocumentLifecycleTests.cpp" />
     <ClCompile Include="DuplicateOpeningLimitTests.cpp" />
     <ClCompile Include="MaskEditWorkTests.cpp" />

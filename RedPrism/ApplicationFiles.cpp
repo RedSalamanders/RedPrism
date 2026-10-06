@@ -694,6 +694,7 @@ void Application::FinishPreparedDocumentReplacement() noexcept
     _sizeDialog.kind = SizeCardKind::None;
     CloseRenameCard();
     _drag = PointerDrag{};
+    _canvasPanLast.reset();
     _composition.EndStroke();
     if (_window && GetCapture() == _window.get())
     {
@@ -707,6 +708,7 @@ void Application::ReplaceDocument(CanvasDocument document, const std::optional<G
                                   std::wstring path) noexcept
 {
     SettleInteractions(false);
+    _canvasPanLast.reset();
     _session.ReplaceDocument(std::move(document), active);
     _documentPath = std::move(path);
     _viewport.followsFit = true;
@@ -863,6 +865,7 @@ bool Application::HonorsPointerLoss() const noexcept
 
 void Application::EndPointerInteractions() noexcept
 {
+    _canvasPanLast.reset();
     // Our close preflight's modal loop may release capture. Its Cancel answer must leave this edit live.
     if (_canvasLifetime && _canvasLifetime->presenting && _canvasBrushInput.Busy())
         return;
