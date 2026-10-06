@@ -34,7 +34,13 @@ each and their exact summaries: actual pointer row/mask selection, expander coll
 refusal while a real worker is held, retained-cache pressure/refusal, repeated refusal, actual accessible retry
 button input, duplicate suppression, continued view input, exact literal source/history and worker retirement.
 These source additions need the same normal-profile/private/predecessor/stage and archive proof before they are
-qualified. Drag/rename, client-reentrant UIA and largest-count/name owner cost remain separate gates.
+qualified. The edit extension adds 17 `application-prepared-layer-rows-edit.*` named state expectations and an
+exact summary in a separate hidden-WARP Application: stale held-worker drag/invocation refusal, literal group
+reorder through actual pointer input, leaf double-click Rename, typed characters/Enter after coherent Prepare,
+one rename undo preserving the reorder, exact stored BGRA/Gray8 bytes, worker retirement and filtered quit
+cleanup. Its registry and complete identical-source normal matrix must preserve all earlier controls/stages.
+Client-reentrant UIA and largest-count/name owner cost remain separate gates; these functional tests do not
+activate production prepared rows or establish their G1 latency.
 See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
 
 ### Producer input ordering primitives
@@ -1584,6 +1590,14 @@ separate P1 requirements. No RAW or Photoshop speed claim follows from these fun
 
 
 ### P1 dormant raster upload lifetime foundations
+
+Event-gated `gpu-raster-upload-job.queued-ack.*` holds the only worker after fill publication, queues the original
+cancelled acknowledgement, and delivers the real copy fence before that skipped stage can run. The original
+ticket/charge must survive the fence callback, literal copied pixels remain, and releasing the worker yields
+one Cancelled callback followed by zero remaining charges/receiver state. `queued-rows.*` holds the only worker
+before Map, queues cancellation, then delivers its mapped loan: the skipped stage must acknowledge that loan,
+perform no copy, preserve every literal guard byte, and retire the original charge exactly once. These
+independent producer-order expectations add to all existing controls; deadlines are failure bounds only.
 
 The managed source passes 41 independent worker reduction and 34 immutable layout controls, 88 opt-in
 scheduler terminal-acknowledgement controls, and 58 startup/123 fault/127 receiver controls on real WARP.

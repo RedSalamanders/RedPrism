@@ -16,6 +16,7 @@
 - [ ] Integrate and qualify actual drag/rename, reentrant accessibility and largest-count/name owner costs before live activation.
 - [ ] Integrate complete H4 display consumers and largest-fixture frame/ETW measurements; resolve G1 overruns.
 - [x] Commit and push the qualified dormant foundation as `2aa2a11`; preserve all parent P1 gates until proved.
+- [x] Commit and push the fully qualified pressure/retry/interaction extension as `e33ab7d`; preserve disabled production rows and every remaining P1 exit gate.
 
 Status: ACTIVE / repaired 843-input foundation and newer 845-input pressure/retry extension fully qualified. Remaining interactions, consumers and activation are open. Neither these functional matrices nor the private proofs establish G1, Native activation or P1 completion.
 
@@ -195,10 +196,16 @@ ASan r183 completes with exactly 7,994 worker-stress controls: all 7,922 predece
 - [x] Repair and prove the diagnostic label source without changing ISA rules; preserve the original rejection evidence.
 - [x] Complete strict full Debug r180, Release analysis r181 and all three ARM64 r23 cross-builds; independently verify every archive copy.
 - [x] Finish identical-source full Release r182 and real ASan r183 runtime, exact predecessor/control proof, worker stress and the actual sanitizer diagnostic.
-- [ ] Commit/push the fully verified pressure/retry extension; production prepared rows remain disabled.
+- [x] Commit/push the fully verified pressure/retry extension as `e33ab7decf85269df5177e5ef8241fe9421b4f7b` on `codex/p1-opacity-host-proof`; production prepared rows remain disabled.
 - [ ] Integrate the reviewed cheaper-agent drag/rename draft; qualify reentrant accessibility and largest-row/name costs separately.
 - [ ] Complete H4 consumers and the other parent P1 routes, Native activation and measured G1 before Done.
 
 Every current qualification child has exited and every archive has independently verified readback. The primary-reviewed cheaper-agent Edit draft retains 17 named checks and an exact summary; a checked Prepare now follows Rename opening before text/key input, and exact quit cleanup is present. Its current Caller source hash is `3FBC57B35D24AC71C6BE99586B22BA1645D16FDA88C223714BFE53C12A16117B`; it is still unregistered/unexecuted and gains no qualification from this pressure/retry matrix. Main integration needs only the new C++ file, static declaration, project entry and runner route, plus fresh registry/norm and full matrix proof; never copy older Caller headers or projects wholesale. Prepared helper r9/ARM driver r5 target a future successful r184 source and are not proof of that draft.
 
 Required source edits may resume after the r180/r181/r182/r183/r23 actual-exit/archive barriers. Documentation was excluded from the input freeze. The three frozen Native launcher helpers remain unchanged. The assigned cheaper agent is closed. No user application was terminated and no native ARM64 runtime, first-display G1, RAW or Photoshop performance result is claimed.
+
+Qualified source commit `e33ab7decf85269df5177e5ef8241fe9421b4f7b` is pushed and matches its upstream. Main is clean at this boundary. Native documentation records this commit separately; its pre-existing WIP index and ScopedTesting changes remain preserved outside this step's staging scope.
+
+## Drag/rename and queued acknowledgement step — 2026-10-06
+
+The subsequent [registered edit and GPU producer-ordering record](P1PreparedLayerRowsEdit_2026-10-06.md) qualifies all 17 edit +26 composition additions in the full identical-source Debug/Release/real ASan matrix, Release analysis and three ARM64 cross-builds. Its newer record supersedes the earlier unregistered-draft statements above. Accessibility reentrancy/charged ownership, complete consumers, Native activation and G1 remain open.

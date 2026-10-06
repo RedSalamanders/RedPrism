@@ -130,6 +130,7 @@ class Application final : public ChromeEvents
     static int RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;

@@ -863,6 +863,182 @@ void RunAwaitCopyCancellation()
            "await-copy.all-charges-and-receiver-state-cleared");
 }
 
+void RunAwaitCopyQueuedAcknowledgement()
+{
+    constexpr std::array<std::uint8_t, 16> pixels{7, 11, 13, 255, 17, 19, 23, 255, 29, 31, 37, 255, 41, 43, 47, 255};
+    constexpr std::uint64_t reservation = 1ULL << 20;
+    Device device;
+    GatedFixture fixture;
+    Observer observer;
+    Blocker blocker;
+    if (FAILED(device.Create()) || !device.device || !fixture.Initialize() || !fixture.Bind(device) ||
+        !observer.entered || !observer.release || !blocker.entered || !blocker.release)
+    {
+        Expect(false, "queued-ack.fixture");
+        return;
+    }
+    auto input =
+        Input(Layout(Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size()), 0, 0, 2, 2, 1, 16));
+    auto target = MakeTarget(device, 2, 2, DXGI_FORMAT_B8G8R8A8_UNORM, 83);
+    Expect(input && target, "queued-ack.fixtures-created");
+    if (!input || !target)
+        return;
+    Completion completion;
+    const auto closeFixture = wil::scope_exit(
+        [&]() noexcept
+        {
+            (void)SetEvent(observer.release.get());
+            (void)SetEvent(blocker.release.get());
+            fixture.Close();
+        });
+    fixture.owner.Pause();
+    auto concrete =
+        std::make_unique<ProbeJob>(fixture.scheduler, fixture.queue, std::move(input), target.get(), completion);
+    concrete->ObservePublication(Observer::Publication, &observer);
+    std::unique_ptr<Job> job = std::move(concrete);
+    JobTicket ticket{};
+    const bool submitted = Submit(fixture, job, reservation, true, ticket);
+    Expect(submitted, "queued-ack.submitted");
+    if (!submitted)
+        return;
+    const bool pending = Until(fixture.scheduler, [&]() noexcept { return fixture.queue.HasPending(); });
+    Expect(pending && fixture.queue.LentCount() == 0, "queued-ack.pending-before-map");
+    if (!pending)
+        return;
+    fixture.queue.Pump();
+    const bool held = WaitForEvent(fixture.scheduler, observer.entered.get());
+    Expect(held && fixture.queue.HasReady() && fixture.queue.LentCount() == 1,
+           "queued-ack.publication-held-before-copy");
+    if (!held)
+        return;
+    fixture.queue.Pump();
+    Expect(fixture.queue.InFlightCount() == 1 && fixture.queue.LentCount() == 0, "queued-ack.copy-fence-retained");
+
+    std::unique_ptr<Job> blockerJob = std::make_unique<BlockerJob>(blocker);
+    JobTicket blockerTicket{};
+    const bool blockerSubmitted =
+        fixture.scheduler.Submit(blockerJob, {JobClass::Background, 0, 0, false}, blockerTicket) == S_OK;
+    Expect(blockerSubmitted, "queued-ack.blocker-submitted");
+    if (!blockerSubmitted)
+        return;
+    (void)SetEvent(observer.release.get());
+    const bool blockerRunning = WaitForEvent(fixture.scheduler, blocker.entered.get());
+    Expect(blockerRunning, "queued-ack.worker-held-after-fill-stage-publication");
+    if (!blockerRunning)
+        return;
+    (void)DrainCompletions(fixture.scheduler);
+    Expect(fixture.scheduler.ReservedMemoryBytes() == reservation && completion.calls == 0,
+           "queued-ack.fill-stage-drained-before-cancellation");
+    const bool cancelled = fixture.scheduler.Cancel(ticket);
+    Expect(cancelled, "queued-ack.cancel-accepted");
+    if (!cancelled)
+        return;
+    const bool resumed = fixture.scheduler.Resume(ticket);
+    Expect(resumed, "queued-ack.terminal-stage-resume-accepted");
+    if (!resumed)
+        return;
+    (void)DrainCompletions(fixture.scheduler); // Promote cancellation while the only worker is held.
+    fixture.owner.Resume();
+    const bool fenceAcknowledged =
+        Until(fixture.scheduler, [&]() noexcept { return fixture.queue.InFlightCount() == 0; });
+    Expect(fenceAcknowledged && completion.calls == 0 && fixture.scheduler.ReservedMemoryBytes() == reservation,
+           "queued-ack.fence-ack-precedes-skipped-worker-and-preserves-ticket");
+    if (!fenceAcknowledged)
+        return;
+    const std::vector<std::uint8_t> expected(pixels.begin(), pixels.end());
+    Expect(TargetEquals(device, *target.get(), expected, 4), "queued-ack.pre-cancel-copy-pixels-preserved");
+    (void)SetEvent(blocker.release.get());
+    const bool settled = SettleJobs(fixture.scheduler, 10000) == SettleResult::Settled;
+    Expect(settled, "queued-ack.skipped-worker-ack-settled");
+    if (!settled)
+        return;
+    Expect(completion.calls == 1 && completion.ticket == ticket && completion.result.status == JobStatus::Cancelled &&
+               completion.reservedAtCallback == reservation,
+           "queued-ack.one-cancelled-callback-after-both-producers-ack");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == 0 && fixture.queue.LentCount() == 0 &&
+               fixture.queue.InFlightCount() == 0 && !fixture.queue.HasPending(),
+           "queued-ack.all-charges-and-receiver-state-cleared");
+}
+
+void RunPendingQueuedAcknowledgement()
+{
+    constexpr std::array<std::uint8_t, 16> pixels{7, 11, 13, 255, 17, 19, 23, 255, 29, 31, 37, 255, 41, 43, 47, 255};
+    constexpr std::uint64_t reservation = 1ULL << 20;
+    constexpr std::uint8_t guard = 89;
+    Device device;
+    GatedFixture fixture;
+    Blocker blocker;
+    if (FAILED(device.Create()) || !device.device || !fixture.Initialize() || !fixture.Bind(device) ||
+        !blocker.entered || !blocker.release)
+    {
+        Expect(false, "queued-rows.fixture");
+        return;
+    }
+    auto input =
+        Input(Layout(Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size()), 0, 0, 2, 2, 1, 16));
+    auto target = MakeTarget(device, 2, 2, DXGI_FORMAT_B8G8R8A8_UNORM, guard);
+    Expect(input && target, "queued-rows.fixtures-created");
+    if (!input || !target)
+        return;
+    Completion completion;
+    const auto closeFixture = wil::scope_exit(
+        [&]() noexcept
+        {
+            (void)SetEvent(blocker.release.get());
+            fixture.Close();
+        });
+    fixture.owner.Pause();
+    std::unique_ptr<Job> job =
+        std::make_unique<ProbeJob>(fixture.scheduler, fixture.queue, std::move(input), target.get(), completion);
+    JobTicket ticket{};
+    const bool submitted = Submit(fixture, job, reservation, true, ticket);
+    Expect(submitted, "queued-rows.submitted");
+    if (!submitted)
+        return;
+    const bool pending = Until(fixture.scheduler, [&]() noexcept { return fixture.queue.HasPending(); });
+    Expect(pending && fixture.queue.LentCount() == 0, "queued-rows.preparation-acknowledged-before-map");
+    if (!pending)
+        return;
+    std::unique_ptr<Job> blockerJob = std::make_unique<BlockerJob>(blocker);
+    JobTicket blockerTicket{};
+    const bool blockerSubmitted =
+        fixture.scheduler.Submit(blockerJob, {JobClass::Background, 0, 0, false}, blockerTicket) == S_OK;
+    Expect(blockerSubmitted, "queued-rows.blocker-submitted");
+    if (!blockerSubmitted)
+        return;
+    const bool blockerRunning = WaitForEvent(fixture.scheduler, blocker.entered.get());
+    Expect(blockerRunning, "queued-rows.only-worker-held");
+    if (!blockerRunning)
+        return;
+    const bool cancelled = fixture.scheduler.Cancel(ticket);
+    Expect(cancelled, "queued-rows.cancel-accepted");
+    if (!cancelled)
+        return;
+    const bool resumed = fixture.scheduler.Resume(ticket);
+    Expect(resumed, "queued-rows.terminal-stage-resume-accepted");
+    if (!resumed)
+        return;
+    (void)DrainCompletions(fixture.scheduler);
+    fixture.queue.Pump(); // Map arrives while the cancelled acknowledgement is queued behind the blocker.
+    Expect(fixture.queue.LentCount() == 1 && fixture.queue.InFlightCount() == 1 &&
+               fixture.scheduler.ReservedMemoryBytes() == reservation && completion.calls == 0,
+           "queued-rows.mapped-loan-and-ticket-retained-before-skipped-stage");
+    fixture.owner.Resume();
+    (void)SetEvent(blocker.release.get());
+    const bool settled = SettleJobs(fixture.scheduler, 10000) == SettleResult::Settled;
+    Expect(settled, "queued-rows.skipped-stage-acknowledges-loan-and-settles");
+    if (!settled)
+        return;
+    const std::vector<std::uint8_t> expected(16, guard);
+    Expect(completion.calls == 1 && completion.ticket == ticket && completion.result.status == JobStatus::Cancelled &&
+               completion.reservedAtCallback == reservation && fixture.queue.MapAttemptsForTest() == 1 &&
+               TargetEquals(device, *target.get(), expected, 4),
+           "queued-rows.one-cancelled-callback-and-no-copy");
+    Expect(fixture.scheduler.ReservedMemoryBytes() == 0 && fixture.queue.LentCount() == 0 &&
+               fixture.queue.InFlightCount() == 0 && !fixture.queue.HasPending(),
+           "queued-rows.all-charges-and-receiver-state-cleared");
+}
+
 void RunHeldRowCancellation(unsigned int heldRow)
 {
     constexpr std::array<std::uint8_t, 32> pixels{1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16,
@@ -1146,6 +1322,8 @@ int RunGpuRasterUploadJobTests()
     RunEarlyRefusals();
     RunProducerSkippedCancellation();
     RunPendingCancellation();
+    RunAwaitCopyQueuedAcknowledgement();
+    RunPendingQueuedAcknowledgement();
     RunAwaitCopyCancellation();
     RunHeldRowCancellation(2);
     RunHeldRowCancellation(4);

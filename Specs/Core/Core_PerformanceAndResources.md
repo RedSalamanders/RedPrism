@@ -394,6 +394,12 @@ owners until acknowledgement and skips further Run work. One ready-only owner pu
 outer loops; in-flight work alone MUST NOT make `HasUiWork` true or cause polling. Its event callbacks share the
 existing 32-registration wait pool with memory pressure, rather than creating another pool/thread.
 
+GPU upload acknowledgement and a cancelled worker acknowledgement may complete in either order. A mapped-row
+or fence callback arriving while the original cancelled stage is queued/running/completed MUST retain that
+same record and reservation; it cannot require a second successful Resume. Final apply waits for both producer
+acknowledgements. Cancelled stages never restart useful pixel work, and an acknowledged pre-cancellation copy
+is not rolled back by lifetime cleanup.
+
 One registered host UI-action source has a borrowed stable lifetime and an allocation-free coalesced readiness
 flag, independent of the eight ordinary action slots. Registration alone is idle. A ready source prevents idle
 waiting, wakes the same scheduler event and shares the one-action-per-pass bound with queued actions, alternating

@@ -2,14 +2,16 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: qualify actual prepared-row pointer interactions and explicit retry under memory pressure; then complete first-display consumers, remaining P1 callers and measured latency gates.
+Current work: complete real-client accessibility notification/reentrancy and charged reader lifetime, then large-count/name costs, first-display consumers, remaining P1 callers and measured latency gates.
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
 ([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
 
-- [x] Current prepared-row extension fully qualified: full Debug r180, Release r182 and real ASan r183 plus strict private/predecessor/registry proof pass all 18 interaction +18 retry controls (9,943 application controls /83 stages). Release analysis r181 and ARM64 r23 cross-builds pass on the same 845 frozen inputs; every archive copy verifies. Actual sanitizer diagnosis and 7,994 stress controls are preserved. Earlier r179 ISA failure remains archived; scanner rules are unchanged. Drag/rename/UIA/cost, complete consumers, Native activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
+- [x] Qualify the repaired drag/rename and upload acknowledgement step: full Debug r193, Release r194 and real ASan r191, strict r12, Release analysis r192 and all three ARM64 r25 cross-builds pass on 846 identical frozen inputs. All 17 edit plus 26 new producer-ordering controls and every predecessor are preserved; original failures and all archive copies are verified ([record](../../TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md)). Production activation and G1 remain open.
+
+- [x] Current prepared-row extension fully qualified and pushed as `e33ab7d`: full Debug r180, Release r182 and real ASan r183 plus strict private/predecessor/registry proof pass all 18 interaction +18 retry controls (9,943 application controls /83 stages). Release analysis r181 and ARM64 r23 cross-builds pass on the same 845 frozen inputs; every archive copy verifies. Actual sanitizer diagnosis and 7,994 stress controls are preserved. Earlier r179 ISA failure remains archived; scanner rules are unchanged. Drag/rename/UIA/cost, complete consumers, Native activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
 
 - [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.

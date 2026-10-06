@@ -355,7 +355,9 @@ void GpuRasterUploadJob::WritableRowsReady(JobTicket ticket, GpuUploadRows rows)
     _rows = rows;
     _phase = Phase::Filling;
     const bool resumed = _scheduler.Resume(ticket);
-    assert(resumed);
+    // Cancellation may already have queued its skipped worker acknowledgement. That same producer will
+    // acknowledge this mapped loan in DeferRetirement; it must not acquire a second resume or reservation.
+    assert(resumed || _cancellation.IsCancelled());
     (void)resumed;
 }
 
@@ -368,7 +370,9 @@ void GpuRasterUploadJob::UploadFinished(JobTicket ticket, HRESULT result) noexce
     {
         _phase = _phase == Phase::AwaitMip ? Phase::AfterMip : Phase::AfterChunk;
         const bool resumed = _scheduler.Resume(ticket);
-        assert(resumed);
+        // A queued/running/completed skipped cancellation stage consumes this queue acknowledgement when
+        // its final completion drains. Its record still owns us; Resume correctly refuses that second wake.
+        assert(resumed || _cancellation.IsCancelled());
         (void)resumed;
     }
     // Filling has not yet acknowledged its scheduler producer. Its terminal-retirement hook observes this
