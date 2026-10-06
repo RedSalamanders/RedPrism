@@ -43,3 +43,25 @@ Debug strict r13 passes: 7,654 host, 7,197 document, 1,694 composition and 9,960
 - Qualify real embedded providers, delayed foreign readers, same-ID replacement, post-close release, exhaustion/retry, full names, locale/selection behavior and large-count owner/frame cost; then finish complete display/utility consumers and all other P1 exits.
 
 Primary-reviewed adapter and actual-provider/10,000-row test drafts are preserved under the managed `.build/prepared-layer-rows-draft-r1/`; they are not compiled or activated. The existing [P1 checklist](../Plans/WIP/UiNeverBlocks_2026-09-22.md) and [H4 checklist](../Plans/WIP/BoundedRasterUploads_2026-10-05.md) retain their open requirements.
+
+## Follow-up: ASan finished; repaired consumer source integrated
+
+The earlier scope and table above describe the original 848-input source before repair. ASan r197 subsequently
+finished with exit 0, actual child 96756, from `2026-10-06T05:16:50.854528+00:00` to
+`2026-10-06T05:31:57.123490+00:00`. All 1,124 archived copies read back identically; original completion SHA256
+`FC6A0F5B2EA75028BCA1D137D0B243CFC9A35B89BD4AAF9A3138C8B20DCA96F9`.
+Strict r13 passes every predecessor and all 8,052 worker-stress controls. The actual expected sanitizer
+heap-use-after-free diagnostic is preserved with SHA256
+`0817B5208ACB5C7F8CEEDAEAE8F4649D9187F64D63301426A975482376BA1B67`;
+its supplement receipt is `00A3F841F7C2175B35F5043A8780543EDB83EB2A1722DBA737138244130F78FD`.
+This result qualifies the original runtime source; analysis r198 remains failed.
+
+After actual child exit and archive readback, the primary added the explicit fail-fast slot bound, the full-graph
+`PreparedLayerRows` consumer, and the qualified library pin `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4`. The new
+consumer is a source draft, not a passed run. Application, Chrome and UIA snapshots share its original admission
+until final graph destruction and owner acknowledgement. Tests now include full 10,000-row/offscreen names,
+same-ID replacement, delayed fresh MTA reads after Application destruction, and actual 64-epoch retained-slot
+exhaustion/refusal/explicit retry. The separately reviewed queued shape redraw host fixture is also integrated.
+Formatting checks 730 files; all 15 repository skill validators pass before the new build. Production remains
+disabled, and the complete consumer matrix, embedded notification/reentrancy, owner cost, H4/G1 and other P1
+requirements remain open.

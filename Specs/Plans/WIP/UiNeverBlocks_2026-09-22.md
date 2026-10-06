@@ -10,7 +10,7 @@ The image-wrapper residency and original worker/upload transport step is fully q
 ## Delivery checklist
 
 - [x] Qualify and push optional prepared Tree accessibility in DxUi as `5f1ccdb`: all x64 profiles, real ASan detection, three ARM64 cross-builds, real native MTA notification/root replacement, embedded lifetime and paired common-scene gates pass. RedPrism pin/adoption and G1 remain open ([record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md)).
-- [ ] Complete the shared retained-memory/consumer step: Debug r195, Release r196 and ARM64 r26 pass on 848 frozen inputs; analysis r198 exposes an unproved slot bound, with the exact failed run archived. ASan r197 is active. Repair and requalify before marking this slice complete; production remains disabled.
+- [ ] Complete the shared retained-memory/consumer step: Debug r195, Release r196, real ASan r197 and ARM64 r26 pass on the original 848 frozen inputs; analysis r198 exposes an unproved slot bound and is archived unchanged. The explicit bound repair, shared consumer at qualified DxUi 5f1ccdb, 10,000-row provider/MTA lifetime, 64-epoch exhaustion/retry and queued shape redraw fixtures are integrated in the managed source, pending compilation and requalification. Production remains disabled.
 
 - [x] Qualify the repaired drag/rename and upload acknowledgement step: full Debug r193, Release r194 and real ASan r191, strict r12, Release analysis r192 and all three ARM64 r25 cross-builds pass on 846 identical frozen inputs. All 17 edit plus 26 new producer-ordering controls and every predecessor are preserved; original failures and all archive copies are verified ([record](../../TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md)). Production activation and G1 remain open.
 
