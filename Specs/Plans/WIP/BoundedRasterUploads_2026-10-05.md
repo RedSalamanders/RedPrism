@@ -2,6 +2,9 @@
 
 ## Implementation checklist
 
+- [x] Qualify and push optional prepared Tree accessibility in DxUi as `5f1ccdb`: all x64 profiles, real ASan detection, three ARM64 cross-builds, real native MTA notification/root replacement, embedded lifetime and paired common-scene gates pass. RedPrism pin/adoption and G1 remain open ([record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md)).
+- [ ] Complete the shared retained-memory/consumer step: Debug r195, Release r196 and ARM64 r26 pass on 848 frozen inputs; analysis r198 exposes an unproved slot bound, with the exact failed run archived. ASan r197 is active. Repair and requalify before marking this slice complete; production remains disabled.
+
 - [ ] U5 chrome: prepare immutable hierarchy rows/localized labels/ID lookup on a worker under complete metadata/source admission; preserve collapse/locale/source authority and atomically adopt. Qualify actual pinned DxUi notification/layout/accessibility costs and largest layer-count G1.
   - [x] Primary-reviewed private CPU preparation passes 42 literal/max-count/depth/name/formatting/sparse/admission/cancellation/off-owner retirement checks. Published lookup uses at most 14 binary-search iterations, each with one equality and at most one ordering comparison, including adversarial hash collisions. This establishes no normal or chrome qualification.
   - [x] Primary-reviewed private scheduler accounting passes 59 transfer/exact-callback/refusal/token reuse/capacity/admission-wakeup/Close checks. Successful callback transfer preserves the original reservation with no second admission; 64 retained slots remain charged while useful jobs are idle. Primary regression reproduces and repairs foreign/progress/pump/custom-apply transfers; old controls remain unchanged.

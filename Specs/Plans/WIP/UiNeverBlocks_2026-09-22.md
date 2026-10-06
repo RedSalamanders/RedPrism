@@ -2,12 +2,15 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: complete real-client accessibility notification/reentrancy and charged reader lifetime, then large-count/name costs, first-display consumers, remaining P1 callers and measured latency gates.
+Current work: the optional DxUi library step is qualified and pushed; finish the shared-reader scheduler bounds repair and consumer adoption, then large-count/name costs, first-display consumers, remaining P1 callers and measured latency gates.
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
 ([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
+
+- [x] Qualify and push optional prepared Tree accessibility in DxUi as `5f1ccdb`: all x64 profiles, real ASan detection, three ARM64 cross-builds, real native MTA notification/root replacement, embedded lifetime and paired common-scene gates pass. RedPrism pin/adoption and G1 remain open ([record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md)).
+- [ ] Complete the shared retained-memory/consumer step: Debug r195, Release r196 and ARM64 r26 pass on 848 frozen inputs; analysis r198 exposes an unproved slot bound, with the exact failed run archived. ASan r197 is active. Repair and requalify before marking this slice complete; production remains disabled.
 
 - [x] Qualify the repaired drag/rename and upload acknowledgement step: full Debug r193, Release r194 and real ASan r191, strict r12, Release analysis r192 and all three ARM64 r25 cross-builds pass on 846 identical frozen inputs. All 17 edit plus 26 new producer-ordering controls and every predecessor are preserved; original failures and all archive copies are verified ([record](../../TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md)). Production activation and G1 remain open.
 
