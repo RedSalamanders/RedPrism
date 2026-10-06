@@ -187,7 +187,7 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
                "original-receipt-acknowledged-and-no-idle-rearm");
         expect(gate->publications.load() == (mode == Mode::Success ? 1u : 0u), name,
                "stale-cancelled-and-failed-candidates-cannot-publish");
-        expect(bool(_preparedLayerRows) == published && bool(_layerRowsMemory) == published &&
+        expect(bool(_preparedLayerRows) == published && bool(_layerRowsCacheTicket) == published &&
                    (_jobs.ReservedMemoryBytes() != 0) == published,
                name, "active-cache-retains-the-original-memory-charge");
         if (mode != Mode::CancelBeforeCapture)
@@ -227,11 +227,11 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
                        name, "actual-pinned-tree-localized-hidden-mask-target-semantics");
             }
             const auto cache = _preparedLayerRows.get();
-            const auto memory = _layerRowsMemory;
+            const auto memory = _layerRowsCacheTicket;
             const auto syncs = _chrome->SyncCountersForTest().layerRows;
             SyncPreparedLayerRows();
             SyncPreparedLayerRows();
-            expect(_preparedLayerRows.get() == cache && _layerRowsMemory == memory && !_layerRowsTicket &&
+            expect(_preparedLayerRows.get() == cache && _layerRowsCacheTicket == memory && !_layerRowsTicket &&
                        _chrome->SyncCountersForTest().layerRows == syncs,
                    name, "settled-sync-reuses-borrowing-and-accounting-with-zero-row-writes");
         }
@@ -242,7 +242,7 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
         ClearPreparedLayerRows();
         if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
             return 5;
-        expect(!_preparedLayerRows && !_layerRowsMemory && _jobs.ReservedMemoryBytes() == 0 &&
+        expect(!_preparedLayerRows && !_layerRowsCacheTicket && _jobs.ReservedMemoryBytes() == 0 &&
                    _jobs.ReleasingMemoryBytes() == 0 && _chrome->LayerRowItemForTest(0).id == 0,
                name, "clear-detaches-borrowing-before-complete-worker-retirement");
         _layerRowsTestGate.reset();
@@ -275,7 +275,7 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
     SyncPreparedLayerRows();
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
         return 5;
-    expect(_preparedLayerRows && _preparedLayerRows->Rows().size() == 1 && _layerRowsMemory &&
+    expect(_preparedLayerRows && _preparedLayerRows->Rows().size() == 1 && _layerRowsCacheTicket &&
                _chrome->LayerRowItemForTest(0).text == L"Survivor",
            "deleted-folders", "remembered-collapse-ids-do-not-disable-the-actual-pinned-tree");
     expect(_session.history.CurrentRevision() == deletedRevision && _session.history.UndoCount() == deletedUndo,
@@ -283,7 +283,7 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
     ClearPreparedLayerRows();
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
         return 5;
-    expect(!_layerRowsMemory && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0,
+    expect(!_layerRowsCacheTicket && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0,
            "deleted-folders", "surviving-list-cache-retires-with-no-accounting-leak");
     std::printf("%s layer-rows-host.summary checks=%u failures=%d\n", failures ? "FAIL" : "PASS", checks, failures);
     return failures ? 5 : 0;

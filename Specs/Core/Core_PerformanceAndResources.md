@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-06
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -539,6 +539,48 @@ old cache's final handle queues its complete graph on the worker release lane. Q
 queueing may the exact retained ticket be released once. Close performs owner detach while the sink/pool are
 live, joins complete retirement before final MTA teardown, and invalidates residual tokens. Tokens own
 accounting, never source lifetime.
+
+Shared immutable CPU sources use a move-only `SharedRetainedMemoryLease` inside their shared graph. It transfers
+the exact original successful callback reservation through the same 64-slot pool, without a second admission,
+memory query or allocation. An occupied output, wrong callback, cancelled/failed job or exhausted pool refuses
+the transfer and preserves the job's original charge. The graph's final destruction must precede lease reset.
+Before Close, owner-final destruction of a complete large graph uses the retirement sink; foreign-final
+destruction may destroy that pure CPU graph directly. A lease publishes one generation-checked acknowledgement
+after destruction, and the next owner drain releases the reservation before retrying waiting admissions. Merely
+dropping the active cache while old readers remain cannot release its charge. Held leases do not create useful
+pending work or periodic wakes; acknowledgement readiness is event-driven and bounded to occupied slots.
+
+The acknowledgement endpoint is preallocated at scheduler initialization and owns a duplicate of the wake event,
+not a borrowed handle or scheduler/Application pointer. Endpoint live-graph bytes remain recorded while foreign
+readers survive Close or scheduler destruction; final release may touch only that independent endpoint. Close
+does not wait for a foreign reader, and no late acknowledgement can release another scheduler's reservation or a
+reused slot generation. `ResidentBytes` reports live shared graph bytes; owner admission remains charged until
+acknowledgement consumption. `ReservedMemoryBytes` and `ReleasingMemoryBytes` can overlap while an owner-retired
+graph is queued and its original lease is still awaiting acknowledgement; diagnostics MUST NOT add these values as
+disjoint totals. The existing owner-only `RetainedMemoryTicket` API remains available for caches whose lifetime is
+owner-confined. This primitive is an experimental foundation; the prepared layer/accessibility consumer adoption
+below remains a disabled draft until its full consumer matrix and H4/G1 gates pass.
+
+#### Experimental prepared layer/accessibility graph
+
+The current consumer draft uses one immutable `PreparedLayerRows` shared owner for the Application cache, Chrome
+Tree model and DxUi UIA snapshots. The prepared semantic source covers the complete current visible model epoch,
+including offscreen rows and their full localized names. DxUi's optional capture retains this existing owner only;
+it does not traverse, copy or reconstruct the rows. The wrapper/control-block allocation has an explicit bounded
+allocator and its allowance is included in the original admission before construction.
+
+The exact successful job reservation transfers to the graph's shared lease during owner completion. Replacing the
+cache or detaching Chrome does not release the reservation while any snapshot/provider/CPU reader retains the graph.
+When the final release occurs on the owner while the scheduler is live, the complete graph is queued to the worker
+retirement sink; destruction finishes before lease acknowledgement lets the owner release the original reservation.
+A foreign CPU reader may be the final owner after Application shutdown or scheduler destruction: the lease holds an
+independent acknowledgement endpoint with its own wake handle, so final graph destruction can acknowledge without
+accessing the scheduler or Application. Scheduler shutdown does not wait for that foreign reader. The endpoint keeps
+live graph bytes observable until final destruction. While the scheduler is live, its original reservation remains
+charged until the owner consumes acknowledgement; after Close, the scheduler ledger is gone while the independent
+endpoint continues tracking the live graph. These are source-level draft properties, not consumer
+qualification: production remains disabled, and the full RedPrism matrix, client-reentrant UIA, actual UIA latency,
+largest-count/name owner cost, activation and G1 remain open.
 
 Cache-replacement jobs opt out of memory waiting (`JobOptions::allowMemoryWaiting = false`); ordinary jobs retain
 the default event-driven waiting policy. An insufficient replacement peak finishes once with `E_OUTOFMEMORY`

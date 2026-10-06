@@ -8,6 +8,7 @@
 #include "Document.h"
 #include "EditorTool.h"
 #include "LayerRowsWork.h"
+#include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "TransformOverlay.h"
 
@@ -496,10 +497,11 @@ class ChromeHost final : public CommandIds
     void SetTool(EditorTool tool) noexcept;
     // `maskTargeted`: the active layer's mask is the target, so its row's Mask badge shows in the accent (RF-907).
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted);
-    // Borrowed immutable worker result. The publisher holds its exact admitted ticket/source reservation until
-    // this view is replaced or cleared; clear before retiring that owner or joining workers. No row traversal,
-    // string formatting, pixel access or large last-owner destruction is performed by this publication.
-    void SetPreparedLayers(const LayerRowsWork* rows, const std::optional<Guid>& active, bool maskTargeted);
+    // Share the admitted immutable epoch with the publisher and accessibility snapshots. Its original charge
+    // survives replacement while any reader remains; final graph retirement acknowledges it. Publication does
+    // no row traversal, string formatting, pixel access or complete owner-thread graph destruction.
+    void SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows, const std::optional<Guid>& active,
+                           bool maskTargeted);
     void SetPreparedLayerRetry(bool available) noexcept;
     void SetPreparedLayerInteraction(bool enabled) noexcept;
 
@@ -706,6 +708,11 @@ class ChromeHost final : public CommandIds
     // The Move tool header's Flip Horizontal button, for a self-test click; empty while hidden.
     [[nodiscard]] D2D1_RECT_F FlipHorizontalBoundsDipForTest() const noexcept;
     [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
+    [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> PreparedLayerAccessibilityForTest()
+        const noexcept
+    {
+        return _treeModel.CapturePreparedAccessibilityRows();
+    }
     [[nodiscard]] bool MenuItemGrayedForTest(int command) const noexcept;
     // 0 none, 1 layers tree, 2 splitter, 3 shortcuts, 4 notice, 5 adjust, 6 picker, 7 overlay, 8 other.
     [[nodiscard]] int HitKindForTest(float xPixels, float yPixels) noexcept;
@@ -806,7 +813,8 @@ class ChromeHost final : public CommandIds
         explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
         ChromeEvents& events;
         std::vector<HierarchyEntry> rows;
-        const LayerRowsWork* preparedRows = nullptr; // borrowed from the publisher's still-live admitted job
+        std::shared_ptr<const PreparedLayerRows>
+            preparedRows; // same admitted immutable epoch as the publisher and snapshots
         bool preparedMode = false;
         [[nodiscard]] std::span<const HierarchyEntry> RowsView() const noexcept
         {
@@ -839,6 +847,11 @@ class ChromeHost final : public CommandIds
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
+        [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> CapturePreparedAccessibilityRows()
+            const noexcept override
+        {
+            return preparedMode ? preparedRows : std::shared_ptr<const PreparedLayerRows>{};
+        }
         void OnTreeSelectionChanged(uint64_t itemId) override;
         void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;
         void OnTreeItemInvoked(uint64_t itemId) override;

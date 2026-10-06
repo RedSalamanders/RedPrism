@@ -411,8 +411,8 @@ int Application::RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) 
 
     owner->Shutdown();
     expect(owner->_shutdownComplete && owner->_jobs.WorkerCount() == 0 && owner->_jobs.ReservedMemoryBytes() == 0 &&
-               owner->_jobs.ReleasingMemoryBytes() == 0 && !owner->_preparedLayerRows && !owner->_layerRowsMemory &&
-               gate->retired.load() && gate->retiredOffOwner.load(),
+               owner->_jobs.ReleasingMemoryBytes() == 0 && !owner->_preparedLayerRows &&
+               !owner->_layerRowsCacheTicket && gate->retired.load() && gate->retiredOffOwner.load(),
            "closeout", "shutdown-joins-worker-clears-borrow-and-retires-input-off-owner");
     MSG quit{};
     const bool quitRemoved = PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE;

@@ -326,12 +326,17 @@
     <ClCompile Include="..\Common\LayerRowsWork.cpp" />
     <ClInclude Include="..\Common\LayerRowsWork.h" />
     <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
+    <ClCompile Include="PreparedLayerRows.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsAccessibilityTests.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsNotificationTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsBoundaryTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsInteractionTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsRetryTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsEditTests.cpp" />
     <ClInclude Include="LayerRowsTestGate.h" />
+    <ClInclude Include="PreparedLayerRows.h" />
+    <ClInclude Include="../Tests/Support/PreparedLayerRowsStressFixture.h" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationClipboardJobs.cpp" />
     <ClCompile Include="ApplicationClipboardTests.cpp" />
@@ -383,6 +388,7 @@
     <ClCompile Include="ApplicationDuplicateGesture.cpp" />
     <ClCompile Include="ApplicationDuplicateGestureTests.cpp" />
     <ClCompile Include="ApplicationTransformTests.cpp" />
+    <ClCompile Include="ApplicationTransformShapeRedrawTests.cpp" />
     <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
     <ClCompile Include="ApplicationTransformPreviewTests.cpp" />
     <ClCompile Include="ApplicationTransformPolicyTests.cpp" />

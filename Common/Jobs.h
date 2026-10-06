@@ -75,6 +75,41 @@ struct RetainedMemoryTicket final
     [[nodiscard]] bool operator==(const RetainedMemoryTicket&) const noexcept = default;
 };
 
+// Move-only reservation ownership embedded in a shared immutable CPU graph. Destroy/reset only after the
+// graph's last readable bytes have been destroyed. A foreign final release publishes one fixed-slot
+// acknowledgement; the owner returns admission capacity on its next drain. The endpoint and its owned wake
+// handle survive scheduler Close, without retaining a scheduler, HWND, document or graphics resource.
+class SharedRetainedMemoryLease final
+{
+  public:
+    SharedRetainedMemoryLease() noexcept = default;
+    ~SharedRetainedMemoryLease();
+    SharedRetainedMemoryLease(const SharedRetainedMemoryLease&) = delete;
+    SharedRetainedMemoryLease& operator=(const SharedRetainedMemoryLease&) = delete;
+    SharedRetainedMemoryLease(SharedRetainedMemoryLease&& other) noexcept;
+    SharedRetainedMemoryLease& operator=(SharedRetainedMemoryLease&& other) noexcept;
+    void Reset() noexcept;
+    [[nodiscard]] explicit operator bool() const noexcept
+    {
+        return bool(_state);
+    }
+    [[nodiscard]] std::uint64_t Bytes() const noexcept
+    {
+        return _bytes;
+    }
+    // Diagnostics of live shared graphs at this endpoint, including after Close. Owner admission continues
+    // to charge acknowledged graphs until its drain consumes the generation-checked acknowledgement.
+    [[nodiscard]] std::uint64_t ResidentBytes() const noexcept;
+
+  private:
+    struct State;
+    std::shared_ptr<State> _state;
+    std::size_t _slot = 64;
+    std::uint64_t _generation = 0;
+    std::uint64_t _bytes = 0;
+    friend class JobScheduler;
+};
+
 enum class JobNoticeKind
 {
     Submitted,
@@ -201,6 +236,9 @@ class JobScheduler final
     // reservation without a new admission/query/allocation. Fixed-capacity cache records do not count as
     // pending useful work; an otherwise settled scheduler stays idle while their bytes remain charged.
     [[nodiscard]] std::int32_t RetainMemory(JobTicket job, RetainedMemoryTicket& retained) noexcept;
+    // Same exact successful-callback transfer and same 64-slot capacity; no new query/allocation/admission.
+    // The lease itself is unique, while its containing immutable graph may have shared foreign readers.
+    [[nodiscard]] std::int32_t RetainMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
     // Owner only, once the borrowed cache is detached and its whole graph is queued for worker retirement.
     // The release sink's in-flight bytes then protect admission until destruction is acknowledged. Close's
     // owner hook performs this cleanup before final worker retirement; Close invalidates residual tickets.

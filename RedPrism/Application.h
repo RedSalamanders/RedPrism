@@ -55,6 +55,7 @@
 #pragma warning(pop)
 
 class ChromeHost;
+class PreparedLayerRows;
 struct UiBenchmarkState;
 struct ApplicationShutdownTestProbe;
 struct ApplicationProcessingTestProbe;
@@ -131,6 +132,9 @@ class Application final : public ChromeEvents
     static int RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsNotificationSelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -745,6 +749,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool RestoreTransformOpening() noexcept;
     void ExecuteLayerNudge(Vec2 offset) noexcept;
     int RunTransformWorkSelfTest() noexcept;
+    int RunTransformShapeRedrawSelfTest() noexcept;
     int RunDuplicateGestureSelfTest() noexcept;
     int RunTransformPolicySelfTest() noexcept;
     struct TransformPreviewRequest final
@@ -1022,8 +1027,9 @@ class Application final : public ChromeEvents
     HistoryWork _historyWork;
     HistoryResidencySource _historyResidencySource{*this};
     LayerRowsSource _layerRowsSource{*this};
-    LayerRowsWork::Handle _preparedLayerRows;
-    std::optional<RetainedMemoryTicket> _layerRowsMemory;
+    std::shared_ptr<const PreparedLayerRows> _preparedLayerRows;
+    // Publication identity only. The shared graph itself owns its original retained-memory lease.
+    std::optional<JobTicket> _layerRowsCacheTicket;
     std::optional<LayerRowsKey> _layerRowsPublishedKey;
     std::optional<LayerRowsKey> _layerRowsRequestedKey;
     std::optional<JobTicket> _layerRowsTicket;

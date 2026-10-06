@@ -115,6 +115,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RetainedJobMemoryTests.cpp" />
+    <ClCompile Include="SharedRetainedJobMemoryTests.cpp" />
+    <ClInclude Include="SharedRetainedJobMemoryTests.h" />
     <ClInclude Include="RetainedJobMemoryTests.h" />
     <ClCompile Include="HostTests.cpp" />
     <ClCompile Include="OwnerWorkMultiplexerTests.cpp" />

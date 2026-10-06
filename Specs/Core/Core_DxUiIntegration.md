@@ -1,7 +1,7 @@
 # DxUi integration
 
 Status: current normative consumer contract
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-06
 Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Build/DxUiOutputPath.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
@@ -13,15 +13,22 @@ Library behavior remains in DxUi's own contracts. Splitter, ColorPicker, and Num
 
 ## Pin and restore
 
-`Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, commit
-`271bd54be24eadf3f03ba5221d1be7be069860f2`, API revision 3, and lock target `["DxUi"]`. That commit is the merge of
-[DxUi pull request 45](https://github.com/RedSalamanders/DxUi/pull/45) on `main` (API revision 3, the registered window
-messages, the 150-character tracked-path budget), 153 commits after the previous pin. The previous pin is the rollback:
-`c403052bad26c97ba23995e136672c32c85ccbfc`, API revision 2, the merge of
-[pull request 19](https://github.com/RedSalamanders/DxUi/pull/19) (tree row drag reports one drop; splitter drag survives
-sibling layout). Rolling back restores the lock, the constant `$requiredApiRevision` in `restore-dxui.ps1` (the one place that
-names the revision this code is written against; the pinned `capabilities.json` must carry it) and the two Tree model
-names in `ChromeHost.h`. `build.ps1` runs
+`Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit
+`cd645ea2375725ed7a899bb6e681ef41d0a3000d`, API revision 3, and lock target `["DxUi"]`. Its full library Debug suite
+passes; remaining library and consumer profiles are still due. Internal embedded property-event providers keep weak
+control identity and read the coherent current snapshot; public row providers retain their original source.
+Structure invalidation uses a bounded coalesced delivery slot and a GIT-marshalled provider proxy on an MTA while
+the public provider retains its STA contract. The slot holds no historical row snapshot; owner disconnect revokes
+registration without joining delivery. The property-only predecessor `36c0ff66bd7574038ed2e255f79847a81bf054c7`
+passes the library matrix but stalls the real consumer callback inline on its owner (r211). The preceding library commit
+`5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` adds the optional prepared Tree accessibility source described below while
+keeping API revision 3; because the public C++ interface changed, the consumer MUST rebuild DxUi and RedPrism from
+matching headers and library. This library result does not qualify the RedPrism consumer draft. The nearest rollback is
+`271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3; it retains the existing Tree reorder callback but
+does not provide the prepared accessibility-row interface. A rollback changes the lock but leaves
+`$requiredApiRevision` at 3. The consumer adapter must also return to legacy Tree accessibility capture: remove the
+optional prepared-source include and `CapturePreparedAccessibilityRows()` override (and the wrapper's implementation
+of that optional interface) before rebuilding against the rollback headers/library. `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
@@ -109,10 +116,24 @@ Facts about the pinned library that the host designs around (verified against th
 - `Toggle` paints a switch regardless of `ButtonVariant::IconOnly`; a latched tool button is an icon-only `Button`
   with `SetPressedVisual(true)`.
 - Icon-only buttons draw their text with `FontRole::Icon` (Segoe Fluent Icons); Latin letters do not render there.
-- `Tree` reports expander toggles through `ITreeDelegate::OnTreeToggleExpanded` and has no drag API.
+- `Tree` reports expander toggles through `ITreeDelegate::OnTreeToggleExpanded`. When reorder is enabled,
+  `SetReorderEnabled` reports one completed row drag through `ITreeDelegate::OnTreeReorder`; DxUi does not move the
+  model. API revision 3 also has this callback at the nearest rollback pin.
+- The qualified commit adds `ITreeModel::CapturePreparedAccessibilityRows()` as an optional source for the current
+  visible-model epoch, including offscreen rows. Its default returns null and preserves legacy capture. A non-null
+  `IPreparedTreeAccessibilityRows` source is already prepared: capture only retains its shared owner, while
+  `GetCount`, `GetItem` and `FindItem` are bounded, allocation-free reads. DxUi's UIA snapshot retains that owner
+  through provider reads and replacement. The interface addition leaves the numeric API revision at 3, but a
+  consumer MUST rebuild against the matching DxUi library.
 - `Splitter` hit-tests only its separator plus 2 DIP of slop; the host sizes it over both panes and places the pane
   controls itself from the committed position. `NumericStepper` and `ColorPicker` are Panels with their own children;
   `ColorPicker` ships no strings, so every caption comes from the RedPrism STRINGTABLE.
+
+RedPrism's prepared layer-row/accessibility integration remains an experimental consumer draft with its production
+flag false. Its current source shares one immutable admitted `PreparedLayerRows` owner across Application, Chrome and
+UIA snapshots; the consumer matrix, client-reentrant UIA behavior, actual UIA latency, largest-count/name owner cost,
+production activation and G1 remain open. Do not infer consumer qualification or P1 completion from the passed DxUi
+library matrix.
 
 DxUi C++ stays inside `RedPrism.exe`. Never pass DxUi types, STL, WIL, or exceptions across a future plugin ABI.
 

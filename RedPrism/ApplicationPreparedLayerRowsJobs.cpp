@@ -2,6 +2,7 @@
 
 #include "ChromeHost.h"
 #include "LayerRowsTestGate.h"
+#include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "resource.h"
 
@@ -20,7 +21,7 @@ struct RowsInput final : DeferredReleaseNode
     CanvasDocument source;
     std::vector<Guid> collapsed;
     std::wstring pattern;
-    LayerRowsWork::Handle rows;
+    std::shared_ptr<PreparedLayerRows> rows;
     std::shared_ptr<LayerRowsTestGate> gate;
     DWORD ownerThread = 0;
     RowsInput() noexcept
@@ -113,13 +114,8 @@ void Application::ClearPreparedLayerRows() noexcept
         _chrome->SetPreparedLayers(nullptr, std::nullopt, false);
         _chrome->SetPreparedLayerRetry(false);
     }
-    _preparedLayerRows.reset(); // Queue the entire active source/name graph before returning its reservation.
-    if (_layerRowsMemory)
-    {
-        if (!_jobs.ReleaseRetainedMemory(_layerRowsMemory.value()))
-            std::terminate();
-        _layerRowsMemory.reset();
-    }
+    _preparedLayerRows.reset(); // The complete shared graph keeps its lease until final retirement.
+    _layerRowsCacheTicket.reset();
     _layerRowsPublishedKey.reset();
 }
 
@@ -135,7 +131,7 @@ void Application::SyncPreparedLayerRows() noexcept
     // selection. Document replacement clears the borrowed model before any younger interaction can see it.
     const bool sameDocument =
         _layerRowsPublishedKey && _layerRowsPublishedKey->documentSerial == current.documentSerial;
-    _chrome->SetPreparedLayers(sameDocument ? _preparedLayerRows.get() : nullptr, _session.ActiveLayerID(),
+    _chrome->SetPreparedLayers(sameDocument ? _preparedLayerRows : nullptr, _session.ActiveLayerID(),
                                _session.IsMaskSelected());
     _chrome->SetPreparedLayerInteraction(same);
     _chrome->SetPreparedLayerRetry(_layerRowsRetryAvailable && !same && !_layerRowsTicket);
@@ -205,8 +201,10 @@ class Application::LayerRowsJob final : public Job
                     return held;
             }
         }
-        _input->rows = LayerRowsWork::Prepare(std::move(_input->source), std::move(_input->collapsed),
-                                              std::move(_input->pattern), _admission, context.cancellation);
+        auto rows = LayerRowsWork::Prepare(std::move(_input->source), std::move(_input->collapsed),
+                                           std::move(_input->pattern), _admission, context.cancellation);
+        _input->rows =
+            PreparedLayerRows::Create(std::move(rows), _admission.Bytes() + PreparedLayerRows::OwnershipAllowance());
         if (_gate && _gate->holdAfterPrepare)
         {
             const auto held = HoldForTest(context);
@@ -262,21 +260,20 @@ class Application::LayerRowsJob final : public Job
             _owner._layerRowsTicket.reset();
         if (result.status == JobStatus::Finished && SUCCEEDED(_captureError) && Current() && _input && _input->rows)
         {
-            RetainedMemoryTicket retained;
-            if (SUCCEEDED(_owner._jobs.RetainMemory(_ticket, retained)))
+            if (SUCCEEDED(_input->rows->BindMemory(_owner._jobs, _ticket)))
             {
+                if (!_input->rows->SealForPublication())
+                    std::terminate();
                 auto previous = std::move(_owner._preparedLayerRows);
-                const auto priorMemory = _owner._layerRowsMemory;
                 _owner._preparedLayerRows = std::move(_input->rows);
-                _owner._layerRowsMemory = retained;
+                _owner._layerRowsCacheTicket = _ticket;
                 _owner._layerRowsPublishedKey = _key;
                 if (_gate)
                     _gate->publications.fetch_add(1);
                 _input->bytes = sizeof(RowsInput) + 64 * 1024; // Source/rows moved to the separately charged cache.
                 _owner.SyncPreparedLayerRows(); // Swap borrowing before any old rows lose their final owner.
                 previous.reset();
-                if (priorMemory && !_owner._jobs.ReleaseRetainedMemory(priorMemory.value()))
-                    std::terminate();
+                // Old snapshot readers keep the old original reservation until its complete graph retires.
                 _owner._frameInvalidated = true;
             }
         }
@@ -343,7 +340,8 @@ void Application::LayerRowsSource::Pump() noexcept
     }
     const auto admission = LayerRowsAdmission::Estimate(
         document.value(), std::as_const(_owner._session).CollapsedGroupIDs().size(), _owner._layerRowsHiddenPattern);
-    constexpr auto overhead = sizeof(LayerRowsJob) + sizeof(RowsInput) + 64 * 1024;
+    const auto overhead =
+        sizeof(LayerRowsJob) + sizeof(RowsInput) + PreparedLayerRows::OwnershipAllowance() + 64 * 1024;
     if (!admission.IsValid() || admission.Bytes() > (std::numeric_limits<std::uint64_t>::max)() - overhead)
     {
         _owner.ReportLayerRowsFailure();

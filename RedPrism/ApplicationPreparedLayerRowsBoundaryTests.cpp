@@ -191,7 +191,7 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
             if (SettleJobs(owner->_jobs, 10000, dispatch, &pump) != SettleResult::Settled)
                 return 5;
             expect(memory.samples == initialSamples + 1 && !gate->captures.load() && !gate->preparations.load() &&
-                       !owner->_layerRowsTicket && !owner->_preparedLayerRows && !owner->_layerRowsMemory &&
+                       !owner->_layerRowsTicket && !owner->_preparedLayerRows && !owner->_layerRowsCacheTicket &&
                        owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
                        owner->_jobs.IsIdle() && !owner->_layerRowsSource.HasReady(),
                    label, "low-headroom-refusal-captures-no-owner-input-no-worker-no-cache-or-token");
@@ -241,7 +241,7 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
             const auto prepared = owner->_preparedLayerRows.get();
             expect(published && memory.samples == initialSamples + 2 && gate->captures.load() == 1 &&
                        gate->preparations.load() == 1 && gate->publications.load() == 1 &&
-                       owner->_layerRowsTicket == std::nullopt && owner->_layerRowsMemory &&
+                       owner->_layerRowsTicket == std::nullopt && owner->_layerRowsCacheTicket &&
                        owner->_jobs.ReservedMemoryBytes() != 0 && !owner->_layerRowsSource.HasReady(),
                    label, "changed-key-admits-exactly-one-fresh-worker-preparation-and-cache");
             expect(fixtureIsIntact(renamedRevision, renamedUndoCount, L"Renamed child"), label,
@@ -320,7 +320,7 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
                 if (waited != WAIT_OBJECT_0 && waited != WAIT_OBJECT_0 + 1)
                     break;
             }
-            expect(!pump.quit && owner->_preparedLayerRows && owner->_layerRowsMemory && owner->_jobs.IsIdle() &&
+            expect(!pump.quit && owner->_preparedLayerRows && owner->_layerRowsCacheTicket && owner->_jobs.IsIdle() &&
                        gate->captures.load() == 1 && gate->preparations.load() == 1 && gate->publications.load() == 1,
                    label, "successful-worker-publishes-active-retained-cache-before-shutdown");
         }
@@ -329,10 +329,10 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
         {
             // The successful-cache case also proves that stable Sync borrows the active rows without rewriting.
             const auto* const cache = owner->_preparedLayerRows.get();
-            const auto retained = owner->_layerRowsMemory;
+            const auto retained = owner->_layerRowsCacheTicket;
             const auto layerSyncs = owner->_chrome->SyncCountersForTest().layerRows;
             owner->SyncPreparedLayerRows();
-            expect(cache && owner->_preparedLayerRows.get() == cache && retained == owner->_layerRowsMemory &&
+            expect(cache && owner->_preparedLayerRows.get() == cache && retained == owner->_layerRowsCacheTicket &&
                        owner->_chrome->SyncCountersForTest().layerRows == layerSyncs &&
                        owner->_layerRowsTicket == std::nullopt && gate->publications.load() == 1,
                    label, "active-cache-is-retained-and-borrowed-across-settled-sync");
@@ -348,10 +348,10 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
         {
             auto& state = *static_cast<ShutdownObservation*>(opaque);
             Application& application = *state.owner;
-            state.cacheClear = !application._preparedLayerRows && !application._layerRowsMemory;
+            state.cacheClear = !application._preparedLayerRows && !application._layerRowsCacheTicket;
             // The closing job still owns its original scheduler reservation until Close returns. The retained
             // cache ticket itself must already be released at this owner-affine boundary.
-            state.accountingClear = !application._layerRowsMemory;
+            state.accountingClear = !application._layerRowsCacheTicket;
             state.borrowedRowsClear = application._chrome && application._chrome->LayerRowItemForTest(0).id == 0;
         };
         const unsigned int capturesBeforeShutdown = gate->captures.load();
@@ -362,8 +362,9 @@ int Application::RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instan
         expect(owner->_shutdownComplete && !owner->_window && !owner->_chrome && !owner->_rendererReady, label,
                "first-shutdown-joins-and-destroys-the-hidden-host");
         expect(shutdownObservation.cacheClear && shutdownObservation.accountingClear &&
-                   shutdownObservation.borrowedRowsClear && !owner->_preparedLayerRows && !owner->_layerRowsMemory &&
-                   owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0,
+                   shutdownObservation.borrowedRowsClear && !owner->_preparedLayerRows &&
+                   !owner->_layerRowsCacheTicket && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                   owner->_jobs.ReleasingMemoryBytes() == 0,
                label, "shutdown-clears-cache-accounting-and-chrome-borrow-after-worker-join");
         expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
                    !DeferredReleaseDetail::sink.enqueue && retirement.ownerCalls == 1 &&

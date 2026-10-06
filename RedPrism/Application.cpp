@@ -2548,6 +2548,9 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
         return transformWork;
     }
+    std::printf("BEGIN self-test.RunTransformShapeRedrawSelfTest\n");
+    if (const int shapeRedraw = RunTransformShapeRedrawSelfTest(); shapeRedraw != 0)
+        return shapeRedraw;
     std::printf("BEGIN self-test.RunTransformPreviewSelfTest\n");
     if (const int transformPreview = RunTransformPreviewSelfTest(); transformPreview != 0)
     {
@@ -3538,6 +3541,10 @@ void Application::Shutdown() noexcept
              owner._brushEngine.Release();
              owner._retryWait.CloseAfterWorkers();
              owner.ClearPreparedLayerRows();
+             // Retire the owner-held semantic snapshot while the full-graph sink/pool still exist. External
+             // providers retain their independent immutable source and endpoint through later disconnection.
+             if (owner._chrome)
+                 owner._chrome->DetachAccessibility();
              owner._layerRowsSource.CloseAfterWorkers();
              owner._historyResidencySource.CloseAfterWorkers();
              owner._gpuWork.CloseAfterWorkers();

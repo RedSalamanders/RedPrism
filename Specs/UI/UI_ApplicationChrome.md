@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-06
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -626,9 +626,12 @@ indentation. Selecting a row selects the layer; toggling a group's expander upda
 line and, on release, calls `DocumentSession::PlaceLayer`: the top or bottom of a row inserts beside it, the middle
 of a folder drops inside it, and Escape or capture loss cancels. A folder cannot be dropped into its own descendant.
 
-The experimental prepared-row path, currently enabled only explicitly by self-tests, borrows its immutable
-row graph from the Application's admitted publisher. Chrome MUST detach that borrow before final retirement
-or replacement. During same-document refresh, previous labels may remain visible but the stale tree is disabled:
+The experimental prepared-row path, currently enabled only explicitly by self-tests, shares one immutable
+`PreparedLayerRows` graph between the Application publisher, Chrome's Tree model and UIA snapshots. On replacement
+or detach, Chrome drops its model reference before the Application drops its cache reference; older snapshots may
+continue to retain the old epoch. Its original admission remains charged while any reader owns the graph, and the
+complete graph is retired and acknowledged only after its final owner releases it. During same-document refresh,
+previous labels may remain visible but the stale tree is disabled:
 selection, reorder and mask-badge hits cannot mutate through its obsolete hierarchy. Document replacement clears
 old labels immediately. A candidate publishes only against its exact current document/generation/collapse/read
 authority/root. Prepared top-first depth, inherited visibility, collapsed descendants, localized hidden labels
@@ -641,6 +644,13 @@ that ticket is pending is ignored. Memory events or unchanged-key sync alone do 
 opacity control. Retry changes derived display state and does not settle or mutate an open document edit.
 Full interaction, accessibility/reentrancy, largest-count/name owner cost, production activation and G1 remain
 separate qualification requirements; prepared publication alone does not close them.
+
+In the experimental prepared mode, the same immutable `PreparedLayerRows` owner backs the Application publisher,
+Chrome's Tree model and DxUi's UIA snapshots. Its semantic source contains every visible model row, including
+offscreen rows, with the full localized display name; UIA capture retains that owner instead of copying rows or
+reading the live Tree model. A provider may therefore keep an older row epoch alive across replacement or shutdown.
+The production flag remains false, and this consumer behavior remains draft pending the RedPrism matrix,
+client-reentrant UIA and latency, largest-count/name owner-cost, activation and G1 qualification.
 
 Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`ITreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`

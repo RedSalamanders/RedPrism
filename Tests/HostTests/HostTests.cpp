@@ -48,6 +48,7 @@
 #include "SamplerInputTests.h"
 #include "SamplerIntentInputTests.h"
 #include "SettingsStore.h"
+#include "SharedRetainedJobMemoryTests.h"
 #include "TransformOverlay.h"
 #include "UiTimingHistogramTests.h"
 #include "UiTimingTests.h"
@@ -1835,6 +1836,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPipelineTraceTests();
     gFailures += RunJobMemoryTests();
     gFailures += RunRetainedJobMemoryTests();
+    gFailures += RunSharedRetainedJobMemoryTests();
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();

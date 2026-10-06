@@ -2,12 +2,16 @@
 
 **Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
 [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
-Current work: complete real-client accessibility notification/reentrancy and charged reader lifetime, then large-count/name costs, first-display consumers, remaining P1 callers and measured latency gates.
+Current work: the queued embedded notification fix is pushed in DxUi as `cd645ea`; library Debug, Release and real ASan tests plus all three ARM64 cross-builds pass. RedPrism Debug build r212 passes on 854 frozen inputs (`A4E632805BEFEFCF9690F8227C5ABC876E444FEFCFE3A6E1CA70E2599B4AE999`). Focused runtime r213 fails the interaction fixture's quit-message closeout before notification and shape are reached; its actual child and archive are preserved. Earlier r211 passed provider 16/16 and retained capacity 12/12 before its synchronous notification stall. Neither run qualifies the new notification route or full consumer matrix. P1 remains OPEN and production activation remains false; see the [receipt record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md).
 The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
 ([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
+
+- [x] Qualify and push the optional DxUi prepared Tree accessibility source as `5f1ccdb`: full library x64 profiles, actual ASan detection, three ARM64 cross-builds, native MTA notification/root replacement, embedded lifetime and paired common-scene gates pass. RedPrism consumer and G1 qualification remain open.
+- [ ] Qualify the integrated shared row consumer at the exact pin. Preserve the original 848-input Debug r195, Release r196 and real ASan r197 passes and analysis failure r198 unchanged. Focused r211 Debug passes retry 18/18, edit 17/17, provider 16/16 and retained capacity 12/12, then stalls after two notification checks in synchronous publication; the owned test child was dumped and terminated with exit 5. Shape remains unexecuted, and this is not full-matrix or successful notification qualification. P1 remains OPEN; production activation remains false. See the [r205–r211 receipt record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md).
+- [ ] Qualify the queued live-shape transform finish with independent literal redraw/mask references, held-worker view responsiveness, original reservation and one Undo/Redo. The host fixture is compiled; its runtime gate has not been reached.
 
 - [x] Qualify the repaired drag/rename and upload acknowledgement step: full Debug r193, Release r194 and real ASan r191, strict r12, Release analysis r192 and all three ARM64 r25 cross-builds pass on 846 identical frozen inputs. All 17 edit plus 26 new producer-ordering controls and every predecessor are preserved; original failures and all archive copies are verified ([record](../../TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md)). Production activation and G1 remain open.
 

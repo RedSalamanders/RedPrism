@@ -197,8 +197,12 @@ int Application::RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE ins
         if (SettleJobs(owner->_jobs, 15000, dispatch, &pump) != SettleResult::Settled)
             return false;
         owner->SyncChrome();
-        return SUCCEEDED(owner->_chrome->Prepare(owner->_renderer.Width(), owner->_renderer.Height(),
-                                                 dpi == 0 ? 96.0f : static_cast<float>(dpi)));
+        if (FAILED(owner->_chrome->Prepare(owner->_renderer.Width(), owner->_renderer.Height(),
+                                           dpi == 0 ? 96.0f : static_cast<float>(dpi))))
+            return false;
+        // Publication can release the old semantic snapshot's final row owner. Its whole-graph retirement and
+        // lease acknowledgement are new useful work; observe that work before asserting a settled ledger.
+        return SettleJobs(owner->_jobs, 15000, dispatch, &pump) == SettleResult::Settled;
     };
     const auto documentIsLiteral = [&]() noexcept
     {
@@ -322,8 +326,18 @@ int Application::RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE ins
     expect(owner->_session.history.CurrentRevision() == initialRevision &&
                owner->_session.history.UndoCount() == initialUndoCount && documentIsLiteral(),
            "group-A-B-A", "expansion-cycle-creates-no-history-and-keeps-source-pixels-and-mask");
+    std::printf("LAYER ROW INTERACTION closeout: idle=%d ticket=%d bytes=%llu reserved=%llu resident=%llu "
+                "releasing=%llu readers=%ld accessibilityStale=%d\n",
+                owner->_jobs.IsIdle(), owner->_layerRowsTicket.has_value(),
+                static_cast<unsigned long long>(owner->_preparedLayerRows->MemoryBytes()),
+                static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
+                static_cast<unsigned long long>(owner->_preparedLayerRows->ResidentBytes()),
+                static_cast<unsigned long long>(owner->_jobs.ReleasingMemoryBytes()),
+                owner->_preparedLayerRows.use_count(), owner->_chrome->AccessibilityStaleForTest());
     expect(!owner->_layerRowsTicket && owner->_preparedLayerRows && !owner->_preparedLayerRows->Rows().empty() &&
-               owner->_jobs.IsIdle() && owner->_jobs.ReservedMemoryBytes() != 0 &&
+               owner->_jobs.IsIdle() && owner->_preparedLayerRows->MemoryBytes() != 0 &&
+               owner->_jobs.ReservedMemoryBytes() == owner->_preparedLayerRows->MemoryBytes() &&
+               owner->_preparedLayerRows->ResidentBytes() == owner->_preparedLayerRows->MemoryBytes() &&
                owner->_jobs.ReleasingMemoryBytes() == 0,
            "closeout", "settled-tree-retains-only-its-current-prepared-cache");
 

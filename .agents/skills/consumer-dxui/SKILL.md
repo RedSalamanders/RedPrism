@@ -11,9 +11,19 @@ the pin. Do not float onto sibling `main`.
 ## Pin
 
 - Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current pin: `271bd54be24eadf3f03ba5221d1be7be069860f2` (merge of
-  DxUi pull request 45 on `main`). Rollback pin: `c403052bad26c97ba23995e136672c32c85ccbfc` (API revision 2, merge of pull
-  request 19). `restore-dxui.ps1` names the revision this code is written against in one constant.
+  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current candidate: `cd645ea2375725ed7a899bb6e681ef41d0a3000d`.
+  It fixes internal embedded property-event retention and queues structure delivery with a COM-marshalled STA
+  provider proxy. Full library Debug passes; remaining library and consumer profiles are still due. Production
+  prepared rows remain disabled. The property-only predecessor `36c0ff66bd7574038ed2e255f79847a81bf054c7`
+  passed its library matrix but blocked the real consumer notification inline on the owner. The earlier library commit
+  `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` has the same public interface but retains old epochs through event providers.
+  The earlier interface rollback is `271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3. The qualified commit adds
+  optional prepared Tree accessibility capture without changing the numeric API revision; rebuild both DxUi and the
+  consumer against matching headers/library. The DxUi library matrix passed, but this RedPrism consumer draft has not
+  passed its full matrix and remains disabled. `restore-dxui.ps1` names the revision this code is written against in one constant.
+  Rolling back to `271bd54be24eadf3f03ba5221d1be7be069860f2` keeps `$requiredApiRevision` at 3 but requires reverting
+  the consumer adapter too: remove the optional prepared-source include/override and wrapper interface implementation,
+  then rebuild against the rollback headers and library.
 - Call or import only what the pinned `capabilities.json` lists under `consumerInterface` (scripts, module functions with their
   parameters, MSBuild files, the header root); `restore-dxui.ps1` imports `Tools/ConsumerBuild.psm1` and
   `Tools/ConsumerUpdate.psm1`. Revision 3 renamed the model and delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel`
@@ -45,7 +55,14 @@ the pin. Do not float onto sibling `main`.
   alpha. Composite chrome after the canvas blit so tooltips and popups over the hole stay visible.
 - `Tree` expects a borrowed `ITreeModel` (`GetVisibleItem` fills `TreeItemData` with `id`, `text`, `depth`,
   `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`.
-  `SetReorderEnabled` lets a row drag call `OnTreeReorder` once; the library does not move the model.
+  `SetReorderEnabled` lets a completed row drag call `ITreeDelegate::OnTreeReorder` once; the library does not move
+  the model. This API exists at both the qualified commit and its nearest rollback.
+- The qualified API revision 3 header adds optional `ITreeModel::CapturePreparedAccessibilityRows()` and
+  `IPreparedTreeAccessibilityRows`. A null source keeps legacy capture; a non-null source represents the exact
+  prepared model epoch including offscreen rows. Capture only retains the existing shared owner, and its indexed
+  reads are bounded and allocation-free. Published UIA snapshots retain that owner through provider reads and
+  replacement. Since the public interface changed while the API revision stayed 3, rebuild the consumer with the
+  matching DxUi library; an API-revision match alone is insufficient.
 - Icon-only buttons draw `_text` with `FontRole::Icon` when Segoe Fluent Icons is installed, and with `FontRole::Body`
   otherwise so a Unicode stand-in does not become a missing-glyph box.
 - Native flyouts go through `DxUi::ShowNativeHMenuContextMenu(owner, screen, HMENU, palette)`; an empty `HMENU`
@@ -92,3 +109,6 @@ the pin. Do not float onto sibling `main`.
   enabled and visible. Hiding, disabling, removing it, or resizing the view still cancels. Sync the viewport
   through the layout handler, not from inside the callback.
 - Library `test.ps1` does not replace RedPrism product tests.
+- The prepared layer-row/accessibility consumer path is an experimental draft with production disabled. Do not
+  describe the consumer matrix, client-reentrant UIA behavior, actual UIA latency, largest-count/name owner cost,
+  G1, production activation, or P1 as qualified until their separate consumer gates pass.

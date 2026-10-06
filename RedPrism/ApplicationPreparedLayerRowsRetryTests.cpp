@@ -81,7 +81,7 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     {
         Application& owner;
         std::shared_ptr<LayerRowsTestGate> gate;
-        const LayerRowsWork* previous = nullptr;
+        const PreparedLayerRows* previous = nullptr;
         bool held = false;
         bool viewInput = false;
         bool duplicateRetryBlocked = false;
@@ -143,7 +143,7 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     }
     owner->SyncChrome();
     const auto* const previous = owner->_preparedLayerRows.get();
-    const auto retained = owner->_layerRowsMemory;
+    const auto retained = owner->_layerRowsCacheTicket;
     const auto originalBytes = owner->_jobs.ReservedMemoryBytes();
     expect(previous && previous->Rows().size() == 1 && previous->Rows()[0].name == L"Before retry" && retained &&
                originalBytes != 0 && initialGate->captures.load() == 1 && initialGate->preparations.load() == 1 &&
@@ -165,7 +165,7 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     if (SettleJobs(owner->_jobs, 10000, dispatch, &pump) != SettleResult::Settled)
         return 5;
     expect(memory.samples == requestedSamples + 1 && !owner->_layerRowsTicket &&
-               owner->_preparedLayerRows.get() == previous && retained == owner->_layerRowsMemory &&
+               owner->_preparedLayerRows.get() == previous && retained == owner->_layerRowsCacheTicket &&
                owner->_jobs.ReservedMemoryBytes() == originalBytes && owner->_jobs.ReleasingMemoryBytes() == 0 &&
                owner->_jobs.IsIdle() && !owner->_layerRowsSource.HasReady(),
            "replacement-pressure-refuses-once-without-waiting-for-its-own-cache");
@@ -186,7 +186,7 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     if (SettleJobs(owner->_jobs, 10000, dispatch, &pump) != SettleResult::Settled)
         return 5;
     expect(memory.samples == requestedSamples + 2 && !owner->_layerRowsTicket &&
-               owner->_preparedLayerRows.get() == previous && retained == owner->_layerRowsMemory &&
+               owner->_preparedLayerRows.get() == previous && retained == owner->_layerRowsCacheTicket &&
                owner->_jobs.ReservedMemoryBytes() == originalBytes && owner->_jobs.IsIdle() &&
                owner->_layerRowsRetryAvailable && !owner->_layerRowsSource.HasReady() &&
                initialGate->captures.load() == 1 && initialGate->preparations.load() == 1,
@@ -249,11 +249,19 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
                retryGate->preparations.load() == 1 && retryGate->publications.load() == 1,
            "explicit-input-makes-exactly-one-fresh-admission-capture-prepare-and-publication");
     owner->SyncChrome();
+    // A real frame publishes the replacement semantic snapshot before the previous epoch can retire.
+    // Drain its whole-graph destruction and acknowledgement before testing the settled reservation.
+    if (FAILED(owner->_chrome->Prepare(owner->_renderer.Width(), owner->_renderer.Height(),
+                                       dpi == 0 ? 96.0f : static_cast<float>(dpi))) ||
+        SettleJobs(owner->_jobs, 10000, dispatch, &pump) != SettleResult::Settled)
+        return 5;
     expect(owner->_preparedLayerRows && owner->_preparedLayerRows.get() != previous &&
                owner->_preparedLayerRows->Rows().size() == 1 && owner->_preparedLayerRows->Rows()[0].id == layerId &&
                owner->_preparedLayerRows->Rows()[0].name == L"After retry" &&
-               owner->_chrome->LayerRowItemForTest(0).text == L"After retry" && retained != owner->_layerRowsMemory &&
-               owner->_layerRowsMemory && owner->_jobs.IsIdle() && owner->_jobs.ReservedMemoryBytes() != 0 &&
+               owner->_chrome->LayerRowItemForTest(0).text == L"After retry" &&
+               retained != owner->_layerRowsCacheTicket && owner->_layerRowsCacheTicket && owner->_jobs.IsIdle() &&
+               owner->_jobs.ReservedMemoryBytes() == owner->_preparedLayerRows->MemoryBytes() &&
+               owner->_preparedLayerRows->ResidentBytes() == owner->_preparedLayerRows->MemoryBytes() &&
                owner->_jobs.ReleasingMemoryBytes() == 0,
            "only-current-renamed-rows-replace-the-borrow-and-original-charge");
     const auto hiddenRetry = owner->_chrome->LayerRetryBoundsDipForTest();
@@ -278,7 +286,7 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
            "retry-input-final-destruction-is-acknowledged-off-owner");
     owner->Shutdown();
     expect(owner->_shutdownComplete && owner->_jobs.WorkerCount() == 0 && owner->_jobs.ReservedMemoryBytes() == 0 &&
-               !owner->_preparedLayerRows && !owner->_layerRowsMemory && !owner->_layerRowsRetryAvailable,
+               !owner->_preparedLayerRows && !owner->_layerRowsCacheTicket && !owner->_layerRowsRetryAvailable,
            "shutdown-clears-the-borrow-cache-accounting-and-retry-state");
     MSG quit{};
     const bool quitRemoved = PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE;

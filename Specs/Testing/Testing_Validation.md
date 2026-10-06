@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-06
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -22,6 +22,17 @@ tokens, original reservation, release-once, waiting admission and actual Close. 
 adds seven state expectations (66 named controls plus the summary): one original refusal, unchanged cache/charge,
 dormancy on memory events, exact release and a fresh explicit ticket when the entire peak fits.
 
+The experimental shared-reader extension adds 57 `shared-retained-job-memory.*` expectations plus its exact
+summary in normal `HostTests`. The independent state reference covers original full-reservation transfer without
+a memory requery, occupied output/outside callback/repeated transfer refusal, failed/cancelled terminal results,
+idle with live leases, move/self-move/overwritten lease acknowledgement, a real MTA final graph destructor held
+inside its payload destruction, and charge retention until the owner consumes acknowledgement. The same 64 slots
+hold mixed shared leases and owner-only tickets; the 65th transfer refuses, and moved-empty releases cannot affect
+a reused slot. A waiting job remains unrun until foreign acknowledgement reaches the owner, then runs once. Two
+literal readable graphs survive actual Close and scheduler destruction; post-close release preserves the other
+graph's live-byte record and cannot affect an unrelated scheduler. Complete normal-profile qualification and
+actual admitted row/accessibility graph adoption remain required; this primitive alone establishes no H4/G1 result.
+
 The actual WARP self-test adds 107 `layer-rows-host.*` publication/lifetime expectations and 46
 `application-prepared-layer-rows-boundary.*` initial-refusal/changed-key/shutdown expectations, each with a
 separate summary. Current/stale/cancelled/failed/deleted-folder/copy-session cases use the real scheduler,
@@ -41,6 +52,29 @@ one rename undo preserving the reorder, exact stored BGRA/Gray8 bytes, worker re
 cleanup. Its registry and complete identical-source normal matrix must preserve all earlier controls/stages.
 Client-reentrant UIA and largest-count/name owner cost remain separate gates; these functional tests do not
 activate production prepared rows or establish their G1 latency.
+The source-only `application-prepared-layer-rows-accessibility.*` draft adds a real hidden-WARP provider scenario:
+the 10,000-row epoch retains its original admitted reservation, indexed reads expose literal full offscreen names,
+the actual Tree captures the same owner, and provider child/sibling navigation preserves the name and order. A
+replacement epoch keeps both original charges alive while the old provider exists; releasing that provider retires
+the complete old graph before acknowledgement. A fresh MTA reader then holds and reads the final graph across
+Application shutdown and scheduler destruction before its final release. These are draft expectations, not a
+passed consumer test result. The consumer full matrix, reentrant UIA notifications, actual UIA latency, largest-row
+owner cost, production activation and G1 remain open; these draft checks do not close P1.
+The unexecuted `RunStandalonePreparedLayerRowsCapacitySelfTest` fixture
+(`application-prepared-layer-rows-capacity.*`) retains 64 actual published epochs, then requires the 65th
+publication to refuse its exhausted slot while preserving the old Chrome rows and full original charges. Releasing
+one old graph cannot uncharge it before whole-graph retirement and owner acknowledgement. Neither that capacity
+return nor a memory event may automatically retry the unchanged key; one explicit retry must submit a fresh ticket
+and reuse the acknowledged slot. This fixture is required but has not been run or qualified.
+The unexecuted `RunStandalonePreparedLayerRowsNotificationSelfTest` fixture has 11 named
+`application-prepared-layer-rows-notification.*` state expectations and its separate summary. A fresh MTA UIA
+client subscribes through the real hidden window provider, holds a same-count/same-ID structure callback, reads
+the complete replacement Unicode name, and invokes the standard selection pattern through COM marshalling.
+The owner must return from publication and process view input while delivery is held; the callback must select
+exactly once without changing literal pixels or adding history. The client unsubscribes while the owner pumps
+messages before joining; shutdown then retires every admitted epoch. Failure bounds detect blocked publication
+or teardown and establish no latency target. Raw embedded providers stay on their STA. Exact registration,
+predecessor preservation and the full identical-source configuration matrix remain required before qualification.
 See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
 
 ### Producer input ordering primitives
@@ -159,6 +193,13 @@ new work and retirement of the persistent restoration owner. Layer nudge control
 across modifier transitions, persistent draft metadata, one-entry publication and younger Undo order. Repeated
 Ctrl+T retains the opening/draft with no entry. Full native profiles remain required; deferred preview coalescing,
 remaining bypass/duplicate/pointer-loss routes, device/shutdown and measured G1 are separate follow-ups.
+
+The unexecuted `RunTransformShapeRedrawSelfTest` fixture (`transform-shape-redraw-host.*`) queues
+`HostTransformFinishInput` into the admitted worker and gates after preparation. Required assertions preserve the
+literal red 2×2 source, linked Gray8 mask bytes and implicit placement, original reservation, source/history and
+live preview while view input remains responsive. Completion must produce the independent literal red 4×3 pixels,
+preserve mask bytes while assigning explicit placement, and publish exactly one Transform Layer entry with matching
+Undo/Redo. This host fixture has not yet been executed or qualified in the consumer matrix.
 
 Duplicate-opening tests add 82 independent controls for shared original image/mask storage, grouped insertion,
 exact-cap color/mask budgets, one duplicate entry/Undo, prepaid rollback, nested parent history/redo, stale

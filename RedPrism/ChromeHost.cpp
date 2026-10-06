@@ -3169,7 +3169,8 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
     }
 }
 
-void ChromeHost::SetPreparedLayers(const LayerRowsWork* rows, const std::optional<Guid>& active, bool maskTargeted)
+void ChromeHost::SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows,
+                                   const std::optional<Guid>& active, bool maskTargeted)
 {
     const bool resync = TakeResync(kResyncLayers);
     if (!resync && _treeModel.preparedMode && rows == _treeModel.preparedRows && active == _treeModel.active &&
