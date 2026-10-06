@@ -4,10 +4,12 @@
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "LayerRowsTestGate.h"
+#include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "resource.h"
 
 #include <array>
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <utility>
@@ -167,22 +169,27 @@ int Application::RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE ins
     pump.gate = gate;
     const auto unblock = wil::scope_exit([gate]() noexcept { (void)SetEvent(gate->release.get()); });
 
+    std::uint64_t groupItemId = 0;
+    std::uint64_t childItemId = 0;
+    std::uint64_t siblingItemId = 0;
     const auto rowsAre = [&](std::size_t count, bool collapsed) noexcept
     {
         if (!owner->_preparedLayerRows || owner->_preparedLayerRows->Rows().size() != count)
             return false;
         const auto first = owner->_chrome->LayerRowItemForTest(0);
-        if (first.id != 1 || first.text != L"Interaction group" || !first.hasChildren || first.expanded != !collapsed)
+        if (first.id != groupItemId || first.text != L"Interaction group" || !first.hasChildren ||
+            first.expanded != !collapsed)
             return false;
         if (collapsed)
         {
             const auto second = owner->_chrome->LayerRowItemForTest(1);
-            return count == 2 && second.id == 2 && second.text == L"Interaction sibling" && second.depth == 0;
+            return count == 2 && second.id == siblingItemId && second.text == L"Interaction sibling" &&
+                   second.depth == 0;
         }
         const auto second = owner->_chrome->LayerRowItemForTest(1);
         const auto third = owner->_chrome->LayerRowItemForTest(2);
-        return count == 3 && second.id == 2 && second.text == L"Interaction child" && second.depth == 1 &&
-               second.badgeText == LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE) && third.id == 3 &&
+        return count == 3 && second.id == childItemId && second.text == L"Interaction child" && second.depth == 1 &&
+               second.badgeText == LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE) && third.id == siblingItemId &&
                third.text == L"Interaction sibling" && third.depth == 0;
     };
     const auto clickAt = [&](float xDip, float yDip, UINT modifiers = 0) noexcept
@@ -225,7 +232,13 @@ int Application::RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE ins
         return true;
     };
 
-    expect(rowsAre(3, false), "initial", "pinned-tree-preserves-literal-visible-row-order-and-ids");
+    groupItemId = owner->_preparedLayerRows->ItemIdAt(0);
+    childItemId = owner->_preparedLayerRows->ItemIdAt(1);
+    siblingItemId = owner->_preparedLayerRows->ItemIdAt(2);
+    expect(groupItemId == PreparedLayerRows::FirstItemIdentity + 1 &&
+               childItemId == PreparedLayerRows::FirstItemIdentity + 2 &&
+               siblingItemId == PreparedLayerRows::FirstItemIdentity && rowsAre(3, false),
+           "initial", "pinned-tree-preserves-literal-visible-row-order-and-ids");
     expect(documentIsLiteral() && owner->_session.ActiveLayerID() == std::optional<Guid>(siblingId) &&
                !owner->_session.IsMaskSelected(),
            "initial", "fixture-starts-with-literal-pixels-enabled-mask-and-sibling-target");

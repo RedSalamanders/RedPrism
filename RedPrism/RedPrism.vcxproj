@@ -327,6 +327,7 @@
     <ClInclude Include="..\Common\LayerRowsWork.h" />
     <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
     <ClCompile Include="PreparedLayerRows.cpp" />
+    <ClCompile Include="ApplicationPreparedLayerRowsIdentityTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsAccessibilityTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsNotificationTests.cpp" />
     <ClCompile Include="ApplicationPreparedLayerRowsTests.cpp" />

@@ -22,12 +22,12 @@ constexpr float kButtonDip = 30.0f;
 
 void ChromeHost::LayerTreeModel::OnTreeItemInvoked(uint64_t itemId)
 {
-    const auto visibleRows = RowsView();
-    if (itemId == 0 || itemId > visibleRows.size())
+    const auto index = FindVisibleItemById(itemId);
+    if (!index)
     {
         return;
     }
-    events.OnLayerInvoked(visibleRows[itemId - 1].id);
+    events.OnLayerInvoked(RowsView()[index.value()].id);
 }
 
 bool ChromeHost::RenameCardOpen() const noexcept

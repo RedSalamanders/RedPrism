@@ -151,3 +151,62 @@ All consumer attempts below use the same 854-input source freeze `33172D95332F68
 ARM64 r29 records kernel-observed child start/completion timestamps and cross-compilation only; it makes no native ARM64 runtime claim. Independent archive receipts are in each `residency-arm-builds-r29/{Debug,Release,ASanDebug}/independently-verified-archive.json`.
 
 Archive location follow-up: the original C: archive operation ran out of space; its three partial C: archives remain unchanged. The successful r29 archives were independently verified on D: with 925/925/929 copies as recorded above. The completed r195/r196/r197 archives were relocated byte-for-byte to D:, with their original C: path junctions and recorded manifest paths preserved. The stable-ID implementation/test draft remains unintegrated and unqualified. Prepared-row production remains disabled. Consumer Release/real ASan, current-source library paired performance, retained row identity through reorder, H4/G1 and P1 exits remain open.
+
+## Stable identity integration: preserved first matrix and Rename repair
+
+The stable-ID candidate integrates exact admitted worker Guid/item-ID arrays, previous-epoch ID copying,
+monotonic checked ranges, mapped Tree interaction, 21 independent real-provider expectations, and the
+62-control signed RDX byte-remap scanner extension. The original scanner allowlist remains unchanged.
+This is not production activation. The first integrated source has 856 inputs, freeze
+`EDF15E59F26058C9E2F5386B6A951F3B1452F238D147D5E770B9ABAE72DAB9F2`.
+
+| Attempt | Actual result | Independent archive completion SHA256 |
+| --- | --- | --- |
+| Full Debug r224 | Child 56088, exit 1, 08:09:11.705990Z to 08:18:26.802670Z on 2026-10-06. Host/document/composition/I/O and build gates complete, then the unchanged 17-control edit fixture fails four Rename assertions. The separate double-click caller still treated a stable ID as an ordinal; identity/accessibility/capacity/notification/shape stages are not reached. | 1,125 copies; `38B0B9D362C45A60FF71A6AFB85007D7E59A0EFEF56D8D80355E818718D901BE` |
+| Release analysis r225 | Child 91996, exit 0, 08:10:38.893149Z to 08:19:19.333605Z. All five images, compiler/SAL analysis, matching-PDB ISA controls, new scanner controls and exact DxUi provenance pass. This does not qualify the failed consumer runtime. | 1,139 copies; `E30A07156F0A4DE61F6605AC0E40C5B9B548FC5011F3536DFE1EB7DC86DF612C` |
+| ARM64 r30 Debug | Cross-build exit 0; no native runtime claim. | 927 copies; `4FD0021606832EDAC17974A3320A69185A62EB97161DBE5D217182BB548BC7A3` |
+| ARM64 r30 Release | Exit 1 at LNK2001/LNK1120: stale PreparedLayerRows object lacks the new signatures. | 926 copies; `EC1B9BFE1DD7F30EF00C5350E83B8E374CFDC86A741D457063229C926EE3BF81` |
+| ARM64 r30 ASan Debug | Exit 1 at LNK2019/LNK1120 for the same stale object signatures. | 936 copies; `21D1DB00BD8784CAB2359FC562C07C324DD7826CA1D0AF6E1E66DBB4E0BB33B4` |
+
+Every archive above is independently read back on D:. The original failures remain unchanged. The copied draft
+retained timestamps earlier than the prior ARM64 Release/ASan objects, so incremental MSBuild omitted its new
+PreparedLayerRows.cpp; the Debug and analysis logs show that file recompiled. After preserving all outputs,
+the primary repaired ChromeHostRename.cpp to use the shared ID lookup and refreshed timestamps on all ten
+copied sources/headers. No source bytes were changed merely to disguise stale outputs. New full Debug r226,
+Release analysis r227 and ARM64 r31 run against 856 inputs, freeze
+`40E29DCBF3FBD59E5332BBA0C62A27F7E1D0EFA8D304D7D9E7828B1DBEADE0FF`.
+Their current-source functional/analysis/matrix and archive receipts are required before qualification.
+Skills (15) and formatting (732 files) pass. The full new consumer matrix, paired library performance,
+largest-count/name owner cost, Native activation, H4/G1 and every P1 exit remain open.
+
+## Stable identity repaired current-source receipts
+
+The actual runs below share 856 inputs, freeze `40E29DCBF3FBD59E5332BBA0C62A27F7E1D0EFA8D304D7D9E7828B1DBEADE0FF`. All archives are independently read back on D:. Prior failures and their inputs remain unchanged. ARM64 rows are cross-builds only.
+
+| Attempt | Actual result | Independent archive completion SHA256 |
+| --- | --- | --- |
+| Full x64 Debug r226 | Child 77960; exit 0; `2026-10-06T08:20:46.695669+00:00` to `2026-10-06T08:33:51.563181+00:00`. | 1,125 copies; `6E3CF57D8DC4689C95B5CABE8DC9FDA8567B752D8232AB5FEB1CE4FB036334C1` |
+| x64 Release analysis r227 | Child 98040; exit 0; `2026-10-06T08:21:18.396414+00:00` to `2026-10-06T08:30:47.006520+00:00`. | 1,139 copies; `9603D8949DD40E32AC9B9B0B47DD9D70DC25A07ED2BA86F62BDE8A53988942E3` |
+| ARM64 r31 Debug | Child 85212; exit 0; `2026-10-06T08:22:43.961752+00:00` to `2026-10-06T08:24:35.617151+00:00`. | 927 copies; `2449D0DAD4C1DC365B112D27A0D4023CF541386BAB776DE28215CD9789CAFD24` |
+| ARM64 r31 Release | Child 102088; exit 0; `2026-10-06T08:24:46.978177+00:00` to `2026-10-06T08:26:59.339225+00:00`. | 927 copies; `60486FF065C10CCE4DC54294D85E2DD8AA4C9EF550627275027CF73655D14BC7` |
+| ARM64 r31 ASan Debug | Child 75940; exit 0; `2026-10-06T08:27:04.580479+00:00` to `2026-10-06T08:27:58.792942+00:00`. | 931 copies; `30FBA4DA9374CBB9F1F283CAB5866CE49C7551C0AC69F267CD6F80A8AFEB787F` |
+
+Full Debug passes 10,029 named application controls across 89 stages, including all 21 new real-provider identity expectations, 11 queued notification expectations and nine shape-redraw expectations. Independent strict22 preserves every exact predecessor label, stage, private probe, source delta, matching PDB/ISA gate and all 62 new signed RDX controls. Release analysis passes all five images, compiler/SAL controls and matching-PDB ISA gates with the runtime allowlist unchanged.
+
+The first strict21 verification failed only its expected aggregate of 10,030: its named-control regex excludes summaries containing `checks=21 failures=0`. An independent archived r222/r226 label comparison loses no controls and adds exactly the 21 identity labels plus that separate summary. Strict22 corrects the aggregate to 10,029, preserves all exact label assertions, checks the summary separately, and passes. The failed verifier remains unchanged.
+
+Full Release r228 is running against this same source. Real ASan and complete functional matrix still remain required before marking the consumer qualified. Largest-count/name owner costs, paired current-pin library measurements, Native activation, complete H4/G1 and P1 Done remain open.
+
+## Stable identity complete functional qualification
+
+The full repaired matrix below uses the same 856 frozen inputs and exact `cd645ea2375725ed7a899bb6e681ef41d0a3000d` DxUi pin as Release analysis r227 and all three ARM64 r31 cross-builds above. Every required current-source profile passes, with independently read-back archive copies and exact predecessor/label/stage/source verification. No failed predecessor is replaced.
+
+| Attempt | Actual result | Independent archive completion SHA256 |
+| --- | --- | --- |
+| Full x64 Debug r226 | Child 77960; exit 0; `2026-10-06T08:20:46.695669+00:00` to `2026-10-06T08:33:51.563181+00:00`. Strict22 passes 10,029 named controls / 89 stages. | 1,125 copies; `6E3CF57D8DC4689C95B5CABE8DC9FDA8567B752D8232AB5FEB1CE4FB036334C1` |
+| Full x64 Release r228 | Child 77696; exit 0; `2026-10-06T08:35:57.362800+00:00` to `2026-10-06T08:43:12.285601+00:00`. Strict22 passes 10,029 named controls / 89 stages. | 1,125 copies; `73B7E83DAA29B0456DE3DFC3732623E4AF1FF7C0E99A38E4F414767F71DF65C9` |
+| Full x64 ASanDebug r229 | Child 91096; exit 0; `2026-10-06T08:43:41.945148+00:00` to `2026-10-06T08:58:48.805199+00:00`. Strict22 passes 10,029 named controls / 89 stages. | 1,132 copies; `945625CC57366877CD49CF3FB320DD63DB3D6AF2D7CB67E41A31BFF16A9E7D9E` |
+
+Real ASan includes the unchanged actual negative detection probe and 8,052 repeated worker-stress controls, with all 7,922 historical stress labels preserved. The strict22 proof, helper, shared helper and supplementation script are separately archived and independently read back; their supplement receipts are SHA256 `155BE9025B154CBC83BA495954F22906F3919A887ADFD92205E638FADC809B1F` (Debug), `493EC50B4326C4D838DD9BEFC4754B60A858BF0E15D7BDD5639664DEB58117D3` (Release) and `A14C6514F1D9F1DDFB3D41107D172945743606EADDE5B13209EC7980D8E41314` (ASan). Skills validate all 15 entries; formatting checks 732 files.
+
+This qualifies stable identities, the complete shared-row functional consumer, real notification callback and shape-redraw code at the current pin. Production rows remain disabled. Largest-layer owner/frame measurements, paired current-pin library performance, Native activation, all other H4/G1 routes and P1 Done remain open. The next isolated draft adds actual owner/provider cost modes; it has no execution or performance claim yet.

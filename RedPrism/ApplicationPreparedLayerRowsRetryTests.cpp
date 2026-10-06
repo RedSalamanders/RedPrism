@@ -292,7 +292,8 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     // leave messages after host disconnect; a quit-only peek cannot establish fixture closeout.
     const auto quit = PumpMessages();
     const auto remainingMessages = PumpMessages();
-    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit, "fixture-quit-consumed-before-the-next-fresh-owner");
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit,
+           "fixture-quit-consumed-before-the-next-fresh-owner");
     std::printf("%s application-prepared-layer-rows-retry.summary checks=%u failures=%d\n", failures ? "FAIL" : "PASS",
                 checks, failures);
     return failures == 0 ? 0 : 5;

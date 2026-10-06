@@ -75,6 +75,17 @@ exactly once without changing literal pixels or adding history. The client unsub
 messages before joining; shutdown then retires every admitted epoch. Failure bounds detect blocked publication
 or teardown and establish no latency target. Raw embedded providers stay on their STA. Exact registration,
 predecessor preservation and the full identical-source configuration matrix remain required before qualification.
+The stable-identity extension adds 21 named `application-prepared-layer-rows-identity.*` expectations and its
+separate summary, registered as `RunStandalonePreparedLayerRowsIdentitySelfTest` before accessibility tests.
+The independent reference is a literal four-layer hierarchy and BGRA bytes, exercised through actual pinned
+Tree providers: disjoint initial IDs in known storage order, full renamed Unicode text, stable runtime IDs,
+reorder and insertion without selecting a replacement ordinal, collapse unavailability and reopening identity,
+delete unavailability, replacement of a document with the same Guids but a new serial, unchanged pixel storage
+through every transition, full old-epoch charges until reader retirement, checked range overflow before capture,
+explicit retry without wraparound, and shutdown/quit closeout. Existing interaction, edit, accessibility and
+capacity fixtures must preserve their exact named controls with independent stable IDs. The new fixture and
+adapted sources need the complete identical-source normal matrix; current draft integration is not a pass and
+does not enable production or qualify owner latency.
 See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
 
 ### Producer input ordering primitives

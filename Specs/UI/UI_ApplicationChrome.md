@@ -652,6 +652,20 @@ reading the live Tree model. A provider may therefore keep an older row epoch al
 The production flag remains false, and this consumer behavior remains draft pending the RedPrism matrix,
 client-reentrant UIA and latency, largest-count/name owner-cost, activation and G1 qualification.
 
+In the experimental prepared path, a Tree item identity belongs to a layer Guid within one document serial;
+visible position is not its identity. The Application reserves a monotonically advancing, checked 64-bit range
+only after original job admission succeeds. Values begin at 2^32, remain disjoint from legacy ordinal IDs, and
+are never reused after failure, cancellation or document replacement. Worker preparation preserves IDs for
+surviving Guids in the same serial, including hidden collapsed descendants. Exact admitted arrays provide
+visible-index-to-ID access and logarithmic ID/Guid lookup; a newly published epoch stores copied identities
+rather than retaining a chain of previous epochs. Tree selection, expansion, drag/drop and UIA all resolve the
+same map. Rename and reorder preserve a surviving layer's runtime identity. A hidden or deleted layer's old
+provider reports UIA_E_ELEMENTNOTAVAILABLE and cannot select a different layer. Reopening a collapsed group
+restores its surviving child's identity. Replacing the document, even with identical Guids, gives fresh IDs and
+invalidates old providers. Range overflow refuses before document capture, keeps the prior admitted epoch, and
+uses the existing explicit Retry layers action. Independent actual-provider tests and the complete matrix,
+owner cost, production activation and G1 remain required; the path stays disabled in production.
+
 Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`ITreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
 holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK

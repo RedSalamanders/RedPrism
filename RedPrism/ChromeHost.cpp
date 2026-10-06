@@ -201,6 +201,8 @@ size_t ChromeHost::LayerTreeModel::GetVisibleItemCount() const noexcept
 
 std::optional<std::size_t> ChromeHost::LayerTreeModel::FindVisibleItemById(uint64_t itemId) const noexcept
 {
+    if (preparedMode)
+        return preparedRows ? preparedRows->FindVisibleItem(itemId) : std::nullopt;
     return itemId != 0 && itemId <= RowsView().size() ? std::optional<std::size_t>(static_cast<std::size_t>(itemId - 1))
                                                       : std::nullopt;
 }
@@ -216,7 +218,7 @@ void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeI
     // DxUi reuses this item's strings for visible rows. Prepared text stays owned by the admitted publisher;
     // painting borrows only a visible row, without hierarchy traversal or formatting.
     const HierarchyEntry& row = current[visibleIndex];
-    outItem.id = visibleIndex + 1;
+    outItem.id = preparedMode ? preparedRows->ItemIdAt(visibleIndex) : visibleIndex + 1;
     outItem.parentId.reset();
     outItem.text = TextView()[visibleIndex];
     outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
@@ -237,20 +239,21 @@ void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeI
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
 {
     const auto visibleRows = RowsView();
-    if (drop.sourceId == 0 || drop.targetId == 0 || drop.sourceId > visibleRows.size() ||
-        drop.targetId > visibleRows.size())
+    const auto sourceIndex = FindVisibleItemById(drop.sourceId);
+    const auto targetIndex = FindVisibleItemById(drop.targetId);
+    if (!sourceIndex || !targetIndex)
     {
         return;
     }
-    const Guid source = visibleRows[drop.sourceId - 1].id;
-    const Guid target = visibleRows[drop.targetId - 1].id;
+    const Guid source = visibleRows[sourceIndex.value()].id;
+    const Guid target = visibleRows[targetIndex.value()].id;
     std::optional<Guid> parent;
     if (drop.place != DxUi::TreeDropPlace::Inside)
     {
-        const int depth = visibleRows[drop.targetId - 1].depth;
+        const int depth = visibleRows[targetIndex.value()].depth;
         if (depth > 0)
         {
-            for (std::size_t index = drop.targetId - 1; index > 0;)
+            for (std::size_t index = targetIndex.value(); index > 0;)
             {
                 --index;
                 if (visibleRows[index].depth == depth - 1)
@@ -315,21 +318,23 @@ void ChromeHost::ShortcutListModel::OnTreeItemInvoked(uint64_t itemId)
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
 {
     const auto visibleRows = RowsView();
-    if (itemId == 0 || itemId > visibleRows.size())
+    const auto index = FindVisibleItemById(itemId);
+    if (!index)
     {
         return;
     }
-    events.OnLayerSelected(visibleRows[itemId - 1].id);
+    events.OnLayerSelected(visibleRows[index.value()].id);
 }
 
 void ChromeHost::LayerTreeModel::OnTreeToggleExpanded(uint64_t itemId, bool expanded)
 {
     const auto visibleRows = RowsView();
-    if (itemId == 0 || itemId > visibleRows.size())
+    const auto index = FindVisibleItemById(itemId);
+    if (!index)
     {
         return;
     }
-    events.OnLayerExpanded(visibleRows[itemId - 1].id, expanded);
+    events.OnLayerExpanded(visibleRows[index.value()].id, expanded);
 }
 
 ChromeHost::ChromeHost(ChromeEvents& events) noexcept : _events(events), _shortcutModel(*this), _treeModel(events) {}
@@ -3191,7 +3196,7 @@ void ChromeHost::SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows
     if (_layers)
     {
         const auto index = rows && active ? rows->FindVisibleRow(active.value()) : std::nullopt;
-        const auto selected = index ? std::optional<uint64_t>(index.value() + 1) : std::nullopt;
+        const auto selected = index ? std::optional<uint64_t>(rows->ItemIdAt(index.value())) : std::nullopt;
         _layers->SetSelectedItemId(selected);
         _layers->NotifyDataChanged();
     }

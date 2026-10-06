@@ -22,6 +22,7 @@ struct RowsInput final : DeferredReleaseNode
     std::vector<Guid> collapsed;
     std::wstring pattern;
     std::shared_ptr<PreparedLayerRows> rows;
+    std::shared_ptr<const PreparedLayerRows> previousRows;
     std::shared_ptr<LayerRowsTestGate> gate;
     DWORD ownerThread = 0;
     RowsInput() noexcept
@@ -170,17 +171,19 @@ void Application::RetryPreparedLayerRows() noexcept
 class Application::LayerRowsJob final : public Job
 {
   public:
-    LayerRowsJob(Application& owner, LayerRowsKey key, LayerRowsAdmission admission) noexcept
-        : _owner(owner), _key(key), _admission(admission), _gate(owner._layerRowsTestGate),
-          _ownerThread(GetCurrentThreadId())
+    LayerRowsJob(Application& owner, LayerRowsKey key, LayerRowsAdmission admission,
+                 std::uint64_t ownershipAllowance) noexcept
+        : _owner(owner), _key(key), _admission(admission), _ownershipAllowance(ownershipAllowance),
+          _gate(owner._layerRowsTestGate), _ownerThread(GetCurrentThreadId())
     {
     }
 
     // Owner-only binding immediately after accepted Submit, including cancellation before the first Run.
     // Workers never read this field; completion hooks cannot execute before the owner returns to the pump.
-    void BindOwnerTicket(JobTicket ticket) noexcept
+    void BindOwnerTicket(JobTicket ticket, std::uint64_t firstItemId) noexcept
     {
         _ticket = ticket;
+        _firstItemId = firstItemId;
     }
 
     JobResult Run(JobContext& context) override
@@ -203,8 +206,8 @@ class Application::LayerRowsJob final : public Job
         }
         auto rows = LayerRowsWork::Prepare(std::move(_input->source), std::move(_input->collapsed),
                                            std::move(_input->pattern), _admission, context.cancellation);
-        _input->rows =
-            PreparedLayerRows::Create(std::move(rows), _admission.Bytes() + PreparedLayerRows::OwnershipAllowance());
+        _input->rows = PreparedLayerRows::Create(std::move(rows), _admission.Bytes() + _ownershipAllowance,
+                                                 _key.documentSerial, _firstItemId, _input->previousRows.get());
         if (_gate && _gate->holdAfterPrepare)
         {
             const auto held = HoldForTest(context);
@@ -235,6 +238,9 @@ class Application::LayerRowsJob final : public Job
                 _gate->captures.fetch_add(1);
             }
             _input->source = std::as_const(_owner._session).Document().value();
+            // This small shared capture preserves its existing original charge. The worker copies only IDs,
+            // then retires this reference with RowsInput; the new cache never owns a chain of old epochs.
+            _input->previousRows = _owner._preparedLayerRows;
             // The collapse set is explicitly read-only and has at most 10,000 Guid values (160 KB). Its one
             // admitted capture is the only bounded owner traversal; no rows/names/pixels/history are copied.
             const auto& collapsed = std::as_const(_owner._session).CollapsedGroupIDs();
@@ -309,8 +315,10 @@ class Application::LayerRowsJob final : public Job
     Application& _owner;
     const LayerRowsKey _key;
     const LayerRowsAdmission _admission;
+    const std::uint64_t _ownershipAllowance;
     std::unique_ptr<RowsInput, RetireRowsInput> _input;
     JobTicket _ticket;
+    std::uint64_t _firstItemId = 0;
     HRESULT _captureError = S_OK;
     const std::shared_ptr<LayerRowsTestGate> _gate;
     const DWORD _ownerThread;
@@ -340,16 +348,20 @@ void Application::LayerRowsSource::Pump() noexcept
     }
     const auto admission = LayerRowsAdmission::Estimate(
         document.value(), std::as_const(_owner._session).CollapsedGroupIDs().size(), _owner._layerRowsHiddenPattern);
-    const auto overhead =
-        sizeof(LayerRowsJob) + sizeof(RowsInput) + PreparedLayerRows::OwnershipAllowance() + 64 * 1024;
-    if (!admission.IsValid() || admission.Bytes() > (std::numeric_limits<std::uint64_t>::max)() - overhead)
+    const auto layerCount = document->layers.size();
+    const auto ownershipAllowance = PreparedLayerRows::OwnershipAllowance(layerCount);
+    const auto overhead = sizeof(LayerRowsJob) + sizeof(RowsInput) + ownershipAllowance + 64 * 1024;
+    if (!admission.IsValid() || ownershipAllowance == 0 ||
+        _owner._nextLayerRowItemId < PreparedLayerRows::FirstItemIdentity ||
+        layerCount > (std::numeric_limits<std::uint64_t>::max)() - _owner._nextLayerRowItemId ||
+        admission.Bytes() > (std::numeric_limits<std::uint64_t>::max)() - overhead)
     {
         _owner.ReportLayerRowsFailure();
         return;
     }
     try
     {
-        auto concrete = std::make_unique<LayerRowsJob>(_owner, key, admission);
+        auto concrete = std::make_unique<LayerRowsJob>(_owner, key, admission, ownershipAllowance);
         auto* submitted = concrete.get();
         std::unique_ptr<Job> job = std::move(concrete);
         JobTicket ticket;
@@ -357,7 +369,8 @@ void Application::LayerRowsSource::Pump() noexcept
             job, {JobClass::Background, key.documentSerial, admission.Bytes() + overhead, false, false}, ticket);
         if (SUCCEEDED(submittedResult))
         {
-            submitted->BindOwnerTicket(ticket);
+            submitted->BindOwnerTicket(ticket, _owner._nextLayerRowItemId);
+            _owner._nextLayerRowItemId += layerCount; // Accepted ranges stay consumed after cancellation/failure.
             _owner._layerRowsTicket = ticket;
             _owner._layerRowsRequestedKey = key;
         }

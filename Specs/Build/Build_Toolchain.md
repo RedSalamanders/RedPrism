@@ -445,6 +445,18 @@ register, displacement width, index extension, row, symbol, bound or target rece
 address, object or procedure name. This adds no runtime allowlist entry
 ([record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md)).
 
+The observed Release variant destructor also emits `MOVSX RAX,byte [RBP+disp32]`, contiguous `LEA RDX,imagebase`,
+`MOVZX EAX,byte [RDX+RAX+disp32]`, `MOV ECX,[RDX+4*RAX+disp32]`, `ADD RCX,RDX`, `JMP RCX`.
+This specific RDX form uses the same one-byte valueless bias and terminal DWORD/byte-table proof as the R8
+form above. Every instruction boundary and byte must agree with the PE; the anonymous same-owner PDB records
+bound both tables, every remap byte is below the exact DWORD entry count, every target is a decoded boundary
+inside the same procedure before its tables, and the procedure and contribution share the exact byte-table end.
+Reported table bytes must agree with the PE too. A different bias, register, width, owner, symbol, extent,
+decoded row or target receives no data exemption. `IsaSignedRdxRemapTests.ps1` preserves 62 independent controls,
+including malformed/missing/duplicated/overlapping rows, PE/listing contradictions, last-byte remap corruption,
+and real VEX/EVEX instructions in code. The runtime allowlist is unchanged. Full normal matrix qualification
+remains required before the scanner extension is complete.
+
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
 LEA EAX with disp8, compare EAX with imm8, then forward JA. Every instruction preserves R8. Both branch destinations

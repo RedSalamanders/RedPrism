@@ -135,6 +135,7 @@ class Application final : public ChromeEvents
     static int RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsNotificationSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsIdentitySelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -1030,6 +1031,9 @@ class Application final : public ChromeEvents
     std::shared_ptr<const PreparedLayerRows> _preparedLayerRows;
     // Publication identity only. The shared graph itself owns its original retained-memory lease.
     std::optional<JobTicket> _layerRowsCacheTicket;
+    // Never reuse an item ID while this Tree control can have retained providers. The first range is disjoint
+    // from the legacy path's <= 10,000 visible ordinals; document replacement does not reset this counter.
+    std::uint64_t _nextLayerRowItemId = std::uint64_t{1} << 32;
     std::optional<LayerRowsKey> _layerRowsPublishedKey;
     std::optional<LayerRowsKey> _layerRowsRequestedKey;
     std::optional<JobTicket> _layerRowsTicket;

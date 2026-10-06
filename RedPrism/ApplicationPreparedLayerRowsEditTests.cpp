@@ -4,6 +4,7 @@
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "LayerRowsTestGate.h"
+#include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "resource.h"
 
@@ -251,9 +252,12 @@ int Application::RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) 
         {
             const auto row = owner->_chrome->LayerRowItemForTest(index);
             const Guid id = order[index];
+            const std::uint64_t expectedItemId = id == siblingId ? PreparedLayerRows::FirstItemIdentity
+                                                 : id == groupId ? PreparedLayerRows::FirstItemIdentity + 1
+                                                                 : PreparedLayerRows::FirstItemIdentity + 2;
             const wchar_t* const name = id == groupId ? groupName : id == childId ? L"Literal child" : siblingName;
             const std::uint32_t depth = id == childId ? 1u : 0u;
-            if (modelRows[index].id != id || row.id != index + 1 || row.text != name || row.depth != depth ||
+            if (modelRows[index].id != id || row.id != expectedItemId || row.text != name || row.depth != depth ||
                 row.hasChildren != (id == groupId) || (id == groupId && row.expanded != true))
                 return false;
             if (id == childId && row.badgeText != LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE))

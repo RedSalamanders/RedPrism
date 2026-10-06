@@ -114,14 +114,21 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
     expect(firstEpoch->HasMemoryLease() && firstEpoch->GetCount() == 10000 && firstBytes != 0 &&
                owner->_jobs.ReservedMemoryBytes() == firstBytes && owner->_jobs.IsIdle(),
            "initial.complete-10000-row-epoch-retains-original-admission");
-    const auto last = firstEpoch->GetItem(9999);
-    const auto middle = firstEpoch->FindItem(5000);
+    const auto firstLayerItemId = firstEpoch->ItemIdAt(fixture.first.topFirstRow);
+    const auto middleLayerItemId = firstEpoch->ItemIdAt(fixture.middle.topFirstRow);
+    const auto last = firstEpoch->GetItem(fixture.first.topFirstRow);
+    const auto middle = firstEpoch->FindItem(middleLayerItemId);
     const std::wstring prefix(1018, L'N');
-    expect(last && last->itemId == 10000 && last->text == prefix + L"#00000" && middle &&
-               middle->text == prefix + L"#05000" && middle->visibleIndex == 4999,
+    expect(firstLayerItemId == PreparedLayerRows::FirstItemIdentity + fixture.first.storageIndex &&
+               middleLayerItemId == PreparedLayerRows::FirstItemIdentity + fixture.middle.storageIndex && last &&
+               last->itemId == firstLayerItemId && last->text == prefix + L"#00000" && middle &&
+               middle->itemId == middleLayerItemId && middle->text == prefix + L"#05000" &&
+               middle->visibleIndex == fixture.middle.topFirstRow,
            "initial.full-1024-unit-offscreen-names-and-independent-order");
-    expect(!firstEpoch->GetItem(10000) && !firstEpoch->FindItem(0) && !firstEpoch->FindItem(10001),
-           "initial.absent-indices-and-ids-are-refused");
+    expect(
+        !firstEpoch->GetItem(PreparedLayerRowsStressFixture::kLayerCount) && !firstEpoch->FindItem(0) &&
+            !firstEpoch->FindItem(PreparedLayerRows::FirstItemIdentity + PreparedLayerRowsStressFixture::kLayerCount),
+        "initial.absent-indices-and-ids-are-refused");
     expect(owner->_chrome->PreparedLayerAccessibilityForTest().get() == firstEpoch.get(),
            "initial.real-tree-captures-the-original-owner-without-a-row-copy");
     if (FAILED(prepareChrome()))
@@ -158,7 +165,7 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
         return 5;
     expect(!oldWitness.expired() && owner->_jobs.ReservedMemoryBytes() == firstBytes + secondEpoch->MemoryBytes(),
            "replacement.retained-provider-keeps-both-original-epoch-charges");
-    const auto replacementItem = secondEpoch->FindItem(10000);
+    const auto replacementItem = secondEpoch->FindItem(firstLayerItemId);
     expect(ProviderName(lastProvider.get()) == L"Replacement α Ω" && replacementItem &&
                replacementItem->text == L"Replacement α Ω",
            "replacement.same-id-provider-reads-acknowledged-unicode-name");
@@ -180,13 +187,13 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
     std::atomic<bool> foreignRead{false};
     std::weak_ptr<const PreparedLayerRows> finalWitness = secondEpoch;
     std::thread foreign(
-        [reader = std::move(owner->_preparedLayerRows), begin = start.get(), end = finished.get(),
-         &foreignRead]() mutable noexcept
+        [reader = std::move(owner->_preparedLayerRows), begin = start.get(), end = finished.get(), &foreignRead,
+         firstLayerItemId]() mutable noexcept
         {
             const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
             if (WaitForSingleObject(begin, 15000) == WAIT_OBJECT_0)
             {
-                const auto item = reader->FindItem(10000);
+                const auto item = reader->FindItem(firstLayerItemId);
                 foreignRead.store(initialized == S_OK && item && item->text == L"Replacement α Ω" &&
                                       reader->GetCount() == 10000 && reader->HasMemoryLease(),
                                   std::memory_order_release);
@@ -213,7 +220,7 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
            "shutdown.fixture-consumes-one-quit-before-the-next-owner");
     // secondEpoch intentionally also owns the graph until this assertion, then the MTA becomes final owner.
     auto survivor = std::move(secondEpoch);
-    const auto survivorItem = survivor->FindItem(10000);
+    const auto survivorItem = survivor->FindItem(firstLayerItemId);
     expect(survivorItem && survivorItem->text == L"Replacement α Ω" && survivor->ResidentBytes() != 0,
            "shutdown.complete-source-and-owned-endpoint-outlive-application");
     survivor.reset();
@@ -265,6 +272,7 @@ int Application::RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instan
     std::vector<std::shared_ptr<const PreparedLayerRows>> epochs;
     epochs.reserve(64);
     std::uint64_t originalCharges = 0;
+    std::uint64_t stableItemId = 0;
     bool complete = true;
     for (unsigned int epoch = 0; epoch < 64; ++epoch)
     {
@@ -277,8 +285,11 @@ int Application::RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instan
         if (SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
             return 5;
         const auto rows = owner->_preparedLayerRows;
-        const auto item = rows ? rows->FindItem(1) : std::nullopt;
-        if (!rows || !item || item->text != name || !rows->HasMemoryLease())
+        if (epoch == 0 && rows)
+            stableItemId = rows->ItemIdAt(0);
+        const auto item = rows ? rows->FindItem(stableItemId) : std::nullopt;
+        if (!rows || stableItemId != PreparedLayerRows::FirstItemIdentity || !item || item->itemId != stableItemId ||
+            item->text != name || !rows->HasMemoryLease())
         {
             complete = false;
             break;
@@ -334,7 +345,7 @@ int Application::RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instan
     if (SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
         return 5;
     const auto current = owner->_preparedLayerRows;
-    const auto currentItem = current ? current->FindItem(1) : std::nullopt;
+    const auto currentItem = current ? current->FindItem(stableItemId) : std::nullopt;
     expect(current && current.get() != previous && currentItem && currentItem->text == L"Capacity retry α Ω" &&
                owner->_layerRowsCacheTicket == retryTicket && gate->preparations.load() == 66 &&
                gate->publications.load() == 65 && !owner->_layerRowsRetryAvailable && owner->_jobs.IsIdle() &&
@@ -360,12 +371,14 @@ int Application::RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instan
            "releasing-old-epochs-retains-only-the-current-original-reservation");
     owner->Shutdown();
     expect(owner->_jobs.ReservedMemoryBytes() == 0 && !owner->_preparedLayerRows && !owner->_layerRowsCacheTicket &&
-               current && current->FindItem(1) && current->FindItem(1)->text == L"Capacity retry α Ω",
+               current && current->FindItem(stableItemId) &&
+               current->FindItem(stableItemId)->text == L"Capacity retry α Ω",
            "shutdown-detaches-the-ledger-with-a-readable-external-current-epoch");
     // Drain queued messages before observing the low-priority WM_QUIT, including COM disconnect messages.
     const auto quit = PumpMessages();
     const auto remainingMessages = PumpMessages();
-    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit, "fixture-consumes-one-quit-before-the-next-owner");
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit,
+           "fixture-consumes-one-quit-before-the-next-owner");
     std::printf("%s application-prepared-layer-rows-capacity.summary checks=%u failures=%d\n",
                 failures ? "FAIL" : "PASS", checks, failures);
     std::fflush(stdout);
