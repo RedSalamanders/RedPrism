@@ -3231,6 +3231,15 @@ void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept
     Arrange();
 }
 
+HRESULT ChromeHost::PrepareInteraction(UINT widthPixels, UINT heightPixels, float dpi) noexcept
+{
+    if (!_attached)
+        return E_UNEXPECTED;
+    SyncToolVisuals();
+    Layout(widthPixels, heightPixels, dpi);
+    return _view.PrepareInteraction(widthPixels, heightPixels, _dpi);
+}
+
 HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept
 {
     if (!_attached)

@@ -572,6 +572,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F JobProgressBoundsDip() const noexcept;
     // Lays the chrome out for the client size and DPI without drawing: HolePixels follows. Prepare lays out and draws.
     void Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
+    // Acknowledge caller-arranged input geometry at the already painted extent, without drawing/publishing UIA.
+    HRESULT PrepareInteraction(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;

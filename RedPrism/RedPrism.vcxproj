@@ -347,6 +347,7 @@
     <ClCompile Include="..\Tests\ClipboardMergedBudgetTests.cpp" />
     <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
+    <ClCompile Include="ApplicationLayerRowsBenchmark.cpp" />
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />

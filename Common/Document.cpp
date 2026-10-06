@@ -3740,7 +3740,9 @@ bool DocumentSession::CanTransform() const noexcept
     {
         return false;
     }
-    return EffectiveVisibleIDs(_document.value()).contains(layer->id);
+    // This owner-side eligibility query needs one ancestry, not every hierarchy row and copied name.
+    // Panel collapse affects row display only; visibility still follows the layer and its ancestors.
+    return EffectivelyVisible(_document.value(), layer->id);
 }
 
 bool DocumentSession::TransformsAsGroup() const noexcept

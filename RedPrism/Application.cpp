@@ -3125,7 +3125,8 @@ void Application::SyncChrome() noexcept
                                        : std::nullopt);
 
     // The canvas hole follows the layout the pushes above asked for, and the overlays below follow the hole: lay out,
-    // push the rest, then prepare once, so the frame after this finds the chrome prepared (RF-1001).
+    // push the rest. Renderer::Render prepares the chrome once at the frame boundary (RF-1001).
+    // Command dispatch and completed-result publication must not paint a chrome surface here.
     const float dpi = ChromeDpi();
     _chrome->Layout(_renderer.Width(), _renderer.Height(), dpi);
     const CanvasHole hole = _chrome->HolePixels();
@@ -3210,7 +3211,9 @@ void Application::SyncChrome() noexcept
     SyncCropChrome();
     SyncToolOverlays();
     SyncStrokePreview();
-    (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi);
+    // Rapid independent gestures need current live bounds before the next frame. This acknowledges layout only;
+    // painting, surface allocation and accessibility/text-geometry publication stay in the frame preparation.
+    (void)_chrome->PrepareInteraction(_renderer.Width(), _renderer.Height(), dpi);
 }
 
 void Application::SyncView() noexcept
@@ -7263,6 +7266,10 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
+    if (_bench == L"layer-rows" || _bench == L"layer-rows-smoke")
+    {
+        return RunLayerRowsBenchmark();
+    }
     if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
         _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
         _bench == L"ui-sampler-smoke")

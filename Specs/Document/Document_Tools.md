@@ -108,6 +108,10 @@ transform, the mask's placement when an unlinked mask is selected (`SelectLayerT
 panel is open (`HasColorEdit`): the panel's edit is anchored to the layer's placement, so moves, Free Transform,
 nudges, the Alt-drag duplicate and both flips wait for OK or Cancel (legacy `canEditLayers`).
 
+The single-layer eligibility query follows the layer's inherited visibility without constructing hierarchy rows,
+copying unrelated layer names or allocating a complete visible-ID set. Collapsing a folder in the Layers panel
+does not change eligibility. Group membership preparation remains a separate bounded-work obligation in P1.
+
 `PreviewTransform(value)` changes only the draft (invalid values are ignored); the document, history and
 `ActiveLayer()->transform` do not change while previewing. Rendering reads `DisplayDocument()`: the real document
 when no edit is pending, else a cached copy sharing every raster where each moved layer carries

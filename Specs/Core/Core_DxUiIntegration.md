@@ -14,8 +14,14 @@ Library behavior remains in DxUi's own contracts. Splitter, ColorPicker, and Num
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit
-`cd645ea2375725ed7a899bb6e681ef41d0a3000d`, API revision 3, and lock target `["DxUi"]`. Its full library Debug suite
-passes; remaining library and consumer profiles are still due. Internal embedded property-event providers keep weak
+`8e8994079e82f79e6765e6a885c03fc687957591`, API revision 3, and lock target `["DxUi"]`. Its identical-source full
+library x64 Debug/Release/real ASan suites, three ARM64 cross-builds and paired Release common-scene comparison pass.
+The managed RedPrism consumer repair passes full x64 Debug/Release/real ASan gates, three ARM64 cross-builds and
+Release analysis on the 858-input freeze recorded in `Specs/TestRuns/P1LayerRowsCosts_2026-10-06.md`. Fresh hardware
+and WARP metadata diagnostics preserve all initial and rename costs; full preparation, production/native activation
+and external-client G1 remain open. This pin adds optional
+caller-arranged interaction acknowledgement without painting; it preserves full preparation after failure, resize,
+DPI/device changes or hide/zero extent. Library ARM64 results are cross-compilation only. Internal embedded property-event providers keep weak
 control identity and read the coherent current snapshot; public row providers retain their original source.
 Structure invalidation uses a bounded coalesced delivery slot and a GIT-marshalled provider proxy on an MTA while
 the public provider retains its STA contract. The slot holds no historical row snapshot; owner disconnect revokes
@@ -23,12 +29,13 @@ registration without joining delivery. The property-only predecessor `36c0ff66bd
 passes the library matrix but stalls the real consumer callback inline on its owner (r211). The preceding library commit
 `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` adds the optional prepared Tree accessibility source described below while
 keeping API revision 3; because the public C++ interface changed, the consumer MUST rebuild DxUi and RedPrism from
-matching headers and library. This library result does not qualify the RedPrism consumer draft. The nearest rollback is
+matching headers and library. Library qualification alone does not qualify a consumer or its activation. The nearest rollback is
 `271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3; it retains the existing Tree reorder callback but
 does not provide the prepared accessibility-row interface. A rollback changes the lock but leaves
 `$requiredApiRevision` at 3. The consumer adapter must also return to legacy Tree accessibility capture: remove the
 optional prepared-source include and `CapturePreparedAccessibilityRows()` override (and the wrapper's implementation
-of that optional interface) before rebuilding against the rollback headers/library. `build.ps1` runs
+of that optional interface), and restore the preceding full-prepare input boundary instead of calling the absent
+`PrepareInteraction`, before rebuilding against the rollback headers/library. `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
@@ -111,6 +118,12 @@ premultiplied alpha, so controls that overlap the canvas hole (tooltips, popups)
 EmbeddedHost holds no cached surface (0 bytes). Visible surface stays within the library 64 MiB cap.
 
 Facts about the pinned library that the host designs around (verified against the pinned sources):
+
+- `EmbeddedHost::PrepareInteraction(width, height, dpi)` acknowledges explicitly arranged live hit geometry at the
+  last successfully painted extent/DPI. It performs no paint, surface allocation, cache trim or text/UIA publication.
+  `SyncChrome` finishes control updates and arrangement before calling this boundary; `Renderer::Render` retains
+  full preparation on the frame path. Initial, failed, hidden, zero-sized and replaced-device views cannot resume
+  interaction through acknowledgement. Dirty pixels/text geometry remain pending for the next full preparation.
 
 - `Toolbar` is a `Panel` subclass with no child layout; consumers set every button's bounds.
 - `Toggle` paints a switch regardless of `ButtonVariant::IconOnly`; a latched tool button is an icon-only `Button`

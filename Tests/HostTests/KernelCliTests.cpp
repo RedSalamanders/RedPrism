@@ -85,6 +85,17 @@ int RunKernelCliTests()
         const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
         check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-ui-benchmark-value");
     }
+    std::wstring layerRowsBenchmark;
+    const bool layerRowsSucceeded = ParseArguments({L"--bench", L"layer-rows"}, parsed, error, &layerRowsBenchmark);
+    check(layerRowsSucceeded && layerRowsBenchmark == L"layer-rows" && error.empty(),
+          "valid-layer-rows-benchmark-value");
+    std::wstring layerRowsSmokeBenchmark;
+    const bool layerRowsSmokeSucceeded =
+        ParseArguments({L"--bench", L"layer-rows-smoke"}, parsed, error, &layerRowsSmokeBenchmark);
+    check(layerRowsSmokeSucceeded && layerRowsSmokeBenchmark == L"layer-rows-smoke" && error.empty(),
+          "valid-layer-rows-smoke-benchmark-value");
+    check(!ParseArguments({L"--bench", L"layer-row"}, parsed, error) && error == L"layer-row",
+          "bench-layer-rows-near-miss-rejected");
     check(!ParseArguments({L"--bench"}, parsed, error) && error == L"--bench", "bench-missing-value-rejected");
     check(!ParseArguments({L"--bench", L""}, parsed, error) && error.empty(), "bench-empty-value-rejected");
     check(!ParseArguments({L"--bench", L"ui-smoke-extra"}, parsed, error) && error == L"ui-smoke-extra",

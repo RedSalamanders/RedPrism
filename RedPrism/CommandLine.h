@@ -91,7 +91,7 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
         RedPrismCommandLineSwitch{
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate,
             L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke|ui|ui45|ui100|ui-smoke|ui-sampler|"
-            L"ui-sampler45|ui-sampler100|ui-sampler-smoke>",
+            L"ui-sampler45|ui-sampler100|ui-sampler-smoke|layer-rows|layer-rows-smoke>",
             L"Run the brush benchmark on the selected device, or the CPU kernel benchmark (kernels: 3840x2160, 10; "
             L"kernels45: 8192x5464, 10; kernels-smoke: 32x24, 2). The smoke mode is not a performance "
             L"measurement. buffers and buffers45 compare copy/adopt pairs at those same image sizes. UI benchmarks "
@@ -100,7 +100,9 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
             L"warmup). ui-smoke runs the same path at 64x48 for two samples after one warmup. The ui-sampler, "
             L"ui-sampler45 and ui-sampler100 variants report only sampler-accepted-prefix on their corresponding "
             L"UI fixture at 10 samples after one warmup; ui-sampler-smoke runs that row at 64x48 for two samples "
-            L"after one warmup.",
+            L"after one warmup. layer-rows measures owner-thread publish/Prepare and full offscreen UI Automation "
+            L"(UIA) name reads with 10,000 rows and 1,024 UTF-16-unit names; layer-rows-smoke uses a small fixture. "
+            L"These modes report measurements without asserting performance success.",
             L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::CrashProbe, L"--crash-probe", nullptr, RedPrismSwitchValue::Separate,
                                   L"<directory>",
@@ -408,7 +410,9 @@ struct RedPrismCommandLineScan final
                                                std::wstring_view{arguments[index + 1]} != L"ui-sampler" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-sampler45" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-sampler100" &&
-                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler-smoke"))
+                                               std::wstring_view{arguments[index + 1]} != L"ui-sampler-smoke" &&
+                                               std::wstring_view{arguments[index + 1]} != L"layer-rows" &&
+                                               std::wstring_view{arguments[index + 1]} != L"layer-rows-smoke"))
             {
                 if (errorToken)
                 {

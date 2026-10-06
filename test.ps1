@@ -237,6 +237,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 $global:LASTEXITCODE = 0
 
+Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Layer-row benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
 Write-Host 'Running qualified gradient benchmark runner controls...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\GradientBenchmarkRunnerTests.ps1')
 if ($LASTEXITCODE -ne 0) {

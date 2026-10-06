@@ -11,19 +11,24 @@ the pin. Do not float onto sibling `main`.
 ## Pin
 
 - Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current candidate: `cd645ea2375725ed7a899bb6e681ef41d0a3000d`.
+  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current candidate: `8e8994079e82f79e6765e6a885c03fc687957591`.
   It fixes internal embedded property-event retention and queues structure delivery with a COM-marshalled STA
-  provider proxy. Full library Debug passes; remaining library and consumer profiles are still due. Production
+  provider proxy, and adds `EmbeddedHost::PrepareInteraction` for explicitly arranged hit geometry without painting.
+  All library x64 profiles, three ARM64 cross-builds and paired Release common scenes pass. The managed consumer
+  repair passes full x64 Debug/Release/real ASan, three ARM64 cross-builds and Release analysis; fresh hardware/WARP
+  largest-row diagnostics retain all initial/rename costs. Full frame, group/multiselect and external-client G1 remain due. Production
   prepared rows remain disabled. The property-only predecessor `36c0ff66bd7574038ed2e255f79847a81bf054c7`
   passed its library matrix but blocked the real consumer notification inline on the owner. The earlier library commit
   `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` has the same public interface but retains old epochs through event providers.
   The earlier interface rollback is `271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3. The qualified commit adds
   optional prepared Tree accessibility capture without changing the numeric API revision; rebuild both DxUi and the
-  consumer against matching headers/library. The DxUi library matrix passed, but this RedPrism consumer draft has not
-  passed its full matrix and remains disabled. `restore-dxui.ps1` names the revision this code is written against in one constant.
+  consumer against matching headers/library. Functional qualification does not activate production prepared rows:
+  they remain disabled pending complete admission/first-display and measured G1. The qualification receipt is
+  `Specs/TestRuns/P1LayerRowsCosts_2026-10-06.md`. `restore-dxui.ps1` names the revision this code is written against in one constant.
   Rolling back to `271bd54be24eadf3f03ba5221d1be7be069860f2` keeps `$requiredApiRevision` at 3 but requires reverting
   the consumer adapter too: remove the optional prepared-source include/override and wrapper interface implementation,
-  then rebuild against the rollback headers and library.
+  restore the preceding full-prepare input boundary instead of calling the absent `PrepareInteraction`, then rebuild
+  against the rollback headers and library.
 - Call or import only what the pinned `capabilities.json` lists under `consumerInterface` (scripts, module functions with their
   parameters, MSBuild files, the header root); `restore-dxui.ps1` imports `Tools/ConsumerBuild.psm1` and
   `Tools/ConsumerUpdate.psm1`. Revision 3 renamed the model and delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel`
@@ -80,6 +85,10 @@ the pin. Do not float onto sibling `main`.
   this true.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
+- `PrepareInteraction` only acknowledges caller-arranged live bounds at the last painted extent/DPI. `SyncChrome`
+  finishes arranging controls before acknowledging rapid input between frames; full painting stays on the frame
+  path. Initial/failed/hidden/zero/device/extent/DPI transitions require full `Prepare`. It publishes no text/UIA
+  geometry and changes no surface/preparation/composition counters. Never acknowledge partial or paint-derived layout.
 - The embedded UI Automation tree is a snapshot that DxUi republishes only when `EmbeddedHost::UpdateAccessibility`
   is called after a preparation (with nothing prepared since and the same placement it returns `S_FALSE` at once), and
   each call walks the whole control tree. `ChromeHost::Prepare` calls it after a preparation while a client listens

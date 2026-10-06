@@ -1535,6 +1535,109 @@ void TestTransformSession()
            "transform.nudge-commits");
 }
 
+void TestTransformVisibility()
+{
+    DocumentSession standalone;
+    standalone.CreateDocument(200, 100, false);
+    const Guid solo = InsertPainted(standalone, 20, 20, Vec2{0, 0});
+    const auto expectSolo = [&](bool expected, const char* name)
+    {
+        const CanvasDocument& document = standalone.Document().value();
+        Expect(EffectivelyVisible(document, solo) == expected && standalone.CanTransform() == expected, name);
+    };
+
+    expectSolo(true, "transform.visibility-standalone-visible");
+    EditLayerRecordsForTest(standalone, [](DocumentFixture& document) { document.layers.back().visible = false; });
+    expectSolo(false, "transform.visibility-standalone-hidden");
+    EditLayerRecordsForTest(standalone, [](DocumentFixture& document) { document.layers.back().visible = true; });
+    expectSolo(true, "transform.visibility-standalone-shown");
+
+    const auto root = standalone.Document()->layers;
+    const std::uint64_t generation = standalone.Generation();
+    const int undoCount = standalone.history.UndoCount();
+    const Raster pixels = standalone.ActiveLayer()->asset->image;
+    bool repeated = true;
+    for (int repeat = 0; repeat < 8; ++repeat)
+        repeated = standalone.CanTransform() && EffectivelyVisible(standalone.Document().value(), solo) && repeated;
+    Expect(repeated, "transform.visibility-repeated-query");
+    const ImageLayer* after = Find(standalone.Document(), solo);
+    Expect(standalone.Document()->layers.Identity() == root.Identity() && standalone.Generation() == generation &&
+               standalone.history.UndoCount() == undoCount && after != nullptr && after->asset.has_value() &&
+               after->asset->image == pixels,
+           "transform.visibility-query-preserves-root-history-pixels");
+
+    DocumentSession nested;
+    nested.CreateDocument(200, 100, false);
+    nested.AddGroup();
+    const Guid outer = nested.ActiveLayerID().value();
+    nested.AddGroup();
+    const Guid inner = nested.ActiveLayerID().value();
+    const Guid child = InsertPainted(nested, 20, 20, Vec2{0, 0});
+    EditLayerRecordsForTest(nested, [&](DocumentFixture& document) { document.layers.back().parentID = inner; });
+    nested.SelectLayer(child);
+    Expect(ValidateHierarchy(nested.Document().value().layers) == DocumentStatus::Ok,
+           "transform.visibility-nested-fixture-valid");
+    const auto expectNested = [&](bool expected, const char* name)
+    {
+        const CanvasDocument& document = nested.Document().value();
+        Expect(EffectivelyVisible(document, child) == expected && nested.CanTransform() == expected, name);
+    };
+
+    nested.SetGroupCollapsed(outer, true);
+    const std::vector<HierarchyEntry> collapsed = nested.LayerRows();
+    Expect(collapsed.size() == 1 && collapsed.front().id == outer && collapsed.front().collapsed,
+           "transform.visibility-collapse-hides-row-subtree");
+    expectNested(true, "transform.visibility-selected-child-in-collapsed-group");
+
+    const auto setVisible = [&](const Guid& id, bool visible)
+    {
+        EditLayerRecordsForTest(nested,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == id)
+                                        {
+                                            layer.visible = visible;
+                                            return;
+                                        }
+                                    }
+                                });
+    };
+    setVisible(inner, false);
+    expectNested(false, "transform.visibility-hidden-inner-ancestor");
+    setVisible(inner, true);
+    setVisible(child, false);
+    expectNested(false, "transform.visibility-hidden-leaf");
+    setVisible(child, true);
+    setVisible(outer, false);
+    expectNested(false, "transform.visibility-hidden-outer-ancestor");
+    setVisible(outer, true);
+    expectNested(true, "transform.visibility-restored-ancestors-and-leaf");
+
+    nested.SelectLayer(outer);
+    const std::vector<Guid> expectedMembers{child};
+    Expect(nested.TransformsAsGroup() && nested.CanTransform() && nested.GroupTransformMemberIDs() == expectedMembers,
+           "transform.visibility-group-path-retains-visible-member");
+
+    DocumentSession nonPixels;
+    nonPixels.CreateDocument(20, 20, false);
+    nonPixels.AddBlankLayer();
+    const Guid blank = nonPixels.ActiveLayerID().value();
+    Expect(EffectivelyVisible(nonPixels.Document().value(), blank) && !nonPixels.CanTransform(),
+           "transform.visibility-blank-still-not-transformable");
+    LayerAdjustment adjustment;
+    adjustment.kind = AdjustmentKind::Levels;
+    EditLayerRecordsForTest(nonPixels,
+                            [&](DocumentFixture& document) { document.layers.back().adjustment = adjustment; });
+    Expect(EffectivelyVisible(nonPixels.Document().value(), blank) && !nonPixels.CanTransform(),
+           "transform.visibility-adjustment-still-not-transformable");
+    nonPixels.AddGroup();
+    const Guid emptyGroup = nonPixels.ActiveLayerID().value();
+    Expect(EffectivelyVisible(nonPixels.Document().value(), emptyGroup) && !nonPixels.CanTransform(),
+           "transform.visibility-empty-group-still-not-transformable");
+}
+
 void TestTransformDuplicate()
 {
     DocumentSession session;
@@ -7984,6 +8087,7 @@ int wmain(int argc, wchar_t** argv)
     TestTransformDrag();
     TestTransformSnap();
     TestTransformSession();
+    TestTransformVisibility();
     TestTransformDuplicate();
     TestTransformGroup();
     TestMaskTransform();

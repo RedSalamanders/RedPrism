@@ -157,6 +157,7 @@ class Application final : public ChromeEvents
     void OnJobIndicatorTimer() noexcept;
     int RunJobActivitySelfTest() noexcept;
     int RunUiBenchmark() noexcept;
+    int RunLayerRowsBenchmark() noexcept;
     HRESULT InitializeUiBenchmark() noexcept;
     void AdvanceUiBenchmark() noexcept;
     void ExecuteUiBenchmarkStep() noexcept;

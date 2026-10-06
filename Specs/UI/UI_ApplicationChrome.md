@@ -619,6 +619,15 @@ self-test itself (`_errorsShown`, `_budgetNotices`, and so on), unconditionally,
 
 ## Layers panel
 
+`Application::SyncChrome` synchronizes retained values and layout geometry without painting the chrome surface.
+`Renderer::Render` performs `ChromeHost::Prepare` at the frame boundary before canvas composition and chrome
+composition. Worker-result publication and command dispatch therefore do not run that preparation; accessibility
+publication still follows a coherent prepared view. Explicit harness preparation remains permitted.
+After all retained pushes, SyncChrome finishes arranging bounds and acknowledges interaction through the pinned
+DxUi PrepareInteraction boundary at the last painted extent/DPI. Rapid gestures then use current live bounds while
+pixels stay dirty for the next frame. This does not publish UIA/text geometry or allocate a surface. A new or failed
+view, resize, hide/zero extent and device replacement still require full frame preparation before interaction.
+
 The layers Tree lists rows top-first (`DocumentSession::LayerRows`): names, `(hidden)` annotation for rows whose
 effective visibility is off, a folder glyph for groups (Segoe Fluent Icons when that font is installed), and depth
 indentation. Selecting a row selects the layer; toggling a group's expander updates

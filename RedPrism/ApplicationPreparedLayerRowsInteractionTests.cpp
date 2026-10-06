@@ -277,14 +277,28 @@ int Application::RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE ins
     expect(owner->_session.history.CurrentRevision() == initialRevision &&
                owner->_session.history.UndoCount() == initialUndoCount && documentIsLiteral(),
            "selection", "row-selection-preserves-literal-pixels-mask-and-history");
+    const DxUi::EmbeddedStatistics beforeMaskClick = owner->_chrome->Statistics();
     clickAt((childBadge.left + childBadge.right) * 0.5f, (childBadge.top + childBadge.bottom) * 0.5f);
+    const DxUi::EmbeddedStatistics afterMaskClick = owner->_chrome->Statistics();
+    expect(afterMaskClick.preparations == beforeMaskClick.preparations &&
+               afterMaskClick.composites == beforeMaskClick.composites &&
+               afterMaskClick.surfaceAllocations == beforeMaskClick.surfaceAllocations &&
+               owner->_session.ActiveLayerID() == std::optional<Guid>(childId) && owner->_session.IsMaskSelected(),
+           "selection", "immediate-mask-pointer-acknowledges-child-without-prepare-composite-or-surface-allocation");
     expect(owner->_session.ActiveLayerID() == std::optional<Guid>(childId) && owner->_session.IsMaskSelected(),
            "selection", "actual-prepared-mask-badge-pointer-selects-child-mask");
     expect(owner->_session.history.CurrentRevision() == initialRevision &&
                owner->_session.history.UndoCount() == initialUndoCount && documentIsLiteral(),
            "selection", "prepared-mask-target-selection-preserves-literal-pixels-mask-and-history");
     const D2D1_RECT_F siblingRow = owner->_chrome->LayerRowBoundsDip(2);
+    const DxUi::EmbeddedStatistics beforeSiblingClick = owner->_chrome->Statistics();
     clickAt(siblingRow.left + 100.0f, (siblingRow.top + siblingRow.bottom) * 0.5f);
+    const DxUi::EmbeddedStatistics afterSiblingClick = owner->_chrome->Statistics();
+    expect(afterSiblingClick.preparations == beforeSiblingClick.preparations &&
+               afterSiblingClick.composites == beforeSiblingClick.composites &&
+               afterSiblingClick.surfaceAllocations == beforeSiblingClick.surfaceAllocations &&
+               owner->_session.ActiveLayerID() == std::optional<Guid>(siblingId) && !owner->_session.IsMaskSelected(),
+           "selection", "immediate-sibling-pointer-acknowledges-image-without-prepare-composite-or-surface-allocation");
     expect(owner->_session.ActiveLayerID() == std::optional<Guid>(siblingId) && !owner->_session.IsMaskSelected(),
            "selection", "actual-tree-row-pointer-restores-sibling-pixel-target");
 
