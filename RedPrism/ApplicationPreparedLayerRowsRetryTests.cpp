@@ -288,10 +288,11 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     expect(owner->_shutdownComplete && owner->_jobs.WorkerCount() == 0 && owner->_jobs.ReservedMemoryBytes() == 0 &&
                !owner->_preparedLayerRows && !owner->_layerRowsCacheTicket && !owner->_layerRowsRetryAvailable,
            "shutdown-clears-the-borrow-cache-accounting-and-retry-state");
-    MSG quit{};
-    const bool quitRemoved = PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE;
-    expect(quitRemoved && quit.wParam == 0 && PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) == FALSE,
-           "fixture-quit-consumed-before-the-next-fresh-owner");
+    // WM_QUIT is generated only after pending posted messages are drained. COM notification delivery may
+    // leave messages after host disconnect; a quit-only peek cannot establish fixture closeout.
+    const auto quit = PumpMessages();
+    const auto remainingMessages = PumpMessages();
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit, "fixture-quit-consumed-before-the-next-fresh-owner");
     std::printf("%s application-prepared-layer-rows-retry.summary checks=%u failures=%d\n", failures ? "FAIL" : "PASS",
                 checks, failures);
     return failures == 0 ? 0 : 5;

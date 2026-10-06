@@ -414,10 +414,12 @@ int Application::RunStandalonePreparedLayerRowsEditSelfTest(HINSTANCE instance) 
                owner->_jobs.ReleasingMemoryBytes() == 0 && !owner->_preparedLayerRows &&
                !owner->_layerRowsCacheTicket && gate->retired.load() && gate->retiredOffOwner.load(),
            "closeout", "shutdown-joins-worker-clears-borrow-and-retires-input-off-owner");
-    MSG quit{};
-    const bool quitRemoved = PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE;
-    expect(quitRemoved && quit.wParam == 0 && PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) == FALSE,
-           "closeout", "fixture-quit-consumed-before-the-next-fresh-owner");
+    // WM_QUIT is generated only after pending posted messages are drained. COM notification delivery may
+    // leave messages after host disconnect; a quit-only peek cannot establish fixture closeout.
+    const auto quit = PumpMessages();
+    const auto remainingMessages = PumpMessages();
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit, "closeout",
+           "fixture-quit-consumed-before-the-next-fresh-owner");
     std::printf("%s application-prepared-layer-rows-edit.summary checks=%u failures=%d\n", failures ? "FAIL" : "PASS",
                 checks, failures);
     return failures == 0 ? 0 : 5;

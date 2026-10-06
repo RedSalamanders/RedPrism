@@ -286,9 +286,10 @@ int Application::RunStandalonePreparedLayerRowsNotificationSelfTest(HINSTANCE in
     owner->Shutdown();
     expect(owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0,
            "shutdown.retires-all-admitted-source-epochs-after-client-unsubscription");
-    MSG quit{};
-    expect(PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE && quit.wParam == 0 &&
-               PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) == FALSE,
+    // Drain queued messages before observing the low-priority WM_QUIT, including COM disconnect messages.
+    const auto quit = PumpMessages();
+    const auto remainingMessages = PumpMessages();
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit,
            "shutdown.fixture-consumes-one-quit-before-the-next-owner");
     std::printf("%s application-prepared-layer-rows-notification.summary checks=%u failures=%d\n",
                 failures ? "FAIL" : "PASS", checks, failures);

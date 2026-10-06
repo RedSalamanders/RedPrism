@@ -206,9 +206,10 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
     expect(owner->_jobs.ReservedMemoryBytes() == 0 && !finalWitness.expired(),
            "shutdown.detaches-ledger-with-foreign-immutable-reader-still-alive");
     owner.reset();
-    MSG quit{};
-    expect(PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE && quit.wParam == 0 &&
-               PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) == FALSE,
+    // Drain queued messages before observing the low-priority WM_QUIT, including COM disconnect messages.
+    const auto quit = PumpMessages();
+    const auto remainingMessages = PumpMessages();
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit,
            "shutdown.fixture-consumes-one-quit-before-the-next-owner");
     // secondEpoch intentionally also owns the graph until this assertion, then the MTA becomes final owner.
     auto survivor = std::move(secondEpoch);
@@ -361,10 +362,10 @@ int Application::RunStandalonePreparedLayerRowsCapacitySelfTest(HINSTANCE instan
     expect(owner->_jobs.ReservedMemoryBytes() == 0 && !owner->_preparedLayerRows && !owner->_layerRowsCacheTicket &&
                current && current->FindItem(1) && current->FindItem(1)->text == L"Capacity retry α Ω",
            "shutdown-detaches-the-ledger-with-a-readable-external-current-epoch");
-    MSG quit{};
-    expect(PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != FALSE && quit.wParam == 0 &&
-               PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_NOREMOVE) == FALSE,
-           "fixture-consumes-one-quit-before-the-next-owner");
+    // Drain queued messages before observing the low-priority WM_QUIT, including COM disconnect messages.
+    const auto quit = PumpMessages();
+    const auto remainingMessages = PumpMessages();
+    expect(quit.quit && quit.exitCode == 0 && !remainingMessages.quit, "fixture-consumes-one-quit-before-the-next-owner");
     std::printf("%s application-prepared-layer-rows-capacity.summary checks=%u failures=%d\n",
                 failures ? "FAIL" : "PASS", checks, failures);
     std::fflush(stdout);

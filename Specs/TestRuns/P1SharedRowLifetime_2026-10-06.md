@@ -2,7 +2,7 @@
 
 ## Scope
 
-**Status: OPEN. Preserve the original 848-input Debug r195, Release r196 and real ASan r197 passes and analysis r198 failure unchanged. Debug build r210 passes on 854 inputs frozen at `211A82AD25D83813F97260D6FCEB546DEC61B34C733C36E6E29EF44F1E99DD43`. Focused runtime r211 passes retry 18/18, edit 17/17, provider 16/16 and capacity 12/12, then stalls in synchronous notification publication after two notification checks. The owned child dump/termination receipt records exit 5. Shape and full-matrix qualification remain open; production activation is false.**
+**Status: OPEN. Preserve the original qualified 848-input Debug r195, Release r196 and real ASan r197 results and failed analysis r198 unchanged. Current consumer source is frozen at 854 inputs, SHA256 `33172D95332F68282B853A3D8D7AF7B17A8A60046EF2FB045152A97B113EADEA`. Full Debug r222 passes 10,008 controls / 88 stages and its 1,123-copy archive is independently verified. Release analysis r223 exits 1 at the ISA scanner on a signed switch table in `HostPathReadTests.obj` (`0x1400c5c84`) after compiler/SAL pass. ARM64 r28 failed in the recorder with `KeyError: 'StartedUtc'`; corrected r29 Debug/Release/ASan Debug cross-builds pass with independent D: archive verification. Full consumer Release/real ASan, stable identity, costs and activation remain open; prepared-row production remains disabled and P1 remains OPEN.**
 
 Source ownership: library branch `codex/p1-prepared-tree-accessibility`, implementation commit `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4`; checklist follow-up `5ba8378`. RedPrism scheduler source is the managed `codex/p1-opacity-host-proof` candidate after `900c644`, not the native checkout. Generated attempts/products and unqualified drafts stay under `.build/`; they are not committed.
 
@@ -118,3 +118,36 @@ These attempts use the exact DxUi pin `cd645ea2375725ed7a899bb6e681ef41d0a3000d`
 | Debug runtime r213 | Child 76908; exit 5; 2026-10-06T07:19:23.113553Z to 2026-10-06T07:19:24.016181Z; binary `E9F0F655E4158C6FFC09A75C2BBDA88D1D52E076B659333A23E2A2814BFAE19D`; interaction 17/18 passes, failing the final quit-message closeout. Notification and shape are not reached. 1,114 archive copies verify. | `1728FA6F17508F09ED9CCED268B739DFA62B0BCC79F7CD93B5917898763A4308` |
 
 The r213 failure remains unchanged. The new callback guard and queued delivery route are not qualified by this run. Production activation remains false; full consumer matrix, retained row identity across reorder, cost, complete H4 and P1 exit gates remain open.
+
+## Full-queue closeout and successful callback/shape runtime
+
+Windows generates WM_QUIT when posted messages have drained. A quit-only peek in r216 found no quit despite complete shutdown and a null HWND. This exposed a fixture assumption after queued COM delivery. The repaired fixtures use the existing shared PumpMessages to drain pending messages, require one exit-zero quit, then require no second quit. Control names/counts and production shutdown are unchanged. The original diagnostic and compile failures remain preserved.
+
+| Attempt | Result | Freeze SHA256 | Archive completion SHA256 |
+| --- | --- | --- | --- |
+| Debug build r215 | Exit 0; diagnostic build, 854 inputs. | `B9E7518102DE37051B6A7E8F0642B262B0F1A488F6D4AF2C63EC0F20AB70BEEF` | `CF485D27FD957DA8C4DC073C282AB32A79E5665CE790E7190ADD6313D5A81A23` |
+| Debug runtime r216 | Child 55688, exit 5; 2026-10-06T07:26:47.199330Z to 2026-10-06T07:26:48.121343Z. Diagnostic removed=0, another=0, shutdown=1, window=null; 1,114 archive copies verify. | `B9E7518102DE37051B6A7E8F0642B262B0F1A488F6D4AF2C63EC0F20AB70BEEF` | `5D85ED8E10364AE0DA43ACBCD2994EB213048674746F905B734F1545AB337E84` |
+| Debug build r217 | Child 88724, exit 1; 2026-10-06T07:28:15.483885Z to 2026-10-06T07:28:31.381375Z. Fixture local `remaining` conflicts with its existing provider-navigation budget; renamed to `remainingMessages` after archival. | `06040AE67677B6C3319975FDDD5807776EB1C36E6A5B4CAA0895C92AE05A9610` | `7120B8B2DEBE81BE94E971BF2A0716FACE101FD552730E20F2AD8A22DF1EACBE` |
+| Debug build r220 | Child 57052, exit 0; 2026-10-06T07:29:39.745728Z to 2026-10-06T07:34:09.682621Z. | `33172D95332F68282B853A3D8D7AF7B17A8A60046EF2FB045152A97B113EADEA` | `14594C4C136A15B0B3085AE6B1657B56A0CD0BF3EA291DADDD2769C754928FFF` |
+| Debug runtime r221 | Child 98532, exit 0; 2026-10-06T07:35:22.302402Z to 2026-10-06T07:37:45.846258Z. Binary `688EDE6793D6995B5184403E8F237E195D44B7030A5B8AFCEFB2924DD3EC9D94`; all 88 application stages pass, including real notification11 and shape-redraw9. All 1,114 archive copies verify. | `33172D95332F68282B853A3D8D7AF7B17A8A60046EF2FB045152A97B113EADEA` | `0054633C41673BC949A15C923521C251C101E4638A9849253A8F9C6E1051814C` |
+
+The real notification client subscribes from a fresh MTA to the actual HWND. Owner publication returns while its callback is held; zoom runs before release; the callback reads the current full Unicode name and marshals a successful selection once. Unsubscription and all old source retirement complete before joined client/host shutdown. Shape redraw runs through the actual queued transform finish and preserves independent literal pixels/mask grid and one Undo/Redo.
+
+The later r222–r223 and ARM64 recorder outcomes are recorded in the current-source receipt section below. The stable-ID implementation/test draft remains isolated under ignored Native `.build`; it is not part of this 854-input source or a qualified change.
+
+## Current frozen-source receipts: r222–r223 and ARM64 r28–r29
+
+All consumer attempts below use the same 854-input source freeze `33172D95332F68282B853A3D8D7AF7B17A8A60046EF2FB045152A97B113EADEA`. The original 848-input qualified matrix and historical failures above are unchanged.
+
+| Attempt | Outcome | Independent archive / receipt |
+| --- | --- | --- |
+| Full x64 Debug r222 | Exit 0; actual child 107768; `2026-10-06T07:38:43.389673Z`–`2026-10-06T07:49:59.829603Z`. Full run passes 10,008 controls across 88 application stages. | 1,123 copies; completion SHA256 `AC34E90F50D39994A0E27B1C1C3976EAF4A9272C9262C2C11A1BBB64EF38A09D`. Independent strict19 verifier passes 10,008 controls / 88 stages. |
+| x64 Release analysis r223 | Exit 1; actual child 113704; `2026-10-06T07:40:47.564841Z`–`2026-10-06T07:45:52.658457Z`. Compiler and SAL controls pass; ISA scanner rejects the signed switch table at `0x1400c5c84` in `HostPathReadTests.obj`. | 1,137 copies; completion SHA256 `A5E37861D6550BF7359A227EE050AA579D1AB566B5E0D064A306E30D29B7EDEC`. Failure preserved. |
+| ARM64 r28 | Recorder failure; `KeyError: 'StartedUtc'` while indexing the child result, so it produced no valid build result and is not a pass. | Original recorder failure retained. |
+| ARM64 r29 Debug | Exit 0; actual child 97964; `2026-10-06T07:54:27.507953Z`–`2026-10-06T07:54:43.990527Z`. | 925 copies; independent archive `D:\RedPrismQualificationArchives\P1-shared-rows-854-arm29-Debug-2026-10-06`; completion SHA256 `5619C7D2CB93ABACC0A1FA898DCB2DE30BA7B5E1DCF3C6A91D37E1EA5DF40B0F`. |
+| ARM64 r29 Release | Exit 0; actual child 100304; `2026-10-06T07:54:47.370211Z`–`2026-10-06T07:57:10.353202Z`. | 925 copies; independent archive `D:\RedPrismQualificationArchives\P1-shared-rows-854-arm29-Release-2026-10-06`; completion SHA256 `A9FFEA730FFB7717D26351A3AEC476CACC0DBDBFFF21556F6740FDBB0FBFC1C6`. |
+| ARM64 r29 ASan Debug | Exit 0; actual child 3536; `2026-10-06T07:57:14.563368Z`–`2026-10-06T07:58:58.445408Z`. | 929 copies; independent archive `D:\RedPrismQualificationArchives\P1-shared-rows-854-arm29-ASan-2026-10-06`; completion SHA256 `F042AD50EF8B499EFDB6F426F5B2DE9F19DDD3D1001CAFEA8BC61AD306A1C5D2`. |
+
+ARM64 r29 records kernel-observed child start/completion timestamps and cross-compilation only; it makes no native ARM64 runtime claim. Independent archive receipts are in each `residency-arm-builds-r29/{Debug,Release,ASanDebug}/independently-verified-archive.json`.
+
+Archive location follow-up: the original C: archive operation ran out of space; its three partial C: archives remain unchanged. The successful r29 archives were independently verified on D: with 925/925/929 copies as recorded above. The completed r195/r196/r197 archives were relocated byte-for-byte to D:, with their original C: path junctions and recorded manifest paths preserved. The stable-ID implementation/test draft remains unintegrated and unqualified. Prepared-row production remains disabled. Consumer Release/real ASan, current-source library paired performance, retained row identity through reorder, H4/G1 and P1 exits remain open.
