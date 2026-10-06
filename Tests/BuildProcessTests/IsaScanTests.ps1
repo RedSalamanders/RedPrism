@@ -17,6 +17,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.
 & (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaDisp8RcxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaDisp8RcxImm8ByteRemapTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX imm8 byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR10EcxGuardTests.ps1')

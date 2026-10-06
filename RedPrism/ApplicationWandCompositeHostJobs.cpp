@@ -118,7 +118,21 @@ class Application::WandCompositeHostJob final : public DocumentReadbackJob
     }
     HRESULT PrepareReadbackDevice(HRESULT reason) noexcept override
     {
-        return _owner.PrepareUtilityDevice(reason);
+        if (_gate)
+        {
+            _gate->readbackPrepares.fetch_add(1);
+            if (FAILED(reason))
+                _gate->readbackRecoveries.fetch_add(1);
+        }
+        const HRESULT ready = _owner.PrepareUtilityDevice(reason);
+        // Test-only owner message: RequestTile enqueues the real readback after this callback. The shared
+        // message pump dispatches the queued message before the next GPU pump, without timers or polling.
+        if (SUCCEEDED(ready) && reason == S_OK && _gate &&
+            _gate->readbackRecoveries.load() < _gate->requestedReadbackRebinds &&
+            !PostThreadMessageW(_ownerThread, WandLayerHostTestGate::kReadbackMessage, 0,
+                                reinterpret_cast<LPARAM>(_gate.get())))
+            return HRESULT_FROM_WIN32(GetLastError());
+        return ready;
     }
     bool ProcessReadbackDetached() const noexcept override
     {

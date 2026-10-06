@@ -673,11 +673,15 @@ presentation and measured G1 remain separate gates.
 exact outline vertices/AA, transparent full-canvas selection, history/no-op behavior, invalid composites, crossed
 publication modes, cancellation, authority refusal and the composite-versus-sparse-source memory plans. These
 fixtures do not use the composition or `MagicWand` as their expected-pixel oracle. `RunWandCompositeHostSelfTest`
-contains 18 modes whose expected state and selected outline come from an independent literal visible-composite
+contains 20 modes whose expected state and selected outline come from an independent literal visible-composite
 fixture, not from the rendering helper that produces the GPU readback. Require original selected order, current-only
 publication, actual record-capacity refusal, map/utility release before CPU preparation, real device recovery after
-copy acknowledgement, fault atomicity and off-owner aggregate retirement. Recorded passage belongs in
-`Specs/TestRuns/WandCompositeReadback_2026-10-04.md`; these structural controls preserve the existing legacy numeric
+copy acknowledgement, fault atomicity and off-owner aggregate retirement. The two pre-copy device-change modes
+retire an actual queued readback before a map exists: one change restarts and publishes the literal outline as one
+undoable entry; a third change fails after two restarts, preserving original selection, redo and history epoch.
+Both require one source capture and unchanged job ticket, history stamp and reservation across retries.
+Recorded passage belongs in `Specs/TestRuns/WandCompositeReadback_2026-10-04.md` and the later
+[pre-copy recovery qualification](../TestRuns/P1WandReadbackRebind_2026-10-06.md); these structural controls preserve the existing legacy numeric
 goldens and do not substitute for the required large supported fixtures or G1 performance measurements.
 
 ## Gates

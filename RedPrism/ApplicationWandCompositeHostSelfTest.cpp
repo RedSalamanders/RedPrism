@@ -69,6 +69,8 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         Admission,
         StaleSource,
         DeviceAfterCopy,
+        DeviceBeforeCopy,
+        DeviceRestartLimit,
     };
     struct State final
     {
@@ -90,6 +92,11 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         bool adjacentCoalescedAtGate = false;
         bool fullRingCoalescedAtGate = false;
         bool ordinalGapRetainedAtGate = false;
+        unsigned int readbackRebinds = 0;
+        bool readbackPendingOnEveryRebind = true, readbackAuthorityUnchanged = true;
+        bool readbackIdentityHeld = true, readbackDeviceRebound = true;
+        std::optional<JobTicket> readbackTicket;
+        std::optional<HistoryWorkStamp> readbackStamp;
         std::optional<CanvasDocument> before;
         std::optional<DocumentSelection> selectionBefore;
         DocumentHistory::StateView historyBefore;
@@ -184,6 +191,42 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         auto& state = *static_cast<State*>(opaque);
         auto& owner = state.owner;
         auto& message = *static_cast<MSG*>(native);
+        if (message.message == WandLayerHostTestGate::kReadbackMessage)
+        {
+            const auto gate = owner._wandLayerHostTestGate;
+            if (!gate || message.lParam != reinterpret_cast<LPARAM>(gate.get()))
+                return;
+            if (state.readbackRebinds == 0)
+            {
+                state.readbackTicket = owner._wandLayerHostTicket;
+                state.readbackStamp = owner._wandLayerHostStamp;
+            }
+            state.readbackPendingOnEveryRebind = state.readbackPendingOnEveryRebind && owner._gpuWork.HasPending() &&
+                                                 owner._gpuWork.LentCount() == 0 &&
+                                                 state.receipt.Read().outcome == HostOutcome::Pending;
+            state.readbackAuthorityUnchanged = state.readbackAuthorityUnchanged &&
+                                               owner._session.Document() == state.before &&
+                                               owner._session.Generation() == state.generation &&
+                                               owner._session.history.CurrentRevision() == state.revision &&
+                                               owner._session.history.IsCurrent(state.historyBefore);
+            state.readbackIdentityHeld =
+                state.readbackIdentityHeld && state.readbackTicket.has_value() && state.readbackStamp.has_value() &&
+                owner._wandLayerHostTicket == state.readbackTicket &&
+                owner._wandLayerHostStamp == state.readbackStamp &&
+                owner._historyWork.IsCurrent(state.readbackStamp.value()) &&
+                owner._jobs.ReservedMemoryBytes() == gate->reservationBytes && gate->captures.load() == 1;
+            const auto generation = owner._renderer.DeviceGeneration();
+            const auto queueGeneration = owner._gpuWork.DeviceGeneration();
+            const HRESULT recovered = owner._renderer.RecoverDeviceForTest();
+            owner.BindCompositionDevice();
+            state.readbackDeviceRebound = state.readbackDeviceRebound && SUCCEEDED(recovered) &&
+                                          SUCCEEDED(owner._gpuBindingError) &&
+                                          owner._renderer.DeviceGeneration() > generation &&
+                                          owner._gpuWork.DeviceGeneration() > queueGeneration &&
+                                          owner._composition.Device() == owner._renderer.Device();
+            ++state.readbackRebinds;
+            return;
+        }
         if (message.message == WandLayerHostTestGate::kMessage)
         {
             const auto gate = owner._wandLayerHostTestGate;
@@ -196,6 +239,11 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             state.sourceAndHistoryUnchangedAtGate = owner._session.Document() == state.before &&
                                                     owner._session.history.CurrentRevision() == state.revision &&
                                                     owner._session.Generation() == state.generation;
+            if (state.mode == Mode::DeviceBeforeCopy)
+                state.readbackIdentityHeld = state.readbackIdentityHeld &&
+                                             owner._wandLayerHostTicket == state.readbackTicket &&
+                                             owner._wandLayerHostStamp == state.readbackStamp &&
+                                             owner._jobs.ReservedMemoryBytes() == gate->reservationBytes;
 
             state.detachedOwnersReleased = owner._gpuWork.LentCount() == 0 && owner._gpuWork.InFlightCount() == 0 &&
                                            !owner._gpuWork.HasPending() && owner._composition.UtilitySurfaceBytes() == 0;
@@ -357,6 +405,10 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             return "stale-source";
         case Mode::DeviceAfterCopy:
             return "device-after-copy";
+        case Mode::DeviceBeforeCopy:
+            return "device-before-copy";
+        case Mode::DeviceRestartLimit:
+            return "device-restart-limit";
         }
         return "unknown";
     };
@@ -383,7 +435,9 @@ int Application::RunWandCompositeHostSelfTest() noexcept
                                Mode::ViewAndWindowPump,
                                Mode::Admission,
                                Mode::StaleSource,
-                               Mode::DeviceAfterCopy};
+                               Mode::DeviceAfterCopy,
+                               Mode::DeviceBeforeCopy,
+                               Mode::DeviceRestartLimit};
 
     for (const Mode mode : modes)
     {
@@ -486,6 +540,15 @@ int Application::RunWandCompositeHostSelfTest() noexcept
                 L"Seed for no match");
             _session.wandSettings.sampleSize = WandSampleSize::ThreeByThree;
         }
+        if (mode == Mode::DeviceBeforeCopy || mode == Mode::DeviceRestartLimit)
+        {
+            _session.SetSelection(
+                DocumentSelection{false, SelectionLoops{SelectionLoop{Vec2{0, 0}, Vec2{1, 0}, Vec2{1, 1}, Vec2{0, 1}}}},
+                L"Seed before device change");
+            _session.SetSelection(ExpectedLatestOutline(), L"Future before device change");
+            _session.Undo();
+            SelectionChanged();
+        }
 
         auto gate = std::make_shared<WandLayerHostTestGate>();
         gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -497,6 +560,8 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             gate->throwCaptureFailure = true;
         if (mode == Mode::HistoryEntryFailure)
             gate->throwHistoryStage = DocumentHistory::PrepareStage::Entry;
+        if (mode == Mode::DeviceBeforeCopy || mode == Mode::DeviceRestartLimit)
+            gate->requestedReadbackRebinds = mode == Mode::DeviceBeforeCopy ? 1u : 3u;
         _wandLayerHostTestGate = gate;
 
         State state{*this, mode};
@@ -545,7 +610,8 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         const SettleResult settled = SettleJobs(_jobs, 15000, pump, &state);
         (void)expect(name(mode), "bounded-settlement", settled == SettleResult::Settled,
                      "SettleJobs did not acknowledge the worker and queued host work within 15 seconds");
-        const bool expectedGate = mode != Mode::CaptureFailure && mode != Mode::HistoryEntryFailure;
+        const bool expectedGate =
+            mode != Mode::CaptureFailure && mode != Mode::HistoryEntryFailure && mode != Mode::DeviceRestartLimit;
         if (mode != Mode::NoWorkInputs)
         {
             (void)expect(name(mode), "prepared-worker-held-under-reservation",
@@ -645,6 +711,47 @@ int Application::RunWandCompositeHostSelfTest() noexcept
                              _session.Selection() == std::optional<DocumentSelection>(ExpectedWandOutline()),
                          "device retirement after map acknowledgement restarted or lost the copied selection");
         }
+        else if (mode == Mode::DeviceBeforeCopy || mode == Mode::DeviceRestartLimit)
+        {
+            const unsigned int recoveries = mode == Mode::DeviceBeforeCopy ? 1u : 2u;
+            (void)expect(name(mode), "each-change-retires-pending-readback-before-map",
+                         state.readbackRebinds == gate->requestedReadbackRebinds &&
+                             state.readbackPendingOnEveryRebind && state.readbackDeviceRebound,
+                         "requested device changes did not retire real pending readbacks before mapped rows existed");
+            (void)expect(
+                name(mode), "original-capture-ticket-stamp-and-reservation-survive-retries",
+                state.readbackIdentityHeld && state.readbackAuthorityUnchanged && gate->captures.load() == 1 &&
+                    gate->readbackPrepares.load() == 1u + 2u * recoveries &&
+                    gate->readbackRecoveries.load() == recoveries,
+                "retries recaptured live state, changed job/history identity or exceeded the two-restart limit");
+            if (mode == Mode::DeviceBeforeCopy)
+            {
+                (void)expect(name(mode), "one-restart-publishes-literal-outline-and-one-history-entry",
+                             state.gateVisited && state.receipt.Read().outcome == HostOutcome::Succeeded &&
+                                 _session.Selection() == std::optional<DocumentSelection>(ExpectedWandOutline()) &&
+                                 _session.Document()->layers == state.before->layers &&
+                                 _session.history.UndoCount() ==
+                                     static_cast<int>(state.historyBefore.PastCount()) + 1 &&
+                                 _session.history.UndoName() == L"Magic Wand" && !_session.history.CanRedo(),
+                             "recovered composite changed source pixels/mask or failed atomic one-entry publication");
+                _session.Undo();
+                const bool undoRestored =
+                    _session.Selection() == state.before->selection && _session.history.RedoName() == L"Magic Wand";
+                _session.Redo();
+                (void)expect(name(mode), "undo-redo-restores-seed-and-recovered-outline",
+                             undoRestored &&
+                                 _session.Selection() == std::optional<DocumentSelection>(ExpectedWandOutline()) &&
+                                 _session.history.UndoName() == L"Magic Wand",
+                             "Undo/Redo failed to restore the original and recovered selections");
+            }
+            else
+                (void)expect(name(mode), "third-change-fails-without-partial-selection-or-history",
+                             !state.gateVisited && state.receipt.Read().outcome == HostOutcome::Failed &&
+                                 state.receipt.Read().error == static_cast<std::int32_t>(E_ABORT) &&
+                                 _session.history.CanRedo() &&
+                                 _session.history.RedoName() == L"Future before device change",
+                             "third device change bypassed the restart limit or discarded existing redo");
+        }
         else if (mode == Mode::Cancel)
         {
             (void)expect(name(mode), "receipt-retained-through-cancel-ack",
@@ -690,7 +797,8 @@ int Application::RunWandCompositeHostSelfTest() noexcept
 
         const bool refusesPublication = mode == Mode::StaleActive || mode == Mode::StaleMask || mode == Mode::Cancel ||
                                         mode == Mode::WorkerFailure || mode == Mode::CaptureFailure ||
-                                        mode == Mode::StaleSource || mode == Mode::HistoryEntryFailure;
+                                        mode == Mode::StaleSource || mode == Mode::HistoryEntryFailure ||
+                                        mode == Mode::DeviceRestartLimit;
         if (expectedGate)
             (void)expect(name(mode), "map-and-utility-released-before-selection-gate", state.detachedOwnersReleased,
                          "selection/history work retained an outstanding map, GPU slot or utility surface");

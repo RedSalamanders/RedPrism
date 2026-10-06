@@ -366,6 +366,20 @@ instructions. The 115 independent controls cover 15 valid bound/displacement com
 failure classes, operand/owner/range/count corruption and genuine body/adjacent vector rejection. This adds no
 module or allowlist exemption.
 
+The observed ASan color-picker remap also emits the exact 42-byte compact form with opcode `83`:
+`CMP dword [RSP+disp8],imm8; JA rel32; MOV EAX,[RSP+the same disp8]`, followed by the same contiguous
+RCX image-base LEA, byte-remap load, DWORD target load, ADD RAX,RCX and JMP RAX. Its sign-extended
+immediate must be positive, 1…127; encoded negative values and zero do not prove an unsigned bound.
+The compact comparison row must be retained as evidence. All eight rows, PE/listing agreement,
+nonoverlapping known boundaries, anonymous same-owner symbols, contiguous DWORD/byte spans,
+exact owning procedure end, remap indices and decoded body/default targets satisfy the same proof
+as the imm32 form. No missing or contradictory evidence receives a fallback exemption. The 115
+imm32 controls remain unchanged; `IsaDisp8RcxImm8ByteRemapTests.ps1` adds 116 independent controls,
+including the observed maximum 27 / stack displacement 40, invalid signed maxima, every row-evidence
+fault and genuine body/adjacent VEX/EVEX rejection. Only proved data receives data status; runtime
+and tier allowlists are unchanged. The [unchanged-image record](../TestRuns/P1WandReadbackRebind_2026-10-06.md)
+preserves the original false instruction report and exact failed binary/PDB.
+
 The ASan `Application::EndCanvasEdit` terminal switch uses exactly `CMP dword [RSP+disp32],imm8;
 JA rel32; MOVSXD RAX,dword [RSP+the same disp32]`, followed by the contiguous RCX image-base DWORD dispatch,
 ADD and JMP RAX. All seven guard/dispatch rows must match their PE bytes, decoded lengths and nonoverlapping

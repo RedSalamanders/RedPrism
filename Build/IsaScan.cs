@@ -1601,7 +1601,8 @@ namespace RedPrismBuild
             return 0;
         }
 
-        // ASan menu tracing uses the disp8 stack slot with an imm32 unsigned guard and a zero-extending
+        // ASan menu/color-picker tracing uses a disp8 stack slot with an imm32 or sign-extended imm8
+        // unsigned guard and a zero-extending
         // EAX load. Its remap ends at the exact procedure inside a larger contribution. Corroborate all
         // eight rows; a later anonymous data symbol cannot rescue a broken or missing guard.
         private static ulong Disp8RcxByteIndexEnd(byte[] pe, List<Section> sections,
@@ -1616,26 +1617,39 @@ namespace RedPrismBuild
             try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
             catch (InvalidDataException) { return 0; }
             if (raw > pe.Length - 45) return 0;
-            candidate = StartsWithAt(pe, raw + 14, 0x8b, 0x44, 0x24) || StartsWithAt(pe, raw, 0x81, 0x7c, 0x24);
-            if (guardRows.TryGetValue(prefix + 14, out byte[] indexRow) && indexRow.Length == 4 &&
+            bool shortImmediate = StartsWithAt(pe, raw + 3, 0x83, 0x7c, 0x24) ||
+                (guardRows.TryGetValue(prefix + 3, out byte[] shortRow) && shortRow.Length == 5 &&
+                 StartsWith(shortRow, 0x83, 0x7c, 0x24));
+            if (shortImmediate) { prefix += 3; raw += 3; }
+            int comparisonLength = shortImmediate ? 5 : 8;
+            int indexOffset = comparisonLength + 6;
+            int dispatchOffset = indexOffset + 4;
+            byte comparisonOpcode = shortImmediate ? (byte)0x83 : (byte)0x81;
+            candidate = StartsWithAt(pe, raw + indexOffset, 0x8b, 0x44, 0x24) ||
+                StartsWithAt(pe, raw, comparisonOpcode, 0x7c, 0x24);
+            if (guardRows.TryGetValue(prefix + (ulong)indexOffset, out byte[] indexRow) && indexRow.Length == 4 &&
                 StartsWith(indexRow, 0x8b, 0x44, 0x24)) candidate = true;
-            if (guardRows.TryGetValue(prefix, out byte[] comparisonRow) && comparisonRow.Length == 8 &&
-                StartsWith(comparisonRow, 0x81, 0x7c, 0x24)) candidate = true;
+            if (guardRows.TryGetValue(prefix, out byte[] comparisonRow) && comparisonRow.Length == comparisonLength &&
+                StartsWith(comparisonRow, comparisonOpcode, 0x7c, 0x24)) candidate = true;
             if (!candidate || begin != dwordTable.End ||
-                !StartsWithAt(pe, raw, 0x81, 0x7c, 0x24) ||
-                !StartsWithAt(pe, raw + 8, 0x0f, 0x87) ||
-                !StartsWithAt(pe, raw + 14, 0x8b, 0x44, 0x24) || pe[raw + 3] != pe[raw + 17] ||
-                !StartsWithAt(pe, raw + 18, 0x48, 0x8d, 0x0d) ||
-                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 21) != (long)imageBase ||
-                !StartsWithAt(pe, raw + 25, 0x0f, 0xb6, 0x84, 0x01) ||
-                checked(imageBase + BitConverter.ToUInt32(pe, raw + 29)) != begin ||
-                !StartsWithAt(pe, raw + 33, 0x8b, 0x84, 0x81) ||
-                checked(imageBase + BitConverter.ToUInt32(pe, raw + 36)) != dwordTable.Begin ||
-                !StartsWithAt(pe, raw + 40, 0x48, 0x03, 0xc1, 0xff, 0xe0)) return 0;
-            uint maximum = BitConverter.ToUInt32(pe, raw + 4);
+                !StartsWithAt(pe, raw, comparisonOpcode, 0x7c, 0x24) ||
+                !StartsWithAt(pe, raw + comparisonLength, 0x0f, 0x87) ||
+                !StartsWithAt(pe, raw + indexOffset, 0x8b, 0x44, 0x24) || pe[raw + 3] != pe[raw + indexOffset + 3] ||
+                !StartsWithAt(pe, raw + dispatchOffset, 0x48, 0x8d, 0x0d) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + dispatchOffset + 3) != (long)imageBase ||
+                !StartsWithAt(pe, raw + dispatchOffset + 7, 0x0f, 0xb6, 0x84, 0x01) ||
+                checked(imageBase + BitConverter.ToUInt32(pe, raw + dispatchOffset + 11)) != begin ||
+                !StartsWithAt(pe, raw + dispatchOffset + 15, 0x8b, 0x84, 0x81) ||
+                checked(imageBase + BitConverter.ToUInt32(pe, raw + dispatchOffset + 18)) != dwordTable.Begin ||
+                !StartsWithAt(pe, raw + dispatchOffset + 22, 0x48, 0x03, 0xc1, 0xff, 0xe0)) return 0;
+            // Opcode 83 sign extends its immediate. Negative encoded values cannot establish a bounded
+            // unsigned index range, even when the same byte interpreted unsigned would be small.
+            if (shortImmediate && pe[raw + 4] >= 128) return 0;
+            uint maximum = shortImmediate ? pe[raw + 4] : BitConverter.ToUInt32(pe, raw + 4);
             if (maximum == 0 || maximum >= 4096) return 0;
-            int[] starts = { 0, 8, 14, 18, 25, 33, 40, 43 };
-            int[] lengths = { 8, 6, 4, 7, 8, 7, 3, 2 };
+            int[] starts = { 0, comparisonLength, indexOffset, dispatchOffset, dispatchOffset + 7,
+                dispatchOffset + 15, dispatchOffset + 22, dispatchOffset + 25 };
+            int[] lengths = { comparisonLength, 6, 4, 7, 8, 7, 3, 2 };
             for (int i = 0; i < starts.Length; ++i)
             {
                 ulong address = prefix + (ulong)starts[i];
@@ -1643,7 +1657,7 @@ namespace RedPrismBuild
                     !MatchesDecodedPe(pe, sections, imageBase, address, reported, contributions, decoded, decodedStarts))
                     return 0;
             }
-            long defaultAddress = (long)prefix + 14 + BitConverter.ToInt32(pe, raw + 10);
+            long defaultAddress = (long)prefix + indexOffset + BitConverter.ToInt32(pe, raw + comparisonLength + 2);
             if (defaultAddress < 0 || !dwordTable.Targets.Contains((ulong)defaultAddress)) return 0;
             ulong end = checked(begin + maximum + 1);
             foreach (Function procedure in procedures)
@@ -2776,7 +2790,7 @@ namespace RedPrismBuild
                 }
                 if (candidateBytes[2] == "0d")
                 {
-                    int[] offsets = { -25, -22, -21, -18, -17, -16, -13, -12, -11, -10, -7, -5, -4, 0, 7, 14, 15, 17, 22, 25 };
+                    int[] offsets = { -25, -22, -21, -18, -17, -16, -15, -13, -12, -11, -10, -7, -5, -4, 0, 7, 14, 15, 17, 22, 25 };
                     foreach (int offset in offsets) rdxGuardCandidates.Add(checked((ulong)((long)candidateAddress + offset)));
                     continue;
                 }
