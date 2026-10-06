@@ -205,3 +205,7 @@ Every current qualification child has exited and every archive has independently
 Required source edits may resume after the r180/r181/r182/r183/r23 actual-exit/archive barriers. Documentation was excluded from the input freeze. The three frozen Native launcher helpers remain unchanged. The assigned cheaper agent is closed. No user application was terminated and no native ARM64 runtime, first-display G1, RAW or Photoshop performance result is claimed.
 
 Qualified source commit `e33ab7decf85269df5177e5ef8241fe9421b4f7b` is pushed and matches its upstream. Main is clean at this boundary. Native documentation records this commit separately; its pre-existing WIP index and ScopedTesting changes remain preserved outside this step's staging scope.
+
+## Drag/rename and queued acknowledgement step — 2026-10-06
+
+The subsequent [registered edit and GPU producer-ordering record](P1PreparedLayerRowsEdit_2026-10-06.md) qualifies all 17 edit +26 composition additions in the full identical-source Debug/Release/real ASan matrix, Release analysis and three ARM64 cross-builds. Its newer record supersedes the earlier unregistered-draft statements above. Accessibility reentrancy/charged ownership, complete consumers, Native activation and G1 remain open.
