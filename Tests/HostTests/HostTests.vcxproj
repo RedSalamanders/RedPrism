@@ -118,6 +118,8 @@
     <ClCompile Include="SharedRetainedJobMemoryTests.cpp" />
     <ClInclude Include="SharedRetainedJobMemoryTests.h" />
     <ClInclude Include="RetainedJobMemoryTests.h" />
+    <ClInclude Include="Host.Tests.WorkerWriteCompletion.h" />
+    <ClCompile Include="Host.Tests.WorkerWriteCompletion.cpp" />
     <ClCompile Include="HostTests.cpp" />
     <ClCompile Include="OwnerWorkMultiplexerTests.cpp" />
     <ClCompile Include="RetryWaitQueueTests.cpp" />

@@ -18,6 +18,7 @@
 #include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
+#include "Host.Tests.WorkerWriteCompletion.h"
 #include "HostPathReadTests.h"
 #include "JobActivityTests.h"
 #include "JobBenchmark.h"
@@ -665,7 +666,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 490> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 491> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -1157,6 +1158,7 @@ void TestStringTable() noexcept
                                          IDS_KEY_FUNCTION,
                                          IDS_KEY_VIRTUAL,
                                          IDS_SHUTDOWN_UNSAVED,
+                                         IDS_SHUTDOWN_SAVING,
                                          IDS_ERROR_CANVAS_DRAW,
                                          IDS_ERROR_SELECTION_DETAILED,
                                          IDS_CMD_TARGET_MASK,
@@ -1829,6 +1831,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRetryWaitQueueTests();
     gFailures += RunRetryWaitCancellationTests();
     gFailures += RunJobUiPolicyTests();
+    gFailures += RunWorkerWriteCompletionChecks();
     gFailures += RunJobActivityTests();
     gFailures += RunMemoryAdmissionTests();
     gFailures += RunDeferredReleaseTests();

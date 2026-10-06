@@ -1,7 +1,22 @@
 # P1 — Responsive raster editor delivery milestone
 
-**Execution resumed by the user on 2026-10-05: “continue until done”.** The saved
-[checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) remains the source/qualification boundary.
+**Paused at the user's explicit request on 2026-10-06.** All assigned agents and the active validation are stopped.
+The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) records the saved source, drafts, exact receipts,
+unfinished work and next commands. Resume only after a new user instruction. P1 remains WIP.
+
+Current 877-input caller candidate passes full x64 Debug r278 / Release r280 / real ASan r281 and all
+three ARM64 r40 cross-builds on identical freeze
+`14178E65857A11148E49C3D1FD548DDC39298FF2BBAFF9FFDC55244656AAABDF`.
+Independent inventory checks preserve every predecessor and require 10,394 named application controls /
+98 stages, including 80 single-layer Clone/folder, 48 clipboard and 108 file session-end additions.
+The 16 new event-protocol and two resource controls occur in both ordinary HostTests and its ASan stress run.
+ASan's r5 verifier corrects that exact stress inventory; no source or runtime expectation changes.
+All runtime/cross-build archives independently verify. Cross-builds establish no native ARM64 runtime result.
+Release analysis r282 was stopped at the user's request: actual child PID 67664 exits -1 at
+`2026-10-06T20:43:28.106340Z`. Its unchanged source and two actual `/MP2` plus `/analyze` response files remain
+preserved, but this is no analysis pass. A fresh completed analysis, qualified commit/push and overall P1/G1 remain due.
+Earlier resource-capacity, compiler-service and clipboard-oracle failures remain archived with their original
+results in the [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
 
 Latest qualified slice: All Layers Clone source readback, retained source/shutdown ownership, separate physical
 Space pan and event-time Clone input policy pass full x64 Debug r267 / Release r268 / real ASan r270,
@@ -34,12 +49,44 @@ The image-wrapper residency and original worker/upload transport step is fully q
 
 ## Delivery checklist
 
-- [ ] Next caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
+- [ ] Enable the qualified history-residency subscriber during normal startup. The primary prepared
+  actual `Run` startup wiring and 36 real-host controls for notification-driven trimming, acquired-prefix
+  failure, full subscription/route capacity, rollback and repeated shutdown. Reviewed copies are ignored
+  under `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`; they are not integrated or compiled. Existing
+  core/index/reprepare qualification stays checked; production startup and full H3/G1 remain open.
+- [ ] Integrate and execute the reviewed cancellable healing kernel and 33 independent analytic/span/cancel
+  controls. Primary review strengthened the API to validate both owned spans, separated statistics from real
+  solve checkpoints and repaired the delegated large-array comparator. Reviewed copies are ignored under
+  `.build/P1Drafts/StrokeFinish/ReviewedHeal-r4`; no compilation or asynchronous production finish is claimed.
+- [ ] Integrate typed structured-buffer readback and deferred brush coverage recording, then connect the actual
+  asynchronous final stroke graph. Primary drafts reuse the existing bounded queue's staging cap, in-flight
+  limit, event/fence waits, exact lease acknowledgements and device-retirement owners. They preserve the shader's
+  uint coverage and move conversion to the worker. Cheaper-agent WARP controls require independent review;
+  ignored drafts are not compilation, application activation, or mouse-up latency evidence.
+- [ ] Qualify the integrated Save/export session-end event handling and localized saving block reason.
+  Primary-reviewed copies and 108 actual-host controls are integrated; the cheaper agent's 16 protocol controls
+  were independently repaired. Unsaved-document protection and original publication/receipt authority remain.
+  Debug r277's resource-array capacity failure is archived; the correction preserves every expectation. Fresh
+  Debug r278, Release r280 and real ASan r281 pass all 108 actual-message checks; all three ARM64 r40
+  cross-builds and their archive proofs pass. Release analysis and commit/push remain due. See the
+  [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
+- [ ] Current caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
   choice in the fixed press context, use an admitted worker placement sample for the active layer, and
-  retain the original source charge through stroke/shutdown retirement. The reviewed ignored draft adds
-  50 functional, five allocation-failure and 16 shutdown controls; none is qualified until registered and run.
+  retain the original source charge through stroke/shutdown retirement. The primary-reviewed implementation
+  and 50 functional, five allocation-failure and 16 shutdown controls are now registered; full qualification
+  remains due. Current Debug r278 / Release r280 / real ASan r281 and all three ARM64 r40 cross-builds pass;
+  Release analysis and the qualified commit/push remain due.
+  Existing retouch checks pump the source and release acknowledgements before inspecting results.
 - [ ] Qualify the supported prepared-folder selection/grouping route with actual host Undo/Redo and literal
-  hierarchy/pixel expectations. The nine-control reviewed draft does not define new multi-row UI semantics.
+  hierarchy/pixel expectations. The nine controls are registered and require qualification; they do not define
+  new multi-row UI semantics. Current Debug r278 / Release r280 / real ASan r281 pass all nine. See the
+  [current source record](../../TestRuns/P1CloneLayerSource_2026-10-06.md).
+- [ ] Confirmed session-end follow-up: cancel active clipboard work on `WM_ENDSESSION(TRUE)` and qualify
+  Copy/Cut before publication and after `EmptyClipboard`, plus cancelled-session preservation. Primary
+  cancellation is implemented and 48 independent real-message controls are registered after review of the
+  delegated draft. The adapter completes an irreversible attempt once. Current Debug r278 / Release r280 /
+  real ASan r281 pass all 48; Release analysis and qualified commit/push remain due.
+  Save/export worker-wait and saving-reason wiring are included in this current candidate.
 - [x] Migrate eligible real Clone All Layers press to admitted tiled readback, retain its event-time offset/input and original reservation through stroke/sample retirement, and qualify literal pixels, ordering, cancellation, failure and device recovery. Sampler diagnostics preserve its literal expectation.
   - [x] Add and qualify real capture-loss and independent shutdown coverage. Primary review found the shutdown cancellation
     runner would retire the live Clone sample before final CPU stroke retirement; keep its original retained
@@ -1193,6 +1240,40 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
   - the Stroke lane and chaining, including chaining behind pending commits;
   - lazy tiled clone/blur/warp sources, async heal, and a single-pass `FinishWarp`;
   - the async mouse-up snapshot.
+
+  Remaining stroke implementation is tracked in this order; these unchecked rows are required for P1:
+
+  - [ ] Prepare a cancellable worker healing kernel without changing candidate ordering, membrane solve or
+    legacy rounding. Validate pitched dimensions before allocating or reading. Allocation failure reaches the
+    scheduler's named runner boundary. A false result discards private scratch/output; it never publishes a
+    partly healed raster. Independent constant-field references, cancellation at each real work boundary and
+    invalid-input controls supplement all unchanged legacy goldens. The ignored `PreparedHeal-r1` and
+    `Document.Tests.HealWork` drafts exist; they are not compiled, integrated or qualified.
+  - [ ] Introduce a typed exclusive finished-stroke worker input and prepared publication. Preserve the exact
+    opening, document serial/generation, layer/image/transform/mask/selection and original FIFO history ordinal.
+    The owner must finish all graphics borrowing before transfer. `ReleaseCoverageEngine` currently means
+    discard-only: calling it before `Flush` is invalid. Do not replay GPU density on the CPU or change the
+    required WARP compute engine to the CPU reference.
+  - [ ] Add final GPU coverage transport for the existing structured preview buffers: owner records final tail
+    dispatch and copies, readiness uses the shared event wait pool, owner lends mapped rows only after readiness,
+    and a worker converts the exact coverage bytes. The current BGRA texture readback interface cannot directly
+    copy a structured buffer into a texture. Extend the typed staging protocol and admit buffer, staging, mapped
+    lease, worker output, resource/context retirement and maximum overlap before starting. No blocking Map,
+    byte conversion or CPU tile composition is allowed in the terminal owner callback.
+  - [ ] Perform healing, sparse snapshot construction, carried-mask growth/eager semantic thumbnail, complete
+    document sealing and history preparation on the Stroke worker. Keep the current wash or settled preview
+    visible until one current publication succeeds. Refuse cancelled, stale or failed preparation without changing
+    pixels/history/saved state. Preserve old owners for worker retirement and the captured reservation until the
+    original acknowledgement; there is no younger ticket or ordinal for the resumed phase.
+  - [ ] Wire Up, capture loss, tool/lifecycle settlement and shutdown through that same closure. A consumed
+    terminal input does not finish its continuation while the final worker/readback is outstanding. Younger
+    history inputs remain queued; view input remains available. Detached exclusive CPU state must never retain
+    a borrowed graphics engine, mutable session pointer or live progress callback. Escape after Up keeps the
+    accepted stroke; teardown cancels and joins before releasing any borrowed fixture/host state.
+  - [ ] Qualify exact hard/soft/mask/selection/translated/growing strokes, Clone/Blur/Heal, final-tail parity,
+    before/after worker gates, allocation/readback/device faults, input FIFO, Undo/Redo, capture loss and shutdown.
+    Full same-source x64 Debug/Release/real ASan, Release analysis and ARM64 cross-builds precede the step commit.
+    Measure terminal owner work and publication on the G1 documents; structural controls alone do not close G1.
 - **P1.5 Raster edits, transforms and shapes**:
   - Invert, Fill, Clear and Delete;
   - the gradient (Interactive lane until P3), pixel move, and selection Free Transform;

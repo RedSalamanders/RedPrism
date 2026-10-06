@@ -26,8 +26,8 @@ bool Application::CanDeferCanvasBrush() const noexcept
     // its own source/closure policy. The fixed context owns settings and an exact older color dependency.
     const auto tool = CapturedCanvasTool();
     const bool brush = tool == EditorTool::Brush || tool == EditorTool::Eraser;
-    const bool clone = tool == EditorTool::Clone && _session.cloneSettings.sampleAllLayers &&
-                       !KeyboardState::Held(VK_MENU) && !_session.IsMaskSelected() && _session.cloneSource;
+    const bool clone = tool == EditorTool::Clone && !KeyboardState::Held(VK_MENU) && !_session.IsMaskSelected() &&
+                       _session.cloneSource;
     const bool colorTool = tool == EditorTool::Gradient || tool == EditorTool::Shape;
     if ((!brush && !colorTool && !clone) || SamplesColor(tool) || _canvasBrushInput.Busy() || PointerBusy() ||
         (tool != EditorTool::Shape && !_session.CanPaint()) || !_session.ActiveLayerID() ||
@@ -91,6 +91,7 @@ bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) n
     if (captured.tool == EditorTool::Clone)
     {
         captured.kind = BrushKind::Clone;
+        captured.cloneAllLayers = _session.cloneSettings.sampleAllLayers;
         const auto start = (event.modifiers & MK_SHIFT) != 0 ? _session.ShiftLineStart() : std::nullopt;
         captured.cloneOffset = _session.CloneStrokeOffset(start.value_or(down.point));
         if (!captured.cloneOffset)
@@ -241,10 +242,11 @@ void Application::ReplayCanvasBrush() noexcept
     }
     if (captured->kind == BrushKind::Clone && !_canvasBrushReplayed && !_canvasCloneSample)
     {
-        const HRESULT result = StartCloneReadback(input->opening);
+        const HRESULT result =
+            captured->cloneAllLayers ? StartCloneReadback(input->opening) : StartCloneLayerSource(input->opening);
         if (FAILED(result))
             FinishHostContinuation({HostOutcome::Failed, result});
-        return; // The Down event stays in the original FIFO until complete readback acknowledges.
+        return; // The Down event stays in the original FIFO until its complete source acknowledges.
     }
     const auto event = _canvasBrushInput.Take(input->opening);
     if (!event)

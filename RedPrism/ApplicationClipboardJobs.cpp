@@ -46,8 +46,19 @@ ClipboardTransfer::Observer ClipboardObserver(const std::shared_ptr<ClipboardWor
             [](void* raw, ClipboardTransfer::Stage stage) noexcept
             {
                 auto& state = *static_cast<ClipboardWorkTestGate*>(raw);
+                if (stage == ClipboardTransfer::Stage::Opened)
+                    state.openedScopes.fetch_add(1);
                 if (stage == ClipboardTransfer::Stage::Emptied)
+                {
+                    state.openAttemptsAtEmpty.store(state.openAttempts.load());
                     state.emptyAttempts.fetch_add(1);
+                }
+                if (stage == ClipboardTransfer::Stage::ReceiptPlaced)
+                    state.receiptPlacements.fetch_add(1);
+                if (stage == ClipboardTransfer::Stage::PngPlaced)
+                    state.pngPlacements.fetch_add(1);
+                if (stage == ClipboardTransfer::Stage::DibPlaced)
+                    state.dibPlacements.fetch_add(1);
                 if (stage == ClipboardTransfer::Stage::Closed)
                     state.publications.fetch_add(1);
                 if (stage == ClipboardTransfer::Stage::DibInspectRead ||
@@ -55,6 +66,18 @@ ClipboardTransfer::Observer ClipboardObserver(const std::shared_ptr<ClipboardWor
                     state.workerDibRead.store(true);
                 if (stage == ClipboardTransfer::Stage::Inspected)
                     state.workerDibRead.store(false);
+                if (state.publicationStage != stage || state.publicationVisits.fetch_add(1) != 0)
+                    return;
+                const HANDLE shutdown = state.workerShutdownEvent.load();
+                if (!shutdown ||
+                    !PostThreadMessageW(state.publicationOwnerThread, ClipboardWorkTestGate::kPublicationMessage, 0, 0))
+                {
+                    state.publicationGateFailed.store(true);
+                    return;
+                }
+                const HANDLE waits[]{state.release.get(), shutdown};
+                if (WaitForMultipleObjects(2, waits, FALSE, 10000) != WAIT_OBJECT_0)
+                    state.publicationGateFailed.store(true);
             },
             [](void* raw, ClipboardTransfer::Fault fault) noexcept -> std::uint32_t
             {

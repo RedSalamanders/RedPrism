@@ -64,8 +64,7 @@ not chrome.
 - `WM_ENDSESSION(TRUE)` saves the settings as a close does ([`Core_Settings.md`](../Core/Core_Settings.md)): the
   process may end as soon as it returns. `WM_ENDSESSION(FALSE)` (the end was cancelled) destroys the reason, and a
   prompt still waiting or showing no longer closes the window.
-- The busy-state policy of the active `UiNeverBlocks` plan (a save in progress at session end) supersedes these rules
-  when it lands.
+- File-write session-end policy is additional to the unsaved-document policy; see [Job activity and end-session policy](#job-activity-and-end-session-policy).
 
 ### Pointer loss
 
@@ -117,18 +116,39 @@ oldest foreground job's 250 ms deadline; it is killed before handling its messag
 update the indicator without periodic polling. Already-queued timer messages revalidate current activity and cannot
 revive a completed job. Shutdown removes the timer and clears its fixed-capacity activity state.
 
-`GetEndSessionWorkPolicy` is the tested pure policy for the P1 file-flow wiring (the current synchronous file flows
-do not yet call it). Flags may overlap; each row contributes its action:
+`GetEndSessionWorkPolicy` is the tested policy used by production file flows. Flags may overlap; each row contributes
+its action:
 
-| Work | Noncritical query | Critical query | Actual session end |
+| Work | Noncritical query | Critical query | Confirmed session end |
 | --- | --- | --- | --- |
-| Save or export in worker encode/write | Block, with a localized saving reason | Allow | Bounded wait on worker completion only; no UI apply |
-| Export still in GPU/readback | Allow | Allow | Cancel |
-| Clipboard write | Allow | Allow | Cancel |
+| Project save queued or writing | Block with localized saving reason | Allow | Wait for its worker event within the shared 1500 ms total budget |
+| Export writing | Block with localized saving reason | Allow | Wait for its worker event within the shared 1500 ms total budget |
+| Export in readback | No work-specific block; continue the existing unsaved-document check | Allow | Cancel readback if cancellation wins the atomic worker-entry boundary; otherwise the entered writer is covered above |
+| Clipboard transfer | No work-specific block; continue the existing unsaved-document check | Allow | Cancel the exact ticket and current stamp; do not wait |
 | None of these | Existing unsaved-document policy | Allow | No worker-write wait |
 
-HostTests enumerates all 32 combinations including the critical flag. Actual worker-write waits, shutdown block
-reasons, save-before-close continuations and file-job cancellation land with P1.7.
+A saving block takes precedence over an earlier pending unsaved-document prompt without replacing that prompt's
+generation. The existing unsaved-document policy remains in force: a modified document still refuses an ordinary
+query (unless it is critical) and posts the existing prompt when no file writer takes precedence.
+
+`WM_ENDSESSION(TRUE)` cancels export readback only if its atomic transition to Writing has not already succeeded,
+and requests cancellation of the exact clipboard ticket/current stamp. A file-writer wait uses the same total 1500 ms
+deadline across Save and export. It waits on the worker event only: it pumps no messages, applies no completion or
+receipt, performs no GPU work, and grants no saved-revision or publication authority. Timeout requests cancellation
+of the exact writer ticket/current stamp while retaining the original job, event, result and reservation until
+ordinary acknowledgement or shutdown join. `WM_ENDSESSION(FALSE)` clears the session-end block/prompt state and
+cancels and waits for no worker.
+
+HostTests enumerates all 32 pure-policy combinations including the critical flag. The actual-message file matrix has
+108 assertions across 12 cases; the protocol suite has 16 assertions. The clipboard matrix has 48 assertions across
+six cases. Fresh qualification of the registered file-writer controls is recorded in
+[P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md). The earlier
+clipboard oracle passed its 48 controls in Debug r275; Release r276 failed a combined publication-counter
+assertion. The current, repaired oracle permits the supported pre-Empty Busy retry and verifies that acquisition
+count does not increase after Empty; production retry behavior is unchanged;
+fresh qualification is recorded in [P1ClipboardSessionEnd](../TestRuns/P1ClipboardSessionEnd_2026-10-06.md). Full
+configuration/native/resource and measured P1/G1 qualification remains required. Details live in
+[`Testing_Validation.md`](../Testing/Testing_Validation.md).
 
 ## Command line
 

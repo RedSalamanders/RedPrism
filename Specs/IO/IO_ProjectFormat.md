@@ -283,8 +283,7 @@ records the captured path and marks only the captured revision saved; a later ed
 Publication followed by cancellation still records the external file and captured saved revision, but cancellation
 suppresses a dependent close/replacement. Cancellation before publication and failed publication preserve the old
 destination and document path/revision. Returned failure and worker `bad_alloc` fail the receipt and show the save
-notice. A stale lineage cannot update the path or saved revision. Clipboard processing remains synchronous
-pending its later P1.7 slices; project open and image import are worker graphs.
+notice. A stale lineage cannot update the path or saved revision. Clipboard commands use admitted worker graphs and owned OS transfers; see [`IO_ImageCodecs.md`](IO_ImageCodecs.md) for publication and qualification. Project open and image import are worker graphs.
 
 Preflight declares one whole-graph peak before owning job construction; submission reserves it before any worker
 decode/encode or staged output allocation. The resolved path and worker object are
@@ -319,7 +318,14 @@ destination; cancellation afterward reports Cancelled without claiming the publi
 The pending request, receipt, memory and barrier survive until acknowledgement. Completion checks token,
 lineage, stamp and ordinal. Export leaves project path and saved revision unchanged, preserves captured
 quality/resolution and destination, posts one current failure notice, and suppresses cancelled/stale dependent
-actions. Open/import/clipboard and additional fault/cancellation measurements remain P1.7 work.
+actions. On confirmed Windows session end, cancellation competes atomically with export readback worker entry: if
+cancellation wins, the file writer cannot begin; if the worker has entered writing, its completion event
+participates in the single shared 1500 ms wait. The event acknowledges only the CPU write stage; ordinary owner
+completion retains receipt and saved-state authority. `WM_ENDSESSION(FALSE)` performs no worker cancellation or
+wait. Full Debug and Release actual-message controls pass; remaining configuration, contention, resource and
+G1 qualification is tracked in [P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md),
+[`UI_Windowing.md`](../UI/UI_Windowing.md#session-end) and
+[`Testing_Validation.md`](../Testing/Testing_Validation.md).
 
 ## Validation
 

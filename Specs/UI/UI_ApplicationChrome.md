@@ -866,7 +866,11 @@ posts an existing localized notice on failure; it never opens a modal from the c
 runs as an owned Io worker after file selection and document settlement; its receipt, ordinal and memory
 reservation remain held through publication and cancellation acknowledgement. PNG/JPEG export uses asynchronous
 utility readback and detached worker encoding under the same owned continuation. Project open and image import
-inspect/decode on workers. Clipboard processing awaits its later P1.7 slice.
+inspect/decode on workers. Copy/Cut/Paste and Copy Merged use admitted worker preparation and owned OS
+clipboard transfers under the selected ordinal; retries preserve the original ticket and reservation with
+six total acquisition attempts. New Canvas opens immediately and requests guarded metadata-only prefill.
+Private Copy/Cut application survives later OS-mirror failure; a successful Empty starts one irreversible
+publication attempt. Complete session-end/contention and measured P1/G1 qualification remain separate.
 
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 New, accepted New Canvas Create and Close Project retain their selected request and history ordinal through
@@ -968,12 +972,15 @@ are reused. Load failures post one localized notice per failed file; unsupported
 formatted from the posted payload when the notice is delivered. Clipboard, wand/clone and other
 readback callers remain later P1.7/P1 work.
 
-When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
-work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")
-that Windows shows while it waits, and the save prompt above runs from the message queue; Save or Don't Save closes
-the window without asking again and Windows goes on, Cancel keeps it and the user cancels the end in Windows. A
-critical end is never refused. The settings are saved when the session ends, as a close saves them; the message
-handling lives in [`UI_Windowing.md`](UI_Windowing.md).
+When Windows ends the session (sign-out, restart, shutdown, an installer's restart request), a document with unsaved
+work still refuses a noncritical end with `IDS_SHUTDOWN_UNSAVED`, which Windows shows while the queued Save/Don't
+Save/Cancel prompt runs. Save or Don't Save closes the window and permits Windows to continue; Cancel keeps it.
+A critical end is never refused. A queued or writing project save, or an export already
+writing, also refuses a noncritical query with the localized saving reason; an earlier unsaved prompt remains
+pending. Confirmed end waits at most 1500 ms total for queued/writing Save or entered export writers, without pumping UI or applying
+their results. Export still in readback is cancelled if that wins before writer entry. A cancelled session waits for
+no worker. Settings are saved on confirmed end as on close. The message and worker policy lives in
+[`UI_Windowing.md`](UI_Windowing.md).
 
 Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Images added as
 layers center on the drop point (`DragQueryPoint` mapped through the viewport) when the drop lands on the canvas —

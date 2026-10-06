@@ -159,6 +159,8 @@
     <ClInclude Include="..\Common\ImageImportWork.h" />
     <ClInclude Include="..\Common\ProjectSaveWork.h" />
     <ClInclude Include="ProjectSaveTestGate.h" />
+    <ClInclude Include="WorkerWriteCompletion.h" />
+    <ClInclude Include="EndSessionWriteTestGate.h" />
     <ClInclude Include="ProjectOpenTestGate.h" />
     <ClInclude Include="ImageImportTestGate.h" />
     <ClInclude Include="..\Common\ExportWork.h" />
@@ -344,6 +346,8 @@
     <ClCompile Include="ApplicationClipboardPrefillTests.cpp" />
     <ClCompile Include="ApplicationClipboardDelayedTests.cpp" />
     <ClCompile Include="ApplicationClipboardFaultTests.cpp" />
+    <ClCompile Include="Application.Tests.ClipboardEndSession.cpp" />
+    <ClCompile Include="Application.Tests.FileEndSession.cpp" />
     <ClCompile Include="..\Tests\ClipboardMergedBudgetTests.cpp" />
     <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
@@ -361,6 +365,10 @@
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
     <ClCompile Include="ApplicationCloneReadbackJobs.cpp" />
+    <ClCompile Include="ApplicationCloneLayerSourceJobs.cpp" />
+    <ClCompile Include="Application.Tests.CloneLayerSource.cpp" />
+    <ClCompile Include="Application.Tests.CloneLayerSourceFaults.cpp" />
+    <ClCompile Include="Application.Tests.PreparedLayerRowsGroupSelection.cpp" />
     <ClCompile Include="Application.Tests.CloneReadback.cpp" />
     <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" />
     <ClInclude Include="CloneReadbackState.h" />

@@ -39,7 +39,8 @@ class Application::CloneReadbackJob final : public DocumentReadbackJob
     {
         const auto* captured = _owner._canvasBrushInput.CapturedContext(_opening);
         return !_owner._shutdownStarted && _owner._utilityStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
-               captured && captured->kind == BrushKind::Clone && _owner._session.IsDocumentReadCurrent(_authority) &&
+               captured && captured->kind == BrushKind::Clone && captured->cloneAllLayers &&
+               _owner._session.IsDocumentReadCurrent(_authority) &&
                _owner._session.ActiveLayerID() == captured->target && !_owner._session.IsMaskSelected();
     }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
@@ -158,8 +159,8 @@ HRESULT Application::StartCloneReadback(std::uint64_t opening) noexcept
     const auto* captured = _canvasBrushInput.CapturedContext(opening);
     const auto& document = _session.Document();
     const auto authority = _session.CaptureDocumentReadAuthority();
-    if (!captured || captured->kind != BrushKind::Clone || !captured->cloneOffset || !document || !authority ||
-        _utilityTicket || _canvasCloneSample || !_activeHostRequest)
+    if (!captured || captured->kind != BrushKind::Clone || !captured->cloneAllLayers || !captured->cloneOffset ||
+        !document || !authority || _utilityTicket || _canvasCloneSample || !_activeHostRequest)
         return E_UNEXPECTED;
     const D3D11_BOX region{
         0, 0, 0, static_cast<unsigned int>(document->width), static_cast<unsigned int>(document->height), 1};

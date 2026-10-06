@@ -32,6 +32,7 @@ enum class ClipboardWorkPhase : std::uint8_t
 struct ClipboardWorkTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 55;
+    static constexpr UINT kPublicationMessage = WM_APP + 0x5f3;
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     ClipboardWorkPhase phase = ClipboardWorkPhase::CopyCaptured;
     JobResult result;
@@ -44,6 +45,8 @@ struct ClipboardWorkTestGate final
     std::atomic<unsigned int> openFailures{0};
     std::atomic<unsigned int> forcedBusyAttempts{0};
     std::atomic<unsigned int> visits{0}, openAttempts{0}, emptyAttempts{0}, publications{0};
+    std::atomic<unsigned int> openedScopes{0}, openAttemptsAtEmpty{0};
+    std::atomic<unsigned int> receiptPlacements{0}, pngPlacements{0}, dibPlacements{0};
     std::atomic<unsigned int> retiredNodes{0}, retiredOwnerNodes{0};
     std::atomic<HANDLE> workerShutdownEvent{nullptr}; // borrowed only until the gated callback acknowledges
     std::atomic<bool> workerDibRead{false};           // native inspection read boundary; delayed-producer harness only
@@ -51,4 +54,9 @@ struct ClipboardWorkTestGate final
     bool captureReservationHeld = false;
     unsigned int detachedCaptures = 0;
     bool utilityReleasedBeforeEncoding = false;
+    // Configured before submission; absent in production. Shares the existing release event.
+    std::optional<ClipboardTransfer::Stage> publicationStage;
+    DWORD publicationOwnerThread = 0;
+    std::atomic<unsigned int> publicationVisits{0};
+    std::atomic<bool> publicationGateFailed{false};
 };

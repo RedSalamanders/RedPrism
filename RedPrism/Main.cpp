@@ -267,6 +267,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneCloneReadbackShutdownSelfTest\n");
         if (const int failed = Application::RunStandaloneCloneReadbackShutdownSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneCloneLayerSourceShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneCloneLayerSourceShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsGroupSelectionSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsGroupSelectionSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsBoundarySelfTest\n");
         if (const int failed = Application::RunStandalonePreparedLayerRowsBoundarySelfTest(instance); failed != 0)
             return failed;

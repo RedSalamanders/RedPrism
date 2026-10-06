@@ -4,6 +4,7 @@
 #include "ProjectSaveTestGate.h"
 #include "ProjectSaveWork.h"
 #include "ProjectStore.h"
+#include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <array>
@@ -21,17 +22,21 @@ class Application::ProjectSaveJob final : public Job
 {
   public:
     ProjectSaveJob(Application& owner, HistoryWorkStamp stamp, CanvasDocument document, std::optional<Guid> active,
-                   Guid revision, std::wstring path)
+                   Guid revision, std::wstring path, std::shared_ptr<WorkerWriteCompletion> write)
         : _owner(owner), _stamp(stamp), _document(std::move(document)), _active(active), _revision(revision),
-          _path(std::move(path)), _gate(owner._projectSaveTestGate), _ownerThread(GetCurrentThreadId())
+          _path(std::move(path)), _write(std::move(write)), _gate(owner._projectSaveTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
-        for (const auto& layer : _document.layers)
-            _assets +=
-                static_cast<unsigned int>(layer.asset.has_value()) + static_cast<unsigned int>(layer.mask.has_value());
     }
 
     JobResult Run(JobContext& context) override
     {
+        const auto acknowledged = wil::scope_exit([this]() noexcept { _write->Acknowledge(); });
+        if (!_write->BeginWorker(WorkerWriteCompletion::Phase::Queued))
+            return {JobStatus::Cancelled};
+        for (const auto& layer : _document.layers)
+            _assets +=
+                static_cast<unsigned int>(layer.asset.has_value()) + static_cast<unsigned int>(layer.mask.has_value());
         if (_gate && !_gate->traceOnly && !_gate->afterPublication)
         {
             const auto result = PassGate(context);
@@ -136,6 +141,8 @@ class Application::ProjectSaveJob final : public Job
             _owner._lastErrorId = stringId;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
         }
+        _owner._projectSaveWrite.reset();
+        _owner.ClearEndSessionWriteBlock();
         _owner._projectSaveTicket.reset();
         _owner._projectSaveStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
@@ -161,6 +168,7 @@ class Application::ProjectSaveJob final : public Job
     const std::optional<Guid> _active;
     const Guid _revision;
     std::wstring _path;
+    const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ProjectSaveTestGate> _gate;
     const DWORD _ownerThread;
     unsigned int _assets = 0;
@@ -203,20 +211,29 @@ HRESULT Application::StartProjectSave() noexcept
     try
     {
         const auto memory = ProjectSaveMemoryBytes(_session.Document().value(), units);
-        if (memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - sizeof(ProjectSaveJob))
+        constexpr auto bookkeeping = sizeof(ProjectSaveJob) + WorkerWriteCompletion::kReservationBytes;
+        if (memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
         {
             if (_projectSaveTestGate && _projectSaveTestGate->throwAdmissionFailure)
                 throw std::bad_alloc{};
-            CanvasDocument snapshot = _session.Document().value();
-            snapshot.selection.reset(); // selection is not a project manifest field; no worker needs its outline
-            std::unique_ptr<Job> job = std::make_unique<ProjectSaveJob>(
-                *this, _projectSaveStamp.value(), std::move(snapshot), _session.ActiveLayerID(),
-                _session.history.CurrentRevision(), std::wstring(resolved.data(), units));
-            JobTicket ticket;
-            result = static_cast<HRESULT>(
-                _jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + sizeof(ProjectSaveJob)}, ticket));
+            auto write = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Queued);
+            result = write->CreationError();
             if (SUCCEEDED(result))
-                _projectSaveTicket = ticket;
+            {
+                CanvasDocument snapshot = _session.Document().value();
+                snapshot.selection.reset(); // selection is not a project manifest field
+                std::unique_ptr<Job> job = std::make_unique<ProjectSaveJob>(
+                    *this, _projectSaveStamp.value(), std::move(snapshot), _session.ActiveLayerID(),
+                    _session.history.CurrentRevision(), std::wstring(resolved.data(), units), write);
+                JobTicket ticket;
+                result = static_cast<HRESULT>(
+                    _jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + bookkeeping}, ticket));
+                if (SUCCEEDED(result))
+                {
+                    _projectSaveWrite = std::move(write);
+                    _projectSaveTicket = ticket;
+                }
+            }
         }
     }
     catch (const std::bad_alloc&)

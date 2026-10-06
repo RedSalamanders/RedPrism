@@ -1706,6 +1706,11 @@ int Application::RunSelfTest() noexcept
         _session.SetCloneSource(Vec2{100, 100});
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 260.0, 200.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"Clone Stamp's admitted source did not acknowledge before the live crosshair check.\n");
+            return 5;
+        }
         const std::optional<D2D1_POINT_2F> sourceMark = _chrome->CloneSourceMarkDip();
         const Vec2 sourceView = _viewport.ViewFromDocument(Vec2{160, 100}, DocumentSize());
         const float sourceDip = _chrome->LayoutDpi() > 0.0f ? 96.0f / _chrome->LayoutDpi() : 1.0f;
@@ -1716,6 +1721,11 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 260.0, 200.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"Clone Stamp's accepted release did not acknowledge.\n");
+            return 5;
+        }
         std::array<int, 4> stamped{};
         if (_session.history.UndoName() != L"Clone Stamp" || !pixelAt(200, 200, stamped) || stamped[2] < 250 ||
             stamped[1] > 5)
@@ -2449,6 +2459,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCloneReadbackSelfTest\n");
     if (const int cloneReadback = RunCloneReadbackSelfTest(); cloneReadback != 0)
         return cloneReadback;
+    std::printf("BEGIN self-test.RunCloneLayerSourceSelfTest\n");
+    if (const int cloneSource = RunCloneLayerSourceSelfTest(); cloneSource != 0)
+        return cloneSource;
+    std::printf("BEGIN self-test.RunCloneLayerSourceCaptureFailureSelfTest\n");
+    if (const int cloneCapture = RunCloneLayerSourceCaptureFailureSelfTest(); cloneCapture != 0)
+        return cloneCapture;
     std::printf("BEGIN self-test.RunCloneInputPolicySelfTest\n");
     if (const int clonePolicy = RunCloneInputPolicySelfTest(); clonePolicy != 0)
         return clonePolicy;
@@ -2708,6 +2724,12 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-fault.\n");
         return clipboardFault;
     }
+    std::printf("BEGIN self-test.RunClipboardEndSessionSelfTest\n");
+    if (const int clipboardEndSession = RunClipboardEndSessionSelfTest(); clipboardEndSession != 0)
+        return clipboardEndSession;
+    std::printf("BEGIN self-test.RunFileEndSessionSelfTest\n");
+    if (const int fileEndSession = RunFileEndSessionSelfTest(); fileEndSession != 0)
+        return fileEndSession;
     std::printf("BEGIN self-test.RunSessionSelfTest\n");
     if (const int session = RunSessionSelfTest(); session != 0)
     {
@@ -3618,6 +3640,18 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_clipboardStamp.value());
     _clipboardStamp.reset();
     _clipboardTicket.reset();
+    // Suppressed file completions keep their exact writer/stamp alive until this completed join.
+    if (_projectSaveStamp)
+        (void)_historyWork.Finish(_projectSaveStamp.value());
+    _projectSaveStamp.reset();
+    _projectSaveTicket.reset();
+    _projectSaveWrite.reset();
+    if (_exportStamp)
+        (void)_historyWork.Finish(_exportStamp.value());
+    _exportStamp.reset();
+    _exportTicket.reset();
+    _exportWrite.reset();
+    ClearEndSessionWriteBlock();
     _shapeTicket.reset();
     _maskTicket.reset();
     _maskStamp.reset();
@@ -6983,10 +7017,10 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
         ShowError(IDS_ERROR_CLONE_SOURCE);
         return;
     }
-    if (kind == BrushKind::Clone && !cloneComposite && _session.cloneSettings.sampleAllLayers)
+    if (kind == BrushKind::Clone && !cloneComposite)
     {
-        // Every host All Layers stroke requires its admitted source readback. A refused or unsupported
-        // input must not fall through to synchronous composition/readback on the owner.
+        // Every host Clone stroke requires its admitted source. A refused or unsupported input must
+        // not fall through to owner layer sampling or synchronous composition/readback.
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }

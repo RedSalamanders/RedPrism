@@ -84,6 +84,8 @@ struct TransformWorkTestGate;
 struct GradientWorkTestGate;
 struct PixelMoveWorkTestGate;
 struct ExportWorkTestGate;
+struct EndSessionWriteTestGate;
+class WorkerWriteCompletion;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -128,6 +130,8 @@ class Application final : public ChromeEvents
     static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePreparedLayerRowsGroupSelectionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -246,6 +250,7 @@ class Application final : public ChromeEvents
         ShapeKind shape = ShapeKind::Rectangle;
         double cornerRadius = 0;
         std::optional<Vec2> cloneOffset;
+        bool cloneAllLayers = false;
     };
     struct CanvasBrushSample final
     {
@@ -269,7 +274,11 @@ class Application final : public ChromeEvents
                             const CanvasBrushContext* captured = nullptr,
                             const Raster* cloneComposite = nullptr) noexcept;
     class CloneReadbackJob;
+    class CloneLayerSourceJob;
     [[nodiscard]] HRESULT StartCloneReadback(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartCloneLayerSource(std::uint64_t opening) noexcept;
+    int RunCloneLayerSourceSelfTest() noexcept;
+    int RunCloneLayerSourceCaptureFailureSelfTest() noexcept;
     int RunCloneReadbackSelfTest() noexcept;
     int RunCloneInputPolicySelfTest() noexcept;
     std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> _canvasCloneSample;
@@ -389,6 +398,7 @@ class Application final : public ChromeEvents
     int RunClipboardPrefillSelfTest() noexcept;
     int RunClipboardDelayedSelfTest() noexcept;
     int RunClipboardFaultSelfTest() noexcept;
+    int RunClipboardEndSessionSelfTest() noexcept;
     [[nodiscard]] HRESULT SubmitClipboardPaste(HistoryWorkStamp stamp, ImageImportAuthority authority,
                                                ClipboardTransfer::Inspection inspection, bool privatePreference,
                                                ClipboardReceipt::Key key,
@@ -940,6 +950,11 @@ class Application final : public ChromeEvents
     // posted prompt; the settings are saved when the session ends.
     [[nodiscard]] bool OnQueryEndSession(LPARAM reasons) noexcept;
     void OnEndSession(bool ending) noexcept;
+    void ClearEndSessionWriteBlock() noexcept;
+    void WaitForEndSessionWriter(const std::shared_ptr<WorkerWriteCompletion>& write,
+                                 const std::optional<JobTicket>& ticket, const std::optional<HistoryWorkStamp>& stamp,
+                                 ULONGLONG deadline) noexcept;
+    int RunFileEndSessionSelfTest() noexcept;
     void RunEndSessionPrompt() noexcept;
     // A close or the session-end prompt waits while a message it arrived inside (a modal loop, a chrome dispatch) is
     // still on the stack; the outermost window-procedure return posts it again.
@@ -1144,9 +1159,12 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _projectSaveStamp;
     std::optional<JobTicket> _projectSaveTicket;
     std::shared_ptr<ProjectSaveTestGate> _projectSaveTestGate;
+    std::shared_ptr<WorkerWriteCompletion> _projectSaveWrite;
     std::optional<HistoryWorkStamp> _exportStamp;
     std::optional<JobTicket> _exportTicket;
     std::shared_ptr<ExportWorkTestGate> _exportWorkTestGate;
+    std::shared_ptr<WorkerWriteCompletion> _exportWrite;
+    std::shared_ptr<EndSessionWriteTestGate> _endSessionWriteTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;
@@ -1293,6 +1311,7 @@ class Application final : public ChromeEvents
     bool _closeConfirmed = false;    // the session-end prompt already asked: the next WM_CLOSE does not
     bool _endSessionPending = false; // a session end was refused and its prompt has not answered yet
     bool _endSessionPromptDeferred = false;
+    bool _endSessionWriteBlocked = false; // this reason is independent from the posted unsaved prompt
     bool _layoutDirty = false;
     // The pointer's one interaction in flight (RF-904). A brush stroke, a warp and a shape draft are the session's own
     // pending edits (PendingBrush, PendingWarp, PendingShape) and keep no state here.

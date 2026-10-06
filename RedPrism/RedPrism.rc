@@ -548,6 +548,7 @@ BEGIN
     IDS_STATUS_BUSY                 "{0}…"
     IDS_A11Y_JOB_PROGRESS           "Image processing progress"
     IDS_SHUTDOWN_UNSAVED            "{0} has unsaved changes."
+    IDS_SHUTDOWN_SAVING             "RedPrism is saving {0}."
     IDS_ERROR_CANVAS_DRAW           "The canvas could not be drawn (error 0x{0:08X}). The document is unchanged: save it to keep your work."
     IDS_ERROR_SELECTION_DETAILED    "That outline is too detailed to load as a selection."
 

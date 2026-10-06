@@ -169,6 +169,18 @@ that makes them impossible.
 Fail-closed performance sandboxes live at `X:\RedPrism.Perf` (any local drive letter plus an ownership marker), never
 under repository `.build/`. C1 does not yet create that tree.
 
+### Session-end file-write allowance (P1.7)
+
+Project-save admission checks the complete reservation addition `sizeof(ProjectSaveJob) + 4096` before scheduler
+submission. Export admission does the same with `sizeof(ExportReadbackJob) + 4096`. The 4096-byte amount is a fixed
+reservation allowance for the `WorkerWriteCompletion` wrapper, shared control block and native event bookkeeping;
+it is not a total process-memory or operating-system allocation bound. The scheduler's existing process
+commit/physical-headroom checks still apply. Admission failure accepts no file writer.
+
+The worker completion event acknowledges only the CPU write stage. It grants no receipt, publication, saved-revision,
+path, document, GPU or owner-completion authority. Confirmed session end uses one shared 1500 ms event-wait budget
+for admitted queued/writing project saves and entered export writers; see [`UI_Windowing.md`](../UI/UI_Windowing.md#job-activity-and-end-session-policy).
+
 ## Worker execution cost and lifetime
 
 Wand/mask-trace preparation uses 4096-unit cancellation spans and a separate checkpoint call so optional
@@ -293,6 +305,15 @@ before all pixel/document owners and released last, after aggregate worker retir
 cancel or stale drop. A finished readback job therefore does not expose uncharged live clone source bytes.
 No partial source is published; device recovery keeps the original capture/ticket and total two-restart limit.
 This source-readback slice does not establish bounded owner painting or first-display upload.
+
+Eligible single-layer host Clone uses the same accepted pointer stream and original retained reservation.
+Its capture occurs only after whole admission, retaining the immutable document, active image and displayed
+placement. Admission adds the complete full-canvas BGRA output, a possible private contiguous source copy and
+bounded job/payload metadata to the cached document retirement envelope, with checked arithmetic.
+`RenderLayerPixels` runs on a worker; no owner sampling, composition preparation or GPU readback is permitted.
+The captured All Layers choice selects the source producer even if the live setting later changes.
+Cancellation and stale authority publish no stroke, and final sample retirement releases its original charge
+after its complete CPU owners, including through actual application shutdown.
 
 The managed H3 candidate seals a `DocumentHistory::StorageIndex` of owning unique entries, raster storage and
 selections. Its worker clones containers, diffs changed-entry membership and samples distinct owners; Undo/Redo

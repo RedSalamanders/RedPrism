@@ -196,16 +196,22 @@
       repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged. Full ASan
       Debug r72 and full Release r73 qualify this topology implementation on the same frozen snapshot; current
       Debug/analysis/ARM64 matrix, native activation and late-residency synchronization remain open.
-    - [ ] Prototype private incremental `StorageIndex`: immutable unique-owner membership maps, changed-entry updates, current-document live exclusion, oldest-past-then-future trim and fresh `RetainedBytes` queries. Strict two-TU code-generation probe r2 exits 0, with no linked runtime claim; the self-bound integration and independent index tests remain under review. Late-cache publication/reprepare, reference-path cost, native activation and G1 remain open.
-    - [ ] Account for late sparse materialization: `ByteSize()` grows from zero to the assembled allocation when
-      `Data()` publishes its cache. A topology cache alone cannot authorize a stale byte total. Define the
-      resident-charge epoch/notification and off-owner reprepare/trim path before using cached totals for
-      publication. Current ImageCodecs and ProjectStore encoders read through `ReadRasterRegionForWork` bands
-      (ImageCodecs.cpp:425,545; ProjectStore.cpp:1451,1465,1480); they do not materialize a captured history-only
-      raster through `Data()`. Keep the late-residency gate for actual `Data()` materializers and direct readers,
-      including `TransformEdit::PixelsOf`, the `WarpStroke` constructor and nested sparse tile reads used by
-      `Raster::ReadRegion`/`MakeThumbnail` in `Document.cpp`; concurrency and retained-charge synchronization
-      are not qualified by r72.
+    - [x] Integrate the immutable unique-owner `StorageIndex` prototype with changed-entry membership, live-document
+      exclusion, oldest-past-then-future trim and retained identity owners. Full Debug r74 / Release r75 / real ASan
+      r76 qualify the managed candidate; subsequent full managed caller matrices preserve it. See
+      [candidate evidence](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md). This closes the duplicate
+      prototype row only. Private map cloning, membership/sampling/bound scans remain worker costs; incremental
+      charge cost, uncovered arithmetic overflow, production startup, reference writers and G1 remain below.
+    - [ ] Complete late sparse-materialization activation and synchronization. The managed nonmovable
+      same-thread lease, epoch/notice, worker reprepare/permit, semantic mask thumbnail and several real callers
+      are integrated and qualified in the r85–r88 core and later caller matrices. Full Debug r278 preserves these
+      controls on its 877-input source; remaining current-source profiles are due. `HistoryResidencySource::Start`
+      still has only explicit self-test callers, so normal startup does not subscribe for proactive history-only
+      maintenance. Enable normal startup with failure/teardown proof; cover remaining direct/reference writers.
+      Current ImageCodecs/ProjectStore encoders and Warp root copying use private read bands. Nested sparse tiles
+      can still reach `Data()` through `BlitTile`; `TransformEdit::PixelsOf` is another direct materializer. A
+      cached topology never authorizes stale resident totals. Keep the actual growth/refresh/trim gates and
+      measured reference/delta cost under H3.
     - [ ] Qualify address reuse, checked overflow and oldest-first cases, plus concurrent late sparse materialization
       and resident-charge synchronization before trim preparation/publication. Current image/project encoders use
       private read bands; exercise actual `Data()` materializers. Verify cancellation/allocation refusal preserves

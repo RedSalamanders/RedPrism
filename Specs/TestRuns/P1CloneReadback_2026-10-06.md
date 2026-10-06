@@ -12,7 +12,7 @@
 - [x] Preserve r255's original recovery-fixture failure and r256's compile diagnostic with verified archives.
 - [x] Qualify the repaired source in full Debug r267, Release r268, real ASan Debug r270, Release analysis r271 and all three ARM64 r38 cross-builds.
 - [x] Independently verify unchanged predecessor controls and exact tested-source equality; archive every profile.
-- [ ] Commit and push this qualified source and contract update.
+- [x] Commit and push this qualified source and contract update as `3cdbc60` on `codex/p1-opacity-host-proof`.
 - [ ] Finish remaining P1 callers, resource activation and due G1 measurements before the parent moves to Done.
 
 Status: **the current `023602…` 867-input source passes full Debug r267, Release r268 and real ASan r270 with independent predecessor/source/product verification, Release analysis r271, and all three ARM64 r38 cross-builds. Failed ASan r266 and analysis r269 are preserved.** The older `AD5015…` and 865-input receipts below qualify their exact earlier source only. This record covers Clone source

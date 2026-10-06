@@ -237,6 +237,31 @@ failures, retained complete previews, queued full-resolution Apply and draft-onl
 retirement off owner. The existing capture-loss fixture awaits cancellation acknowledgement before applying its
 unchanged document/history assertions. Full native clean qualification remains required before closing this
 foundation. Production opt-in, Alt-duplicate, complete caller/device/shutdown and G1 remain separate gates.
+### Windows session-end file writes and clipboard publication
+
+`worker-write-completion.*` has 16 protocol assertions for queued writer entry, invalid/duplicate entry refusal,
+readback cancellation winning before writer entry, writer entry winning cancellation, event readiness only after
+acknowledgement, and retained job authority. `file-end-session.*` has 108 assertions across 12 actual-message cases:
+Save/PNG before and after publication, `WM_ENDSESSION(FALSE)`, writer timeout, export readback for saved and modified
+documents, JPEG writer acknowledgement, and an earlier unsaved prompt while Save is active. Literal old-destination
+bytes, captured output, ticket/stamp/reservation, wait counts, no owner apply in the window procedure, and ordinary
+receipt completion are checked. The current source, actual child runs and
+qualification boundaries are recorded in [P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md).
+
+`clipboard-end-session.*` contains 48 assertions across six Copy/Cut cases. The earlier oracle passed in Debug
+r275. Release r276 failed one combined publication-counter assertion; the available log does not identify which counter
+failed, so no root cause is claimed. The current optional counters permit a supported pre-`EmptyClipboard` Busy retry
+(up to the existing six-attempt job limit), snapshot the acquisition count at Empty, and require the final count to
+match that snapshot. Receipt, PNG and DIB placement still occur exactly once after Empty, and no production retry or
+publication behavior changed. Fresh repaired-oracle qualification
+is recorded in [P1ClipboardSessionEnd](../TestRuns/P1ClipboardSessionEnd_2026-10-06.md); Release r276 remains
+failed evidence.
+
+The repaired source passes full Debug r278, Release r280, real ASan r281 and all three ARM64 r40 cross-builds. These results do not
+close F5d/P1 or move its plan to Done. Release analysis r282 was user-interrupted; completed analysis, native runtime claims, resource
+and G1 qualification remain subject to the parent milestone
+and its current execution checklist; cross-compilation alone makes no native ARM64 runtime claim.
+
 ### Clipboard and copy preparation
 
 `clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent
@@ -944,6 +969,21 @@ shutdown owners add 14. The 15 `clone-input-policy.*` checks establish literal A
 readback/history, mask refusal, event-time Shift continuation from the prior endpoint, exact red/green pixels,
 one entry per Clone, Undo/Redo and missing-composite refusal. At zoom 1 the policy fixture aligns its document
 grid to whole client pixels after layout, so odd canvas extents cannot alter its literal pointer coordinates.
+
+The registered single-layer `clone-layer-source.*` graph has 50 controls across success, cancellation,
+worker failure, stale active target, retained live lease and capture loss. Literal red active source and
+blue destination must produce red despite an unrelated opaque green overlay. A live All Layers change while
+the worker is held cannot change its captured false choice. Checks bind original ordinal/opening/ticket/stamp,
+source charge, responsive zoom, zero GPU preparations, exact errors, one entry, actual host Undo/Redo and
+off-owner aggregate retirement. Five independent capture-refusal controls require `E_OUTOFMEMORY` before
+payload/copy and unchanged literal pixels/history. Sixteen standalone shutdown controls cover copied-worker
+and adopted-live-source boundaries, complete reservation lifetime, MTA retirement and one drained quit.
+
+Nine standalone prepared-folder controls use an actual borrowed Tree row to select a folder, issue two Group
+Layers commands, and perform actual host Undo/Redo. Independent literal hierarchy, top-first rows, unique
+folder IDs, single active selection and original two-pixel rasters must survive each operation, with one
+history entry per grouping. This tests the supported folder route; it does not activate production prepared
+rows or define multiple-row modifier behavior. All new controls require full configuration qualification.
 
 HostTests covers one-active/latest-pending preview ownership, stale epochs and refinements, all eight continuation
 slots, refusal ownership, ring wrap, wand coalescing, shared stroke ordinals, cross-class history exclusion and

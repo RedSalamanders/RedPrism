@@ -8,7 +8,7 @@
 #include <memory>
 
 struct CloneReadbackTestGate;
-// The original readback admission stays charged through the live clone stroke and final worker retirement.
+// The original source admission stays charged through the live clone stroke and final worker retirement.
 // Declare the lease first so the document/pixel owners die before its acknowledgement releases the charge.
 #pragma warning(push)
 #pragma warning(disable : 4324)
@@ -18,6 +18,7 @@ struct CloneReadbackState final : DeferredReleaseNode
     CanvasDocument document;
     PixelBuffer pixels;
     Raster image;
+    LayerTransform sourceTransform{};
     Raster composite;
     std::uint64_t opening = 0;
     std::shared_ptr<CloneReadbackTestGate> gate;

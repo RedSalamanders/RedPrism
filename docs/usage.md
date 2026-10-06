@@ -44,6 +44,9 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 value, a live stroke, a pending gradient or transform, an adjustment panel — so the saved or exported file always
 matches what the canvas shows.
 
+Windows may wait briefly for a project save or image export that is already writing before signing out. If an export
+is still preparing the canvas, Windows cancels that work.
+
 ## Keyboard reference
 
 | Keys | Action |
@@ -85,8 +88,9 @@ matches what the canvas shows.
 | Space (held) | Pan; types a space in a text field, or presses a control reached by keyboard (Tab) instead |
 | Escape | Focus chrome |
 
-With Clone Stamp set to All Layers, after choosing a source with Alt-click, you can press and drag while the
+With Clone Stamp, after choosing a source with Alt-click, you can press and drag while the
 source image is preparing; your movement and release are kept. Zoom remains available during preparation.
+The press keeps its current All Layers choice: either the committed composite or the active layer's placed pixels.
 After releasing the stroke, hold Space and drag to pan while the source finishes preparing.
 Escape cancels before any pixels or undo history are published. If pointer capture is lost, the accepted part of
 the stroke is kept.

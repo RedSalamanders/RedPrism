@@ -4,8 +4,10 @@
 
 #include "Adjust.h"
 #include "ChromeHost.h"
+#include "EndSessionWriteTestGate.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
+#include "JobUiPolicy.h"
 #include "KeyboardState.h"
 #include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
@@ -13,6 +15,7 @@
 #include "Resources.h"
 #include "Selection.h"
 #include "SystemClipboard.h"
+#include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -789,23 +792,52 @@ void Application::ReleaseDeferredClose() noexcept
     }
 }
 
+void Application::ClearEndSessionWriteBlock() noexcept
+{
+    if (std::exchange(_endSessionWriteBlocked, false) && _window)
+    {
+        (void)ShutdownBlockReasonDestroy(_window.get());
+        if (_endSessionPending && !_shutdownStarted)
+        {
+            const std::wstring reason = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
+            (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
+        }
+    }
+}
+
 bool Application::OnQueryEndSession(LPARAM reasons) noexcept
 {
     if ((reasons & ENDSESSION_CRITICAL) != 0)
     {
+        ClearEndSessionWriteBlock();
         return true;
     }
-    if (_endSessionPending)
+    const auto savePhase = _projectSaveWrite ? _projectSaveWrite->Current() : WorkerWriteCompletion::Phase::Finished;
+    const auto exportPhase = _exportWrite ? _exportWrite->Current() : WorkerWriteCompletion::Phase::Finished;
+    const EndSessionWorkState work{_projectSaveTicket && (savePhase == WorkerWriteCompletion::Phase::Queued ||
+                                                          savePhase == WorkerWriteCompletion::Phase::Writing),
+                                   _exportTicket && exportPhase == WorkerWriteCompletion::Phase::Writing,
+                                   _exportTicket && exportPhase == WorkerWriteCompletion::Phase::Readback,
+                                   _clipboardTicket.has_value(), false};
+    if (GetEndSessionWorkPolicy(work).blockQuery)
     {
-        // The prompt for an earlier request has not been answered.
+        if (_window)
+        {
+            const auto output = _activeHostRequest ? _activeHostRequest->input.SelectedOutputPath() : std::nullopt;
+            const std::wstring reason = FormatStringResource(
+                nullptr, IDS_SHUTDOWN_SAVING, FileTitle(output ? std::wstring(output.value()) : _documentPath));
+            (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
+            _endSessionWriteBlocked = true;
+        }
         return false;
     }
-    // A critical end cannot wait; nothing unsaved (or a quiet run the self-test does not answer) has nothing to ask.
+    ClearEndSessionWriteBlock();
+    if (_endSessionPending)
+        return false; // the earlier unsaved prompt still owns its generation and restored reason
+    // Readback/clipboard work adds no work-specific query block. It must not suppress the existing unsaved
+    // document check. A settled writer's event likewise confers no saved-revision authority here.
     if (!_window || !HasUnsavedWork() || (_quietUi && !_forcedDiscard.has_value()))
-    {
         return true;
-    }
-    // Windows wants the answer now and shows the reason while it waits; the save prompt runs from the queue.
     const std::wstring reason = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
     (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
     _endSessionPending = true;
@@ -820,20 +852,67 @@ bool Application::OnQueryEndSession(LPARAM reasons) noexcept
     return false;
 }
 
+void Application::WaitForEndSessionWriter(const std::shared_ptr<WorkerWriteCompletion>& write,
+                                          const std::optional<JobTicket>& ticket,
+                                          const std::optional<HistoryWorkStamp>& stamp, ULONGLONG deadline) noexcept
+{
+    if (!write || !ticket)
+        return;
+    const auto phase = write->Current();
+    if (phase != WorkerWriteCompletion::Phase::Queued && phase != WorkerWriteCompletion::Phase::Writing)
+        return;
+    const auto now = GetTickCount64();
+    const DWORD remaining = now < deadline ? static_cast<DWORD>(deadline - now) : 0;
+    if (_endSessionWriteTestGate)
+    {
+        _endSessionWriteTestGate->waitVisits.fetch_add(1);
+        (void)SetEvent(_endSessionWriteTestGate->waitEntered.get());
+    }
+    // No dispatch, owner action, GPU work or completion application is possible inside this native wait.
+    const DWORD result = WaitForSingleObject(write->Event(), remaining);
+    if (_endSessionWriteTestGate)
+        _endSessionWriteTestGate->waitResult.store(result);
+    if (result != WAIT_OBJECT_0)
+    {
+        if (stamp && _historyWork.IsCurrent(stamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(ticket.value());
+    }
+}
+
 void Application::OnEndSession(bool ending) noexcept
 {
-    if (_endSessionPending && _window)
-    {
+    if ((_endSessionPending || _endSessionWriteBlocked) && _window)
         (void)ShutdownBlockReasonDestroy(_window.get());
-    }
-    // Cancelled (another app refused, or the user did): a prompt still waiting or showing no longer closes.
+    _endSessionWriteBlocked = false;
     _endSessionPending = false;
     _endSessionPromptDeferred = false;
-    if (ending)
+    if (!ending)
+        return;
+
+    // The boundary is atomic with worker entry. If readback cancellation wins, no writer can start afterward;
+    // otherwise the already entered CPU writer is waited below without restarting GPU work.
+    const auto exportWrite = _exportWrite;
+    if (_exportTicket && exportWrite && exportWrite->CancelReadback())
     {
-        // The process may end as soon as this returns: the settings are saved as a close saves them.
-        SaveSettings();
+        if (_exportStamp && _historyWork.IsCurrent(_exportStamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_exportTicket.value());
     }
+    if (_clipboardTicket)
+    {
+        if (_clipboardStamp && _historyWork.IsCurrent(_clipboardStamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_clipboardTicket.value());
+    }
+    // One total native-wait allowance even if work flags overlap. Timeout requests cancellation and keeps the
+    // exact ticket, event, result and retained graph until ordinary acknowledgement or the shutdown join.
+    constexpr ULONGLONG kWriteWaitMilliseconds = 1500;
+    const ULONGLONG deadline = GetTickCount64() + kWriteWaitMilliseconds;
+    const auto saveWrite = _projectSaveWrite;
+    WaitForEndSessionWriter(saveWrite, _projectSaveTicket, _projectSaveStamp, deadline);
+    WaitForEndSessionWriter(exportWrite, _exportTicket, _exportStamp, deadline);
+    SaveSettings();
 }
 
 void Application::RunEndSessionPrompt() noexcept

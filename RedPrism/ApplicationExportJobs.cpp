@@ -6,6 +6,7 @@
 #include "ExportWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <array>
@@ -22,16 +23,24 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
 {
   public:
     ExportReadbackJob(Application& owner, HistoryWorkStamp stamp, JobToken token, CanvasDocument document,
-                      HostWriteFormat format, JpegExportOptions options, std::wstring path)
+                      HostWriteFormat format, JpegExportOptions options, std::wstring path,
+                      std::shared_ptr<WorkerWriteCompletion> write)
         : DocumentReadbackJob(
               owner._jobs, owner._gpuWork, owner._composition, std::move(document),
               {0, 0, 0, static_cast<UINT>(token.canvasWidth), static_cast<UINT>(token.canvasHeight), 1}),
           _owner(owner), _stamp(stamp), _token(std::move(token)), _format(format), _options(options),
-          _path(std::move(path)), _gate(owner._exportWorkTestGate), _ownerThread(GetCurrentThreadId())
+          _path(std::move(path)), _write(std::move(write)), _gate(owner._exportWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
 
   private:
+    JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext& context) override
+    {
+        if (_gate && _gate->holdReadback && _gate->visits.load() == 0)
+            return PassGate(context, ExportWorkTestGate::kReadbackMessage);
+        return {};
+    }
     HRESULT PrepareReadbackDevice(HRESULT reason) noexcept override
     {
         return _owner.PrepareUtilityDevice(reason);
@@ -44,6 +53,9 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     }
     JobResult ProcessReadback(Raster& image, JobContext& context) override
     {
+        const auto acknowledged = wil::scope_exit([this]() noexcept { _write->Acknowledge(); });
+        if (!_write->BeginWorker(WorkerWriteCompletion::Phase::Readback))
+            return {JobStatus::Cancelled};
         if (_gate && !_gate->afterPublication && _gate->visits.load() == 0)
         {
             const auto result = PassGate(context);
@@ -111,6 +123,8 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
             _owner._lastErrorId = stringId;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
         }
+        _owner._exportWrite.reset();
+        _owner.ClearEndSessionWriteBlock();
         _owner._exportTicket.reset();
         _owner._exportStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
@@ -118,12 +132,12 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
         _owner._frameInvalidated = true; // exports never alter the document/path/saved revision
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
-    JobResult PassGate(JobContext& context) noexcept
+    JobResult PassGate(JobContext& context, UINT message = ExportWorkTestGate::kMessage) noexcept
     {
         _gate->quality.store(_options.quality);
         _gate->resolution.store(_options.resolution);
         _gate->visits.fetch_add(1);
-        if (!PostThreadMessageW(_ownerThread, ExportWorkTestGate::kMessage, 0, 0))
+        if (!PostThreadMessageW(_ownerThread, message, 0, 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
         const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
         const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
@@ -138,6 +152,7 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     const HostWriteFormat _format;
     const JpegExportOptions _options;
     const std::wstring _path;
+    const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ExportWorkTestGate> _gate;
     const DWORD _ownerThread;
     ImageCodecStatus _status = ImageCodecStatus::Encode;
@@ -183,19 +198,28 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
         const auto memory = ExportReadbackMemoryBytes(_session.Document().value(), units);
         if (static_cast<std::int64_t>(_session.Document()->width) * _session.Document()->height > kMaxLayerPixels)
             result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-        if (token && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - sizeof(ExportReadbackJob))
+        constexpr auto bookkeeping = sizeof(ExportReadbackJob) + WorkerWriteCompletion::kReservationBytes;
+        if (token && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
         {
-            CanvasDocument snapshot = _session.Document().value();
-            snapshot.selection.reset(); // export pixels come from the committed whole document, never selection
-            std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(
-                *this, _exportStamp.value(), std::move(token.value()), std::move(snapshot), format,
-                JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
-                std::wstring(resolved.data(), units));
-            JobTicket ticket;
-            result = static_cast<HRESULT>(_jobs.Submit(
-                job, {JobClass::Io, _session.DocumentSerial(), memory + sizeof(ExportReadbackJob)}, ticket));
+            auto write = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Readback);
+            result = write->CreationError();
             if (SUCCEEDED(result))
-                _exportTicket = ticket;
+            {
+                CanvasDocument snapshot = _session.Document().value();
+                snapshot.selection.reset(); // export never includes selection outline data
+                std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(
+                    *this, _exportStamp.value(), std::move(token.value()), std::move(snapshot), format,
+                    JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
+                    std::wstring(resolved.data(), units), write);
+                JobTicket ticket;
+                result = static_cast<HRESULT>(
+                    _jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + bookkeeping}, ticket));
+                if (SUCCEEDED(result))
+                {
+                    _exportWrite = std::move(write);
+                    _exportTicket = ticket;
+                }
+            }
         }
     }
     catch (const std::bad_alloc&)
