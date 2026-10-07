@@ -6,14 +6,17 @@
 - [x] Preserve the qualified predecessor's exact source, complete matrix and archives; commit/push `3cdbc60`.
 - [x] Register worker placement sampling, captured All Layers choice and all 80 new host controls.
 - [x] Update tools, resource, composition, validation and guide contracts.
-- [ ] Run full Debug, Release and real ASan, Release analysis and ARM64 cross-builds on identical source.
+- [x] Run full Debug, Release and real ASan, Release analysis and ARM64 cross-builds on identical source.
   - [x] Full Debug r275, independent registry r3 and the read-back archive pass on the combined 872-input candidate.
-  - [ ] Release, real ASan, analysis and all three ARM64 cross-builds on the repaired combined source.
-- [ ] Independently verify all predecessor registries, actual images/PDBs and exact 80-control additions.
-- [ ] Archive successful and failed receipts; commit and push the qualified step.
+  - [x] Release, real ASan, analysis and all three ARM64 cross-builds on the repaired combined source.
+- [x] Independently verify all predecessor registries, actual images/PDBs and exact 80-control additions.
+- [x] Archive successful and failed receipts; commit and push the qualified step.
 - [ ] Finish remaining P1 live producers, native/resource activation and due G1 gates before Done.
 
-Status: **integrated candidate; qualification due.** Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
+Status: **qualified on the combined 877-input source**. The
+[complete caller closeout](P1CallerQualification_2026-10-07.md) binds Debug r278, Release r280,
+real ASan r281, Release analysis r283 and all three ARM64 r40 cross-builds and archive proofs.
+Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
 This record covers source preparation and the existing supported prepared-folder route. It does not establish
 worker stroke finish, production prepared-row activation, complete GPU residency or P1/G1 latency.
 

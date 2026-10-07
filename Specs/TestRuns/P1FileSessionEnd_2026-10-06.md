@@ -8,13 +8,14 @@
 - [x] Prepare 108 actual-host controls with literal output, old-file byte comparison and original ownership checks.
 - [x] Integrate the complete reviewed source set after the previous frozen caller matrix finishes.
 - [x] Full Debug builds/runs the new protocol and actual-message controls without changing their references.
-- [ ] Qualify identical-source Debug/Release/real ASan, Release analysis and ARM64 cross-builds.
-- [ ] Independently verify predecessor inventories, source/products/PDBs and all qualification archives.
-- [ ] Commit/push the qualified step and update the parent opening checklist.
+- [x] Qualify identical-source Debug/Release/real ASan, Release analysis and ARM64 cross-builds.
+- [x] Independently verify predecessor inventories, source/products/PDBs and all qualification archives.
+- [x] Commit/push the qualified step and update the parent opening checklist.
 - [ ] Close every remaining P1 requirement and measured G1 gate before Done.
 
 Status: **full Debug r278 / Release r280 / real ASan r281 and all three ARM64 r40 cross-builds pass on identical source**.
-Release analysis r282 is running; there is no complete P1/G1 claim.
+Fresh Release analysis r283 and its independent archive pass after resume; r282 remains user-stopped.
+The [complete caller closeout](P1CallerQualification_2026-10-07.md) qualifies this exact slice, with no complete P1/G1 claim.
 Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
 
 ## Intended implementation

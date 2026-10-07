@@ -1,8 +1,14 @@
 # P1 — Responsive raster editor delivery milestone
 
-**Paused at the user's explicit request on 2026-10-06.** All assigned agents and the active validation are stopped.
-The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) records the saved source, drafts, exact receipts,
-unfinished work and next commands. Resume only after a new user instruction. P1 remains WIP.
+**Execution resumed on 2026-10-07 at the user's request: “continue until P1 done”.**
+The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) preserves the prior stop and exact evidence.
+The managed checkout is clean at pushed WIP checkpoint `833ae76`; all 877 original frozen inputs are unchanged.
+No running app/build process was observed at resume. Fresh Release analysis r283 ran alone at
+`2026-10-07T06:09:10.959236Z`–`06:31:04.052839Z`, actual PID `55084`, exit 0, with compiler parallelism two.
+Its independent source/product/PDB/ISA checks and 1,180-copy archive pass. The 877-input caller slice is now
+qualified across the complete matrix; see the [closeout record](../../TestRuns/P1CallerQualification_2026-10-07.md).
+Current work is reviewed history-startup and stroke/healing/readback integration, then actual asynchronous
+stroke completion and the remaining P1 exit gates. P1 remains WIP until those gates pass.
 
 Current 877-input caller candidate passes full x64 Debug r278 / Release r280 / real ASan r281 and all
 three ARM64 r40 cross-builds on identical freeze
@@ -14,11 +20,11 @@ ASan's r5 verifier corrects that exact stress inventory; no source or runtime ex
 All runtime/cross-build archives independently verify. Cross-builds establish no native ARM64 runtime result.
 Release analysis r282 was stopped at the user's request: actual child PID 67664 exits -1 at
 `2026-10-06T20:43:28.106340Z`. Its unchanged source and two actual `/MP2` plus `/analyze` response files remain
-preserved, but this is no analysis pass. A fresh completed analysis, qualified commit/push and overall P1/G1 remain due.
+preserved, but this is no analysis pass. Fresh r283 closes analysis for this exact caller slice; overall P1/G1 remains due.
 Earlier resource-capacity, compiler-service and clipboard-oracle failures remain archived with their original
 results in the [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
 
-Latest qualified slice: All Layers Clone source readback, retained source/shutdown ownership, separate physical
+Preceding qualified slice: All Layers Clone source readback, retained source/shutdown ownership, separate physical
 Space pan and event-time Clone input policy pass full x64 Debug r267 / Release r268 / real ASan r270,
 Release analysis r271 and all three ARM64 r38 cross-builds on 867 identical inputs, freeze
 `0236021DC5A19194AA4AC527FF628A7980A131A78D2A7337C7E40A5D157E75E4`.
@@ -63,29 +69,29 @@ The image-wrapper residency and original worker/upload transport step is fully q
   limit, event/fence waits, exact lease acknowledgements and device-retirement owners. They preserve the shader's
   uint coverage and move conversion to the worker. Cheaper-agent WARP controls require independent review;
   ignored drafts are not compilation, application activation, or mouse-up latency evidence.
-- [ ] Qualify the integrated Save/export session-end event handling and localized saving block reason.
+- [x] Qualify the integrated Save/export session-end event handling and localized saving block reason.
   Primary-reviewed copies and 108 actual-host controls are integrated; the cheaper agent's 16 protocol controls
   were independently repaired. Unsaved-document protection and original publication/receipt authority remain.
   Debug r277's resource-array capacity failure is archived; the correction preserves every expectation. Fresh
   Debug r278, Release r280 and real ASan r281 pass all 108 actual-message checks; all three ARM64 r40
-  cross-builds and their archive proofs pass. Release analysis and commit/push remain due. See the
+  cross-builds and their archive proofs pass. Fresh Release analysis r283 and its independent archive pass. See the
   [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
-- [ ] Current caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
+- [x] Current caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
   choice in the fixed press context, use an admitted worker placement sample for the active layer, and
   retain the original source charge through stroke/shutdown retirement. The primary-reviewed implementation
-  and 50 functional, five allocation-failure and 16 shutdown controls are now registered; full qualification
-  remains due. Current Debug r278 / Release r280 / real ASan r281 and all three ARM64 r40 cross-builds pass;
-  Release analysis and the qualified commit/push remain due.
+  and 50 functional, five allocation-failure and 16 shutdown controls are registered and fully qualified.
+  Current Debug r278 / Release r280 / real ASan r281, all three ARM64 r40 cross-builds, Release analysis r283,
+  strict predecessor/product checks and every qualification archive pass.
   Existing retouch checks pump the source and release acknowledgements before inspecting results.
-- [ ] Qualify the supported prepared-folder selection/grouping route with actual host Undo/Redo and literal
-  hierarchy/pixel expectations. The nine controls are registered and require qualification; they do not define
+- [x] Qualify the supported prepared-folder selection/grouping route with actual host Undo/Redo and literal
+  hierarchy/pixel expectations. The nine controls are fully qualified; they do not define
   new multi-row UI semantics. Current Debug r278 / Release r280 / real ASan r281 pass all nine. See the
   [current source record](../../TestRuns/P1CloneLayerSource_2026-10-06.md).
-- [ ] Confirmed session-end follow-up: cancel active clipboard work on `WM_ENDSESSION(TRUE)` and qualify
+- [x] Confirmed session-end follow-up: cancel active clipboard work on `WM_ENDSESSION(TRUE)` and qualify
   Copy/Cut before publication and after `EmptyClipboard`, plus cancelled-session preservation. Primary
   cancellation is implemented and 48 independent real-message controls are registered after review of the
   delegated draft. The adapter completes an irreversible attempt once. Current Debug r278 / Release r280 /
-  real ASan r281 pass all 48; Release analysis and qualified commit/push remain due.
+  real ASan r281 pass all 48; Release analysis r283, ARM64 r40 and all independent archive proofs pass.
   Save/export worker-wait and saving-reason wiring are included in this current candidate.
 - [x] Migrate eligible real Clone All Layers press to admitted tiled readback, retain its event-time offset/input and original reservation through stroke/sample retirement, and qualify literal pixels, ordering, cancellation, failure and device recovery. Sampler diagnostics preserve its literal expectation.
   - [x] Add and qualify real capture-loss and independent shutdown coverage. Primary review found the shutdown cancellation

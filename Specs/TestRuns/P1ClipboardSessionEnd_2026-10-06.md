@@ -7,15 +7,18 @@
 - [x] Implement exact-ticket/current-stamp cancellation on confirmed session end, preserving acknowledgement.
 - [x] Register 48 real-message controls; use one existing harness gate event and a collision-free message.
 - [x] Keep irreversible native publication, private Copy/Cut, all preceding goldens and retry policy unchanged.
-- [ ] Full identical-source Debug/Release/real ASan, Release analysis and ARM64 cross-build qualification.
+- [x] Full identical-source Debug/Release/real ASan, Release analysis and ARM64 cross-build qualification.
   - [x] Full Debug r275 and independent registry r3 pass all 48 new checks and every predecessor.
-  - [ ] Repair/qualify the precise post-Empty oracle; retain the failed Release r276 result.
-  - [ ] Release, real ASan, analysis and all three ARM64 cross-builds on the repaired source.
-- [ ] Independently verify all predecessor registries and actual images/PDBs; archive every receipt.
-- [ ] Commit/push the qualified caller step and update the parent checklist.
-- [ ] Finish Save/export session-end wiring and the remaining P1/G1 gates before Done.
+  - [x] Repair/qualify the precise post-Empty oracle; retain the failed Release r276 result.
+  - [x] Release, real ASan, analysis and all three ARM64 cross-builds on the repaired source.
+- [x] Independently verify all predecessor registries and actual images/PDBs; archive every receipt.
+- [x] Commit/push the qualified caller step and update the parent checklist.
+- [ ] Finish the remaining P1/G1 gates before Done; Save/export session-end wiring is now qualified separately.
 
-Status: **integrated candidate; qualification due**. Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
+Status: **qualified on the combined 877-input source**. The
+[complete caller closeout](P1CallerQualification_2026-10-07.md) binds Debug r278, Release r280,
+real ASan r281, Release analysis r283 and all three ARM64 r40 cross-builds and archive proofs.
+Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
 
 ## Reference and boundaries
 
