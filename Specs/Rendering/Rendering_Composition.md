@@ -253,7 +253,11 @@ Successful delivery
 lends immutable rows with an exact lease generation. Workers may copy them, and the owner unmaps exactly once on
 acknowledgement. Duplicate/stale releases fail. A device rebind retires old pending/in-flight work; lent rows keep
 their old context/texture/fence alive until worker acknowledgement, and their bytes remain charged against the
-same staging cap. No command is recorded on a retired context. Consumers validate returned device generations
+same staging cap. No useful image command is recorded on a retired context. An explicit owner-captured
+retirement barrier may signal/flush its original healthy context solely to acknowledge preceding commands;
+it shares the fixed queue/event limits, reports its captured generation and grants no current publication.
+Its strong origin rejects a foreign or closed/reinitialized queue. Fence serials never reset at rebind.
+Admission/recording failure is not a GPU acknowledgement. Consumers validate returned device generations
 before publication. Shutdown disarms/joins wait producers, joins copying workers, then unmaps/releases leftovers.
 
 `Application` owns this queue and binds it when the renderer's exact generation changes. Stop event producers

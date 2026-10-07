@@ -1493,13 +1493,44 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
     }
 }
 
-void Application::CancelHostContinuations() noexcept
+void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 {
+    // Inspect at most the fixed eight slots before mutation. A sealed stroke may still be queued behind
+    // opacity or sampling; only its scalar key survives ClearExcept. Active requests live outside that ring.
+    const bool preserve = preserveSealedStroke && CanvasBrushSealedStrokePending();
+    const auto serial = _session.DocumentSerial();
+    const auto opening = _canvasBrushInput.Opening();
+    const auto matchesStroke = [serial, opening](const HostRequestQueue::Entry& entry) noexcept
+    {
+        const auto* input = std::get_if<HostCanvasBrushInput>(&entry.input.Input());
+        return entry.documentSerial == serial && input && input->kind == HostCanvasInputKind::Brush &&
+               input->opening == opening;
+    };
+    const bool preserveActive = preserve && _activeHostRequest && matchesStroke(_activeHostRequest.value());
+    std::uint64_t preservedOrdinal = 0;
+    if (preserve && !preserveActive)
+        for (std::size_t offset = 0; offset < _hostRequests.Size(); ++offset)
+        {
+            const auto* pending = _hostRequests.PendingAt(offset);
+            if (pending && matchesStroke(*pending))
+            {
+                preservedOrdinal = pending->ordinal;
+                break;
+            }
+        }
     FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _shapeCommitPreview.reset();
     SyncToolOverlays();
-    (void)_hostRequests.Clear(RetireHostContinuation);
+    if (preserve)
+        (void)_hostRequests.ClearExcept(serial, preservedOrdinal, RetireHostContinuation);
+    else
+        (void)_hostRequests.Clear(RetireHostContinuation);
     _pendingPanelOpening.reset();
+    if (preserveActive)
+    {
+        SweepSamplerOpenings();
+        return; // No cancellation, stage reset or receipt publication for this accepted stroke.
+    }
     if (_pathClassificationTicket)
     {
         _pathClassificationCancelled = true;

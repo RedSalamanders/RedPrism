@@ -21,10 +21,15 @@
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
 #include "Document.Tests.HealWork.h"
+#include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
+#include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
+#include "Document.Tests.StrokeFinishPlan.h"
 #include "Document.Tests.StrokeFinishPublication.h"
+#include "Document.Tests.StrokeOpening.h"
+#include "Document.Tests.StrokeOpeningMemory.h"
 #include "Document.h"
 #include "DocumentDraftTests.h"
 #include "DocumentFixtureTests.h"
@@ -8122,6 +8127,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryStateViewTests();
     gFailures += RunHistoryEntriesTests();
     gFailures += RunRecordRootTests();
+    gFailures += RunRecordLookupTests();
+    gFailures += RunLayerIndexTests();
+    gFailures += RunStrokeFinishPlanTests();
+    gFailures += RunStrokeOpeningTests();
+    gFailures += RunStrokeOpeningMemoryTests();
     gFailures += RunRecordOwnershipBoundsTests();
     gFailures += RunColorDisplayWorkTests();
     gFailures += RunColorDisplayPublicationTests();

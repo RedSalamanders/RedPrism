@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -86,6 +86,11 @@
 
   <ItemGroup>
     <ClInclude Include="Composition.Tests.GpuBufferReadback.h" />
+    <ClInclude Include="Composition.Tests.BrushEpoch.h" />
+    <ClInclude Include="Composition.Tests.DetachedEpoch.h" />
+    <ClInclude Include="Composition.Tests.GpuCompletion.h" />
+    <ClInclude Include="Composition.Tests.CapturedCompletion.h" />
+    <ClInclude Include="Composition.Tests.VideoMemorySnapshot.h" />
     <ClInclude Include="Composition.Tests.BrushDensityClear.h" />
     <ClInclude Include="Composition.Tests.GpuBufferSlots.h" />
     <ClInclude Include="..\Support\FailureReports.h" />
@@ -123,6 +128,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Composition.Tests.GpuBufferReadback.cpp" />
+    <ClCompile Include="Composition.Tests.BrushEpoch.cpp" />
+    <ClCompile Include="Composition.Tests.DetachedEpoch.cpp" />
+    <ClCompile Include="Composition.Tests.GpuCompletion.cpp" />
+    <ClCompile Include="Composition.Tests.CapturedCompletion.cpp" />
+    <ClCompile Include="Composition.Tests.VideoMemorySnapshot.cpp" />
     <ClCompile Include="Composition.Tests.BrushDensityClear.cpp" />
     <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
@@ -156,6 +166,7 @@
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
     <ClCompile Include="..\..\Common\TransformEdit.cpp" />

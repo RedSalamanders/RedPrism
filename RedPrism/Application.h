@@ -36,6 +36,7 @@
 #include "SamplerState.h"
 #include "SettingsStore.h"
 #include "ShapeEditWork.h"
+#include "StrokeOpeningWork.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
 
@@ -252,6 +253,7 @@ class Application final : public ChromeEvents
         double cornerRadius = 0;
         std::optional<Vec2> cloneOffset;
         bool cloneAllLayers = false;
+        SpotHealingMode healing = SpotHealingMode::ContentAware;
     };
     struct CanvasBrushSample final
     {
@@ -268,12 +270,20 @@ class Application final : public ChromeEvents
     void RecordCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
     void LoseCanvasBrush(bool keepShape = false) noexcept;
     void SealCanvasBrushForBoundary() noexcept;
-    [[nodiscard]] bool CancelCanvasBrush() noexcept;
+    [[nodiscard]] bool CanvasBrushSealedStrokePending() const noexcept;
+    [[nodiscard]] bool CancelCanvasBrush(bool physicalOnly = false) noexcept;
     void ReplayCanvasBrush() noexcept;
     void RetireCanvasBrush(ContinuationOutcome outcome, std::uint64_t opening) noexcept;
     void BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
                             const CanvasBrushContext* captured = nullptr,
                             const Raster* cloneComposite = nullptr) noexcept;
+    class StrokeOpeningJob;
+    [[nodiscard]] HRESULT StartStrokeOpening(std::uint64_t opening) noexcept;
+    void BeginPreparedBrushStrokeAt(Vec2 point, unsigned int modifiers) noexcept;
+    int RunStrokeOpeningHostSelfTest() noexcept;
+    int RunSealedStrokeHostSelfTest() noexcept;
+    int RunSealedCloneHostSelfTest() noexcept;
+    std::shared_ptr<struct StrokeOpeningTestGate> _strokeOpeningTestGate;
     class CloneReadbackJob;
     class CloneLayerSourceJob;
     [[nodiscard]] HRESULT StartCloneReadback(std::uint64_t opening) noexcept;
@@ -568,7 +578,7 @@ class Application final : public ChromeEvents
     void FinishHostContinuation(ContinuationReceipt::Result result) noexcept;
     // Every asynchronous history finisher calls this after apply/drop and HistoryWork::Finish.
     void ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error) noexcept;
-    void CancelHostContinuations() noexcept;
+    void CancelHostContinuations(bool preserveSealedStroke = false) noexcept;
     void StopHostContinuations() noexcept;
     static void RetireHostContinuation(HostRequestQueue::Entry&& entry, ContinuationRetirement reason) noexcept;
     int RunHostContinuationSelfTest() noexcept;

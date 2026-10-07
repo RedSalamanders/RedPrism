@@ -18,6 +18,9 @@
 #include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
+#include "Host.Tests.PreservedContinuation.h"
+#include "Host.Tests.RetainedSlotAdmission.h"
+#include "Host.Tests.WorkerStageRetirement.h"
 #include "Host.Tests.WorkerWriteCompletion.h"
 #include "HostPathReadTests.h"
 #include "JobActivityTests.h"
@@ -1843,6 +1846,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();
+    gFailures += RunHostWorkerStageRetirementTests();
+    gFailures += RunRetainedSlotAdmissionTests();
+    gFailures += RunPreservedContinuationTests();
     gFailures += RunJobRetirementTests();
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();

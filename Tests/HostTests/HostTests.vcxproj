@@ -106,6 +106,9 @@
     <ClInclude Include="..\..\Common\InputRevision.h" />
     <ClInclude Include="JobCloseHookTests.h" />
     <ClInclude Include="JobSuspendedRetirementTests.h" />
+    <ClInclude Include="Host.Tests.WorkerStageRetirement.h" />
+    <ClInclude Include="Host.Tests.RetainedSlotAdmission.h" />
+    <ClInclude Include="Host.Tests.PreservedContinuation.h" />
     <ClInclude Include="JobRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
     <ClInclude Include="SamplerInputTests.h" />
@@ -131,6 +134,7 @@
     <ClCompile Include="UiTimingTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
     <ClCompile Include="..\..\Common\BenchmarkMachine.cpp" />
@@ -181,6 +185,9 @@
     <ClCompile Include="JobShutdownRetirementTests.cpp" />
     <ClCompile Include="JobCloseHookTests.cpp" />
     <ClCompile Include="JobSuspendedRetirementTests.cpp" />
+    <ClCompile Include="Host.Tests.WorkerStageRetirement.cpp" />
+    <ClCompile Include="Host.Tests.RetainedSlotAdmission.cpp" />
+    <ClCompile Include="Host.Tests.PreservedContinuation.cpp" />
     <ClCompile Include="JobRetirementTests.cpp" />
     <ClCompile Include="PixelRecycleTests.cpp" />
     <ClCompile Include="PerfRootTests.cpp" />

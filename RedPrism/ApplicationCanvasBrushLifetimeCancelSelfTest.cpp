@@ -1,4 +1,4 @@
-#include "Application.h"
+﻿#include "Application.h"
 
 #include "ChromeHost.h"
 #include "LayerMetadataTestGate.h"
@@ -340,9 +340,12 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
                         lifecycleResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_CANCELLED)) &&
                         originalStreamSurvived && !state.closeMessageConsumed) ||
             !expect(scenario.name, "original-request-retains-budget-after-opacity-worker-retires",
-                    _hostInputBudget.Used() != 0 && _jobs.ReservedMemoryBytes() == 0 && !_historyWork.Busy() &&
-                        !_layerMetadataTicket && _layerMetadataTestGate->retired.load() &&
-                        _layerMetadataTestGate->retiredOffOwner.load() && !_canvasLifetime) ||
+                    _hostInputBudget.Used() != 0 && _session.PendingBrush() &&
+                        _session.PendingBrush()->OpeningRetainedMemoryBytes() != 0 &&
+                        _jobs.ReservedMemoryBytes() == _session.PendingBrush()->OpeningRetainedMemoryBytes() &&
+                        !_utilityTicket && !_utilityStamp && !_historyWork.Busy() && !_layerMetadataTicket &&
+                        _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load() &&
+                        !_canvasLifetime) ||
             !expect(scenario.name, "source-and-history-stay-unchanged-before-original-up",
                     _session.DocumentSerial() == sourceSerial && _session.ActiveLayerID() == target && unchangedLayer &&
                         unchangedLayer->asset && unchangedLayer->asset->image == source &&

@@ -6,6 +6,7 @@
 #include <atomic>
 #include <bit>
 #include <cassert>
+#include <exception>
 #include <limits>
 #include <new>
 
@@ -49,9 +50,12 @@ struct GpuWorkQueue::Impl final
         JobTicket ticket;
         GpuReadbackReceiver* receiver = nullptr;
         GpuBufferReadbackReceiver* bufferReceiver = nullptr;
+        GpuCompletionReceiver* completionReceiver = nullptr;
         GpuReadbackProducer* producer = nullptr;
     };
 
+    // Allocated once inside Initialize's construction boundary, never during capture/recording.
+    const std::shared_ptr<const std::uint8_t> identity = std::make_shared<const std::uint8_t>(std::uint8_t{0});
     DWORD ownerThread = GetCurrentThreadId();
     JobScheduler* scheduler = nullptr;
     OwnerWorkMultiplexer* routes = nullptr;
@@ -105,6 +109,7 @@ struct GpuWorkQueue::Impl final
         slot.completionFence.reset();
         slot.receiver = nullptr;
         slot.bufferReceiver = nullptr;
+        slot.completionReceiver = nullptr;
         slot.producer = nullptr;
         slot.state = State::Free;
         if (slot.retired)
@@ -115,9 +120,13 @@ struct GpuWorkQueue::Impl final
     {
         auto* receiver = slot.receiver;
         auto* bufferReceiver = slot.bufferReceiver;
+        auto* completionReceiver = slot.completionReceiver;
         const auto ticket = slot.ticket;
+        const auto generation = slot.deviceGeneration;
         Free(slot);
-        if (bufferReceiver)
+        if (completionReceiver)
+            completionReceiver->GpuCompletionReady(ticket, generation, error);
+        else if (bufferReceiver)
             bufferReceiver->BufferReadbackReady(ticket, {}, error);
         else
             receiver->ReadbackReady(ticket, {}, error);
@@ -218,7 +227,7 @@ struct GpuWorkQueue::Impl final
 
     HRESULT Record(Slot& slot) noexcept
     {
-        HRESULT result = PrepareStorage(slot);
+        HRESULT result = slot.completionReceiver ? S_OK : PrepareStorage(slot);
         if (FAILED(result))
             return result;
         if (slot.producer)
@@ -239,10 +248,13 @@ struct GpuWorkQueue::Impl final
         slot.ready.store(false, std::memory_order_relaxed);
         if (!scheduler->RearmEventWait(slot.wait))
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-        if (slot.bufferReadback)
-            slot.context->CopyResource(slot.bufferStaging.get(), slot.bufferSource.get());
-        else
-            slot.context->CopySubresourceRegion(slot.staging.get(), 0, 0, 0, 0, slot.source.get(), 0, &slot.box);
+        if (!slot.completionReceiver)
+        {
+            if (slot.bufferReadback)
+                slot.context->CopyResource(slot.bufferStaging.get(), slot.bufferSource.get());
+            else
+                slot.context->CopySubresourceRegion(slot.staging.get(), 0, 0, 0, 0, slot.source.get(), 0, &slot.box);
+        }
         if (route == GpuCapabilities::CompletionRoute::MonitoredFence)
         {
             if (fenceValue >= std::numeric_limits<std::uint64_t>::max() - 1)
@@ -261,7 +273,8 @@ struct GpuWorkQueue::Impl final
             slot.source.reset();
             slot.bufferSource.reset();
             ++inFlight;
-            ++statistics.copies;
+            if (!slot.completionReceiver)
+                ++statistics.copies;
         }
         return result;
     }
@@ -418,7 +431,8 @@ HRESULT GpuWorkQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context, b
     self.fence = std::move(fence);
     self.dxgiDevice2 = std::move(dxgiDevice2);
     self.route = route;
-    self.fenceValue = 0;
+    // Values increase across rebinds: captured old fences and the current fence share this owner sequence.
+    // Resetting on Bind could signal an old captured fence below its already completed value.
     ++self.deviceGeneration;
     return S_OK;
 }
@@ -455,6 +469,135 @@ HRESULT GpuWorkQueue::EnqueueBufferReadback(ID3D11Buffer* source, unsigned int w
     const HRESULT result = self.ValidateBuffer(source, width, height);
     return FAILED(result) ? result
                           : self.Admit(width, height, ticket, nullptr, nullptr, {}, nullptr, &receiver, source);
+}
+
+bool GpuWorkQueue::HasCompletionSlot() const noexcept
+{
+    return HasReadbackSlot() && _impl->inFlight < kMaxInFlight;
+}
+
+HRESULT GpuWorkQueue::EnqueueCompletion(JobTicket ticket, GpuCompletionReceiver& receiver) noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (!HasCompletionSlot())
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+    // Admission captures only fixed descriptor storage. Record immediately so the real signal order and
+    // monotonically increasing fence value cannot be overtaken by another copy or a subsequent Bind.
+    const HRESULT admitted = self.Admit(1, 1, ticket, nullptr, nullptr, {}, nullptr);
+    if (FAILED(admitted))
+        return admitted;
+    for (auto& slot : self.slots)
+    {
+        if (slot.state != Impl::State::Pending || slot.ticket != ticket || slot.receiver || slot.bufferReceiver ||
+            slot.producer || slot.source || slot.bufferSource)
+            continue;
+        slot.completionReceiver = &receiver;
+        const HRESULT result = self.Record(slot);
+        if (FAILED(result))
+            self.Free(slot); // Failed recording is a local refusal, never a callback or a retirement proof.
+        return result;
+    }
+    std::terminate(); // This owner just admitted the sole matching descriptor; no callback can intervene.
+}
+
+HRESULT GpuCompletionContext::DeviceStatusOwner() const noexcept
+{
+    return _origin && _device && _ownerThread == GetCurrentThreadId() ? _device->GetDeviceRemovedReason()
+                                                                      : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+}
+
+HRESULT GpuWorkQueue::CaptureCompletionContext(GpuCompletionContext& empty) const noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device || empty)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    const auto& self = *_impl;
+    self.CheckOwner();
+    const HRESULT removed = self.device->GetDeviceRemovedReason();
+    if (FAILED(removed))
+        return removed;
+    if (self.route == GpuCapabilities::CompletionRoute::None || !self.context)
+        return E_NOINTERFACE;
+    empty._device = self.device;
+    empty._context = self.context;
+    empty._context4 = self.context4;
+    empty._dxgiDevice2 = self.dxgiDevice2;
+    empty._fence = self.fence;
+    empty._route = self.route;
+    empty._deviceGeneration = self.deviceGeneration;
+    empty._ownerThread = self.ownerThread;
+    empty._origin = self.identity; // Publish validity last; no callback or allocating operation intervenes.
+    return S_OK;
+}
+
+bool GpuWorkQueue::HasRetirementCompletionSlot(const GpuCompletionContext& captured) const noexcept
+{
+    if (!_impl || _impl->stopped || !captured || captured._origin != _impl->identity ||
+        captured._ownerThread != GetCurrentThreadId())
+        return false;
+    _impl->CheckOwner();
+    return _impl->inFlight < kMaxInFlight &&
+           std::any_of(
+               _impl->slots.begin(), _impl->slots.end(),
+               [](const Impl::Slot& slot) noexcept { return slot.state == Impl::State::Free; });
+}
+
+HRESULT GpuWorkQueue::EnqueueRetirementCompletion(const GpuCompletionContext& captured, JobTicket ticket,
+                                                  GpuCompletionReceiver& receiver) noexcept
+{
+    if (!_impl || _impl->stopped || !captured || captured._origin != _impl->identity ||
+        captured._ownerThread != GetCurrentThreadId())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (!HasRetirementCompletionSlot(captured))
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+    const HRESULT removed = captured._device->GetDeviceRemovedReason();
+    if (FAILED(removed))
+        return removed; // Caller may separately treat confirmed removal as retirement, never this refusal callback.
+    const HRESULT admitted = self.Admit(1, 1, ticket, nullptr, nullptr, {}, nullptr);
+    if (FAILED(admitted))
+        return admitted;
+    for (auto& slot : self.slots)
+    {
+        if (slot.state != Impl::State::Pending || slot.ticket != ticket || slot.receiver || slot.bufferReceiver ||
+            slot.producer || slot.source || slot.bufferSource)
+            continue;
+        slot.completionReceiver = &receiver;
+        slot.deviceGeneration = captured._deviceGeneration;
+        slot.retired =
+            captured._context.get() != self.context.get() || captured._deviceGeneration != self.deviceGeneration;
+        slot.context = captured._context;
+        slot.completionFence = captured._fence;
+        slot.ready.store(false, std::memory_order_relaxed);
+        HRESULT result = self.scheduler->RearmEventWait(slot.wait) ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        if (SUCCEEDED(result) && captured._route == GpuCapabilities::CompletionRoute::MonitoredFence)
+        {
+            if (self.fenceValue >= (std::numeric_limits<std::uint64_t>::max)() - 1)
+                result = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            else
+            {
+                result = captured._context4->Signal(captured._fence.get(), ++self.fenceValue);
+                if (SUCCEEDED(result))
+                    result = captured._fence->SetEventOnCompletion(self.fenceValue, slot.event.get());
+                if (SUCCEEDED(result))
+                    captured._context->Flush();
+            }
+        }
+        else if (SUCCEEDED(result))
+            result = captured._dxgiDevice2->EnqueueSetEvent(slot.event.get());
+        if (SUCCEEDED(result))
+        {
+            slot.state = Impl::State::Waiting;
+            ++self.inFlight;
+        }
+        else
+            self.Free(slot); // This is a refusal, not a retirement acknowledgement.
+        return result;
+    }
+    std::terminate();
 }
 
 bool GpuWorkQueue::HasReadbackSlot() const noexcept
@@ -533,6 +676,7 @@ void GpuWorkQueue::CloseAfterWorkers() noexcept
         slot.completionFence.reset();
         slot.receiver = nullptr;
         slot.bufferReceiver = nullptr;
+        slot.completionReceiver = nullptr;
         slot.producer = nullptr;
         self.DropStorage(slot);
     }
@@ -578,6 +722,18 @@ void GpuWorkQueue::Pump() noexcept
         if (slot.state != Impl::State::Waiting || (slot.mapDeferred && self.testHoldMapRecovery) ||
             !slot.ready.exchange(false, std::memory_order_acquire))
             continue;
+        if (slot.completionReceiver)
+        {
+            --self.inFlight;
+            // A healthy retired generation also waits for its original real event. Query only that captured
+            // context's device, never the replacement. The event acknowledges command retirement even when
+            // its result is stale or the old device was removed; no rows are mapped or lent here.
+            wil::com_ptr_nothrow<ID3D11Device> originalDevice;
+            slot.context->GetDevice(originalDevice.put());
+            const HRESULT removed = originalDevice->GetDeviceRemovedReason();
+            self.DeliverFailure(slot, FAILED(removed) ? removed : slot.retired ? E_ABORT : S_OK);
+            continue;
+        }
         if (slot.retired)
         {
             --self.inFlight;

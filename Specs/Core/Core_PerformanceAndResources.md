@@ -430,6 +430,16 @@ owners until acknowledgement and skips further Run work. One ready-only owner pu
 outer loops; in-flight work alone MUST NOT make `HasUiWork` true or cause polling. Its event callbacks share the
 existing 32-registration wait pool with memory pressure, rather than creating another pool/thread.
 
+An opted-in `deferredRetirement` stage invokes `RetireWorkerStage` on its worker after all useful producers join
+and cancellation or allocation failure is normalized, before completion publication. Cancellation that skips
+`Run` still invokes this cleanup hook. The hook performs nonthrowing destruction of already detached owned
+graphs; it starts no useful work or producer, invokes no owner/context callbacks and waits for no external fence.
+The owner resumes such a retirement stage only after every external reader acknowledges. The same original
+record, FIFO key and complete reservation survive worker cleanup and owner acknowledgement. Undispatched work
+at shutdown continues to use the joined owner and final-worker cleanup protocol; no worker stage is fabricated.
+The default hook is empty, and jobs without the opt-in receive no hook call. This does not activate application
+stroke ownership or qualify owner/G1 costs by itself.
+
 GPU upload acknowledgement and a cancelled worker acknowledgement may complete in either order. A mapped-row
 or fence callback arriving while the original cancelled stage is queued/running/completed MUST retain that
 same record and reservation; it cannot require a second successful Resume. Final apply waits for both producer
@@ -1041,3 +1051,45 @@ partial output and deferred worker retirement. This description cannot approve d
 separate preview/brush/utility/pipeline graph and its CPU/device metadata. Original conservative two-domain
 RasterResidencyAdmission/Prepare remains available with its original contract. This dormant description alone
 does not qualify live display integration, oversized mapping, complete resource creation/fallback or G1.
+
+### Opening reservation transfer
+
+An opening that publishes a live worker-built brush draft MUST preclaim a retained-memory slot at descriptor admission. Ordinary callback retainers cannot consume that slot. The complete CPU opening/live declaration remains charged to its original job through source retirement, then transfers once into the draft before any accepted sample replays. It survives every reader and whole-draft retirement, with acknowledgement returning capacity on the owner drain. Failed, cancelled, untransferred and joined-shutdown records return their preclaimed slots. A slot preclaim adds no second byte reservation. Clone source ownership and final coverage/history/GPU/residency need their complete additional admissions.
+
+### Recorded GPU command retirement
+
+`CaptureCompletionContext` captures the actual device, context, completion route and queue generation into an
+empty immutable value before dependent commands. A strong queue-origin token rejects foreign captures and
+captures surviving Close/reinitialization, including reuse of the queue object address. Capture creates no
+resource and records no command. `DeviceStatusOwner` queries this captured device independently; healthy
+status establishes no command completion.
+
+`EnqueueRetirementCompletion` may record a retirement barrier on that captured healthy stream after device
+retirement or rebind. This is the only retired-context recording exception: no useful image draw, compute,
+copy, Map or publication may use it. It shares the fixed slots and event waits. Every admitted callback follows
+the real original event and reports the original generation. Fence serials MUST increase across rebinds so
+an old fence cannot mistake a reused completed value for completion of newer commands.
+
+`GpuWorkQueue::EnqueueCompletion` shares the queue's fixed slots, two-command in-flight limit and event wait
+pool. Successful admission records its completion event immediately on the captured immediate context; it
+creates no staging resource, issues no pixel copy and returns no mapped lease. Capacity refusal records
+nothing and produces no callback. Retry waits on existing completion/release notifications; it MUST NOT poll.
+
+An admitted callback acknowledges commands preceding the actual event on that original context, including a
+retired generation. Current healthy-device success permits current publication; retired generation `E_ABORT`
+permits retirement only. Confirmed device removal is reported separately. Admission or event-recording failure
+does not acknowledge outstanding device work: the caller retains its resource graph and GPU charge until a
+real original-stream acknowledgement, confirmed removal, or joined shutdown. Completion does not prove swap
+chain presentation. Stop/join event producers before scheduler close, and release queue owners after workers
+join. Receivers outlive every admitted event or this joined close sequence.
+
+### Fresh video-memory observations
+
+`QueryVideoMemorySnapshot` borrows the actual device, reacquires its adapter and independently queries local
+and nonlocal segments on every call. It creates no device, context, fence, texture or persistent owner.
+Each segment preserves its exact HRESULT and availability. Failed segments discard all numeric fields,
+including driver-written partial output; successful zero-budget observations remain available but cannot
+admit a graph. Device/setup failure resets the complete output and returns its exact HRESULT. Recheck the
+original device removal status after the segment queries. These live segment observations are not an atomic
+aggregate, and an earlier capability probe is not a fresh admission snapshot. Unknown budgets MUST NOT be
+replaced with guessed RAM/VRAM limits. Current consumer activation and whole-graph admission remain P1 work.

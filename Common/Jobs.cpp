@@ -1,4 +1,5 @@
 #include "Jobs.h"
+#include "SharedRetainedMemoryState.h"
 
 #include "DeferredRelease.h"
 #include "PipelineTrace.h"
@@ -55,63 +56,6 @@ bool Serial(JobClass kind) noexcept
 }
 } // namespace
 
-struct SharedRetainedMemoryLease::State final
-{
-    std::array<std::atomic<std::uint64_t>, JobScheduler::kRetainedMemoryCapacity> acknowledged{};
-    std::atomic<std::uint64_t> pending{0};
-    std::atomic<std::uint64_t> residentBytes{0};
-    wil::unique_handle wake; // Duplicate of the kernel event, never a borrowed scheduler handle.
-};
-
-SharedRetainedMemoryLease::~SharedRetainedMemoryLease()
-{
-    Reset();
-}
-
-SharedRetainedMemoryLease::SharedRetainedMemoryLease(SharedRetainedMemoryLease&& other) noexcept
-    : _state(std::move(other._state)), _slot(std::exchange(other._slot, 64)),
-      _generation(std::exchange(other._generation, 0)), _bytes(std::exchange(other._bytes, 0))
-{
-}
-
-SharedRetainedMemoryLease& SharedRetainedMemoryLease::operator=(SharedRetainedMemoryLease&& other) noexcept
-{
-    if (this != &other)
-    {
-        Reset();
-        _state = std::move(other._state);
-        _slot = std::exchange(other._slot, 64);
-        _generation = std::exchange(other._generation, 0);
-        _bytes = std::exchange(other._bytes, 0);
-    }
-    return *this;
-}
-
-void SharedRetainedMemoryLease::Reset() noexcept
-{
-    auto state = std::move(_state);
-    if (!state)
-        return;
-    const auto slot = std::exchange(_slot, 64);
-    const auto generation = std::exchange(_generation, 0);
-    const auto bytes = std::exchange(_bytes, 0);
-    assert(slot < JobScheduler::kRetainedMemoryCapacity && generation != 0 && bytes != 0);
-    // Destruction of the enclosing graph precedes publication. A slot cannot be reused until the owner has
-    // consumed its bit; the old producer performs no further slot writes after that publication.
-    const auto previous = state->residentBytes.fetch_sub(bytes, std::memory_order_acq_rel);
-    assert(previous >= bytes);
-    (void)previous;
-    state->acknowledged[slot].store(generation, std::memory_order_relaxed);
-    const auto pending = state->pending.fetch_or(std::uint64_t{1} << slot, std::memory_order_release);
-    if (pending == 0)
-        (void)SetEvent(state->wake.get()); // One wake per empty-to-ready transition, including simultaneous releases.
-}
-
-std::uint64_t SharedRetainedMemoryLease::ResidentBytes() const noexcept
-{
-    return _state ? _state->residentBytes.load(std::memory_order_acquire) : 0;
-}
-
 // Windows interlocked SLIST requires this alignment on both its head and every intrusive entry.
 #pragma warning(push)
 #pragma warning(disable : 4324)
@@ -145,6 +89,7 @@ struct JobScheduler::Impl final
         std::uint64_t sequence = 0;
         JobOptions options{};
         std::uint64_t reserved = 0;
+        std::size_t retainedSlot = JobScheduler::kRetainedMemoryCapacity;
         std::unique_ptr<Job> job;
         std::optional<CancelSource> cancel;
         JobResult result{};
@@ -170,6 +115,7 @@ struct JobScheduler::Impl final
         std::uint64_t generation = 0;
         std::uint64_t bytes = 0;
         bool shared = false;
+        std::uint64_t reservedFor = 0; // exact original record sequence; owner only
     };
     const std::uint64_t retainedMemoryOwner = NextRetainedMemoryOwner();
     std::array<RetainedMemory, JobScheduler::kRetainedMemoryCapacity> retainedMemory{};
@@ -562,6 +508,8 @@ struct JobScheduler::Impl final
             {
                 result = {JobStatus::Cancelled};
             }
+            if (record->options.deferredRetirement)
+                record->job->RetireWorkerStage(execution, result);
             {
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record->result = result;
@@ -773,10 +721,24 @@ std::int32_t JobScheduler::RetainMemory(JobTicket ticket, RetainedMemoryTicket& 
         record.reserved == 0 || record.result.status != JobStatus::Finished || !record.cancel ||
         record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    if (record.retainedSlot < kRetainedMemoryCapacity)
+    {
+        const auto index = record.retainedSlot;
+        auto& cache = self.retainedMemory[index];
+        if (cache.reservedFor != record.sequence || cache.bytes || !cache.generation)
+            std::terminate();
+        cache.reservedFor = 0;
+        cache.bytes = std::exchange(record.reserved, 0);
+        cache.shared = false;
+        record.retainedSlot = kRetainedMemoryCapacity;
+        retained = {index, cache.generation, self.retainedMemoryOwner};
+        return S_OK;
+    }
     for (std::size_t index = 0; index < self.retainedMemory.size(); ++index)
     {
         auto& cache = self.retainedMemory[index];
-        if (cache.bytes == 0 && cache.generation != (std::numeric_limits<std::uint64_t>::max)())
+        if (cache.bytes == 0 && cache.reservedFor == 0 &&
+            cache.generation != (std::numeric_limits<std::uint64_t>::max)())
         {
             ++cache.generation;
             cache.bytes = std::exchange(record.reserved, 0);
@@ -870,6 +832,24 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         }
+        std::size_t retainedSlot = kRetainedMemoryCapacity;
+        if (options.reserveRetainedMemory)
+        {
+            if (!options.memoryBytes)
+                return E_INVALIDARG;
+            for (std::size_t index = 0; index < self.retainedMemory.size(); ++index)
+            {
+                const auto& cache = self.retainedMemory[index];
+                if (!cache.bytes && !cache.reservedFor &&
+                    cache.generation != (std::numeric_limits<std::uint64_t>::max)())
+                {
+                    retainedSlot = index;
+                    break;
+                }
+            }
+            if (retainedSlot == kRetainedMemoryCapacity)
+                return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        }
         auto& record = self.records[slot];
         try
         {
@@ -884,6 +864,13 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         record.reserved = 0;
         record.sequence = ++self.nextSequence;
         record.generation = record.sequence;
+        record.retainedSlot = retainedSlot;
+        if (retainedSlot < kRetainedMemoryCapacity)
+        {
+            auto& cache = self.retainedMemory[retainedSlot];
+            ++cache.generation;
+            cache.reservedFor = record.sequence;
+        }
         record.job = std::move(job);
         record.result = {};
         record.percent.store(0, std::memory_order_relaxed);
@@ -1214,7 +1201,10 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
     assert(self.releasingCount.load(std::memory_order_acquire) == 0);
     (void)self.memory.Release(self.memory.Reserved());
     for (auto& cache : self.retainedMemory)
-        cache.bytes = 0;       // Close has joined producers and owner cleanup; every older ticket is now invalid.
+    {
+        cache.reservedFor = 0;
+        cache.bytes = 0; // Close has joined producers and owner cleanup; every older ticket is now invalid.
+    }
     self.sharedMemory.reset(); // Foreign leases keep their independent endpoint and owned wake alive.
     self.actionCount = 0;
     self.actionSource = nullptr;
@@ -1441,6 +1431,14 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         assert(released);
         (void)released;
         record.reserved = 0;
+        if (record.retainedSlot < JobScheduler::kRetainedMemoryCapacity)
+        {
+            auto& cache = self.retainedMemory[record.retainedSlot];
+            if (cache.reservedFor != record.sequence || cache.bytes)
+                std::terminate();
+            cache.reservedFor = 0;
+            record.retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+        }
         {
             WorkerResources::ExclusiveLock guard{self.lock};
             record.state = JobScheduler::Impl::State::Empty;

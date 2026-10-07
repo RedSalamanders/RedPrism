@@ -74,7 +74,7 @@ is still preparing the canvas, Windows cancels that work.
 | Ctrl+A / Ctrl+D / Ctrl+Shift+I | Select all, deselect, inverse |
 | [ / ] and Shift+[ / Shift+] | Brush size down / up by a fifth; hardness down / up by a quarter (brush tools) |
 | 0-9 | Brush opacity 100 %, 10-90 % (two digits within 0.6 s for other percents); the active layer's opacity with the Move tool. Holding a digit sets it once, not repeatedly |
-| Shift-click / Escape | Straight brush line from the last stroke / drop the stroke in progress |
+| Shift-click / Escape | Straight brush line from the last stroke / cancel the brush stroke while the pointer is down |
 | Alt-click | Set the Clone Stamp source; with the Brush, Spot Healing or Gradient, sample a color |
 | Ctrl+M / Ctrl+L / Ctrl+U | Curves, Levels, Hue/Saturation on the active layer (the Image menu adds Exposure, Gradient Map, Grain; the Filter menu the blurs, noise and lens correction) |
 | Ctrl+Alt+C / Ctrl+Alt+I | Canvas Size, Image Size (Image menu) |
@@ -92,8 +92,8 @@ With Clone Stamp, after choosing a source with Alt-click, you can press and drag
 source image is preparing; your movement and release are kept. Zoom remains available during preparation.
 The press keeps its current All Layers choice: either the committed composite or the active layer's placed pixels.
 After releasing the stroke, hold Space and drag to pan while the source finishes preparing.
-Escape cancels before any pixels or undo history are published. If pointer capture is lost, the accepted part of
-the stroke is kept.
+Escape cancels while the pointer is down. After release or capture loss, the accepted stroke is kept even if
+its source is still preparing. Undo after release waits for the stroke, then undoes it.
 
 ## Settings, crash reports and languages
 

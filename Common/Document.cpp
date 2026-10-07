@@ -225,6 +225,12 @@ std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(
                 return std::nullopt;
     }
     result.ownershipBytes = result.metadataBytes;
+    const int imagePixels = layer.asset ? layer.asset.value().image.PixelCount() : 0;
+    const int maskPixels = layer.mask ? layer.mask.value().asset.image.PixelCount() : 0;
+    if (imagePixels < 0 || maskPixels < 0)
+        return std::nullopt;
+    result.imagePixels = static_cast<std::uint64_t>(imagePixels);
+    result.maskPixels = static_cast<std::uint64_t>(maskPixels);
     const auto raster = [&](const Raster& image) noexcept
     {
         if (!image.HasStorage())
@@ -1311,6 +1317,11 @@ bool NameUtf8LengthOk(std::wstring_view name) noexcept
 
 namespace
 {
+[[nodiscard]] const ImageLayer* LayerById(const RecordRoot<ImageLayer>& layers, const Guid& id) noexcept
+{
+    return layers.FindKey(id);
+}
+
 [[nodiscard]] const ImageLayer* LayerById(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     for (const ImageLayer& layer : layers)
@@ -1624,7 +1635,7 @@ const ImageLayer* DocumentSession::FindLayer(const Guid& id) const noexcept
     {
         return nullptr;
     }
-    return LayerById(_document.value().layers, id);
+    return _document.value().layers.FindKey(id);
 }
 
 const ImageLayer* DocumentSession::ActiveLayer() const noexcept
@@ -1736,8 +1747,34 @@ template <typename Excluded>
 
 std::int64_t DocumentSession::PixelBudgetLeft(bool mask, std::initializer_list<Guid> excluding) const noexcept
 {
-    return BudgetLeft(_document, mask, [&](const Guid& id)
-                      { return std::find(excluding.begin(), excluding.end(), id) != excluding.end(); });
+    if (!_document)
+        return 0;
+    const auto& layers = _document.value().layers;
+    const auto bounds = layers.OwnershipBounds();
+    if ((!bounds && layers.Identity()) || !layers.HasUniqueKeys())
+        return 0;
+    auto used = bounds ? (mask ? bounds.value().maskPixels : bounds.value().imagePixels) : 0;
+    // The exclusion list is bounded by its caller, not document size. Ignore repeated/missing IDs just as the
+    // original predicate did on validated unique-ID documents. Invalid duplicate roots refuse above; stored
+    // occurrence totals exclude thumbnails and shape-source owners, and count each layer even with shared pixels.
+    for (auto cursor = excluding.begin(); cursor != excluding.end(); ++cursor)
+    {
+        if (std::find(excluding.begin(), cursor, *cursor) != cursor)
+            continue;
+        const auto* layer = layers.FindKey(*cursor);
+        if (!layer)
+            continue;
+        const auto pixelCount = mask ? (layer->mask ? layer->mask.value().asset.image.PixelCount() : 0)
+                                     : (layer->asset ? layer->asset.value().image.PixelCount() : 0);
+        if (pixelCount < 0)
+            return 0;
+        const auto pixels = static_cast<std::uint64_t>(pixelCount);
+        if (pixels > used)
+            return 0;
+        used -= pixels;
+    }
+    const auto limit = static_cast<std::uint64_t>(mask ? kMaxMaskPixels : kMaxLayerPixels);
+    return used >= limit ? 0 : static_cast<std::int64_t>(limit - used);
 }
 
 std::int64_t DocumentSession::PixelBudgetLeft(bool mask, const std::unordered_set<Guid>& excluding) const noexcept

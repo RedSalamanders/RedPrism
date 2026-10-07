@@ -88,6 +88,15 @@ class PreparedStrokeFinish final
         DocumentHistory::ResidencyPermit& permit) noexcept;
     [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
                                                DocumentHistory::PrepareObserver observer = {});
+    // Lifetime-bound immutable preparation views; these grant no publication authority. Null after apply/move.
+    [[nodiscard]] const CanvasDocument* FinalDocument() const noexcept
+    {
+        return !_applied && _input._valid && _document && _commit ? &*_document : nullptr;
+    }
+    [[nodiscard]] const BrushCommitInfo* CommitInfo() const noexcept
+    {
+        return !_applied && _input._valid && _document && _commit ? &*_commit : nullptr;
+    }
 
   private:
     friend class DocumentSession;

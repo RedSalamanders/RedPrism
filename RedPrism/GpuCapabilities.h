@@ -26,6 +26,17 @@ struct VideoMemoryInfo final
     std::uint64_t currentReservation = 0;
 };
 
+// Pure value conversion. Failed queries keep their HRESULT and discard every supplied numeric field.
+[[nodiscard]] VideoMemoryInfo VideoMemoryInfoFromQuery(HRESULT queryResult,
+                                                       const DXGI_QUERY_VIDEO_MEMORY_INFO& info) noexcept;
+
+// Fresh value-only observations; the two segments are independent queries, not an atomic aggregate.
+struct VideoMemorySnapshot final
+{
+    VideoMemoryInfo local{};
+    VideoMemoryInfo nonLocal{};
+};
+
 // A value-only snapshot. Capability booleans are meaningful only when their corresponding query is available.
 struct Report final
 {
@@ -80,4 +91,9 @@ enum class CompletionRoute : std::uint8_t
 
 // Borrows both input interfaces. It performs capability queries only and owns no persistent graphics resources.
 HRESULT Probe(ID3D11Device* device, ID3D11DeviceContext* context, Report& report) noexcept;
+
+// Borrows the actual device and reacquires its adapter on every call. Creates no context, fence, or resource.
+// Setup/device-removal failure returns its HRESULT with reset output. S_OK means both segment queries were
+// attempted; each segment retains its own HRESULT and availability, including unsupported-query failures.
+HRESULT QueryVideoMemorySnapshot(ID3D11Device* device, VideoMemorySnapshot& snapshot) noexcept;
 } // namespace GpuCapabilities

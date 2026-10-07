@@ -583,6 +583,10 @@ int Application::RunSamplerCallerSelfTest() noexcept
         return 5;
     pointer(WM_LBUTTONDOWN, Vec2{55, 16});
     pointer(WM_LBUTTONUP, Vec2{55, 16});
+    // Ordinary brushes now use the admitted worker opening. Pixel proof follows its actual acknowledgement,
+    // exactly as the sampler-dependent routes above; the literal color and old-dependency assertions stay fixed.
+    if (!settle())
+        return 5;
     if (!check(pixelAt(55, 16) == std::array<std::uint8_t, 4>{0xFF, 0x00, 0xFF, 0xFF} &&
                    _session.ForegroundColor() == kMagenta,
                L"A brush press after the manual write did not use its magenta live palette color.\n",

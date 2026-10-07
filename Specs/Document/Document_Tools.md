@@ -541,7 +541,11 @@ explicitly empty selection.
   sealed document and one history publication. Owner apply compares exact session/document/generation/restore,
   target and root/selection identities plus history authority, then swaps the complete owners without pixel or
   history construction. Prepared residency refresh retains this same publication. Old document/display/history
-  and draft owners remain in the retirement aggregate. Discard clears only its exact opening. Direct reference
+  and draft owners remain in the retirement aggregate. Discard clears only its exact opening. `FinalDocument`
+  and `CommitInfo` expose immutable preparation views only while the input remains valid and unapplied. They
+  preserve the exact target and final bytes, confer no apply authority and cannot escape the preparation owner's
+  lifetime. Moved or applied preparations expose neither view; stale preparations still require the full
+  current-authority check before apply. Direct reference
   Undo/Redo first clears the marker without moving older history; settled history restore refuses while it
   exists. Actual application FIFO activation and full resource/latency qualification remain P1 obligations.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;

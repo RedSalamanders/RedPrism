@@ -148,6 +148,11 @@ waits for acknowledgement and observes the restored state; document replacement/
 queued lineage. An empty stack or an open transaction preserves the ignored-key behavior and crop without
 capturing history. Current failure posts the localized history-restore notice and preserves the document.
 
+An admitted ordinary brush whose pointer input is sealed is no longer an uncommitted gesture consumed by
+Escape or the first Undo. Escape preserves that original stroke and clears other queued inputs; Undo/Redo
+queues behind its commit and observes history at dequeue. This applies while worker opening is pending as
+well as after preview starts, and while the stroke waits behind an older opacity or sampling request.
+
 ## Move tool
 
 With the Move tool the header is the transform inspector and the canvas shows the active layer's box through
@@ -291,7 +296,9 @@ press starts a stroke on the active layer, or on its mask when the mask is selec
 line from the end of the previous stroke on that target); moving adds samples and shows them at once through the
 composition's stroke preview; release, the pointer capture or the focus going elsewhere (a dialog, a menu, another
 app; [`UI_Windowing.md`](UI_Windowing.md)), the pointer leaving the window once no drag holds the capture, and
-switching tools each commit one history entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke. The Eraser and the Brush's Erase mode both
+switching tools each commit one history entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke while
+its pointer sampling remains open. After accepted release/loss, Escape preserves the recorded prefix through
+worker acknowledgement and Undo queues behind its commit. The Eraser and the Brush's Erase mode both
 erase; a mask is never erased but painted black or white. A stroke over the pixel budget or an engine failure is
 dropped with `IDS_ERROR_BRUSH_BUDGET`. A press does nothing on a folder without its mask, a hidden or adjustment
 layer, a disabled mask or an empty selection.

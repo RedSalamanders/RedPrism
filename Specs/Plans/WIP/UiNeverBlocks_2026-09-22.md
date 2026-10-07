@@ -1,5 +1,57 @@
 # P1 — Responsive raster editor delivery milestone
 
+## Current delivery checklist
+
+- [x] Commit and push the qualified caller and stroke resource foundations (`f585577`, `4abdb3a`).
+- [x] Integrate the immutable layer index, cached pixel totals, final allocation planner, worker retirement hook and complete GPU epoch handoff.
+- [x] Integrate worker stroke opening, captured settings, selection/Blur preparation and whole-draft retirement; review numeric/state controls.
+- [x] Preserve exact 912-input Debug r305 / Release r306 / real ASan r307 and all three ARM64 r43 cross-builds; analysis r308 failed and remains recorded.
+- [x] Integrate reviewed actual Paint/Eraser, Heal and Blur opening, full CPU charge retention and descriptor-time slot admission.
+- [x] Exercise all 46 new actual opening success/fault controls in Debug r313; preserve its separate old live-charge fixture failure.
+- [x] Qualify the corrected live-charge assertion, owner completion/detached density recording and analysis reservation expression repair; see the [stroke work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
+- [x] Preserve accepted sealed strokes through Escape and queued Undo; qualify active and queued original-ticket scenarios, receipt retirement and bounded queue preservation.
+- [x] Preserve r317's full-run failure after all 15 sealed controls pass; retain its chrome fixture failure and add an actual opening wait before live move measurement.
+- [x] Qualify original-context retirement, fresh DXGI observations, final preflight/views and 16 sealed Clone controls on the new combined source.
+- [x] Pass and preserve canonical x64 Debug r322 after the replay/completion fixture corrections: 933 frozen inputs, 102 application stages and a verified 1,226-copy archive.
+- [x] Pass and archive canonical Release r323 and real ASan r324 on the identical 933-input source.
+- [x] Independently verify archived Debug r322 / Release r323 / real ASan r324 against their frozen source, products, complete ordered controls and verifier mutation checks.
+- [x] Pass and archive Release analysis r326 after two test-only warning repairs; all named expectations are preserved.
+- [x] Qualify the two repaired test fixtures on the revised source: full x64 Debug r327, Release r328, real ASan r329, Release analysis r326 and all three ARM64 r44 cross-builds pass and are archived.
+- [ ] Commit/push this qualified 933-input stroke opening and retirement step.
+- [x] Establish private recorded-display feasibility with hardware/WARP literal pixels, eager canvas mips and 45 MP sparse copies without source materialization.
+- [ ] Integrate the bounded command stream and dedicated recorder lane; prove cancellation, original-device completion and worker retirement before display publication.
+- [ ] Connect opening and finalization to the actual application, preserving accepted input, exact GPU coverage, final residency and cancellation/shutdown ownership.
+- [ ] Close the remaining I/O, selection/transform, native integration, history/display and first-display admission items below.
+- [ ] Pass actual host scenarios and measured G1, finish the current validation matrix, reconcile contracts/user guide, commit/push and move P1 to Done.
+
+P1 remains **WIP**. Qualified worker prerequisites do not establish application activation or the responsiveness exit gate.
+
+Latest Debug result: r322 passes the complete canonical test command on freeze
+`30D06FBFBFD5A1D0AB3B2982A6A09DDD031F05B4DD42F7416029A59F3AD6FC40`.
+Its archive verifies. Release r323 and real ASan r324 also pass on the same freeze;
+Release analysis r325 failed two test-fixture warnings; the failed run is archived.
+Two test-only repairs preserve all expectations; Release analysis r326 passes on revised freeze
+`776E5C51CB24B15FEC6207B927CEFAEA77C2241FA231E562A7A531720CB0CF6D` and its 1,238-copy archive verifies.
+Debug r327 is checking that revised source. Original r320/r321 failures remain preserved in the
+[stroke work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
+Independent source-bound inventory checking passes for all three original profiles, including exact
+predecessor order/multiplicity and synthetic rejection controls. Revised runtime/cross-build qualification remains due.
+An isolated worker-recorded composition experiment also rules out one whole command list on WARP:
+45 MP submission took 168 ms. Bounded 512-square draws/clears, 1 MiB uploads and sliced mips reduce
+its measured batch p99 to 0.482 ms, maximum 6.205 ms, with matching sampled literal pixels.
+This Debug experiment ran separately from the application and overlaps qualification work; it is
+design evidence, not G1 or throughput qualification. A two-slot streaming variant also verifies nonuniform pixels across the 1 MiB band boundary,
+with actual per-batch completions and unrelated CPU work finishing under recorder backpressure.
+Its incoming command/private recording context is a third shadow owner and must be charged in
+admission. Complete graph admission, device/cancellation/shutdown ownership and actual display
+activation remain required.
+
+The private full-display graph records canvas mips before sealing. Its sparse 45 MP experiment verifies
+four independent literal pixels, including a replacement at the upload band boundary, and that the
+sparse source remains unmaterialized. Hardware and WARP pass with two transport slots and real
+per-batch acknowledgements. This graph is still outside the application; original parent admission,
+callback joins, failure quarantine and the final bounded publish are implementation requirements.
+
 **Execution resumed on 2026-10-07 at the user's request: “continue until P1 done”.**
 The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) preserves the prior stop and exact evidence.
 The qualified 877-input caller slice is committed and pushed as `f585577`. Its original source freeze and
@@ -58,6 +110,9 @@ The image-wrapper residency and original worker/upload transport step is fully q
 ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
 
 ## Delivery checklist
+
+- [x] Commit and push the qualified resource checkpoint as `4abdb3a`.
+- [ ] Qualify the integrated layer index, cached pixel budgets and final allocation planner. Preserve failed Debug r299; repair the one-point, valid inverse-transform and index allocation references, then run fresh validation. Actual asynchronous stroke activation and the final P1 gates remain open. See the [current host work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
 
 - [x] Qualify and archive resource candidate Debug r294: all predecessors plus 181 exact additions,
   five fresh linked image/PDB/ISA identities, active WARP debug layer and 99 application stages. Freeze

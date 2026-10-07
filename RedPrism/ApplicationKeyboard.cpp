@@ -403,6 +403,11 @@ bool Application::HandleKey(const KeyPress& press) noexcept
         SealSamplerForBoundary();
         return true;
     }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CanvasBrushSealedStrokePending())
+    {
+        CancelHostContinuations(true); // The accepted terminal and original worker retain their authority.
+        return true;
+    }
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
         (_samplerHostTicket || (std::get_if<ColorSampling>(&_drag) && std::get<ColorSampling>(_drag).opening)))
     {
@@ -410,7 +415,7 @@ bool Application::HandleKey(const KeyPress& press) noexcept
         CancelHostContinuations(); // Retain published color; acknowledge cancellation of the remaining prefix.
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CancelCanvasBrush())
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CancelCanvasBrush(true))
         return true;
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
         (_documentLifecycleTicket || _sizingTicket || _pathClassificationTicket || _rasterEditTicket ||

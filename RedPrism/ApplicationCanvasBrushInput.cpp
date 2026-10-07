@@ -25,7 +25,9 @@ bool Application::CanDeferCanvasBrush() const noexcept
     // A delayed canvas press may follow opacity or read-only sampling. Every other preceding mutation keeps
     // its own source/closure policy. The fixed context owns settings and an exact older color dependency.
     const auto tool = CapturedCanvasTool();
-    const bool brush = tool == EditorTool::Brush || tool == EditorTool::Eraser;
+    const bool brush = tool == EditorTool::Brush || tool == EditorTool::Eraser ||
+                       (tool == EditorTool::Heal && !_session.IsMaskSelected()) ||
+                       (tool == EditorTool::Smear && _session.smearMode == SmearMode::Blur);
     const bool clone = tool == EditorTool::Clone && !KeyboardState::Held(VK_MENU) && !_session.IsMaskSelected() &&
                        _session.cloneSource;
     const bool colorTool = tool == EditorTool::Gradient || tool == EditorTool::Shape;
@@ -62,7 +64,7 @@ bool Application::CanDeferCanvasBrush() const noexcept
             return false;
         precedingInput = true;
     }
-    return clone || (precedingInput && (brush || samplerPending));
+    return clone || brush || (precedingInput && samplerPending);
 }
 
 bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept
@@ -74,12 +76,17 @@ bool Application::QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) n
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW)));
         return true;
     }
-    CanvasBrushContext captured{
-        _session.DocumentSerial(), _session.ActiveLayerID().value(),
-        CapturedCanvasTool(),      CapturedCanvasTool() == EditorTool::Eraser ? BrushKind::Erase : BrushKind::Paint,
-        _session.brushSettings,    _session.IsMaskSelected(),
-        _session.maskPaintWhite};
-    if (!captured.mask && captured.tool != EditorTool::Eraser && captured.tool != EditorTool::Clone)
+    CanvasBrushContext captured{_session.DocumentSerial(), _session.ActiveLayerID().value(), CapturedCanvasTool(),
+                                BrushKind::Paint,          _session.brushSettings,           _session.IsMaskSelected(),
+                                _session.maskPaintWhite};
+    captured.kind = captured.tool == EditorTool::Eraser  ? BrushKind::Erase
+                    : captured.tool == EditorTool::Heal  ? BrushKind::Heal
+                    : captured.tool == EditorTool::Smear ? BrushKind::Blur
+                    : captured.tool == EditorTool::Brush && _session.brushMode == BrushToolMode::Erase
+                        ? BrushKind::Erase
+                        : BrushKind::Paint;
+    captured.healing = _session.spotHealingMode;
+    if (!captured.mask && captured.kind == BrushKind::Paint && captured.tool != EditorTool::Clone)
         captured.sampledColor = CaptureSamplerColorDependency();
     captured.gradient = _session.gradientSettings;
     captured.foreground = _session.ForegroundColor();
@@ -146,15 +153,25 @@ void Application::LoseCanvasBrush(bool keepShape) noexcept
         (void)_jobs.RequestUiActionSource(_continuationAction);
 }
 
-bool Application::CancelCanvasBrush() noexcept
+bool Application::CanvasBrushSealedStrokePending() const noexcept
 {
-    if (!_canvasBrushInput.Busy() || _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+    const auto opening = _canvasBrushInput.Opening();
+    const auto* captured = _canvasBrushInput.CapturedContext(opening);
+    return captured && captured->documentSerial == _session.DocumentSerial() && EditorToolIsBrush(captured->tool) &&
+           !_canvasBrushInput.Sampling() && _canvasBrushReceipt.Read().outcome == HostOutcome::Pending &&
+           _canvasBrushCancelledOpening != opening;
+}
+
+bool Application::CancelCanvasBrush(bool physicalOnly) noexcept
+{
+    if ((physicalOnly && CanvasBrushSealedStrokePending()) || !_canvasBrushInput.Busy() ||
+        _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         return false;
     // Cancellation owns the same admitted ordinal. Do not mutate a replayed transaction in a key callback,
     // drop its context before the selected owner retires, or wait for a physical Up that may never arrive.
     _canvasBrushCancelledOpening = _canvasBrushInput.Opening();
     const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushCancelledOpening);
-    if (captured && captured->kind == BrushKind::Clone && _utilityTicket)
+    if (captured && _utilityTicket)
     {
         (void)_historyWork.RequestCancel();
         (void)_jobs.Cancel(_utilityTicket.value());
@@ -194,7 +211,7 @@ void Application::RetireCanvasBrush(HostOutcome outcome, std::uint64_t opening) 
         else if (captured->tool == EditorTool::Shape && _session.PendingShapeOpening() == _canvasBrushSessionOpening)
             _session.CancelShape();
     }
-    if (!_shutdownStarted && outcome != HostOutcome::Succeeded && _canvasBrushReplayed && _canvasBrushSessionOpening &&
+    if (!_shutdownStarted && outcome != HostOutcome::Succeeded && _canvasBrushSessionOpening &&
         captured->documentSerial == _session.DocumentSerial() &&
         _session.PendingBrushOpening() == _canvasBrushSessionOpening)
     {
@@ -247,6 +264,14 @@ void Application::ReplayCanvasBrush() noexcept
         if (FAILED(result))
             FinishHostContinuation({HostOutcome::Failed, result});
         return; // The Down event stays in the original FIFO until its complete source acknowledges.
+    }
+    if (!_canvasBrushReplayed && !_canvasBrushSessionOpening && captured->kind != BrushKind::Clone &&
+        captured->tool != EditorTool::Gradient && captured->tool != EditorTool::Shape)
+    {
+        const HRESULT result = StartStrokeOpening(input->opening);
+        if (FAILED(result))
+            FinishHostContinuation({HostOutcome::Failed, result});
+        return; // Opening owns the complete Down/Move/Up prefix until current preparation acknowledges.
     }
     const auto event = _canvasBrushInput.Take(input->opening);
     if (!event)
@@ -336,11 +361,20 @@ void Application::ReplayCanvasBrush() noexcept
     switch (event->action)
     {
     case CanvasBrushInput::Action::Down:
-        if (PointerBusy())
+        if (captured->kind != BrushKind::Clone &&
+            (!_canvasBrushSessionOpening || _session.PendingBrushOpening() != _canvasBrushSessionOpening))
         {
             FinishHostContinuation({HostOutcome::Stale, E_ABORT});
             return;
         }
+        if (captured->kind == BrushKind::Clone && PointerBusy())
+        {
+            FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+            return;
+        }
+        if (captured->kind != BrushKind::Clone)
+            BeginPreparedBrushStrokeAt(event->sample.point, event->sample.modifiers);
+        else
         {
             auto resolved = *captured;
             if (resolved.sampledColor)

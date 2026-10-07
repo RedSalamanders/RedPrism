@@ -56,7 +56,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>rpcrt4.lib;ole32.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>rpcrt4.lib;ole32.lib;user32.lib;psapi.lib;yyjson.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -71,7 +71,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>rpcrt4.lib;ole32.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>rpcrt4.lib;ole32.lib;user32.lib;psapi.lib;yyjson.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -81,6 +81,11 @@
     <ClInclude Include="Document.Tests.BrushRetirementBounds.h" />
     <ClInclude Include="Document.Tests.SparseWindowBounds.h" />
     <ClInclude Include="Document.Tests.MaskSampleWork.h" />
+    <ClInclude Include="Document.Tests.RecordLookup.h" />
+    <ClInclude Include="Document.Tests.LayerIndex.h" />
+    <ClInclude Include="Document.Tests.StrokeFinishPlan.h" />
+    <ClInclude Include="Document.Tests.StrokeOpening.h" />
+    <ClInclude Include="Document.Tests.StrokeOpeningMemory.h" />
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
     <ClInclude Include="Document.Tests.CapturedCloneOffset.h" />
@@ -198,6 +203,11 @@
     <ClCompile Include="Document.Tests.BrushRetirementBounds.cpp" />
     <ClCompile Include="Document.Tests.SparseWindowBounds.cpp" />
     <ClCompile Include="Document.Tests.MaskSampleWork.cpp" />
+    <ClCompile Include="Document.Tests.RecordLookup.cpp" />
+    <ClCompile Include="Document.Tests.LayerIndex.cpp" />
+    <ClCompile Include="Document.Tests.StrokeFinishPlan.cpp" />
+    <ClCompile Include="Document.Tests.StrokeOpening.cpp" />
+    <ClCompile Include="Document.Tests.StrokeOpeningMemory.cpp" />
     <ClCompile Include="Document.Tests.StrokeFinalCoverage.cpp" />
     <ClCompile Include="Document.Tests.StrokeFinishPublication.cpp" />
     <ClCompile Include="DocumentTests.cpp" />
@@ -294,6 +304,11 @@
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
+    <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
     <ClCompile Include="..\..\Common\TransformEdit.cpp" />
@@ -303,6 +318,7 @@
     <ClCompile Include="..\..\Common\Crop.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
     <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
+    <ClCompile Include="..\..\Common\StrokeOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />

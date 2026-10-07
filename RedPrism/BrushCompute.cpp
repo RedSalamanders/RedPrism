@@ -1,10 +1,18 @@
-#include "BrushCompute.h"
+﻿#include "BrushCompute.h"
 
 #include "BrushCoverageShader.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
+#include <limits>
 #include <new>
+#include <utility>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -49,6 +57,7 @@ HRESULT GpuBrushCoverage::Initialize(ID3D11Device* device, ID3D11DeviceContext* 
 void GpuBrushCoverage::Release() noexcept
 {
     _tiles.clear();
+    _tileGpuBytes = 0;
     _segmentsView.reset();
     _segments.reset();
     _segmentCapacity = 0;
@@ -61,11 +70,93 @@ void GpuBrushCoverage::Release() noexcept
 void GpuBrushCoverage::BeginStroke() noexcept
 {
     _tiles.clear();
+    _tileGpuBytes = 0;
 }
 
 void GpuBrushCoverage::EndStroke() noexcept
 {
     _tiles.clear();
+    _tileGpuBytes = 0;
+}
+
+GpuBrushCoverage::StrokeEpoch::StrokeEpoch() : _tiles(std::make_unique<TileMap>()) {}
+
+GpuBrushCoverage::StrokeEpoch::~StrokeEpoch()
+{
+    ResetForWork();
+}
+
+bool GpuBrushCoverage::StrokeEpoch::HasResources() const noexcept
+{
+    return (_tiles && !_tiles->empty()) || _segments || _segmentsView;
+}
+
+void GpuBrushCoverage::StrokeEpoch::ResetForWork() noexcept
+{
+    assert(!_capturingThread || GetCurrentThreadId() != _capturingThread);
+    // Destroy the directory as well as its nodes on this worker. clear() alone retains large bucket storage.
+    _tiles.reset();
+    _segmentsView.reset();
+    _segments.reset();
+    _device.reset();
+    _segmentCapacity = 0;
+    _tileGpuBytes = 0;
+    _cpuBytes = 0;
+    _gpuBytes = 0;
+    _capturingThread = 0;
+}
+
+std::uint64_t GpuBrushCoverage::StrokeCpuOwnershipBytes() const noexcept
+{
+    // MSVC's hash directory has two iterator slots per bucket. Nodes/control/proxies and opaque resource
+    // wrappers receive separate conservative allowances; payload buffers are charged by the GPU graph.
+    constexpr std::uint64_t metadata = sizeof(StrokeEpoch) + 64 * 1024;
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    constexpr std::uint64_t node = sizeof(std::pair<const std::uint64_t, TileBuffers>) + 256 + 5 * 4096;
+    if (_tiles.bucket_count() > (maximum - metadata) / (2 * sizeof(void*)))
+        return 0;
+    const auto base = metadata + _tiles.bucket_count() * 2 * sizeof(void*);
+    return _tiles.size() <= (maximum - base) / node ? base + _tiles.size() * node : 0;
+}
+
+std::uint64_t GpuBrushCoverage::StrokeGpuOwnershipBytes() const noexcept
+{
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    constexpr std::uint64_t allowance = 2 * 4096;
+    if (!_segments)
+        return _tileGpuBytes;
+    if (_tileGpuBytes > maximum - allowance ||
+        _segmentCapacity > (maximum - _tileGpuBytes - allowance) / (4 * sizeof(float)))
+        return 0;
+    return _tileGpuBytes + allowance + _segmentCapacity * 4 * sizeof(float);
+}
+
+bool GpuBrushCoverage::CanTakeStrokeEpoch(const StrokeEpoch& empty) const noexcept
+{
+    if (!empty._tiles || empty.HasResources() || empty._capturingThread)
+        return false;
+    const auto cpu = StrokeCpuOwnershipBytes();
+    const auto gpu = StrokeGpuOwnershipBytes();
+    return cpu != 0 && (gpu != 0 || (_tiles.empty() && !_segments));
+}
+
+bool GpuBrushCoverage::TakeStrokeEpoch(StrokeEpoch& empty) noexcept
+{
+    if (!CanTakeStrokeEpoch(empty))
+        return false;
+    const auto cpu = StrokeCpuOwnershipBytes();
+    const auto gpu = StrokeGpuOwnershipBytes();
+    static_assert(noexcept(_tiles.swap(*empty._tiles)));
+    _tiles.swap(*empty._tiles);
+    _segments.swap(empty._segments);
+    _segmentsView.swap(empty._segmentsView);
+    empty._device = _device; // Own the identity; a released device address cannot alias a replacement.
+    empty._segmentCapacity = std::exchange(_segmentCapacity, 0);
+    empty._tileGpuBytes = std::exchange(_tileGpuBytes, 0);
+    empty._cpuBytes = cpu;
+    empty._gpuBytes = gpu;
+    empty._capturingThread = GetCurrentThreadId();
+    return true;
 }
 
 HRESULT GpuBrushCoverage::EnsureSegments(std::size_t count) noexcept
@@ -157,7 +248,13 @@ GpuBrushCoverage::TileBuffers* GpuBrushCoverage::BuffersFor(const BrushKernelTil
     }
     try
     {
-        return &_tiles.emplace(tile.key, std::move(buffers)).first->second;
+        // Logical density/uint payload plus four opaque buffer/view allowances. Cache only after insertion.
+        const auto bytes = static_cast<std::uint64_t>(pixels) * 8 + 4 * 4096;
+        if (bytes > (std::numeric_limits<std::uint64_t>::max)() - _tileGpuBytes)
+            return nullptr;
+        auto* result = &_tiles.emplace(tile.key, std::move(buffers)).first->second;
+        _tileGpuBytes += bytes;
+        return result;
     }
     catch (const std::bad_alloc&)
     {
@@ -173,7 +270,13 @@ HRESULT GpuBrushCoverage::EnsureStaging(TileBuffers& buffers) noexcept
     staging.ByteWidth = static_cast<UINT>(buffers.width) * static_cast<UINT>(buffers.height) * sizeof(std::uint32_t);
     staging.Usage = D3D11_USAGE_STAGING;
     staging.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    return _device->CreateBuffer(&staging, nullptr, buffers.staging.put());
+    const auto bytes = static_cast<std::uint64_t>(staging.ByteWidth) + 4096;
+    if (bytes > (std::numeric_limits<std::uint64_t>::max)() - _tileGpuBytes)
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    const HRESULT result = _device->CreateBuffer(&staging, nullptr, buffers.staging.put());
+    if (SUCCEEDED(result))
+        _tileGpuBytes += bytes;
+    return result;
 }
 
 bool GpuBrushCoverage::Render(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
@@ -186,6 +289,46 @@ bool GpuBrushCoverage::RecordCoverage(std::span<const BrushKernelTile> tiles, st
                                       std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept
 {
     return RenderImpl(tiles, settled, tail, params, false);
+}
+
+bool GpuBrushCoverage::RecordEpochCoverage(StrokeEpoch& epoch, std::span<const BrushKernelTile> tiles,
+                                           std::span<const BrushSegment> settled,
+                                           const BrushKernelParams& params) noexcept
+{
+    if (!Ready() || !epoch._tiles || epoch._capturingThread != GetCurrentThreadId() || epoch._device.get() != _device ||
+        !_tiles.empty() || _segments || _segmentsView || _segmentCapacity || _tileGpuBytes ||
+        FAILED(_device->GetDeviceRemovedReason()))
+        return false;
+    const auto swapGraph = [&]() noexcept
+    {
+        _tiles.swap(*epoch._tiles);
+        _segments.swap(epoch._segments);
+        _segmentsView.swap(epoch._segmentsView);
+        std::swap(_segmentCapacity, epoch._segmentCapacity);
+        std::swap(_tileGpuBytes, epoch._tileGpuBytes);
+    };
+    swapGraph();
+    const auto restore = wil::scope_exit(
+        [&]() noexcept
+        {
+            // Failed resource creation can still leave a private prefix. Cache its whole charge before restoring
+            // the graph; the same original final job retires it after the actual GPU completion acknowledgement.
+            epoch._cpuBytes = StrokeCpuOwnershipBytes();
+            epoch._gpuBytes = StrokeGpuOwnershipBytes();
+            swapGraph();
+        });
+    return RecordCoverage(tiles, settled, {}, params);
+}
+
+ID3D11Buffer* GpuBrushCoverage::EpochCoverageBuffer(const StrokeEpoch& epoch, std::uint64_t key, int width,
+                                                    int height) const noexcept
+{
+    if (!epoch._tiles || epoch._capturingThread != GetCurrentThreadId() || epoch._device.get() != _device)
+        return nullptr;
+    const auto found = epoch._tiles->find(key);
+    return found != epoch._tiles->end() && found->second.width == width && found->second.height == height
+               ? found->second.preview.get()
+               : nullptr;
 }
 
 ID3D11Buffer* GpuBrushCoverage::CoverageBuffer(std::uint64_t key, int width, int height) const noexcept

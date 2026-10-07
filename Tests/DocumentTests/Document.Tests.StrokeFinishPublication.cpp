@@ -313,7 +313,14 @@ void SuccessfulPublication(bool withMask)
     if (!opening.has_value())
         return;
     const std::weak_ptr<BrushStroke> draft = fixture.session.WeakPendingBrushForTest();
+    ExpectCase(fixture.session.PendingBrush()->ExpectedFinishCoverageEngine() == &CpuBrushCoverage::Shared(), group,
+               "attached-live-draft-preflight-names-original-cpu-engine");
     ExpectCase(work.TakeOnOwner(fixture.session, opening.value()), group, "exact-opening-captured");
+    {
+        const auto detachedDraft = draft.lock();
+        ExpectCase(detachedDraft && detachedDraft->ExpectedFinishCoverageEngine() == nullptr, group,
+                   "detached-draft-preflight-exposes-no-engine-borrow");
+    }
     ExpectCase(work.returnedCpuEngine && work.ownerEndedEngine, group, "cpu-engine-ended-on-owner-after-take");
     ExpectCase(fixture.session.PendingBrush() == nullptr, group, "live-draft-detached");
     ExpectCase(fixture.session.PendingBrushOpening() == opening, group, "exact-opening-retained-while-detached");
@@ -328,6 +335,14 @@ void SuccessfulPublication(bool withMask)
     ExpectCase(SameOwner(fixture.session, detached), group, "private-preparation-preserves-owner-root-and-history");
     if (!work.Ready())
         return;
+    const auto* finalDocument = work.Publication().FinalDocument();
+    const auto* commit = work.Publication().CommitInfo();
+    ExpectCase(finalDocument && finalDocument->width == kSide && finalDocument->height == kSide &&
+                   finalDocument->layers.size() == 1 && original.active &&
+                   finalDocument->layers[0].id == original.active.value() && commit && commit->mask == withMask &&
+                   commit->x == 0 && commit->y == 0 && commit->width == kSide && commit->height == kSide &&
+                   (withMask ? AllGray(commit->image, 0) : AllBgra(commit->image, kPaintBgra)),
+               group, "immutable-preparation-views-preserve-literal-final-pixels-and-target");
     ExpectCase(fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), group,
                "publication-current-before-apply");
     DocumentHistory::ResidencyPermit permit;
@@ -339,6 +354,8 @@ void SuccessfulPublication(bool withMask)
     ExpectCase(applied, group, "owner-apply-succeeds");
     if (!applied)
         return;
+    ExpectCase(!work.Publication().FinalDocument() && !work.Publication().CommitInfo(), group,
+               "applied-preparation-views-are-no-longer-exposed");
     ExpectCase(fixture.session.history.UndoCount() == original.undoCount + 1, group, "exactly-one-history-entry");
     ExpectCase(fixture.session.history.UndoName() == (withMask ? L"Paint Mask" : L"Brush Stroke"), group,
                "history-name-preserved");
@@ -438,6 +455,9 @@ void CancelAfterDetachRejectsOldPublication()
     Expect(SameCommittedOwner(fixture.session, original), "cancel.owner-cancel-preserves-original-root-and-history");
     const OwnerState cancelled(fixture.session);
     Expect(!fixture.session.IsPreparedStrokeFinishCurrent(work.Publication()), "cancel.old-publication-not-current");
+    Expect(work.Publication().FinalDocument() && work.Publication().CommitInfo() &&
+               AllBgra(work.Publication().CommitInfo()->image, kPaintBgra),
+           "cancel.stale-immutable-views-grant-no-publication-authority");
     Expect(!fixture.session.ApplyPreparedStrokeFinishIfCurrent(work.Publication()), "cancel.old-publication-refused");
     Expect(SameOwner(fixture.session, cancelled), "cancel.refusal-preserves-original-root-history-and-generation");
     Expect(ActiveBgra(fixture.session, kSourceBgra), "cancel.all-owner-pixels-remain-original");

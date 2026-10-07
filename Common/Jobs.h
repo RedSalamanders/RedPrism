@@ -49,6 +49,10 @@ struct JobOptions final
     // Cache replacement may depend on ownership that remains resident until a successful replacement.
     // Refuse insufficient admission once instead of waiting on that retained cache. Ordinary jobs wait.
     bool allowMemoryWaiting = true;
+    // Reserve one of the fixed retained-memory slots at descriptor admission, before any capture/publication.
+    // Other jobs cannot consume it. Successful final RetainMemory transfers the original reservation into
+    // that slot; failure/cancellation/untransferred completion/Close returns it. It charges no extra bytes.
+    bool reserveRetainedMemory = false;
 };
 
 struct JobTicket final
@@ -166,6 +170,13 @@ class Job
     // Only bad_alloc is translated by the runner, to a failed operation. Other unexpected exceptions retain
     // the process crash policy. Kernels themselves do not catch. Run cannot leave any producer in flight.
     [[nodiscard]] virtual JobResult Run(JobContext& context) = 0;
+    // Worker-only, after this stage's useful producers have joined and cancellation/bad_alloc has been
+    // normalized, before publishing completion. Called for deferredRetirement only, even when cancellation
+    // skipped Run entirely. This is bounded nonthrowing retirement of already-detached owned graphs; never
+    // useful work, owner callbacks, context commands, new producers or fence waiting. The original record,
+    // FIFO and complete reservation remain held. Owner resumes a retirement stage only after external users
+    // acknowledge. Close instead retains the existing joined owner/final-worker cleanup protocol.
+    virtual void RetireWorkerStage(JobContext&, JobResult) noexcept {}
     // Owner thread after a successful worker stage, before final apply. Returning true retains this job, its
     // ticket, reservation and FIFO position until Resume. Failed/cancelled stages skip this hook. Resume may
     // be requested here; the next worker stage cannot start until this hook returns. A false return finalizes.

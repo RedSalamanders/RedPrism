@@ -145,6 +145,7 @@
     <ClCompile Include="..\..\Common\ImageImportWork.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
     <ClCompile Include="..\..\Common\TransformEdit.cpp" />

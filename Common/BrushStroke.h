@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "Document.h"
 #include "Executor.h"
+#include "Jobs.h"
 
 #include <array>
 #include <cstdint>
@@ -10,6 +11,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -172,6 +174,28 @@ class BrushStroke
     static constexpr int kTileSize = 256;
     static constexpr int kMaxGridSide = 1'000'000'000;
 
+    // Pure scalar geometry, shared by construction and admission. No hash directory, raster ownership,
+    // sample, graphics call or allocation is constructed while planning on the owner.
+    struct GridPlan final
+    {
+        int width = 0;
+        int height = 0;
+        GridRect sourceRect;
+        Affine2 pixelToDocument;
+        LayerTransform paintTransform;
+        LayerTransform sourceTransform;
+    };
+    [[nodiscard]] static std::optional<GridPlan> PlanGrid(const ImageLayer& layer, bool mask,
+                                                          const BrushSettings& settings, int canvasWidth,
+                                                          int canvasHeight) noexcept;
+    // Exact original opening reservation. The lease is declared before all CPU owners and dies last.
+    // Only a worker-built empty draft may accept it once; an attached graphics borrow requires its owner.
+    [[nodiscard]] bool RetainOpeningMemory(SharedRetainedMemoryLease&& lease) noexcept;
+    [[nodiscard]] std::uint64_t OpeningRetainedMemoryBytes() const noexcept
+    {
+        return _openingMemory.Bytes();
+    }
+
     struct Tile
     {
         std::uint64_t key = 0;
@@ -201,6 +225,15 @@ class BrushStroke
                 BrushCoverageEngine* engine, BrushKind kind = BrushKind::Paint,
                 SpotHealingMode healingMode = SpotHealingMode::ContentAware);
     ~BrushStroke();
+    // Admitted worker construction: the complete CPU draft has a preallocated deferred owner.
+    [[nodiscard]] static std::shared_ptr<BrushStroke> MakeForWork(
+        const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth, int canvasHeight,
+        BrushKind kind = BrushKind::Paint, SpotHealingMode healing = SpotHealingMode::ContentAware);
+    // Owner-only current opening. No samples or GPU resource graph may exist in the private draft.
+    [[nodiscard]] bool AttachCoverageForOpening(BrushCoverageEngine* engine) noexcept;
+    // Discard/failed drafts also detach without ending their graphics engine. The owner takes its complete
+    // GPU epoch and ends the empty engine; only then may the detached CPU graph retire on a worker.
+    [[nodiscard]] BrushCoverageEngine* DetachCoverageForRetirement() noexcept;
     // Owner-only, once publication has discarded this stroke. Detach the borrowed engine before CPU state
     // transfers to a worker; later destruction cannot mutate a graphics engine. No further stroke calls follow.
     void ReleaseCoverageEngine() noexcept;
@@ -209,10 +242,26 @@ class BrushStroke
     // then call EndStroke on the owner. The detached CPU draft owns no graphics pointer.
     [[nodiscard]] BrushCoverageEngine* DetachCoverageForFinish() noexcept;
 
+    // Owner-only allocation-free declaration, before exclusive transfer/admission. Bounds the final
+    // spline's tile grid plus old tail; no iteration over tiles, samples, raster windows or document records.
+    // The application adds its document/history publication, upload and shared-queue overlap separately.
+    struct FinishMemoryPlan final
+    {
+        std::uint64_t additionalCpuBytes = 0;
+        std::uint64_t retirementCpuBytes = 0;
+        std::uint64_t additionalGpuBytes = 0;
+        std::uint64_t maximumTiles = 0;
+        std::uint64_t maximumChangedTiles = 0;
+        GridRect commitBounds;
+        GridRect healRegion;
+    };
+    [[nodiscard]] std::optional<FinishMemoryPlan> PlanFinishMemory() const noexcept;
+
     struct FinalCoverage final
     {
         std::vector<BrushSegment> settled;
         std::vector<BrushKernelTile> tiles;
+        BrushKernelParams params;
         bool needsGpu = false;
     };
     // Exclusive worker-only final curve/tile preparation; no borrowed engine calls.
@@ -238,6 +287,15 @@ class BrushStroke
     [[nodiscard]] bool IsValid() const noexcept
     {
         return _valid;
+    }
+    // Borrow only on the live coverage owner, before exclusive finish transfer. Worker-built drafts retain
+    // their deferred CPU owner after attachment, so that lifetime flag must not exclude this live view.
+    [[nodiscard]] const BrushCoverageEngine* ExpectedFinishCoverageEngine() const noexcept
+    {
+        return _valid && !_failed && !_workerRasterEdit && !_detachedFinish && _engine &&
+                       _coverageOwner == std::this_thread::get_id()
+                   ? _engine
+                   : nullptr;
     }
     // Conservative retained CPU storage bound for retirement/admission accounting; zero means unknown or overflow.
     [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
@@ -380,7 +438,7 @@ class BrushStroke
 
   private:
     [[nodiscard]] bool Render(const std::vector<BrushSegment>& settled, const std::vector<BrushSegment>& tail);
-    void TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys) const;
+    [[nodiscard]] bool TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys);
     [[nodiscard]] bool AllocateTile(std::uint64_t key, bool sourceOnly = false);
     // The tile's image from its base, coverage and the settings; false (the stroke fails) when the base cannot be read.
     [[nodiscard]] bool ComposeTile(Tile& tile);
@@ -398,6 +456,8 @@ class BrushStroke
     [[nodiscard]] bool PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                                    const std::function<bool(Vec2, std::array<double, 4>&)>& shade);
 
+    SharedRetainedMemoryLease _openingMemory; // last CPU admission acknowledgement
+    bool _privateWorkerOwner = false;
     Guid _layerID;
     bool _mask = false;
     BrushSettings _settings;
@@ -413,6 +473,7 @@ class BrushStroke
     // Borrowed from the application; this stroke never owns or destroys the engine pointer. Its destructor only
     // calls the engine's EndStroke lifetime hook when the stroke was begun.
     BrushCoverageEngine* _engine = nullptr;
+    std::thread::id _coverageOwner;
     BrushKind _kind = BrushKind::Paint;
     SpotHealingMode _healingMode = SpotHealingMode::ContentAware;
     bool _valid = false;
@@ -432,6 +493,7 @@ class BrushStroke
     std::int64_t _pixelLimit = 100'000'000;
     std::optional<Raster> _selection;
     std::optional<GridRect> _allocated;
+    std::optional<GridRect> _tileBounds; // successful tile allocations only, excluding untouched source extent
     std::vector<Vec2> _samples;
     std::unordered_set<std::uint64_t> _tailKeys;
     std::vector<Tile> _tiles;
@@ -439,6 +501,7 @@ class BrushStroke
     bool _tileOwnershipValid = true;
     std::unordered_map<std::uint64_t, std::size_t> _index;
     std::optional<Raster> _sample;
+    Raster _carriedMask; // immutable linked non-placed mask, captured at stroke creation
     int _sampleX = 0;
     int _sampleY = 0;
     bool _replaces = false;

@@ -213,6 +213,7 @@
     <ClCompile Include="..\Common\WindowCapture.cpp" />
     <ClCompile Include="..\Common\Document.cpp" />
     <ClCompile Include="..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\Common\UiTiming.cpp" />
     <ClCompile Include="..\Common\BenchmarkMachine.cpp" />
@@ -220,6 +221,7 @@
     <ClCompile Include="..\Common\Selection.cpp" />
     <ClCompile Include="..\Common\BrushStroke.cpp" />
     <ClCompile Include="..\Common\StrokeFinishWork.cpp" />
+    <ClCompile Include="..\Common\StrokeOpeningWork.cpp" />
     <ClCompile Include="..\Common\Heal.cpp" />
     <ClCompile Include="..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\Common\WarpStroke.cpp" />
@@ -365,6 +367,10 @@
     <ClCompile Include="ApplicationColorCancellationTests.cpp" />
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
+    <ClCompile Include="ApplicationStrokeOpeningJobs.cpp" />
+    <ClCompile Include="Application.Tests.StrokeOpening.cpp" />
+    <ClCompile Include="Application.Tests.SealedStroke.cpp" />
+    <ClCompile Include="Application.Tests.SealedClone.cpp" />
     <ClCompile Include="ApplicationCloneReadbackJobs.cpp" />
     <ClCompile Include="ApplicationCloneLayerSourceJobs.cpp" />
     <ClCompile Include="Application.Tests.CloneLayerSource.cpp" />
@@ -374,6 +380,7 @@
     <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" />
     <ClInclude Include="CloneReadbackState.h" />
     <ClInclude Include="CloneReadbackTestGate.h" />
+    <ClInclude Include="StrokeOpeningTestGate.h" />
     <ClCompile Include="ApplicationCanvasBrushInputSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushCancellationSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushPaletteSelfTest.cpp" />

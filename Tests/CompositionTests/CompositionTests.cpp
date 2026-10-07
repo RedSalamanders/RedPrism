@@ -1,4 +1,4 @@
-#include "../Support/DocumentFixture.h"
+﻿#include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "Adjust.h"
 #include "BrushCompute.h"
@@ -6,8 +6,13 @@
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
 #include "Composition.Tests.BrushDensityClear.h"
+#include "Composition.Tests.BrushEpoch.h"
+#include "Composition.Tests.CapturedCompletion.h"
+#include "Composition.Tests.DetachedEpoch.h"
 #include "Composition.Tests.GpuBufferReadback.h"
 #include "Composition.Tests.GpuBufferSlots.h"
+#include "Composition.Tests.GpuCompletion.h"
+#include "Composition.Tests.VideoMemorySnapshot.h"
 #include "CompositionStageTimingTests.h"
 #include "Document.h"
 #include "DocumentReadbackTests.h"
@@ -2093,6 +2098,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuCapabilityTests();
     gFailures += RunGpuWorkTests();
     gFailures += RunGpuBufferReadbackTests();
+    gFailures += RunBrushEpochTests();
+    gFailures += RunDetachedEpochTests();
+    gFailures += RunGpuCompletionBarrierTests();
+    gFailures += RunCapturedCompletionContextTests();
+    gFailures += RunVideoMemorySnapshotTests();
     gFailures += RunBrushDensityClearTests();
     gFailures += RunGpuBufferSlotsTests();
     gFailures += RunGpuUploadAdmissionTests();

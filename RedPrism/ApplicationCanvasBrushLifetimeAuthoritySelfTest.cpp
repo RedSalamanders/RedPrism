@@ -321,12 +321,15 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
                                : scenario.fault == Fault::Core ? _session.PendingBrushOpening() == state.core &&
                                                                      _session.PendingBrush() == state.replacement
                                                                : !_session.PendingBrushOpening();
+        const auto* liveStroke = _session.PendingBrush();
+        const auto liveCharge = liveStroke ? liveStroke->OpeningRetainedMemoryBytes() : 0;
         if (!expect(scenario.name, "retirement-preserves-current-authority", authority) ||
             !expect(scenario.name, "only-original-owner-retains-input-budget",
-                    _jobs.ReservedMemoryBytes() == 0 && !_historyWork.Busy() &&
+                    _jobs.ReservedMemoryBytes() == liveCharge && !_utilityTicket && !_utilityStamp &&
+                        !_historyWork.Busy() &&
                         (original
-                             ? _hostInputBudget.Used() != 0
-                             : _hostInputBudget.Used() == 0 && !_canvasBrushInput.Busy() &&
+                             ? liveStroke && liveCharge != 0 && _hostInputBudget.Used() != 0
+                             : liveCharge == 0 && _hostInputBudget.Used() == 0 && !_canvasBrushInput.Busy() &&
                                    stroke.Read().outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Stale))))
             return 5;
         if (!expect(scenario.name, "newer-end-generation-is-not-cleared",

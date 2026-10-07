@@ -1529,12 +1529,17 @@ int Application::RunSelfTest() noexcept
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
+        bool pointerAcknowledged = true;
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
             OnPointer(message, wParam,
                       MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                  static_cast<int>(std::lround(hole.top + view.y))));
+            // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
+            // suite proves that the real callback returns before the worker and keeps view input live.
+            pointerAcknowledged =
+                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
@@ -1564,7 +1569,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 200.0, 600.0);
-        if (_session.PendingBrush() == nullptr || !_composition.HasStroke())
+        if (!pointerAcknowledged || _session.PendingBrush() == nullptr || !_composition.HasStroke())
         {
             SelfTestFailure(L"Pressing with the Brush did not start a stroke with a live preview.\n");
             return 5;
@@ -1646,7 +1651,7 @@ int Application::RunSelfTest() noexcept
         _forcedDiscard.reset();
         const bool strokeLive = _session.PendingBrush() != nullptr;
         pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
-        if (!stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
+        if (!pointerAcknowledged || !stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
             _session.history.UndoName() != L"Brush Stroke")
         {
             SelfTestFailure(L"The save prompt did not ask for a live stroke on a clean document, or its Cancel did "
@@ -1666,12 +1671,17 @@ int Application::RunSelfTest() noexcept
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
+        bool pointerAcknowledged = true;
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
             OnPointer(message, wParam,
                       MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                  static_cast<int>(std::lround(hole.top + view.y))));
+            // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
+            // suite proves that the real callback returns before the worker and keeps view input live.
+            pointerAcknowledged =
+                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
@@ -1694,7 +1704,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
         std::array<int, 4> mark{};
-        if (_session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) || mark[2] < 250 || mark[1] > 5)
+        if (!pointerAcknowledged || _session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) ||
+            mark[2] < 250 || mark[1] > 5)
         {
             SelfTestFailure(L"The red mark for the retouch block did not paint.\n");
             return 5;
@@ -1778,7 +1789,7 @@ int Application::RunSelfTest() noexcept
         _session.smearMode = SmearMode::Blur;
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
-        if (_session.history.UndoName() != L"Blur")
+        if (!pointerAcknowledged || _session.history.UndoName() != L"Blur")
         {
             SelfTestFailure(L"Blur did not commit.\n");
             return 5;
@@ -2476,6 +2487,15 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCloneLayerSourceCaptureFailureSelfTest\n");
     if (const int cloneCapture = RunCloneLayerSourceCaptureFailureSelfTest(); cloneCapture != 0)
         return cloneCapture;
+    std::printf("BEGIN self-test.RunStrokeOpeningHostSelfTest\n");
+    if (RunStrokeOpeningHostSelfTest() != 0)
+        return 5;
+    std::printf("BEGIN self-test.RunSealedStrokeHostSelfTest\n");
+    if (RunSealedStrokeHostSelfTest() != 0)
+        return 5;
+    std::printf("BEGIN self-test.RunSealedCloneHostSelfTest\n");
+    if (RunSealedCloneHostSelfTest() != 0)
+        return 5;
     std::printf("BEGIN self-test.RunCloneInputPolicySelfTest\n");
     if (const int clonePolicy = RunCloneInputPolicySelfTest(); clonePolicy != 0)
         return clonePolicy;
@@ -4090,9 +4110,11 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         {
             BeginWarpStroke(view);
         }
-        else
+        else if (_session.CanPaint() && !(_tool == EditorTool::Heal && _session.IsMaskSelected()))
         {
-            BeginBrushStroke(view, event.modifiers);
+            // Accepted paint/erase/healing/blur presses already entered QueueCanvasBrush. A refused or
+            // unsupported opening cannot fall through to owner coverage/sample construction.
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         }
         return;
     }
@@ -4465,8 +4487,8 @@ void Application::OnCommand(int command) noexcept
         return; // Explicit input invalidates old sample publication at event time, outside document history.
     }
     if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
-        CancelCanvasBrush())
-        return; // The first history action cancels this admitted stroke, without consuming opacity history.
+        CancelCanvasBrush(true))
+        return; // Pointer-down cancels its draft; a sealed stroke retains its ordinal and queues Undo below.
     // View/chrome commands keep pumping. Every document mutation waits behind admitted history/input, preserving
     // its event-time command instead of settling a panel inline and falling through on failure.
     const bool view = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual ||
@@ -7083,6 +7105,31 @@ void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKi
         // The source crosshair moves with this stroke. Hover updates do not run while the button is down.
         SyncToolOverlays();
     }
+}
+
+void Application::BeginPreparedBrushStrokeAt(Vec2 pixel, unsigned int modifiers) noexcept
+{
+    auto* stroke = _session.MutableBrush();
+    if (!stroke || _session.PendingBrushOpening() != _canvasBrushSessionOpening)
+        return;
+    // Empty typed worker draft is already attached under current authority. The accepted press supplies
+    // the first sample; opening never deposits density. Shift preserves the existing endpoint rule.
+    const auto start = (modifiers & MK_SHIFT) != 0 ? _session.ShiftLineStart() : std::nullopt;
+    (void)_composition.BeginStroke(PreviewFor(*stroke));
+    _previewSource.reset();
+    if (start)
+        _session.ContinueBrush(start.value());
+    if (_session.PendingBrush())
+        _session.ContinueBrush(pixel);
+    _brushHover = pixel;
+    if (_session.PendingBrush())
+        PushPreviewTiles();
+    else
+    {
+        _composition.EndStroke();
+        DocumentChanged();
+    }
+    SyncBrushCursor();
 }
 
 void Application::PushPreviewTiles() noexcept

@@ -354,31 +354,14 @@ std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
         const auto amount = stroke->RetirementMemoryBytes();
         return amount && add(1, amount);
     };
-    // H2 will cache this shared document's complete record/storage bound. Until then metadata traversal is
-    // explicit admission work; no optional<CanvasDocument> copy or pixel/materialization occurs on the owner.
+    // Every published layer root and selection caches its complete held graph, including immutable lookup
+    // metadata and potential sparse assembly. Read one complete bound; no record/name/pixel traversal or copy.
     const auto documentBytes = [&](const std::shared_ptr<CanvasDocument>& document) noexcept
     {
         if (!document)
             return true;
-        if (!add(1, sizeof(CanvasDocument) + 64) || !add(document->layers.capacity(), sizeof(ImageLayer)) ||
-            (document->selection && !add(1, document->selection->loops.StorageBytes())))
-            return false;
-        for (const auto& layer : document->layers)
-        {
-            if (!add(layer.name.capacity() + 1, sizeof(wchar_t)) || !rasterBytes(layer.shapeImage))
-                return false;
-            if (layer.asset && (!add(layer.asset->name.capacity() + 1, sizeof(wchar_t)) ||
-                                !rasterBytes(layer.asset->image) || !rasterBytes(layer.asset->thumbnail)))
-                return false;
-            if (layer.mask && (!add(layer.mask->asset.name.capacity() + 1, sizeof(wchar_t)) ||
-                               !rasterBytes(layer.mask->asset.image) || !rasterBytes(layer.mask->asset.thumbnail)))
-                return false;
-            if (layer.adjustment)
-                for (const auto& channel : layer.adjustment->curves.channels)
-                    if (!add(channel.capacity(), sizeof(CurvePoint)))
-                        return false;
-        }
-        return true;
+        const auto amount = document->RetirementMemoryBytes();
+        return amount && add(1, amount) && add(1, 64); // the shared document's own control allocation
     };
     if (!bytes || !add(1, sizeof(PreparedImageImport::RetiredDrafts) + 64) ||
         (_lassoDraft && !add(_lassoDraft->points.capacity(), sizeof(Vec2))) ||

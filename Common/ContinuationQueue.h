@@ -246,6 +246,57 @@ template <typename Request> class ContinuationQueue final
         return removed;
     }
 
+    // Escape cancels every queued continuation except the sealed pointer-Up stroke identified by its
+    // document/ordinal key. Taken/active entries are outside the queue and remain the owner's responsibility.
+    // A missing key (or ordinal zero) has Clear semantics. Retirement follows the original FIFO order.
+    // Callbacks must not reenter or mutate this queue. The survivor keeps its request, receipt and admission
+    // lease without copying. The ordinal watermark is retained.
+    template <typename Retire>
+    [[nodiscard]] std::size_t ClearExcept(std::uint64_t documentSerial, std::uint64_t ordinal, Retire&& retire) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
+        if (ordinal == 0)
+        {
+            return Clear(retire);
+        }
+
+        std::size_t preserveOffset = _count;
+        for (std::size_t offset = 0; offset < _count; ++offset)
+        {
+            const std::size_t slot = (_head + offset) % kCapacity;
+            const Entry& entry = _entries[slot].value();
+            if (entry.documentSerial == documentSerial && entry.ordinal == ordinal)
+            {
+                preserveOffset = offset;
+                break;
+            }
+        }
+        if (preserveOffset == _count)
+        {
+            return Clear(retire);
+        }
+
+        std::optional<Entry> preserved;
+        const std::size_t originalCount = _count;
+        for (std::size_t offset = 0; offset < originalCount; ++offset)
+        {
+            const std::size_t slot = (_head + offset) % kCapacity;
+            if (offset == preserveOffset)
+            {
+                preserved.emplace(std::move(_entries[slot].value()));
+                _entries[slot].reset();
+                continue;
+            }
+            auto entry = std::exchange(_entries[slot], std::nullopt);
+            retire(std::move(entry.value()), ContinuationRetirement::Cancelled);
+        }
+
+        _head = 0;
+        _count = 1;
+        _entries[0].emplace(std::move(preserved.value()));
+        return originalCount - 1;
+    }
+
     [[nodiscard]] std::size_t Size() const noexcept
     {
         return _count;

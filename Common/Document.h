@@ -927,6 +927,20 @@ template <> struct RecordOwnershipPolicy<ImageLayer> final
     [[nodiscard]] static std::optional<RecordOwnershipBounds> Measure(const ImageLayer& layer) noexcept;
 };
 
+template <> struct RecordLookupPolicy<ImageLayer> final
+{
+    static constexpr bool enabled = true;
+    static constexpr std::size_t maximumRecords = kMaxLayerCount;
+    // Validation and malformed-input fixtures retain oversized record values.
+    // They receive no index/uniqueness authority and cannot pass document admission.
+    static constexpr bool allowUnindexedOverflow = true;
+    using Key = Guid;
+    [[nodiscard]] static Guid KeyOf(const ImageLayer& layer) noexcept
+    {
+        return layer.id;
+    }
+};
+
 struct CanvasDocument
 {
     Guid id;
@@ -1382,6 +1396,11 @@ struct MaskEditResult;
 struct MaskWorkObserver;
 class LayerCopyInput;
 class PreparedLayerCopy;
+class StrokeOpeningInput;
+class PreparedStrokeOpening;
+struct StrokeOpeningOptions;
+struct StrokeOpeningResult;
+struct StrokeOpeningObserver;
 class StrokeFinishInput;
 class PreparedStrokeFinish;
 struct StrokeFinishResult;
@@ -1528,6 +1547,12 @@ struct HierarchyEntry
 [[nodiscard]] std::unordered_set<Guid> DescendantIds(std::span<const ImageLayer> layers, const Guid& id);
 // `id`'s position in `layers`; nullopt when it is not there.
 [[nodiscard]] std::optional<std::size_t> IndexOf(std::span<const ImageLayer> layers, const Guid& id) noexcept;
+
+// Immutable full roots use their worker-prepared key index; sliced/vector ranges keep span-relative order.
+[[nodiscard]] inline std::optional<std::size_t> IndexOf(const RecordRoot<ImageLayer>& layers, const Guid& id) noexcept
+{
+    return layers.FindIndex(id);
+}
 
 // Immutable owning closure of one document's storage graph. Prepared on a worker; copies retain one handle.
 // Raster charges are read at use time so a sparse cache published later is not represented by a stale total.
@@ -2495,6 +2520,15 @@ class DocumentSession
     // Starts a stroke at `point` (document pixels): the foreground color, or `erase`; on a mask, black or white
     // per `maskPaintWhite`. False when painting cannot start (or the stroke exceeded the pixel budget).
     bool BeginBrush(Vec2 point, bool erase = false);
+    // Capture handles/scalars only after whole opening admission. Worker prepares selection/sample/CPU draft;
+    // current owner application attaches the real graphics engine and never reconstructs these pixels.
+    [[nodiscard]] std::optional<StrokeOpeningInput> PrepareStrokeOpeningInput(
+        StrokeOpeningOptions options) const noexcept;
+    [[nodiscard]] static StrokeOpeningResult PrepareStrokeOpeningPublication(StrokeOpeningInput input,
+                                                                             CancelToken cancellation,
+                                                                             StrokeOpeningObserver observer);
+    [[nodiscard]] bool IsPreparedStrokeOpeningCurrent(const PreparedStrokeOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedStrokeOpeningIfCurrent(PreparedStrokeOpening& prepared) noexcept;
     // The retouch brushes (C11): Spot Healing and Clone Stamp rework image pixels and never start on a mask; Blur
     // paints a softened copy of the layer or its mask through the tip. Clone Stamp needs a source
     // (`SetCloneSource`) and, with `cloneSettings.sampleAllLayers`, the host's composite of the visible canvas at
@@ -2882,6 +2916,8 @@ class DocumentSession
     // composite (document-size premultiplied BGRA). Nullopt outside the canvas or over a fully transparent pixel.
     [[nodiscard]] static std::optional<std::uint32_t> SampleCompositeColor(const Raster& composite,
                                                                            Vec2 point) noexcept;
+    // The accepted first/next sample also records its exact layer/mask endpoint for later Shift lines.
+    // A worker-prepared opening does not fabricate a pointer sample during publication.
     void ContinueBrush(Vec2 point);
     // Replaces the provisional tail by the final curve and commits the tiles as one entry (`Brush Stroke`,
     // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.

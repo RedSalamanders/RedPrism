@@ -1892,13 +1892,28 @@ int Application::RunSessionSelfTest() noexcept
         _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 320.0, 250.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 380.0, 250.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The captured stroke did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         (void)SendMessageW(_window.get(), WM_CAPTURECHANGED, 0, elsewhere);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The captured stroke did not acknowledge its capture-loss completion.\n");
+            return 5;
+        }
         const bool committed = _session.PendingBrush() == nullptr && _session.history.UndoCount() == before + 1 &&
                                _session.history.UndoName() == L"Brush Stroke";
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 450.0, 250.0);
         pointer(WM_LBUTTONUP, 0, 450.0, 250.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The pointer after capture loss did not settle before checking the committed stroke.\n");
+            return 5;
+        }
         if (!stroking || !committed || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
             SelfTestFailure(std::format(L"Losing the capture mid-stroke did not end the stroke (stroking {}, "
@@ -1911,12 +1926,22 @@ int Application::RunSessionSelfTest() noexcept
     {
         pointer(WM_LBUTTONDOWN, 0, 320.0, 300.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 360.0, 300.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The uncaptured stroke did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         _releasingCapture = true;
         (void)ReleaseCapture();
         _releasingCapture = false;
         (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The uncaptured stroke did not acknowledge its leave-window completion.\n");
+            return 5;
+        }
         if (!stroking || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
             SelfTestFailure(L"Leaving the window did not end a stroke that no longer held the capture.\n");
@@ -1935,10 +1960,20 @@ int Application::RunSessionSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 320.0, 350.0);
         const int before = _session.history.UndoCount();
         OnPointer(WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(over.x, over.y));
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The stroke over chrome did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool followed = _session.PendingBrush() != nullptr && _brushHover.has_value() &&
                               std::fabs(_brushHover->x - underPointer.x) < 1e-6 &&
                               std::fabs(_brushHover->y - underPointer.y) < 1e-6;
         OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(over.x, over.y));
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The stroke over chrome did not acknowledge its release completion.\n");
+            return 5;
+        }
         if (row.bottom <= row.top || !followed || _session.PendingBrush() != nullptr ||
             _session.history.UndoCount() != before + 1 || _session.history.UndoName() != L"Brush Stroke")
         {

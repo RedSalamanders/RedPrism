@@ -718,8 +718,11 @@ int RunRecordOwnershipBoundsTests()
                     stored.asset->image.RetirementNodeCount() + stored.asset->thumbnail.RetirementNodeCount() +
                     stored.mask->asset.image.RetirementNodeCount() +
                     stored.mask->asset.thumbnail.RetirementNodeCount() + stored.shapeImage.RetirementNodeCount();
+                // This one-record root owns one Guid/index entry in addition
+                // to the record array. The empty root has no index entries.
+                constexpr std::uint64_t oneLookupEntry = sizeof(std::pair<Guid, std::size_t>);
                 const std::uint64_t imageRootBase =
-                    emptySample.bounds->metadataBytes + sample.capacity * sizeof(ImageLayer);
+                    emptySample.bounds->metadataBytes + sample.capacity * sizeof(ImageLayer) + oneLookupEntry;
                 const std::uint64_t expectedChildMetadata = LayerChildMetadata(stored);
                 Expect(sample.bounds->metadataBytes == imageRootBase + expectedChildMetadata,
                        "image-layer-metadata-uses-published-name-and-curve-capacities-plus-allowances");
@@ -734,7 +737,7 @@ int RunRecordOwnershipBoundsTests()
                 Expect(stored.adjustment->curves.channels[0].capacity() >= 11,
                        "moved-publication-retains-reserved-curve-capacity");
                 const std::uint64_t imageOwnershipRootBase =
-                    emptySample.bounds->ownershipBytes + sample.capacity * sizeof(ImageLayer);
+                    emptySample.bounds->ownershipBytes + sample.capacity * sizeof(ImageLayer) + oneLookupEntry;
                 Expect(sample.bounds->ownershipBytes ==
                            imageOwnershipRootBase + expectedChildMetadata + knownRasterGraph,
                        "image-layer-total-adds-only-present-image-mask-shape-and-thumbnail-fields");

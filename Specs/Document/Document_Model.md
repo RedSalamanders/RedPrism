@@ -85,7 +85,7 @@ integration and H3 accounting obligations; this primitive establishes no UI timi
 
 An enabled `RecordOwnershipPolicy` measures owned record children while an exclusive builder seals. The
 immutable root caches `RecordOwnershipBounds`: metadata bytes, complete conservative ownership bytes and raster
-node occurrences. Queries and handle copies allocate nothing and never revisit records. Root/vector capacity and
+node occurrences, image-pixel occurrences and mask-pixel occurrences. Queries and handle copies allocate nothing and never revisit records. Root/vector capacity and
 a control allowance are added to child totals with checked arithmetic. Disabled/unavailable policies, overflow
 or a child ownership total below its metadata total yield an unavailable bound; an otherwise valid root still
 seals. A consumer requiring a complete bound MUST refuse admission explicitly, never substitute zero.
@@ -96,6 +96,25 @@ and Debug proxy allowances. Ownership additionally sums cached image, mask, thum
 occurrence, including possible sparse assembly. Shared occurrences intentionally overcount, and measurement never
 materializes pixels. These bounds remain stable after lazy assembly. They do not replace exact history deduplication,
 process headroom or complete operation admission/retirement. Application use and G1 remain separately qualified.
+
+An enabled `RecordLookupPolicy` builds one sorted key/index vector while the exclusive builder seals. It checks
+its policy's record maximum before allocation/key access and checks cancellation before keys, during duplicate
+validation and before publication. Sorting is bounded by that maximum. By default, exceeding the policy maximum
+refuses sealing before key allocation. A policy may explicitly retain oversized malformed snapshots without an
+index; such snapshots expose no lookup or uniqueness authority. Keys, comparisons, moves and destruction
+are nonthrowing. Index/root allocation failure preserves the original builder buffer and its records for retry.
+The immutable root owns its lookup and records together; lookup borrows allocate nothing. Duplicate keys retain
+the first source record, and `HasUniqueKeys` exposes the invalid-root condition without a second traversal.
+Ownership includes the actual lookup capacity and allocator/control allowance.
+
+`ImageLayer` enables Guid lookup for at most 10,000 records. Full-root `IndexOf`, `FindLayer` and layer lookup use
+the index; span/vector/sliced queries retain indices relative to their supplied range. Oversized snapshots remain
+representable for production validation and malformed-input tests, but have no index/uniqueness authority and
+remain rejected by `ValidateDocument`; this does not increase the supported document layer limit. Cached pixel totals count
+each layer occurrence even with shared rasters, and exclude thumbnails and shape-source storage. The bounded
+initializer-list pixel-budget query subtracts unique existing exclusions from these totals. Missing/repeated IDs
+do not alter the result; invalid duplicate roots or unavailable ownership bounds refuse with zero budget.
+The unordered-set form retains the linear reference. Indexing does not qualify all writer/destructor or G1 paths.
 
 `CanvasDocument::RetirementMemoryBytes` supplies a complete conservative bound for that immutable source only.
 It reads the sealed layer root and construction-cached selection storage in constant time, without allocation,
