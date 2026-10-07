@@ -27,4 +27,7 @@ struct ApplicationProcessingTestProbe final
     std::int32_t (*afterStage)(void*, ApplicationProcessingStage) noexcept = nullptr;
     RetryWaitObserver retryWait;
     MemorySource memory; // Optional fixed admission source, alive through scheduler Close.
+    // Actual Run startup checkpoint, after document/settings and real runtime notification subscription.
+    // Absent in production. Its borrowed context survives Run and Shutdown; failure exercises acquired cleanup.
+    std::int32_t (*afterRuntimeSources)(void*) noexcept = nullptr;
 };

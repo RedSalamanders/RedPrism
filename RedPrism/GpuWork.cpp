@@ -37,6 +37,9 @@ struct GpuWorkQueue::Impl final
         JobEventTicket wait;
         wil::com_ptr_nothrow<ID3D11Texture2D> source;
         wil::com_ptr_nothrow<ID3D11Texture2D> staging;
+        wil::com_ptr_nothrow<ID3D11Buffer> bufferSource;
+        wil::com_ptr_nothrow<ID3D11Buffer> bufferStaging;
+        bool bufferReadback = false;
         wil::com_ptr_nothrow<ID3D11DeviceContext> context;
         wil::com_ptr_nothrow<ID3D11Fence> completionFence;
         D3D11_BOX box{};
@@ -45,6 +48,7 @@ struct GpuWorkQueue::Impl final
         std::uint64_t bytes = 0;
         JobTicket ticket;
         GpuReadbackReceiver* receiver = nullptr;
+        GpuBufferReadbackReceiver* bufferReceiver = nullptr;
         GpuReadbackProducer* producer = nullptr;
     };
 
@@ -90,14 +94,17 @@ struct GpuWorkQueue::Impl final
         stagingBytes -= slot.bytes;
         slot.bytes = 0;
         slot.staging.reset();
+        slot.bufferStaging.reset();
         slot.context.reset();
     }
 
     void Free(Slot& slot) noexcept
     {
         slot.source.reset();
+        slot.bufferSource.reset();
         slot.completionFence.reset();
         slot.receiver = nullptr;
+        slot.bufferReceiver = nullptr;
         slot.producer = nullptr;
         slot.state = State::Free;
         if (slot.retired)
@@ -107,16 +114,35 @@ struct GpuWorkQueue::Impl final
     void DeliverFailure(Slot& slot, HRESULT error) noexcept
     {
         auto* receiver = slot.receiver;
+        auto* bufferReceiver = slot.bufferReceiver;
         const auto ticket = slot.ticket;
         Free(slot);
-        receiver->ReadbackReady(ticket, {}, error);
+        if (bufferReceiver)
+            bufferReceiver->BufferReadbackReady(ticket, {}, error);
+        else
+            receiver->ReadbackReady(ticket, {}, error);
+    }
+
+    static ID3D11Resource* StagingResource(const Slot& slot) noexcept
+    {
+        return slot.bufferReadback ? static_cast<ID3D11Resource*>(slot.bufferStaging.get())
+                                   : static_cast<ID3D11Resource*>(slot.staging.get());
+    }
+
+    static std::uint64_t StorageBytes(const Slot& slot) noexcept
+    {
+        const auto width = slot.bufferReadback ? slot.width : std::bit_ceil(slot.width);
+        const auto height = slot.bufferReadback ? slot.height : std::bit_ceil(slot.height);
+        return static_cast<std::uint64_t>(width) * height * sizeof(std::uint32_t);
     }
 
     bool CanRecord(const Slot& slot) const noexcept
     {
         const auto width = std::bit_ceil(slot.width);
         const auto height = std::bit_ceil(slot.height);
-        if (slot.staging)
+        if (slot.bufferReadback && slot.bufferStaging && slot.bytes == StorageBytes(slot))
+            return true;
+        if (!slot.bufferReadback && slot.staging)
         {
             D3D11_TEXTURE2D_DESC existing{};
             slot.staging->GetDesc(&existing);
@@ -129,7 +155,7 @@ struct GpuWorkQueue::Impl final
             if (candidate.state == State::Free)
                 reclaimable += candidate.bytes;
         }
-        const std::uint64_t needed = static_cast<std::uint64_t>(width) * height * 4;
+        const std::uint64_t needed = StorageBytes(slot);
         return needed <= kStagingCapBytes - (stagingBytes - reclaimable);
     }
 
@@ -137,7 +163,10 @@ struct GpuWorkQueue::Impl final
     {
         const auto width = std::bit_ceil(slot.width);
         const auto height = std::bit_ceil(slot.height);
-        if (slot.staging && slot.deviceGeneration == deviceGeneration)
+        if (slot.bufferReadback && slot.bufferStaging && slot.deviceGeneration == deviceGeneration &&
+            slot.bytes == StorageBytes(slot))
+            return S_OK;
+        if (!slot.bufferReadback && slot.staging && slot.deviceGeneration == deviceGeneration)
         {
             D3D11_TEXTURE2D_DESC existing{};
             slot.staging->GetDesc(&existing);
@@ -145,7 +174,7 @@ struct GpuWorkQueue::Impl final
                 return S_OK;
         }
         DropStorage(slot);
-        const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 4;
+        const std::uint64_t bytes = StorageBytes(slot);
         if (bytes > kStagingCapBytes - stagingBytes)
         {
             // Evict only idle cache entries. Lent/retiring textures count against the same cap.
@@ -157,6 +186,19 @@ struct GpuWorkQueue::Impl final
         }
         if (bytes > kStagingCapBytes - stagingBytes)
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        if (slot.bufferReadback)
+        {
+            D3D11_BUFFER_DESC desc{};
+            desc.ByteWidth = static_cast<UINT>(bytes);
+            desc.Usage = D3D11_USAGE_STAGING;
+            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            const HRESULT result = device->CreateBuffer(&desc, nullptr, slot.bufferStaging.put());
+            if (FAILED(result))
+                return result;
+            slot.bytes = bytes;
+            stagingBytes += bytes;
+            return S_OK;
+        }
         D3D11_TEXTURE2D_DESC desc{};
         desc.Width = width;
         desc.Height = height;
@@ -197,7 +239,10 @@ struct GpuWorkQueue::Impl final
         slot.ready.store(false, std::memory_order_relaxed);
         if (!scheduler->RearmEventWait(slot.wait))
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-        slot.context->CopySubresourceRegion(slot.staging.get(), 0, 0, 0, 0, slot.source.get(), 0, &slot.box);
+        if (slot.bufferReadback)
+            slot.context->CopyResource(slot.bufferStaging.get(), slot.bufferSource.get());
+        else
+            slot.context->CopySubresourceRegion(slot.staging.get(), 0, 0, 0, 0, slot.source.get(), 0, &slot.box);
         if (route == GpuCapabilities::CompletionRoute::MonitoredFence)
         {
             if (fenceValue >= std::numeric_limits<std::uint64_t>::max() - 1)
@@ -214,6 +259,7 @@ struct GpuWorkQueue::Impl final
         {
             slot.state = State::Waiting;
             slot.source.reset();
+            slot.bufferSource.reset();
             ++inFlight;
             ++statistics.copies;
         }
@@ -235,8 +281,25 @@ struct GpuWorkQueue::Impl final
         return sourceDevice.get() == device.get() ? S_OK : E_INVALIDARG;
     }
 
-    HRESULT Admit(unsigned int width, unsigned int height, JobTicket ticket, GpuReadbackReceiver& receiver,
-                  ID3D11Texture2D* source, const D3D11_BOX& box, GpuReadbackProducer* producer) noexcept
+    HRESULT ValidateBuffer(ID3D11Buffer* source, unsigned int width, unsigned int height) const noexcept
+    {
+        if (!source || width == 0 || height == 0 || width > kMaxReadbackSide || height > kMaxReadbackSide)
+            return E_INVALIDARG;
+        D3D11_BUFFER_DESC desc{};
+        source->GetDesc(&desc);
+        const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * sizeof(std::uint32_t);
+        if (desc.ByteWidth != bytes || desc.StructureByteStride != sizeof(std::uint32_t) ||
+            (desc.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED) == 0 ||
+            (desc.Usage != D3D11_USAGE_DEFAULT && desc.Usage != D3D11_USAGE_IMMUTABLE))
+            return E_INVALIDARG;
+        wil::com_ptr_nothrow<ID3D11Device> sourceDevice;
+        source->GetDevice(sourceDevice.put());
+        return sourceDevice.get() == device.get() ? S_OK : E_INVALIDARG;
+    }
+
+    HRESULT Admit(unsigned int width, unsigned int height, JobTicket ticket, GpuReadbackReceiver* receiver,
+                  ID3D11Texture2D* source, const D3D11_BOX& box, GpuReadbackProducer* producer,
+                  GpuBufferReadbackReceiver* bufferReceiver = nullptr, ID3D11Buffer* bufferSource = nullptr) noexcept
     {
         if (width == 0 || height == 0 || width > kMaxReadbackSide || height > kMaxReadbackSide ||
             ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0)
@@ -250,7 +313,10 @@ struct GpuWorkQueue::Impl final
             slot.width = width;
             slot.height = height;
             slot.ticket = ticket;
-            slot.receiver = &receiver;
+            slot.receiver = receiver;
+            slot.bufferReceiver = bufferReceiver;
+            slot.bufferSource = bufferSource;
+            slot.bufferReadback = bufferReceiver != nullptr;
             slot.producer = producer;
             slot.retired = false;
             slot.mapDeferred = false;
@@ -367,7 +433,7 @@ HRESULT GpuWorkQueue::EnqueueReadback(ID3D11Texture2D* source, const D3D11_BOX& 
     const HRESULT result = self.ValidateSource(source, box);
     return FAILED(result)
                ? result
-               : self.Admit(box.right - box.left, box.bottom - box.top, ticket, receiver, source, box, nullptr);
+               : self.Admit(box.right - box.left, box.bottom - box.top, ticket, &receiver, source, box, nullptr);
 }
 
 HRESULT GpuWorkQueue::EnqueueProducedReadback(unsigned int width, unsigned int height, JobTicket ticket,
@@ -376,7 +442,28 @@ HRESULT GpuWorkQueue::EnqueueProducedReadback(unsigned int width, unsigned int h
     if (!_impl || _impl->stopped || !_impl->device)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     _impl->CheckOwner();
-    return _impl->Admit(width, height, ticket, receiver, nullptr, {}, &producer);
+    return _impl->Admit(width, height, ticket, &receiver, nullptr, {}, &producer);
+}
+
+HRESULT GpuWorkQueue::EnqueueBufferReadback(ID3D11Buffer* source, unsigned int width, unsigned int height,
+                                            JobTicket ticket, GpuBufferReadbackReceiver& receiver) noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    const HRESULT result = self.ValidateBuffer(source, width, height);
+    return FAILED(result) ? result
+                          : self.Admit(width, height, ticket, nullptr, nullptr, {}, nullptr, &receiver, source);
+}
+
+bool GpuWorkQueue::HasReadbackSlot() const noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device)
+        return false;
+    _impl->CheckOwner();
+    return std::any_of(_impl->slots.begin(), _impl->slots.end(),
+                       [](const Impl::Slot& slot) noexcept { return slot.state == Impl::State::Free; });
 }
 
 bool GpuWorkQueue::ReleaseMapped(GpuReadbackLease lease) noexcept
@@ -388,7 +475,7 @@ bool GpuWorkQueue::ReleaseMapped(GpuReadbackLease lease) noexcept
     auto& slot = self.slots[lease.slot];
     if (slot.state != Impl::State::Lent || slot.generation != lease.generation)
         return false;
-    slot.context->Unmap(slot.staging.get(), 0);
+    slot.context->Unmap(Impl::StagingResource(slot), 0);
     self.Free(slot);
     self.scheduler->NotifyOwnerWork();
     return true;
@@ -439,11 +526,13 @@ void GpuWorkQueue::CloseAfterWorkers() noexcept
     for (auto& slot : self.slots)
     {
         if (slot.state == Impl::State::Lent)
-            slot.context->Unmap(slot.staging.get(), 0);
+            slot.context->Unmap(Impl::StagingResource(slot), 0);
         slot.state = Impl::State::Free;
         slot.source.reset();
+        slot.bufferSource.reset();
         slot.completionFence.reset();
         slot.receiver = nullptr;
+        slot.bufferReceiver = nullptr;
         slot.producer = nullptr;
         self.DropStorage(slot);
     }
@@ -513,7 +602,8 @@ void GpuWorkQueue::Pump() noexcept
             --self.testBusyMaps;
         else
         {
-            result = slot.context->Map(slot.staging.get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+            result =
+                slot.context->Map(Impl::StagingResource(slot), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
             if (SUCCEEDED(result) && self.testSkipSuccessfulMaps != 0)
                 --self.testSkipSuccessfulMaps;
         }
@@ -549,20 +639,33 @@ void GpuWorkQueue::Pump() noexcept
             self.DeliverFailure(slot, result);
             continue;
         }
-        if (!mapped.pData || mapped.RowPitch < static_cast<std::size_t>(slot.width) * 4)
+        if (!mapped.pData || (!slot.bufferReadback && mapped.RowPitch < static_cast<std::size_t>(slot.width) * 4))
         {
-            slot.context->Unmap(slot.staging.get(), 0);
+            slot.context->Unmap(Impl::StagingResource(slot), 0);
             self.DeliverFailure(slot, E_UNEXPECTED);
             continue;
         }
         slot.state = Impl::State::Lent;
-        const GpuReadbackRows rows{static_cast<const std::uint8_t*>(mapped.pData),
-                                   mapped.RowPitch,
-                                   slot.width,
-                                   slot.height,
-                                   {index, slot.generation},
-                                   slot.deviceGeneration};
-        slot.receiver->ReadbackReady(slot.ticket, rows, S_OK);
+        if (slot.bufferReadback)
+        {
+            const GpuBufferReadbackValues values{static_cast<const std::uint32_t*>(mapped.pData),
+                                                 static_cast<std::size_t>(slot.width) * slot.height,
+                                                 slot.width,
+                                                 slot.height,
+                                                 {index, slot.generation},
+                                                 slot.deviceGeneration};
+            slot.bufferReceiver->BufferReadbackReady(slot.ticket, values, S_OK);
+        }
+        else
+        {
+            const GpuReadbackRows rows{static_cast<const std::uint8_t*>(mapped.pData),
+                                       mapped.RowPitch,
+                                       slot.width,
+                                       slot.height,
+                                       {index, slot.generation},
+                                       slot.deviceGeneration};
+            slot.receiver->ReadbackReady(slot.ticket, rows, S_OK);
+        }
     }
     for (auto& slot : self.slots)
     {

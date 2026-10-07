@@ -66,19 +66,8 @@ namespace
 // tile; a 256-pixel window can span at most three intervals per axis, regardless of its offset from the grid.
 [[nodiscard]] bool AddSparseWindows(std::uint64_t& bytes, const Raster& source) noexcept
 {
-    if (!source.IsSparse())
-        return true;
-    for (const RasterTile& tile : source.Tiles())
-    {
-        if (tile.Width() < 1 || tile.Height() < 1 || tile.Width() > kMaxCanvasSide || tile.Height() > kMaxCanvasSide)
-            return false;
-        const auto columns = (static_cast<std::uint64_t>(tile.Width()) + 255) / 256 + 2;
-        const auto rows = (static_cast<std::uint64_t>(tile.Height()) + 255) / 256 + 2;
-        // Result/vector growth, older headers, and one old-window's piece/next scratch coexist.
-        if (!AddProduct(bytes, columns * rows, 8 * sizeof(RasterTile)))
-            return false;
-    }
-    return true;
+    const auto cached = source.GridReplacementWorkspaceBytes();
+    return cached && AddBytes(bytes, cached.value());
 }
 
 [[nodiscard]] RasterEditStatus InputStatus(const RasterEditInput& input, CancelToken cancellation) noexcept

@@ -1,7 +1,7 @@
 # Brush rendering
 
 Status: current normative contract (created with C10)
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-07
 Owner: `Common/BrushStroke.*` (stroke model, CPU kernel, session brush API), `RedPrism/BrushCompute.*` and
 `RedPrism/Shaders/BrushCoverage.hlsl` (compute engine), the sparse-raster and stroke-preview code in
 `RedPrism/CanvasRenderer.*`, the brush code in `RedPrism/Application.cpp`
@@ -80,6 +80,44 @@ reveals (255). The commit is refused, and nothing recorded, when the layer's pix
 stroke. History names:
 `Brush Stroke`, `Erase`, `Paint Mask`. Undo, Redo and the next stroke read the tiles directly; the first
 `Data()` call (export, a filter) assembles a contiguous copy once and keeps it.
+
+### Detached final coverage foundation (P1)
+
+Tile producers maintain the aggregate ownership of permanent/coverage capacities and base/image raster graphs
+after every successful allocation or replacement, including compatibility healing and lifted-pixel moves.
+`RetirementMemoryBytes` reads this cache plus fixed metadata capacities and retained source/selection/sample
+bounds without traversing tiles or pixels. Unknown children and arithmetic overflow return unavailable (zero).
+The cache does not itself route whole-draft destruction or reserve CPU/GPU memory.
+
+Fresh compute density uses `ClearUnorderedAccessViewUint` with zero bits on its structured UAV. It creates no
+tile-sized CPU zero vector and performs no initial pixel upload. Reusing an existing tile preserves settled
+density; a reused key in a new stroke starts at zero. The coverage shader and legacy density equations stay
+unchanged. GPU recording, resource creation, epoch retirement and their measured owner costs remain separate.
+
+The worker completion API supplements the synchronous reference API above. `DetachCoverageForFinish` transfers
+exclusive CPU draft ownership and removes its graphics pointer. It leaves the borrowed engine's density alive;
+the owner must retain each final GPU copy source before calling `EndStroke`. A second detach, pointer Append,
+or compatibility Flush on that detached draft refuses. No worker calls or destroys a graphics engine.
+
+`PrepareFinalCoverage` builds the final Catmull-Rom curve, the sorted exact union of final and old provisional
+tail keys, and private tile metadata. CPU coverage executes on the worker with row cancellation. Compute
+coverage preserves the shader's uint values: `RecordCoverage` records dispatch without compatibility readback,
+and the typed buffer queue lends the result to a worker. `InstallFinalCoverage` requires the exact key and
+value count, clamps uint values to 255, and rejects duplicate deliveries. `ComposeFinalCoverage` requires all
+coverage acknowledgements and exact tile origins, dimensions and borrowed preview pointers. Failed, cancelled,
+or incompletely composed drafts cannot expose a snapshot.
+
+`HealForFinish` uses the original pixels and unchanged legacy search, membrane, grain and rounding equations.
+It checks the complete supported patch region before allocating and checks cancellation between bounds,
+read, coverage, kernel and output rows. Partial private results are discarded as one graph; they cannot become
+publishable until every touched tile and selection blend completes. `HealForWork` validates actual BGRA and
+coverage spans, last-row extent, stride arithmetic, dimensions, finite opacity and mode before allocating or
+writing. Its checkpoints distinguish role, ring rows/columns, patch search, statistics, recursive coarse solve,
+solve and output. Cancellation during output can leave a private prefix; callers must discard the whole result.
+
+This foundation does not activate asynchronous application mouse-up. The application's existing pointer update
+and compatibility finish remain governed by the sections above until the original-ticket host path, complete
+admission, final preview/residency and G1 gates qualify together.
 
 Shift-click paints a straight line from the end of the previous stroke on the same layer or mask
 (`ShiftLineStart`); switching tools or layers, or a stroke on another target, forgets that point.

@@ -20,4 +20,8 @@ namespace ImageFilters
 // read or memory runs out.
 [[nodiscard]] Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int width, int height,
                                       std::uint8_t background);
+// Admitted worker sample: private sparse reads, cancellable rows, unchanged mask sampling/edge tone.
+// Invalid dimensions, wrong format, cancellation or output over 100M pixels return empty.
+[[nodiscard]] Raster RenderMaskPixelsForWork(const Raster& mask, const LayerTransform& transform, int width, int height,
+                                             std::uint8_t background, const CancelToken& cancellation = {});
 } // namespace ImageFilters

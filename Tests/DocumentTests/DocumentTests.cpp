@@ -18,7 +18,13 @@
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
 #include "DistortWorkTests.h"
+#include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
+#include "Document.Tests.HealWork.h"
+#include "Document.Tests.MaskSampleWork.h"
+#include "Document.Tests.SparseWindowBounds.h"
+#include "Document.Tests.StrokeFinalCoverage.h"
+#include "Document.Tests.StrokeFinishPublication.h"
 #include "Document.h"
 #include "DocumentDraftTests.h"
 #include "DocumentFixtureTests.h"
@@ -8105,6 +8111,12 @@ int wmain(int argc, wchar_t** argv)
     TestWandSession();
     TestSparseRaster();
     TestPixelBuffer();
+    gFailures += RunHealWorkChecks();
+    gFailures += RunBrushRetirementBoundsTests();
+    gFailures += RunSparseWindowBoundsTests();
+    gFailures += RunDocumentMaskSampleWorkTests();
+    gFailures += RunStrokeFinalCoverageTests();
+    gFailures += RunStrokeFinishPublicationTests();
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
     gFailures += RunHistoryStateViewTests();

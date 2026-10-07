@@ -297,6 +297,13 @@ class Raster
     {
         return _storage ? _storage->selfRetirementBytes : 0;
     }
+    // Producer-cached workspace for splitting old windows with replacements on one 256-pixel grid.
+    // Includes result/vector growth, older headers and one piece/next scratch; no pixel allocation.
+    // Empty/contiguous rasters need zero old-window workspace. Unknown/overflow refuses admission.
+    [[nodiscard]] std::optional<std::uint64_t> GridReplacementWorkspaceBytes() const noexcept
+    {
+        return _storage ? _storage->gridReplacementWorkspaceBytes : std::optional<std::uint64_t>{0};
+    }
     [[nodiscard]] std::uint64_t RetirementNodeCount() const noexcept
     {
         return _storage && _storage->retirementBytes ? _storage->graphNodes : 0;
@@ -326,6 +333,7 @@ class Raster
         std::vector<RasterTile> tiles;
         std::uint64_t selfRetirementBytes = 0;
         std::uint64_t retirementBytes = 0;
+        std::optional<std::uint64_t> gridReplacementWorkspaceBytes;
         std::uint64_t graphNodes = 1;
         unsigned int graphDepth = 0;
     };
@@ -1374,6 +1382,10 @@ struct MaskEditResult;
 struct MaskWorkObserver;
 class LayerCopyInput;
 class PreparedLayerCopy;
+class StrokeFinishInput;
+class PreparedStrokeFinish;
+struct StrokeFinishResult;
+struct StrokeFinishObserver;
 struct LayerCopyResult;
 struct LayerCopyObserver;
 struct ImageImportBatchResult;
@@ -2874,6 +2886,15 @@ class DocumentSession
     // Replaces the provisional tail by the final curve and commits the tiles as one entry (`Brush Stroke`,
     // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.
     void FinishBrush();
+    // Staged P1 closure: the caller must admit the complete original job before exclusive capture.
+    [[nodiscard]] std::optional<StrokeFinishInput> TakeStrokeFinishInput(std::uint64_t opening,
+                                                                         BrushCoverageEngine*& ownerEngine) noexcept;
+    [[nodiscard]] bool DiscardStrokeFinishIfCurrent(std::uint64_t opening) noexcept;
+    [[nodiscard]] static StrokeFinishResult PrepareStrokeFinishPublication(
+        StrokeFinishInput input, CancelToken cancellation, StrokeFinishObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool IsPreparedStrokeFinishCurrent(const PreparedStrokeFinish& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedStrokeFinishIfCurrent(PreparedStrokeFinish& prepared) noexcept;
     void CancelBrush() noexcept;
     [[nodiscard]] const BrushStroke* PendingBrush() const noexcept
     {
@@ -2881,7 +2902,7 @@ class DocumentSession
     }
     [[nodiscard]] std::optional<std::uint64_t> PendingBrushOpening() const noexcept
     {
-        return _brush ? std::optional(_brushOpening) : std::nullopt;
+        return _brush ? std::optional(_brushOpening) : _brushFinishingOpening;
     }
     // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
     [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept
@@ -3157,6 +3178,7 @@ class DocumentSession
     std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;
     std::uint64_t _brushOpening = 0;
+    std::optional<std::uint64_t> _brushFinishingOpening;
     BrushCoverageEngine* _brushEngine = nullptr;
     struct LastBrushPoint
     {

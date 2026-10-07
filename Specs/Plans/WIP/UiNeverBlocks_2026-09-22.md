@@ -2,13 +2,17 @@
 
 **Execution resumed on 2026-10-07 at the user's request: “continue until P1 done”.**
 The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) preserves the prior stop and exact evidence.
-The managed checkout is clean at pushed WIP checkpoint `833ae76`; all 877 original frozen inputs are unchanged.
+The qualified 877-input caller slice is committed and pushed as `f585577`. Its original source freeze and
+complete qualification remain preserved; the current foundation candidate adds new source and requires fresh proof.
 No running app/build process was observed at resume. Fresh Release analysis r283 ran alone at
 `2026-10-07T06:09:10.959236Z`–`06:31:04.052839Z`, actual PID `55084`, exit 0, with compiler parallelism two.
 Its independent source/product/PDB/ISA checks and 1,180-copy archive pass. The 877-input caller slice is now
 qualified across the complete matrix; see the [closeout record](../../TestRuns/P1CallerQualification_2026-10-07.md).
 Current work is reviewed history-startup and stroke/healing/readback integration, then actual asynchronous
 stroke completion and the remaining P1 exit gates. P1 remains WIP until those gates pass.
+The [stroke host closure record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md) covers actual opening,
+finalization, admission refusal, GPU acknowledgement and shutdown; drafting or qualifying helper APIs does not
+close those application gates.
 
 Current 877-input caller candidate passes full x64 Debug r278 / Release r280 / real ASan r281 and all
 three ARM64 r40 cross-builds on identical freeze
@@ -55,20 +59,44 @@ The image-wrapper residency and original worker/upload transport step is fully q
 
 ## Delivery checklist
 
+- [x] Qualify and archive resource candidate Debug r294: all predecessors plus 181 exact additions,
+  five fresh linked image/PDB/ISA identities, active WARP debug layer and 99 application stages. Freeze
+  `6358FB57C725E348C079A1C5027FFC3B5D33842C860E1E2CEB9C137D4C7ACCA7`, 898 inputs; Release r295 is also independently verified and archived. ARM64 r42 all three profiles are verified/archived.
+  ASan r296 failed a sampler terminal retirement assertion; Release analysis r297 passed and is archived. Diagnostic-only ASan r298 passes strict source/product/predecessor verification and archive readback with unchanged expectations. Its sole source difference is recorded explicitly; the original intermittent failure has no established cause. Preserve this foundation/resource checkpoint, then complete actual host activation, the final current-source matrix and G1.
+  This does not close asynchronous stroke host activation or G1; see the
+  [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
+
 - [ ] Enable the qualified history-residency subscriber during normal startup. The primary prepared
   actual `Run` startup wiring and 36 real-host controls for notification-driven trimming, acquired-prefix
   failure, full subscription/route capacity, rollback and repeated shutdown. Reviewed copies are ignored
-  under `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`; they are not integrated or compiled. Existing
-  core/index/reprepare qualification stays checked; production startup and full H3/G1 remain open.
+  under `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`; they are integrated into the current candidate.
+  Debug r284's interrupted warning-bearing attempt is preserved; structural correction builds in r285.
+  Focused actual Run r288 passes the exact 36 new checks and every predecessor. Fresh complete matrix
+  qualification is running; whole H3/G1 remains open. See the [foundation record](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
 - [ ] Integrate and execute the reviewed cancellable healing kernel and 33 independent analytic/span/cancel
   controls. Primary review strengthened the API to validate both owned spans, separated statistics from real
   solve checkpoints and repaired the delegated large-array comparator. Reviewed copies are ignored under
-  `.build/P1Drafts/StrokeFinish/ReviewedHeal-r4`; no compilation or asynchronous production finish is claimed.
+  `.build/P1Drafts/StrokeFinish/ReviewedHeal-r4`; the kernel and controls are integrated into the current candidate.
+  Compilation passes r285. Focused document r286 exposes one incorrect new Create Texture constant-fill
+  assumption; its failed receipt is preserved, and the replacement uses 25 independent legacy-equation literals.
+  No kernel or existing golden changes. Fresh canonical Debug r289 passes all 33 healing, 133 final-coverage
+  and 201 publication controls, with every predecessor preserved. Its 1,176-copy archive verifies.
+  Full Release r290 also passes every predecessor and all 471 additions; its 1,174-copy archive verifies.
+  Real ASan r291 passes the exact inventory, detection probe and 8,073 worker stress controls; its 1,177-copy
+  archive verifies. All three ARM64 r41 profiles and fresh PE/PDB/instrumentation/archive checks pass.
+  Release analysis r292 fails the healing test fixture's 222,088-byte stack warning; its exact source, responses
+  and failed archive are preserved. The primary moves the fixture arrays to the heap without changing kernels
+  or expected bytes. The corrected 898-input resource candidate adds cached bounds, GPU density clearing,
+  queue readiness and a private worker mask sampler. Current Debug r294 follows r293's preserved C4244 test
+  sentinel warning and explicit byte-cast repair. Its full matrix and the asynchronous application remain due;
+  see the [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
 - [ ] Integrate typed structured-buffer readback and deferred brush coverage recording, then connect the actual
   asynchronous final stroke graph. Primary drafts reuse the existing bounded queue's staging cap, in-flight
   limit, event/fence waits, exact lease acknowledgements and device-retirement owners. They preserve the shader's
-  uint coverage and move conversion to the worker. Cheaper-agent WARP controls require independent review;
-  ignored drafts are not compilation, application activation, or mouse-up latency evidence.
+  uint coverage and move conversion to the worker. The primary reviewed the cheaper-agent WARP/core/publication
+  controls, added independent pending Undo/Redo authority checks, and integrated the foundation with the
+  typed worker publication. Focused WARP r287 passes all 1,694 predecessor controls and 68 exact additions;
+  actual asynchronous stroke application activation and mouse-up latency evidence remain due.
 - [x] Qualify the integrated Save/export session-end event handling and localized saving block reason.
   Primary-reviewed copies and 108 actual-host controls are integrated; the cheaper agent's 16 protocol controls
   were independently repaired. Unsaved-document protection and original publication/receipt authority remain.

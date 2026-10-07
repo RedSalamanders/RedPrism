@@ -33,6 +33,12 @@ class GpuBrushCoverage final : public BrushCoverageEngine
 
     [[nodiscard]] bool Render(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
                               std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept override;
+    // Owner-only final coverage recording. Performs the same compute dispatch without copying,
+    // mapping or converting preview values. The final job retains each borrowed buffer through
+    // GpuWorkQueue::EnqueueBufferReadback before EndStroke may release this engine's owners.
+    [[nodiscard]] bool RecordCoverage(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
+                                      std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept;
+    [[nodiscard]] ID3D11Buffer* CoverageBuffer(std::uint64_t key, int width, int height) const noexcept;
     void BeginStroke() noexcept override;
     void EndStroke() noexcept override;
     [[nodiscard]] bool UsesCpuPermanent() const noexcept override
@@ -66,6 +72,10 @@ class GpuBrushCoverage final : public BrushCoverageEngine
 
     [[nodiscard]] TileBuffers* BuffersFor(const BrushKernelTile& tile) noexcept;
     [[nodiscard]] HRESULT EnsureSegments(std::size_t count) noexcept;
+    [[nodiscard]] HRESULT EnsureStaging(TileBuffers& buffers) noexcept;
+    [[nodiscard]] bool RenderImpl(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
+                                  std::span<const BrushSegment> tail, const BrushKernelParams& params,
+                                  bool readback) noexcept;
 
     ID3D11Device* _device = nullptr;
     ID3D11DeviceContext* _context = nullptr;

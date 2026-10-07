@@ -291,6 +291,17 @@ int Application::Run(int showCommand) noexcept
     }
     ApplySettings(_settings);
 
+    // Arm the qualified history-only maintenance source before accepting startup paths or ordinary input.
+    // Failed subscription/route admission is a startup failure; Shutdown joins notices before the pool closes.
+    if (!_historyResidencySource.Start())
+    {
+        OutputDebugStringW(L"History residency subscription failed.\n");
+        return 5;
+    }
+    if (_processingTestProbe && _processingTestProbe->afterRuntimeSources &&
+        FAILED(static_cast<HRESULT>(_processingTestProbe->afterRuntimeSources(_processingTestProbe->context))))
+        return 5;
+
     if (_startupPaths)
     {
         const auto receipt = QueueHostRequest(std::move(_startupPaths.value()));

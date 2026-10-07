@@ -423,6 +423,30 @@ std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
 
 void Raster::CacheRetirementMemory(Storage& storage) noexcept
 {
+    // This immutable producer already visits its children below. Admission later reads this scalar even
+    // when a repeatedly shared child graph cannot represent its conservative occurrence sum.
+    std::uint64_t windowBytes = 0;
+    bool windowBoundValid = true;
+    if (storage.sparse)
+        for (const auto& tile : storage.tiles)
+        {
+            if (tile.Width() < 1 || tile.Height() < 1 || tile.Width() > kMaxCanvasSide ||
+                tile.Height() > kMaxCanvasSide)
+            {
+                windowBoundValid = false;
+                break;
+            }
+            const auto columns = (static_cast<std::uint64_t>(tile.Width()) + 255) / 256 + 2;
+            const auto rows = (static_cast<std::uint64_t>(tile.Height()) + 255) / 256 + 2;
+            const auto pieceBytes = columns * rows * 8 * sizeof(RasterTile); // axes <=120; product cannot overflow
+            if (pieceBytes > (std::numeric_limits<std::uint64_t>::max)() - windowBytes)
+            {
+                windowBoundValid = false;
+                break;
+            }
+            windowBytes += pieceBytes;
+        }
+    storage.gridReplacementWorkspaceBytes = windowBoundValid ? std::optional{windowBytes} : std::nullopt;
     const auto logical = static_cast<std::uint64_t>(storage.stride) * static_cast<std::uint64_t>(storage.height);
     if (logical > (std::numeric_limits<std::size_t>::max)())
         return;
@@ -1786,7 +1810,7 @@ bool DocumentSession::CancelPendingEdit()
         CancelTransform();
         return true;
     }
-    if (_brush)
+    if (_brush || _brushFinishingOpening)
     {
         CancelBrush();
         return true;
@@ -2525,6 +2549,7 @@ void DocumentSession::ClearDocument()
     _lassoDraft.reset();
     _selectionMoveOrigin.reset();
     _brush.reset();
+    _brushFinishingOpening.reset();
     _lastBrushPoint.reset();
     _pendingOpacityDigit.reset();
     _budgetRefused = false;

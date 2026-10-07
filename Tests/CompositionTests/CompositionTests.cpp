@@ -5,6 +5,9 @@
 #include "BrushStroke.h"
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
+#include "Composition.Tests.BrushDensityClear.h"
+#include "Composition.Tests.GpuBufferReadback.h"
+#include "Composition.Tests.GpuBufferSlots.h"
 #include "CompositionStageTimingTests.h"
 #include "Document.h"
 #include "DocumentReadbackTests.h"
@@ -2089,6 +2092,9 @@ int wmain(int argc, wchar_t** argv)
     TestViewport();
     gFailures += RunGpuCapabilityTests();
     gFailures += RunGpuWorkTests();
+    gFailures += RunGpuBufferReadbackTests();
+    gFailures += RunBrushDensityClearTests();
+    gFailures += RunGpuBufferSlotsTests();
     gFailures += RunGpuUploadAdmissionTests();
     gFailures += RunGpuUploadTransportTests();
     gFailures += RunGpuUploadInitializationTests();

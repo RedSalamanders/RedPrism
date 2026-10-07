@@ -228,6 +228,21 @@ allocation/row-padding overhead remains outside this declared texel cap; mapped 
 by the copy worker. When retained staging prevents a new class allocation, pending work waits for acknowledgement
 without claiming readiness or polling. A 1×1 sampler stages one texel.
 
+The same slots also accept exact structured uint32 buffers through `EnqueueBufferReadback`: a nonempty shape
+up to 2048 squared, four-byte structure stride, matching `ByteWidth`, supported default/immutable usage and the
+bound device identity are required before admission. Buffer staging is byte-exact; texture staging keeps its
+power-of-two classes. A slot changing kind drops the incompatible reusable staging owner before replacement,
+and idle, lent and retired storage share the same 64 MiB cap. `GpuBufferReadbackValues` carries an immutable
+uint32 span, exact width/height, lease and device generation to a typed receiver. The owner never converts or
+copies those pixels. Callback, nonblocking Map, event rearm, cancellation, retirement and exact Unmap rules
+below apply equally to buffers. A successful enqueue retains its source even when the coverage engine ends.
+
+`HasReadbackSlot` reads the eight fixed owner metadata slots and returns false when stopped or unbound.
+It reports readiness only; it neither reserves a slot nor admits CPU/GPU memory. A final-density producer MUST
+wait for readiness before depositing the next settled segments, then retain the successful copy source once.
+Capacity release and device retirement notify the owner through the existing event route; a producer MUST NOT
+poll or re-dispatch settled density after an admission failure.
+
 Only the owner records Copy, fence Signal/event registration/Flush or EnqueueSetEvent, Map READ DO_NOT_WAIT and
 Unmap. EnqueueSetEvent already flushes. Registered waits publish an atomic ready flag and wake the shared job event.
 Map is nonblocking after completion. If it returns WAS_STILL_DRAWING, the queue may retain the original copy,

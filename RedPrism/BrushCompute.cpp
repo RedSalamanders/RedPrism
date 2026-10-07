@@ -124,25 +124,13 @@ GpuBrushCoverage::TileBuffers* GpuBrushCoverage::BuffersFor(const BrushKernelTil
     TileBuffers buffers;
     buffers.width = tile.width;
     buffers.height = tile.height;
-    // The permanent density starts at zero for a fresh stroke.
-    std::vector<float> zeros;
-    try
-    {
-        zeros.assign(pixels, 0.0f);
-    }
-    catch (const std::bad_alloc&)
-    {
-        return nullptr;
-    }
     D3D11_BUFFER_DESC description{};
     description.ByteWidth = pixels * sizeof(float);
     description.Usage = D3D11_USAGE_DEFAULT;
     description.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
     description.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
     description.StructureByteStride = sizeof(float);
-    D3D11_SUBRESOURCE_DATA initial{};
-    initial.pSysMem = zeros.data();
-    if (FAILED(_device->CreateBuffer(&description, &initial, buffers.permanent.put())))
+    if (FAILED(_device->CreateBuffer(&description, nullptr, buffers.permanent.put())))
     {
         return nullptr;
     }
@@ -155,18 +143,15 @@ GpuBrushCoverage::TileBuffers* GpuBrushCoverage::BuffersFor(const BrushKernelTil
     {
         return nullptr;
     }
+    // Structured DXGI_FORMAT_UNKNOWN UAVs accept the uint clear; zero bits are float density zero.
+    // A fresh tile now records a constant-size owner command instead of allocating/copying CPU pixel zeros.
+    static_assert(sizeof(float) == sizeof(std::uint32_t));
+    constexpr UINT zeros[4] = {0, 0, 0, 0};
+    _context->ClearUnorderedAccessViewUint(buffers.permanentView.get(), zeros);
     description.ByteWidth = pixels * sizeof(std::uint32_t);
     description.StructureByteStride = sizeof(std::uint32_t);
     if (FAILED(_device->CreateBuffer(&description, nullptr, buffers.preview.put())) ||
         FAILED(_device->CreateUnorderedAccessView(buffers.preview.get(), &view, buffers.previewView.put())))
-    {
-        return nullptr;
-    }
-    D3D11_BUFFER_DESC staging{};
-    staging.ByteWidth = pixels * sizeof(std::uint32_t);
-    staging.Usage = D3D11_USAGE_STAGING;
-    staging.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    if (FAILED(_device->CreateBuffer(&staging, nullptr, buffers.staging.put())))
     {
         return nullptr;
     }
@@ -180,8 +165,40 @@ GpuBrushCoverage::TileBuffers* GpuBrushCoverage::BuffersFor(const BrushKernelTil
     }
 }
 
+HRESULT GpuBrushCoverage::EnsureStaging(TileBuffers& buffers) noexcept
+{
+    if (buffers.staging)
+        return S_OK;
+    D3D11_BUFFER_DESC staging{};
+    staging.ByteWidth = static_cast<UINT>(buffers.width) * static_cast<UINT>(buffers.height) * sizeof(std::uint32_t);
+    staging.Usage = D3D11_USAGE_STAGING;
+    staging.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    return _device->CreateBuffer(&staging, nullptr, buffers.staging.put());
+}
+
 bool GpuBrushCoverage::Render(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
                               std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept
+{
+    return RenderImpl(tiles, settled, tail, params, true);
+}
+
+bool GpuBrushCoverage::RecordCoverage(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
+                                      std::span<const BrushSegment> tail, const BrushKernelParams& params) noexcept
+{
+    return RenderImpl(tiles, settled, tail, params, false);
+}
+
+ID3D11Buffer* GpuBrushCoverage::CoverageBuffer(std::uint64_t key, int width, int height) const noexcept
+{
+    const auto found = _tiles.find(key);
+    return found != _tiles.end() && found->second.width == width && found->second.height == height
+               ? found->second.preview.get()
+               : nullptr;
+}
+
+bool GpuBrushCoverage::RenderImpl(std::span<const BrushKernelTile> tiles, std::span<const BrushSegment> settled,
+                                  std::span<const BrushSegment> tail, const BrushKernelParams& params,
+                                  bool readback) noexcept
 {
     if (!Ready() || tiles.empty())
     {
@@ -231,7 +248,7 @@ bool GpuBrushCoverage::Render(std::span<const BrushKernelTile> tiles, std::span<
     for (const BrushKernelTile& tile : tiles)
     {
         TileBuffers* buffers = BuffersFor(tile);
-        if (buffers == nullptr)
+        if (buffers == nullptr || (readback && FAILED(EnsureStaging(*buffers))))
         {
             ok = false;
             break;
@@ -268,14 +285,15 @@ bool GpuBrushCoverage::Render(std::span<const BrushKernelTile> tiles, std::span<
         _context->Dispatch(static_cast<UINT>((tile.width + 15) / 16), static_cast<UINT>((tile.height + 15) / 16), 1);
         ID3D11UnorderedAccessView* none[] = {nullptr, nullptr};
         _context->CSSetUnorderedAccessViews(0, 2, none, nullptr);
-        _context->CopyResource(buffers->staging.get(), buffers->preview.get());
+        if (readback)
+            _context->CopyResource(buffers->staging.get(), buffers->preview.get());
     }
     ID3D11ShaderResourceView* noResources[] = {nullptr};
     _context->CSSetShaderResources(0, 1, noResources);
     _context->CSSetShader(nullptr, nullptr, 0);
-    if (!ok)
+    if (!ok || !readback)
     {
-        return false;
+        return ok;
     }
     // The previews come back as one uint per pixel; the stroke composes tiles from bytes.
     for (const BrushKernelTile& tile : tiles)

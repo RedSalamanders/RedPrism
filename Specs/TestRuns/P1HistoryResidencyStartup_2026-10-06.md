@@ -4,13 +4,14 @@
 
 - [x] Reconcile the integrated index/epoch/maintenance slices and independently verify the missing normal startup call.
 - [x] Prepare primary-owned startup wiring and actual normal `Run(SW_HIDE)` controls in an ignored review folder.
-- [ ] Integrate after the preceding frozen file/Clone/clipboard matrix finishes; preserve its exact qualified source.
+- [x] Integrate after the preceding frozen file/Clone/clipboard matrix finishes; preserve its exact qualified source.
 - [ ] Compile/run the startup and unchanged residency controls; repair concrete issues without relaxing references.
 - [ ] Qualify the same-source required configurations, analysis, cross-builds and exact retained predecessors.
 - [ ] Update the owning runtime/history/resource contracts and commit/push the qualified activation.
 - [ ] Finish remaining reference writers, incremental accounting cost, resource activation and G1 before P1 Done.
 
-Status: **reviewed unintegrated source and test draft**. No new compile/runtime qualification.
+Status: **integrated foundation candidate on 2026-10-07**. No new compile/runtime qualification yet;
+see the [current foundation attempt](P1StrokeFinishFoundation_2026-10-07.md).
 Parent: [P1](../Plans/WIP/UiNeverBlocks_2026-09-22.md).
 
 ## Source finding
@@ -31,7 +32,7 @@ no polling, timer or new history writer class. Actual maintenance admission, FIF
 publication and deferred aggregate retirement remain the existing qualified implementation.
 
 The draft lives in `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`. Its mapping preserves the five original
-source hashes and six reviewed file hashes. It is not integrated while the previous 877-input source is frozen.
+source hashes and six reviewed file hashes. Integration follows the completed and archived 877-input caller matrix.
 
 ## Independent controls
 

@@ -81,6 +81,10 @@ namespace BrushKernel
 // Renders one tile exactly as the compute kernel does (the CPU engine and the tests use it).
 void RenderTile(const BrushKernelTile& tile, std::span<const BrushSegment> settled, std::span<const BrushSegment> tail,
                 const BrushKernelParams& params) noexcept;
+// Exclusive worker buffers. Checks cancellation between rows and exposes no successful partial result.
+[[nodiscard]] bool RenderTileForWork(const BrushKernelTile& tile, std::span<const BrushSegment> settled,
+                                     std::span<const BrushSegment> tail, const BrushKernelParams& params,
+                                     const CancelToken& cancellation) noexcept;
 } // namespace BrushKernel
 
 // Accumulates settled segments into every tile's permanent buffer and writes each preview from the permanent paint
@@ -178,6 +182,7 @@ class BrushStroke
         Raster image;                       // the tile as it looks now: base, paint and coverage composed
         bool touched = false;
         bool changed = false;
+        std::uint64_t ownershipBytes = 0; // producer-cached buffers and immutable raster owners
     };
 
     struct Commit
@@ -199,6 +204,29 @@ class BrushStroke
     // Owner-only, once publication has discarded this stroke. Detach the borrowed engine before CPU state
     // transfers to a worker; later destruction cannot mutate a graphics engine. No further stroke calls follow.
     void ReleaseCoverageEngine() noexcept;
+    // Owner-only exclusive transfer. Unlike discard, this does NOT end the borrowed engine:
+    // the final job must retain its GPU density until every final coverage copy is recorded,
+    // then call EndStroke on the owner. The detached CPU draft owns no graphics pointer.
+    [[nodiscard]] BrushCoverageEngine* DetachCoverageForFinish() noexcept;
+
+    struct FinalCoverage final
+    {
+        std::vector<BrushSegment> settled;
+        std::vector<BrushKernelTile> tiles;
+        bool needsGpu = false;
+    };
+    // Exclusive worker-only final curve/tile preparation; no borrowed engine calls.
+    // Returned kernel tile pointers borrow this private draft through final coverage acknowledgement.
+    [[nodiscard]] std::optional<FinalCoverage> PrepareFinalCoverage(CancelToken cancellation = {});
+    // Worker copies exact structured uint values to the matching private coverage tile.
+    // Cancellation may leave a private prefix written; failure discards the entire final draft.
+    [[nodiscard]] bool InstallFinalCoverage(std::uint64_t key, std::span<const std::uint32_t> values);
+    // Once every required coverage copy is acknowledged, compose and seal the private CPU tiles.
+    [[nodiscard]] bool ComposeFinalCoverage(const FinalCoverage& final);
+    // Exclusive worker after final composition. Failed/cancelled healing makes this draft permanently
+    // unpublishable; no partially healed snapshot can escape. Allocations propagate to the job runner.
+    [[nodiscard]] bool HealForFinish(std::uint32_t seed);
+
     // Owner-only harness observation; the engine remains borrowed.
     [[nodiscard]] bool HasCoverageEngineForTest() const noexcept
     {
@@ -356,6 +384,7 @@ class BrushStroke
     [[nodiscard]] bool AllocateTile(std::uint64_t key, bool sourceOnly = false);
     // The tile's image from its base, coverage and the settings; false (the stroke fails) when the base cannot be read.
     [[nodiscard]] bool ComposeTile(Tile& tile);
+    void RefreshTileOwnership(Tile& tile) noexcept;
     [[nodiscard]] double SelectionAt(Vec2 document) const noexcept;
     // Runs `shade` in document coordinates over every tile the canvas and selection cover (only the layer's existing
     // pixels with `withinSource`), starting from each tile's original content; `shade` returns false to leave a
@@ -389,6 +418,13 @@ class BrushStroke
     bool _valid = false;
     bool _failed = false;
     bool _workerRasterEdit = false;
+    bool _detachedFinish = false;
+    bool _finalCoveragePrepared = false;
+    bool _usesCpuPermanent = true;
+    bool _finalCoverageComplete = false;
+    std::size_t _finalCoverageRemaining = 0;
+    std::vector<std::uint64_t> _finalCoverageOrder;
+    std::vector<std::uint8_t> _finalCoverageReceived;
     bool _pixelLimitRefused = false;
     CancelToken _workCancellation;
     void (*_workProgress)(void*, std::size_t, std::size_t) noexcept = nullptr;
@@ -399,6 +435,8 @@ class BrushStroke
     std::vector<Vec2> _samples;
     std::unordered_set<std::uint64_t> _tailKeys;
     std::vector<Tile> _tiles;
+    std::uint64_t _tileOwnershipBytes = 0;
+    bool _tileOwnershipValid = true;
     std::unordered_map<std::uint64_t, std::size_t> _index;
     std::optional<Raster> _sample;
     int _sampleX = 0;

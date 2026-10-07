@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-07
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -10,6 +10,54 @@ This contract owns how RedPrism is proven. Domain specs name the behavior; this 
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
 ## Entrypoint
+
+### Stroke completion and normal history notification startup foundation
+
+Canonical `DocumentTests` includes 33 `heal-work.*`, 133 `strokefinal.*` and 201
+`strokefinish-publication.*` assertions. The independent references are literal complete BGRA/Gray8 rasters,
+selection64 rounding, exact private-draft state transitions and existing-history Undo/Redo behaviour. Healing
+span and cancellation tests include last-row extents, unsupported shape/opacity/mode, actual recursive solve,
+and an analytic partial-output prefix with unchanged outside pixels and padding. Create Texture's 5x5 red-hole
+fixture uses 25 literals derived from the legacy detail/grain equations, not a constant-fill assumption or
+implementation-generated output. Existing legacy healing goldens stay unchanged.
+
+`CompositionTests` requires 68 expanded `gpu-buffer-readback.*` assertions, including repeated helper
+multiplicities: actual WARP structured-buffer dispatch/copy, exact uint values and worker clamp, hard/soft final
+tail parity within 2/255, unchanged preview sentinel, buffer/texture/buffer slot reuse and staging charge,
+invalid device/layout admission, the one-event busy-Map rearm, cancellation with a lent mapping and device
+retirement through exact worker acknowledgement. These transport controls do not activate application mouse-up.
+
+The normal WARP application self-test registers `RunStandaloneHistoryResidencyStartupSelfTest` once and
+requires 36 `history-residency-startup.*` assertions across normal startup, failure after registration,
+subscription exhaustion and owner-route exhaustion. It executes the actual `Run` startup path: an original
+worker grows a literal sparse history raster, notifications start admitted trimming, the live document/revision/
+saved state stay exact, and the graph retires off owner. Acquired-prefix rollback, repeated shutdown, joined
+producer/event lifetime, zero residual charge and per-fixture quit isolation are mandatory.
+
+Every runtime configuration must preserve the complete predecessor registry and stage order, require the exact
+expanded names/multiplicities/order of all 471 additions, and bind its source, binaries, PDBs, linked ISA checks
+and logs to the actual attempt. Functional foundation proof does not establish application stroke activation,
+complete resource admission or G1 performance. Evidence: [foundation record](../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
+
+### Stroke resource controls
+
+Canonical `DocumentTests` additionally requires 48 `brush-retirement.*`, 44 `sparse-window.*` and 18
+`mask-sample-work.*` controls. They cover producer-cached complete tile ownership, sparse clipping/splitting and
+literal replacement pixels, and private cancellable nearest/bilinear mask sampling without shared assembly.
+The worker sampler validates Gray8 and dimensions/pixel limits, preserves the captured edge background, and
+uses Smooth for High exactly as the reference mask sampler does. Invalid placement yields background only
+after a successful source read. Its bilinear expectations are independent literal bytes.
+
+WARP `CompositionTests` requires 40 `brush-density-clear.*` controls with the D3D11 debug layer active, or 38
+when the SDK debug component is absent, plus 31 expanded `gpu-buffer-slots.*` controls. The repeated device-bind
+assertion appears twice and MUST NOT be deduplicated. Active debug-layer runs reject every warning, error or
+corruption diagnostic after engine cleanup. Fresh/reused density, exact eight-slot capacity, real mapped loans,
+release/device generations and stopped cleanup are mandatory. Receiver owners outlive callback and loan cleanup.
+
+Complete runtime profiles preserve every predecessor control and ordered application stage, with exact source,
+binary, PDB and ISA identity. Large healing fixture arrays live on heap owners so Release analysis retains stack
+diagnostics without suppressing them. These controls do not establish asynchronous application mouse-up, whole
+CPU/VRAM admission or G1. See [the resource record](../TestRuns/P1StrokeResourceControls_2026-10-07.md).
 
 ### Experimental prepared layer-row and retained-cache foundation
 

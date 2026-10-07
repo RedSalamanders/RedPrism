@@ -153,6 +153,7 @@
     <ClCompile Include="..\..\Common\DocumentSizeHistory.cpp" />
     <ClCompile Include="..\..\Common\Crop.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />

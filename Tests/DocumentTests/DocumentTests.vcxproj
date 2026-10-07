@@ -75,6 +75,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Document.Tests.StrokeFinishPublication.h" />
+    <ClInclude Include="Document.Tests.StrokeFinalCoverage.h" />
+    <ClInclude Include="Document.Tests.HealWork.h" />
+    <ClInclude Include="Document.Tests.BrushRetirementBounds.h" />
+    <ClInclude Include="Document.Tests.SparseWindowBounds.h" />
+    <ClInclude Include="Document.Tests.MaskSampleWork.h" />
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
     <ClInclude Include="Document.Tests.CapturedCloneOffset.h" />
@@ -188,6 +194,12 @@
     <ClInclude Include="LayerRowsWorkTests.h" />
     <ClCompile Include="CollapseRevisionTests.cpp" />
     <ClInclude Include="CollapseRevisionTests.h" />
+    <ClCompile Include="Document.Tests.HealWork.cpp" />
+    <ClCompile Include="Document.Tests.BrushRetirementBounds.cpp" />
+    <ClCompile Include="Document.Tests.SparseWindowBounds.cpp" />
+    <ClCompile Include="Document.Tests.MaskSampleWork.cpp" />
+    <ClCompile Include="Document.Tests.StrokeFinalCoverage.cpp" />
+    <ClCompile Include="Document.Tests.StrokeFinishPublication.cpp" />
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="Document.Tests.CapturedCloneOffset.cpp" />
     <ClCompile Include="DocumentLifecycleTests.cpp" />
@@ -290,6 +302,7 @@
     <ClCompile Include="..\..\Common\DocumentSizeHistory.cpp" />
     <ClCompile Include="..\..\Common\Crop.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />

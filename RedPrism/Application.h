@@ -124,6 +124,7 @@ class Application final : public ChromeEvents
     int RunSelfTest() noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;

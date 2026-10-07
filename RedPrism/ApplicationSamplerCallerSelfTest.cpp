@@ -836,15 +836,66 @@ int Application::RunSamplerCallerSelfTest() noexcept
                    L"A sampler terminal kept capture, invented a point or mutated the document inline.\n",
                    test.immediate))
             return 5;
-        if (!check(
-                settle() && receipt.Read().outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Succeeded) &&
-                    _session.ForegroundColor() == (cancelled ? kBlue : 0xFF804020u) &&
-                    _session.IsDocumentReadCurrent(sourceAuthority.value()) &&
-                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
-                    !FindSamplerOpening(opening) && samplerSlotsClear() && !_samplerHostTicket && !_samplerHostStamp &&
-                    !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() &&
-                    _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
-                L"A physical sampler terminal changed its outcome/prefix or retained graph resources.\n", test.retired))
+        const auto settleResult = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+        const bool settled = settleResult == SettleResult::Settled;
+        const auto actualReceipt = receipt.Read();
+        const auto actualReceiptOutcome = actualReceipt.outcome;
+        const auto expectedReceiptOutcome = cancelled ? HostOutcome::Cancelled : HostOutcome::Succeeded;
+        const std::uint32_t actualForeground = _session.ForegroundColor();
+        const std::uint32_t expectedForeground = cancelled ? kBlue : 0xFF804020u;
+        const bool authorityPresent = sourceAuthority.has_value();
+        const bool documentReadCurrent = authorityPresent && _session.IsDocumentReadCurrent(sourceAuthority.value());
+        const bool revisionMatches = _session.history.CurrentRevision() == revision;
+        const int actualUndoCount = _session.history.UndoCount();
+        const bool undoCountMatches = actualUndoCount == undo;
+        const bool openingAbsent = FindSamplerOpening(opening) == nullptr;
+        const bool samplerSlotsClearNow = samplerSlotsClear();
+        const bool samplerTicketAbsent = !_samplerHostTicket;
+        const bool samplerStampAbsent = !_samplerHostStamp;
+        const bool samplerJobAbsent = !_samplerHostJob;
+        const bool activeHostRequestAbsent = !_activeHostRequest;
+        const std::size_t hostRequestCount = _hostRequests.Size();
+        const bool hostRequestsEmpty = hostRequestCount == 0;
+        const bool historyWorkIdle = !_historyWork.Busy();
+        const std::uint64_t reservedMemoryBytes = _jobs.ReservedMemoryBytes();
+        const bool reservedMemoryEmpty = reservedMemoryBytes == 0;
+        const std::uint64_t utilitySurfaceBytes = _composition.UtilitySurfaceBytes();
+        const bool utilitySurfaceEmpty = utilitySurfaceBytes == 0;
+        const bool receiptOutcomeMatches = actualReceiptOutcome == expectedReceiptOutcome;
+        const bool foregroundMatches = actualForeground == expectedForeground;
+        const bool terminalAcknowledged = settled && receiptOutcomeMatches && foregroundMatches &&
+                                          documentReadCurrent && revisionMatches && undoCountMatches && openingAbsent &&
+                                          samplerSlotsClearNow && samplerTicketAbsent && samplerStampAbsent &&
+                                          samplerJobAbsent && activeHostRequestAbsent && hostRequestsEmpty &&
+                                          historyWorkIdle && reservedMemoryEmpty && utilitySurfaceEmpty;
+        if (!terminalAcknowledged)
+        {
+            std::printf("INFO sampler-terminal terminal=%u cancelled=%u settled=%u settle_result=%u receipt=%u "
+                        "expected_receipt=%u receipt_error=0x%08X "
+                        "foreground=0x%08X expected_foreground=0x%08X authority_present=%u document_current=%u "
+                        "revision_matches=%u undo=%d expected_undo=%d\n",
+                        static_cast<unsigned int>(test.terminal), static_cast<unsigned int>(cancelled),
+                        static_cast<unsigned int>(settled), static_cast<unsigned int>(settleResult),
+                        static_cast<unsigned int>(actualReceiptOutcome),
+                        static_cast<unsigned int>(expectedReceiptOutcome),
+                        static_cast<unsigned int>(actualReceipt.error), static_cast<unsigned int>(actualForeground),
+                        static_cast<unsigned int>(expectedForeground), static_cast<unsigned int>(authorityPresent),
+                        static_cast<unsigned int>(documentReadCurrent), static_cast<unsigned int>(revisionMatches),
+                        actualUndoCount, undo);
+            std::printf(
+                "INFO sampler-terminal resources opening_absent=%u sampler_slots_clear=%u sampler_ticket_absent=%u "
+                "sampler_stamp_absent=%u sampler_job_absent=%u active_request_absent=%u host_request_count=%llu "
+                "host_requests_empty=%u history_work_idle=%u reserved_bytes=%llu utility_surface_bytes=%llu\n",
+                static_cast<unsigned int>(openingAbsent), static_cast<unsigned int>(samplerSlotsClearNow),
+                static_cast<unsigned int>(samplerTicketAbsent), static_cast<unsigned int>(samplerStampAbsent),
+                static_cast<unsigned int>(samplerJobAbsent), static_cast<unsigned int>(activeHostRequestAbsent),
+                static_cast<unsigned long long>(hostRequestCount), static_cast<unsigned int>(hostRequestsEmpty),
+                static_cast<unsigned int>(historyWorkIdle), static_cast<unsigned long long>(reservedMemoryBytes),
+                static_cast<unsigned long long>(utilitySurfaceBytes));
+        }
+        if (!check(terminalAcknowledged,
+                   L"A physical sampler terminal changed its outcome/prefix or retained graph resources.\n",
+                   test.retired))
             return 5;
     }
 

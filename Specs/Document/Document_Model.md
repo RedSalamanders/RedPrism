@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-07
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -175,6 +175,13 @@ overcounted. Bound reads are constant-time and never assemble pixels or recursiv
 An overflow or graph depth above 128 produces an unavailable bound (zero), which migrated whole-operation
 admission refuses. These immutable construction caches are separate from history's retained-byte accounting;
 they do not change pixel equality, history trim goldens or the raster's published assembly lifetime.
+
+`GridReplacementWorkspaceBytes` additionally caches the clipped-window splitting allowance used by one uniform
+256-pixel replacement grid. For each kept window it sums
+`(ceil(width/256)+2)*(ceil(height/256)+2)*8*sizeof(RasterTile)` with checked arithmetic. Empty and contiguous
+rasters return zero; unavailable sparse metadata returns absence and admission MUST refuse it. The immutable
+query allocates nothing and visits no windows. This allowance does not cover arbitrary overlapping rectangles,
+new pixel buffers, full source/result ownership or other operation peaks.
 
 Basic raster-edit jobs retain input/token/result handles in one aggregate deferred-release owner. A stale or
 canceled sparse frame can consist of many individually small tiles; retirement MUST NOT free that entire graph

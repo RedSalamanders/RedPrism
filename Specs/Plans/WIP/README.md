@@ -1,7 +1,10 @@
 # Active plan index
 
-P1 implementation is **ACTIVE after the user’s resume on 2026-10-05**. Read the
-[saved checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-05.md) for exact source and qualification boundaries.
+P1 implementation is **ACTIVE after the user’s resume on 2026-10-07**. Read the
+[saved checkpoint](../../TestRuns/P1Pause_2026-10-06.md) for the prior stop, the
+[foundation receipts](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md) and
+[resource candidate](../../TestRuns/P1StrokeResourceControls_2026-10-07.md) for current qualification, and
+[host closure work](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md) for the next code and executable gates.
 The current H3/Wand/Warp work does not change P1 exit gates or activate private source in Native.
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the

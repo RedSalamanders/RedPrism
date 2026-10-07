@@ -231,4 +231,23 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
         return {};
     }
 }
+
+Raster RenderMaskPixelsForWork(const Raster& mask, const LayerTransform& transform, int width, int height,
+                               std::uint8_t background, const CancelToken& cancellation)
+{
+    if (cancellation.IsCancelled() || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
+        static_cast<std::int64_t>(width) * height > kMaxLayerPixels || !mask.HasStorage() ||
+        mask.Format() != RasterFormat::Gray8 || mask.PixelCount() > kMaxLayerPixels)
+        return {};
+    // Read privately, including when an invalid transform yields the legacy uniform edge background. A failed
+    // source read cannot be replaced by a valid background result. Never materialize the shared sparse mask.
+    const auto source = ContiguousRasterForWork(mask, cancellation);
+    if (!source.HasStorage() || cancellation.IsCancelled())
+        return {};
+    if (!transform.IsValid())
+        return RenderPlacedMask({}, Affine2{}, width, height, LayerSampling::Nearest, background, cancellation);
+    const auto sampling = transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
+    return RenderPlacedMask(source, PixelToDocument(transform, source.Width(), source.Height()), width, height,
+                            sampling, background, cancellation);
+}
 } // namespace ImageFilters

@@ -26,6 +26,25 @@ struct GpuReadbackRows final
     std::uint64_t deviceGeneration = 0;
 };
 
+// Structured uint32 coverage is borrowed separately from BGRA rows. No texture pitch or byte
+// conversion is implied. The owner releases the same exact queue lease after the worker acknowledges.
+struct GpuBufferReadbackValues final
+{
+    const std::uint32_t* data = nullptr;
+    std::size_t count = 0;
+    unsigned int width = 0;
+    unsigned int height = 0;
+    GpuReadbackLease lease;
+    std::uint64_t deviceGeneration = 0;
+};
+
+class GpuBufferReadbackReceiver
+{
+  public:
+    virtual ~GpuBufferReadbackReceiver() = default;
+    virtual void BufferReadbackReady(JobTicket ticket, GpuBufferReadbackValues values, HRESULT result) noexcept = 0;
+};
+
 class GpuReadbackReceiver
 {
   public:
@@ -78,6 +97,15 @@ class GpuWorkQueue final : public OwnerWorkPump
     [[nodiscard]] HRESULT EnqueueProducedReadback(unsigned int width, unsigned int height, JobTicket ticket,
                                                   GpuReadbackReceiver& receiver,
                                                   GpuReadbackProducer& producer) noexcept;
+    // A structured uint32 buffer with exactly width*height elements on the bound device.
+    // Shares the texture queue's slots, staging cap, in-flight limit, events and retirement policy.
+    // Source reference survives until the owner records its copy; no Map or conversion happens here.
+    [[nodiscard]] HRESULT EnqueueBufferReadback(ID3D11Buffer* source, unsigned int width, unsigned int height,
+                                                JobTicket ticket, GpuBufferReadbackReceiver& receiver) noexcept;
+    // Owner-only bounded readiness query for an already admitted job's next copy. Free slots only:
+    // no Map, allocation or context commands, and no reservation. The same owner pass must then enqueue.
+    // A suspended source waits on existing release/device notifications while false, never polls the pump.
+    [[nodiscard]] bool HasReadbackSlot() const noexcept;
     [[nodiscard]] bool ReleaseMapped(GpuReadbackLease lease) noexcept;
     // Device loss/adapter change retires lent owners. No commands are recorded on a retired context.
     void RetireDevice() noexcept;

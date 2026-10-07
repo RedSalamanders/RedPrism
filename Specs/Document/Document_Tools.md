@@ -533,6 +533,17 @@ explicitly empty selection.
   [`Document_History.md`](Document_History.md)); a committed stroke's Undo and Redo still share every untouched
   tile.
 - `ShiftLineStart` is the last sample of the previous stroke on the same layer or mask, for Shift-click lines.
+- The P1 worker foundation `TakeStrokeFinishInput` captures immutable source/history handles and the exact
+  pending brush opening after complete admission. It transfers exclusive CPU draft ownership without visiting
+  pixels and returns the engine borrow separately to the owner. `PendingBrushOpening` retains a finish marker
+  while `PendingBrush` is null; another brush cannot begin until that marker applies or drops. The worker
+  `PrepareStrokeFinishPublication` builds the final sparse snapshot, carried mask, eager semantic mask thumbnail,
+  sealed document and one history publication. Owner apply compares exact session/document/generation/restore,
+  target and root/selection identities plus history authority, then swaps the complete owners without pixel or
+  history construction. Prepared residency refresh retains this same publication. Old document/display/history
+  and draft owners remain in the retirement aggregate. Discard clears only its exact opening. Direct reference
+  Undo/Redo first clears the marker without moving older history; settled history restore refuses while it
+  exists. Actual application FIFO activation and full resource/latency qualification remain P1 obligations.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
   `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
   opacity typing (1–9 set 10–90 %, 0 sets 100 %, a second digit within 0.6 s makes a two-digit percent, never below

@@ -85,6 +85,9 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="Composition.Tests.GpuBufferReadback.h" />
+    <ClInclude Include="Composition.Tests.BrushDensityClear.h" />
+    <ClInclude Include="Composition.Tests.GpuBufferSlots.h" />
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
@@ -119,6 +122,9 @@
     <ClInclude Include="..\..\RedPrism\GpuRasterTextureCreation.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Composition.Tests.GpuBufferReadback.cpp" />
+    <ClCompile Include="Composition.Tests.BrushDensityClear.cpp" />
+    <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
     <ClCompile Include="GpuCapabilityTests.cpp" />
     <ClCompile Include="GpuWorkTests.cpp" />
@@ -159,6 +165,7 @@
     <ClCompile Include="..\..\RedPrism\CanvasRenderer.cpp" />
     <ClCompile Include="..\..\RedPrism\BrushCompute.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
