@@ -2,6 +2,7 @@
 
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationShutdownTestProbe.h"
+#include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
@@ -101,11 +102,15 @@ int Application::RunCloneReadbackSelfTest() noexcept
         const auto gate = owner._cloneReadbackTestGate;
         const auto receipt = owner._canvasBrushReceipt.Read();
         if (message.wParam == 2)
+            return; // Source adoption precedes the separate worker opening.
+        if (message.wParam == 3)
         {
+            const auto* draft = owner._session.PendingBrush();
+            const auto openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
             state.liveLease = owner._canvasCloneSample && owner._canvasCloneSample->lease &&
-                              owner._canvasCloneSample->lease.Bytes() == state.bytes &&
-                              owner._jobs.ReservedMemoryBytes() == state.bytes && !owner._utilityTicket &&
-                              receipt.outcome == HostOutcome::Pending && owner._session.PendingBrush() &&
+                              owner._canvasCloneSample->lease.Bytes() == state.bytes && openingBytes != 0 &&
+                              owner._jobs.ReservedMemoryBytes() == state.bytes + openingBytes &&
+                              !owner._utilityTicket && receipt.outcome == HostOutcome::Pending && draft &&
                               owner._session.history.UndoCount() == 0;
             const auto hole = owner._chrome->HolePixels();
             const auto view = owner._viewport.ViewFromDocument({12, 6}, owner.DocumentSize());
@@ -434,6 +439,8 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
             bool live;
             Guid revision;
             bool reached = false;
+            std::uint64_t sourceBytes = 0;
+            std::uint64_t openingBytes = 0;
             bool documentUnchangedAtDetach = false;
             bool sampleChargedAtDetach = false;
         } state{*owner, live, revision};
@@ -442,7 +449,7 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
             auto& state = *static_cast<State*>(opaque);
             auto& message = *static_cast<MSG*>(native);
             if (message.message == CloneReadbackTestGate::kMessage)
-                state.reached = message.wParam == (state.live ? 2u : 1u);
+                state.reached = message.wParam == (state.live ? 3u : 1u);
             else
                 state.owner.DispatchQueuedMessage(message);
         };
@@ -465,10 +472,17 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
                                             MWMO_INPUTAVAILABLE) == WAIT_FAILED)
                 std::_Exit(5);
         }
+        if (live)
+        {
+            state.sourceBytes = owner->_canvasCloneSample ? owner->_canvasCloneSample->lease.Bytes() : 0;
+            const auto* draft = owner->_session.PendingBrush();
+            state.openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
+        }
         expect(receipt.Read().outcome == HostOutcome::Pending && owner->_jobs.ReservedMemoryBytes() != 0 &&
                    gate->captures.load() == 1 &&
                    (live ? owner->_canvasCloneSample && owner->_canvasCloneSample->lease &&
-                               owner->_session.PendingBrush() && !owner->_utilityTicket
+                               owner->_session.PendingBrush() && !owner->_utilityTicket && state.openingBytes != 0 &&
+                               owner->_jobs.ReservedMemoryBytes() == state.sourceBytes + state.openingBytes
                          : owner->_utilityTicket && !owner->_session.PendingBrush() && !owner->_canvasCloneSample),
                "actual-admitted-boundary-held");
         probe.draft = owner->_session.WeakPendingBrushForTest();
@@ -482,7 +496,8 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
                                               state.owner._session.history.UndoCount() == 0;
             state.sampleChargedAtDetach =
                 state.owner._canvasCloneSample && state.owner._canvasCloneSample->lease &&
-                state.owner._jobs.ReservedMemoryBytes() == state.owner._canvasCloneSample->lease.Bytes();
+                state.owner._canvasCloneSample->lease.Bytes() == state.sourceBytes && state.openingBytes != 0 &&
+                state.owner._jobs.ReservedMemoryBytes() == state.sourceBytes + state.openingBytes;
         };
         owner->_shutdownTestProbe = &probe;
         owner->Shutdown(); // The held worker exits on the actual shutdown event, without releasing its test gate.

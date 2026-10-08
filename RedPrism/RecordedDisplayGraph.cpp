@@ -1,0 +1,176 @@
+#include "RecordedDisplayGraph.h"
+
+#include <exception>
+#include <utility>
+
+RecordedDisplayGraph::RecordedDisplayGraph(std::uint32_t originalOwnerThread) noexcept
+    : _ownerThread(originalOwnerThread ? originalOwnerThread : GetCurrentThreadId())
+{
+}
+
+RecordedDisplayGraph::~RecordedDisplayGraph()
+{
+    if (IsOwner() && _phase != Phase::Empty && _phase != Phase::Retired)
+        std::terminate(); // Never move final CPU/graphics releases back to the UI through a wrapper destructor.
+}
+
+bool RecordedDisplayGraph::IsOwner() const noexcept
+{
+    return _ownerThread == GetCurrentThreadId();
+}
+
+HRESULT RecordedDisplayGraph::PrepareForWork(ID3D11Device* device, CanvasDocument source, GpuCommandStream& stream,
+                                             CancelToken cancellation,
+                                             const RecordedDisplayGraph* publishedSeed) noexcept
+{
+    return PrepareInternalForWork(device, std::move(source), stream, std::move(cancellation), publishedSeed, nullptr,
+                                  {});
+}
+
+HRESULT RecordedDisplayGraph::PrepareStrokeForWork(ID3D11Device* device, CanvasDocument source,
+                                                   const CanvasRenderer::StrokePreview& preview,
+                                                   std::span<const RasterTile> tiles, GpuCommandStream& stream,
+                                                   CancelToken cancellation,
+                                                   const RecordedDisplayGraph* publishedSeed) noexcept
+{
+    return PrepareInternalForWork(device, std::move(source), stream, std::move(cancellation), publishedSeed, &preview,
+                                  tiles);
+}
+
+HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, CanvasDocument source,
+                                                     GpuCommandStream& stream, CancelToken cancellation,
+                                                     const RecordedDisplayGraph* publishedSeed,
+                                                     const CanvasRenderer::StrokePreview* preview,
+                                                     std::span<const RasterTile> tiles) noexcept
+{
+    if (IsOwner() || _phase != Phase::Empty || !device || !stream.CanRecordForWork())
+        return E_INVALIDARG;
+    if (cancellation.IsCancelled())
+        return E_ABORT;
+    D3D11_FEATURE_DATA_THREADING threading{};
+    const HRESULT capabilities = device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &threading, sizeof(threading));
+    if (FAILED(capabilities) || !threading.DriverConcurrentCreates)
+        return FAILED(capabilities) ? capabilities : E_NOTIMPL;
+    _phase = Phase::Preparing;
+    _device = device;
+    _source = std::move(source);
+    _recording.emplace();
+    HRESULT result = device->CreateDeferredContext(0, _deferred.put());
+    if (SUCCEEDED(result))
+        result = _recording.value().InitializeForWork(_deferred.get(), stream, cancellation);
+    if (SUCCEEDED(result))
+        result = _composition.CreateDeviceResources(device, _deferred.get(), &_recording.value());
+    if (SUCCEEDED(result) && publishedSeed)
+    {
+        if (publishedSeed->_phase != Phase::Published || publishedSeed->_device.get() != device)
+            result = E_INVALIDARG;
+        else
+            result = _composition.SeedRasterResidencyForWork(publishedSeed->_composition);
+    }
+    if (SUCCEEDED(result) && preview)
+        result = _composition.PrepareRecordedStrokeForWork(
+            _source, *preview, tiles, publishedSeed ? &publishedSeed->_composition : nullptr, _inheritedStroke);
+    if (SUCCEEDED(result))
+        result = _composition.Compose(_source);
+    if (SUCCEEDED(result))
+        result = _composition.SealRecordedDisplayForWork();
+    if (SUCCEEDED(result))
+        _phase = Phase::Sealed;
+    return result;
+}
+
+HRESULT RecordedDisplayGraph::PublishOwner(ID3D11DeviceContext* originalContext) noexcept
+{
+    if (!IsOwner() || _phase != Phase::Sealed || !originalContext)
+        return E_INVALIDARG;
+    const HRESULT result = _composition.BindAcknowledgedDisplayOwner(originalContext);
+    if (SUCCEEDED(result))
+    {
+        _original = originalContext;
+        _phase = Phase::Published;
+    }
+    return result;
+}
+
+HRESULT RecordedDisplayGraph::BlitOwner(ID3D11RenderTargetView* target, unsigned int width, unsigned int height,
+                                        const CanvasViewport& view, float holeLeft, float holeTop, float holeWidth,
+                                        float holeHeight) noexcept
+{
+    if (!IsPublishedOwner() || !target)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    wil::com_ptr_nothrow<ID3D11Device> targetDevice;
+    target->GetDevice(targetDevice.put());
+    if (targetDevice.get() != _device.get())
+        return E_INVALIDARG;
+    return _composition.BlitToTarget(target, width, height, view, holeLeft, holeTop, holeWidth, holeHeight);
+}
+
+bool RecordedDisplayGraph::DetachOwner() noexcept
+{
+    if (!IsOwner() || _phase == Phase::Detached || _phase == Phase::Retired)
+        return false;
+    _phase = Phase::Detached;
+    return true;
+}
+
+bool RecordedDisplayGraph::RetireForWork() noexcept
+{
+    if (IsOwner() || _phase != Phase::Detached)
+        return false;
+    ReleaseForWork();
+    return true;
+}
+
+bool RecordedDisplayGraph::RetireUnpublishedForWork() noexcept
+{
+    if (IsOwner() || _phase == Phase::Published || _phase == Phase::Detached || _phase == Phase::Retired)
+        return false;
+    ReleaseForWork();
+    return true;
+}
+
+void RecordedDisplayGraph::ReleaseForWork() noexcept
+{
+    _composition.ReleaseDeviceResources();
+    _original.reset();
+    _recording.reset();
+    _deferred.reset();
+    _device.reset();
+    _source = {};
+    _phase = Phase::Retired;
+}
+
+std::uint64_t RecordedDisplayGraph::SurfaceBytesOwner() const noexcept
+{
+    return IsPublishedOwner() ? _composition.CanvasSurfaceBytes() : 0;
+}
+
+bool RecordedDisplayGraph::IsPublishedOwner() const noexcept
+{
+    return IsOwner() && _phase == Phase::Published;
+}
+
+bool RecordedDisplayGraph::IsPublishedOnOwner(ID3D11Device* device, ID3D11DeviceContext* context) const noexcept
+{
+    return IsPublishedOwner() && device == _device.get() && context == _original.get();
+}
+
+CanvasRenderer* RecordedDisplayGraph::CompositionForTestOwner() noexcept
+{
+    return IsPublishedOwner() ? &_composition : nullptr;
+}
+
+ID3D11Device* RecordedDisplayGraph::DeviceForTestOwner() const noexcept
+{
+    return IsPublishedOwner() ? _device.get() : nullptr;
+}
+
+ID3D11DeviceContext* RecordedDisplayGraph::ContextForTestOwner() const noexcept
+{
+    return IsPublishedOwner() ? _original.get() : nullptr;
+}
+
+bool RecordedDisplayGraph::InheritedStrokeForTestOwner() const noexcept
+{
+    return IsPublishedOwner() && _inheritedStroke;
+}

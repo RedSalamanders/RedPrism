@@ -79,6 +79,9 @@ struct GpuWorkQueue::Impl final
     HRESULT testRearmFailure = S_OK;
     HRESULT testEnqueueFailure = S_OK;
     HRESULT testRemovedFailure = S_OK;
+    HRESULT testRetirementFailure = S_OK;
+    unsigned int testRetirementRefusals = 0;
+    JobTicket testRetirementTarget;
     GpuReadbackStatistics statistics;
 
     void CheckOwner() const noexcept
@@ -557,6 +560,12 @@ HRESULT GpuWorkQueue::EnqueueRetirementCompletion(const GpuCompletionContext& ca
     const HRESULT removed = captured._device->GetDeviceRemovedReason();
     if (FAILED(removed))
         return removed; // Caller may separately treat confirmed removal as retirement, never this refusal callback.
+    if (self.testRetirementRefusals && FAILED(self.testRetirementFailure) &&
+        (self.testRetirementTarget.generation == 0 || self.testRetirementTarget == ticket))
+    {
+        --self.testRetirementRefusals;
+        return self.testRetirementFailure;
+    }
     const HRESULT admitted = self.Admit(1, 1, ticket, nullptr, nullptr, {}, nullptr);
     if (FAILED(admitted))
         return admitted;
@@ -903,4 +912,15 @@ void GpuWorkQueue::SetMapRecoveryFailuresForTest(HRESULT rearm, HRESULT enqueue,
 GpuReadbackStatistics GpuWorkQueue::Statistics() const noexcept
 {
     return _impl ? _impl->statistics : GpuReadbackStatistics{};
+}
+
+void GpuWorkQueue::SetRetirementCompletionRefusalsForTest(HRESULT error, unsigned int attempts,
+                                                          JobTicket target) noexcept
+{
+    if (!_impl)
+        return;
+    _impl->CheckOwner();
+    _impl->testRetirementFailure = error;
+    _impl->testRetirementRefusals = FAILED(error) ? attempts : 0;
+    _impl->testRetirementTarget = target;
 }

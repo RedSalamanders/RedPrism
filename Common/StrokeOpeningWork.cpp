@@ -46,7 +46,7 @@ std::optional<StrokeOpeningInput> DocumentSession::PrepareStrokeOpeningInput(
     StrokeOpeningOptions options) const noexcept
 {
     static_assert(std::is_nothrow_copy_constructible_v<CanvasDocument>);
-    if (!_document || !_activeLayerID || !CanPaint() || _brush || _brushFinishingOpening ||
+    if (!_document || !_activeLayerID || !CanPaint() || _brush || _brushFinishingOpening || _brushUpdatingOpening ||
         _brushOpening == UINT64_MAX || _transformEdit || _gradient || _pixelMove || _warp || _colorEdit ||
         _shapeDraft || !OptionsValid(options, _document.value(), _maskSelected) || !_document->RetirementMemoryBytes())
         return std::nullopt;
@@ -145,10 +145,10 @@ StrokeOpeningResult DocumentSession::PrepareStrokeOpeningPublication(StrokeOpeni
 bool DocumentSession::IsPreparedStrokeOpeningCurrent(const PreparedStrokeOpening& prepared) const noexcept
 {
     return !prepared._applied && prepared._stroke && prepared._stroke->IsValid() && !_brush &&
-           !_brushFinishingOpening && _brushOpening != UINT64_MAX && !_transformEdit && !_gradient && !_pixelMove &&
-           !_warp && !_colorEdit && !_shapeDraft && CanApplyImageImport(prepared._input._authority) &&
-           history.IsCurrent(prepared._input._history) && _document &&
-           _document->layers.Identity() == prepared._input._source.layers.Identity() &&
+           !_brushFinishingOpening && !_brushUpdatingOpening && _brushOpening != UINT64_MAX && !_transformEdit &&
+           !_gradient && !_pixelMove && !_warp && !_colorEdit && !_shapeDraft &&
+           CanApplyImageImport(prepared._input._authority) && history.IsCurrent(prepared._input._history) &&
+           _document && _document->layers.Identity() == prepared._input._source.layers.Identity() &&
            _document->width == prepared._input._source.width && _document->height == prepared._input._source.height &&
            _document->resolution == prepared._input._source.resolution &&
            _document->selection.has_value() == prepared._input._source.selection.has_value() &&
@@ -175,11 +175,21 @@ bool PreparedStrokeOpening::RetainMemory(SharedRetainedMemoryLease&& lease) noex
 }
 
 std::uint64_t StrokeOpeningMemoryBytes(const CanvasDocument& source, const ImageLayer& layer, bool mask,
-                                       std::int64_t pixelLimit, const BrushSettings& settings, BrushKind kind) noexcept
+                                       std::int64_t pixelLimit, const BrushSettings& settings, BrushKind kind,
+                                       const Raster* cloneSample) noexcept
 {
     if (source.width < 1 || source.height < 1 || source.width > kMaxCanvasSide || source.height > kMaxCanvasSide ||
-        pixelLimit < 1 || pixelLimit > kMaxLayerPixels || kind > BrushKind::Blur || kind == BrushKind::Clone ||
+        pixelLimit < 1 || pixelLimit > kMaxLayerPixels || kind > BrushKind::Blur ||
         (mask && (!layer.mask || !layer.mask->enabled || kind == BrushKind::Heal || kind == BrushKind::Clone)))
+        return 0;
+    if (kind == BrushKind::Clone)
+    {
+        if (!cloneSample || !cloneSample->HasStorage() || cloneSample->Format() != RasterFormat::Bgra8888 ||
+            cloneSample->Width() != source.width || cloneSample->Height() != source.height ||
+            !cloneSample->RetirementMemoryBytes())
+            return 0;
+    }
+    else if (cloneSample)
         return 0;
     const auto grid = BrushStroke::PlanGrid(layer, mask, settings, source.width, source.height);
     const auto retained = source.RetirementMemoryBytes();
@@ -204,6 +214,10 @@ std::uint64_t StrokeOpeningMemoryBytes(const CanvasDocument& source, const Image
         const auto allocation = PixelBuffer::RequiredBytes(static_cast<std::size_t>(count * channels));
         return allocation && add(allocations, allocation);
     };
+    // The sampled source already has its source-job lease. The live draft also owns this immutable
+    // graph until its final reader retires, so declare that complete cached bound before capture.
+    if (cloneSample && !add(cloneSample->RetirementMemoryBytes(), 1))
+        return 0;
     const auto columns = (static_cast<std::uint64_t>(grid->width) + 255) / 256;
     const auto rows = (static_cast<std::uint64_t>(grid->height) + 255) / 256;
     // A supported commit rectangle has area <= pixelLimit and both sides <=30000. Its alignment may

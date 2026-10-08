@@ -10,6 +10,7 @@
 #include "CloneReadbackState.h"
 #include "ColorEditWork.h"
 #include "CommandBindings.h"
+#include "CommittedDisplayController.h"
 #include "ContinuationRequests.h"
 #include "Crop.h"
 #include "Document.h"
@@ -109,7 +110,7 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
                         double rotation, std::uint32_t argb);
 
 // The chrome's events (ChromeEvents) land on the handlers below, marked `override`.
-class Application final : public ChromeEvents
+class Application final : public ChromeEvents, private CommittedDisplayClient
 {
   public:
     Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
@@ -136,6 +137,8 @@ class Application final : public ChromeEvents
     static int RunStandalonePreparedLayerRowsGroupSelectionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE instance) noexcept;
@@ -154,6 +157,10 @@ class Application final : public ChromeEvents
     void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
 
   private:
+    [[nodiscard]] bool EnableCommittedDisplayForTest(bool allowHidden = true) noexcept;
+    [[nodiscard]] bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
+    void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
+    void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
     static constexpr UINT_PTR kScreenshotTimerId = 1;
     static constexpr UINT_PTR kJobIndicatorTimerId = 8;
@@ -277,6 +284,27 @@ class Application final : public ChromeEvents
     void BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
                             const CanvasBrushContext* captured = nullptr,
                             const Raster* cloneComposite = nullptr) noexcept;
+    class StrokeFinishJob;
+    class StrokeFinishSource final : public OwnerWorkPump
+    {
+      public:
+        explicit StrokeFinishSource(Application& owner) noexcept : _owner(owner) {}
+        [[nodiscard]] bool Start() noexcept;
+        [[nodiscard]] bool HasPending() const noexcept override;
+        [[nodiscard]] bool HasReady() const noexcept override;
+        void Pump() noexcept override;
+        void DeviceChangedOwner() noexcept;
+        void CloseAfterWorkers() noexcept;
+
+      private:
+        Application& _owner;
+        bool _attached = false;
+    };
+    [[nodiscard]] HRESULT StartStrokeFinish(std::uint64_t opening) noexcept;
+    void PrepareStrokeFinishJoinedShutdownOwner() noexcept;
+    StrokeFinishJob* _strokeFinishCurrent = nullptr;
+    std::shared_ptr<struct StrokeFinishTestGate> _strokeFinishTestGate;
+    bool _asyncStrokeFinishEnabled = false;
     class StrokeOpeningJob;
     [[nodiscard]] HRESULT StartStrokeOpening(std::uint64_t opening) noexcept;
     void BeginPreparedBrushStrokeAt(Vec2 point, unsigned int modifiers) noexcept;
@@ -1062,6 +1090,16 @@ class Application final : public ChromeEvents
     OwnerWorkMultiplexer _ownerWork;
     RetryWaitQueue _retryWait;
     GpuWorkQueue _gpuWork;
+    GpuCommandPump _recordedCommands;
+    GpuResidencyBudget _graphGpuBudget;
+    GpuResidencyReservation _strokeFinishShutdownGpu;
+    GpuResidencyReservation _strokeFinishShutdownDisplayGpu;
+    StrokeFinishSource _strokeFinishSource{*this};
+    CommittedDisplayController _committedDisplay;
+    RecordedDisplayGraph* _acknowledgedCommittedDisplay = nullptr;
+    bool _committedDisplayInitialized = false;
+    bool _committedDisplayAllowHiddenForTest = false;
+    HRESULT _committedDisplayFailure = S_OK;
     bool _gpuWorkInitialized = false;
     HRESULT _gpuBindingError = E_PENDING;
     HistoryWork _historyWork;

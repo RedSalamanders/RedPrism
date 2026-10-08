@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "RecordedDisplayGraph.h"
 
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
@@ -492,7 +493,7 @@ HRESULT Renderer::RecoverDeviceForUtility(HRESULT result) noexcept
 }
 
 HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                         const CanvasDocument* document) noexcept
+                         const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay) noexcept
 {
     _canvasFailure = S_OK;
     if (_suspended)
@@ -527,7 +528,25 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         }
     }
 
-    if (composition && composition->HasDevice() && document && viewport && chrome)
+    if (acknowledgedDisplay && viewport && chrome)
+    {
+        // A sealed, originally acknowledged graph has no owner Compose/upload/create stage. Validate both
+        // actual interfaces before any command: a recovered renderer cannot blit a retired device's graph.
+        const CanvasHole hole = chrome->HolePixels();
+        const HRESULT canvasResult = StageResult(
+            Stage::Blit, acknowledgedDisplay->IsPublishedOnOwner(_device.get(), _context.get())
+                             ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport,
+                                                              hole.left, hole.top, hole.width, hole.height)
+                             : E_ABORT);
+        if (FAILED(canvasResult))
+        {
+            if (DeviceLostAfter(canvasResult))
+                return RecoverFromStage();
+            _canvasFailure = canvasResult;
+        }
+        _context->OMSetRenderTargets(1, renderTargets, nullptr);
+    }
+    else if (composition && composition->HasDevice() && document && viewport && chrome)
     {
         HRESULT canvasResult = StageResult(Stage::Compose, composition->Compose(*document));
         if (SUCCEEDED(canvasResult))

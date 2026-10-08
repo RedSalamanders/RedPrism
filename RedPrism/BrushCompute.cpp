@@ -1,9 +1,11 @@
-﻿#include "BrushCompute.h"
+#include "BrushCompute.h"
 
 #include "BrushCoverageShader.h"
+#include "GpuRecordingCommands.h"
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <new>
@@ -65,6 +67,7 @@ void GpuBrushCoverage::Release() noexcept
     _pipeline.reset();
     _device = nullptr;
     _context = nullptr;
+    _recording = nullptr;
 }
 
 void GpuBrushCoverage::BeginStroke() noexcept
@@ -156,6 +159,25 @@ bool GpuBrushCoverage::TakeStrokeEpoch(StrokeEpoch& empty) noexcept
     empty._cpuBytes = cpu;
     empty._gpuBytes = gpu;
     empty._capturingThread = GetCurrentThreadId();
+    return true;
+}
+
+bool GpuBrushCoverage::RestoreStrokeEpoch(StrokeEpoch& epoch) noexcept
+{
+    if (!epoch._tiles || !epoch._capturingThread || epoch._capturingThread != GetCurrentThreadId() || !_device ||
+        epoch._device.get() != _device || FAILED(_device->GetDeviceRemovedReason()) || !_tiles.empty() || _segments ||
+        _segmentsView || _segmentCapacity || _tileGpuBytes || !epoch._cpuBytes)
+        return false;
+    _tiles.swap(*epoch._tiles);
+    _segments.swap(epoch._segments);
+    _segmentsView.swap(epoch._segmentsView);
+    _segmentCapacity = std::exchange(epoch._segmentCapacity, 0);
+    _tileGpuBytes = std::exchange(epoch._tileGpuBytes, 0);
+    // Empty directory capacity is real retained CPU state. Its final release stays on the worker;
+    // keeping the captured device reference there also avoids a last COM reference on this owner.
+    epoch._cpuBytes = sizeof(StrokeEpoch) + 64 * 1024 + epoch._tiles->bucket_count() * 2 * sizeof(void*);
+    epoch._gpuBytes = 0;
+    epoch._capturingThread = 0;
     return true;
 }
 
@@ -320,6 +342,97 @@ bool GpuBrushCoverage::RecordEpochCoverage(StrokeEpoch& epoch, std::span<const B
     return RecordCoverage(tiles, settled, {}, params);
 }
 
+HRESULT GpuBrushCoverage::RecordEpochForWork(StrokeEpoch& epoch, ID3D11DeviceContext* deferred,
+                                             GpuRecordingCommands& commands, std::span<const BrushKernelTile> tiles,
+                                             std::span<const BrushSegment> settled, std::span<const BrushSegment> tail,
+                                             const BrushKernelParams& params)
+{
+    if (!epoch._tiles || !epoch._device || !epoch._capturingThread || epoch._capturingThread == GetCurrentThreadId() ||
+        !deferred || deferred->GetType() != D3D11_DEVICE_CONTEXT_DEFERRED)
+        return E_INVALIDARG;
+    const auto bound = commands.ContextStatusForWork(epoch._device.get(), deferred);
+    if (FAILED(bound))
+        return bound;
+    const auto deviceStatus = epoch._device->GetDeviceRemovedReason();
+    if (FAILED(deviceStatus))
+        return deviceStatus;
+    const auto finiteFloat = [](double value) noexcept
+    { return std::isfinite(value) && std::abs(value) <= (std::numeric_limits<float>::max)(); };
+    if (settled.size() > 1024 || tail.size() > 1 || !finiteFloat(params.radius) ||
+        static_cast<float>(params.radius) <= 0 || !std::isfinite(params.hardness) || params.hardness < 0 ||
+        params.hardness > 1 || !finiteFloat(params.spacing) || static_cast<float>(params.spacing) <= 0 ||
+        !finiteFloat(params.antialiasWidth) || static_cast<float>(params.antialiasWidth) <= 0 ||
+        !std::isfinite(params.canvasWidth) || params.canvasWidth <= 0 || params.canvasWidth > kMaxCanvasSide ||
+        !std::isfinite(params.canvasHeight) || params.canvasHeight <= 0 || params.canvasHeight > kMaxCanvasSide ||
+        !std::isfinite(params.pixelToDocument.a) || !std::isfinite(params.pixelToDocument.b) ||
+        !std::isfinite(params.pixelToDocument.c) || !std::isfinite(params.pixelToDocument.d) ||
+        !std::isfinite(params.pixelToDocument.tx) || !std::isfinite(params.pixelToDocument.ty))
+        return E_INVALIDARG;
+    std::optional<std::uint64_t> previousKey;
+    for (const auto& tile : tiles)
+    {
+        if (tile.width <= 0 || tile.height <= 0 || tile.width > BrushStroke::kTileSize ||
+            tile.height > BrushStroke::kTileSize || tile.x < 0 || tile.y < 0 ||
+            tile.x > BrushStroke::kMaxGridSide - tile.width || tile.y > BrushStroke::kMaxGridSide - tile.height ||
+            (previousKey && tile.key <= previousKey.value()))
+            return E_INVALIDARG;
+        previousKey = tile.key; // Prepared coverage supplies a sorted exact union, without duplicate deliveries.
+        for (const double y : {static_cast<double>(tile.y), static_cast<double>(tile.y) + tile.height})
+            for (const double x : {static_cast<double>(tile.x), static_cast<double>(tile.x) + tile.width})
+            {
+                const auto corner = params.pixelToDocument.Apply({x, y});
+                if (!finiteFloat(corner.x) || !finiteFloat(corner.y))
+                    return E_INVALIDARG;
+            }
+    }
+    const auto finiteSegments = [&finiteFloat](std::span<const BrushSegment> segments) noexcept
+    {
+        for (const auto& segment : segments)
+            if (!finiteFloat(segment.from.x) || !finiteFloat(segment.from.y) || !finiteFloat(segment.to.x) ||
+                !finiteFloat(segment.to.y))
+                return false;
+        return true;
+    };
+    if (!finiteSegments(settled) || !finiteSegments(tail))
+        return E_INVALIDARG;
+    GpuBrushCoverage privateEngine;
+    const HRESULT initialized = privateEngine.Initialize(epoch._device.get(), deferred);
+    if (FAILED(initialized))
+        return initialized;
+    privateEngine._recording = &commands;
+    const auto swapGraph = [&]() noexcept
+    {
+        privateEngine._tiles.swap(*epoch._tiles);
+        privateEngine._segments.swap(epoch._segments);
+        privateEngine._segmentsView.swap(epoch._segmentsView);
+        std::swap(privateEngine._segmentCapacity, epoch._segmentCapacity);
+        std::swap(privateEngine._tileGpuBytes, epoch._tileGpuBytes);
+    };
+    swapGraph();
+    const auto restore = wil::scope_exit(
+        [&]() noexcept
+        {
+            epoch._cpuBytes = privateEngine.StrokeCpuOwnershipBytes();
+            epoch._gpuBytes = privateEngine.StrokeGpuOwnershipBytes();
+            swapGraph(); // Captured resources outlive the private pipeline, even after a failed prefix.
+        });
+    const bool recorded = privateEngine.RenderImpl(tiles, settled, tail, params, false);
+    const auto commandStatus = commands.StatusForWork();
+    return FAILED(commandStatus) ? commandStatus : recorded ? S_OK : E_FAIL;
+}
+
+ID3D11Buffer* GpuBrushCoverage::RecordedEpochBufferOwner(const StrokeEpoch& epoch, ID3D11Device* originalDevice,
+                                                         std::uint64_t key, int width, int height) noexcept
+{
+    if (!epoch._tiles || !originalDevice || epoch._device.get() != originalDevice ||
+        epoch._capturingThread != GetCurrentThreadId())
+        return nullptr;
+    const auto found = epoch._tiles->find(key);
+    return found != epoch._tiles->end() && found->second.width == width && found->second.height == height
+               ? found->second.preview.get()
+               : nullptr;
+}
+
 ID3D11Buffer* GpuBrushCoverage::EpochCoverageBuffer(const StrokeEpoch& epoch, std::uint64_t key, int width,
                                                     int height) const noexcept
 {
@@ -353,40 +466,49 @@ bool GpuBrushCoverage::RenderImpl(std::span<const BrushKernelTile> tiles, std::s
     {
         return false;
     }
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(_context->Map(_segments.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+    const auto uploadSegments = [&]() noexcept
     {
-        return false;
-    }
-    float* segments = static_cast<float*>(mapped.pData);
-    std::size_t written = 0;
-    for (const BrushSegment& segment : settled)
-    {
-        segments[written * 4] = static_cast<float>(segment.from.x);
-        segments[written * 4 + 1] = static_cast<float>(segment.from.y);
-        segments[written * 4 + 2] = static_cast<float>(segment.to.x);
-        segments[written * 4 + 3] = static_cast<float>(segment.to.y);
-        ++written;
-    }
-    for (const BrushSegment& segment : tail)
-    {
-        segments[written * 4] = static_cast<float>(segment.from.x);
-        segments[written * 4 + 1] = static_cast<float>(segment.from.y);
-        segments[written * 4 + 2] = static_cast<float>(segment.to.x);
-        segments[written * 4 + 3] = static_cast<float>(segment.to.y);
-        ++written;
-    }
-    if (written == 0)
-    {
-        std::memset(segments, 0, 4 * sizeof(float));
-    }
-    _context->Unmap(_segments.get(), 0);
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (FAILED(_context->Map(_segments.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        {
+            return false;
+        }
+        float* segments = static_cast<float*>(mapped.pData);
+        std::size_t written = 0;
+        for (const BrushSegment& segment : settled)
+        {
+            segments[written * 4] = static_cast<float>(segment.from.x);
+            segments[written * 4 + 1] = static_cast<float>(segment.from.y);
+            segments[written * 4 + 2] = static_cast<float>(segment.to.x);
+            segments[written * 4 + 3] = static_cast<float>(segment.to.y);
+            ++written;
+        }
+        for (const BrushSegment& segment : tail)
+        {
+            segments[written * 4] = static_cast<float>(segment.from.x);
+            segments[written * 4 + 1] = static_cast<float>(segment.from.y);
+            segments[written * 4 + 2] = static_cast<float>(segment.to.x);
+            segments[written * 4 + 3] = static_cast<float>(segment.to.y);
+            ++written;
+        }
+        if (written == 0)
+        {
+            std::memset(segments, 0, 4 * sizeof(float));
+        }
+        _context->Unmap(_segments.get(), 0);
 
-    _context->CSSetShader(_pipeline.get(), nullptr, 0);
-    ID3D11ShaderResourceView* resources[] = {_segmentsView.get()};
-    _context->CSSetShaderResources(0, 1, resources);
-    ID3D11Buffer* constants[] = {_uniforms.get()};
-    _context->CSSetConstantBuffers(0, 1, constants);
+        return true;
+    };
+    if (!_recording && !uploadSegments())
+        return false;
+    if (!_recording)
+    {
+        _context->CSSetShader(_pipeline.get(), nullptr, 0);
+        ID3D11ShaderResourceView* resources[] = {_segmentsView.get()};
+        _context->CSSetShaderResources(0, 1, resources);
+        ID3D11Buffer* constants[] = {_uniforms.get()};
+        _context->CSSetConstantBuffers(0, 1, constants);
+    }
     bool ok = true;
     for (const BrushKernelTile& tile : tiles)
     {
@@ -395,6 +517,12 @@ bool GpuBrushCoverage::RenderImpl(std::span<const BrushKernelTile> tiles, std::s
         {
             ok = false;
             break;
+        }
+        if (_recording)
+        {
+            _recording->CheckpointForWork(); // Includes a new density clear before any pixel reads it.
+            if (FAILED(_recording->StatusForWork()))
+                return false;
         }
         const Vec2 origin =
             params.pixelToDocument.Apply(Vec2{static_cast<double>(tile.x), static_cast<double>(tile.y)});
@@ -415,19 +543,62 @@ bool GpuBrushCoverage::RenderImpl(std::span<const BrushKernelTile> tiles, std::s
         uniforms.counts[1] = static_cast<std::uint32_t>(tile.height);
         uniforms.counts[2] = static_cast<std::uint32_t>(settled.size());
         uniforms.counts[3] = static_cast<std::uint32_t>(total);
-        D3D11_MAPPED_SUBRESOURCE mappedUniforms{};
-        if (FAILED(_context->Map(_uniforms.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedUniforms)))
+        // Keep each pixel's original full-tile origin and all ordered segments. Splitting the segment
+        // sum would alter settled density rounding/capping; only disjoint pixel regions are dispatched.
+        const int side = _recording ? (total <= 16 ? 256 : total <= 64 ? 128 : total <= 256 ? 64 : 32) : 256;
+        for (int y = 0; y < tile.height && ok; y += side)
         {
-            ok = false;
-            break;
+            for (int x = 0; x < tile.width; x += side)
+            {
+                if (_recording && FAILED(_recording->ContextStatusForWork(_device, _context)))
+                {
+                    ok = false;
+                    break;
+                }
+                const int endX = std::min(tile.width, x + side);
+                const int endY = std::min(tile.height, y + side);
+                uniforms.dispatchBounds[0] = static_cast<std::uint32_t>(x);
+                uniforms.dispatchBounds[1] = static_cast<std::uint32_t>(y);
+                uniforms.dispatchBounds[2] = static_cast<std::uint32_t>(endX);
+                uniforms.dispatchBounds[3] = static_cast<std::uint32_t>(endY);
+                // Dynamic maps are command-list local. Record the exact segment data in the same list
+                // as its dispatch; never rely on a mapped alias from an earlier finished command list.
+                if (_recording && !uploadSegments())
+                {
+                    ok = false;
+                    break;
+                }
+                D3D11_MAPPED_SUBRESOURCE mappedUniforms{};
+                if (FAILED(_context->Map(_uniforms.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedUniforms)))
+                {
+                    ok = false;
+                    break;
+                }
+                std::memcpy(mappedUniforms.pData, &uniforms, sizeof(uniforms));
+                _context->Unmap(_uniforms.get(), 0);
+                // FinishCommandList(FALSE) leaves defaults; every streamed region rebinds its complete state.
+                if (_recording)
+                {
+                    _context->CSSetShader(_pipeline.get(), nullptr, 0);
+                    ID3D11ShaderResourceView* resources[] = {_segmentsView.get()};
+                    _context->CSSetShaderResources(0, 1, resources);
+                    ID3D11Buffer* constants[] = {_uniforms.get()};
+                    _context->CSSetConstantBuffers(0, 1, constants);
+                }
+                ID3D11UnorderedAccessView* views[] = {buffers->permanentView.get(), buffers->previewView.get()};
+                _context->CSSetUnorderedAccessViews(0, 2, views, nullptr);
+                _context->Dispatch(static_cast<UINT>((endX - x + 15) / 16), static_cast<UINT>((endY - y + 15) / 16), 1);
+                ID3D11UnorderedAccessView* none[] = {nullptr, nullptr};
+                _context->CSSetUnorderedAccessViews(0, 2, none, nullptr);
+                if (_recording)
+                {
+                    ID3D11ShaderResourceView* noResources[] = {nullptr};
+                    _context->CSSetShaderResources(0, 1, noResources);
+                    _context->CSSetShader(nullptr, nullptr, 0);
+                    _recording->CheckpointForWork();
+                }
+            }
         }
-        std::memcpy(mappedUniforms.pData, &uniforms, sizeof(uniforms));
-        _context->Unmap(_uniforms.get(), 0);
-        ID3D11UnorderedAccessView* views[] = {buffers->permanentView.get(), buffers->previewView.get()};
-        _context->CSSetUnorderedAccessViews(0, 2, views, nullptr);
-        _context->Dispatch(static_cast<UINT>((tile.width + 15) / 16), static_cast<UINT>((tile.height + 15) / 16), 1);
-        ID3D11UnorderedAccessView* none[] = {nullptr, nullptr};
-        _context->CSSetUnorderedAccessViews(0, 2, none, nullptr);
         if (readback)
             _context->CopyResource(buffers->staging.get(), buffers->preview.get());
     }

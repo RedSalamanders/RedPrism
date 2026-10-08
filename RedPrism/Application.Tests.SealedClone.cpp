@@ -4,6 +4,7 @@
 #include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
 #include "LayerMetadataTestGate.h"
+#include "StrokeOpeningTestGate.h"
 
 #include "../Tests/Support/DocumentFixture.h"
 
@@ -111,11 +112,14 @@ int Application::RunSealedCloneHostSelfTest() noexcept
                 (void)SetEvent(_cloneReadbackTestGate->release.get());
             if (_layerMetadataTestGate && _layerMetadataTestGate->release)
                 (void)SetEvent(_layerMetadataTestGate->release.get());
+            if (_strokeOpeningTestGate)
+                (void)SetEvent(_strokeOpeningTestGate->release.get());
             CancelHostContinuations();
             if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
                 std::_Exit(5);
             _cloneReadbackTestGate.reset();
             _layerMetadataTestGate.reset();
+            _strokeOpeningTestGate.reset();
             _canvasCloneSample.reset();
             _opacityEdit.reset();
             _opacityRecorded.reset();
@@ -324,6 +328,10 @@ int Application::RunSealedCloneHostSelfTest() noexcept
             return 5;
         gate->holdAfterCopy = true;
         _cloneReadbackTestGate = gate;
+        auto openingGate = std::make_shared<StrokeOpeningTestGate>();
+        if (!openingGate->release)
+            return 5;
+        _strokeOpeningTestGate = openingGate;
         pointer(WM_LBUTTONDOWN, MK_LBUTTON, kCloneDestination);
         CloneGateState state(*this, cloneActions[index]);
         state.gate = gate;
@@ -335,6 +343,11 @@ int Application::RunSealedCloneHostSelfTest() noexcept
             return 5;
 
         const char* const scenario = cloneNames[index];
+        if (!expect(scenario, "clone-opening-captured-once-and-prepared-off-owner",
+                    openingGate->captures.load() == 1 && openingGate->prepares.load() == 1 &&
+                        openingGate->offowner.load() == 1 && openingGate->retired.load() &&
+                        openingGate->retiredOffOwner.load()))
+            return 5;
         if (!expect(scenario, "original-clone-readback-worker-held-after-gpu-copy",
                     state.gateVisited && state.originalWorkerHeld && state.workerTicket.generation != 0) ||
             !expect(scenario, "physical-up-seals-the-pending-clone-request", state.upSealed))
@@ -382,6 +395,7 @@ int Application::RunSealedCloneHostSelfTest() noexcept
                         _gpuWork.LentCount() == 0 && _gpuWork.InFlightCount() == 0 && !_gpuWork.HasPending()))
             return 5;
         _cloneReadbackTestGate.reset();
+        _strokeOpeningTestGate.reset();
     }
 
     // Reuse the established owner/worker opacity gate: a sealed Clone queued behind it keeps its ordinal while
@@ -396,6 +410,10 @@ int Application::RunSealedCloneHostSelfTest() noexcept
     if (!ungatedCloneReadback->release)
         return 5;
     _cloneReadbackTestGate = ungatedCloneReadback;
+    auto queuedOpeningGate = std::make_shared<StrokeOpeningTestGate>();
+    if (!queuedOpeningGate->release)
+        return 5;
+    _strokeOpeningTestGate = queuedOpeningGate;
     OnLayerOpacity(.25, ChromeEditPhase::Preview);
 
     struct OpacityCloneState final
@@ -497,8 +515,90 @@ int Application::RunSealedCloneHostSelfTest() noexcept
         return 5;
     _cloneReadbackTestGate.reset();
     _layerMetadataTestGate.reset();
+    if (!expect("queued-behind-opacity", "clone-opening-keeps-one-off-owner-preparation-after-cancelled-predecessor",
+                queuedOpeningGate->captures.load() == 1 && queuedOpeningGate->prepares.load() == 1 &&
+                    queuedOpeningGate->offowner.load() == 1 && queuedOpeningGate->retired.load() &&
+                    queuedOpeningGate->retiredOffOwner.load()))
+        return 5;
+    _strokeOpeningTestGate.reset();
 
-    std::fprintf(stderr, "%s sealed-clone-host.summary failures=%d cases=3\n", failures == 0 ? "PASS" : "FAIL",
+    // Single Layer samples the red/blue image itself. The held opening is reached only after the
+    // actual admitted layer-source worker; changing Clone's source afterward must not change this press.
+    if (!installCloneFixture())
+        return 5;
+    const auto sourceId = _session.Document()->layers.front().id;
+    _session.SelectLayer(sourceId);
+    _session.cloneSettings = CloneSettings{true, false};
+    SyncChrome();
+    Pixel originalDestination{};
+    if (!expect("single-layer-opening", "independent-source-fixture-starts-red-and-destination-blue",
+                ReadActivePixel(_session, static_cast<int>(kCloneDestination.x), static_cast<int>(kCloneDestination.y),
+                                originalDestination) &&
+                    originalDestination == kBlue && _session.history.UndoCount() == 0))
+        return 5;
+    auto singleOpeningGate = std::make_shared<StrokeOpeningTestGate>();
+    if (!singleOpeningGate->release)
+        return 5;
+    singleOpeningGate->holdAfterPreparation = true;
+    _strokeOpeningTestGate = singleOpeningGate;
+    pointer(WM_LBUTTONDOWN, MK_LBUTTON, kCloneDestination);
+    pointer(WM_LBUTTONUP, 0, kCloneDestination);
+    struct SingleOpeningState final
+    {
+        Application& owner;
+        std::shared_ptr<StrokeOpeningTestGate> gate;
+        bool visited = false;
+        bool heldOriginal = false;
+        bool sourceRetained = false;
+        bool immutableSourceAndOffset = false;
+    } single{*this, singleOpeningGate};
+    const auto singleOpeningPump = [](void* opaque, void* native) noexcept
+    {
+        auto& state = *static_cast<SingleOpeningState*>(opaque);
+        auto& message = *static_cast<MSG*>(native);
+        auto& owner = state.owner;
+        if (message.message != StrokeOpeningTestGate::kMessage)
+        {
+            owner.DispatchQueuedMessage(message);
+            return;
+        }
+        if (state.visited)
+            return;
+        state.visited = true;
+        const auto* captured = owner._canvasBrushInput.CapturedContext(owner._canvasBrushInput.Opening());
+        state.heldOriginal = owner._utilityTicket && owner._historyWork.Busy() &&
+                             owner._canvasBrushReceipt.Read().outcome == HostOutcome::Pending &&
+                             owner.CanvasBrushSealedStrokePending() && !owner._session.PendingBrush() &&
+                             state.gate->captures.load() == 1 && state.gate->prepares.load() == 1 &&
+                             state.gate->offowner.load() == 1 && owner._session.history.UndoCount() == 0;
+        state.sourceRetained = owner._canvasCloneSample && owner._jobs.ReservedMemoryBytes() != 0;
+        state.immutableSourceAndOffset = captured && !captured->cloneAllLayers && captured->cloneOffset &&
+                                         captured->cloneOffset->x == -8 && captured->cloneOffset->y == 0;
+        owner._session.SetCloneSource(kCloneDestination);
+        (void)SetEvent(state.gate->release.get());
+    };
+    const auto singleReceipt = _canvasBrushReceipt;
+    if (SettleJobs(_jobs, 15000, singleOpeningPump, &single) != SettleResult::Settled)
+        return 5;
+    Pixel clonedDestination{};
+    if (!expect("single-layer-opening", "actual-source-ack-precedes-held-off-owner-opening",
+                single.visited && single.heldOriginal && single.sourceRetained && single.immutableSourceAndOffset) ||
+        !expect("single-layer-opening", "event-time-offset-wins-over-later-clone-source-with-literal-red",
+                singleReceipt.Read() == ContinuationReceipt::Result{HostOutcome::Succeeded, S_OK} &&
+                    ReadActivePixel(_session, static_cast<int>(kCloneDestination.x),
+                                    static_cast<int>(kCloneDestination.y), clonedDestination) &&
+                    clonedDestination == kRed && _session.history.UndoCount() == 1 &&
+                    _session.history.UndoName() == L"Clone Stamp") ||
+        !expect("single-layer-opening", "joined-opening-retires-off-owner-and-returns-all-charges",
+                singleOpeningGate->captures.load() == 1 && singleOpeningGate->prepares.load() == 1 &&
+                    singleOpeningGate->offowner.load() == 1 && singleOpeningGate->retired.load() &&
+                    singleOpeningGate->retiredOffOwner.load() && !_session.PendingBrush() && !_canvasCloneSample &&
+                    !_utilityTicket && !_utilityStamp && !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 &&
+                    _jobs.ReleasingMemoryBytes() == 0))
+        return 5;
+    _strokeOpeningTestGate.reset();
+
+    std::fprintf(stderr, "%s sealed-clone-host.summary failures=%d cases=4\n", failures == 0 ? "PASS" : "FAIL",
                  failures);
     return failures;
 }

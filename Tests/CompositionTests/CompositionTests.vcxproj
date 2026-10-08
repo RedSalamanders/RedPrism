@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -136,6 +136,10 @@
     <ClCompile Include="Composition.Tests.BrushDensityClear.cpp" />
     <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
+    <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
+    <ClCompile Include="Composition.Tests.GpuCommandPump.cpp" />
+    <ClInclude Include="Composition.Tests.GpuCommandPump.h" />
+    <ClInclude Include="Composition.Tests.GpuCommandStream.h" />
     <ClCompile Include="GpuCapabilityTests.cpp" />
     <ClCompile Include="GpuWorkTests.cpp" />
     <ClCompile Include="GpuUploadAdmissionTests.cpp" />
@@ -151,6 +155,12 @@
     <ClCompile Include="CompositionStageTimingTests.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
+    <ClCompile Include="..\..\RedPrism\GpuCommandStream.cpp" />
+    <ClCompile Include="..\..\RedPrism\GpuCommandPump.cpp" />
+    <ClInclude Include="..\..\RedPrism\GpuCommandPump.h" />
+    <ClInclude Include="..\..\RedPrism\GpuCommandStream.h" />
+    <ClCompile Include="..\..\RedPrism\GpuRecordingCommands.cpp" />
+    <ClInclude Include="..\..\RedPrism\GpuRecordingCommands.h" />
     <ClCompile Include="..\..\RedPrism\GpuUploadWork.cpp" />
     <ClCompile Include="..\..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="..\..\Common\RasterUploadReductionWork.cpp" />
@@ -255,6 +265,29 @@
     </FxCompile>
   </ItemGroup>
 
+  <ItemGroup>
+    <ClCompile Include="..\..\RedPrism\RecordedDisplayGraph.cpp" />
+    <ClCompile Include="..\..\RedPrism\CommittedDisplayController.cpp" />
+    <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
+    <ClCompile Include="Composition.Tests.PublicationParent.cpp" />
+    <ClInclude Include="Composition.Tests.PublicationParent.h" />
+    <ClCompile Include="..\..\Common\RasterResidencyPlanWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterResidencyManifestWork.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedBlit.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedDisplayParent.cpp" />
+    <ClCompile Include="Composition.Tests.CommittedDisplay.cpp" />
+    <ClCompile Include="Composition.Tests.DisplayVisibility.cpp" />
+    <ClCompile Include="Composition.Tests.DisplayRebind.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedBrush.cpp" />
+    <ClCompile Include="Composition.Tests.EmptyJoinedShutdown.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedBlit.h" />
+    <ClInclude Include="Composition.Tests.RecordedDisplayParent.h" />
+    <ClInclude Include="Composition.Tests.CommittedDisplay.h" />
+    <ClInclude Include="Composition.Tests.DisplayVisibility.h" />
+    <ClInclude Include="Composition.Tests.DisplayRebind.h" />
+    <ClInclude Include="Composition.Tests.RecordedBrush.h" />
+    <ClInclude Include="Composition.Tests.EmptyJoinedShutdown.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

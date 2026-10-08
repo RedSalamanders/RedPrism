@@ -29,9 +29,10 @@ std::optional<StrokeFinishInput> DocumentSession::TakeStrokeFinishInput(std::uin
                                                                         BrushCoverageEngine*& ownerEngine) noexcept
 {
     static_assert(std::is_nothrow_copy_constructible_v<CanvasDocument>);
-    if (ownerEngine || !_document || !_brush || _brushFinishingOpening || opening != _brushOpening ||
-        !_brush->IsValid() || !_activeLayerID || _brush->LayerID() != _activeLayerID.value() ||
-        _brush->IsMask() != _maskSelected || _transformEdit || _gradient || _pixelMove || _warp || _colorEdit)
+    if (ownerEngine || !_document || !_brush || _brushFinishingOpening || _brushUpdatingOpening ||
+        opening != _brushOpening || !_brush->IsValid() || !_activeLayerID ||
+        _brush->LayerID() != _activeLayerID.value() || _brush->IsMask() != _maskSelected || _transformEdit ||
+        _gradient || _pixelMove || _warp || _colorEdit)
         return std::nullopt;
     // All capture here is immutable handle/scalar copying. A failed exclusive transfer leaves the live draft.
     StrokeFinishInput input(CaptureImageImportAuthority(), _document.value(), _activeLayerID, history.CaptureState(),

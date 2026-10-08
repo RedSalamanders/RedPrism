@@ -176,7 +176,14 @@ int Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(HINSTANCE i
     root.reset();
     if (SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
         return 5;
-    expect(oldWitness.expired() && owner->_jobs.ReservedMemoryBytes() == secondEpoch->MemoryBytes() &&
+    const bool oldGraphDestroyed = oldWitness.expired();
+    expect(oldGraphDestroyed && owner->_jobs.ReservedMemoryBytes() == firstBytes + secondEpoch->MemoryBytes() &&
+               owner->_jobs.ReleasingMemoryBytes() == 0,
+           "replacement.weak-control-witness-keeps-complete-original-charge-after-data-retirement");
+    oldWitness.reset(); // The remaining control block is part of the admitted graph too.
+    if (SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
+        return 5;
+    expect(oldGraphDestroyed && owner->_jobs.ReservedMemoryBytes() == secondEpoch->MemoryBytes() &&
                owner->_jobs.ReleasingMemoryBytes() == 0,
            "replacement.final-old-provider-release-retires-graph-and-acknowledges-exact-charge");
 

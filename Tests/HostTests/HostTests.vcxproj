@@ -84,6 +84,9 @@
 
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
+    <ClInclude Include="..\..\Common\SharedPublicationMemory.h" />
+    <ClInclude Include="Host.Tests.PublicationCallback.h" />
+    <ClInclude Include="Host.Tests.PublicationRetention.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
@@ -171,6 +174,7 @@
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="WorkerPoolTests.cpp" />
     <ClCompile Include="JobTests.cpp" />
@@ -186,6 +190,16 @@
     <ClCompile Include="JobCloseHookTests.cpp" />
     <ClCompile Include="JobSuspendedRetirementTests.cpp" />
     <ClCompile Include="Host.Tests.WorkerStageRetirement.cpp" />
+    <ClCompile Include="Host.Tests.PublicationCallback.cpp" />
+    <ClCompile Include="Host.Tests.PublicationRetention.cpp" />
+    <ClCompile Include="Host.Tests.GpuRecordingLane.cpp" />
+    <ClInclude Include="Host.Tests.GpuRecordingLane.h" />
+    <ClCompile Include="Host.Tests.ExecutionLaneStages.cpp" />
+    <ClInclude Include="Host.Tests.ExecutionLaneStages.h" />
+    <ClCompile Include="Host.Tests.ReservationGrowth.cpp" />
+    <ClInclude Include="Host.Tests.ReservationGrowth.h" />
+    <ClCompile Include="Host.Tests.RetainedGrowth.cpp" />
+    <ClInclude Include="Host.Tests.RetainedGrowth.h" />
     <ClCompile Include="Host.Tests.RetainedSlotAdmission.cpp" />
     <ClCompile Include="Host.Tests.PreservedContinuation.cpp" />
     <ClCompile Include="JobRetirementTests.cpp" />

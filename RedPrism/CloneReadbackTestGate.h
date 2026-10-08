@@ -17,7 +17,7 @@ struct CloneReadbackTestGate final
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     bool holdAfterCopy = false;
     bool throwCaptureFailure = false;
-    bool observeAdoption = false;
+    bool observeAdoption = false; // Message 2: source lease adopted; message 3: opening completed and Down replayed.
     unsigned int rebindsBeforeCopy = 0;
     JobResult result;
     std::atomic<unsigned int> captures{0};

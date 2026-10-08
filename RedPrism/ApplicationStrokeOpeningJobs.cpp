@@ -181,6 +181,20 @@ class Application::StrokeOpeningJob final : public Job
         options.kind = captured->kind;
         options.healing = captured->healing;
         options.maskWhite = captured->maskWhite;
+        if (captured->kind == BrushKind::Clone)
+        {
+            if (!_owner._canvasCloneSample)
+            {
+                _captureError = E_ABORT;
+                _terminal = true;
+                _cleanup = true;
+                if (_owner._jobs.Resume(ticket))
+                    return true;
+                std::terminate();
+            }
+            options.cloneOffset = captured->cloneOffset;
+            options.cloneSample = _owner._canvasCloneSample->composite;
+        }
         if (captured->sampledColor)
         {
             const auto color = _owner.ResolveSamplerColor(captured->sampledColor.value());
@@ -291,14 +305,14 @@ HRESULT Application::StartStrokeOpening(std::uint64_t opening) noexcept
     const auto* captured = _canvasBrushInput.CapturedContext(opening);
     const auto& document = _session.Document();
     const auto* layer = _session.ActiveLayer();
-    if (!captured || !document || !layer || _utilityTicket || !_activeHostRequest ||
-        captured->kind == BrushKind::Clone || _session.PendingBrush() || _canvasBrushSessionOpening ||
-        captured->documentSerial != _session.DocumentSerial() || captured->target != layer->id ||
-        captured->mask != _session.IsMaskSelected())
+    if (!captured || !document || !layer || _utilityTicket || !_activeHostRequest || _session.PendingBrush() ||
+        _canvasBrushSessionOpening || captured->documentSerial != _session.DocumentSerial() ||
+        captured->target != layer->id || captured->mask != _session.IsMaskSelected() ||
+        (captured->kind == BrushKind::Clone && (!_canvasCloneSample || !captured->cloneOffset)))
         return E_UNEXPECTED;
-    const auto memory = StrokeOpeningMemoryBytes(*document, *layer, captured->mask,
-                                                 _session.RasterEditPixelLimit(*layer, captured->mask),
-                                                 captured->settings, captured->kind);
+    const auto memory = StrokeOpeningMemoryBytes(
+        *document, *layer, captured->mask, _session.RasterEditPixelLimit(*layer, captured->mask), captured->settings,
+        captured->kind, captured->kind == BrushKind::Clone ? &_canvasCloneSample->composite : nullptr);
     const auto fixed = sizeof(StrokeOpeningJob) + sizeof(OpeningPayload) + 8192ULL;
     if (!memory || memory > (std::numeric_limits<std::uint64_t>::max)() - fixed)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);

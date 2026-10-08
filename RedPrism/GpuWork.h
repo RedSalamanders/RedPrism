@@ -109,6 +109,7 @@ class GpuCompletionContext final
 
   private:
     friend class GpuWorkQueue;
+    friend class GpuCommandPump;
     std::shared_ptr<const std::uint8_t> _origin;
     wil::com_ptr_nothrow<ID3D11Device> _device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> _context;
@@ -187,6 +188,11 @@ class GpuWorkQueue final : public OwnerWorkPump
     [[nodiscard]] unsigned int MapAttemptsForTest() const noexcept;
     void HoldMapRecoveryForTest(bool hold) noexcept;
     void SetMapRecoveryFailuresForTest(HRESULT rearm, HRESULT enqueue, HRESULT removed) noexcept;
+    // Refuse a fixed number of retirement barriers before admitting/recording any event. No callback or
+    // completion proof is fabricated. Subsequent offers use the real captured context and event wait. An
+    // empty target (generation 0) preserves global behavior; an exact ticket isolates one original admission
+    // from unrelated cache barriers.
+    void SetRetirementCompletionRefusalsForTest(HRESULT error, unsigned int attempts, JobTicket target = {}) noexcept;
     [[nodiscard]] GpuReadbackStatistics Statistics() const noexcept;
 
   private:

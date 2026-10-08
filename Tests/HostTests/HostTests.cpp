@@ -18,7 +18,13 @@
 #include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
+#include "Host.Tests.ExecutionLaneStages.h"
+#include "Host.Tests.GpuRecordingLane.h"
 #include "Host.Tests.PreservedContinuation.h"
+#include "Host.Tests.PublicationCallback.h"
+#include "Host.Tests.PublicationRetention.h"
+#include "Host.Tests.ReservationGrowth.h"
+#include "Host.Tests.RetainedGrowth.h"
 #include "Host.Tests.RetainedSlotAdmission.h"
 #include "Host.Tests.WorkerStageRetirement.h"
 #include "Host.Tests.WorkerWriteCompletion.h"
@@ -1847,6 +1853,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();
     gFailures += RunHostWorkerStageRetirementTests();
+    gFailures += RunGpuRecordingLaneTests();
+    gFailures += RunExecutionLaneStagesTests();
+    gFailures += RunReservationGrowthTests();
+    gFailures += RunRetainedGrowthTests();
     gFailures += RunRetainedSlotAdmissionTests();
     gFailures += RunPreservedContinuationTests();
     gFailures += RunJobRetirementTests();
@@ -1876,6 +1886,8 @@ int wmain(int argc, wchar_t** argv)
     TestCrashDumps();
     TestLocalization();
     TestVersionInfo();
+    gFailures += RunPublicationCallbackTests();
+    gFailures += RunPublicationRetentionTests();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

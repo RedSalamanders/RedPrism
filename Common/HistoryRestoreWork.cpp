@@ -95,8 +95,9 @@ HistoryRestoreAuthority DocumentSession::CaptureHistoryRestoreAuthority() const 
     result._active = _activeLayerID;
     result._crop = _cropRect;
     result._maskSelected = _maskSelected;
-    result._valid = !HasColorEdit() && !_gradient && !_transformEdit && !_brush && !_brushFinishingOpening && !_warp &&
-                    !_pixelMove && !_shapeDraft && !_selectionMoveOrigin && !_lassoDraft;
+    result._valid = !HasColorEdit() && !_gradient && !_transformEdit && !_brush && !_brushFinishingOpening &&
+                    !_brushUpdatingOpening && !_warp && !_pixelMove && !_shapeDraft && !_selectionMoveOrigin &&
+                    !_lassoDraft;
     return result;
 }
 
@@ -106,8 +107,8 @@ bool DocumentSession::CanApplyHistoryRestore(const HistoryRestoreAuthority& auth
            authority._documentSerial == _documentSerial && authority._generation == _generation &&
            authority._restoreSerial == _restoreSerial && authority._active == _activeLayerID &&
            authority._maskSelected == _maskSelected && authority._crop == _cropRect && !HasColorEdit() && !_gradient &&
-           !_transformEdit && !_brush && !_brushFinishingOpening && !_warp && !_pixelMove && !_shapeDraft &&
-           !_selectionMoveOrigin && !_lassoDraft;
+           !_transformEdit && !_brush && !_brushFinishingOpening && !_brushUpdatingOpening && !_warp && !_pixelMove &&
+           !_shapeDraft && !_selectionMoveOrigin && !_lassoDraft;
 }
 
 bool DocumentSession::ApplyPreparedHistoryRestoreIfCurrent(PreparedHistoryRestore& prepared) noexcept

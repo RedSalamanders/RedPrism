@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-07
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -240,6 +240,35 @@ eight pending UI actions. The seven job classes share three OS priorities. The s
 aligned intrusive completion nodes; producers push to an SLIST and signal an auto-reset event. The owner drains
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
+
+The scheduler optionally enables one private GPU-recording worker at owner startup, before the first accepted
+descriptor. It shares the same 128 records, priorities, FIFO through final owner apply/drop, cancellation,
+original reservations and terminal hooks. It has no second scheduler, memory budget or event-wait pool.
+Compute remains the default lane and its worker count is unchanged. Invalid/disabled recording lanes refuse
+without consuming the offered descriptor or assigning a ticket. Enablement allocates no recorder resources
+until requested; failure refuses recording or fails the caller's startup. A bounded transport capacity wait
+may block only this recorder on events, while ordinary CPU jobs remain independently runnable.
+
+Only RedPrism's private recording components may own/use a deferred D3D11 context on that lane. Common's
+public scheduler boundary remains standard-only. No worker receives an immediate context, maps for read,
+executes a command list, Presents or mutates a document. The scheduler joins recording callbacks before closing
+their borrowed general kernel executor/MTA and before owner cleanup or final worker graph retirement.
+The independent lane-state reference is startup refusal, cross-lane FIFO through delayed external retirement,
+event-driven cancellation and complete reservation return. This foundation does not activate display/strokes.
+
+An actually acknowledged suspended stage may resume on a different enabled execution lane using its same
+ticket. Only the execution lane changes: class/key ordering, cancellation, retained slot, complete reservation
+and record sequence survive. Running, stale, duplicate, invalid or disabled handoffs refuse without advancing
+the suspended stage. CPU preparation, private recording and CPU retirement therefore need no child descriptor
+or independent admission. Finalization still waits for every external original-context use acknowledgement.
+
+After a CPU planning stage describes additional owners, `IncreaseReservation` may grow that exact suspended
+record's complete peak before their creation. It uses a fresh physical/commit observation outside the scheduler
+lock, revalidates the stage and reserves only the complete additional amount. A failed snapshot, inadequate
+capacity, cancellation, shrink or invalid stage retains the original ticket/charge and creates no partial
+reservation, wait or queued retry. Equal totals need no snapshot. Future stages and final retention/retirement
+keep the grown total. Software GPU graphs must charge their CPU-backed texture ownership before creation;
+this API alone establishes neither their complete declaration nor production display activation.
 
 The owner router serves one ready leaf per pump, with at most eight leaves. Application's retry source adds
 eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
@@ -608,6 +637,14 @@ owner-confined. This primitive is an experimental foundation; the prepared layer
 below remains a disabled draft until its full consumer matrix and H4/G1 gates pass.
 
 #### Experimental prepared layer/accessibility graph
+
+An original multi-root publication uses one worker-created `SharedPublicationMemory` owner for its complete
+CPU reservation. Its bounded allocator holds the lease until the object and its final weak-owned control block
+are destroyed. Prepared rows may bind that already-bound owner exactly once before sealing. Their separate
+row-object and control-block ownership roles keep the publication owner alive until both the semantic row data
+and any weak-owned control block are gone; replacement of the Application/Tree cache alone cannot refund it.
+This supplements ordinary completion-bound row leases. Neither mechanism authorizes a document mutation.
+Graph retirement and weak-control retirement are separately required lifetime controls.
 
 The current consumer draft uses one immutable `PreparedLayerRows` shared owner for the Application cache, Chrome
 Tree model and DxUi UIA snapshots. The prepared semantic source covers the complete current visible model epoch,
@@ -1093,3 +1130,14 @@ admit a graph. Device/setup failure resets the complete output and returns its e
 original device removal status after the segment queries. These live segment observations are not an atomic
 aggregate, and an earlier capability probe is not a fresh admission snapshot. Unknown budgets MUST NOT be
 replaced with guessed RAM/VRAM limits. Current consumer activation and whole-graph admission remain P1 work.
+
+### Original retained lease growth
+
+`JobScheduler::IncreaseRetainedReservation` is owner-only while the containing graph is exclusively idle.
+It validates the exact live endpoint/slot/generation/current bytes and pending acknowledgement before and
+after its fresh physical/commit memory query. Growth uses the existing aggregate admission budget. Success
+updates the same lease and retained record; no new ticket, retained slot, replacement cache or premature
+refund is created. No-op growth does not query. Shrink, foreign/moved/reset leases and closed schedulers
+refuse. Failed snapshot/admission/revalidation leaves both lease and charge unchanged. The whole grown
+charge survives final reader Reset until its real owner drain, or joined Close; foreign readers after Close
+retain their endpoint's own charge until destruction. Growth may not race lease readers or Reset.

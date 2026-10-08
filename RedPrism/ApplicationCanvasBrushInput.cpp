@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
 
 #include <cstdint>
@@ -265,8 +266,8 @@ void Application::ReplayCanvasBrush() noexcept
             FinishHostContinuation({HostOutcome::Failed, result});
         return; // The Down event stays in the original FIFO until its complete source acknowledges.
     }
-    if (!_canvasBrushReplayed && !_canvasBrushSessionOpening && captured->kind != BrushKind::Clone &&
-        captured->tool != EditorTool::Gradient && captured->tool != EditorTool::Shape)
+    if (!_canvasBrushReplayed && !_canvasBrushSessionOpening && captured->tool != EditorTool::Gradient &&
+        captured->tool != EditorTool::Shape)
     {
         const HRESULT result = StartStrokeOpening(input->opening);
         if (FAILED(result))
@@ -361,32 +362,14 @@ void Application::ReplayCanvasBrush() noexcept
     switch (event->action)
     {
     case CanvasBrushInput::Action::Down:
-        if (captured->kind != BrushKind::Clone &&
-            (!_canvasBrushSessionOpening || _session.PendingBrushOpening() != _canvasBrushSessionOpening))
+        if (!_canvasBrushSessionOpening || _session.PendingBrushOpening() != _canvasBrushSessionOpening)
         {
             FinishHostContinuation({HostOutcome::Stale, E_ABORT});
             return;
         }
-        if (captured->kind == BrushKind::Clone && PointerBusy())
-        {
-            FinishHostContinuation({HostOutcome::Stale, E_ABORT});
-            return;
-        }
-        if (captured->kind != BrushKind::Clone)
-            BeginPreparedBrushStrokeAt(event->sample.point, event->sample.modifiers);
-        else
-        {
-            auto resolved = *captured;
-            if (resolved.sampledColor)
-            {
-                const auto argb = ResolveSamplerColor(resolved.sampledColor.value());
-                resolved.settings.red = static_cast<double>((argb >> 16) & 0xFFu) / 255.0;
-                resolved.settings.green = static_cast<double>((argb >> 8) & 0xFFu) / 255.0;
-                resolved.settings.blue = static_cast<double>(argb & 0xFFu) / 255.0;
-            }
-            BeginBrushStrokeAt(event->sample.point, event->sample.modifiers, captured->kind, &resolved,
-                               _canvasCloneSample ? &_canvasCloneSample->composite : nullptr);
-        }
+        BeginPreparedBrushStrokeAt(event->sample.point, event->sample.modifiers);
+        if (captured->kind == BrushKind::Clone)
+            SyncToolOverlays(); // The captured Clone offset moves its source crosshair with this stroke.
         _canvasBrushSessionOpening = _session.PendingBrushOpening();
         _canvasBrushReplayed = _canvasBrushSessionOpening.has_value();
         if (!_canvasBrushReplayed)
@@ -394,6 +377,8 @@ void Application::ReplayCanvasBrush() noexcept
             FinishHostContinuation({HostOutcome::Failed, E_FAIL});
             return;
         }
+        if (captured->kind == BrushKind::Clone && _cloneReadbackTestGate && _cloneReadbackTestGate->observeAdoption)
+            (void)PostThreadMessageW(GetCurrentThreadId(), CloneReadbackTestGate::kMessage, 3, 0);
         break;
     case CanvasBrushInput::Action::Move:
         ContinueBrushStrokeAt(event->sample.point);
@@ -410,9 +395,23 @@ void Application::ReplayCanvasBrush() noexcept
             FinishHostContinuation({HostOutcome::Failed, E_FAIL});
             return;
         }
+        if (_asyncStrokeFinishEnabled)
+        {
+            const HRESULT started = StartStrokeFinish(input->opening);
+            if (FAILED(started))
+                FinishHostContinuation({HostOutcome::Failed, started});
+            return; // Original ordinal stays held through final worker/GPU/display/row retirement.
+        }
         FinishBrushStroke();
         break;
     case CanvasBrushInput::Action::Lost:
+        if (_asyncStrokeFinishEnabled)
+        {
+            const HRESULT started = StartStrokeFinish(input->opening);
+            if (FAILED(started))
+                FinishHostContinuation({HostOutcome::Failed, started});
+            return;
+        }
         EndPointerDrag(PointerEnd::Lost); // Brush retains only its accepted path, exactly as capture loss does.
         break;
     }

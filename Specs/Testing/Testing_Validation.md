@@ -11,6 +11,76 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Original publication and application final-stroke controls
+
+`HostTests` registers 15 `publication-callback.*` controls, 17 publication-retention controls, four shared
+publication boundary controls, six real-worker publication-owner controls and six reconstructed-endpoint controls. They independently require
+exact acknowledged-hook identity, success-only one-time complete reservation transfer, predecessor FIFO,
+failure/cancellation refusal and charge retention through final weak-control release.
+
+`CompositionTests` registers the original-parent publication controls on WARP and available hardware. These
+check held seeds, exact private publication, foreign GPU-ledger refusal and literal pixel results. Their
+document swap uses a test editor; it does not qualify application history or rows. The application additionally
+runs `RunPreparedLayerRowsAccessibilitySelfTest` (17 controls) and `RunPreparedRowPublicationTests` (34 controls).
+The accessibility controls require the complete original admission to remain charged after row data retires while
+an expired weak witness still owns the control block, then require the exact refund after that witness is released
+(`ApplicationPreparedLayerRowsAccessibilityTests.cpp`). `RunStandaloneStrokeFinishSelfTest` covers ten actual
+hidden-WARP scenarios with 35 assertions. It retains the original gesture ordinal through worker final preparation
+and checks literal pixels, one history entry, Undo/Redo, sparse storage, eager semantic mask thumbnails, no-op,
+cancellation and joined shutdown. The two added scenarios require dormant healthy-device refusal, unchanged
+notification refusal, repeated failed recovery preserving the first cause, and cancellation retaining every owner
+until a real original event acknowledges. The full physical FIFO additionally seals its accepted prefix at the last
+accepted point, preserves the original pending ordinal through final preparation, commits only that literal prefix
+with matching display/rows, returns exactly `ERROR_NOT_ENOUGH_QUOTA` and retires its original payload and stream.
+Complete predecessor stages remain mandatory; these stages precede shutdown tests.
+
+These integrated controls require fresh exact-source execution. Historical isolated probes and the earlier
+978-input profiles cannot qualify this candidate. Normal asynchronous stroke activation, complete device and
+transport fault coverage, the required profile matrix and G1 remain separate gates.
+
+### Joined sample-input retirement
+
+`DocumentTests` retains the original 98 `strokesample-session.*` controls and their summary, then runs five
+`joined-retirement.*` engine-owner assertions with a separate `strokesample-joined-retirement.summary`.
+A tracking CPU engine observes one Begin/End, a real worker prepares/composes the detached draft, and
+successful owner apply must consume the input's draft reference. Owner cancellation expires the original
+weak draft before a second real worker destroys the remaining input. That worker calls no engine End and
+writes no history. These are lifetime controls, not application Append/Up or G1 qualification.
+
+### Clone worker opening
+
+`DocumentTests` additionally requires eight `clone-opening-memory.*` assertions and its separate summary.
+The independent equation is the same Paint declaration plus the valid sample's cached retirement bytes;
+missing, empty, wrong-format/dimension, mask and unexpected non-Clone sample inputs return exact zero.
+The predecessor `stroke-opening-memory` assertions and 30-fact summary remain unchanged.
+
+The actual WARP `RunSealedCloneHostSelfTest` retains all predecessor receipt/order/pixel expectations and
+adds seven assertions: one off-owner opening in each All Layers Escape/Undo scenario, one after a cancelled
+opacity predecessor, and four Single Layer fixture/held-opening/event-time-offset/retirement observations.
+The Single Layer destination starts literal blue and must become literal red despite a later Clone-source
+change while its actual prepared worker is held. The summary has four scenarios. Full current-source profiles
+and archived identities must qualify these controls; opening is not an Append/Up or G1 result.
+
+### Private GPU recording and original-record phase transitions
+
+Normal `HostTests` runs `recording-lane.*`, `execution-lane-stages.*` and `reservation-growth.*`.
+The independent state references observe original tickets, actual acknowledged stages, retained charges,
+event gates, worker identities and final callbacks. CPU/recorder/CPU handoff keeps the original serial FIFO,
+cancellation and retained slot; unrelated CPU work completes while the recorder is blocked. Invalid or disabled
+lane changes preserve the suspended record. Later phase growth uses a fresh physical/commit snapshot outside
+the scheduler lock and revalidates the exact suspended ticket afterward. Equal totals do not sample, refusal
+changes no charge, and cancellation/shutdown return the complete grown reservation after acknowledgement.
+The reentrant sample case resumes that same ticket during sampling and must refuse stale growth.
+See the [growth state oracle](../TestRuns/P1ReservationGrowthStateOracle_2026-10-07.md).
+
+Normal WARP `CompositionTests` runs the `recorded-display.*` transport and `recording-pump.*` groups:
+two fixed command slots, exact leases, producer acknowledgement, original GPU completion, failed-signal recovery
+and dormant quarantine. A real second device with the same numeric generation must be refused before Execute,
+with `E_INVALIDARG`, no executed acknowledgement and the complete charge retained until original retirement.
+Actual display graph activation, complete graph admission and G1 remain separate gates. The complete identical-source
+runtime/cross-build matrix, exact predecessor inventories and preserved archives are required for qualification;
+[r330 evidence](../TestRuns/P1GpuRecording_2026-10-07.md) covers only its original source.
+
 ### Stroke completion and normal history notification startup foundation
 
 Canonical `DocumentTests` includes 33 `heal-work.*`, 133 `strokefinal.*` and 201
@@ -1790,6 +1860,17 @@ These gates qualify dormant transport/receiver lifetime only. Complete CPU/VRAM 
 creation/mips, application consumers, bounded first composition/chrome/retirement and large-fixture G1 remain
 mandatory before H4/P1 completion. Native source activation and native ARM64 runtime are not inferred.
 
+The integrated `recorded-blit` and `recorded-blit-parent` controls require three actual published WARP graphs,
+with optional hardware, literal sampling expectations, a deliberately stale scissor, zero pan/zoom composition
+or mip work, and an original last-use barrier before worker retirement. `admitted-display` controls observe
+actual DXGI budgets, the original retained CPU charge, cache reuse/replacement, immediate document exclusion
+and final worker refund. `empty-shutdown` independently covers an attached source before recorder Resume,
+finished/started/nonempty/wrong-owner refusals and actual scheduler post-join/final-MTA hooks. No requested
+stop or cancellation is a completion. `RunStandaloneCommittedDisplaySelfTest` enables the route in actual hidden
+WARP Application instances, verifies renderer blits without legacy owner composition and closes both cached
+and in-flight roots through actual Application shutdown. These tests establish their reached states; pending
+preview/stroke/utility migrations, all injected controller faults, peak bounds and measured G1 remain separate.
+
 ## Prepared layer-row owner and provider cost diagnostic
 
 `RedPrism.exe --bench layer-rows` runs the prepared layer-row diagnostic with 10,000 layers; `--bench layer-rows-smoke` runs the same correctness path with 128 layers and is not a performance measurement. Both use a hidden 2×1 canvas, independent literal assets at the first/last storage records, the active/rename target at the final storage record (the longest active-layer lookup path), and the deterministic stress fixture: 1,024-code-unit names consisting of `N` characters followed by storage-order suffixes `#00000` through `#09999` (smoke retains `#00000` through `#00127`). Trial 0 is the initial publication; the full mode then records ten rename trials (1–10), and smoke records two (1–2). No initial or rename trial is discarded as warmup.
@@ -1799,3 +1880,13 @@ For every trial, report the request, `ChromeHost::Prepare`, raw embedded-STA pro
 Correctness checks must preserve the final storage layer's active Guid and its stable item ID (`FirstItemIdentity + layerCount - 1`), order, and full expected names (including every offscreen row). Both modes retain independent first/last BGRA bytes `10 20 30 ff 40 50 60 ff` / `70 80 90 ff a0 b0 c0 ff` and first Gray8 mask bytes `3f d1`; every trial verifies those literals outside the measured provider calls. Initial publication adds no history entry; each rename adds exactly one entry while preserving pixels and active identity.
 
 These diagnostics use a hidden 2×1 canvas and do not measure visible-frame G1, external COM RPC/client latency, or GPU residency. `layer-rows-smoke` is correctness-only. Neither mode changes performance requirements or thresholds, and diagnostic output alone does not qualify G1.
+
+### P1 exclusive stroke sample controls
+
+The candidate registers `Document.Tests.StrokeSample` and `Document.Tests.StrokeSampleSession` for exact
+scalar reference pixels/placement, detached worker state, original engine identity, ordered coverage delivery,
+scalar opening retention, source/history/target refusals and cancellation. `Host.Tests.RetainedGrowth` checks
+the same original lease's full admission/refund lifetime. Actual WARP `recorded-brush` returns its joined
+epoch without replacing/resetting buffers, then retires those original owners on the worker. The bound record
+is [P1StrokeSampleWork_2026-10-08.md](../TestRuns/P1StrokeSampleWork_2026-10-08.md). These additions require
+fresh qualification and do not establish actual application Append/Up, complete admission, G1 or native ARM64.

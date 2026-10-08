@@ -147,6 +147,16 @@ tile-sized CPU zero vector and performs no initial pixel upload. Reusing an exis
 density; a reused key in a new stroke starts at zero. The coverage shader and legacy density equations stay
 unchanged. GPU recording, resource creation, epoch retirement and their measured owner costs remain separate.
 
+`RecordEpochForWork` supplements owner recording with an exclusive recorder-lane path. It validates the actual
+captured device, private deferred context and recording thread before creating its private pipeline. Tile keys
+are a sorted exact union; unsupported extents, duplicate keys and unrepresentable geometry refuse before mutation.
+Captured buffers and their cached charges return to the epoch even on failure. The 80-byte constant layout adds
+a disjoint dispatch origin/end; indices and floating positions remain on the original complete tile. Every pixel
+processes all segments in their original order. Dynamic segment maps and full compute bindings belong to each
+command list. CPU composition/readback and useful owner publication remain outside recording. The caller holds
+complete reservations, joins the producer and acknowledges every original use before borrowing or resetting
+the epoch. This API alone does not activate application Append/Up or establish a timing bound.
+
 The worker completion API supplements the synchronous reference API above. `DetachCoverageForFinish` transfers
 exclusive CPU draft ownership and removes its graphics pointer. It leaves the borrowed engine's density alive;
 the owner must retain each final GPU copy source before calling `EndStroke`. A second detach, pointer Append,
@@ -171,6 +181,24 @@ solve and output. Cancellation during output can leave a private prefix; callers
 This foundation does not activate asynchronous application mouse-up. The application's existing pointer update
 and compatibility finish remain governed by the sections above until the original-ticket host path, complete
 admission, final preview/residency and G1 gates qualify together.
+
+The experimental application final-stroke parent keeps the admitted physical gesture's host ordinal and one
+`Stroke` scheduler record through exclusive draft capture, final coverage, mapped-buffer conversion, healing,
+sparse document/history preparation, row preparation and private display recording. Descriptor admission and
+fresh reservation growth precede the corresponding captures/allocations. WARP retains the compute engine;
+only a stroke opened with the CPU fallback uses CPU coverage. Borrowed engines never cross to workers.
+
+Publication must preflight the exact current edit/history authority, original display slot, device/context,
+GPU reservation and complete prepared final document before changing any visible root. History/document,
+prepared rows and display install in one nonreentrant owner boundary. Notifications follow that boundary.
+The same original CPU charge survives through shared display/row owners and weak control blocks; GPU charges
+survive each original recorder/copy/frame acknowledgement. Failed or cancelled drafts never publish a prefix.
+Joined shutdown first joins the actual producers, detaches mapped/seed/controller borrows on the owner, then
+destroys complete CPU/epoch/context owners on workers before releasing their admissions.
+
+`Application.Tests.StrokeFinish.cpp` exercises this opted-in path through the real hidden application. Normal
+startup is still disabled pending asynchronous Down/Append/Up integration, full fault/driver qualification
+and the G1 measurements. Its structural tests cannot establish a performance pass.
 
 Shift-click paints a straight line from the end of the previous stroke on the same layer or mask
 (`ShiftLineStart`); switching tools or layers, or a stroke on another target, forgets that point.
@@ -319,7 +347,7 @@ a stroke. `--screenshot ... --demo brush` writes `docs/screenshots/brush-96.png`
 
 ### Application opening
 
-Ordinary Paint/Eraser, Spot Healing and Blur presses capture target, mask, kind, healing mode and brush settings at event time. After descriptor and complete CPU admission, a worker constructs the private draft, selection coverage and Blur sample. The owner attaches the empty coverage engine only after exact source, selection, target and history checks; the original worker stage retires the captured source before replay. The live draft owns the transferred reservation until its final CPU reader retires. Delayed replay cannot substitute newer palette or tip settings. Zoom and deferred Space pan remain view-only while opening work is pending. Clone source transfer and mouse-up finalization are tracked separately in the active P1 plan; opening alone establishes no finalization or G1 result.
+Ordinary Paint/Eraser, Spot Healing, Blur and Clone presses capture target, mask, kind, healing mode and brush settings at event time. After descriptor and complete CPU admission, a worker constructs the private draft, selection coverage and Blur sample. Clone first acknowledges its admitted All Layers readback or Single Layer sample, then admits and captures that immutable sample and the press's Clone offset into the same ordered opening continuation. Its opening declaration includes the sample's complete cached retirement bound; Clone on masks, absent or incorrectly sized/formatted samples refuse before capture. The owner attaches the empty coverage engine only after exact source, selection, target and history checks; the original worker stage retires the captured source before replay. The live draft owns the transferred reservation until its final CPU reader retires. Delayed replay cannot substitute newer palette, tip or Clone-source settings. Zoom and deferred Space pan remain view-only while opening work is pending. Pointer samples and mouse-up finalization are tracked separately in the active P1 plan; opening alone establishes no finalization or G1 result.
 
 For an admitted ordinary brush stream, Escape while physical sampling remains open cancels its draft. Accepted
 Up, capture loss and overflow loss seal the recorded prefix: subsequent Escape MUST preserve its original
@@ -328,3 +356,55 @@ queued behind an older opacity or sampling request. Undo/Redo after sealing ente
 stream and observes the stroke's acknowledged history at dequeue. Explicit discard, document teardown and
 shutdown retain their cancellation and joined-retirement paths. No keyboard callback waits for an opening,
 coverage, commit or retirement acknowledgement.
+
+Overflow loss commits only the accepted prefix and returns exactly `ERROR_NOT_ENOUGH_QUOTA` in its original
+host receipt, including through the experimental final parent. The refused point and a later Up cannot extend
+that prefix. A prior finalization failure, cancellation or stale authority keeps its own terminal outcome.
+
+### Exclusive pointer sample preparation
+
+`PlanSampleMemory` reads cached ownership and at most three previous samples. The unchanged centripetal
+segment's cubic convex hull plus provisional tail and tip reach bound the new tile region before any
+sample/key/pixel allocation. A monotonically growing bounding tile rectangle excludes the untouched source;
+revisiting tiles does not accumulate a new persistent charge per event. Declare the original source graph,
+complete persistent tile/density/coverage/metadata owners and simultaneous curve/key/compose copies.
+Actual epoch/pipeline/command shadows, staging/maps, immutable preview/display and rows remain caller charges.
+Unknown cached storage, overflow, nonfinite input or unsupported projected geometry/pixel limits refuse.
+
+A live retained opening lease grows only on its serialized owner, through a fresh physical/commit query,
+before new tile allocations. It keeps its original slot, generation and final reader acknowledgement.
+`DetachCoverageForSample` transfers the draft exclusively and removes its engine borrow without ending or
+resetting density. No live session or graphics context moves to the CPU worker. While detached, synchronous
+Append/Flush/final handoff and PaintSnapshot refuse. A duplicate accepted point advances its sequence but
+prepares no segments/tiles/pixels; the host may acknowledge that no-op without useful GPU work.
+
+Worker preparation uses the unchanged settled Catmull-Rom pieces and straight provisional tail, including
+previous tail tiles in the exact ordered changed set. CPU permanent density uses the existing scalar kernel.
+The compute path requires one exact uint coverage acknowledgement per required key/dimension, rejects
+missing/duplicate/foreign delivery and clamps values to 255. Complete sequence/key/grid/buffer validation
+precedes tile composition. Failed or cancelled preparation remains permanently unpublishable; no private
+prefix can become a snapshot. Temporary metadata is released on the worker.
+
+Only after actual worker/recorder/map/copy joins may the original owner restore the GPU epoch and reattach
+the exact engine to the completed CPU draft. Neither operation calls BeginStroke/EndStroke or constructs
+new pixel buffers. `RestoreStrokeEpoch` refuses a foreign thread/device, removed device, nonempty live engine
+or already returned epoch. Empty directory/device owners still retire on a worker under the parent charge.
+`StrokeSampleInput` retains immutable document/history/selection/target authority. The session exposes only
+its opening scalar while the private draft runs; Undo authority is invalid then. A current complete apply
+restores the draft and Shift-line endpoint without committing document/history. Cancel, replacement, restore,
+changed source/selection/history/target and moved/consumed inputs refuse stale publication.
+Successful apply consumes the input's mutable draft reference on the owner. The remaining immutable
+document/history wrappers may then retire on a worker; later owner cancellation must end the engine exactly
+once on that owner, without waiting for or transferring an engine-owning last reference to the input's worker.
+Draft borrows from the consumed input are invalid after apply.
+
+These APIs are P1 prerequisites. Actual application Append/Up/preview/display consumers, complete peak
+admission, fault scenarios and measured G1 still require qualification. Direct scalar APIs/goldens retain
+their existing behavior.
+
+The experimental final parent quarantines a healthy-device retirement-event refusal without polling or refund.
+Only a changed queue device generation or completion route grants one new offer on its held original context;
+repeated unchanged binding notifications do not retry. Another refusal returns to dormant quarantine and keeps
+the first terminal cause. Cancellation acknowledges its original skipped worker stage but retains quarantined
+CPU/GPU owners until original event recovery or joined shutdown. Cancellation wins the unpublished receipt
+after that acknowledgement. Device replacement itself never establishes GPU completion or successful image work.

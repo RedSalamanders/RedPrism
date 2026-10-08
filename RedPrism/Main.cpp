@@ -1,3 +1,4 @@
+#include "Application.Tests.RowPublication.h"
 #include "Application.h"
 #include "CommandLine.h"
 #include "CrashDumps.h"
@@ -305,6 +306,15 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         if (const int failed = Application::RunStandaloneLeaseShutdownSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneLiveShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCommittedDisplaySelfTest\n");
+        if (const int failed = Application::RunStandaloneCommittedDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunPreparedRowPublicationTests\n");
+        if (const int failed = RunPreparedRowPublicationTests(); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeFinishSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeFinishSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
             return failed;

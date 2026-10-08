@@ -8,7 +8,8 @@
 #include <memory>
 
 // This boundary deliberately has no Windows types. Jobs own immutable input and result values. Worker bodies
-// never access a session, a window, chrome or a graphics context; only UI callbacks may touch those owners.
+// never access a session, a window, chrome or an immediate graphics context. The explicitly enabled recording
+// lane may own one private deferred context under RedPrism's recording contract; no graphics type crosses here.
 enum class JobClass : unsigned int
 {
     InteractivePreview,
@@ -34,6 +35,15 @@ struct JobResult final
     std::int32_t error = 0; // HRESULT when status is Failed
 };
 
+// An explicitly enabled single recorder may wait for bounded command transport capacity. It shares job
+// records, admission, sequencing and terminal acknowledgement; normal CPU execution remains independent.
+enum class JobExecutionLane : unsigned int
+{
+    Compute,
+    GpuRecording,
+    Count
+};
+
 struct JobOptions final
 {
     JobClass kind = JobClass::Background;
@@ -53,6 +63,8 @@ struct JobOptions final
     // Other jobs cannot consume it. Successful final RetainMemory transfers the original reservation into
     // that slot; failure/cancellation/untransferred completion/Close returns it. It charges no extra bytes.
     bool reserveRetainedMemory = false;
+    // Explicit opt-in; never run a capacity-blocked command recorder on the ordinary kernel workers.
+    JobExecutionLane executionLane = JobExecutionLane::Compute;
 };
 
 struct JobTicket final
@@ -236,6 +248,9 @@ class JobScheduler final
 
     [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {},
                                           MemorySource memory = {}) noexcept;
+    // Owner startup only, outside callbacks and before any admitted record. Failure leaves recording disabled.
+    // No second scheduler or memory budget. GPU APIs remain private to the opted-in RedPrism recorder job.
+    [[nodiscard]] std::int32_t EnableGpuRecordingLane() noexcept;
     // Explicitly bind large last-reference releases on this owner thread to this scheduler. Only one scheduler
     // per owner may bind. Close retains the sink through owner cleanup after join, then acknowledges final
     // worker retirement before teardown; a full job queue cannot refuse a release.
@@ -250,6 +265,24 @@ class JobScheduler final
     // Same exact successful-callback transfer and same 64-slot capacity; no new query/allocation/admission.
     // The lease itself is unique, while its containing immutable graph may have shared foreign readers.
     [[nodiscard]] std::int32_t RetainMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
+    // Explicit immutable publication boundary in the exact successful DeferCompletion callback only.
+    // Requires descriptor-time retained-slot reservation and deferred retirement. Useful worker/recorder/map
+    // users must have joined; only allocation-free original-record retirement may follow. Transfer the WHOLE
+    // original admission before exposing any shared rows/display/root. A preallocated shared graph contains
+    // this unique lease and every still-readable published/retiring CPU owner holds that graph until destruction.
+    // No fresh query/allocation/admission or early refund. Failure preserves the record/output. This call
+    // supplies accounting, not a publication authority, worker acknowledgement, GPU completion or history permit.
+    [[nodiscard]] std::int32_t RetainPublicationMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
+    // Owner-only identity of the live shared endpoint. A closed or reconstructed scheduler cannot own
+    // an older lease, even if its wrapper address and first job slot/generation have been reused.
+    // This query performs no admission, transfer or publication authorization.
+    [[nodiscard]] bool OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept;
+    // Owner-only monotonic growth for a live unique lease, while its containing graph is exclusively idle.
+    // Samples current physical/commit memory before new graph allocations. The original retained slot,
+    // generation and last-reader acknowledgement stay unchanged; no replacement ticket or early refund.
+    // No-op growth queries nothing. A failed sample/admission/revalidation changes no charge or lease bytes.
+    [[nodiscard]] std::int32_t IncreaseRetainedReservation(SharedRetainedMemoryLease& retained,
+                                                           std::uint64_t totalBytes) noexcept;
     // Owner only, once the borrowed cache is detached and its whole graph is queued for worker retirement.
     // The release sink's in-flight bytes then protect admission until destruction is acknowledged. Close's
     // owner hook performs this cleanup before final worker retirement; Close invalidates residual tickets.
@@ -266,6 +299,15 @@ class JobScheduler final
     // Only an exact suspended ticket can resume. Cancellation is acknowledged by a skipped worker stage and
     // one final Cancelled callback. No new record, reservation or sequence is allocated. Duplicate/stale fails.
     [[nodiscard]] bool Resume(JobTicket ticket) noexcept;
+    // An acknowledged suspended stage may change only its execution lane. The original record, class/key
+    // FIFO, cancellation, retained slot and complete reservation remain unchanged. Invalid/disabled lanes
+    // leave the stage suspended; no new descriptor, queue or reservation is created.
+    [[nodiscard]] bool Resume(JobTicket ticket, JobExecutionLane lane) noexcept;
+    // Owner-only on the exact acknowledged suspended record, before a later phase creates its new owners.
+    // Grow the complete peak from a fresh memory snapshot; never shrink, partially reserve, queue or wait.
+    // Refusal preserves the original stage/ticket/charge. Cancellation refuses useful growth. A successful
+    // later Resume borrows this new total and final retention/retirement keeps the same complete charge.
+    [[nodiscard]] std::int32_t IncreaseReservation(JobTicket ticket, std::uint64_t totalBytes) noexcept;
     [[nodiscard]] bool RegisterOwnerWork(OwnerWorkPump& source) noexcept;
     [[nodiscard]] bool UnregisterOwnerWork(OwnerWorkPump& source) noexcept;
     // Thread-safe publication/wake only. External producers must be joined before Close destroys the event.
@@ -316,11 +358,18 @@ class JobScheduler final
     // Owner-only diagnostic snapshot. It consumes no readiness and never pumps or waits.
     [[nodiscard]] UiReadiness UiReadinessForTest() const noexcept;
     [[nodiscard]] bool InUiCallback() const noexcept;
+    // Owner only. Exact successful joined job acknowledgement, during DeferRetirement/DeferCompletion.
+    // Progress, final Completed, UI actions, another ticket and Close confer no source-capture authority.
+    [[nodiscard]] bool InAcknowledgedJobCallback(JobTicket original) const noexcept;
     [[nodiscard]] void* WakeHandle() const noexcept;
 
     using Apply = void (*)(void*, Job&, JobResult) noexcept;
 
   private:
+    [[nodiscard]] std::int32_t RetainMemoryImpl(JobTicket job, RetainedMemoryTicket& retained,
+                                                bool publication) noexcept;
+    [[nodiscard]] std::int32_t RetainSharedMemoryImpl(JobTicket job, SharedRetainedMemoryLease& retained,
+                                                      bool publication) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
     friend std::size_t DrainCompletions(JobScheduler&, Apply, void*) noexcept;

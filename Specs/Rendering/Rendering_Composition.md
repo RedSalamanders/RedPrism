@@ -1,7 +1,7 @@
 # Canvas composition
 
 Status: current normative product contract
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-07
 Owner: `RedPrism/CanvasRenderer.*`, `RedPrism/CanvasViewport.h`, HLSL under `RedPrism/Shaders/`, the frame loop's
 failure handling in `RedPrism/Renderer.*` and `Application::RenderFrame`
 
@@ -324,6 +324,48 @@ and G1 are not yet established.
 
 ## Failures
 
+### Bounded private recording and original command completion
+
+`GpuCommandStream` transports two immutable published command lists between one recording producer and its
+original immediate-context owner. The producer's incoming command/private context is a third shadow owner;
+the parent's complete CPU/GPU admission MUST include all three plus source, device, result and retirement peaks.
+The descriptor remains on one explicitly opted-in scheduler record. Transport metadata is not admission.
+Only exact original job/device/ordinal/slot leases may execute or acknowledge. Full capacity waits on events
+on the dedicated recorder; cancellation/shutdown wake that wait without releasing executing commands.
+
+`GpuRecordingCommands` requires successful actual DriverConcurrentCreates and a private deferred Context1.
+It records upload bands at most 1 MiB, clear/copy/draw windows at most 512², and eager linear-clamp mip draws,
+checkpointing and fully rebinding state after FinishCommandList(FALSE). UpdateSubresource1 preserves software
+command-list source offsets on WARP. Parent-owned initialized source spans remain alive through recording.
+Supported P1 formats are R8, premultiplied BGRA8 and RGBA32F lookup inputs. Invalid device/layout/pitch/box
+refuses the preparation. Cancellation checks occur between bounded commands and resource creation calls.
+These are command-size bounds; opaque driver memory and elapsed time still require admission and measurement.
+
+`GpuCommandPump` is one stable startup-registered owner source with two fixed borrowers. It executes at most
+one batch per owner pump, outside frame recording, using the queue-captured original context. It first checks
+completion capacity and the command list's actual device against the captured device before execution. A foreign
+device refuses without Execute or an acknowledgement, even when numeric queue generations match. Its original
+producer and full charge remain until joined worker retirement. The actual original GPU callback (including
+retired E_ABORT), confirmed original-device
+removal, or joined shutdown acknowledges a submitted use. Failure to enqueue/signal and requested cancellation
+never acknowledge it. A post-execute failure stops the source and retains the exact command/context/charge.
+One bounded captured recovery barrier may resolve it. Failed healthy recovery stays dormant and quarantined;
+an actual device change permits one further attempt, otherwise joined shutdown resolves destruction ownership.
+No timer, polling or unchanged self-rearm is permitted. Failure is reported once per source.
+
+Normal detachment requires recorder callback join and all submitted GPU uses acknowledged. Captured device/context
+references transfer into an empty worker-retired owner; the UI never silently drops their last reference.
+Shutdown stops future use, joins command/wait producers, acknowledges uncertain slots for destruction only,
+then retires complete CPU/graphics graphs on the joined worker before returning admission. Ordinary owner
+callbacks and useful pixel publication remain suppressed in that shutdown phase. Receiver callbacks cannot
+detach/destroy their own receiver or recursively pump/close. Stable pump registration ends after every borrower.
+
+Canonical tests use independent exact lease/state expectations, real WARP completion callbacks, same-record
+reservation/FIFO and actual Execute followed by injected completion refusals. A recovery success uses the real
+captured barrier; a healthy failed recovery has no acknowledgement before joined shutdown. This mechanism does
+not yet activate full display/stroke graphs. Complete supported-image admission, immutable published display,
+fallback, source reuse, final layer rows and actual P1/G1 timings remain required before application activation.
+
 ### Dormant bounded upload leaf
 
 `GpuUploadQueue` transports admitted base-level chunks through owner WRITE/DO_NOT_WAIT Map, worker-only row
@@ -461,3 +503,51 @@ partial output and deferred worker retirement. This description cannot approve d
 separate preview/brush/utility/pipeline graph and its CPU/device metadata. Original conservative two-domain
 RasterResidencyAdmission/Prepare remains available with its original contract. This dormant description alone
 does not qualify live display integration, oversized mapping, complete resource creation/fallback or G1.
+
+## Opt-in recorded committed display
+
+`CommittedDisplayController` has two fixed owner cells: one published cache and an admitted replacement or
+retiring graph. This route is enabled only by the hidden application qualification fixture. Normal application
+display, pending previews, strokes and utilities retain their existing consumers until their separate admission
+and scenario gates close. Helper integration does not qualify H4/P1 or a first-display latency.
+
+The original scheduler record admits CPU source/manifest/scratch before capture, plans resources on a compute
+worker, then grows its complete reservation before graph containers, command shadows and software textures.
+The container declaration is 4,096 bytes per current/seed layer plus eight MiB fixed scratch; its production peak
+still requires measurement. Software logical textures are additionally charged to physical/commit admission.
+The complete GPU description requires a fresh successful actual DXGI segment query, including current usage,
+old reservations and headroom. Unknown/zero budgets refuse; no guessed segment admits. Hardware selects local;
+software selects a positive available nonlocal budget, otherwise local.
+
+`RecordedDisplayGraph` owns its immutable source, composition resources, recording policy and private context.
+Preparation requires actual `DriverConcurrentCreates`; command batches remain bounded through the original
+two-slot transport. Every batch executes on the captured original context and acknowledges its actual GPU use.
+The recording callback must join before transport retirement, publication and seed retirement. Mips are eager
+before sealing. Published graphs admit only owner blits on their actual device/context; pan/zoom does no Compose
+or mip generation. A blit installs the full target scissor after tiled recording. The renderer's opt-in route
+never falls back to owner composition while a replacement waits or refuses.
+
+Publication transfers the preclaimed CPU retention slot before pointer adoption. A different document/device
+or a cleared document excludes old pixels immediately, even while an unfinished replacement holds a seed borrow.
+Same-document revisions can retain the previous complete display until replacement. Retiring a cache first
+excludes future frames, then records an original-context barrier after its last blit. Failed healthy signals
+remain charged and dormant; an actual device change arms one recovery attempt. Actual device removal permits
+destruction only. Graph/source/context destruction runs on the existing noncancellable worker release sink;
+both CPU and GPU charges survive its fixed-cell acknowledgement.
+
+Shutdown stops new uses, joins actual producers, acknowledges submitted original uses for destruction, detaches
+borrowed owner routes and retires roots on the final MTA worker before refund. An initialized source whose
+recorder never started has a separate empty-join path: stopped, no producer thread, no command slot owner and
+no prior finish/retirement authority. Only the actual post-join owner hook may use it; it publishes cancelled
+destruction and supplies no successful pixels or useful receiver callback.
+### Opt-in committed-display visibility and startup
+
+The opt-in application route binds the actual device/context queue before its first immutable source request.
+An unavailable initial context cannot count as a displayed or successfully prepared graph. The normal startup
+route remains unchanged until the complete pending-edit, stroke, utility and row consumers are qualified.
+
+Hidden, minimized, display-off or occluded state immediately removes the published display pointer and
+cancels useful graph preparation. Existing graphs keep their original reservations through real command and
+last-use acknowledgements, producer joins and worker destruction. Repeated requests while suspended admit
+no replacement and create no ready loop. One actual visible-state transition requests the current document;
+there is no synchronous composition fallback. A qualification fixture may explicitly enable hidden rendering.

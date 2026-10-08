@@ -17,6 +17,7 @@
 
 class ChromeHost;
 class CanvasRenderer;
+class RecordedDisplayGraph;
 struct CanvasViewport;
 struct CanvasDocument;
 
@@ -60,7 +61,7 @@ class Renderer final
     // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
     // (CanvasFailure reports it), so the window keeps working (Decision D1).
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                   const CanvasDocument* document) noexcept;
+                   const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay = nullptr) noexcept;
     // The canvas stage's failure in the last Render, S_OK when the canvas drew.
     [[nodiscard]] HRESULT CanvasFailure() const noexcept
     {

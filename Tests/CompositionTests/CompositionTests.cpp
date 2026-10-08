@@ -1,4 +1,4 @@
-﻿#include "../Support/DocumentFixture.h"
+#include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "Adjust.h"
 #include "BrushCompute.h"
@@ -8,10 +8,19 @@
 #include "Composition.Tests.BrushDensityClear.h"
 #include "Composition.Tests.BrushEpoch.h"
 #include "Composition.Tests.CapturedCompletion.h"
+#include "Composition.Tests.CommittedDisplay.h"
 #include "Composition.Tests.DetachedEpoch.h"
+#include "Composition.Tests.DisplayRebind.h"
+#include "Composition.Tests.DisplayVisibility.h"
+#include "Composition.Tests.EmptyJoinedShutdown.h"
 #include "Composition.Tests.GpuBufferReadback.h"
 #include "Composition.Tests.GpuBufferSlots.h"
+#include "Composition.Tests.GpuCommandPump.h"
+#include "Composition.Tests.GpuCommandStream.h"
 #include "Composition.Tests.GpuCompletion.h"
+#include "Composition.Tests.PublicationParent.h"
+#include "Composition.Tests.RecordedBrush.h"
+#include "Composition.Tests.RecordedDisplayParent.h"
 #include "Composition.Tests.VideoMemorySnapshot.h"
 #include "CompositionStageTimingTests.h"
 #include "Document.h"
@@ -2102,6 +2111,15 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDetachedEpochTests();
     gFailures += RunGpuCompletionBarrierTests();
     gFailures += RunCapturedCompletionContextTests();
+    gFailures += RunGpuCommandStreamTests();
+    gFailures += RunGpuCommandPumpTests();
+    gFailures += RunRecordedDisplayParentTests();
+    gFailures += RunCommittedDisplayControllerTests();
+    gFailures += RunPublicationParentTests();
+    gFailures += RunCommittedDisplayVisibilityTests();
+    gFailures += RunCommittedDisplayDeviceRebindTests();
+    gFailures += RunRecordedBrushCoverageTests();
+    gFailures += RunEmptyJoinedShutdownTests();
     gFailures += RunVideoMemorySnapshotTests();
     gFailures += RunBrushDensityClearTests();
     gFailures += RunGpuBufferSlotsTests();

@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "../Tests/Support/DocumentFixture.h"
+#include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
@@ -252,13 +253,17 @@ int Application::RunCloneLayerSourceSelfTest() noexcept
 
             const auto receipt = owner._canvasBrushReceipt.Read();
             if (message.wParam == 2)
+                return; // The source lease is ready; the opening worker has not necessarily completed.
+            if (message.wParam == 3)
             {
+                const auto* draft = owner._session.PendingBrush();
+                const auto openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
                 state.leaseAdopted =
                     state.mode.liveLease && owner._canvasCloneSample && owner._canvasCloneSample->lease &&
                     owner._canvasCloneSample->lease.Bytes() == state.reservation &&
-                    owner._canvasCloneSample->opening == state.opening &&
-                    owner._jobs.ReservedMemoryBytes() == state.reservation && !owner._utilityTicket &&
-                    !owner._utilityStamp && owner._session.PendingBrush() && receipt.outcome == HostOutcome::Pending &&
+                    owner._canvasCloneSample->opening == state.opening && openingBytes != 0 &&
+                    owner._jobs.ReservedMemoryBytes() == state.reservation + openingBytes && !owner._utilityTicket &&
+                    !owner._utilityStamp && draft && receipt.outcome == HostOutcome::Pending &&
                     owner._session.history.CurrentRevision() == state.revision;
                 const auto hole = owner._chrome->HolePixels();
                 const auto view = owner._viewport.ViewFromDocument({12, 6}, owner.DocumentSize());

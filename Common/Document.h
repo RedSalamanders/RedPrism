@@ -1402,6 +1402,7 @@ struct StrokeOpeningOptions;
 struct StrokeOpeningResult;
 struct StrokeOpeningObserver;
 class StrokeFinishInput;
+class StrokeSampleInput;
 class PreparedStrokeFinish;
 struct StrokeFinishResult;
 struct StrokeFinishObserver;
@@ -2919,6 +2920,12 @@ class DocumentSession
     // The accepted first/next sample also records its exact layer/mask endpoint for later Shift lines.
     // A worker-prepared opening does not fabricate a pointer sample during publication.
     void ContinueBrush(Vec2 point);
+    // Exclusive sample capture after admission. Only scalar opening metadata remains visible while it runs.
+    [[nodiscard]] std::optional<StrokeSampleInput> TakeStrokeSampleInput(std::uint64_t opening, Vec2 point,
+                                                                         BrushCoverageEngine*& ownerEngine) noexcept;
+    [[nodiscard]] bool IsStrokeSampleCurrent(const StrokeSampleInput& input) const noexcept;
+    [[nodiscard]] bool ApplyStrokeSampleIfCurrent(StrokeSampleInput& input, BrushCoverageEngine* ownerEngine) noexcept;
+    [[nodiscard]] bool DiscardStrokeSampleIfCurrent(std::uint64_t opening) noexcept;
     // Replaces the provisional tail by the final curve and commits the tiles as one entry (`Brush Stroke`,
     // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.
     void FinishBrush();
@@ -2938,7 +2945,8 @@ class DocumentSession
     }
     [[nodiscard]] std::optional<std::uint64_t> PendingBrushOpening() const noexcept
     {
-        return _brush ? std::optional(_brushOpening) : _brushFinishingOpening;
+        return _brush ? std::optional(_brushOpening)
+                      : (_brushUpdatingOpening ? _brushUpdatingOpening : _brushFinishingOpening);
     }
     // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
     [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept
@@ -3215,6 +3223,7 @@ class DocumentSession
     std::shared_ptr<BrushStroke> _brush;
     std::uint64_t _brushOpening = 0;
     std::optional<std::uint64_t> _brushFinishingOpening;
+    std::optional<std::uint64_t> _brushUpdatingOpening;
     BrushCoverageEngine* _brushEngine = nullptr;
     struct LastBrushPoint
     {

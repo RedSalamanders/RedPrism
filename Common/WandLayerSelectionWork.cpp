@@ -50,6 +50,42 @@ class WandByteSum final
 };
 } // namespace
 
+bool TryAddWandLayerSelectionBytes(std::uint64_t left, std::uint64_t right, std::uint64_t& result) noexcept
+{
+    const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (right > maximum - left)
+        return false;
+    result = left + right;
+    return true;
+}
+
+WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerSelectionMemoryPlan& plan,
+                                                                SelectionMode mode, bool hasCurrentSelection,
+                                                                std::uint64_t& requiredBytes) noexcept
+{
+    requiredBytes = 0;
+    if (mode > SelectionMode::Subtract)
+        return WandLayerSelectionAdmission::InvalidMode;
+    if (plan.captureHistoryBytes == 0 || plan.preparationBytes < plan.captureHistoryBytes ||
+        plan.retirementBytes == 0 || plan.reservationBytes == 0)
+        return WandLayerSelectionAdmission::IncompletePlan;
+
+    std::uint64_t completeReservation = 0;
+    if (!TryAddWandLayerSelectionBytes(plan.preparationBytes, plan.retirementBytes, completeReservation))
+        return WandLayerSelectionAdmission::Overflow;
+    if (completeReservation != plan.reservationBytes)
+        return WandLayerSelectionAdmission::IncompletePlan;
+
+    // This plan accounts New-mode flood/trace, document/history capture and publication/retirement. A
+    // selection boolean can allocate Clipper intersections and output whose capacities are not bounded by
+    // the trace-edge ceiling. Refuse before the caller captures its document until Clipper has a proved cap.
+    if (mode == SelectionMode::Add || (mode == SelectionMode::Subtract && hasCurrentSelection))
+        return WandLayerSelectionAdmission::UnknownClipperWorkspace;
+
+    requiredBytes = completeReservation;
+    return WandLayerSelectionAdmission::Ready;
+}
+
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandLayerSelectionInput(Vec2 point,
                                                                                        WandSettings settings,
                                                                                        bool antialiased,

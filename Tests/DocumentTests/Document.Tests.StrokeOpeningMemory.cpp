@@ -376,6 +376,63 @@ void OwnerFinalDeferredRetirement()
     else
         Expect(false, "deferred.owner-final-release-queues-whole-declared-node-for-worker-destruction");
 }
+int RunCloneOpeningMemoryTests()
+{
+    int failures = 0;
+    int facts = 0;
+    const auto expect = [&](bool condition, const char* fact) noexcept
+    {
+        ++facts;
+        std::printf("%s clone-opening-memory.%s\n", condition ? "PASS" : "FAIL", fact);
+        failures += condition ? 0 : 1;
+    };
+    auto layer = BlankLayer(L"Clone opening memory", 8, 8);
+    layer.asset = RasterAsset{SmallBgra(), {}, layer.name};
+    CanvasDocument source = DocumentWith(layer, 8, 8);
+    const Raster sample = SmallBgra(source.width, source.height);
+    const auto sampleBytes = sample.RetirementMemoryBytes();
+    const auto paint = StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings, BrushKind::Paint);
+    const auto clone =
+        StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings, BrushKind::Clone, &sample);
+    expect(sample.HasStorage() && sample.Format() == RasterFormat::Bgra8888 && sampleBytes != 0 && paint != 0 &&
+               clone > paint && clone - paint == sampleBytes,
+           "valid-clone-bound-is-paint-bound-plus-exact-cached-sample-retention");
+    expect(StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings, BrushKind::Clone) == 0,
+           "null-clone-sample-is-exact-zero");
+    const Raster gray = SmallGray(source.width, source.height);
+    expect(gray.HasStorage() && gray.Format() == RasterFormat::Gray8 &&
+               StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings, BrushKind::Clone, &gray) ==
+                   0,
+           "gray-clone-sample-is-exact-zero");
+    const Raster wrongWidth = SmallBgra(source.width - 1, source.height);
+    const Raster wrongHeight = SmallBgra(source.width, source.height - 1);
+    expect(wrongWidth.HasStorage() && StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings,
+                                                               BrushKind::Clone, &wrongWidth) == 0,
+           "wrong-width-clone-sample-is-exact-zero");
+    expect(wrongHeight.HasStorage() && StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings,
+                                                                BrushKind::Clone, &wrongHeight) == 0,
+           "wrong-height-clone-sample-is-exact-zero");
+    const Raster empty;
+    expect(!empty.HasStorage() && StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings,
+                                                           BrushKind::Clone, &empty) == 0,
+           "empty-clone-sample-is-exact-zero");
+    auto maskedLayer = BlankLayer(L"Clone mask opening memory", 8, 8);
+    maskedLayer.asset = RasterAsset{SmallBgra(), {}, maskedLayer.name};
+    LayerMask mask;
+    mask.asset = RasterAsset{SmallGray(), {}, L"Clone mask"};
+    mask.enabled = true;
+    maskedLayer.mask = std::move(mask);
+    CanvasDocument maskedSource = DocumentWith(std::move(maskedLayer), 8, 8);
+    expect(StrokeOpeningMemoryBytes(maskedSource, maskedSource.layers.front(), true, 64, kSettings, BrushKind::Clone,
+                                    &sample) == 0,
+           "clone-mask-target-is-exact-zero");
+    expect(StrokeOpeningMemoryBytes(source, source.layers.front(), false, 64, kSettings, BrushKind::Paint, &sample) ==
+               0,
+           "non-clone-kind-with-supplied-clone-sample-is-exact-zero");
+    std::printf("%s clone-opening-memory.summary facts=%d failures=%d\n", failures == 0 ? "PASS" : "FAIL", facts,
+                failures);
+    return failures;
+}
 } // namespace
 
 int RunStrokeOpeningMemoryTests()
@@ -387,5 +444,5 @@ int RunStrokeOpeningMemoryTests()
     OwnerFinalDeferredRetirement();
     SchedulerReservationMovesIntoPreparedOpening();
     std::printf("%s stroke-opening-memory.summary facts=30 failures=%d\n", gFailures == 0 ? "PASS" : "FAIL", gFailures);
-    return gFailures;
+    return gFailures + RunCloneOpeningMemoryTests();
 }

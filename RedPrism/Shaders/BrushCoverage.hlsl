@@ -6,10 +6,11 @@
 
 cbuffer BrushUniforms : register(b0)
 {
-    float4 mapping;  // a, b, c, d of the grid-to-document map
-    float4 geometry; // document position of the tile's top-left corner, radius, hardness
-    float4 canvas;   // width, height, antialias width, deposition spacing
-    uint4 counts;    // tile width, tile height, settled segment count, total segment count
+    float4 mapping;       // a, b, c, d of the grid-to-document map
+    float4 geometry;      // document position of the tile's top-left corner, radius, hardness
+    float4 canvas;        // width, height, antialias width, deposition spacing
+    uint4 counts;         // tile width, tile height, settled segment count, total segment count
+    uint4 dispatchBounds; // region origin and exclusive end, on the original full tile
 };
 
 StructuredBuffer<float4> g_segments : register(t0);
@@ -79,13 +80,12 @@ float SegmentDensity(float2 p, float4 segment)
                 const float nodes[4] = {0.1834346425, 0.5255324099, 0.7966664774, 0.9602898565};
                 const float weights[4] = {0.3626837834, 0.3137066459, 0.2223810345, 0.1012285363};
                 float integral = 0.0;
-                [unroll]
-                for (uint i = 0; i < 4; ++i)
+                [unroll] for (uint i = 0; i < 4; ++i)
                 {
                     float a = midpoint - halfLength * nodes[i] - projection;
                     float b = midpoint + halfLength * nodes[i] - projection;
-                    integral += weights[i] * (TipDensity(perpendicularSquared + a * a) +
-                                              TipDensity(perpendicularSquared + b * b));
+                    integral += weights[i] *
+                                (TipDensity(perpendicularSquared + a * a) + TipDensity(perpendicularSquared + b * b));
                 }
                 result = integral * halfLength / canvas.w;
             }
@@ -94,10 +94,10 @@ float SegmentDensity(float2 p, float4 segment)
     return result;
 }
 
-[numthreads(16, 16, 1)]
-void BrushMain(uint3 id : SV_DispatchThreadID)
+[numthreads(16, 16, 1)] void BrushMain(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= counts.x || id.y >= counts.y)
+    id.xy += dispatchBounds.xy;
+    if (id.x >= dispatchBounds.z || id.y >= dispatchBounds.w || id.x >= counts.x || id.y >= counts.y)
     {
         return;
     }
@@ -114,13 +114,11 @@ void BrushMain(uint3 id : SV_DispatchThreadID)
         // Hard tips already have a solid interior: keep the pixel-edge antialiasing.
         float settled = kFar;
         float tail = kFar;
-        [loop]
-        for (uint i = 0; i < counts.z; ++i)
+        [loop] for (uint i = 0; i < counts.z; ++i)
         {
             settled = min(settled, SegmentDistanceSquared(p, g_segments[i]));
         }
-        [loop]
-        for (uint j = counts.z; j < counts.w; ++j)
+        [loop] for (uint j = counts.z; j < counts.w; ++j)
         {
             tail = min(tail, SegmentDistanceSquared(p, g_segments[j]));
         }
@@ -132,13 +130,11 @@ void BrushMain(uint3 id : SV_DispatchThreadID)
     {
         float value = g_permanent[index];
         float tail = 0.0;
-        [loop]
-        for (uint i = 0; i < counts.z; ++i)
+        [loop] for (uint i = 0; i < counts.z; ++i)
         {
             value += SegmentDensity(p, g_segments[i]);
         }
-        [loop]
-        for (uint j = counts.z; j < counts.w; ++j)
+        [loop] for (uint j = counts.z; j < counts.w; ++j)
         {
             tail += SegmentDensity(p, g_segments[j]);
         }

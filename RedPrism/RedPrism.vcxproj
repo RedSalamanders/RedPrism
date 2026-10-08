@@ -214,6 +214,8 @@
     <ClCompile Include="..\Common\Document.cpp" />
     <ClCompile Include="..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\Common\SharedRetainedMemory.cpp" />
+    <ClCompile Include="..\Common\SharedPublicationMemory.cpp" />
+    <ClInclude Include="..\Common\SharedPublicationMemory.h" />
     <ClCompile Include="..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\Common\UiTiming.cpp" />
     <ClCompile Include="..\Common\BenchmarkMachine.cpp" />
@@ -222,6 +224,8 @@
     <ClCompile Include="..\Common\BrushStroke.cpp" />
     <ClCompile Include="..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\Common\StrokeOpeningWork.cpp" />
+    <ClCompile Include="..\Common\StrokeSampleWork.cpp" />
+    <ClInclude Include="..\Common\StrokeSampleWork.h" />
     <ClCompile Include="..\Common\Heal.cpp" />
     <ClCompile Include="..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\Common\WarpStroke.cpp" />
@@ -368,6 +372,7 @@
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
     <ClCompile Include="ApplicationStrokeOpeningJobs.cpp" />
+    <ClCompile Include="ApplicationStrokeFinishJobs.cpp" />
     <ClCompile Include="Application.Tests.StrokeOpening.cpp" />
     <ClCompile Include="Application.Tests.SealedStroke.cpp" />
     <ClCompile Include="Application.Tests.SealedClone.cpp" />
@@ -442,6 +447,12 @@
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="GpuCapabilities.cpp" />
     <ClCompile Include="GpuWork.cpp" />
+    <ClCompile Include="GpuCommandStream.cpp" />
+    <ClCompile Include="GpuCommandPump.cpp" />
+    <ClInclude Include="GpuCommandPump.h" />
+    <ClInclude Include="GpuCommandStream.h" />
+    <ClCompile Include="GpuRecordingCommands.cpp" />
+    <ClInclude Include="GpuRecordingCommands.h" />
     <ClCompile Include="GpuUploadWork.cpp" />
     <ClCompile Include="GpuRasterUploadJob.cpp" />
     <ClCompile Include="GpuResidencyBudget.cpp" />
@@ -516,6 +527,18 @@
     <ResourceCompile Include="RedPrism.rc" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ClCompile Include="RecordedDisplayGraph.cpp" />
+    <ClCompile Include="CommittedDisplayController.cpp" />
+    <ClCompile Include="ApplicationCommittedDisplay.cpp" />
+    <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
+    <ClCompile Include="Application.Tests.RowPublication.cpp" />
+    <ClInclude Include="Application.Tests.RowPublication.h" />
+    <ClCompile Include="Application.Tests.StrokeFinish.cpp" />
+    <ClInclude Include="StrokeFinishTestGate.h" />
+    <ClInclude Include="RecordedDisplayGraph.h" />
+    <ClInclude Include="CommittedDisplayController.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="..\Build\RedPrism.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets" />

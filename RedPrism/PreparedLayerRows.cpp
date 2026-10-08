@@ -1,35 +1,60 @@
 #include "PreparedLayerRows.h"
 
 #include <algorithm>
+#include <atomic>
 #include <exception>
 #include <limits>
 #include <new>
 #include <utility>
 
+struct PreparedLayerRowsMemoryNode final
+{
+    std::atomic<unsigned int> owners{1}; // Row object, plus exactly one successful control-block allocation.
+    SharedRetainedMemoryLease lease;
+    std::shared_ptr<const SharedPublicationMemory> publicationMemory;
+    bool allocated = false; // Single allocation on the exclusive preparation worker.
+};
+
 namespace
 {
 constexpr std::size_t kControlBlockLimit = 4096;
+
+void ReleaseMemoryNode(PreparedLayerRowsMemoryNode* node) noexcept
+{
+    if (!node || node->owners.fetch_sub(1, std::memory_order_acq_rel) != 1)
+        return;
+    auto lease = std::move(node->lease);
+    auto publicationMemory = std::move(node->publicationMemory);
+    delete node;
+    lease.Reset();
+    publicationMemory.reset(); // All row data AND its possibly weak-owned control block already died.
+}
 
 // The shared_ptr rebinds this allocator to its private control-block type. Refuse before allocation if a
 // compiler/CRT change exceeds the declared envelope; never rely on a guessed private STL structure size.
 template <class T> struct RowOwnerAllocator
 {
     using value_type = T;
-    RowOwnerAllocator() noexcept = default;
-    template <class U> RowOwnerAllocator(const RowOwnerAllocator<U>&) noexcept {}
+    PreparedLayerRowsMemoryNode* node;
+    explicit RowOwnerAllocator(PreparedLayerRowsMemoryNode* value) noexcept : node(value) {}
+    template <class U> RowOwnerAllocator(const RowOwnerAllocator<U>& other) noexcept : node(other.node) {}
     [[nodiscard]] T* allocate(std::size_t count)
     {
-        if (count > kControlBlockLimit / sizeof(T))
+        if (node->allocated || count > kControlBlockLimit / sizeof(T))
             throw std::bad_alloc{};
-        return std::allocator<T>{}.allocate(count);
+        auto* storage = std::allocator<T>{}.allocate(count);
+        node->allocated = true;
+        (void)node->owners.fetch_add(1, std::memory_order_relaxed);
+        return storage;
     }
     void deallocate(T* pointer, std::size_t count) noexcept
     {
         std::allocator<T>{}.deallocate(pointer, count);
+        ReleaseMemoryNode(node);
     }
-    template <class U> [[nodiscard]] bool operator==(const RowOwnerAllocator<U>&) const noexcept
+    template <class U> [[nodiscard]] bool operator==(const RowOwnerAllocator<U>& other) const noexcept
     {
-        return true;
+        return node == other.node;
     }
 };
 } // namespace
@@ -46,7 +71,7 @@ std::uint64_t PreparedLayerRows::OwnershipAllowance(std::size_t layerCount) noex
     if (layerCount > static_cast<std::size_t>(kMaxLayerCount))
         return 0;
     // Exact arrays, with the visible arrays bounded by the complete layer count. No hash table or vector slack.
-    return sizeof(PreparedLayerRows) + kControlBlockLimit + 4096 +
+    return sizeof(PreparedLayerRows) + sizeof(PreparedLayerRowsMemoryNode) + kControlBlockLimit + 4096 +
            layerCount * (sizeof(LayerIdentity) + sizeof(std::uint64_t) + sizeof(VisibleIdentity));
 }
 
@@ -63,10 +88,12 @@ std::shared_ptr<PreparedLayerRows> PreparedLayerRows::Create(LayerRowsWork::Hand
         retirementBound - rows->bytes < allowance)
         return {};
 
+    auto memory = std::make_unique<PreparedLayerRowsMemoryNode>();
     auto* prepared = new PreparedLayerRows(std::move(rows), retirementBound);
+    prepared->_memory = memory.release();
     // The shared_ptr constructor invokes Release(prepared) if allocating its control block throws.
     auto result = std::shared_ptr<PreparedLayerRows>(prepared, &PreparedLayerRows::Release,
-                                                     RowOwnerAllocator<PreparedLayerRows>{});
+                                                     RowOwnerAllocator<PreparedLayerRows>{prepared->_memory});
     result->PrepareIdentities(documentSerial, firstItemId, previous);
     return result;
 }
@@ -192,14 +219,24 @@ std::optional<DxUi::TreeAccessibilityItemView> PreparedLayerRows::FindItem(std::
 
 std::int32_t PreparedLayerRows::BindMemory(JobScheduler& scheduler, JobTicket ticket) noexcept
 {
-    if (_sealedForPublication || _lease)
+    if (_sealedForPublication || _memory->lease || _memory->publicationMemory)
         return static_cast<std::int32_t>(0x80070057u); // E_INVALIDARG
-    return scheduler.RetainMemory(ticket, _lease);
+    return scheduler.RetainMemory(ticket, _memory->lease);
+}
+
+std::int32_t PreparedLayerRows::BindPublicationMemory(
+    const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept
+{
+    if (_sealedForPublication || _memory->lease || _memory->publicationMemory || !memory || !memory->IsBound() ||
+        memory->Bytes() < bytes)
+        return static_cast<std::int32_t>(0x80070057u); // E_INVALIDARG, no ownership change
+    _memory->publicationMemory = memory;
+    return 0;
 }
 
 bool PreparedLayerRows::SealForPublication() noexcept
 {
-    if (_sealedForPublication || !_lease)
+    if (_sealedForPublication || !HasMemoryLease())
         return false;
     _sealedForPublication = true;
     return true;
@@ -207,17 +244,19 @@ bool PreparedLayerRows::SealForPublication() noexcept
 
 bool PreparedLayerRows::HasMemoryLease() const noexcept
 {
-    return static_cast<bool>(_lease);
+    return static_cast<bool>(_memory->lease) || (_memory->publicationMemory && _memory->publicationMemory->IsBound());
 }
 
 std::uint64_t PreparedLayerRows::MemoryBytes() const noexcept
 {
-    return _lease.Bytes();
+    return _memory->lease ? _memory->lease.Bytes()
+                          : (_memory->publicationMemory ? _memory->publicationMemory->Bytes() : 0);
 }
 
 std::uint64_t PreparedLayerRows::ResidentBytes() const noexcept
 {
-    return _lease.ResidentBytes();
+    return _memory->lease ? _memory->lease.ResidentBytes()
+                          : (_memory->publicationMemory ? _memory->publicationMemory->ResidentBytes() : 0);
 }
 
 void PreparedLayerRows::Release(PreparedLayerRows* rows) noexcept
@@ -229,7 +268,7 @@ void PreparedLayerRows::Release(PreparedLayerRows* rows) noexcept
 void PreparedLayerRows::DestroyNode(DeferredReleaseNode* node) noexcept
 {
     auto* rows = static_cast<PreparedLayerRows*>(node);
-    SharedRetainedMemoryLease lease = std::move(rows->_lease);
+    auto* memory = rows->_memory;
     delete rows;
-    lease.Reset();
+    ReleaseMemoryNode(memory);
 }

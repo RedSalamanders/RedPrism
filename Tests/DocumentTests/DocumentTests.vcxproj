@@ -77,6 +77,8 @@
   <ItemGroup>
     <ClInclude Include="Document.Tests.StrokeFinishPublication.h" />
     <ClInclude Include="Document.Tests.StrokeFinalCoverage.h" />
+    <ClInclude Include="Document.Tests.StrokeSample.h" />
+    <ClInclude Include="Document.Tests.StrokeSampleSession.h" />
     <ClInclude Include="Document.Tests.HealWork.h" />
     <ClInclude Include="Document.Tests.BrushRetirementBounds.h" />
     <ClInclude Include="Document.Tests.SparseWindowBounds.h" />
@@ -209,6 +211,8 @@
     <ClCompile Include="Document.Tests.StrokeOpening.cpp" />
     <ClCompile Include="Document.Tests.StrokeOpeningMemory.cpp" />
     <ClCompile Include="Document.Tests.StrokeFinalCoverage.cpp" />
+    <ClCompile Include="Document.Tests.StrokeSample.cpp" />
+    <ClCompile Include="Document.Tests.StrokeSampleSession.cpp" />
     <ClCompile Include="Document.Tests.StrokeFinishPublication.cpp" />
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="Document.Tests.CapturedCloneOffset.cpp" />
@@ -319,6 +323,8 @@
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
     <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\..\Common\StrokeOpeningWork.cpp" />
+    <ClCompile Include="..\..\Common\StrokeSampleWork.cpp" />
+    <ClInclude Include="..\..\Common\StrokeSampleWork.h" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
@@ -363,6 +369,10 @@
     <ClCompile Include="PreservedLayerOpacityTests.cpp" />
     <ClCompile Include="LayerOpacityWorkTests.cpp" />
     <ClCompile Include="..\..\Common\LayerMetadataWork.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.WandBooleanAdmission.cpp" />
+    <ClInclude Include="Document.Tests.WandBooleanAdmission.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

@@ -436,6 +436,7 @@ int Application::Run(int showCommand) noexcept
                 (void)WaitUntilMessage();
                 continue;
             }
+            ReleaseSurfacesWhileUnseen(); // The actual occlusion probe permits one display resume transition.
             _frameInvalidated = true;
             frameAction = HostFrameAction::Render;
         }
@@ -490,12 +491,18 @@ int Application::ExitCode(int quitCode) const noexcept
 void Application::RenderFrame() noexcept
 {
     BindCompositionDevice();
-    HRESULT result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    const auto render = [this]() noexcept
+    {
+        return _committedDisplayInitialized
+                   ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, _acknowledgedCommittedDisplay)
+                   : _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    };
+    HRESULT result = render();
     if (result == S_FALSE)
     {
         // A stage found the device removed and the renderer rebuilt it: rebind and draw on the new device.
         BindCompositionDevice();
-        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        result = render();
     }
     if (FAILED(result))
     {
@@ -518,7 +525,8 @@ void Application::RenderFrame() noexcept
         return;
     }
     _frameInvalidated = false;
-    ReportCanvasFailure(_renderer.CanvasFailure());
+    ReportCanvasFailure(_committedDisplayInitialized && FAILED(_committedDisplayFailure) ? _committedDisplayFailure
+                                                                                         : _renderer.CanvasFailure());
     // The screenshot capture waits for a frame that reached the display (RF-409).
     if (!_screenshotPath.empty() && !_screenshotArmed && _window && _renderer.PresentCount() > 0)
     {
@@ -565,6 +573,8 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
     const bool displayOff = !_displayPoweredOn && !(_uiBenchmark && _uiBenchmark->smoke);
     const bool unseen =
         _screenshotPath.empty() && (!_windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
+    if (_committedDisplayInitialized)
+        _committedDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -2921,6 +2931,13 @@ HRESULT Application::InitializeRenderer() noexcept
     }
     _rendererReady = true;
     _frameInvalidated = true;
+    if (_committedDisplayInitialized)
+    {
+        // The first admitted display needs this actual queue context before its initial source request.
+        // Waiting for RenderFrame would settle that request without a graph and bind only afterwards.
+        BindCompositionDevice();
+        RETURN_IF_FAILED(_gpuBindingError);
+    }
     return S_OK;
 }
 
@@ -3107,6 +3124,8 @@ Vec2 Application::DocumentSize() const noexcept
 
 void Application::DocumentChanged() noexcept
 {
+    if (_committedDisplayInitialized)
+        _committedDisplay.RequestOwner();
     _historyResidencySource.RetryDeferred();
     RefreshColorJobs();
     SyncColorLookupPreview();
@@ -3527,6 +3546,9 @@ void Application::BindCompositionDevice() noexcept
         _composition.ReleaseDeviceResources();
         DropBrushEngine();
         _boundDeviceGeneration = 0;
+        if (_committedDisplayInitialized)
+            _committedDisplay.DeviceChangedOwner();
+        _strokeFinishSource.DeviceChangedOwner();
         return;
     }
     // A rebuilt device can come back at the old one's address: the generation tells them apart.
@@ -3545,6 +3567,9 @@ void Application::BindCompositionDevice() noexcept
         DropBrushEngine();
         (void)_brushEngine.Initialize(device, context);
         _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
+        if (_committedDisplayInitialized)
+            _committedDisplay.DeviceChangedOwner();
+        _strokeFinishSource.DeviceChangedOwner();
     }
 }
 
@@ -3573,6 +3598,8 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    if (_committedDisplayInitialized)
+        _committedDisplay.StopOwner();
     _historyResidencySource.StopNotifications();
     _layerRowsSource.StopNotifications();
     StopHostContinuations();
@@ -3609,6 +3636,9 @@ void Application::Shutdown() noexcept
                  owner._chrome->DetachAccessibility();
              owner._layerRowsSource.CloseAfterWorkers();
              owner._historyResidencySource.CloseAfterWorkers();
+             owner.PrepareStrokeFinishJoinedShutdownOwner();
+             if (owner._committedDisplayInitialized)
+                 owner._committedDisplay.JoinedShutdownOwner();
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;
              owner._shapeCommitPreview.reset();
@@ -3630,6 +3660,8 @@ void Application::Shutdown() noexcept
          [](void* opaque) noexcept
          {
              auto& owner = *static_cast<Application*>(opaque);
+             if (owner._committedDisplayInitialized)
+                 owner._committedDisplay.RetireShutdownForWork();
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
@@ -3667,6 +3699,16 @@ void Application::Shutdown() noexcept
              }
          },
          this});
+    _strokeFinishShutdownGpu.ResetOwner();
+    _strokeFinishShutdownDisplayGpu.ResetOwner();
+    if (_committedDisplayInitialized)
+    {
+        if (!_committedDisplay.CloseAfterWorkersOwner())
+            std::terminate();
+        _committedDisplayInitialized = false;
+        _committedDisplayAllowHiddenForTest = false;
+        _acknowledgedCommittedDisplay = nullptr;
+    }
     if (_clipboardStamp)
         (void)_historyWork.Finish(_clipboardStamp.value());
     _clipboardStamp.reset();
@@ -5572,6 +5614,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         break;
     case WM_SHOWWINDOW:
         _windowVisible = wParam != FALSE;
+        ReleaseSurfacesWhileUnseen();
         if (_chrome)
         {
             _chrome->SetVisible(_windowVisible);
@@ -5730,6 +5773,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 DWORD displayStatus = 0;
                 std::memcpy(&displayStatus, setting->Data, sizeof(displayStatus));
                 _displayPoweredOn = displayStatus != 0;
+                ReleaseSurfacesWhileUnseen();
                 if (_displayPoweredOn)
                 {
                     _frameInvalidated = true;
@@ -5803,6 +5847,7 @@ LRESULT Application::OnSize(UINT width, UINT height) noexcept
     }
 
     const HRESULT result = _renderer.Resize(width, height);
+    ReleaseSurfacesWhileUnseen();
     if (width == 0 || height == 0)
     {
         // Minimized: nothing presents, and no document surfaces wait for a frame that cannot show (RF-411).

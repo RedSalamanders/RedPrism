@@ -242,6 +242,38 @@ class BrushStroke
     // then call EndStroke on the owner. The detached CPU draft owns no graphics pointer.
     [[nodiscard]] BrushCoverageEngine* DetachCoverageForFinish() noexcept;
 
+    // Exclusive sample work uses the existing density, without EndStroke/BeginStroke or a live engine borrow.
+    // The caller admits CPU/GPU/transport overlap before detaching and returns the epoch only after its users join.
+    struct SampleMemoryPlan final
+    {
+        Vec2 point;
+        std::uint64_t sequence = 0;
+        std::uint64_t persistentCpuBytes = 0;
+        std::uint64_t transientCpuBytes = 0;
+        std::uint64_t additionalGpuBytes = 0;
+        std::uint64_t maximumTiles = 0;
+        std::uint64_t maximumChangedTiles = 0;
+    };
+    [[nodiscard]] std::optional<SampleMemoryPlan> PlanSampleMemory(Vec2 point) const noexcept;
+    [[nodiscard]] std::int32_t IncreaseOpeningMemoryForSample(JobScheduler& scheduler,
+                                                              const SampleMemoryPlan& plan) noexcept;
+    [[nodiscard]] BrushCoverageEngine* DetachCoverageForSample(const SampleMemoryPlan& plan) noexcept;
+
+    struct SampleCoverage final
+    {
+        std::uint64_t sequence = 0;
+        std::vector<BrushSegment> settled;
+        std::vector<BrushSegment> tail;
+        std::vector<BrushKernelTile> tiles;
+        BrushKernelParams params;
+        bool needsGpu = false;
+    };
+    [[nodiscard]] std::optional<SampleCoverage> PrepareSampleCoverage(CancelToken cancellation = {});
+    [[nodiscard]] bool InstallSampleCoverage(std::uint64_t key, std::span<const std::uint32_t> values);
+    [[nodiscard]] bool ComposeSampleCoverage(const SampleCoverage& sample);
+    // This only reattaches the original owner/engine after exclusive work. It performs no pixel work or allocation.
+    [[nodiscard]] bool AttachCoverageAfterSample(BrushCoverageEngine* engine) noexcept;
+
     // Owner-only allocation-free declaration, before exclusive transfer/admission. Bounds the final
     // spline's tile grid plus old tail; no iteration over tiles, samples, raster windows or document records.
     // The application adds its document/history publication, upload and shared-queue overlap separately.
@@ -292,7 +324,7 @@ class BrushStroke
     // their deferred CPU owner after attachment, so that lifetime flag must not exclude this live view.
     [[nodiscard]] const BrushCoverageEngine* ExpectedFinishCoverageEngine() const noexcept
     {
-        return _valid && !_failed && !_workerRasterEdit && !_detachedFinish && _engine &&
+        return _valid && !_failed && !_workerRasterEdit && !_detachedFinish && !_detachedSample && _engine &&
                        _coverageOwner == std::this_thread::get_id()
                    ? _engine
                    : nullptr;
@@ -480,6 +512,14 @@ class BrushStroke
     bool _failed = false;
     bool _workerRasterEdit = false;
     bool _detachedFinish = false;
+    bool _detachedSample = false;
+    bool _sampleCoveragePrepared = false;
+    bool _sampleCoverageComplete = false;
+    std::uint64_t _sampleSequence = 0;
+    std::uint64_t _sampleMemoryBaseCpu = 0;
+    Vec2 _samplePoint;
+    BrushCoverageEngine* _sampleOwnerEngine = nullptr; // identity only; never dereferenced by workers
+    std::unordered_set<std::uint64_t> _sampleTailKeys;
     bool _finalCoveragePrepared = false;
     bool _usesCpuPermanent = true;
     bool _finalCoverageComplete = false;

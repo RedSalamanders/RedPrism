@@ -2,6 +2,102 @@
 
 ## Current delivery checklist
 
+- [x] Preserve full Debug r356, Release analysis r357 and Release r358 on the identical 977-input Clone/joined-sample source. Independently verify complete predecessor controls, five lifetime additions, Clone additions and all 103 reached application stages.
+- [x] Preserve ASan r359's linked-instruction failure before runtime. Verify the offending bytes are an exact guarded DWORD table following `RET; NOP`, with matching PE, PDB ownership and decoded control flow. The repaired scanner passes that same binary without an allowlist change.
+- [x] Integrate 115 independent one-byte terminal-padding controls (three accept, 112 refuse). Full real ASan r360 and Release analysis r361 pass and are archived on the same 978-input source; ASan preserves all 39,659 predecessor pass records, separate stress checks and 103 application stages.
+- [x] Preserve full Debug r362 on that 978-input source. ARM64 r46 Debug/Release/ASan Debug all failed the same C4324 padding warning; all three failed archives verify. These are historical results after the publication integration below.
+- [x] Qualify overflow-receipt freeze `A0ADC7E26AF83395E81EFDBE38D7927A07B74BB805CF1155D4B7B91B99FC5078`: full Debug r382, Release r383, real ASan Debug r384, Release analysis r385 and all three ARM64 r49 cross-builds pass with completed archives. Fixed source inventories and complete predecessor application streams verify; formatting, skill validation and diff checks pass. Commit/push this qualified step before changing production source. Ordinary asynchronous pointer sample and preview routing remains open.
+- [x] Pass and independently archive full x64 Release r383 on the A0ADC freeze. The 28,736 aggregate PASS records and 4,606 application records preserve predecessor order and multiplicity; all 105 application stages pass. Archive: `D:\RedPrismQualificationArchives\P1-stroke-overflow-993-Release383-full-qualified-2026-10-08`. The receipt's attempt timestamps are recorder bounds, not `GetProcessTimes` or G1 evidence. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Pass and independently archive full x64 ASan Debug r384 on the same A0ADC freeze. Profile verification preserves 37,104 predecessor aggregate PASS records plus 152 assertions and eight summaries (37,264 total), including 104 ordinary and 48 stress controls. The same 105 application stages and 70 fixed application controls pass; application inventory is 4,535 predecessor records plus 70 assertions and one summary (4,606), with the UIA 16-to-17 transition in its original position. Archive: `D:\RedPrismQualificationArchives\P1-stroke-overflow-993-ASan384-full-qualified-2026-10-08`. Attempt timestamps are recorder bounds, not `GetProcessTimes` or G1 evidence. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Execute the isolated publication-retention probe: 17 scheduler controls, four boundary controls and six real-worker lifetime controls pass, including memory held through final weak-reference release. This is experimental Debug proof only.
+- [x] Execute original-parent display publication on WARP and hardware: 19 controls per driver pass, including exact callback authority, same-key FIFO, GPU acknowledgement, literal pixels and complete-charge retirement. The existing seed/controller controls also pass. Preserve the earlier empty-asset fixture and alpha-rounding failures. This is isolated Debug proof; normal application activation remains due.
+- [ ] Finish original-parent prepared display/rows ownership and GPU admission; prove seed borrows, exact publication, cancellation, device replacement and joined shutdown before application activation.
+- [x] Integrate reviewed exact acknowledged-callback identity, original publication-memory retention, final-root preflight, prepared-row weak-control accounting and recorded stroke-preview primitives. Correct ARM64 alignment locally. Compilation and actual host qualification are due.
+- [x] Preserve Debug r367 build and actual application r368: all 105 stages, 20 final-stroke, 34 row-publication and 17 accessibility controls pass. Independent fixed inventories and the complete earlier application PASS sequence verify. Earlier r364/r366 failures remain archived. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Qualify the revised opted-in final stroke in actual application Debug r374 on the repaired 993-input source: all 105 stages, 30 final-stroke, 34 row-publication and 17 accessibility controls pass. Fixed source inventories, the complete predecessor application PASS sequence, and build/runtime archives verify. This is experimental opted-in Debug application proof only; full Debug r375 and remaining profiles, ordinary activation, asynchronous Append and measured G1 remain open. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Preserve full Debug r371's second-refusal fixture failure and exact archive. Its 48 publication endpoint/lifetime controls pass independently; the full application stops after 16 stages. The second diagnostic refusal was retargeted to the original stroke ticket so committed-cache retirement could not consume it; the later r372 attempt is recorded below.
+- [x] Preserve full Debug r372's later cancellation failure: all six real recovery assertions pass, but cancellation of the quarantined suspended parent does not resume its skipped acknowledgement stage. The event-driven cancellation acknowledgement was added while retaining dormant GPU quarantine and all charges; it compiled in Debug r373 and passed actual application qualification in r374 below.
+- [x] Qualify and archive full Debug r375 on the same repaired 993-input source: 28,736 aggregate PASS records preserve all 28,628 predecessor records plus the fixed 108 additions. The separate actual application stream verifies all 105 stages, 30 stroke, 34 rows and 17 accessibility controls. This is historical after the later Release repair; remaining profiles and normal asynchronous stroke activation stay open.
+- [x] Preserve Release r376's eight assertion-only unused-parameter diagnostics and verified failed archive. Make original callback identities active in Release, format the source, and retain r377's interrupted retry separately. Full Release r378 and ARM64 r47 are running; r375 is historical after this repair.
+- [x] Build and archive ARM64 r47 Debug, Release and ASan Debug on the formatted 993-input source. All three actual child exits are zero and all archives verify. These are cross-compilation results, not native ARM64 runtime proof.
+- [x] Preserve Release analysis r379's two prerequisite-refusal fixture C6221 failures and their explicit int32 HRESULT equality repair; preserve ASan r380's shared pinned-DxUi vcpkg lock failure; pass and archive Release analysis r381 and ARM64 r48 Debug/Release/ASan Debug on HRESULT fixture freeze `EB059799011B1F7397DEA08C3E3F5158E7086B23C65DE3810F0B6A38B01BED23`. Debug r375, Release r378, ARM64 r47, analysis r381 and ARM64 r48 are historical relative to the current A0ADC overflow source. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Qualify and archive full Debug r382 for the experimental final parent's exact overflow receipt on the current A0ADC freeze: ten actual host scenarios / 35 assertions, including a full physical FIFO, original ordinal, literal accepted-prefix pixels, matching display/rows and acknowledged off-owner retirement. The parent's reviewed r7 verification against archived Sources preserves all 28,628 predecessor aggregate PASS records plus 104 controls and four summaries, totaling 28,736. Separate actual application verification passes all 105 stages and 70 fixed additions (35 stroke, 34 rows, one weak UIA), preserving the full pinned r362 predecessor order/multiplicity and UIA 16-to-17 transition; five overflow source names, syntax and five mutation-refusal controls are reviewed. Debug start/completion fields are recorder bounds, not kernel intervals or G1 evidence. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [x] Pass and archive ARM64 r49 Debug, Release and ASan Debug on the same 993-input A0ADC freeze. All three actual child exits are zero; independently checked result, kernel interval, log, manifest and completed-receipt hashes agree. This qualifies cross-compilation only; native ARM64 runtime remains separate. [Record](../../TestRuns/P1StrokePublication_2026-10-08.md).
+- [ ] Integrate actual asynchronous Append and Up for Paint/Eraser, Heal, Blur, Clone and masks with unchanged coverage goldens and original-ticket ordering. All ignored sample-parent drafts remain uncompiled and unregistered; normal Append/preview routing is open.
+- [ ] Complete normal display/preview activation, utility routes, first uploads, prepared rows, complete phase bounds and deferred retirement.
+- [ ] Close remaining clipboard/I/O, Wand boolean operations, selection/transform, image-size publication and history/native integration items in the detailed checklist below.
+- [ ] Measure actual R1/W G1 scenarios against the owner/apply limits; preserve failures and correct their causes.
+- [ ] Reconcile domain contracts and user guide, pass the final exact-source matrix, commit/push and move this milestone to Done.
+
+### Next implementation sequence: pointer samples and preview publication
+
+This sequence closes the asynchronous Append item above. It is planned work, not an activated route.
+
+1. Extend the current stroke processing parent to begin after worker opening and before the first Down
+   sample. Keep its original `JobTicket`, host ordinal and history work stamp through all accepted samples
+   and final publication. A live gesture suspends waiting for input; only newly recorded input, cancellation
+   or an actual resource/device transition makes it ready. Tests wait for the sample acknowledgement
+   rather than requiring the entire live gesture to settle.
+2. Preflight each event-time point with `PlanSampleMemory`, grow the original opening CPU lease to the
+   declared persistent maximum, and grow the processing admission to the maximum complete overlapping
+   phase requirement. Revisited samples must not accumulate fixed allowances. GPU growth uses a fresh
+   successful budget snapshot and preserves the original reservation; a changed device refuses useful
+   work on the old generation. Refusal acknowledges the original accepted request with its exact error.
+3. Transfer the live draft exclusively with `TakeStrokeSampleInput`, detach the original GPU epoch, and
+   run `PrepareSampleCoverage` on a worker. Preserve Shift's previous endpoint as a separate first sample.
+   Record both settled and provisional tail segments on the dedicated recorder, acknowledge all original
+   command batches, copy exact coverage through mapped-row worker leases, and acknowledge the original
+   final-use barrier before returning the epoch. CPU fallback follows the same exclusive draft protocol.
+4. Build stroke preview metadata and changed immutable tiles on the worker. Admit the complete recorded
+   preview separately from the committed-document manifest: private stroke grid and mips, committed
+   canvas/stacks/coverage/resources, copied seed directories, pipeline/deferred contexts, upload bands,
+   command shadows and retained CPU inputs. Charge previous/current/replacement overlaps before creation;
+   on WARP charge logical GPU allocations in the CPU domain too. The committed-only controller must not
+   adopt a same-generation stroke preview.
+5. Publish a private preview only after its original recording join and all command acknowledgements.
+   The renderer selects that acknowledged root; pan/zoom remain blits. Keep the previous seed alive until
+   the new recorder and GPU users acknowledge, exclude it from later frames, then retire it on a worker
+   after its last frame barrier. Failure leaves the last acknowledged pixels intact and publishes no history.
+6. Return the draft using `ApplyStrokeSampleIfCurrent` only after exact epoch return, with no owner pixel
+   work. Consume the input's mutable draft reference before worker retirement. Up first processes its last
+   accepted point; Lost finishes only the accepted prefix. Then reuse the current final coverage/history/
+   display/rows path and bind shared publication memory only after every useful stage has joined.
+7. Add actual host controls for incremental Paint/Eraser, masks, Heal, Blur and both Clone source modes;
+   Shift, soft tail replacement, duplicate points, queued Undo, capture loss, FIFO overflow, fresh admission
+   refusal, cancellation, device replacement and joined shutdown. Compare coverage with existing numeric
+   goldens and final pixels with independent fixtures. Measure owner dispatch/drain/apply and real preview
+   latency before normal activation; helper throughput or a hidden fixture is not the G1 result.
+
+### Earlier delivery checkpoints
+
+The current checklist above governs delivery. The older snapshots below preserve their original evidence and
+remaining-work descriptions; their unchecked entries are historical, not separate new obligations.
+
+- [x] Pass and archive full x64 Debug r356 on the 977-input Clone/joined-sample candidate: four suites, five independent lifetime controls, original 98 sample-session controls, Clone fixtures, 103 application stages and screenshots pass. Remaining profiles and G1 are due.
+- [x] Pass and archive rebuilt actual application Debug r355: all 103 stages, corrected Clone live/shutdown boundaries and all seven new opening controls pass. Full matrix and G1 remain separate.
+- [ ] Qualify joined sample-input retirement: successful owner apply releases its mutable draft reference before later owner cancellation and worker wrapper destruction. Five independent engine-owner controls are integrated; the original 98 controls remain unchanged.
+- [x] Preserve full Debug r352's Clone live-boundary failure and exact source/products/logs. The live/shutdown fixtures now distinguish source adoption from completed opening and require the exact two-lease aggregate; fresh validation is due.
+- [x] Pass and archive fresh Release analysis r351 on the integrated Clone/sample candidate, including the repaired lock contracts and unchanged DxUi pin. Runtime and ARM64 profiles remain due; [record](../../TestRuns/P1CloneWorkerOpening_2026-10-08.md).
+- [x] Execute the isolated recorded stroke-preview prototype on WARP and hardware: analytic BGRA/Gray8 fixtures, inherited previous grid/canvas, seven exact refusals, original GPU acknowledgements and MTA retirement pass. This is experimental proof, with no normal application activation or G1 claim; [record](../../TestRuns/P1RecordedStrokePreview_2026-10-08.md).
+- [ ] Qualify actual Clone worker opening for All Layers and Single Layer: admit the captured sample graph, keep the event-time offset, replay only after worker acknowledgement, and preserve sealed Escape/Undo and queued predecessor ordering. The code and independent tests are in progress; [record](../../TestRuns/P1CloneWorkerOpening_2026-10-08.md).
+- [ ] Validate the recorded stroke-preview graph against analytic image/mask byte fixtures on WARP and hardware, then integrate it with an original-parent held display seed. Preserve the two experimental rounding-boundary failures; no legacy golden or production shader changes.
+- [x] Pass and archive full Release r346 and real ASan r347 on the identical 977-input sample candidate; preserve Release analysis r348's lock-validation and test-warning failure.
+- [ ] Qualify the repaired retained-growth lock boundaries and unchanged test expectations on fresh source in the complete required matrix, then commit/push the qualified foundation step.
+- [x] Pass and archive full x64 Debug r345 on the 977-input candidate: exclusive sample/session controls, original retained growth, actual WARP epoch return, all predecessor suites and 103 application stages pass. See the [sample work record](../../TestRuns/P1StrokeSampleWork_2026-10-08.md).
+- [ ] Finish fresh-source Release analysis and all three ARM64 cross-builds; independently verify complete control inventories before commit/push. r345–r347 remain historical passes after the analysis repair.
+- [x] Pass and archive full x64 Debug r342 on the 969-input candidate: recorded brush exact coverage, corrected visibility/shutdown, two-device cached rebind, all predecessor suites and 103 application stages pass. Freeze `0169FC16C46215A8F236D62224EDCC88C41AC3DB01F6CCCC09D7D1C370625B17`; see the [recorded brush record](../../TestRuns/P1RecordedBrush_2026-10-07.md). Remaining configurations and G1 are separate.
+- [ ] Qualify exclusive pointer-sample transfer, original retained-lease growth and joined GPU epoch return, then integrate actual Append and Up with prepared preview/display/rows and original-parent retirement.
+- [x] Pass and archive actual application Debug r341 on the 965-input display candidate: all 41 display controls and 103 reached application stages pass. This is an application runtime pass, not a full profile or G1 pass.
+- [ ] Qualify the corrected cached-root shutdown fixture, two-device rebind tests and private worker brush recording with unchanged numeric goldens and exact coverage parity.
+- [x] Pass and archive corrected Debug build r336 and focused composition r337; preserve focused application r338's first-source startup failure and its actual admission-wait fixture defect.
+- [ ] Qualify the corrected initial queue binding, visibility suspension/resume and delegated admission/retry controls on the revised integrated source.
+- [x] Preserve integrated display Debug r334's build failure and r335's shutdown-fixture assertion, with exact source/products/output archives. Repair the actual helper call and invalid worker budget observation; see the [display integration record](../../TestRuns/P1CommittedDisplay_2026-10-07.md).
+- [ ] Pass fresh full Debug after those fixture repairs, then qualify the integrated display source in the remaining required profiles.
+- [x] Pass and archive full Debug r333 on the revised 949-input recorder candidate, including all 432 actual live-shutdown controls; keep the prior r332 timeout diagnosis open.
+- [ ] Independently qualify the admitted display controller, source/last-frame retirement and empty-recorder shutdown before application display activation.
+- [x] Run the reviewed display blit parent and committed controller on real WARP and hardware; preserve their experimental products and source identities separately from application qualification.
+- [ ] Qualify the integrated committed display route through the actual hidden application renderer and shutdown, then finish previews/strokes/utilities and normal activation.
+
 - [x] Commit and push the qualified caller and stroke resource foundations (`f585577`, `4abdb3a`).
 - [x] Integrate the immutable layer index, cached pixel totals, final allocation planner, worker retirement hook and complete GPU epoch handoff.
 - [x] Integrate worker stroke opening, captured settings, selection/Blur preparation and whole-draft retirement; review numeric/state controls.
@@ -17,25 +113,32 @@
 - [x] Independently verify archived Debug r322 / Release r323 / real ASan r324 against their frozen source, products, complete ordered controls and verifier mutation checks.
 - [x] Pass and archive Release analysis r326 after two test-only warning repairs; all named expectations are preserved.
 - [x] Qualify the two repaired test fixtures on the revised source: full x64 Debug r327, Release r328, real ASan r329, Release analysis r326 and all three ARM64 r44 cross-builds pass and are archived.
-- [ ] Commit/push this qualified 933-input stroke opening and retirement step.
+- [x] Commit/push this qualified 933-input stroke opening and retirement step (`0773548`).
 - [x] Establish private recorded-display feasibility with hardware/WARP literal pixels, eager canvas mips and 45 MP sparse copies without source materialization.
-- [ ] Integrate the bounded command stream and dedicated recorder lane; prove cancellation, original-device completion and worker retirement before display publication.
+- [x] Integrate the bounded recorder lane, exact-lease stream and owner pump; full Debug r330/r333 covers real completion, failed-signal recovery and dormant quarantine/shutdown. This closes their Debug helper proof only; display activation and remaining profiles are separate.
+- [ ] Qualify the complete integrated display/controller source and recorder additions in the remaining required matrix, including actual application publication, refusal, cancellation and retirement.
+- [x] Pass and archive full Debug r330 for the 945-input recording candidate; see the [recording evidence](../../TestRuns/P1GpuRecording_2026-10-07.md).
+- [ ] Qualify the actual-device refusal, same-ticket CPU/recorder handoffs and complete later-phase memory growth on the revised source in the required matrix.
+- [x] Preserve r331's lane-stage fixture failure; consume the real memory-release notification before its unchanged idle expectation. Fresh full qualification remains required.
+- [x] Preserve r332's subsequent existing live-shutdown lifecycle gate failure; add reached-state diagnostics with unchanged expectations/deadlock bound. Diagnosis and full qualification remain open.
 - [ ] Connect opening and finalization to the actual application, preserving accepted input, exact GPU coverage, final residency and cancellation/shutdown ownership.
 - [ ] Close the remaining I/O, selection/transform, native integration, history/display and first-display admission items below.
 - [ ] Pass actual host scenarios and measured G1, finish the current validation matrix, reconcile contracts/user guide, commit/push and move P1 to Done.
 
 P1 remains **WIP**. Qualified worker prerequisites do not establish application activation or the responsiveness exit gate.
 
-Latest Debug result: r322 passes the complete canonical test command on freeze
+Historical Debug result: r322 passes the complete canonical test command on freeze
 `30D06FBFBFD5A1D0AB3B2982A6A09DDD031F05B4DD42F7416029A59F3AD6FC40`.
 Its archive verifies. Release r323 and real ASan r324 also pass on the same freeze;
 Release analysis r325 failed two test-fixture warnings; the failed run is archived.
 Two test-only repairs preserve all expectations; Release analysis r326 passes on revised freeze
 `776E5C51CB24B15FEC6207B927CEFAEA77C2241FA231E562A7A531720CB0CF6D` and its 1,238-copy archive verifies.
-Debug r327 is checking that revised source. Original r320/r321 failures remain preserved in the
+Debug r327, Release r328, real ASan r329 and all three ARM64 r44 cross-builds pass on that revised source
+and are archived. The qualified step is committed/pushed as `0773548`. Original r320/r321 failures remain preserved in the
 [stroke work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
 Independent source-bound inventory checking passes for all three original profiles, including exact
-predecessor order/multiplicity and synthetic rejection controls. Revised runtime/cross-build qualification remains due.
+predecessor order/multiplicity and synthetic rejection controls. The later 945-input recorder candidate passes full
+Debug r330 and is archived; its actual-device refusal and same-ticket phase additions require fresh qualification.
 An isolated worker-recorded composition experiment also rules out one whole command list on WARP:
 45 MP submission took 168 ms. Bounded 512-square draws/clears, 1 MiB uploads and sliced mips reduce
 its measured batch p99 to 0.482 ms, maximum 6.205 ms, with matching sampled literal pixels.
@@ -49,8 +152,8 @@ activation remain required.
 The private full-display graph records canvas mips before sealing. Its sparse 45 MP experiment verifies
 four independent literal pixels, including a replacement at the upload band boundary, and that the
 sparse source remains unmaterialized. Hardware and WARP pass with two transport slots and real
-per-batch acknowledgements. This graph is still outside the application; original parent admission,
-callback joins, failure quarantine and the final bounded publish are implementation requirements.
+per-batch acknowledgements. That experiment predates the opt-in application route qualified in full Debug r342. Normal activation,
+remaining profiles, full fault scenarios and measured G1 remain requirements.
 
 **Execution resumed on 2026-10-07 at the user's request: “continue until P1 done”.**
 The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) preserves the prior stop and exact evidence.
@@ -112,7 +215,7 @@ The image-wrapper residency and original worker/upload transport step is fully q
 ## Delivery checklist
 
 - [x] Commit and push the qualified resource checkpoint as `4abdb3a`.
-- [ ] Qualify the integrated layer index, cached pixel budgets and final allocation planner. Preserve failed Debug r299; repair the one-point, valid inverse-transform and index allocation references, then run fresh validation. Actual asynchronous stroke activation and the final P1 gates remain open. See the [current host work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
+- [x] Qualify the integrated layer index, cached pixel budgets and final allocation planner, including rounded pixel buffers and overlapping sparse metadata. Full Debug r327, Release r328, real ASan r329, analysis r326 and ARM64 r44 pass on the committed 933-input source (`0773548`). Preserve r299 and its reference repairs. Actual asynchronous stroke activation and final P1 gates remain open; see the [host work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
 
 - [x] Qualify and archive resource candidate Debug r294: all predecessors plus 181 exact additions,
   five fresh linked image/PDB/ISA identities, active WARP debug layer and 99 application stages. Freeze
@@ -121,14 +224,15 @@ The image-wrapper residency and original worker/upload transport step is fully q
   This does not close asynchronous stroke host activation or G1; see the
   [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
 
-- [ ] Enable the qualified history-residency subscriber during normal startup. The primary prepared
+- [x] Enable the qualified history-residency subscriber during normal startup. The primary prepared
   actual `Run` startup wiring and 36 real-host controls for notification-driven trimming, acquired-prefix
   failure, full subscription/route capacity, rollback and repeated shutdown. Reviewed copies are ignored
   under `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`; they are integrated into the current candidate.
   Debug r284's interrupted warning-bearing attempt is preserved; structural correction builds in r285.
   Focused actual Run r288 passes the exact 36 new checks and every predecessor. Fresh complete matrix
-  qualification is running; whole H3/G1 remains open. See the [foundation record](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
-- [ ] Integrate and execute the reviewed cancellable healing kernel and 33 independent analytic/span/cancel
+  qualification subsequently passes on the 933-input committed candidate `0773548` in Debug/Release/real ASan,
+  Release analysis and three ARM64 cross-builds; whole H3/G1 remains open. See the [foundation record](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
+- [x] Integrate and execute the reviewed cancellable healing kernel and 33 independent analytic/span/cancel
   controls. Primary review strengthened the API to validate both owned spans, separated statistics from real
   solve checkpoints and repaired the delegated large-array comparator. Reviewed copies are ignored under
   `.build/P1Drafts/StrokeFinish/ReviewedHeal-r4`; the kernel and controls are integrated into the current candidate.
@@ -142,16 +246,19 @@ The image-wrapper residency and original worker/upload transport step is fully q
   Release analysis r292 fails the healing test fixture's 222,088-byte stack warning; its exact source, responses
   and failed archive are preserved. The primary moves the fixture arrays to the heap without changing kernels
   or expected bytes. The corrected 898-input resource candidate adds cached bounds, GPU density clearing,
-  queue readiness and a private worker mask sampler. Current Debug r294 follows r293's preserved C4244 test
-  sentinel warning and explicit byte-cast repair. Its full matrix and the asynchronous application remain due;
+  queue readiness and a private worker mask sampler. Debug r294 follows r293's preserved C4244 test
+  sentinel warning and explicit byte-cast repair. The later 933-input committed candidate `0773548` passes the full
+  required matrix; asynchronous application finalization remains due;
   see the [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
-- [ ] Integrate typed structured-buffer readback and deferred brush coverage recording, then connect the actual
-  asynchronous final stroke graph. Primary drafts reuse the existing bounded queue's staging cap, in-flight
+- [x] Integrate typed structured-buffer readback and deferred brush coverage recording foundations. They reuse
+  the existing bounded queue's staging cap, in-flight
   limit, event/fence waits, exact lease acknowledgements and device-retirement owners. They preserve the shader's
   uint coverage and move conversion to the worker. The primary reviewed the cheaper-agent WARP/core/publication
   controls, added independent pending Undo/Redo authority checks, and integrated the foundation with the
   typed worker publication. Focused WARP r287 passes all 1,694 predecessor controls and 68 exact additions;
-  actual asynchronous stroke application activation and mouse-up latency evidence remain due.
+  the later committed `0773548` matrix qualifies these prerequisites. Actual asynchronous stroke application
+  activation and mouse-up latency evidence remain due.
+- [ ] Connect those foundations and private worker recording to the actual asynchronous final stroke graph.
 - [x] Qualify the integrated Save/export session-end event handling and localized saving block reason.
   Primary-reviewed copies and 108 actual-host controls are integrated; the cheaper agent's 16 protocol controls
   were independently repaired. Unsaved-document protection and original publication/receipt authority remain.
@@ -1332,23 +1439,24 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
 
   Remaining stroke implementation is tracked in this order; these unchecked rows are required for P1:
 
-  - [ ] Prepare a cancellable worker healing kernel without changing candidate ordering, membrane solve or
+  - [x] Prepare a cancellable worker healing kernel without changing candidate ordering, membrane solve or
     legacy rounding. Validate pitched dimensions before allocating or reading. Allocation failure reaches the
     scheduler's named runner boundary. A false result discards private scratch/output; it never publishes a
     partly healed raster. Independent constant-field references, cancellation at each real work boundary and
-    invalid-input controls supplement all unchanged legacy goldens. The ignored `PreparedHeal-r1` and
-    `Document.Tests.HealWork` drafts exist; they are not compiled, integrated or qualified.
-  - [ ] Introduce a typed exclusive finished-stroke worker input and prepared publication. Preserve the exact
+    invalid-input controls supplement all unchanged legacy goldens. The integrated worker kernel and controls
+    qualify in the complete `0773548` matrix; actual finalization activation is separate below.
+  - [x] Introduce a typed exclusive finished-stroke worker input and prepared publication. Preserve the exact
     opening, document serial/generation, layer/image/transform/mask/selection and original FIFO history ordinal.
     The owner must finish all graphics borrowing before transfer. `ReleaseCoverageEngine` currently means
     discard-only: calling it before `Flush` is invalid. Do not replay GPU density on the CPU or change the
-    required WARP compute engine to the CPU reference.
-  - [ ] Add final GPU coverage transport for the existing structured preview buffers: owner records final tail
+    required WARP compute engine to the CPU reference. Core publication controls qualify in the `0773548` matrix.
+  - [x] Add final GPU coverage transport foundations for the existing structured preview buffers: owner records final tail
     dispatch and copies, readiness uses the shared event wait pool, owner lends mapped rows only after readiness,
     and a worker converts the exact coverage bytes. The current BGRA texture readback interface cannot directly
     copy a structured buffer into a texture. Extend the typed staging protocol and admit buffer, staging, mapped
     lease, worker output, resource/context retirement and maximum overlap before starting. No blocking Map,
-    byte conversion or CPU tile composition is allowed in the terminal owner callback.
+    byte conversion or CPU tile composition is allowed in the terminal owner callback. The typed transport and
+    detached epoch controls qualify in the `0773548` matrix; actual host recording remains unchecked below.
   - [ ] Perform healing, sparse snapshot construction, carried-mask growth/eager semantic thumbnail, complete
     document sealing and history preparation on the Stroke worker. Keep the current wash or settled preview
     visible until one current publication succeeds. Refuse cancelled, stale or failed preparation without changing

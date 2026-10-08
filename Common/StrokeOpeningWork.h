@@ -105,4 +105,4 @@ struct StrokeOpeningResult final
 // Final history, final coverage scratch, GPU residency and publication have separate additional admissions.
 [[nodiscard]] std::uint64_t StrokeOpeningMemoryBytes(const CanvasDocument& source, const ImageLayer& layer, bool mask,
                                                      std::int64_t pixelLimit, const BrushSettings& settings,
-                                                     BrushKind kind) noexcept;
+                                                     BrushKind kind, const Raster* cloneSample = nullptr) noexcept;

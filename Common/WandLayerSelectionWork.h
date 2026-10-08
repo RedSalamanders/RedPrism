@@ -42,6 +42,25 @@ struct WandLayerSelectionMemoryPlan
     bool transparentShortcut = false;
 };
 
+enum class WandLayerSelectionAdmission : std::uint8_t
+{
+    Ready,
+    InvalidMode,
+    IncompletePlan,
+    Overflow,
+    UnknownClipperWorkspace,
+};
+
+// Add/Subtract that invokes SelectionGeometry cannot be admitted from the New-mode plan: the pinned
+// Clipper2 call graph has no application-enforced workspace ceiling. Subtract with no current selection
+// is a trace-only no-op in PrepareWandSelectionPublication and needs no boolean workspace.
+[[nodiscard]] WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerSelectionMemoryPlan& plan,
+                                                                              SelectionMode mode,
+                                                                              bool hasCurrentSelection,
+                                                                              std::uint64_t& requiredBytes) noexcept;
+[[nodiscard]] bool TryAddWandLayerSelectionBytes(std::uint64_t left, std::uint64_t right,
+                                                 std::uint64_t& result) noexcept;
+
 // Immutable selection-mode capture. Separate entry points bind an active layer or a detached full composite.
 // Complete graph admission must precede owner capture; neither entry point owns a GPU device.
 class WandLayerSelectionInput final

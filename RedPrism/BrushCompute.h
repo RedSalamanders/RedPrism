@@ -13,6 +13,8 @@
 #include <wil/com.h>
 #pragma warning(pop)
 
+class GpuRecordingCommands;
+
 // The Direct3D 11 compute engine behind the brush (Rendering_Brush.md): `BrushCoverage.hlsl` per tile, with the
 // settled density kept on the GPU for the stroke's lifetime and only the 0-255 preview read back. Borrows the
 // application device; owns no full-canvas allocation, only buffers for the tiles a stroke touches.
@@ -77,6 +79,10 @@ class GpuBrushCoverage final : public BrushCoverageEngine
     // until Take; this does not reserve resources or acknowledge GPU completion.
     [[nodiscard]] bool CanTakeStrokeEpoch(const StrokeEpoch& empty) const noexcept;
     [[nodiscard]] bool TakeStrokeEpoch(StrokeEpoch& empty) noexcept;
+    // Owner-only return after the recorder joined and every original GPU/copy/map user acknowledged.
+    // The live engine is empty on the same healthy device. Swaps density back without allocating or
+    // resetting it; the now-empty epoch still retires on a worker under the parent's reservation.
+    [[nodiscard]] bool RestoreStrokeEpoch(StrokeEpoch& epoch) noexcept;
     GpuBrushCoverage() = default;
     ~GpuBrushCoverage() override;
     GpuBrushCoverage(const GpuBrushCoverage&) = delete;
@@ -106,6 +112,20 @@ class GpuBrushCoverage final : public BrushCoverageEngine
                                            const BrushKernelParams& params) noexcept;
     [[nodiscard]] ID3D11Buffer* EpochCoverageBuffer(const StrokeEpoch& epoch, std::uint64_t key, int width,
                                                     int height) const noexcept;
+    // Exclusive recorder-lane call, after complete parent admission and actual owner epoch transfer.
+    // Uses a private same-device deferred context/pipeline, preserves segment ordering and full-tile
+    // coordinates, and checkpoints bounded regions through the original command stream. No readback.
+    // The caller joins this producer and acknowledges every original GPU use before accessing/resetting
+    // the epoch. Allocations constructing the private engine propagate to the scheduler runner.
+    [[nodiscard]] static HRESULT RecordEpochForWork(StrokeEpoch& epoch, ID3D11DeviceContext* deferred,
+                                                    GpuRecordingCommands& commands,
+                                                    std::span<const BrushKernelTile> tiles,
+                                                    std::span<const BrushSegment> settled,
+                                                    std::span<const BrushSegment> tail,
+                                                    const BrushKernelParams& params);
+    // Owner borrow only after the recorder joined; the caller retains the epoch through every readback.
+    [[nodiscard]] static ID3D11Buffer* RecordedEpochBufferOwner(const StrokeEpoch& epoch, ID3D11Device* originalDevice,
+                                                                std::uint64_t key, int width, int height) noexcept;
     void BeginStroke() noexcept override;
     void EndStroke() noexcept override;
     [[nodiscard]] bool UsesCpuPermanent() const noexcept override
@@ -124,6 +144,7 @@ class GpuBrushCoverage final : public BrushCoverageEngine
         float geometry[4];
         float canvas[4];
         std::uint32_t counts[4];
+        std::uint32_t dispatchBounds[4]; // region origin and exclusive end, on the original full tile
     };
 
     [[nodiscard]] TileBuffers* BuffersFor(const BrushKernelTile& tile) noexcept;
@@ -133,6 +154,7 @@ class GpuBrushCoverage final : public BrushCoverageEngine
                                   std::span<const BrushSegment> tail, const BrushKernelParams& params,
                                   bool readback) noexcept;
 
+    GpuRecordingCommands* _recording = nullptr; // private worker borrow; never the compatibility engine
     ID3D11Device* _device = nullptr;
     ID3D11DeviceContext* _context = nullptr;
     wil::com_ptr_nothrow<ID3D11ComputeShader> _pipeline;

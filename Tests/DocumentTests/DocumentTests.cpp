@@ -30,6 +30,9 @@
 #include "Document.Tests.StrokeFinishPublication.h"
 #include "Document.Tests.StrokeOpening.h"
 #include "Document.Tests.StrokeOpeningMemory.h"
+#include "Document.Tests.StrokeSample.h"
+#include "Document.Tests.StrokeSampleSession.h"
+#include "Document.Tests.WandBooleanAdmission.h"
 #include "Document.h"
 #include "DocumentDraftTests.h"
 #include "DocumentFixtureTests.h"
@@ -8121,6 +8124,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSparseWindowBoundsTests();
     gFailures += RunDocumentMaskSampleWorkTests();
     gFailures += RunStrokeFinalCoverageTests();
+    gFailures += RunDocumentStrokeSampleTests();
+    gFailures += RunStrokeSampleSessionTests();
     gFailures += RunStrokeFinishPublicationTests();
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
@@ -8157,6 +8162,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();
     gFailures += RunWandLayerSelectionTests();
+    gFailures += RunWandBooleanAdmissionTests();
     gFailures += RunWandCompositeSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
     gFailures += RunSelectionMoveOpeningTests();

@@ -46,6 +46,10 @@ class GpuResidencyReservation final
     {
         return _deviceGeneration;
     }
+    [[nodiscard]] bool BelongsTo(const GpuResidencyBudget& budget) const noexcept
+    {
+        return _budget == &budget;
+    }
     void ResetOwner() noexcept;
 
   private:

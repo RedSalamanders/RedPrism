@@ -5,6 +5,7 @@
 
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationShutdownTestProbe.h"
+#include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "CloneReadbackTestGate.h"
 #include "DeferredRelease.h"
@@ -158,6 +159,7 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             std::optional<JobTicket> ticket;
             std::optional<HistoryWorkStamp> stamp;
             std::uint64_t reservation = 0;
+            std::uint64_t openingBytes = 0;
             bool workerHeld = false;
             bool adopted = false;
             bool reached = false;
@@ -186,6 +188,12 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             if (message.message == CloneReadbackTestGate::kMessage && message.wParam == 2)
             {
                 state.adopted = true;
+                return;
+            }
+            if (message.message == CloneReadbackTestGate::kMessage && message.wParam == 3)
+            {
+                const auto* draft = state.owner._session.PendingBrush();
+                state.openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
                 state.reached = state.live;
                 return;
             }
@@ -216,9 +224,10 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             state.stamp.has_value() && state.reservation != 0 && owner->_activeHostRequest &&
             owner->_activeHostRequest->ordinal == ordinal && owner->_canvasBrushInput.Opening() == opening &&
             receipt.Read().outcome == HostOutcome::Pending && gate->captures.load() == 1 &&
-            owner->_jobs.ReservedMemoryBytes() == state.reservation &&
+            owner->_jobs.ReservedMemoryBytes() == state.reservation + state.openingBytes &&
             (live ? state.adopted && owner->_canvasCloneSample && owner->_canvasCloneSample->lease &&
-                        owner->_canvasCloneSample->lease.Bytes() == state.reservation && owner->_session.PendingBrush()
+                        owner->_canvasCloneSample->lease.Bytes() == state.reservation &&
+                        owner->_session.PendingBrush() && state.openingBytes != 0
                   : owner->_utilityTicket == state.ticket && owner->_utilityStamp == state.stamp &&
                         owner->_historyWork.Busy() && !owner->_canvasCloneSample && !owner->_session.PendingBrush());
         expect(chargedBoundary, scenario, "original-ordinal-opening-ticket-stamp-and-charge-retained");
@@ -242,10 +251,12 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             Guid sourceId;
             Guid overlayId;
             std::uint64_t reservation;
+            std::uint64_t sourceReservation;
             bool pixelsAndHistoryUnchanged = false;
             bool chargeRetained = false;
             bool liveDraftAlive = false;
-        } detach{*owner, probe, live, revision, sourceId, overlayId, state.reservation};
+        } detach{*owner,           probe, live, revision, sourceId, overlayId, state.reservation + state.openingBytes,
+                 state.reservation};
         probe.checkContext = &detach;
         probe.checkOwner = [](void* opaque) noexcept
         {
@@ -261,7 +272,8 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             state.chargeRetained =
                 state.owner._jobs.ReservedMemoryBytes() == state.reservation && state.reservation != 0 &&
                 (!state.live || (state.owner._canvasCloneSample && state.owner._canvasCloneSample->lease &&
-                                 state.owner._canvasCloneSample->lease.Bytes() == state.reservation));
+                                 state.owner._canvasCloneSample->lease.Bytes() == state.sourceReservation &&
+                                 state.reservation > state.sourceReservation));
             state.liveDraftAlive = state.live && state.probe.draftAliveAtDetach && !state.probe.draft.expired();
         };
         owner->_shutdownTestProbe = &probe;

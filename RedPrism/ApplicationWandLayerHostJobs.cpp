@@ -228,7 +228,11 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     if (metadata > maximum - plan->reservationBytes || metadata > maximum - plan->retirementBytes)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto memory = plan->reservationBytes + metadata;
+    std::uint64_t declared = 0;
+    if (EvaluateWandLayerSelectionAdmission(*plan, SelectionMode::New, document->selection.has_value(), declared) !=
+        WandLayerSelectionAdmission::Ready)
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto memory = declared + metadata;
     const auto retirement = plan->retirementBytes + metadata;
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
     if (!ordinal)

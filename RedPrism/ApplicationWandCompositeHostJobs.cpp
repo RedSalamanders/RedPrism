@@ -238,7 +238,10 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
     const auto readback = DocumentReadbackJob::RequiredMemory(region);
     if (!plan || !readback)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    auto memory = plan->reservationBytes;
+    std::uint64_t memory = 0;
+    if (EvaluateWandLayerSelectionAdmission(*plan, SelectionMode::New, document->selection.has_value(), memory) !=
+        WandLayerSelectionAdmission::Ready)
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     auto retirement = plan->retirementBytes;
     const auto metadata = sizeof(WandCompositeHostJob) + sizeof(WandCompositePayload) + 8192ull;
     // Charge readback storage in addition to the conservative selection phases, including the retained GPU

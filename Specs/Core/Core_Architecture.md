@@ -77,6 +77,22 @@ returns. A false hook finalizes once even if it requested resume. Cancellation w
 external owner's acknowledgement, then skips the next Run and delivers one final Cancelled callback. Shutdown
 joins producers before destroying suspended payloads and drops callbacks.
 
+`InAcknowledgedJobCallback(ticket)` identifies only the exact successful original stage while its owner
+`DeferRetirement` or `DeferCompletion` callback runs after the producer returns. Progress, ordinary completion,
+failed/cancelled hooks, wrong generations and shutdown cannot acquire that identity. It grants no document or
+history mutation authority. A publication parent additionally needs its captured session/edit/history authority.
+
+`RetainPublicationMemory` is restricted to that original successful `DeferCompletion` callback, a suspended
+record with `deferredRetirement` and a descriptor-preclaimed retained-memory slot. It transfers the entire
+remaining CPU reservation once, without allocation, a memory query or a partial refund. All useful producers
+must have joined before this transfer; only bounded allocation-free cleanup may follow on the original record.
+The existing ordinary-completion `RetainMemory` contract remains unchanged.
+
+Publication provenance MUST compare the original ticket and the live shared-memory endpoint. Wrapper addresses
+and slot/generation numbers alone are insufficient after scheduler reconstruction. `OwnsRetainedMemoryEndpoint`
+is an owner-only identity query: it allocates nothing, samples no memory and grants no callback or mutation authority.
+Close removes the live endpoint, while older foreign graphs keep their independent charged endpoint until final release.
+
 Jobs that lend mapped storage or retain an external receiver across a terminal worker result MUST opt in with
 `JobOptions::deferredRetirement`. After the worker has returned (or its cancelled Run has been skipped), the
 owner invokes `Job::DeferRetirement` for Finished, Failed and Cancelled results, before the success-only hook.

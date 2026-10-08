@@ -4,6 +4,7 @@
 
 #include "Jobs.h"
 #include "LayerRowsWork.h"
+#include "SharedPublicationMemory.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,8 @@
 #include <optional>
 #include <span>
 #include <string>
+
+struct PreparedLayerRowsMemoryNode;
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
@@ -45,6 +48,10 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
 
     // Call from the successful owner completion, before exposing this wrapper to any reader.
     [[nodiscard]] std::int32_t BindMemory(JobScheduler& scheduler, JobTicket ticket) noexcept;
+    // Original admitted parent binds its worker-preallocated shared memory after useful work joins.
+    // A valid complete bound is required before sealing. This accounting creates no UI/history authority.
+    [[nodiscard]] std::int32_t BindPublicationMemory(
+        const std::shared_ptr<const SharedPublicationMemory>& memory) noexcept;
     // Seals the memory transfer before publication. A wrapper without its retained admission cannot be published.
     [[nodiscard]] bool SealForPublication() noexcept;
 
@@ -78,7 +85,7 @@ class PreparedLayerRows final : public DxUi::IPreparedTreeAccessibilityRows, pub
     std::unique_ptr<VisibleIdentity[]> _visibleLookup;
     std::size_t _layerCount = 0;
     std::uint64_t _documentSerial = 0;
-    SharedRetainedMemoryLease _lease;
+    PreparedLayerRowsMemoryNode* _memory = nullptr; // Object and control block hold independent roles.
     bool _sealedForPublication = false;
 };
 #pragma warning(pop)

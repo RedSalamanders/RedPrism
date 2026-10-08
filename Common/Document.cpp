@@ -1847,7 +1847,7 @@ bool DocumentSession::CancelPendingEdit()
         CancelTransform();
         return true;
     }
-    if (_brush || _brushFinishingOpening)
+    if (_brush || _brushFinishingOpening || _brushUpdatingOpening)
     {
         CancelBrush();
         return true;
@@ -2587,6 +2587,7 @@ void DocumentSession::ClearDocument()
     _selectionMoveOrigin.reset();
     _brush.reset();
     _brushFinishingOpening.reset();
+    _brushUpdatingOpening.reset();
     _lastBrushPoint.reset();
     _pendingOpacityDigit.reset();
     _budgetRefused = false;

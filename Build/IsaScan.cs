@@ -413,16 +413,24 @@ namespace RedPrismBuild
             if (!guardRows.TryGetValue(returnAddress, out byte[] terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
                 !MatchesDecodedPe(pe, sections, imageBase, returnAddress, terminal, contributions, decoded, decodedStarts))
             {
-                // MSVC also emits RET followed by exactly this three-byte alignment NOP. Both rows must
-                // be decoded, nonoverlapping and byte-identical to the PE; no arbitrary tail is skipped.
-                if (begin < imageBase + 4 ||
+                // MSVC emits either one-byte NOP or this exact three-byte alignment NOP after RET.
+                // Every terminal row must be decoded, nonoverlapping and byte-identical to the PE;
+                // the padded path below additionally validates the complete procedure's control flow.
+                if (begin >= imageBase + 2 &&
+                    guardRows.TryGetValue(begin - 2, out byte[] singleRet) && singleRet.Length == 1 && singleRet[0] == 0xc3 &&
+                    MatchesDecodedPe(pe, sections, imageBase, begin - 2, singleRet, contributions, decoded, decodedStarts) &&
+                    guardRows.TryGetValue(begin - 1, out byte[] singleNop) && singleNop.Length == 1 && singleNop[0] == 0x90 &&
+                    MatchesDecodedPe(pe, sections, imageBase, begin - 1, singleNop, contributions, decoded, decodedStarts))
+                    returnAddress = begin - 2;
+                else if (begin < imageBase + 4 ||
                     !guardRows.TryGetValue(begin - 4, out terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
                     !MatchesDecodedPe(pe, sections, imageBase, begin - 4, terminal, contributions, decoded, decodedStarts) ||
                     !guardRows.TryGetValue(begin - 3, out byte[] padding) || padding.Length != 3 ||
                     !StartsWith(padding, 0x0f, 0x1f, 0x00) ||
                     !MatchesDecodedPe(pe, sections, imageBase, begin - 3, padding, contributions, decoded, decodedStarts))
                     return null;
-                returnAddress = begin - 4;
+                else
+                    returnAddress = begin - 4;
             }
             foreach (Function procedure in procedures)
             {
@@ -2743,12 +2751,14 @@ namespace RedPrismBuild
                             {
                                 ulong table = checked(imageBase + BitConverter.ToUInt32(pe, at + 3));
                                 if (table > imageBase) rdxGuardCandidates.Add(table - 1);
+                                if (table >= imageBase + 2) rdxGuardCandidates.Add(table - 2);
                                 if (table >= imageBase + 4)
                                 {
                                     rdxGuardCandidates.Add(table - 4);
                                     rdxGuardCandidates.Add(table - 3);
                                     int tableRaw = checked((int)Offset(checked((uint)(table - imageBase)), sections, pe.Length));
-                                    if (tableRaw >= 4 && StartsWithAt(pe, tableRaw - 4, 0xc3, 0x0f, 0x1f, 0x00))
+                                    if ((tableRaw >= 2 && StartsWithAt(pe, tableRaw - 2, 0xc3, 0x90)) ||
+                                        (tableRaw >= 4 && StartsWithAt(pe, tableRaw - 4, 0xc3, 0x0f, 0x1f, 0x00)))
                                         foreach (Function procedure in procedures)
                                             if (procedure.Begin <= address - 15 && procedure.End > table)
                                                 raxPaddingBodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = table });
