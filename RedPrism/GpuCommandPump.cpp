@@ -302,3 +302,25 @@ void GpuCommandPump::SetCompletionRefusalsForTest(HRESULT first, HRESULT recover
         _recoveryRefusal = recovery;
     }
 }
+
+std::size_t GpuCommandPump::AttachedSourceCountOwnerForTest() const noexcept
+{
+    if (!IsOwner() || _inCallback)
+        return 0;
+    std::size_t count = 0;
+    for (const auto& source : _sources)
+        if (source.stream)
+            ++count;
+    return count;
+}
+
+std::size_t GpuCommandPump::QuarantinedSourceCountOwnerForTest() const noexcept
+{
+    if (!IsOwner() || _inCallback)
+        return 0;
+    std::size_t count = 0;
+    for (const auto& source : _sources)
+        if (source.stream && source.executing.ordinal && source.quarantined && !source.waiting)
+            ++count;
+    return count;
+}

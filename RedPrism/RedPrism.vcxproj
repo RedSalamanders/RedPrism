@@ -535,6 +535,7 @@
     <ClCompile Include="ApplicationCommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.PendingDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingDisplayTransport.cpp" />
     <ClCompile Include="Application.Tests.RowPublication.cpp" />
     <ClInclude Include="Application.Tests.RowPublication.h" />
     <ClCompile Include="Application.Tests.StrokeFinish.cpp" />

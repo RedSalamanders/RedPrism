@@ -1993,3 +1993,14 @@ before a later owner pass can execute the first batch: Cancel/reopen, joined shu
 and suspension/resume. Unpublished cancelled pixels cannot become a frame; all original charges remain until
 producer/transport/worker retirement. Fifteen-second event waits are deadlock bounds, not G1 measurements.
 Ordinary activation, recorder coexistence, full peaks and the large-document latency gates remain separate.
+
+`RunStandalonePendingDisplayTransportSelfTest` uses the actual WARP owner and both asynchronous stroke
+flags. Exposure's recorded commands execute before completion and recovery enqueue refusals quarantine the
+original source. Cancel's exact receipt must close the panel while that original remains attached. A real
+opacity commit then executes and quarantines its second source. Read-only fixed-array observers require
+one then two live executing, quarantined, nonwaiting sources and a dormant pump. Paint starts only after
+opacity's exact receipt is terminal. The third real recorder must report `ERROR_NOT_ENOUGH_QUOTA` through
+its retained Paint receipt without changing the opacity-published pixels or history. Joined shutdown must
+release both originals and all reservations. No failure field delivered only after retirement, synthetic
+acknowledgement or transient-ticket timing observation qualifies this scenario. The event timeout is a
+deadlock bound. This does not qualify ordinary activation, complete peaks or G1.

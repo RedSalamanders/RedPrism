@@ -59,6 +59,9 @@ class GpuCommandPump final : public OwnerWorkPump
     // One-shot test refusals after actual Execute, and before a captured retirement barrier. They never
     // substitute a completion signal or acknowledge the original use. Production leaves both S_OK.
     void SetCompletionRefusalsForTest(HRESULT first, HRESULT recovery) noexcept;
+    // Read-only fixed-array observations. Refuse off-owner and during callbacks; never acknowledge a use.
+    [[nodiscard]] std::size_t AttachedSourceCountOwnerForTest() const noexcept;
+    [[nodiscard]] std::size_t QuarantinedSourceCountOwnerForTest() const noexcept;
     [[nodiscard]] bool HasPending() const noexcept override;
     [[nodiscard]] bool HasReady() const noexcept override;
     void Pump() noexcept override;

@@ -139,6 +139,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept;
