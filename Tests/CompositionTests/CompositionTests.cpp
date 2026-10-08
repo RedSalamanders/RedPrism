@@ -26,6 +26,7 @@
 #include "Composition.Tests.RecordedBrush.h"
 #include "Composition.Tests.RecordedDisplayParent.h"
 #include "Composition.Tests.VideoMemorySnapshot.h"
+#include "Composition.Tests.WarpReplayCompute.h"
 #include "CompositionStageTimingTests.h"
 #include "Document.h"
 #include "DocumentReadbackTests.h"
@@ -2233,6 +2234,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunCommittedDisplayVisibilityTests();
     gFailures += RunCommittedDisplayDeviceRebindTests();
     gFailures += RunRecordedBrushCoverageTests();
+    gFailures += RunWarpReplayComputeTests();
     gFailures += RunEmptyJoinedShutdownTests();
     gFailures += RunVideoMemorySnapshotTests();
     gFailures += RunBrushDensityClearTests();

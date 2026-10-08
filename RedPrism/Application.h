@@ -142,6 +142,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneWarpFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleInputSelfTest(HINSTANCE instance) noexcept;
@@ -318,8 +319,10 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
         bool _attached = false;
     };
     [[nodiscard]] HRESULT StartStrokeFinish(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartWarpFinish(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartStrokeSamples(std::uint64_t opening) noexcept;
-    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples) noexcept;
+    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples,
+                                                bool warpReplay = false) noexcept;
     void PrepareStrokeFinishJoinedShutdownOwner() noexcept;
     StrokeFinishJob* _strokeFinishCurrent = nullptr;
     std::shared_ptr<struct StrokeFinishTestGate> _strokeFinishTestGate;

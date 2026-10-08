@@ -97,6 +97,46 @@ sequence. An old callback from the same gesture MUST NOT clear a newer transfer.
 graph destruction survive both final semantic ownership and weak control-block ownership, including small drafts.
 These core APIs do not activate the ordinary Warp host path or establish G1 timing qualification.
 
+Immutable Warp preview preparation retains the placed source and complete touched tile versions, with a
+producer-built dense tile directory. Metadata admission adds 1 MiB plus two `RasterTile` records and one
+32-bit directory entry per possible document tile. This is additional container allowance, not a substitute
+for source, mutable draft, old/new tile, history, transport, GPU, display or retirement overlap. Directory
+construction and tile snapshots run only on the admitted worker. Readers use constant-time directory lookup
+and bounded source windows; they allocate neither a full rendered image nor a reader-side tile index.
+The preallocated preview retirement node uses `AlwaysOnOwner`, even below the usual threshold. Its graph and
+allocator-owned weak control retain the same original accounting owner until both actually retire.
+Completed CPU transfer may use an available retained slot; callers requiring guaranteed publication preclaim
+that slot before work. Missing/stale tickets and duplicate binding refuse. GPU acknowledgement, original-parent
+admission, normal Warp activation and G1 remain separate requirements.
+
+Final Warp replay MUST sample the immutable placed-original/touched-tile representation on an exclusive worker,
+without constructing a document-sized sample raster. Its bounded source cache and retained preview ownership
+are included in the private stroke's retirement bound. One point phase at a time reuses the existing settled/tail
+coverage protocol; no all-points-by-all-segments batch is retained. The original parent separately admits CPU/GPU
+coverage, complete path, source/history/display and old/new ownership before replay. WARP continues to use compute
+coverage; the CPU replay reference is not permission to switch the host to a different coverage engine.
+Final capture copies only immutable handles and scalars and moves the sole mutable Warp owner. It performs no
+path, pixel, tile or history traversal. The ordered replay facade uses a scalar cursor and one pending coverage
+phase; it supplies centers from the retained original path without copying it. Private source-window, selection,
+replay output, path and captured/prepared history coexist under the original whole-operation reservation.
+Conversion cannot release the original path charge early; the prepared finish retains that owner until worker
+retirement, with original accounting continuing through deferred graph and weak-control deallocation.
+
+`PlanWarpFinishMemory` declares the complete supported replay rectangle from cached grid geometry and retained
+source/history bounds before exclusive capture. It additionally covers immutable snapshot containers and tiles,
+selection scratch, output, carried-mask construction and old/new history overlap. The CPU/GPU split declares
+retained density and uint output for every possible replay tile; the host separately adds command, pipeline and
+readback transport, and charges logical GPU storage in the CPU domain on WARP. Final display and layer rows
+have their own complete admission before preparation. Wrong-owner, borrowed, detached or stale targets refuse.
+These conservative declarations require measured large-document admission and G1 before ordinary activation.
+
+The experimental final Warp parent uses the existing ordered recording/readback protocol for each captured
+center and final coverage. It MUST keep density across point phases, install exact uint coverage only after
+the original mapped-row worker joins, and acknowledge original command/GPU users before replay or graph
+retirement. Its final history, display and rows retain the original ticket and host ordinal. Successful apply
+transfers the old session Warp source cache to the prepared worker retirement aggregate. Failed detached
+finishing discards only its matching marker; cancellation does not establish GPU completion.
+
 `PointerInputStream` provides fixed owner-only storage for one admitted gesture. Captured context and samples are
 trivial owning values; published samples cannot borrow session or control state. Accepted path samples retain FIFO
 order. Up/Lost uses a separate terminal slot, including when the move ring is full. Overflow refuses the offered
@@ -673,8 +713,9 @@ is 1 MiB plus two `RasterTile` records for every possible 256-pixel grid cell. T
 raster-edit pixel, coverage, lifted-opening or source-retirement bounds.
 
 One worker-created `SharedPublicationMemory` owner spans the preview stroke, immutable metadata and any newly
-prepared lifted-pixel opening. A successful original `Completed` callback may bind it through
-`BindAfterCompletedWork` only when that descriptor preclaimed a retained-memory slot. Wrong generation, foreign
+prepared lifted-pixel opening. Raster-preview callers preclaim a retained-memory slot for guaranteed transfer;
+a successful original `Completed` callback binds it through `BindAfterCompletedWork`. The general completed
+transfer may also select an available retained slot when none was preclaimed. Wrong generation, foreign
 scheduler, duplicate binding, failed completion or a call outside the original completion refuses transfer.
 No output or cache may escape before this binding succeeds. This success-only completed-CPU transfer is distinct
 from the acknowledged publication callback used by recording parents; neither authorizes document mutation.

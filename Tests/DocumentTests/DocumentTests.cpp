@@ -38,8 +38,12 @@
 #include "Document.Tests.StrokeSample.h"
 #include "Document.Tests.StrokeSampleSession.h"
 #include "Document.Tests.WandBooleanAdmission.h"
+#include "Document.Tests.WarpFinish.h"
+#include "Document.Tests.WarpFinishAdmission.h"
 #include "Document.Tests.WarpLazyTiles.h"
 #include "Document.Tests.WarpOpening.h"
+#include "Document.Tests.WarpPreviewReader.h"
+#include "Document.Tests.WarpReplay.h"
 #include "Document.Tests.WarpSamplePlan.h"
 #include "Document.Tests.WarpSampleSession.h"
 #include "Document.Tests.WarpWorkerCancellation.h"
@@ -8205,6 +8209,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWarpLazyTilesTests();
     gFailures += RunWarpSamplePlanTests();
     gFailures += RunWarpSampleSessionTests();
+    gFailures += RunWarpPreviewReaderTests();
+    gFailures += RunWarpReplayTests();
+    gFailures += RunWarpFinishTests();
+    gFailures += RunWarpFinishAdmissionTests();
     gFailures += RunPlacedRasterWorkTests() ? 0 : 1;
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();

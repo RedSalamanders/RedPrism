@@ -177,9 +177,14 @@ bool PreparedStrokeFinish::RefreshHistoryResidency(CancelToken cancellation, Doc
 
 bool DocumentSession::IsPreparedStrokeFinishCurrent(const PreparedStrokeFinish& prepared) const noexcept
 {
-    return !prepared._applied && prepared._input._valid && prepared._document && _document && !_brush &&
-           _brushFinishingOpening == prepared._input._opening && !_transformEdit && !_gradient && !_pixelMove &&
-           !HasPendingWarp() && !_colorEdit && CanApplyImageImport(prepared._input._authority) &&
+    const bool gestureCurrent =
+        prepared._input._kind == StrokeGestureKind::Warp
+            ? (_warpFinishingOpening == prepared._input._opening && !_warp && !_warpUpdatingOpening &&
+               !_brushFinishingOpening && !_brushUpdatingOpening && !_maskSelected)
+            : (_brushFinishingOpening == prepared._input._opening && !HasPendingWarp() && !_brushUpdatingOpening);
+    return gestureCurrent && !prepared._applied && prepared._input._valid && prepared._document && _document &&
+           !_brush && !_transformEdit && !_gradient && !_pixelMove && !_colorEdit &&
+           CanApplyImageImport(prepared._input._authority) &&
            _document->layers.Identity() == prepared._input._source.layers.Identity() &&
            _document->width == prepared._input._source.width && _document->height == prepared._input._source.height &&
            _document->resolution == prepared._input._source.resolution &&
@@ -196,7 +201,13 @@ bool DocumentSession::ApplyPreparedStrokeFinishIfCurrent(PreparedStrokeFinish& p
     std::swap(_document, prepared._document);
     std::swap(_displayCopy, prepared._retiredDisplay);
     std::swap(_lastBrushCommit, prepared._commit);
-    _brushFinishingOpening.reset();
+    if (prepared._input._kind == StrokeGestureKind::Warp)
+    {
+        std::swap(_warpSource.image, prepared._retiredWarpSource);
+        _warpFinishingOpening.reset();
+    }
+    else
+        _brushFinishingOpening.reset();
     NoteDocumentMutation();
     prepared._applied = true;
     return true;

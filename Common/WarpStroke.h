@@ -73,6 +73,9 @@ class WarpStroke
     }
     // Retained CPU storage bound for retirement/admission accounting; zero means arithmetic overflow.
     [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
+    // Known factory owner only, while no sample producer is active. Uses cached allocated bounds;
+    // no path or tile-directory walk. Includes one new version of every possibly touched tile.
+    [[nodiscard]] std::uint64_t SnapshotMemoryBytesForOwner() const noexcept;
     // Continues the stroke to `point` (document pixels), dabbing along the way.
     void Append(Vec2 point);
     // Worker mutation is exclusive. Any cancellation/refusal invalidates the private draft, so neither
@@ -106,6 +109,14 @@ class WarpStroke
     [[nodiscard]] std::thread::id WorkOwner() const noexcept
     {
         return _workOwner;
+    }
+    // Exclusive worker metadata borrow, valid only while the original draft is privately owned.
+    // Immutable preview construction copies these placed source owners; no full rendered raster is created.
+    [[nodiscard]] const WarpSourceView* SourceViewForWork() const noexcept
+    {
+        return _valid && _sourceView && _workOwner != std::thread::id{} && _workOwner != std::this_thread::get_id()
+                   ? &_sourceView.value()
+                   : nullptr;
     }
     // Every dab's center, for painting the result into the layer.
     [[nodiscard]] const std::vector<Vec2>& Points() const noexcept
@@ -173,6 +184,7 @@ class WarpStroke
     int _height = 0;
     int _columns = 0;
     std::vector<std::uint8_t> _pixels;
+    std::optional<WarpSourceView> _sourceView;
     std::unique_ptr<PlacedRasterReader> _reader;
     std::vector<Tile> _tiles;
     std::uint64_t _tileBytes = 0; // cached mutable/published tile ownership; no owner directory walk

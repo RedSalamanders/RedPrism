@@ -1,5 +1,6 @@
 #include "BrushStroke.h"
 #include "DocumentDraft.h"
+#include "WarpPreviewWork.h"
 
 #include "Heal.h"
 #include "ImageFilters.h"
@@ -1218,6 +1219,12 @@ std::uint64_t BrushStroke::RetirementMemoryBytes() const noexcept
         return 0;
     }
 
+    if (_warpSample)
+    {
+        const auto bytes = _warpSample->RetirementMemoryBytes();
+        if (!bytes || !AddRetirementBytes(total, bytes))
+            return 0;
+    }
     // Producers cache each tile's complete buffer/raster ownership after every allocation or replacement.
     // Pointer release reads this aggregate, never the tiles or their pixels. Duplicate immutable ownership
     // stays conservatively counted just as in the original per-tile reference bound.
@@ -1598,8 +1605,8 @@ bool BrushStroke::ComposeTile(Tile& tile)
     const double paintB = _settings.blue * 255.0;
     const double paintG = _settings.green * 255.0;
     const double paintR = _settings.red * 255.0;
-    const bool sampling = _sample.has_value() && _sample->HasStorage() &&
-                          _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888);
+    const bool sampling = _warpSample || (_sample.has_value() && _sample->HasStorage() &&
+                                          _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888));
     const bool washing = !sampling && Healing() && !_mask;
     const auto round8 = [](double value)
     { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
@@ -1633,7 +1640,8 @@ bool BrushStroke::ComposeTile(Tile& tile)
         if (sampling)
         {
             std::array<double, 4> sample{};
-            if (!SampleAt(*_sample, document.x + _sampleX, document.y + _sampleY, sample))
+            if (_warpSample ? !_warpSample->Sample(document, sample, _workCancellation)
+                            : !SampleAt(*_sample, document.x + _sampleX, document.y + _sampleY, sample))
             {
                 continue;
             }
@@ -5173,4 +5181,68 @@ bool BrushStroke::RetainOpeningMemory(SharedRetainedMemoryLease&& lease) noexcep
         return false;
     _openingMemory = std::move(lease);
     return true;
+}
+
+bool BrushStroke::BeginWarpReplayForWork(std::shared_ptr<const PreparedWarpPreview> preview, bool computeCoverage,
+                                         CancelToken cancellation)
+{
+    if (!_privateWorkerOwner || !_valid || _failed || _mask || _kind != BrushKind::Paint ||
+        _engine != &CpuBrushCoverage::Shared() || _workerRasterEdit || _detachedFinish || _detachedSample ||
+        !_tiles.empty() || !_samples.empty() || _sample || _warpSample || !preview ||
+        preview->ownerThread == std::this_thread::get_id() || preview->source.width != _canvasWidth ||
+        preview->source.height != _canvasHeight || cancellation.IsCancelled())
+        return false;
+    auto reader = std::make_unique<WarpPreviewReader>(preview);
+    if (!reader->IsValidForWork() || !reader->RetirementMemoryBytes())
+        return false;
+    ReleaseCoverageEngine(); // The worker factory's CPU engine has no graphics state.
+    _warpSample = std::move(reader);
+    _warpReplayOwner = preview->ownerThread;
+    _usesCpuPermanent = !computeCoverage;
+    _workerRasterEdit = true;
+    _warpReplay = true;
+    _replaces = true;
+    _workCancellation = std::move(cancellation);
+    return true;
+}
+
+std::optional<BrushStroke::SampleCoverage> BrushStroke::PrepareWarpReplaySampleForWork(Vec2 point,
+                                                                                       CancelToken cancellation)
+{
+    if (!_warpReplay || !_warpSample || _engine || !_valid || _failed || _detachedFinish ||
+        _warpReplayOwner == std::this_thread::get_id() || _sampleSequence == UINT64_MAX ||
+        (_sampleCoveragePrepared && !_sampleCoverageComplete) || !std::isfinite(point.x) || !std::isfinite(point.y))
+        return std::nullopt;
+    if (cancellation.IsCancelled())
+    {
+        _failed = true;
+        return std::nullopt;
+    }
+    _detachedSample = true;
+    _sampleCoveragePrepared = false;
+    _sampleCoverageComplete = false;
+    ++_sampleSequence;
+    // The unchanged scalar Append ignores finite centers beyond 1e7. Preserve a previously painted prefix,
+    // without replacing its last-four curve controls, and still acknowledge this accepted replay phase.
+    if (std::abs(point.x) > 1e7 || std::abs(point.y) > 1e7)
+    {
+        _workCancellation = std::move(cancellation);
+        _sampleCoveragePrepared = true;
+        SampleCoverage noop;
+        noop.sequence = _sampleSequence;
+        noop.params = KernelParams();
+        return noop;
+    }
+    _samplePoint = point;
+    return PrepareSampleCoverage(std::move(cancellation));
+}
+
+std::optional<BrushStroke::FinalCoverage> BrushStroke::PrepareWarpReplayFinishForWork(CancelToken cancellation)
+{
+    if (!_warpReplay || !_warpSample || _engine || !_valid || _failed || _detachedFinish ||
+        _warpReplayOwner == std::this_thread::get_id() || (_sampleCoveragePrepared && !_sampleCoverageComplete))
+        return std::nullopt;
+    _detachedSample = false;
+    _detachedFinish = true;
+    return PrepareFinalCoverage(std::move(cancellation));
 }

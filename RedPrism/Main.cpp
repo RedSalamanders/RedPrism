@@ -325,6 +325,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneStrokeFinishSelfTest\n");
         if (const int failed = Application::RunStandaloneStrokeFinishSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneWarpFinishSelfTest\n");
+        if (const int failed = Application::RunStandaloneWarpFinishSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneStrokeSampleSelfTest\n");
         if (const int failed = Application::RunStandaloneStrokeSampleSelfTest(instance); failed != 0)
             return failed;

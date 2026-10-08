@@ -29,6 +29,7 @@
 #include "Host.Tests.RetainedGrowth.h"
 #include "Host.Tests.RetainedSlotAdmission.h"
 #include "Host.Tests.WarpFactoryLifetime.h"
+#include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerStageRetirement.h"
 #include "Host.Tests.WorkerWriteCompletion.h"
 #include "HostPathReadTests.h"
@@ -1855,6 +1856,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunCompletedPreviewMemoryTests();
     gFailures += RunPreparedRasterPreviewLifetimeTests();
     gFailures += RunWarpFactoryLifetimeTests();
+    gFailures += RunWarpPreviewLifetimeTests();
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();

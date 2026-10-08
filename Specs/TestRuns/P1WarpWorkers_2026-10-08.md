@@ -1,6 +1,6 @@
 # P1 Warp worker primitives and retirement — 2026-10-08
 
-Status: focused Debug numeric qualification passes for the cancellable primitives and worker factory lifetime.
+Status: focused Debug numeric qualification passes for the cancellable primitives and worker factory lifetime. Full Release r511 passes the strengthened final-host qualification on the exact 1,068-input freeze; the combined matrix remains pending.
 Detached opening's counter repair passes all 49 focused Debug assertions in r480. Lazy placed-source opening,
 tile storage and reviewed sampler/snapshot tests pass focused Debug r482 after build r481. Full Debug r483
 fails the metadata fixture's inherited Blur mode; its preserved evidence precedes the explicit Liquify setup
@@ -200,9 +200,8 @@ Release analysis r491's actual child PID 114256 ran at `2026-10-08T17:49:52.6189
 `.build/P1Drafts/WarpLive-r1/Main-Analysis491-archive.json`. This is an incremental analysis attempt with zero
 application stages, not a full profile or G1 result.
 
-ARM1051 r58 was prepared but never launched. Main will qualify ARM64 on the combined forthcoming preview
-checkpoint 1057 to avoid repeating the full matrix for the metadata-reader edit. ARM64 remains pending until an
-actual later receipt. No run here proves ordinary Warp activation or G1; P1 remains WIP.
+ARM1051 r58 was prepared but never launched. ARM64 remains pending for the combined latest-source checkpoint;
+no ARM64 cross-build is claimed here. No run here proves ordinary Warp activation or G1; P1 remains WIP.
 
 r485's actual child PID 41928 runs at `2026-10-08T16:42:10.777929Z`–`16:47:48.532882Z`, exit 0. Its
 1,051 sources and 318 evidence copies authenticate before the opening-plus-sequence discard repair. r486's
@@ -244,6 +243,85 @@ expectation changes. Build and actual runtime qualification must prove this inte
 
 ## Next integration
 
+The x64-qualified opening/sample foundation is committed and pushed as `ef9c868`.
+The immutable preview reader is now integrated, with 32 Document assertions and 24 scheduler lifetime
+assertions. The main corrects the cheaper integration script's count labels: 33/15 literal `Expect`
+occurrences include definitions and do not describe the executed 32/24 assertions. Include registration
+order is formatted; `format.ps1 -Check` passes 928 files and skills validation passes 15 skills.
+
+Debug build r492 fails the new preview refusal fixture's implicit cancellation-token construction.
+Its completed archive `P1-warp-preview-1057-Debug492-failed-build-2026-10-08` authenticates 1,057 sources
+and 320 evidence copies before repair. Actual child PID 101244 runs at `2026-10-08T18:01:22.008541Z`–
+`18:01:41.813511Z`, exit 1, freeze `C10C3757BBE90D528CEC8A2C1B043DB9D07EB1C14EDAC03B78582B623BFC97D6`.
+Main changes only that call to explicit `CancelToken{...}`; no numeric or lifetime expectation changes.
+Debug build r493 completes successfully on 1,057-input freeze
+`DA1D8002478E3B822F421CBDC187F3B2988A7805B3221D27A79AEE4DF91EB988`, all five targets and linked instruction controls.
+Actual child PID 616 runs at `2026-10-08T18:04:47.565938Z`–`18:09:17.978744Z`, exit 0.
+Focused Document r494 (PID 121196, `18:10:47.924883Z`–`18:11:30.700878Z`) and Host r495 (PID 93760,
+`18:12:23.791922Z`–`18:12:25.610222Z`) both exit 0 on that same freeze. Main's
+`.build/P1Drafts/WarpPreviewQualification-r1/Main-preview-proof.json` binds their actual executable hashes to
+saved build r493: Document `1C640BFBBBBCBA3C436783F543EE2BA7BAD1D1A139CD19D143F1B5CF824E6DC8` and Host
+`C166B35644925428A0F8A3721B4EF43431C98812D5DC07CC13798E8B4A0D43CB`. The 32/24 assertions and two summaries
+match archived test source in execution order. Removing only these 33/25 records preserves the complete
+predecessor PASS/INFO/SUMMARY streams (8,655 Document / 8,204 Host), with no callback normalization.
+All three completed archives and their 1,057 source / 320 evidence copies independently authenticate.
+This is focused Debug core qualification. Final replay, graphics/host publication, full combined matrix,
+ARM64, ordinary activation and G1 remain open.
+
+The private final replay API and 21 CPU reference controls are integrated after those archives complete.
+Main repairs the cheaper-agent fixture before integration: original/sample bytes are distinct and the scalar
+reference reads the independent literal fixture, with two analytic selected/transparent pixel controls.
+Debug build r496 and Document runtime r497 both exit 0 on identical 1,059-input freeze
+`ABBB973CB811C6A66F95C6B51ACEE9E75827105E555EBAA18A2970F9D3975C3C`. Build PID 27004 runs at
+`2026-10-08T18:22:03.945242Z`–`18:27:27.739064Z`; runtime PID 65004 runs at
+`18:28:23.088892Z`–`18:29:06.517116Z`. The runtime executable SHA-256 is
+`EB3B1A6A4578B66610DD9714501AC74285C122B5E7BEA2906C8D682062A22B9C`. Main's
+`.build/P1Drafts/WarpReplayQualification-r1/Main-replay-proof.json` binds it to the saved build, verifies all
+21 assertions plus one summary, and preserves the exact 8,688-record predecessor stream (8,710 candidate
+PASS/INFO/SUMMARY records). No numeric reference changes after execution. The completed build/runtime archives
+independently authenticate 1,059 sources and 320 evidence copies each. Their completed receipt hashes are
+`92BAE79F6DD5793BF9E5B5FC7C1803F2D28D39EBCABB34BA7A7D1D9AACA77C2D` and
+`C336F5AD8CC88EC1F45A9A89C43333F500D3941277E722D275038BF16012ECF4` respectively.
+This is CPU reference qualification; no compute or host activation is established.
+
+The next staged capture retains the exclusive accepted Warp path, immutable source/history and explicit Warp
+gesture kind. Conversion requires every captured point to advance its own ordered composition facade and final
+coverage to complete; a raw brush replay cannot grant that path authority. Main reviews the cheaper-agent
+authority draft and catches optional move-assignment and moved-from probing errors before integration.
+Its initial spacing review incorrectly included the opening center in the recorded path. The 30 authority controls plus main's original-owner
+worker-refusal control are integrated (31 total), along with the main-written numeric compute fixture.
+All 15 skills validate and 936 files are formatted. Initial combined Debug build r498 fails solely on the
+new worker source's missing complete `SharedPublicationMemory` include. Its actual child PID 115588 runs at
+`2026-10-08T18:44:21.066526Z`–`18:45:40.162833Z`, exit 1, freeze
+`128B085C8A68B845520B7FCF9863FBA00F61DC386B8190B0CF1E0704038AB063`. The completed failed archive authenticates
+all 1,065 sources and 320 evidence copies before repair, receipt
+`6F5B7C8DFA22B72174000FC3B511C4ADF8B859EF5F5653889C61C078E801F6F8`. Main adds the direct include without
+changing algorithms or expectations. Fresh build/runtime qualification is due.
+
+Debug build r499 passes all five targets and linked instruction controls on 1,065-input freeze
+`F9C1D30C5CD4DB747AA82C8C65C44482DCD6A49A8C75283C9831FD8B94235CDA`.
+Document runtime r500 fails seven authority checks (21 assertions reached). Its completed failed archive
+`P1-warp-finish-1065-Document500-failed-2026-10-08` is authenticated before repair, receipt
+`D360B62AB9EB02F4386654CC2B57EF15D7F8231477D17FD7CC2E3792CFF3F639`.
+Main verifies both `WarpStroke::AppendForWork` and legacy `SmudgeLiquify.swift`: the first append only seeds
+`last` and picks up Smudge; it does not record a dab. The distance-two fixture must record only 8.25 and 9.25,
+not its opening center 7.25. Only this new authority fixture's path expectation is corrected. Existing pixel
+goldens and production algorithms are unchanged. Debug rebuild r502 succeeds on corrected 1,065-input freeze
+`C8CE3257AFDDF8680AF0C35E3B5FD8587942B2A40CB776B6C8D9C2A2280F6C7C`; Document r503 passes on that same freeze.
+
+Composition r501 independently passes all 18 numeric compute controls on each of WARP and hardware (36 total,
+zero failures) against build r499. Its full predecessor projection remains PARTIAL: asynchronous output from a
+pre-existing callback changes print order at record 810 (actual `recording-pump.actual-recording-and-gpu-protocol-reaches-owner`,
+expected `recording-pump.real-callback-keeps-original-source-device-and-order`). No complete predecessor claim or
+normalized result is established. Its actual child PID 107184 runs at
+`2026-10-08T18:59:01.320926Z`–`18:59:09.662728Z`, exit 0, executable SHA-256
+`7E8C3ABA5F397F64DB1E3B87A726635345916E5946E3ED33DB5CE68699E42E03`. The completed archive
+`P1-warp-finish-1065-Composition501-qualified-2026-10-08` authenticates all source/evidence copies, receipt
+`9FE0B112463CDD2BD7F123FE493B6828A441F89B0EA526121AD2D3B809C94BED`.
+This diagnostic uses the existing context-owned compute engine and joined worker uint installation; it does
+not qualify original-parent asynchronous recording/readback, normal Warp activation or G1. r501 belongs to
+r499's freeze, not corrected r502. The combined latest-source matrix remains due.
+
 The worker-only factory preallocates whole-draft retirement and retains the supplied original accounting owner
 through both queued node destruction and final weak control deallocation. Main corrects the agent's lifetime
 tests to construct directly on the admitted pool worker and to install the deferred sink only on the owner;
@@ -253,3 +331,165 @@ exact original reservation, below-threshold owner deferral and refusal expectati
 This factory is not normal Warp activation. Opening/live/snapshot/final phase peaks, accepted sample/seal order,
 all-touched preview metadata, prepared history/display, actual Cancel/Apply/Undo/device/shutdown and measured
 R1/W G1 remain required. Later compiled factory edits make r473/r475 historical evidence for the prior source.
+
+## Ordered Warp authority and final-host build follow-up
+
+Debug build r502 passes on the corrected 1,065-input freeze `C8CE3257AFDDF8680AF0C35E3B5FD8587942B2A40CB776B6C8D9C2A2280F6C7C`. Its actual-child result has exit 0, stdout SHA-256 `3764A0A75C42C36A9B5B752FFCC8A786488AE682E6D02FB9846EF6A2966C4845`, and empty-stderr hash `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`. Canonical archive `D:\RedPrismQualificationArchives\P1-warp-finish-1065-Debug502-qualified-build-2026-10-08` and `.build/P1Drafts/WarpLive-r1/Main-Debug502-archive.json` authenticate 1,065 sources and 320 evidence copies; completed receipt SHA-256 is `685A9F88BE77776F7F2A51DA64A8ABCD21BB873C337508B40EB26F93F0229246`.
+
+Document runtime r503 passes on the same 1,065-input freeze, using the actual `DocumentTests.exe` SHA-256 `A9D6EDC89A58AE8E8FDF7003410A97F55B169B7011E481FF0C7FEE73BE686D4F`. Its stdout ends `All document tests passed.` and hash is `E7A1317D522641C6F8C6036D3C9A18ABF8D078B44910CA54AC74EF66D52F6446`; stderr is empty. The independent `.build/P1Drafts/WarpCompletionQualification-r1/Document502-503-proof.json` source comparison verifies 31 authority assertions, zero failures, and exact predecessor sequence equality for all 8,710 records. Canonical archive `D:\RedPrismQualificationArchives\P1-warp-finish-1065-Document503-qualified-2026-10-08` and `.build/P1Drafts/WarpLive-r1/Main-Document503-archive.json` authenticate 1,065 sources and 320 evidence copies; completed receipt SHA-256 is `BEA4C3004A362C66AED49B0609691FE3BBDBA4580F6B6C98056C6607087F7FAF`. This is focused Document authority proof, not original-host activation or G1.
+
+Composition r501 passes 18 numeric compute controls on WARP and 18 on hardware (36 total, zero failures) against build r499. Its full predecessor projection remains PARTIAL: the 4,255-record candidate and expected projection first differ at record 810 because pre-existing asynchronous callback output order differs. Do not claim a complete predecessor comparison or a normalized result. r501 is from the earlier r499 freeze.
+
+The later final-host admission/application slice has 12 Document admission controls and 8 actual final-application controls integrated; it remains unqualified, and ordinary opening/live/preview Warp is not activated.
+
+Debug build r504 fails on the 1,068-input freeze `40E53AF1F284C1E340EDD46C3B68E52E2D23F3752AE0462FAB088A94ACCCA7AB`. The compiler reports C2661 for the new `BrushStroke` fixture call, which lacks its sixth `nullptr` argument, along with integration errors. Its actual-child receipt has exit 1, stdout SHA-256 `5669A58438B42392EB840371067B2A42347754305716E80373714ED580B72021`, and stderr SHA-256 `A8A4252C62957836AF4D50437F1F3B8C24BB1945D8E3E2F5B7FD1DA6346E00C7`. Canonical failed archive `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Debug504-failed-2026-10-08` and `.build/P1Drafts/WarpLive-r1/Main-Debug504-archive.json` authenticate 1,068 sources and 350 evidence copies; completed receipt SHA-256 is `9CD2E14CA9A40DC230E4134A51B82EED90A6A4905B024A96451BA8CCCE41B1A1`. Main corrected the test call; this archive remains failure evidence.
+
+Debug build r505 then fails on 1,068-input freeze `3FD695513179D70A9B9FA17E0EF53591829DB43AE53EB095D3A52B207409E1F7`. It reports `warpInput`/`warpPointCount` missing from `FinishPayload` because those members were declared on `LiveRetirementCapture`, plus follow-on compile errors. Canonical failed archive `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Debug505-failed-2026-10-08` and `.build/P1Drafts/WarpLive-r1/Main-Debug505-archive.json` authenticate 1,068 sources and 377 evidence copies; actual child exit is 1 and completed receipt SHA-256 is `9A0A93BD396BB09F8FC081892ADD4654A0A1D3FA005E564D17AE253F3F742F9E`. Preserve r505 as a failed build. Main is correcting the member placement after archive authentication.
+
+After the r505 correction, Debug build r506 fails on 1,068-input freeze `6E33C536977A8BA211D664E5208ACFE37ED8B10DC00F706E036C9A5A8E0BBA4F`: `StrokeOpeningMemoryBytes` is unresolved because its consuming test projects lack the `Common/StrokeOpeningWork.cpp` dependency. Canonical failed archive `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Debug506-failed-2026-10-08` and `.build/P1Drafts/WarpLive-r1/Main-Debug506-archive.json` authenticate 1,068 sources and 377 evidence copies; actual child exit is 1, stdout SHA-256 `A8DDAE7259542C05612A7FFA1D2507A11D3F42C013650B4F341E25741A6AEFC1`, and completed receipt SHA-256 is `88F488D94780C6C73FCE00B58B7EC4A6E1D356F2E5B1A73396E32A08EF962D26`. Archive authentication completed before Main adds the compiled project dependency. No algorithm or golden changed, and no pass is claimed for r504-r506.
+
+## Experimental final Warp parent qualification
+
+Debug build r507 succeeds on 1,068-input freeze `93579B384EF9EF05EA18C5AA35333F9CFE2D11532F45E946FAB04A4C5150E86C`.
+Actual child PID 33152 runs at `2026-10-08T19:24:15.863026Z`–`19:29:06.935719Z`, exit 0, empty stderr. All five
+executables and linked instruction controls pass. Completed archive `P1-warp-final-host-1068-Debug507-qualified-build-2026-10-08`
+authenticates all 1,068 source and 320 evidence files, receipt `355AEA5860E0789677C30072A4D300B9E27053AD521B915766B6A77F1ABABE3B`.
+
+Document r508 runs at `19:30:14.455937Z`–`19:30:57.970325Z`, PID 37816, exit 0, same freeze. Its unchanged executable
+hash is `80E3495A985E38955934E7751C42062722419A0AFF39951E537746AD48F13982`, bound to saved r507. Main's
+`.build/P1Drafts/WarpLive-r1/Main-Document508-proof.json` verifies the fixed 12 assertion labels and zero-failure
+summary against archived source, the unchanged 31 authority controls and exact 8,742-record predecessor projection.
+Completed archive `P1-warp-final-host-1068-Document508-qualified-2026-10-08` independently authenticates the same
+source/evidence counts, receipt `C7C3DE9C08812004A2F39EAA0380C26C45C8C05C4D5CEBCE0ACB975EE8D9228E`.
+
+Actual Application r509 runs at `19:32:00.389114Z`–`19:34:19.229783Z`, PID 59872, exit 0, same freeze. Its unchanged
+executable hash is `C294BE95A1A2BC20C62E3377AEA4A71854B3F7D792E5D9638492E215C38AFB4E`. Both Liquify and Smudge pass
+the four original-parent controls each: held final worker after real recording/readback, complete final raster and
+placement against the original scalar reference, one correctly named history, acknowledged display/rows and
+off-owner retirement, then exact Undo. The entire application reaches all 114 ordered stages. Completed archive
+`P1-warp-final-host-1068-Application509-qualified-2026-10-08` authenticates all 1,068 source and 320 evidence files,
+receipt `12538CCFFE0EB987310D3A5702003E5AC11DB7417486C1F986A333789CEB0974`. Stderr contains the existing
+successful export-host case records, not a diagnostic failure. The original opening and sample preparation are
+explicit joined core fixtures; this is experimental final-host proof, with no ordinary Warp live route or G1 claim.
+
+After these archives authenticate, the next fixture adds synthetic keyboard isolation, actual final-display
+pixel readback parity and held-final cancellation in both modes. It requires the literal old source/history,
+unchanged acknowledged display and exact old reservation after joined off-owner retirement. Four successful
+and three cancellation controls per mode total 14. Full Debug r510 passes; its actual receipt and independent
+qualification are recorded below. The earlier r509 result does not qualify these new assertions. Release/real
+ASan, analysis and combined ARM64 remain pending.
+
+The next preview graphics draft is isolated under `.build/P1Drafts/WarpRecordedPreview-r1`; no production
+composition edit or runtime qualification is claimed. Main drafts exact immutable placed-original/touched-tile
+band reads and source/grid validation. A cheaper agent supplies only independent literal quadrant bytes and
+translation expectations under `WarpRecordedPreviewTests-r1`. Main has drafted the original-ticket recorder
+fixture for translated, scaled, rotated, sparse and blank sources in both modes, preserving actual command
+acknowledgements, private inherited grids and last-use barriers. It is uncompiled and has no actual GPU pass
+yet; Main reviews and integrates it only after the current producer freeze ends.
+
+### Strengthened full Debug r510
+
+Actual test child PID 34828 runs at `2026-10-08T19:36:56.743977Z`–`19:46:57.357832Z`, exit 0. All required
+Debug suites, crash probes, instruction controls, RAW corpus controls and harness captures pass. The application
+reaches all 114 stages and all 14 final Warp assertions pass, including actual GPU display pixels and both
+held-final cancellations. Identity fixtures still begin with explicitly worker-prepared core opening/samples;
+this proves neither ordinary live Warp activation nor G1.
+
+- Source freeze: `1B604725BB49AFBF2AD4EFEA36DC00F0478A12D4269ADF65D7AC82C9A71EA420` (1,068 inputs).
+- Stdout: `BF19621BDC72430E263EFCC742876AA6F126D28D7838095810336CB823298056`.
+- Stderr: `355A1A2B1F563FC78AD395CC347F95908FDF61AA3A7F2B84D12AEFAFAEC0C3DF`.
+- Completed archive: `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Debug510-qualified-2026-10-08`.
+- Completion receipt: `10B5924C18E89F9E8D7BE1D2BDA667055E39FCF1D40C98252F800DD82D87F7FE`.
+- Source/evidence manifests: `83B331AAB26D794ED5AD12A863371C20F805C1B37557D4AA8858702C79F4B6F0` /
+  `400F6EA64CB280A01D5BADA4740D2093E2DF68130E4F23F33BA5F5004D15F4AF`.
+- Main independent read-back authenticates all 1,068 source and 331 evidence files before Release starts.
+- `Main-Debug510-profile.json` independently checks the fixed 14 labels, 114 unique stages, source hash
+  `96A7F7D485866FD4056066DF55B087AAF91DCFA2F7B23563DE8505CE3B686A3D`, and the required core summaries:
+  32 reader, 24 lifetime, 21 replay, 31 authority, 12 admission and 36 WARP/hardware compute assertions.
+
+The profile check initially refuses localized MSBuild bytes as invalid UTF-8. Main corrects only the checker:
+authenticate the full byte hash, then decode irrelevant localized build text with replacement while matching
+the ASCII PASS registries exactly. No source, golden, assertion or producer result changes. Main also fixes
+the checker to require the real lifetime summary's `passed=24 failed=0 controls=24` spelling.
+
+Full Release r511 completes on freeze `1B604725BB49AFBF2AD4EFEA36DC00F0478A12D4269ADF65D7AC82C9A71EA420`.
+The actual x64 test child PID 98816 exits 0 from `2026-10-08T19:47:39.473555Z` through
+`2026-10-08T19:56:34.323118Z`, with 1,068 frozen inputs and no automatic retry. Its stdout/stderr SHA-256 values
+are `39CAA4BDE339E0242C318179A6A9E6AA7C52C6CE76247B53E6AA72E35603AAB3` and
+`519EF1DCBB7984D6BFF3DEB243061202151C95CE593291F4143EFE64C099DE2D`. Main's independently checked profile
+receipt reports PASS, the same freeze, 14 application controls, all 114 application stages, one host execution,
+and the zero-failure core summaries for 32 preview-reader, 21 replay, 31 finish and 12 finish-admission checks;
+its bound source hash is `96A7F7D485866FD4056066DF55B087AAF91DCFA2F7B23563DE8505CE3B686A3D`. The actual completed
+archive `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Release511-qualified-2026-10-08` authenticates
+1,068 source and 317 evidence files. Its completion receipt SHA-256 is
+`D3489B10BE9A26385EF56426185C81B6D70DB882AA55D61C08DE53F30B5D1552`; source/evidence manifest SHA-256 values
+are `F1AF011F0AF1F4B3D2A3E8EFA869E59700ABD4BFFABCF3A84AFA7668A2D89F51` /
+`F2915239A561A36F51973E7330C9965E2CEA575BFAEA9093C2326DDBF862EE27`. The ignored
+`.build/P1Drafts/WarpLive-r1/Main-Release511-archive.json` and `Main-Release511-profile.json` independently record
+these checks; the archived source-freeze, actual-child result, start receipt, stdout, stderr and in-interval
+self-test log hashes were read back and matched against the evidence manifest. This is the strengthened final-host
+qualification only: no ordinary live Warp activation or G1 claim follows.
+
+Main review corrects the draft's transposed stdout hash against the actual archive; no test evidence changes.
+
+ASan r512 is running/pending; no result is claimed because no independently checked completed
+archive is present. Release analysis and combined ARM64 cross-builds remain pending. The separately staged cheaper
+agent ARM64 r59 scripts were main-reviewed and corrected to retain actual `failed` archive labels, run the
+independent archive checker before the next configuration and stop after an actual failed child; no ARM64 r59
+execution is claimed, and native ARM64 runtime is unavailable.
+
+
+## Full real-ASan r512 — main verification
+
+Actual test child PID 40656 runs at `2026-10-08T19:57:24.469068+00:00`–`2026-10-08T20:12:28.681775+00:00`, exit 0.
+The entire real-instrumented suite, detection probe, both crash probes, all 114 application stages and harness
+captures pass on the same 1,068-input freeze `1B604725BB49AFBF2AD4EFEA36DC00F0478A12D4269ADF65D7AC82C9A71EA420`.
+
+- Stdout/stderr SHA-256: `36CD91266F7B0F8B16A3F1EB41F92A80283E3ADFE0F45C72C12F9F565177D849` / `31E05D32EB91B740AC8B574F424E5AE5F6B5B0DD6E337E2C053791C989129D4E`.
+- Completed archive: `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-ASan512-qualified-2026-10-08`.
+- Completion receipt SHA-256: `F37CB8DC7153FE2F14BD1BF3DB80D09599EB51968EE845DB81731A00C5F0932D`.
+- Main independent archive checker authenticates 1068 sources and 318 evidence files.
+- Main fixed profile check passes all 14 actual final-Warp assertions, the fixed core summaries and both required
+  HostTests executions. No predecessor projection, ordinary Warp activation or measured G1 claim is added.
+
+Release analysis r513 starts only after this actual archive and both independent checks pass. ARM64 r59 remains
+pending until analysis completes and its actual archive is checked.
+
+
+## Release analysis r513 — main verification
+
+Actual analysis child PID 94488 runs at `2026-10-08T20:13:21.901460+00:00`–`2026-10-08T20:23:48.671645+00:00`, exit 0.
+All five products, concurrency-analysis controls, linked ISA/PDB controls and exact DxUi pin verification pass
+on the unchanged 1,068-input freeze `1B604725BB49AFBF2AD4EFEA36DC00F0478A12D4269ADF65D7AC82C9A71EA420`. This is analysis/build evidence;
+no application runtime or G1 measurement is inferred.
+
+- Stdout/stderr SHA-256: `D4A458E03AD23F106F467D890988741DE04C7970D3377E8F8C7893615BBDCFE6` / `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`.
+- Archive: `D:\RedPrismQualificationArchives\P1-warp-final-host-1068-Analysis513-qualified-2026-10-08`; completion receipt `C3EAEE873ADF2B9C5A65F5E0B4C573091EE61EAAB18EA41CDB2E2290DEAAA43E`.
+- Main independent checker authenticates 1068 sources and 331 evidence files.
+
+Reviewed ARM64 r59 starts at `2026-10-08T20:24:55.994111Z` with recorder PID 82388 only after analysis archive
+authentication. Each configuration must finish, archive its actual result and independently authenticate before
+the next one starts. Native ARM64 runtime remains unavailable; none is claimed.
+
+
+## Combined ARM64 r59 — main product verification
+
+All three actual cross-build children exit zero on the same 1,068-source freeze as x64 Debug/Release/real ASan
+and Release analysis. Each archive was independently authenticated before the next child was launched. Main
+verifies every source/evidence copy, actual process interval, prebuild snapshot and all 15 ARM64 PE/PDB products.
+The five ASan products additionally retain real sanitizer compiler/image controls. Native ARM64 runtime remains
+unavailable; this closes cross-build qualification only.
+
+- **Debug**: actual PID 9236, `2026-10-08T20:25:36.304664+00:00–2026-10-08T20:27:46.879175+00:00`, exit 0;
+  archive `D:\RedPrismQualificationArchives\P1-opacity-host-proof-1068-ARM64-Debug-r59-qualified-2026-10-08`; completion SHA-256 `D1F72F369CF0BE921C59CA80E3BFEE51E96B5841011F6EB9AD1FD7DE742FDAC4`.
+
+- **Release**: actual PID 106564, `2026-10-08T20:28:40.308459+00:00–2026-10-08T20:31:12.807289+00:00`, exit 0;
+  archive `D:\RedPrismQualificationArchives\P1-opacity-host-proof-1068-ARM64-Release-r59-qualified-2026-10-08`; completion SHA-256 `FFFCB751F0A932ED8F8E6796A05EEB70B57F5ACC44F65A5BF16E25F80B579E3A`.
+
+- **ASan Debug**: actual PID 39400, `2026-10-08T20:31:56.032656+00:00–2026-10-08T20:33:33.857901+00:00`, exit 0;
+  archive `D:\RedPrismQualificationArchives\P1-opacity-host-proof-1068-ARM64-ASan-r59-qualified-2026-10-08`; completion SHA-256 `950E053B1113D145D705A40AE389243B1752B1D00F4C2431D372AAC35564AC4C`.
+
+Main proof: `.build/P1Drafts/Arm1068-r59/Main-ARM59-products.json` (PASS, three profiles / 15 products).
+All 15 skills and 939 formatted files pass. No DxUi change is included; its exact pin remains
+`8e8994079e82f79e6765e6a885c03fc687957591`. The source checkpoint is qualified for commit/push, while
+recorded Warp preview, original opening/live activation, broader P1 delivery areas and measured G1 remain open.

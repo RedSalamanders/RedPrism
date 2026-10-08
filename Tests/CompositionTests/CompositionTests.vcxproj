@@ -136,6 +136,8 @@
     <ClCompile Include="Composition.Tests.BrushDensityClear.cpp" />
     <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
+    <ClCompile Include="Composition.Tests.WarpReplayCompute.cpp" />
+    <ClInclude Include="Composition.Tests.WarpReplayCompute.h" />
     <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
     <ClCompile Include="Composition.Tests.GpuResidencyGrowth.cpp" />
     <ClCompile Include="Composition.Tests.CommandStreamRestart.cpp" />
@@ -194,6 +196,11 @@
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\..\Common\WarpFinishWork.cpp" />
+    <ClCompile Include="..\..\Common\StrokeOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpFinishWork.h" />
     <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
     <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />

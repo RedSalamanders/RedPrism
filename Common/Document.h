@@ -1410,6 +1410,8 @@ class LayerCopyInput;
 class PreparedLayerCopy;
 class SharedPublicationMemory;
 class WarpSampleInput;
+class WarpFinishInput;
+struct WarpFinishMemoryPlan;
 struct WarpSampleMemoryPlan;
 class WarpOpeningInput;
 class PreparedWarpOpening;
@@ -2592,6 +2594,10 @@ class DocumentSession
     [[nodiscard]] bool IsWarpSampleCurrent(const WarpSampleInput& input) const noexcept;
     [[nodiscard]] bool ApplyWarpSampleIfCurrent(WarpSampleInput& input) noexcept;
     [[nodiscard]] bool DiscardWarpSampleIfCurrent(std::uint64_t opening, std::uint64_t sequence) noexcept;
+    // Capture only after original whole-graph admission. Exclusive worker replay retains this exact Warp kind.
+    [[nodiscard]] std::optional<WarpFinishInput> TakeWarpFinishInput(std::uint64_t opening) noexcept;
+    [[nodiscard]] std::optional<WarpFinishMemoryPlan> PlanWarpFinishMemory(bool computeCoverage) const noexcept;
+    [[nodiscard]] bool DiscardWarpFinishIfCurrent(std::uint64_t opening) noexcept;
     [[nodiscard]] bool HasPendingWarp() const noexcept
     {
         return _warp || _warpUpdatingOpening || _warpFinishingOpening;

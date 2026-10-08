@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Document.h"
 #include "Executor.h"
@@ -168,6 +168,9 @@ class BrushStrokeOpening
     std::uint64_t _retirementMemoryBytes = 0;
 };
 
+struct PreparedWarpPreview;
+class WarpPreviewReader;
+
 class BrushStroke
 {
   public:
@@ -296,6 +299,22 @@ class BrushStroke
         BrushKernelParams params;
         bool needsGpu = false;
     };
+    // Private final Warp replay only: retained immutable document-grid sample, no mutable Warp borrow,
+    // engine or context. Original parent admits complete path/tile/CPU/GPU/history/display overlap first.
+    [[nodiscard]] bool BeginWarpReplayForWork(std::shared_ptr<const PreparedWarpPreview> preview, bool computeCoverage,
+                                              CancelToken cancellation = {});
+    // One accepted dab center per joined phase. Exact settled curve/provisional tail order is preserved;
+    // compute mode requires original uint coverage delivery before ComposeSampleCoverage and the next call.
+    [[nodiscard]] std::optional<SampleCoverage> PrepareWarpReplaySampleForWork(Vec2 point,
+                                                                               CancelToken cancellation = {});
+    [[nodiscard]] std::optional<FinalCoverage> PrepareWarpReplayFinishForWork(CancelToken cancellation = {});
+    // Scalar completion proof for the private final Warp conversion; never creates a pixel snapshot.
+    [[nodiscard]] bool IsWarpReplayCompleteForWork() const noexcept
+    {
+        return _warpReplay && _warpSample && _valid && !_failed && !_engine && _detachedFinish &&
+               _finalCoveragePrepared && _finalCoverageComplete && !_workCancellation.IsCancelled() &&
+               _warpReplayOwner != std::this_thread::get_id();
+    }
     // Exclusive worker-only final curve/tile preparation; no borrowed engine calls.
     // Returned kernel tile pointers borrow this private draft through final coverage acknowledgement.
     [[nodiscard]] std::optional<FinalCoverage> PrepareFinalCoverage(CancelToken cancellation = {});
@@ -541,6 +560,9 @@ class BrushStroke
     bool _tileOwnershipValid = true;
     std::unordered_map<std::uint64_t, std::size_t> _index;
     std::optional<Raster> _sample;
+    std::unique_ptr<WarpPreviewReader> _warpSample;
+    bool _warpReplay = false;
+    std::thread::id _warpReplayOwner;
     Raster _carriedMask; // immutable linked non-placed mask, captured at stroke creation
     int _sampleX = 0;
     int _sampleY = 0;

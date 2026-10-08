@@ -643,6 +643,41 @@ composite)`; the kernels, the tile composition and the warp model live in
   Discard must match both opening and sample sequence; an old callback from the same gesture cannot clear a
   newer transfer. Cancel/replacement/shutdown invalidates late publication while
   the original worker input retains its graph until retirement. Normal Warp samples/finalization are still due.
+  `PrepareWarpPreviewForWork` prepares an immutable placed original plus complete touched replacement tiles,
+  in row-major 256-square cells clipped to the document. It requires the draft's known off-worker owner and
+  unbound original accounting owner; unknown/current/foreign owners, sealed accounting or cancellation refuse.
+  Its private directory and completion flag are producer-built; public metadata cannot forge reader authority.
+  `WarpPreviewReader` reads only on an exclusive worker, using that directory and bounded placed-source windows.
+  It does not materialize an unassembled sparse original or retain a mutable draft. Region reads preserve row
+  padding; invalid regions, sizes and pre-cancellation refuse before writing. In-flight cancellation may leave
+  only a private output prefix and grants no publication. Samples use the existing unrounded bilinear brush
+  rule after placed-source byte rounding; outside/nonfinite samples leave the caller's output unchanged.
+  Transparent document pixels remain successful samples. Old immutable previews survive subsequent dabs.
+  This CPU representation alone grants no session, history, GPU or normal display publication authority.
+  Private final Warp replay uses `BrushStroke::BeginWarpReplayForWork` with that immutable sample. The original
+  parent admits source, path, tiles, coverage, history, display and retirement overlap before creating the draft.
+  Replay retains the accepted point order and existing settled Catmull-Rom/provisional-tail/final-Flush rules.
+  Every `PrepareWarpReplaySampleForWork` descriptor must complete exact coverage delivery and composition before
+  another point or finish. Finite centers beyond the existing 1e7 limit acknowledge a no-op without changing the
+  retained curve controls; nonfinite points refuse without changing the prefix. Cancellation invalidates the
+  private prefix. `PrepareWarpReplayFinishForWork` seals only after final coverage composition; premature snapshots
+  refuse. CPU coverage is a private reference mode; WARP and hardware host replay retain the compute engine and
+  original uint delivery. The replay API grants no session/history publication authority.
+  `TakeWarpFinishInput` additionally requires the exact opening and sole strong draft owner. It captures only
+  immutable document/selection/history and scalar settings, leaving `_warpFinishingOpening` as the session barrier.
+  Its worker builds the private replay and exposes only const metadata. `PrepareNextSampleForWork` supplies the
+  next captured dab center; `ComposeSampleForWork` alone advances the path. Finish before the entire path or
+  publication before final composition refuses. Conversion carries the explicit `StrokeGestureKind::Warp` plus
+  the original path owner into prepared stroke/history publication. A brush finishing marker and Warp finishing
+  marker cannot authorize or discard each other, even with equal numeric openings. Apply is current and once;
+  cancellation, newer document/history/selection or reopening rejects late results. The joined original parent
+  retains every captured/replay/publication owner through retirement. These APIs do not activate the ordinary host.
+  `PlanWarpFinishMemory` is owner-only preflight before that capture, using cached complete source/history/grid
+  bounds and explicit CPU/GPU replay overlap. Missing, borrowed, detached or changed targets refuse. The
+  experimental host finishing parent preserves density through each recorded center, worker uint installation
+  and final composition. Final history, display and rows publish under the original host ordinal. Successful
+  apply moves the old Warp source cache into the prepared worker retirement owner. Ordinary Down, live preview,
+  acceptance/fault scenarios and measured G1 remain separate activation gates.
 - **Tip families**: `SwitchBrushTipFamily(from, to)` parks the size, hardness and opacity per family (0 the Brush,
   Eraser and Spot Healing; 1 Clone Stamp; 2 Smear; the parked families start soft at 40 px).
 - **Gradient** (`gradientSettings`: shape Linear / Radial, style Foreground to Transparent default / Foreground to

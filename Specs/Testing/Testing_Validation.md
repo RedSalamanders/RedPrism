@@ -34,6 +34,62 @@ source/product/profile binding and predecessor order/multiplicity are required. 
 admission, display publication, ordinary activation and G1 remain separate gates. See
 [the source-bound run record](../TestRuns/P1WarpWorkers_2026-10-08.md).
 
+`RunWarpPreviewReaderTests` adds 32 assertions with literal premultiplied pixels: identity/padded rows,
+translated nearest sampling, quarter-offset smooth placement, unrounded four-tap brush samples, refusal
+canaries, transparent exterior carried by Smudge, four clipped crossing tiles, immutable old generations and
+a 100 MP sparse source with one touched tile and no materialization. Preview factory controls include unknown,
+current and foreign owner, missing or cancelled accounting and unprepared metadata. No reference reads
+candidate output to generate expected pixels.
+
+`RunWarpPreviewLifetimeTests` adds 24 actual scheduler assertions. Event-gated joined workers prepare literal
+2x2 previews under one original reservation. Missing/stale tickets, sealed rebinding and already-bound preview
+preparation refuse. Both queued-graph/last-weak destruction permutations retain the full original charge;
+the final owner drain alone refunds it. A completed job without a slot preclaim can transfer into a free slot,
+preserving the scheduler's existing API behavior. Ten-second waits are deadlock bounds, not timing claims.
+These CPU tests do not qualify a GPU preview, final document publication, ordinary activation or G1.
+
+`RunWarpReplayTests` adds 21 CPU reference assertions. The original layer is literal `(8,4,12,32)` BGRA,
+distinct from the independent premultiplied sample pattern. Curved selected/self-crossing paths, duplicate centers,
+single-point Flush and a finite outlier compare exact pixels, bounds and transform with the unchanged scalar
+`BrushStroke` Append/Flush reference using that original fixture. Full hard coverage at `(3,3)` mixes
+`(56,28,112,224)` through selection `128/255` to `(32,16,62,128)`; selection zero preserves the original.
+A transparent sample clears the single-point tip interior while far pixels remain original. Missing/repeated
+opening, known-owner mutation, uncomposed phase advance/finish and cancelled-prefix snapshot refuse. A nonfinite
+point preserves the accepted prefix. These references do not qualify WARP compute delivery or host publication.
+
+`RunWarpFinishTests` adds 31 authority/history assertions on joined worker-factory drafts. Diameter 6 has
+spacing 1 in both modes; the opening at `(7.25,7.25)` seeds the last point and Smudge pickup without recording
+a dab. Moving to `(9.25,7.25)` captures only `(8.25,7.25)` and `(9.25,7.25)` in order. Liquify and Smudge require every captured center and final composition before conversion, apply
+exactly one correctly named history entry and Undo restores the independent original. Capture preserves root,
+history and generation, refuses missing/wrong opening or a live strong borrow, and rejects worker replay on
+the original owner. A brush-kind discard cannot clear a Warp marker. Moved/duplicate conversion, generation
+change, legitimate opacity history and cancel/reopen leave stale results unable to overwrite newer state.
+
+`RunWarpReplayComputeTests` requires the actual compute engine on WARP and exercises hardware when available.
+Its independent original/sample BGRA fixtures expose replacement errors. Curved/duplicate point phases and
+final Flush retain density; missing, short and duplicate uint coverage delivery refuse before composition.
+Workers compose only after joined coverage delivery. Exact bounds/transform and every resulting channel match
+the scalar reference within the existing brush tolerance (2/255); a transparent tip and far original have literal
+byte expectations. The diagnostic uses the existing synchronous engine on its context owner and independent
+readback storage. It does not qualify the production command recorder, asynchronous readback lifetime, original
+admission, ordinary activation or G1.
+
+`RunWarpFinishAdmissionTests` adds 12 controls for repeatable CPU/GPU preflight, literal one-tile geometry,
+unchanged source/document/history/path, an independently calculated source/snapshot/output floor and owner,
+borrowed, detached, missing, changed-placement and cancelled refusals. A worker-produced snapshot retains
+valid premultiplied bytes inside its cached ownership bound. This small identity fixture is not large-document
+admission or an allocation/latency measurement.
+
+`RunStandaloneWarpFinishSelfTest` uses a hidden actual WARP application and the real admitted final parent.
+Its fourteen controls cover Liquify and Smudge: original pending ordinal through recorded compute/readback and
+held final worker, complete final raster/placement against the original contiguous Warp plus scalar
+Append/Flush reference (existing 2/255 tolerance), one correctly named history entry, display/row publication,
+off-owner retirement and exact Undo. Harness-only readback compares every published display channel with the
+independent reference within 2/255. Each mode also cancels while final preparation is held, requiring unchanged
+literal source/history and acknowledged display, the exact old charge after off-owner retirement and a cancelled
+original receipt. Opening and sample setup are explicitly joined core fixtures; this gate
+does not qualify ordinary Down/live preview, hardware host acceptance, the complete fault matrix or G1.
+
 ### Completed raster-preview metadata and accounting
 
 `DocumentTests` runs `RunPreparedRasterPreviewTests`: 52 assertions cover immutable completed image gradients,

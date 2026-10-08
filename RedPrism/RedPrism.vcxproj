@@ -233,6 +233,10 @@
     <ClCompile Include="..\Common\Heal.cpp" />
     <ClCompile Include="..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\Common\WarpFinishWork.cpp" />
+    <ClInclude Include="..\Common\WarpFinishWork.h" />
     <ClCompile Include="..\Common\PlacedRasterWork.cpp" />
     <ClInclude Include="..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\Common\AdjustmentClosureWork.cpp" />
@@ -549,6 +553,7 @@
     <ClCompile Include="Application.Tests.RowPublication.cpp" />
     <ClInclude Include="Application.Tests.RowPublication.h" />
     <ClCompile Include="Application.Tests.StrokeFinish.cpp" />
+    <ClCompile Include="Application.Tests.WarpFinish.cpp" />
     <ClCompile Include="Application.Tests.StrokeSample.cpp" />
     <ClCompile Include="Application.Tests.StrokeSampleFault.cpp" />
     <ClCompile Include="Application.Tests.StrokeSampleInput.cpp" />

@@ -8,6 +8,15 @@
 #include <optional>
 #include <utility>
 
+class WarpFinishInput;
+class WarpStroke;
+
+enum class StrokeGestureKind : std::uint8_t
+{
+    Brush,
+    Warp
+};
+
 enum class StrokeFinishStatus : std::uint8_t
 {
     Ready,
@@ -44,11 +53,16 @@ class StrokeFinishInput final
     StrokeFinishInput(StrokeFinishInput&& input) noexcept
         : _authority(std::move(input._authority)), _source(std::move(input._source)), _active(input._active),
           _history(std::move(input._history)), _stroke(std::move(input._stroke)), _opening(input._opening),
-          _healSeed(input._healSeed), _valid(std::exchange(input._valid, false))
+          _healSeed(input._healSeed), _kind(input._kind), _warp(std::move(input._warp)),
+          _valid(std::exchange(input._valid, false))
     {
     }
     StrokeFinishInput& operator=(StrokeFinishInput&&) = delete;
 
+    [[nodiscard]] StrokeGestureKind GestureKind() const noexcept
+    {
+        return _kind;
+    }
     // Exclusive worker borrow. FinalCoverage's buffer pointers remain borrowed from this owned draft.
     [[nodiscard]] BrushStroke& DraftForWork() noexcept
     {
@@ -58,6 +72,7 @@ class StrokeFinishInput final
   private:
     friend class DocumentSession;
     friend class PreparedStrokeFinish;
+    friend class WarpFinishInput;
     StrokeFinishInput(ImageImportAuthority authority, CanvasDocument source, std::optional<Guid> active,
                       DocumentHistory::StateView history, std::shared_ptr<BrushStroke> stroke, std::uint64_t opening,
                       std::uint32_t healSeed) noexcept
@@ -72,6 +87,8 @@ class StrokeFinishInput final
     std::shared_ptr<BrushStroke> _stroke;
     std::uint64_t _opening;
     std::uint32_t _healSeed;
+    StrokeGestureKind _kind = StrokeGestureKind::Brush;
+    std::shared_ptr<WarpStroke> _warp; // complete accepted path/source remains charged through final retirement
     bool _valid = true;
 };
 
@@ -109,6 +126,7 @@ class PreparedStrokeFinish final
     std::optional<CanvasDocument> _document;
     DocumentHistory::Publication _history;
     std::optional<CanvasDocument> _retiredDisplay;
+    Raster _retiredWarpSource; // swapped from session cache; dies inside the original charged worker aggregate
     std::optional<BrushCommitInfo> _commit;
     bool _applied = false;
 };

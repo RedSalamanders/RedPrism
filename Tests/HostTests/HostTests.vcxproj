@@ -153,6 +153,11 @@
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\..\Common\WarpFinishWork.cpp" />
+    <ClCompile Include="..\..\Common\StrokeOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpFinishWork.h" />
     <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
     <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
@@ -181,6 +186,8 @@
     <ClInclude Include="Host.Tests.PreparedRasterPreviewLifetime.h" />
     <ClCompile Include="Host.Tests.WarpFactoryLifetime.cpp" />
     <ClInclude Include="Host.Tests.WarpFactoryLifetime.h" />
+    <ClCompile Include="Host.Tests.WarpPreviewLifetime.cpp" />
+    <ClInclude Include="Host.Tests.WarpPreviewLifetime.h" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />

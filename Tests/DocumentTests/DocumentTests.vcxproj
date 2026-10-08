@@ -334,6 +334,10 @@
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\..\Common\WarpFinishWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpFinishWork.h" />
     <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
     <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
@@ -387,6 +391,14 @@
     <ClInclude Include="Document.Tests.WarpSamplePlan.h" />
     <ClCompile Include="Document.Tests.WarpSampleSession.cpp" />
     <ClInclude Include="Document.Tests.WarpSampleSession.h" />
+    <ClCompile Include="Document.Tests.WarpPreviewReader.cpp" />
+    <ClInclude Include="Document.Tests.WarpPreviewReader.h" />
+    <ClCompile Include="Document.Tests.WarpReplay.cpp" />
+    <ClInclude Include="Document.Tests.WarpReplay.h" />
+    <ClCompile Include="Document.Tests.WarpFinish.cpp" />
+    <ClInclude Include="Document.Tests.WarpFinish.h" />
+    <ClCompile Include="Document.Tests.WarpFinishAdmission.cpp" />
+    <ClInclude Include="Document.Tests.WarpFinishAdmission.h" />
     <ClCompile Include="Document.Tests.WarpLazyTiles.cpp" />
     <ClInclude Include="Document.Tests.WarpLazyTiles.h" />
     <ClCompile Include="Document.Tests.PlacedRasterWork.cpp" />

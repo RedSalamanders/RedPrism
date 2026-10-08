@@ -8,6 +8,7 @@
 #include "StrokeFinishTestGate.h"
 #include "StrokeFinishWork.h"
 #include "StrokeSampleWork.h"
+#include "WarpFinishWork.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -36,6 +37,8 @@ struct FinishPayload final : DeferredReleaseNode
     // Last member destruction: the complete Clone charge survives every CPU draft/result source borrow.
     std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> clone;
     std::optional<StrokeFinishInput> input;
+    std::optional<WarpFinishInput> warpInput;
+    std::size_t warpPointCount = 0;
     std::optional<StrokeSampleInput> sampleInput;
     std::optional<BrushStroke::SampleCoverage> sampleCoverage;
     std::vector<RasterTile> changedTiles;
@@ -123,10 +126,10 @@ class Application::StrokeFinishJob final : public Job,
   public:
     StrokeFinishJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t hostOpening, std::uint64_t sessionOpening,
                     std::uint64_t retirement, std::uint64_t cpuBytes, GpuResidencyReservation reservation,
-                    bool processingSamples = false) noexcept
+                    bool processingSamples = false, bool warpReplay = false) noexcept
         : _owner(owner), _stamp(stamp), _hostOpening(hostOpening), _sessionOpening(sessionOpening),
           _retirement(retirement), _cpuBytes(cpuBytes), _gpuReservation(std::move(reservation)),
-          _processingSamples(processingSamples)
+          _processingSamples(processingSamples), _warpReplay(warpReplay)
     {
     }
 
@@ -291,11 +294,32 @@ class Application::StrokeFinishJob final : public Job,
         case WorkerAction::SampleRetire:
             // The draft has returned to its owner; this producer owns only the consumed wrapper and old preview.
             return HoldSampleBoundary(context, StrokeFinishTestGate::SampleBoundary::ReturningDraft);
+        case WorkerAction::WarpPrepare:
+        {
+            if (!_payload || !_payload->warpInput ||
+                !_payload->warpInput->PrepareReplayForWork(_usesGpu, context.cancellation, _payload->memory))
+                return FailureFor(context.cancellation);
+            _payload->warpPointCount = _payload->warpInput->PointsForWork().size();
+            if (!_payload->warpPointCount)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            [[fallthrough]];
+        }
+        case WorkerAction::WarpSamplePrepare:
+            _payload->sampleCoverage = _payload->warpInput->PrepareNextSampleForWork(context.cancellation);
+            return _payload->sampleCoverage ? JobResult{} : FailureFor(context.cancellation);
+        case WorkerAction::WarpSampleCompose:
+            if (!_payload || !_payload->warpInput || !_payload->sampleCoverage ||
+                !_payload->warpInput->ComposeSampleForWork(*_payload->sampleCoverage))
+                return FailureFor(context.cancellation);
+            _payload->sampleCoverage.reset(); // Borrow ends after exact mapped-row/command/barrier acknowledgements.
+            return {};
         case WorkerAction::Prepare:
         {
-            if (!_payload || !_payload->input)
+            if (!_payload || (_warpReplay ? !_payload->warpInput : !_payload->input))
                 return {JobStatus::Failed, E_UNEXPECTED};
-            _payload->coverage = _payload->input->DraftForWork().PrepareFinalCoverage(context.cancellation);
+            _payload->coverage = _warpReplay
+                                     ? _payload->warpInput->PrepareFinishForWork(context.cancellation)
+                                     : _payload->input->DraftForWork().PrepareFinalCoverage(context.cancellation);
             if (_payload->coverage && _gate)
             {
                 _gate->prepares.fetch_add(1);
@@ -353,15 +377,31 @@ class Application::StrokeFinishJob final : public Job,
         case WorkerAction::Install:
             if (!_payload || !_rows.data || _nextCoverage >= CoverageTiles().size())
                 return {JobStatus::Failed, E_UNEXPECTED};
-            _installed = _sampleInFlight ? _payload->sampleInput->DraftForWork().InstallSampleCoverage(
-                                               CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count})
-                                         : _payload->input->DraftForWork().InstallFinalCoverage(
-                                               CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count});
+            _installed = _warpReplay
+                             ? (_sampleInFlight ? _payload->warpInput->InstallSampleCoverageForWork(
+                                                      CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count})
+                                                : _payload->warpInput->InstallFinalCoverageForWork(
+                                                      CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count}))
+                         : _sampleInFlight ? _payload->sampleInput->DraftForWork().InstallSampleCoverage(
+                                                 CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count})
+                                           : _payload->input->DraftForWork().InstallFinalCoverage(
+                                                 CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count});
             return _installed ? JobResult{} : FailureFor(context.cancellation);
         case WorkerAction::Compose:
             // All exact coverage loans have acknowledged. No worker calls the borrowed engine/context.
+            if (_warpReplay)
+            {
+                if (!_payload || !_payload->warpInput || !_payload->coverage ||
+                    !_payload->warpInput->ComposeFinishForWork(*_payload->coverage))
+                    return FailureFor(context.cancellation);
+                auto completed = _payload->warpInput->TakeReplayPublicationForWork();
+                if (!completed)
+                    return FailureFor(context.cancellation);
+                _payload->input.emplace(std::move(completed.value()));
+                _payload->warpInput.reset();
+            }
             if (!_payload || !_payload->input || !_payload->coverage ||
-                !_payload->input->DraftForWork().ComposeFinalCoverage(*_payload->coverage))
+                (!_warpReplay && !_payload->input->DraftForWork().ComposeFinalCoverage(*_payload->coverage)))
                 return FailureFor(context.cancellation);
             _payload->coverage.reset();
             _payload->epoch.ResetForWork(); // only after actual completion or confirmed removal
@@ -512,6 +552,35 @@ class Application::StrokeFinishJob final : public Job,
         {
         case Phase::Allocate:
         {
+            if (_warpReplay)
+            {
+                if (_owner._gpuWork.DeviceGeneration() != _warpAdmissionGeneration ||
+                    _owner._brushEngine.Ready() != _warpCompute)
+                    return FailOwner(E_ABORT);
+                if (!_owner._committedDisplay.ClaimPublicationSlotOwner(_ticket, _publicationSlot))
+                    return FailOwner(E_OUTOFMEMORY);
+                _usesGpu = _warpCompute;
+                if (_usesGpu &&
+                    (_owner._brushEngine.TileCount() || !_owner._brushEngine.CanTakeStrokeEpoch(_payload->epoch)))
+                    return FailOwner(E_ABORT);
+                HRESULT status = _owner._gpuWork.CaptureCompletionContext(_payload->completion);
+                if (SUCCEEDED(status))
+                    status = _owner._gpuWork.CaptureCompletionContext(_payload->displayCompletion);
+                if (FAILED(status))
+                    return FailOwner(status);
+                auto input = _owner._session.TakeWarpFinishInput(_sessionOpening);
+                if (!input)
+                    return FailOwner(E_ABORT);
+                _payload->warpInput.emplace(std::move(input.value()));
+                _transferred = true;
+                if (_usesGpu && !_owner._brushEngine.TakeStrokeEpoch(_payload->epoch))
+                    std::terminate();    // Same serialized owner preflight; no intervening callback.
+                _gpuAcknowledged = true; // Empty Warp epoch: no submitted use until recording.
+                _payload->device = _owner._renderer.Device();
+                _payload->immediate = _owner._renderer.Context();
+                _sampleInFlight = true;
+                return ScheduleWorkerOwner(Phase::WarpPrepared, WorkerAction::WarpPrepare);
+            }
             if (_processingSamples)
             {
                 _liveRetirement = _payload->emergency.get();
@@ -570,6 +639,7 @@ class Application::StrokeFinishJob final : public Job,
         }
         case Phase::Prepare:
         case Phase::SamplePrepared:
+        case Phase::WarpPrepared:
             if (_sampleInFlight ? _payload->sampleCoverage->needsGpu : _payload->coverage->needsGpu)
             {
                 _recordingAdmission = _payload->commandsInitialized
@@ -674,11 +744,18 @@ class Application::StrokeFinishJob final : public Job,
             if (_finalAfterSample)
                 return CaptureFinalOwner();
             return AwaitInputOwner();
+        case Phase::WarpSampleComposed:
+            ++_warpReplayIndex;
+            _nextCoverage = 0;
+            if (_warpReplayIndex < _payload->warpPointCount)
+                return ScheduleWorkerOwner(Phase::WarpPrepared, WorkerAction::WarpSamplePrepare);
+            _sampleInFlight = false;
+            return ScheduleWorkerOwner(Phase::Prepare, WorkerAction::Prepare);
         case Phase::Compose:
         {
             if (_payload->result->status == StrokeFinishStatus::Unchanged)
             {
-                (void)_owner._session.DiscardStrokeFinishIfCurrent(_sessionOpening);
+                DiscardFinishOwner();
                 _terminal = true;
                 return BeginRetirementOwner();
             }
@@ -811,6 +888,9 @@ class Application::StrokeFinishJob final : public Job,
 
     void DeviceChangedOwner() noexcept
     {
+        if (_warpReplay && !_terminal && _owner._gpuWork.DeviceGeneration() != _warpAdmissionGeneration)
+            _originalDeviceInvalid =
+                true; // Original worker/copy acknowledgements remain due; no callback edits payload.
         if (_processingSamples && !_terminal && _originalContextCaptured &&
             (_payload->device.get() != _owner._renderer.Device() ||
              _payload->completion.DeviceGeneration() != _owner._gpuWork.DeviceGeneration()))
@@ -1029,7 +1109,7 @@ class Application::StrokeFinishJob final : public Job,
         if (_owner._strokeFinishCurrent == this)
             _owner._strokeFinishCurrent = nullptr;
         if (_transferred && !_applied)
-            (void)_owner._session.DiscardStrokeFinishIfCurrent(_sessionOpening);
+            DiscardFinishOwner();
         if (_processingSamples && !_applied)
             (void)_owner._session.DiscardStrokeSampleIfCurrent(_sessionOpening);
         _owner._utilityTicket.reset();
@@ -1075,6 +1155,8 @@ class Application::StrokeFinishJob final : public Job,
     }
     bool ComposeCoverageOwner() noexcept
     {
+        if (_warpReplay && _sampleInFlight)
+            return ScheduleWorkerOwner(Phase::WarpSampleComposed, WorkerAction::WarpSampleCompose);
         return _sampleInFlight ? ScheduleWorkerOwner(Phase::SampleComposed, WorkerAction::SampleCompose)
                                : ScheduleWorkerOwner(Phase::Compose, WorkerAction::Compose);
     }
@@ -1319,6 +1401,8 @@ class Application::StrokeFinishJob final : public Job,
         SampleComposed,
         SampleRecordingPreview,
         SampleRetired,
+        WarpPrepared,
+        WarpSampleComposed,
         Prepare,
         RecordCoverage,
         AwaitCommands,
@@ -1346,6 +1430,9 @@ class Application::StrokeFinishJob final : public Job,
         SampleCompose,
         SampleRecordPreview,
         SampleRetire,
+        WarpPrepare,
+        WarpSamplePrepare,
+        WarpSampleCompose,
         Prepare,
         RecordCoverage,
         RetireCommands,
@@ -1447,7 +1534,16 @@ class Application::StrokeFinishJob final : public Job,
     {
         return !_originalDeviceInvalid && CurrentRequest() && _owner._utilityStamp == _stamp &&
                _owner._historyWork.IsCurrent(_stamp) &&
-               (!_transferred || _applied || _owner._session.PendingBrushOpening() == _sessionOpening);
+               (!_transferred || _applied ||
+                (_warpReplay ? _owner._session.PendingWarpOpening() : _owner._session.PendingBrushOpening()) ==
+                    _sessionOpening);
+    }
+    void DiscardFinishOwner() noexcept
+    {
+        if (_warpReplay)
+            (void)_owner._session.DiscardWarpFinishIfCurrent(_sessionOpening);
+        else
+            (void)_owner._session.DiscardStrokeFinishIfCurrent(_sessionOpening);
     }
     bool ScheduleWorkerOwner(Phase phase, WorkerAction action) noexcept
     {
@@ -1586,6 +1682,10 @@ class Application::StrokeFinishJob final : public Job,
     bool _retirementAcknowledged = false;
     bool _applied = false;
     bool _processingSamples = false;
+    const bool _warpReplay;
+    const bool _warpCompute = _owner._brushEngine.Ready();
+    const std::uint64_t _warpAdmissionGeneration = _owner._gpuWork.DeviceGeneration();
+    std::size_t _warpReplayIndex = 0;
     bool _originalDeviceInvalid = false;
     bool _originalContextCaptured = false;
     LiveRetirementCapture* _liveRetirement = nullptr; // Owner-only descriptor; whole owner retires with payload.
@@ -1655,19 +1755,27 @@ HRESULT Application::StartStrokeSamples(std::uint64_t opening) noexcept
     return StartStrokeProcessing(opening, true);
 }
 
-HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processingSamples) noexcept
+HRESULT Application::StartWarpFinish(std::uint64_t opening) noexcept
+{
+    return StartStrokeProcessing(opening, false, true);
+}
+
+HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processingSamples, bool warpReplay) noexcept
 {
     const auto* captured = _canvasBrushInput.CapturedContext(opening);
     const auto* stroke = _session.PendingBrush();
-    if (!_committedDisplayInitialized || !_preparedLayerRowsEnabled || !captured || !stroke ||
-        !_canvasBrushSessionOpening || _session.PendingBrushOpening() != _canvasBrushSessionOpening ||
+    if ((warpReplay && processingSamples) || !_committedDisplayInitialized || !_preparedLayerRowsEnabled || !captured ||
+        (warpReplay ? !_session.PendingWarp() : !stroke) || !_canvasBrushSessionOpening ||
+        (warpReplay ? _session.PendingWarpOpening() : _session.PendingBrushOpening()) != _canvasBrushSessionOpening ||
         !_activeHostRequest || _utilityTicket || _strokeFinishCurrent ||
         captured->documentSerial != _session.DocumentSerial())
         return E_UNEXPECTED;
-    const auto plan = stroke->PlanFinishMemory();
-    const auto retirement = _session.RasterEditRetirementMemoryBytes();
-    if (!plan || !retirement)
+    const auto plan = !warpReplay && stroke ? stroke->PlanFinishMemory() : std::nullopt;
+    const auto warpPlan = warpReplay ? _session.PlanWarpFinishMemory(_brushEngine.Ready()) : std::nullopt;
+    const auto retirement = warpReplay && warpPlan ? warpPlan->cpuBytes : _session.RasterEditRetirementMemoryBytes();
+    if ((warpReplay ? !warpPlan : !plan) || !retirement)
         return E_OUTOFMEMORY;
+    const auto gpu = warpReplay ? warpPlan->gpuBytes : plan->additionalGpuBytes;
     auto cpu = retirement;
     const auto add = [&](std::uint64_t value) noexcept
     {
@@ -1677,12 +1785,12 @@ HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processin
         return true;
     };
     // Private brush pipeline, structured readback, metadata and all three bounded command shadows.
-    if (!add(plan->retirementCpuBytes) || !add(plan->additionalCpuBytes) || !add(128ull * 1024 * 1024) ||
-        !add(sizeof(StrokeFinishJob) + sizeof(FinishPayload)) || !add(SharedPublicationMemory::OwnershipAllowance()) ||
-        (_renderer.IsWarp() && !add(plan->additionalGpuBytes)))
+    if ((!warpReplay && (!add(plan->retirementCpuBytes) || !add(plan->additionalCpuBytes))) ||
+        !add(128ull * 1024 * 1024) || !add(sizeof(StrokeFinishJob) + sizeof(FinishPayload)) ||
+        !add(SharedPublicationMemory::OwnershipAllowance()) || (_renderer.IsWarp() && !add(gpu)))
         return E_OUTOFMEMORY;
     GpuResidencyReservation reservation;
-    if (plan->additionalGpuBytes)
+    if (gpu)
     {
         GpuCapabilities::VideoMemorySnapshot snapshot;
         const HRESULT query = GpuCapabilities::QueryVideoMemorySnapshot(_renderer.Device(), snapshot);
@@ -1695,7 +1803,7 @@ HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processin
             return E_OUTOFMEMORY;
         GpuResidencyAdmission decision;
         reservation = _graphGpuBudget.ReserveOwner(
-            plan->additionalGpuBytes, {_gpuWork.DeviceGeneration(), segment.budget, segment.currentUsage}, decision);
+            gpu, {_gpuWork.DeviceGeneration(), segment.budget, segment.currentUsage}, decision);
         if (!reservation)
             return E_OUTOFMEMORY;
     }
@@ -1710,7 +1818,7 @@ HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processin
     {
         auto constructed =
             std::make_unique<StrokeFinishJob>(*this, *stamp, opening, *_canvasBrushSessionOpening, retirement, cpu,
-                                              std::move(reservation), processingSamples);
+                                              std::move(reservation), processingSamples, warpReplay);
         auto* original = constructed.get();
         std::unique_ptr<Job> job = std::move(constructed);
         JobTicket ticket;

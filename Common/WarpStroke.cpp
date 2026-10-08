@@ -108,7 +108,8 @@ WarpStroke::WarpStroke(WarpSourceView source, SmearMode mode, const BrushSetting
     const auto count = static_cast<std::size_t>(_columns) * ((_height + kTileSize - 1) / kTileSize);
     _dirty.assign(count, 0);
     _tiles.resize(count);
-    _reader = std::make_unique<PlacedRasterReader>(std::move(source.image), source.placement);
+    _reader = std::make_unique<PlacedRasterReader>(source.image, source.placement);
+    _sourceView = std::move(source);
     _valid = !cancellation.IsCancelled();
 }
 
@@ -236,6 +237,34 @@ std::optional<WarpStroke::SampleMemoryPlan> WarpStroke::PlanSampleMemory(Vec2 po
     if (_workOwner == std::thread::id{} || _workOwner != std::this_thread::get_id())
         return std::nullopt;
     return PlanSampleMemoryImpl(point);
+}
+
+std::uint64_t WarpStroke::SnapshotMemoryBytesForOwner() const noexcept
+{
+    if (!_valid || !_reader || !_sourceView || _workOwner == std::thread::id{} ||
+        _workOwner != std::this_thread::get_id())
+        return 0;
+    const auto columns = (static_cast<std::uint64_t>(_width) + 255) / 256;
+    const auto rows = (static_cast<std::uint64_t>(_height) + 255) / 256;
+    auto bytes = std::uint64_t{1024 * 1024}; // dense indices, tile-vector overlap, reader caches and controls
+    const auto add = [&](std::uint64_t count, std::uint64_t unit) noexcept
+    {
+        if ((unit && count > UINT64_MAX / unit) || count * unit > UINT64_MAX - bytes)
+            return false;
+        bytes += count * unit;
+        return true;
+    };
+    const auto tileBytes = PixelBuffer::RequiredBytes(kTileSize * kTileSize * 4);
+    if (!tileBytes || !add(columns * rows, 2 * sizeof(RasterTile) + sizeof(std::int32_t)))
+        return 0;
+    if (_allocatedLeft <= _allocatedRight && _allocatedTop <= _allocatedBottom)
+    {
+        const auto tiles = static_cast<std::uint64_t>(_allocatedRight / kTileSize - _allocatedLeft / kTileSize + 1) *
+                           (_allocatedBottom / kTileSize - _allocatedTop / kTileSize + 1);
+        if (!add(tiles, tileBytes + 4096))
+            return 0;
+    }
+    return bytes;
 }
 
 std::optional<WarpStroke::SampleMemoryPlan> WarpStroke::PlanSampleMemoryImpl(Vec2 point) const noexcept
