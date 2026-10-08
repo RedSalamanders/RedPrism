@@ -316,6 +316,21 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneStrokeFinishSelfTest\n");
         if (const int failed = Application::RunStandaloneStrokeFinishSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleFaultSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleFaultSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleInputSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleInputSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleAdmissionSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleAdmissionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleParitySelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleParitySelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
             return failed;
     }

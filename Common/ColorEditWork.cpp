@@ -373,7 +373,10 @@ ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Ex
     };
     if (input.liveAdjustment)
     {
-        edit.previewLookup = Adjust::BuildAdjustmentLookup(input.liveAdjustment.value(), cancellation);
+        // The admitted source remains the original immutable layer in worker mode. Render the accepted
+        // settings, rather than depending on an owner-side mutation of that layer's parameter record.
+        const auto adjustment = Adjust::AdjustmentWithSettings(input.liveAdjustment.value(), edit.settings);
+        edit.previewLookup = Adjust::BuildAdjustmentLookup(adjustment, cancellation);
         if (!edit.previewLookup)
             return failed();
         edit.previewLookupOnly = true;

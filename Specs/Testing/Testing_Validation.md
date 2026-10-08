@@ -1890,3 +1890,82 @@ the same original lease's full admission/refund lifetime. Actual WARP `recorded-
 epoch without replacing/resetting buffers, then retires those original owners on the worker. The bound record
 is [P1StrokeSampleWork_2026-10-08.md](../TestRuns/P1StrokeSampleWork_2026-10-08.md). These additions require
 fresh qualification and do not establish actual application Append/Up, complete admission, G1 or native ARM64.
+
+`Composition.Tests.GpuResidencyGrowth` adds 33 literal accounting controls, including exact headroom, no-op
+under pressure, atomic refusals, moved/foreign leases and growth with all 128 slots held.
+`Composition.Tests.CommandStreamRestart` adds 21 controls through one original real WARP parent and three
+recording/acknowledgement/worker-retirement rounds; old ordinal 1 cannot name ordinal 3 in the same slot.
+
+`RunStandaloneStrokeSampleSelfTest` opts into the sample parent in an actual hidden WARP Application.
+Its eight mode fixtures cover Paint, Eraser, uniform and nearest-stretched masks, constant Blur/Heal, active
+Clone and All Layers Clone. Forty-nine source-fixed assertions require acknowledged Down and Move previews
+before history, the original ticket/ordinal, duplicate-point no-op, exact final pixels/history, complete-root
+publication and worker retirement. The independent stretched-mask quadrants are 64, 128 and 255; healing's
+full-coverage wash over opaque red is BGRA `14,14,154,255` from the legacy 12% gray at 45% opacity. The legacy
+touched-patch commit retains one history entry even when final color is constant. The event wait's ten-second
+bound detects deadlock; these functional fixtures do not measure G1 or qualify ordinary activation.
+
+### Application stroke sample faults and input ordering (P1)
+
+The opt-in hidden application sample route holds real worker preparation, CPU composition, completed preview
+recording, or consumed-draft retirement on a fixture event. Cancel, exact worker failure, actual renderer device
+replacement and actual joined shutdown are tested at each boundary. Dormant input additionally covers Cancel,
+device replacement and shutdown. Original ticket/ordinal, charges, unmodified source/history, old-frame exclusion
+and off-owner retirement form the independent state reference: 19 scenarios and 89 assertions. Device-invalid
+original work reports Stale/E_ABORT after original users acknowledge; cancellation reports Cancelled/E_ABORT;
+the injected failed producer reports Failed/E_OUTOFMEMORY. Shutdown uses the scheduler shutdown event, never a
+synthetic release. Ten-second waits detect deadlock and do not assert throughput or responsiveness.
+
+Separate literal input fixtures cover Shift's previous endpoint followed by the physical click, accepted-prefix
+capture loss, Undo that cancels an open gesture without changing history (RF-904), Undo after physical Up with
+accepted samples still pending, Undo during final preparation, the 512-event physical FIFO plus its separate
+terminal, and a hard rectangular selection: seven scenarios and 14 assertions. Sealed Undo waits behind the
+original stroke; open Undo reports Cancelled/E_ABORT with no new history. Overflow commits the accepted prefix and reports ERROR_NOT_ENOUGH_QUOTA;
+the rejected point remains transparent. Their original scalar/legacy brush reference remains unchanged.
+
+The existing startup-only ApplicationProcessingTestProbe::memory source drives two admission fixtures. Real OS
+snapshots admit a 512x8 source and the first acknowledged red preview. The next point crosses a 256-pixel tile
+boundary; one failed snapshot or one successful zero physical/commit snapshot refuses original reservation
+growth. Both report E_OUTOFMEMORY before a second sample acknowledgement, preserve source/history and retire
+the complete private graph off owner. All queries are on the owner. Production has no probe and retains its
+real OS memory source. These are functional admission controls; large-fixture peak/G1 qualification stays separate.
+
+### Patterned application stroke parity (P1)
+
+The opt-in actual application also compares ten patterned scenarios with a separate direct DocumentSession
+using CpuBrushCoverage::Shared, whose existing legacy numeric goldens remain unchanged. Five physical points
+per scenario include a curved return and a repeated endpoint. Every acknowledged live tile's geometry,
+coverage and complete composed raster is compared, including provisional-tail replacement. Final raster,
+placement, carried mask/semantic thumbnail and history are compared after Up; original preparation and
+off-owner retirement must acknowledge. The fixed inventory is 70 assertions plus one summary.
+
+Cases are partial-alpha soft paint/erasure, fractional selected paint, nonuniform masks, image/mask Blur,
+active/All Layers Clone, translated growth with a carried mask and nonuniform Heal. An opaque patterned top
+layer provides an analytic All Layers Clone composite. Each scenario constructs fresh actual and reference
+sessions; the first Heal uses the same existing session LCG state (`0x9e3779b9`, then unsigned
+`state * 1664525 + 1013904223`, in `Common/Document.h`), with no preceding Noise/Grain/Heal operation,
+without using candidate pixels or changing a production seed. Coverage and pixel comparisons use the existing 2/255 CPU/compute tolerance;
+placement, history count and ticket ownership are exact. Ten-second event waits are deadlock bounds. These
+functional scenarios do not establish G1, throughput or ordinary startup activation.
+
+### Recorded adjustment parent (P1)
+
+`Composition.Tests.RecordedAdjustment.cpp` uses one original admitted scheduler parent per case and actual
+WARP/hardware command acknowledgement. Three private graphs retain the committed seed, GPU preview and
+independent CPU-filter reference. Levels, Curves, Exposure, Gradient Map, HSV and half-scale Grain use a
+translated/stretched partial-alpha image, fractional selection, mask, opacity and an opaque upper layer.
+The reference is `RunFilter` plus `BlendThrough`, followed only by ordinary composition passes. Tolerances
+remain 1/255 for tables/Gradient Map, 4/255 for HSV and 2/255 for Grain. Live Exposure and Grain compare with
+`ApplyAdjustment` on the lower document composite through a half-coverage mask, preserving the upper layer.
+
+Exact unaffected pixels and immutable seed pixels, owner/invalid/pre-cancel refusals before creation,
+original ticket/device identity, joined stream retirement and a real final-use barrier are required.
+Every graph and lookup retires on the joined worker before the parent charge refunds. Failure prints both
+pixel arrays. Hardware is optional when unavailable; WARP is required. Diagnostic readback occurs only in
+this fixture. The declared three-graph 128 MiB peak and ten-second deadlock bound prove neither production
+resource sufficiency nor G1. Normal pending preview routing remains a separate integration gate.
+
+In the display-worker mode, `ColorEditDeferredTests` also covers all six adjustment kinds with both OK and
+Cancel: settings/preview-off/lookup publication retain the exact original root, generation and history;
+prepared closure does not mutate the source until apply; OK adds one exact entry and Cancel adds none.
+The 72 new state assertions supplement the unchanged direct-mode literal adjustment closure expectations.

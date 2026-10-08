@@ -535,6 +535,11 @@
     <ClCompile Include="Application.Tests.RowPublication.cpp" />
     <ClInclude Include="Application.Tests.RowPublication.h" />
     <ClCompile Include="Application.Tests.StrokeFinish.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSample.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleFault.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleInput.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleAdmission.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleParity.cpp" />
     <ClInclude Include="StrokeFinishTestGate.h" />
     <ClInclude Include="RecordedDisplayGraph.h" />
     <ClInclude Include="CommittedDisplayController.h" />

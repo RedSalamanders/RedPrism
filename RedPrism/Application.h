@@ -139,6 +139,11 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeSampleInputSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeSampleAdmissionSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneStrokeSampleParitySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsBoundarySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsInteractionSelfTest(HINSTANCE instance) noexcept;
@@ -294,6 +299,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
         [[nodiscard]] bool HasReady() const noexcept override;
         void Pump() noexcept override;
         void DeviceChangedOwner() noexcept;
+        void PrepareDeviceReplacementOwner() noexcept;
         void CloseAfterWorkers() noexcept;
 
       private:
@@ -301,10 +307,13 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
         bool _attached = false;
     };
     [[nodiscard]] HRESULT StartStrokeFinish(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartStrokeSamples(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples) noexcept;
     void PrepareStrokeFinishJoinedShutdownOwner() noexcept;
     StrokeFinishJob* _strokeFinishCurrent = nullptr;
     std::shared_ptr<struct StrokeFinishTestGate> _strokeFinishTestGate;
     bool _asyncStrokeFinishEnabled = false;
+    bool _asyncStrokeSamplesEnabled = false;
     class StrokeOpeningJob;
     [[nodiscard]] HRESULT StartStrokeOpening(std::uint64_t opening) noexcept;
     void BeginPreparedBrushStrokeAt(Vec2 point, unsigned int modifiers) noexcept;
@@ -1097,6 +1106,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     StrokeFinishSource _strokeFinishSource{*this};
     CommittedDisplayController _committedDisplay;
     RecordedDisplayGraph* _acknowledgedCommittedDisplay = nullptr;
+    RecordedDisplayGraph* _acknowledgedStrokePreview = nullptr;
     bool _committedDisplayInitialized = false;
     bool _committedDisplayAllowHiddenForTest = false;
     HRESULT _committedDisplayFailure = S_OK;

@@ -7,6 +7,7 @@
 #include "PreparedLayerRows.h"
 #include "StrokeFinishTestGate.h"
 #include "StrokeFinishWork.h"
+#include "StrokeSampleWork.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -20,6 +21,11 @@
 
 namespace
 {
+struct LiveRetirementCapture final
+{
+    std::optional<StrokeFinishInput> input;
+    GpuBrushCoverage::StrokeEpoch epoch;
+};
 #pragma warning(push)
 #pragma warning(disable : 4324)
 struct FinishPayload final : DeferredReleaseNode
@@ -30,6 +36,14 @@ struct FinishPayload final : DeferredReleaseNode
     // Last member destruction: the complete Clone charge survives every CPU draft/result source borrow.
     std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> clone;
     std::optional<StrokeFinishInput> input;
+    std::optional<StrokeSampleInput> sampleInput;
+    std::optional<BrushStroke::SampleCoverage> sampleCoverage;
+    std::vector<RasterTile> changedTiles;
+    CanvasRenderer::StrokePreview samplePreview;
+    std::unique_ptr<RecordedDisplayGraph> previewCurrent;
+    std::unique_ptr<RecordedDisplayGraph> previewCandidate;
+    std::unique_ptr<RecordedDisplayGraph> previewPrevious;
+    bool previewsDetached = false;
     std::optional<BrushStroke::FinalCoverage> coverage;
     std::optional<StrokeFinishResult> result;
     std::unique_ptr<PreparedCommittedDisplay> display;
@@ -48,6 +62,9 @@ struct FinishPayload final : DeferredReleaseNode
     // Declaration order keeps context alive until the density graph's destructor has finished.
     GpuCompletionContext completion;
     GpuBrushCoverage::StrokeEpoch epoch;
+    // First worker allocation; exclusively owner-owned after its acknowledgement until terminal retirement.
+    // Separate from sample input/coverage/preview fields a producer may be using.
+    std::unique_ptr<LiveRetirementCapture> emergency;
     wil::com_ptr_nothrow<ID3D11Device> device;
     GpuCompletionContext commandRetirement;
     GpuCommandStream commands;
@@ -56,6 +73,11 @@ struct FinishPayload final : DeferredReleaseNode
     bool commandsRetired = false;
     ~FinishPayload()
     {
+        if (previewPrevious && !previewPrevious->RetireForWork())
+            std::terminate();
+        for (auto* graph : {previewCurrent.get(), previewCandidate.get()})
+            if (graph && (!previewsDetached || !graph->RetireForWork()))
+                std::terminate();
         if (displayCommandsInitialized && !displayCommandsRetired && !displayCommands.RetireForWork())
             std::terminate();
         if (display && !displayConsumed && !display->RetireForWork())
@@ -100,9 +122,11 @@ class Application::StrokeFinishJob final : public Job,
 {
   public:
     StrokeFinishJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t hostOpening, std::uint64_t sessionOpening,
-                    std::uint64_t retirement, std::uint64_t cpuBytes, GpuResidencyReservation reservation) noexcept
+                    std::uint64_t retirement, std::uint64_t cpuBytes, GpuResidencyReservation reservation,
+                    bool processingSamples = false) noexcept
         : _owner(owner), _stamp(stamp), _hostOpening(hostOpening), _sessionOpening(sessionOpening),
-          _retirement(retirement), _cpuBytes(cpuBytes), _gpuReservation(std::move(reservation))
+          _retirement(retirement), _cpuBytes(cpuBytes), _gpuReservation(std::move(reservation)),
+          _processingSamples(processingSamples)
     {
     }
 
@@ -157,6 +181,8 @@ class Application::StrokeFinishJob final : public Job,
         };
         if (_payload)
         {
+            DetachPreviewsOwner();
+            CaptureLiveRetirementOwner();
             detachStream(_payload->commands, _payload->commandsInitialized, _payload->commandsRetired,
                          _payload->commandsAuthorized, _commandSource, _payload->commandRetirement);
             detachStream(_payload->displayCommands, _payload->displayCommandsInitialized,
@@ -198,7 +224,73 @@ class Application::StrokeFinishJob final : public Job,
             _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
             _payload->memory = SharedPublicationMemory::CreateForWork();
             _payload->gate = _gate;
+            if (_processingSamples)
+                _payload->emergency = std::make_unique<LiveRetirementCapture>();
             return {};
+        case WorkerAction::SamplePrepare:
+            if (!_payload || !_payload->sampleInput)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            _payload->sampleCoverage =
+                _payload->sampleInput->DraftForWork().PrepareSampleCoverage(context.cancellation);
+            if (_payload->sampleCoverage && _gate)
+            {
+                _gate->samplesPrepared.fetch_add(1);
+                _gate->samplesOffOwner.fetch_add(GetCurrentThreadId() != _ownerThread ? 1u : 0u);
+            }
+            return _payload->sampleCoverage
+                       ? HoldSampleBoundary(context, StrokeFinishTestGate::SampleBoundary::Prepared)
+                       : FailureFor(context.cancellation);
+        case WorkerAction::SampleCompose:
+        {
+            if (!_payload || !_payload->sampleInput || !_payload->sampleCoverage ||
+                !_payload->sampleInput->DraftForWork().ComposeSampleCoverage(_payload->sampleCoverage.value()))
+                return FailureFor(context.cancellation);
+            _sampleNoPixels = _payload->sampleCoverage->tiles.empty();
+            if (_sampleNoPixels)
+                return {}; // Duplicate/outside points advance their sequence without a new preview graph.
+            auto& stroke = _payload->sampleInput->DraftForWork();
+            auto& preview = _payload->samplePreview;
+            preview.layerID = stroke.LayerID();
+            preview.mask = stroke.IsMask();
+            preview.width = stroke.Width();
+            preview.height = stroke.Height();
+            preview.transform = stroke.PaintTransform();
+            preview.fill = stroke.FillValue();
+            const auto& source = stroke.SourceImage();
+            if (source.HasStorage())
+            {
+                preview.source = source;
+                preview.sourceX = stroke.SourceRect().x;
+                preview.sourceY = stroke.SourceRect().y;
+                preview.sourceWidth = stroke.SourceRect().width;
+                preview.sourceHeight = stroke.SourceRect().height;
+            }
+            _payload->changedTiles.clear();
+            for (const auto index : stroke.TakeChanged())
+            {
+                const auto& tile = stroke.Tiles()[index];
+                _payload->changedTiles.push_back({tile.rect.x, tile.rect.y, tile.image});
+            }
+            _payload->previewCandidate = std::make_unique<RecordedDisplayGraph>(_ownerThread);
+            return HoldSampleBoundary(context, StrokeFinishTestGate::SampleBoundary::Composed);
+        }
+        case WorkerAction::SampleRecordPreview:
+        {
+            if (!_payload || !_payload->sampleInput || !_payload->previewCandidate ||
+                FAILED(_displayRecordingAdmission))
+                return {JobStatus::Failed,
+                        FAILED(_displayRecordingAdmission) ? _displayRecordingAdmission : E_UNEXPECTED};
+            const auto* seed = _payload->previewCurrent ? _payload->previewCurrent.get() : _seedGraph;
+            const auto status = _payload->previewCandidate->PrepareStrokeForWork(
+                _payload->device.get(), _payload->sampleInput->CapturedDocumentForWork(), _payload->samplePreview,
+                _payload->changedTiles, _payload->displayCommands, context.cancellation, seed);
+            return SUCCEEDED(status)
+                       ? HoldSampleBoundary(context, StrokeFinishTestGate::SampleBoundary::PreviewRecorded)
+                       : FailureResult(status);
+        }
+        case WorkerAction::SampleRetire:
+            // The draft has returned to its owner; this producer owns only the consumed wrapper and old preview.
+            return HoldSampleBoundary(context, StrokeFinishTestGate::SampleBoundary::ReturningDraft);
         case WorkerAction::Prepare:
         {
             if (!_payload || !_payload->input)
@@ -227,7 +319,8 @@ class Application::StrokeFinishJob final : public Job,
         }
         case WorkerAction::RecordCoverage:
         {
-            if (!_payload || !_payload->coverage || FAILED(_recordingAdmission))
+            if (!_payload || (_sampleInFlight ? !_payload->sampleCoverage : !_payload->coverage) ||
+                FAILED(_recordingAdmission))
                 return {JobStatus::Failed, FAILED(_recordingAdmission) ? _recordingAdmission : E_UNEXPECTED};
             wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
             HRESULT status = _payload->device->CreateDeferredContext(0, deferred.put());
@@ -237,9 +330,19 @@ class Application::StrokeFinishJob final : public Job,
             status = recording.InitializeForWork(deferred.get(), _payload->commands, context.cancellation);
             if (SUCCEEDED(status))
             {
-                const auto& final = *_payload->coverage;
-                status = GpuBrushCoverage::RecordEpochForWork(_payload->epoch, deferred.get(), recording, final.tiles,
-                                                              final.settled, {}, final.params);
+                if (_sampleInFlight)
+                {
+                    const auto& sample = _payload->sampleCoverage.value();
+                    status =
+                        GpuBrushCoverage::RecordEpochForWork(_payload->epoch, deferred.get(), recording, sample.tiles,
+                                                             sample.settled, sample.tail, sample.params);
+                }
+                else
+                {
+                    const auto& final = _payload->coverage.value();
+                    status = GpuBrushCoverage::RecordEpochForWork(_payload->epoch, deferred.get(), recording,
+                                                                  final.tiles, final.settled, {}, final.params);
+                }
             }
             return status == E_ABORT ? JobResult{JobStatus::Cancelled, E_ABORT}
                    : FAILED(status)  ? JobResult{JobStatus::Failed, status}
@@ -248,11 +351,12 @@ class Application::StrokeFinishJob final : public Job,
         case WorkerAction::RetireCommands:
             return {}; // Nonthrowing retirement is in RetireWorkerStage, including cancellation-skipped Run.
         case WorkerAction::Install:
-            if (!_payload || !_payload->input || !_payload->coverage || !_rows.data ||
-                _nextCoverage >= _payload->coverage->tiles.size())
+            if (!_payload || !_rows.data || _nextCoverage >= CoverageTiles().size())
                 return {JobStatus::Failed, E_UNEXPECTED};
-            _installed = _payload->input->DraftForWork().InstallFinalCoverage(
-                _payload->coverage->tiles[_nextCoverage].key, {_rows.data, _rows.count});
+            _installed = _sampleInFlight ? _payload->sampleInput->DraftForWork().InstallSampleCoverage(
+                                               CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count})
+                                         : _payload->input->DraftForWork().InstallFinalCoverage(
+                                               CoverageTiles()[_nextCoverage].key, {_rows.data, _rows.count});
             return _installed ? JobResult{} : FailureFor(context.cancellation);
         case WorkerAction::Compose:
             // All exact coverage loans have acknowledged. No worker calls the borrowed engine/context.
@@ -261,7 +365,8 @@ class Application::StrokeFinishJob final : public Job,
                 return FailureFor(context.cancellation);
             _payload->coverage.reset();
             _payload->epoch.ResetForWork(); // only after actual completion or confirmed removal
-            _payload->completion = {};
+            if (!_processingSamples)
+                _payload->completion = {}; // A live preview still needs this original last-frame barrier.
             _payload->result.emplace(DocumentSession::PrepareStrokeFinishPublication(std::move(_payload->input.value()),
                                                                                      context.cancellation, {}));
             _payload->input.reset();
@@ -311,6 +416,21 @@ class Application::StrokeFinishJob final : public Job,
 
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
+        if (_payload && _workerAction == WorkerAction::SampleRecordPreview)
+            _payload->displayCommands.FinishProducerForWork(result.status == JobStatus::Finished    ? S_OK
+                                                            : result.status == JobStatus::Cancelled ? E_ABORT
+                                                                                                    : result.error);
+        if (_payload && _workerAction == WorkerAction::SampleRetire)
+        {
+            if (_payload->previewPrevious && !_payload->previewPrevious->RetireForWork())
+                std::terminate();
+            _payload->previewPrevious.reset();
+            _payload->sampleInput.reset(); // Successful owner apply already consumed its mutable draft reference.
+            _payload->sampleCoverage.reset();
+            _payload->changedTiles.clear();
+            _payload->samplePreview = {};
+            // Keep the returned EMPTY epoch directory for the next exact Take; never reset live density here.
+        }
         if (_payload && _workerAction == WorkerAction::RecordCoverage)
             _payload->commands.FinishProducerForWork(result.status == JobStatus::Finished    ? S_OK
                                                      : result.status == JobStatus::Cancelled ? E_ABORT
@@ -352,7 +472,7 @@ class Application::StrokeFinishJob final : public Job,
                 (void)SetEvent(_gate->cancelled.get());
             }
         }
-        if (_workerAction == WorkerAction::RecordDisplay)
+        if (_workerAction == WorkerAction::RecordDisplay || _workerAction == WorkerAction::SampleRecordPreview)
             _displayRecordingJoined = true;
         if (_workerAction == WorkerAction::RecordCoverage)
             _recordingJoined = true; // The runner has returned and RetireWorkerStage finished the producer.
@@ -392,6 +512,25 @@ class Application::StrokeFinishJob final : public Job,
         {
         case Phase::Allocate:
         {
+            if (_processingSamples)
+            {
+                _liveRetirement = _payload->emergency.get();
+                _payload->device = _owner._renderer.Device();
+                _payload->immediate = _owner._renderer.Context();
+                auto status = _owner._gpuWork.CaptureCompletionContext(_payload->completion);
+                if (SUCCEEDED(status))
+                    status = _owner._gpuWork.CaptureCompletionContext(_payload->displayCompletion);
+                if (FAILED(status))
+                    return FailOwner(status);
+                _originalContextCaptured = true;
+                CommittedDisplayDescriptor descriptor;
+                if (!_owner.DescribeCommittedDisplayOwner(descriptor))
+                    return FailOwner(E_ABORT);
+                (void)_owner._committedDisplay.AcquirePublishedSeedOwner(descriptor.key, _seed);
+                _seedGraph = _seed ? _seed.GraphForWork() : nullptr;
+                _payload->clone = std::move(_owner._canvasCloneSample);
+                return AwaitInputOwner();
+            }
             if (!_owner._committedDisplay.ClaimPublicationSlotOwner(_ticket, _publicationSlot))
                 return FailOwner(E_OUTOFMEMORY);
             const auto* live = _owner._session.PendingBrush();
@@ -430,13 +569,18 @@ class Application::StrokeFinishJob final : public Job,
             return ScheduleWorkerOwner(Phase::Prepare, WorkerAction::Prepare);
         }
         case Phase::Prepare:
-            if (_payload->coverage->needsGpu)
+        case Phase::SamplePrepared:
+            if (_sampleInFlight ? _payload->sampleCoverage->needsGpu : _payload->coverage->needsGpu)
             {
-                _recordingAdmission =
-                    _payload->commands.InitializeOwner(_owner._jobs, _ticket, _payload->completion.DeviceGeneration());
+                _recordingAdmission = _payload->commandsInitialized
+                                          ? _payload->commands.RestartOwner()
+                                          : _payload->commands.InitializeOwner(_owner._jobs, _ticket,
+                                                                               _payload->completion.DeviceGeneration());
                 if (FAILED(_recordingAdmission))
                     return FailOwner(_recordingAdmission);
                 _payload->commandsInitialized = true;
+                _payload->commandsAuthorized = false;
+                _payload->commandsRetired = false;
                 _recordingAdmission =
                     _owner._recordedCommands.AttachOwner(_payload->commands, _ticket, *this, _commandSource);
                 // Even a refused attach reaches the original recorder stage. Its named retirement callback
@@ -456,7 +600,7 @@ class Application::StrokeFinishJob final : public Job,
                 _owner._jobs.NotifyOwnerWork();
                 return true;
             }
-            return ScheduleWorkerOwner(Phase::Compose, WorkerAction::Compose);
+            return ComposeCoverageOwner();
         case Phase::RecordCoverage:
             _phase = Phase::AwaitCommands;
             _workerAction = WorkerAction::AwaitAck;
@@ -475,7 +619,7 @@ class Application::StrokeFinishJob final : public Job,
                 return FailOwner(E_UNEXPECTED);
             ++_nextCoverage;
             _installed = false;
-            if (_nextCoverage < _payload->coverage->tiles.size())
+            if (_nextCoverage < CoverageTiles().size())
             {
                 _phase = Phase::AwaitCoverageSlot;
                 _workerAction = WorkerAction::AwaitAck;
@@ -487,7 +631,49 @@ class Application::StrokeFinishJob final : public Job,
             _owner._jobs.NotifyOwnerWork();
             return true; // Last real copy/map acknowledgment is followed by the original final-use barrier.
         case Phase::AfterBarrier:
-            return ScheduleWorkerOwner(Phase::Compose, WorkerAction::Compose);
+            if (_samplePreviewBarrier)
+            {
+                _samplePreviewBarrier = false;
+                return ScheduleWorkerOwner(Phase::SampleRetired, WorkerAction::SampleRetire);
+            }
+            return ComposeCoverageOwner();
+        case Phase::SampleAvailable:
+            return CaptureNextSampleOwner();
+        case Phase::SampleComposed:
+        {
+            if (_sampleNoPixels)
+                return PublishSampleOwner(false);
+            _displayRecordingAdmission =
+                _payload->displayCommandsInitialized
+                    ? _payload->displayCommands.RestartOwner()
+                    : _payload->displayCommands.InitializeOwner(_owner._jobs, _ticket,
+                                                                _payload->displayCompletion.DeviceGeneration());
+            if (FAILED(_displayRecordingAdmission))
+                return FailOwner(_displayRecordingAdmission);
+            _payload->displayCommandsInitialized = true;
+            _payload->displayCommandsAuthorized = false;
+            _payload->displayCommandsRetired = false;
+            _displayRecordingAdmission =
+                _owner._recordedCommands.AttachOwner(_payload->displayCommands, _ticket, *this, _displaySource);
+            _displayRecordingJoined = false;
+            _phase = Phase::SampleRecordingPreview;
+            _workerAction = WorkerAction::SampleRecordPreview;
+            if (!_owner._jobs.Resume(_ticket, JobExecutionLane::GpuRecording))
+                std::terminate();
+            return true;
+        }
+        case Phase::SampleRecordingPreview:
+            _phase = Phase::AwaitDisplayCommands;
+            _workerAction = WorkerAction::AwaitAck;
+            _owner._jobs.NotifyOwnerWork();
+            return true;
+        case Phase::SampleRetired:
+            _sampleInFlight = false;
+            if (_gate)
+                _gate->samplesAcknowledged.fetch_add(1, std::memory_order_release);
+            if (_finalAfterSample)
+                return CaptureFinalOwner();
+            return AwaitInputOwner();
         case Phase::Compose:
         {
             if (_payload->result->status == StrokeFinishStatus::Unchanged)
@@ -518,16 +704,24 @@ class Application::StrokeFinishJob final : public Job,
                                                                          manifest->RequiredGpuBytes(), _displayGpu);
             if (FAILED(status))
                 return FailOwner(status);
-            CommittedDisplayDescriptor descriptor;
-            if (!_owner.DescribeCommittedDisplayOwner(descriptor))
-                return FailOwner(E_ABORT);
-            (void)_owner._committedDisplay.AcquirePublishedSeedOwner(descriptor.key, _seed);
-            _seedGraph = _seed ? _seed.GraphForWork() : nullptr;
-            _displayRecordingAdmission = _payload->displayCommands.InitializeOwner(
-                _owner._jobs, _ticket, _payload->displayCompletion.DeviceGeneration());
+            if (!_seed)
+            {
+                CommittedDisplayDescriptor descriptor;
+                if (!_owner.DescribeCommittedDisplayOwner(descriptor))
+                    return FailOwner(E_ABORT);
+                (void)_owner._committedDisplay.AcquirePublishedSeedOwner(descriptor.key, _seed);
+                _seedGraph = _seed ? _seed.GraphForWork() : nullptr;
+            }
+            _displayRecordingAdmission =
+                _payload->displayCommandsInitialized
+                    ? _payload->displayCommands.RestartOwner()
+                    : _payload->displayCommands.InitializeOwner(_owner._jobs, _ticket,
+                                                                _payload->displayCompletion.DeviceGeneration());
             if (FAILED(_displayRecordingAdmission))
                 return FailOwner(_displayRecordingAdmission);
             _payload->displayCommandsInitialized = true;
+            _payload->displayCommandsAuthorized = false;
+            _payload->displayCommandsRetired = false;
             _displayRecordingAdmission =
                 _owner._recordedCommands.AttachOwner(_payload->displayCommands, _ticket, *this, _displaySource);
             _displayRecordingJoined = false;
@@ -543,6 +737,9 @@ class Application::StrokeFinishJob final : public Job,
             _owner._jobs.NotifyOwnerWork();
             return true;
         case Phase::DisplayCommandsRetired:
+            if (_sampleInFlight)
+                return PublishSampleOwner(true);
+            [[fallthrough]];
         case Phase::RefreshHistory:
         {
             auto* publication = Publication();
@@ -597,6 +794,9 @@ class Application::StrokeFinishJob final : public Job,
             return false;
         if (_phase == Phase::Quarantined)
             return _cancellation.IsCancelled() && !_cancellationAckRequested && !_cancellationAcknowledged;
+        if (_phase == Phase::AwaitInput)
+            return _owner._canvasBrushInput.PendingCount() != 0 || _pendingDown.has_value() ||
+                   _cancellation.IsCancelled() || _owner._canvasBrushCancelledOpening == _hostOpening;
         // Test owner-only phase first: Allocate/Prepare/Install/Compose may still have a producer writing payload.
         if (_phase == Phase::AwaitDisplayCommands)
             return _displayRecordingJoined && _payload && _payload->displayCommands.CanRetireOwner();
@@ -611,6 +811,10 @@ class Application::StrokeFinishJob final : public Job,
 
     void DeviceChangedOwner() noexcept
     {
+        if (_processingSamples && !_terminal && _originalContextCaptured &&
+            (_payload->device.get() != _owner._renderer.Device() ||
+             _payload->completion.DeviceGeneration() != _owner._gpuWork.DeviceGeneration()))
+            PrepareDeviceReplacementOwner();
         if (_owner._shutdownStarted || _phase != Phase::Quarantined)
             return;
         if (_owner._gpuWork.DeviceGeneration() == _quarantineGeneration &&
@@ -622,10 +826,47 @@ class Application::StrokeFinishJob final : public Job,
         _owner._jobs.NotifyOwnerWork();
     }
 
+    void PrepareDeviceReplacementOwner() noexcept
+    {
+        if (!_processingSamples || _owner._shutdownStarted || _terminal || _originalDeviceInvalid)
+            return;
+        _originalDeviceInvalid = true;
+        // A recorder can still use the immutable preview seed. Exclude later frames now; detach that graph
+        // only after its actual recorder acknowledgement, through normal original-stream retirement.
+        _owner._acknowledgedStrokePreview = nullptr;
+        _owner._frameInvalidated = true;
+        auto* live = _owner._session.MutableBrush();
+        if (live && _liveRetirement)
+        {
+            const auto* expected = live->ExpectedFinishCoverageEngine();
+            if (!expected ||
+                (!expected->UsesCpuPermanent() && !_owner._brushEngine.CanTakeStrokeEpoch(_liveRetirement->epoch)))
+                std::terminate();
+            BrushCoverageEngine* engine = nullptr;
+            auto input = _owner._session.TakeStrokeFinishInput(_sessionOpening, engine);
+            if (!input || engine != expected)
+                std::terminate();
+            _liveRetirement->input.emplace(std::move(input.value()));
+            _transferred = true;
+            if (!expected->UsesCpuPermanent() && !_owner._brushEngine.TakeStrokeEpoch(_liveRetirement->epoch))
+                std::terminate();
+            if (_liveRetirement->epoch.HasResources())
+                _gpuAcknowledged = false;
+        }
+        // Cancellation never fabricates producer join or original GPU acknowledgement.
+        (void)_owner._jobs.Cancel(_ticket);
+        _owner._jobs.NotifyOwnerWork();
+    }
+
     void PumpOwner() noexcept
     {
         if (!HasReadyOwner())
             return;
+        if (_phase == Phase::AwaitInput)
+        {
+            (void)ScheduleWorkerOwner(Phase::SampleAvailable, WorkerAction::AwaitAck);
+            return;
+        }
         if (_phase == Phase::Quarantined)
         {
             // Cancel marks the suspended record but cannot itself acknowledge a producer. Resume exactly
@@ -696,8 +937,7 @@ class Application::StrokeFinishJob final : public Job,
             _phase = Phase::AwaitRetirement;
             return;
         }
-        const auto& final = _payload->coverage.value();
-        const auto& tile = final.tiles[_nextCoverage];
+        const auto& tile = CoverageTiles()[_nextCoverage];
         // Recorder callback and ALL original command batches already acknowledged. Borrow the exact buffer;
         // no shader dispatch, resource creation, byte conversion or immediate READ Map occurs in this pump.
         _gpuAcknowledged = false;
@@ -790,6 +1030,8 @@ class Application::StrokeFinishJob final : public Job,
             _owner._strokeFinishCurrent = nullptr;
         if (_transferred && !_applied)
             (void)_owner._session.DiscardStrokeFinishIfCurrent(_sessionOpening);
+        if (_processingSamples && !_applied)
+            (void)_owner._session.DiscardStrokeSampleIfCurrent(_sessionOpening);
         _owner._utilityTicket.reset();
         _owner._utilityStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
@@ -801,19 +1043,282 @@ class Application::StrokeFinishJob final : public Job,
             // refused sample. Preserve a prior failure/cancellation and the current-request staleness check.
             terminal = {JobStatus::Failed, static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA))};
         }
-        const auto outcome = _stale || !CurrentRequest()               ? HostOutcome::Stale
-                             : terminal.status == JobStatus::Cancelled ? HostOutcome::Cancelled
-                             : terminal.status == JobStatus::Failed    ? HostOutcome::Failed
-                                                                       : HostOutcome::Succeeded;
+        // A GPU callback can publish failure before the recorder's retirement callback observes Current().
+        // Device replacement is an immutable original-parent fact, regardless of that callback ordering.
+        const auto outcome = _stale || _originalDeviceInvalid || !CurrentRequest() ? HostOutcome::Stale
+                             : terminal.status == JobStatus::Cancelled             ? HostOutcome::Cancelled
+                             : terminal.status == JobStatus::Failed                ? HostOutcome::Failed
+                                                                                   : HostOutcome::Succeeded;
         if (_applied)
             _owner.DocumentChanged(); // Notifications/chrome run after every root has been installed together.
         _owner.ResumeHostHistory(_stamp, outcome, outcome == HostOutcome::Stale ? E_ABORT : terminal.error);
     }
 
   private:
+    std::span<const BrushKernelTile> CoverageTiles() const noexcept
+    {
+        if (!_payload)
+            return {};
+        if (_sampleInFlight)
+            return _payload->sampleCoverage ? std::span<const BrushKernelTile>(_payload->sampleCoverage->tiles)
+                                            : std::span<const BrushKernelTile>{};
+        return _payload->coverage ? std::span<const BrushKernelTile>(_payload->coverage->tiles)
+                                  : std::span<const BrushKernelTile>{};
+    }
+    bool AwaitInputOwner() noexcept
+    {
+        _phase = Phase::AwaitInput;
+        _workerAction = WorkerAction::AwaitAck;
+        if (_owner._canvasBrushInput.PendingCount() || _pendingDown)
+            _owner._jobs.NotifyOwnerWork();
+        return true; // Suspended original job; no timer, polling or unchanged self-rearm.
+    }
+    bool ComposeCoverageOwner() noexcept
+    {
+        return _sampleInFlight ? ScheduleWorkerOwner(Phase::SampleComposed, WorkerAction::SampleCompose)
+                               : ScheduleWorkerOwner(Phase::Compose, WorkerAction::Compose);
+    }
+    HRESULT GrowGpuOwner(std::uint64_t total) noexcept
+    {
+        if (!total)
+            return E_INVALIDARG;
+        if (_owner._gpuWork.DeviceGeneration() != _payload->completion.DeviceGeneration() ||
+            _payload->device.get() != _owner._renderer.Device() || FAILED(_payload->completion.DeviceStatusOwner()))
+            return E_ABORT;
+        GpuCapabilities::VideoMemorySnapshot snapshot;
+        const auto status = GpuCapabilities::QueryVideoMemorySnapshot(_payload->device.get(), snapshot);
+        if (FAILED(status))
+            return status;
+        const auto& segment = _owner._renderer.IsWarp() && snapshot.nonLocal.available && snapshot.nonLocal.budget
+                                  ? snapshot.nonLocal
+                                  : snapshot.local;
+        if (!segment.available || !segment.budget)
+            return E_OUTOFMEMORY;
+        GpuResidencyAdmission result;
+        const GpuResidencySnapshot fresh{_payload->completion.DeviceGeneration(), segment.budget, segment.currentUsage};
+        if (_gpuReservation)
+            return _owner._graphGpuBudget.IncreaseOwner(_gpuReservation, (std::max)(total, _gpuReservation.Bytes()),
+                                                        fresh, result)
+                       ? S_OK
+                       : E_OUTOFMEMORY;
+        _gpuReservation = _owner._graphGpuBudget.ReserveOwner(total, fresh, result);
+        return _gpuReservation ? S_OK : E_OUTOFMEMORY;
+    }
+    bool CaptureNextSampleOwner() noexcept
+    {
+        const auto* captured = _owner._canvasBrushInput.CapturedContext(_hostOpening);
+        auto* stroke = _owner._session.MutableBrush();
+        if (!captured || !stroke || _owner._session.PendingBrushOpening() != _sessionOpening)
+            return FailOwner(E_ABORT);
+        auto event =
+            _pendingDown ? std::exchange(_pendingDown, std::nullopt) : _owner._canvasBrushInput.Take(_hostOpening);
+        if (!event)
+            return AwaitInputOwner();
+        if (event->action == CanvasBrushInput::Action::Lost)
+            return CaptureFinalOwner();
+        if (event->action == CanvasBrushInput::Action::Down)
+        {
+            _owner._canvasBrushReplayed = true;
+            if ((event->sample.modifiers & MK_SHIFT) != 0)
+            {
+                const auto previous = _owner._session.ShiftLineStart();
+                if (previous)
+                {
+                    _pendingDown = event;
+                    _pendingDown->action = CanvasBrushInput::Action::Move;
+                    event->sample.point = previous.value();
+                }
+            }
+        }
+        _finalAfterSample = event->action == CanvasBrushInput::Action::Up;
+        const auto plan = stroke->PlanSampleMemory(event->sample.point);
+        const auto& document = std::as_const(_owner._session).Document();
+        if (!plan || !document)
+            return FailOwner(E_OUTOFMEMORY);
+        RasterResidencyPlanOptions options;
+        options.deviceGeneration = _payload->completion.DeviceGeneration();
+        const auto residency = RasterResidencyAdmission::Estimate(document.value(), options);
+        if (!residency.IsValid())
+            return FailOwner(E_OUTOFMEMORY);
+        // Complete phase maximum. Current and replacement canvases/private grids coexist; old committed
+        // roots already have their own admission. No fixed allowance accumulates on revisited samples.
+        auto cpu = _retirement;
+        auto gpu = residency.GpuBytes();
+        const auto gridPixels = static_cast<std::uint64_t>(stroke->Width()) * stroke->Height();
+        const auto gridChannels = stroke->IsMask() ? 1u : 4u;
+        if (gridPixels > (std::numeric_limits<std::uint64_t>::max)() / (4 * gridChannels) ||
+            plan->maximumTiles > (std::numeric_limits<std::uint64_t>::max)() / (256ull * 256 * 8 + 32768))
+            return FailOwner(E_OUTOFMEMORY);
+        const auto grids = gridPixels * 4 * gridChannels; // <= 2*base per rectangular mip chain, two private grids.
+        const auto density = plan->maximumTiles * (256ull * 256 * 8 + 32768);
+        if (!AddBytes(gpu, grids) || !AddBytes(gpu, residency.GpuBytes()) || !AddBytes(gpu, density) ||
+            !AddBytes(gpu, 128ull * 1024 * 1024) || !AddBytes(cpu, plan->transientCpuBytes) ||
+            !AddBytes(cpu, plan->persistentCpuBytes) || !AddBytes(cpu, residency.CpuBytes()) ||
+            !AddBytes(cpu, residency.CpuBytes()) || !AddBytes(cpu, 128ull * 1024 * 1024) ||
+            !AddBytes(cpu, sizeof(StrokeFinishJob) + sizeof(FinishPayload)) ||
+            (_owner._renderer.IsWarp() && !AddBytes(cpu, gpu)))
+            return FailOwner(E_OUTOFMEMORY);
+        auto status = _owner._jobs.IncreaseReservation(_ticket, (std::max)(cpu, _cpuBytes));
+        if (SUCCEEDED(status))
+            status = stroke->IncreaseOpeningMemoryForSample(_owner._jobs, plan.value());
+        if (SUCCEEDED(status))
+            status = GrowGpuOwner(gpu);
+        if (FAILED(status))
+            return FailOwner(status);
+        _cpuBytes = (std::max)(cpu, _cpuBytes);
+        _sampleCpuBase = cpu;
+        _sampleGpuBase = gpu;
+        _sampleEngine = nullptr;
+        const auto* expected = stroke->ExpectedFinishCoverageEngine();
+        if (!expected)
+            return FailOwner(E_ABORT);
+        _usesGpu = !expected->UsesCpuPermanent();
+        if (_usesGpu && !_owner._brushEngine.CanTakeStrokeEpoch(_payload->epoch))
+            return FailOwner(E_ABORT);
+        auto input = _owner._session.TakeStrokeSampleInput(_sessionOpening, event->sample.point, _sampleEngine);
+        if (!input || !_sampleEngine)
+            return FailOwner(E_ABORT);
+        _payload->sampleInput.emplace(std::move(input.value()));
+        _sampleInFlight = true;
+        if (_usesGpu &&
+            (_sampleEngine != &_owner._brushEngine || !_owner._brushEngine.TakeStrokeEpoch(_payload->epoch)))
+            std::terminate();
+        _gpuAcknowledged = !_usesGpu || !_payload->epoch.HasResources();
+        _nextCoverage = 0;
+        _owner._brushHover = event->sample.point;
+        return ScheduleWorkerOwner(Phase::SamplePrepared, WorkerAction::SamplePrepare);
+    }
+    bool PublishSampleOwner(bool publishPreview) noexcept
+    {
+        if (!_payload->sampleInput || (publishPreview && !_payload->previewCandidate) ||
+            !_owner._session.IsStrokeSampleCurrent(_payload->sampleInput.value()) ||
+            _payload->device.get() != _owner._renderer.Device() ||
+            _payload->immediate.get() != _owner._renderer.Context())
+            return FailOwner(E_ABORT);
+        if (publishPreview)
+        {
+            const auto status = _payload->previewCandidate->PublishOwner(_payload->immediate.get());
+            if (FAILED(status))
+                return FailOwner(status);
+        }
+        if (_usesGpu && !_owner._brushEngine.RestoreStrokeEpoch(_payload->epoch))
+            return FailOwner(E_ABORT);
+        if (!_owner._session.ApplyStrokeSampleIfCurrent(_payload->sampleInput.value(), _sampleEngine))
+            std::terminate(); // Exact serialized preflight, no callback or device mutation intervenes.
+        _sampleEngine = nullptr;
+        if (!publishPreview)
+            return ScheduleWorkerOwner(Phase::SampleRetired, WorkerAction::SampleRetire);
+        _payload->previewPrevious = std::move(_payload->previewCurrent);
+        _payload->previewCurrent = std::move(_payload->previewCandidate);
+        if (_gate)
+        {
+            _gate->previewsPublished.fetch_add(1);
+            if (_payload->previewPrevious)
+                _gate->previewsReplaced.fetch_add(1);
+        }
+        _owner._acknowledgedStrokePreview = _payload->previewCurrent.get();
+        _owner._frameInvalidated = true;
+        _owner.SyncBrushCursor();
+        if (_payload->previewPrevious && !_payload->previewPrevious->DetachOwner())
+            std::terminate();
+        // Exclusion of future old frames precedes this original-stream barrier. Recorder/GPU acknowledgements
+        // alone do not cover a frame submitted while the stream-retirement worker was still running.
+        _samplePreviewBarrier = true;
+        _gpuAcknowledged = false;
+        _phase = Phase::AwaitRetirementSlot;
+        _workerAction = WorkerAction::AwaitAck;
+        _owner._jobs.NotifyOwnerWork();
+        return true;
+    }
+    bool CaptureFinalOwner() noexcept
+    {
+        auto* stroke = _owner._session.MutableBrush();
+        if (!stroke || _owner._session.PendingBrushOpening() != _sessionOpening)
+            return FailOwner(E_ABORT);
+        const auto plan = stroke->PlanFinishMemory();
+        if (!plan || !_owner._committedDisplay.ClaimPublicationSlotOwner(_ticket, _publicationSlot))
+            return FailOwner(E_OUTOFMEMORY);
+        auto cpu = (std::max)(_sampleCpuBase, _retirement);
+        auto gpu = _sampleGpuBase;
+        if (!AddBytes(cpu, plan->additionalCpuBytes) || !AddBytes(cpu, plan->retirementCpuBytes) ||
+            !AddBytes(cpu, 128ull * 1024 * 1024) || !AddBytes(gpu, plan->additionalGpuBytes) ||
+            (_owner._renderer.IsWarp() && !AddBytes(cpu, plan->additionalGpuBytes)))
+            return FailOwner(E_OUTOFMEMORY);
+        auto status = _owner._jobs.IncreaseReservation(_ticket, (std::max)(cpu, _cpuBytes));
+        if (SUCCEEDED(status) && gpu)
+            status = GrowGpuOwner(gpu);
+        if (FAILED(status))
+            return FailOwner(status);
+        _cpuBytes = (std::max)(cpu, _cpuBytes);
+        if (_owner._session.MutableBrush() != stroke || _owner._session.PendingBrushOpening() != _sessionOpening)
+            return FailOwner(E_ABORT);
+        auto* expected = stroke->ExpectedFinishCoverageEngine();
+        if (!expected)
+            return FailOwner(E_ABORT);
+        _usesGpu = !expected->UsesCpuPermanent();
+        if (_usesGpu && !_owner._brushEngine.CanTakeStrokeEpoch(_payload->epoch))
+            return FailOwner(E_ABORT);
+        BrushCoverageEngine* engine = nullptr;
+        auto input = _owner._session.TakeStrokeFinishInput(_sessionOpening, engine);
+        if (!input || engine != expected)
+            return FailOwner(E_ABORT);
+        _payload->input.emplace(std::move(input.value()));
+        _transferred = true;
+        if (_usesGpu && !_owner._brushEngine.TakeStrokeEpoch(_payload->epoch))
+            std::terminate();
+        _gpuAcknowledged = !_usesGpu || !_payload->epoch.HasResources();
+        _sampleInFlight = false;
+        _nextCoverage = 0;
+        _finalAfterSample = false;
+        return ScheduleWorkerOwner(Phase::Prepare, WorkerAction::Prepare);
+    }
+    void CaptureLiveRetirementOwner() noexcept
+    {
+        // No sample/final allocation or work follows this cleanup capture. The complete live draft's opening
+        // lease and parent declaration already cover its sources and retained epoch.
+        if (!_processingSamples || !_payload || _payload->input || !_owner._session.PendingBrush() ||
+            _owner._session.PendingBrushOpening() != _sessionOpening)
+            return;
+        const auto* expected = _owner._session.PendingBrush()->ExpectedFinishCoverageEngine();
+        if (!expected)
+            std::terminate();
+        _usesGpu = !expected->UsesCpuPermanent();
+        BrushCoverageEngine* engine = nullptr;
+        auto input = _owner._session.TakeStrokeFinishInput(_sessionOpening, engine);
+        if (!input || engine != expected)
+            std::terminate();
+        _payload->input.emplace(std::move(input.value()));
+        _transferred = true;
+        if (_usesGpu && !_owner._brushEngine.TakeStrokeEpoch(_payload->epoch))
+            std::terminate();
+        if (_payload->epoch.HasResources())
+            _gpuAcknowledged = false;
+    }
+    void DetachPreviewsOwner() noexcept
+    {
+        if (!_payload || _payload->previewsDetached)
+            return;
+        if (_owner._acknowledgedStrokePreview == _payload->previewCurrent.get())
+        {
+            _owner._acknowledgedStrokePreview = nullptr;
+            _owner._frameInvalidated = true;
+        }
+        for (auto* graph : {_payload->previewCurrent.get(), _payload->previewCandidate.get()})
+            if (graph && !graph->DetachOwner())
+                std::terminate();
+        if (_payload->previewCurrent)
+            _gpuAcknowledged = false; // Last original frame barrier is still due.
+        _payload->previewsDetached = true;
+    }
     enum class Phase : std::uint8_t
     {
         Allocate,
+        AwaitInput,
+        SampleAvailable,
+        SamplePrepared,
+        SampleComposed,
+        SampleRecordingPreview,
+        SampleRetired,
         Prepare,
         RecordCoverage,
         AwaitCommands,
@@ -837,6 +1342,10 @@ class Application::StrokeFinishJob final : public Job,
     enum class WorkerAction : std::uint8_t
     {
         Allocate,
+        SamplePrepare,
+        SampleCompose,
+        SampleRecordPreview,
+        SampleRetire,
         Prepare,
         RecordCoverage,
         RetireCommands,
@@ -860,6 +1369,24 @@ class Application::StrokeFinishJob final : public Job,
         return status == E_ABORT ? JobResult{JobStatus::Cancelled, status}
                : FAILED(status)  ? JobResult{JobStatus::Failed, status}
                                  : JobResult{};
+    }
+    JobResult HoldSampleBoundary(JobContext& context, StrokeFinishTestGate::SampleBoundary boundary) noexcept
+    {
+        if (!_gate || _gate->holdSample != boundary ||
+            _gate->samplesPrepared.load(std::memory_order_acquire) != _gate->holdSampleNumber)
+            return {};
+        _gate->sampleBoundaryVisits.fetch_add(1);
+        _gate->sampleBoundaryOffOwner.fetch_add(GetCurrentThreadId() != _ownerThread ? 1u : 0u);
+        if (!SetEvent(_gate->reached.get()))
+            return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
+        _owner._jobs.NotifyOwnerWork();
+        const HANDLE waits[]{_gate->release.get(), context.shutdownEvent};
+        const auto waited = WaitForMultipleObjects(2, waits, FALSE, StrokeFinishTestGate::kWaitTimeoutMs);
+        if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
+            return {JobStatus::Cancelled, E_ABORT};
+        if (waited != WAIT_OBJECT_0)
+            return {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+        return _gate->failureResult.value_or(JobResult{});
     }
     bool PrepareDisplayOwner(PreparedStrokeFinish& publication) noexcept
     {
@@ -918,7 +1445,8 @@ class Application::StrokeFinishJob final : public Job,
     }
     bool Current() const noexcept
     {
-        return CurrentRequest() && _owner._utilityStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+        return !_originalDeviceInvalid && CurrentRequest() && _owner._utilityStamp == _stamp &&
+               _owner._historyWork.IsCurrent(_stamp) &&
                (!_transferred || _applied || _owner._session.PendingBrushOpening() == _sessionOpening);
     }
     bool ScheduleWorkerOwner(Phase phase, WorkerAction action) noexcept
@@ -964,6 +1492,7 @@ class Application::StrokeFinishJob final : public Job,
     {
         if (_queuePending || _phase == Phase::Quarantined)
             return true;
+        CaptureLiveRetirementOwner();
         if (_payload && _payload->commandsInitialized && !_payload->commandsRetired)
         {
             _payload->commands.RequestStopOwner();
@@ -974,19 +1503,20 @@ class Application::StrokeFinishJob final : public Job,
             _owner._jobs.NotifyOwnerWork();
             return true; // Real producer join and original submitted uses precede any command/epoch retirement.
         }
-        if (_payload && !_gpuAcknowledged)
-        {
-            _phase = Phase::AwaitRetirementSlot;
-            _workerAction = WorkerAction::AwaitAck;
-            _owner._jobs.NotifyOwnerWork();
-            return true;
-        }
         if (_payload && _payload->displayCommandsInitialized && !_payload->displayCommandsRetired)
         {
             _payload->displayCommands.RequestStopOwner();
             if (_displaySource.slot < GpuCommandPump::kCapacity)
                 (void)_owner._recordedCommands.StopSourceOwner(_displaySource);
             _phase = Phase::AwaitDisplayCommands;
+            _workerAction = WorkerAction::AwaitAck;
+            _owner._jobs.NotifyOwnerWork();
+            return true;
+        }
+        DetachPreviewsOwner();
+        if (_payload && !_gpuAcknowledged)
+        {
+            _phase = Phase::AwaitRetirementSlot;
             _workerAction = WorkerAction::AwaitAck;
             _owner._jobs.NotifyOwnerWork();
             return true;
@@ -1055,6 +1585,18 @@ class Application::StrokeFinishJob final : public Job,
     bool _terminal = false;
     bool _retirementAcknowledged = false;
     bool _applied = false;
+    bool _processingSamples = false;
+    bool _originalDeviceInvalid = false;
+    bool _originalContextCaptured = false;
+    LiveRetirementCapture* _liveRetirement = nullptr; // Owner-only descriptor; whole owner retires with payload.
+    bool _sampleInFlight = false;
+    bool _sampleNoPixels = false;
+    bool _finalAfterSample = false;
+    bool _samplePreviewBarrier = false;
+    BrushCoverageEngine* _sampleEngine = nullptr; // Owner only; no worker accesses this borrow.
+    std::optional<CanvasBrushInput::Event> _pendingDown;
+    std::uint64_t _sampleCpuBase = 0;
+    std::uint64_t _sampleGpuBase = 0;
 };
 
 bool Application::StrokeFinishSource::Start() noexcept
@@ -1082,6 +1624,11 @@ void Application::StrokeFinishSource::DeviceChangedOwner() noexcept
     if (_attached && _owner._strokeFinishCurrent)
         _owner._strokeFinishCurrent->DeviceChangedOwner();
 }
+void Application::StrokeFinishSource::PrepareDeviceReplacementOwner() noexcept
+{
+    if (_attached && _owner._strokeFinishCurrent)
+        _owner._strokeFinishCurrent->PrepareDeviceReplacementOwner();
+}
 void Application::StrokeFinishSource::CloseAfterWorkers() noexcept
 {
     if (_attached)
@@ -1099,6 +1646,16 @@ void Application::PrepareStrokeFinishJoinedShutdownOwner() noexcept
 }
 
 HRESULT Application::StartStrokeFinish(std::uint64_t opening) noexcept
+{
+    return StartStrokeProcessing(opening, false);
+}
+
+HRESULT Application::StartStrokeSamples(std::uint64_t opening) noexcept
+{
+    return StartStrokeProcessing(opening, true);
+}
+
+HRESULT Application::StartStrokeProcessing(std::uint64_t opening, bool processingSamples) noexcept
 {
     const auto* captured = _canvasBrushInput.CapturedContext(opening);
     const auto* stroke = _session.PendingBrush();
@@ -1151,8 +1708,9 @@ HRESULT Application::StartStrokeFinish(std::uint64_t opening) noexcept
     HRESULT status = E_OUTOFMEMORY;
     try
     {
-        auto constructed = std::make_unique<StrokeFinishJob>(*this, *stamp, opening, *_canvasBrushSessionOpening,
-                                                             retirement, cpu, std::move(reservation));
+        auto constructed =
+            std::make_unique<StrokeFinishJob>(*this, *stamp, opening, *_canvasBrushSessionOpening, retirement, cpu,
+                                              std::move(reservation), processingSamples);
         auto* original = constructed.get();
         std::unique_ptr<Job> job = std::move(constructed);
         JobTicket ticket;

@@ -1,7 +1,27 @@
 #include "RecordedDisplayGraph.h"
 
+#include <cmath>
 #include <exception>
 #include <utility>
+
+namespace
+{
+bool SupportedAdjustment(AdjustmentKind kind) noexcept
+{
+    switch (kind)
+    {
+    case AdjustmentKind::Levels:
+    case AdjustmentKind::Curves:
+    case AdjustmentKind::Exposure:
+    case AdjustmentKind::GradientMap:
+    case AdjustmentKind::Hsv:
+    case AdjustmentKind::Grain:
+        return true;
+    default:
+        return false;
+    }
+}
+} // namespace
 
 RecordedDisplayGraph::RecordedDisplayGraph(std::uint32_t originalOwnerThread) noexcept
     : _ownerThread(originalOwnerThread ? originalOwnerThread : GetCurrentThreadId())
@@ -24,7 +44,7 @@ HRESULT RecordedDisplayGraph::PrepareForWork(ID3D11Device* device, CanvasDocumen
                                              const RecordedDisplayGraph* publishedSeed) noexcept
 {
     return PrepareInternalForWork(device, std::move(source), stream, std::move(cancellation), publishedSeed, nullptr,
-                                  {});
+                                  {}, nullptr);
 }
 
 HRESULT RecordedDisplayGraph::PrepareStrokeForWork(ID3D11Device* device, CanvasDocument source,
@@ -34,14 +54,64 @@ HRESULT RecordedDisplayGraph::PrepareStrokeForWork(ID3D11Device* device, CanvasD
                                                    const RecordedDisplayGraph* publishedSeed) noexcept
 {
     return PrepareInternalForWork(device, std::move(source), stream, std::move(cancellation), publishedSeed, &preview,
-                                  tiles);
+                                  tiles, nullptr);
+}
+
+HRESULT RecordedDisplayGraph::PrepareAdjustmentForWork(ID3D11Device* device, CanvasDocument source,
+                                                       const CanvasRenderer::AdjustmentPreview& preview,
+                                                       GpuCommandStream& stream, CancelToken cancellation,
+                                                       const RecordedDisplayGraph* publishedSeed) noexcept
+{
+    if (IsOwner() || _phase != Phase::Empty || !device || !stream.CanRecordForWork())
+        return E_INVALIDARG; // Refuse the owner before any metadata traversal or settings validation.
+    if (cancellation.IsCancelled())
+        return E_ABORT;
+    if (!std::isfinite(preview.previewScale) || !(preview.previewScale > 0 && preview.previewScale <= 1) ||
+        (preview.lookup && !preview.lookup->adjustment.IsValid()) ||
+        (preview.lookup && preview.lookup->adjustment.kind == AdjustmentKind::Hsv &&
+         preview.lookup->cube.size() != 33u * 33u * 33u * 4u))
+        return E_INVALIDARG;
+    if ((preview.lookup && !SupportedAdjustment(preview.lookup->adjustment.kind)) ||
+        (preview.liveOriginal && !SupportedAdjustment(preview.liveOriginal->kind)))
+        return E_INVALIDARG;
+    const ImageLayer* target = nullptr;
+    for (const auto& layer : source.layers)
+    {
+        if (cancellation.IsCancelled())
+            return E_ABORT;
+        if (layer.id == preview.layerId)
+        {
+            target = &layer;
+            break;
+        }
+    }
+    if (!target)
+        return E_INVALIDARG;
+    if (preview.liveOriginal)
+    {
+        if (!preview.liveOriginal->IsValid() || !target->adjustment || target->asset ||
+            target->adjustment.value() != preview.liveOriginal.value() || preview.source.HasStorage() ||
+            preview.coverage.HasStorage() || preview.previewScale != 1 ||
+            (preview.lookup && preview.lookup->adjustment.kind != preview.liveOriginal->kind))
+            return E_INVALIDARG;
+    }
+    else if (!preview.lookup || !target->asset || target->adjustment || !preview.source.HasStorage() ||
+             target->asset->image != preview.source || preview.source.Format() != RasterFormat::Bgra8888 ||
+             preview.source.Width() > 16384 || preview.source.Height() > 16384 ||
+             (preview.coverage.HasStorage() &&
+              (preview.coverage.Format() != RasterFormat::Gray8 || preview.coverage.Width() != preview.source.Width() ||
+               preview.coverage.Height() != preview.source.Height())))
+        return E_INVALIDARG;
+    return PrepareInternalForWork(device, std::move(source), stream, std::move(cancellation), publishedSeed, nullptr,
+                                  {}, &preview);
 }
 
 HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, CanvasDocument source,
                                                      GpuCommandStream& stream, CancelToken cancellation,
                                                      const RecordedDisplayGraph* publishedSeed,
                                                      const CanvasRenderer::StrokePreview* preview,
-                                                     std::span<const RasterTile> tiles) noexcept
+                                                     std::span<const RasterTile> tiles,
+                                                     const CanvasRenderer::AdjustmentPreview* adjustment) noexcept
 {
     if (IsOwner() || _phase != Phase::Empty || !device || !stream.CanRecordForWork())
         return E_INVALIDARG;
@@ -70,6 +140,8 @@ HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, Canva
     if (SUCCEEDED(result) && preview)
         result = _composition.PrepareRecordedStrokeForWork(
             _source, *preview, tiles, publishedSeed ? &publishedSeed->_composition : nullptr, _inheritedStroke);
+    if (SUCCEEDED(result) && adjustment)
+        _composition.SetAdjustmentPreview(*adjustment); // Copies owning handles only on the admitted worker.
     if (SUCCEEDED(result))
         result = _composition.Compose(_source);
     if (SUCCEEDED(result))

@@ -114,6 +114,9 @@ class CanvasRenderer final
         Raster source;            // the layer's image (or mask) the stroke started from; may be empty
         int sourceX = 0;          // where the source sits in the grid
         int sourceY = 0;
+        // Explicit nearest stretch of the immutable source in the private recorder. Zero uses source size.
+        int sourceWidth = 0;
+        int sourceHeight = 0;
         std::uint8_t fill = 0; // pixels beyond the source (255 reveals for masks)
     };
     HRESULT BeginStroke(const StrokePreview& preview) noexcept;

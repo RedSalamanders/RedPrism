@@ -214,6 +214,29 @@ bool GpuCommandStream::AuthorizeRetirementOwner() noexcept
     return true;
 }
 
+HRESULT GpuCommandStream::RestartOwner() noexcept
+{
+    if (!IsOwner() || !_scheduler->InAcknowledgedJobCallback(_source) || !_retired.load(std::memory_order_acquire) ||
+        !_finished.load(std::memory_order_acquire) || !_retirementAuthorized.load(std::memory_order_acquire) ||
+        _result != S_OK || IsStopped() || _consumed != _produced)
+        return E_INVALIDARG;
+    if (_produced == (std::numeric_limits<std::uint64_t>::max)())
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    for (const auto& slot : _slots)
+        if (slot.state.load(std::memory_order_acquire) != State::Free || slot.command)
+            return E_UNEXPECTED;
+    if (!ResetEvent(_available.get()) || !ResetEvent(_stopped.get()))
+        return HRESULT_FROM_WIN32(GetLastError());
+    _producerThread.store(0, std::memory_order_relaxed);
+    _result = E_PENDING;
+    _backpressured.store(false, std::memory_order_relaxed);
+    _retirementAuthorized.store(false, std::memory_order_relaxed);
+    _finished.store(false, std::memory_order_relaxed);
+    _retired.store(false, std::memory_order_release);
+    // Source, device generation and monotonically increasing produced/consumed ordinals are unchanged.
+    return S_OK;
+}
+
 bool GpuCommandStream::AcknowledgeEmptyJoinedShutdownOwner() noexcept
 {
     if (!IsOwner() || !IsStopped() || _finished.load(std::memory_order_acquire) ||

@@ -588,6 +588,8 @@ bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& va
     {
         return false;
     }
+    if (layer->adjustment.value() == value)
+        return true; // An exact restore/no-op keeps the immutable root and generation.
     const auto index = IndexOf(_document.value().layers, id);
     if (!index)
         return false;
@@ -654,6 +656,13 @@ bool DocumentSession::PreviewAdjustmentEditing(bool preview)
     if (!_adjustmentEditingID.has_value() || !_adjustmentOriginal.has_value())
     {
         return false;
+    }
+    if (_colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred)
+    {
+        // The completed worker lookup supplies live pixels. Settings ticks retain the original immutable
+        // document; only the admitted closure constructs its committed replacement and history.
+        ++_editRevision;
+        return true;
     }
     const std::optional<LayerAdjustment> value = EditedAdjustment();
     if (!value.has_value())

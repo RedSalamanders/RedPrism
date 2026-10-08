@@ -8,6 +8,7 @@
 #include "Composition.Tests.BrushDensityClear.h"
 #include "Composition.Tests.BrushEpoch.h"
 #include "Composition.Tests.CapturedCompletion.h"
+#include "Composition.Tests.CommandStreamRestart.h"
 #include "Composition.Tests.CommittedDisplay.h"
 #include "Composition.Tests.DetachedEpoch.h"
 #include "Composition.Tests.DisplayRebind.h"
@@ -18,7 +19,9 @@
 #include "Composition.Tests.GpuCommandPump.h"
 #include "Composition.Tests.GpuCommandStream.h"
 #include "Composition.Tests.GpuCompletion.h"
+#include "Composition.Tests.GpuResidencyGrowth.h"
 #include "Composition.Tests.PublicationParent.h"
+#include "Composition.Tests.RecordedAdjustment.h"
 #include "Composition.Tests.RecordedBrush.h"
 #include "Composition.Tests.RecordedDisplayParent.h"
 #include "Composition.Tests.VideoMemorySnapshot.h"
@@ -2112,8 +2115,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuCompletionBarrierTests();
     gFailures += RunCapturedCompletionContextTests();
     gFailures += RunGpuCommandStreamTests();
+    gFailures += RedPrism::CompositionTests::RunGpuResidencyGrowthTests();
+    gFailures += RedPrism::CompositionTests::RunCommandStreamRestartTests();
     gFailures += RunGpuCommandPumpTests();
     gFailures += RunRecordedDisplayParentTests();
+    gFailures += RunRecordedAdjustmentParentTests();
     gFailures += RunCommittedDisplayControllerTests();
     gFailures += RunPublicationParentTests();
     gFailures += RunCommittedDisplayVisibilityTests();

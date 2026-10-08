@@ -1141,3 +1141,18 @@ refund is created. No-op growth does not query. Shrink, foreign/moved/reset leas
 refuse. Failed snapshot/admission/revalidation leaves both lease and charge unchanged. The whole grown
 charge survives final reader Reset until its real owner drain, or joined Close; foreign readers after Close
 retain their endpoint's own charge until destruction. Growth may not race lease readers or Reset.
+
+### Original GPU reservation and transport reuse
+
+`GpuResidencyBudget::IncreaseOwner` grows an original live reservation under exclusive owner access. Validate
+its budget, slot, ticket, current bytes and original device generation. A fresh successful actual segment
+observation precedes any growth; charge only the delta against all live/retired reservations and the usual
+headroom. Equal totals are a no-op; shrink, foreign or stale owners, unknown observations, overflow and
+pressure refuse without changing either reservation or accounting. Growth uses no additional slot or ticket.
+
+An original parent may restart its command stream only in its exact successful joined acknowledgement,
+after the producer finished successfully, every submitted command acknowledged and worker transport
+retirement completed. Reuse the existing events and slots without resetting produced/consumed ordinals.
+Stopped, failed, foreign, unjoined or exhausted streams refuse. An old command lease cannot name a later
+command occupying the same physical slot. This API does not establish GPU completion or permit reusing a
+device generation after replacement.

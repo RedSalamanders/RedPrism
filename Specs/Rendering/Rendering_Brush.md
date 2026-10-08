@@ -408,3 +408,25 @@ repeated unchanged binding notifications do not retry. Another refusal returns t
 the first terminal cause. Cancellation acknowledges its original skipped worker stage but retains quarantined
 CPU/GPU owners until original event recovery or joined shutdown. Cancellation wins the unpublished receipt
 after that acknowledgement. Device replacement itself never establishes GPU completion or successful image work.
+
+### Opt-in application sample parent
+
+The experimental application route starts its original processing parent after worker opening and before
+consuming Down. It keeps that ticket, physical ordinal and history work stamp through every accepted sample
+and final publication. Between samples it blocks on existing input/cancellation/resource events; no polling
+or timer retries are permitted. Shift's previous endpoint is a separate first sample. Up processes its last
+point before final coverage; Lost finalizes only the accepted prefix. Duplicate points advance the sequence
+without replacing an acknowledged preview.
+
+Before each exclusive transfer, grow the original live opening lease and parent CPU/GPU admissions to their
+complete overlapping maxima. Retire each original command stream on a worker before restarting it under the
+same ticket. Exact mapped uint coverage is installed on the worker; owner Unmap follows its actual join.
+Preview metadata and changed immutable tiles are built and recorded off the owner. Restore the original
+epoch and apply the private sample only after those joins and acknowledgements. No sample publishes history.
+
+A returned live draft may coexist with retirement of its consumed input wrapper. Before replacing the device
+or dropping the engine, capture that live CPU/GPU draft in a separate worker-preallocated emergency owner;
+do not mutate fields an active producer uses or release live density on the owner. Cancellation/replacement
+preserves every original context and reservation until its actual acknowledgement or joined shutdown.
+Final publication reuses the admitted final coverage/history/display/rows path. This experimental route remains
+disabled in ordinary startup until actual mode/fault coverage, the complete validation matrix and G1 pass.

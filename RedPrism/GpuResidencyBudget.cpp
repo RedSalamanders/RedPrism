@@ -101,6 +101,38 @@ GpuResidencyReservation GpuResidencyBudget::ReserveOwner(std::uint64_t bytes, Gp
     return reservation;
 }
 
+bool GpuResidencyBudget::IncreaseOwner(GpuResidencyReservation& original, std::uint64_t totalBytes,
+                                       GpuResidencySnapshot snapshot, GpuResidencyAdmission& result) noexcept
+{
+    result = GpuResidencyAdmission::Invalid;
+    if (!IsOwner() || original._budget != this || original._slot >= _slots.size() || !original._ticket ||
+        !original._bytes || !totalBytes || totalBytes < original._bytes || !snapshot.budgetBytes ||
+        !snapshot.deviceGeneration || snapshot.deviceGeneration != original._deviceGeneration)
+        return false;
+    auto& slot = _slots[original._slot];
+    if (slot.ticket != original._ticket || slot.bytes != original._bytes || original._bytes > _reserved || !_active)
+        return false;
+    if (totalBytes == original._bytes)
+    {
+        result = GpuResidencyAdmission::Ready;
+        return true;
+    }
+    result = GpuResidencyAdmission::Pressure;
+    const auto headroom = (std::max)(kMinimumHeadroom, snapshot.budgetBytes / 8);
+    if (snapshot.currentUsageBytes > snapshot.budgetBytes ||
+        headroom > snapshot.budgetBytes - snapshot.currentUsageBytes)
+        return false;
+    const auto available = snapshot.budgetBytes - snapshot.currentUsageBytes - headroom;
+    const auto delta = totalBytes - original._bytes;
+    if (_reserved > available || delta > available - _reserved)
+        return false;
+    _reserved += delta; // The complete available ceiling proves this addition cannot overflow.
+    slot.bytes = totalBytes;
+    original._bytes = totalBytes;
+    result = GpuResidencyAdmission::Ready;
+    return true;
+}
+
 bool GpuResidencyBudget::ReleaseOwner(std::size_t slot, std::uint64_t ticket, std::uint64_t bytes) noexcept
 {
     if (!IsOwner() || slot >= _slots.size() || !ticket || !bytes || _slots[slot].ticket != ticket ||

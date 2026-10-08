@@ -1122,7 +1122,10 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
     const bool uniformMask = preview.mask && !preview.source.HasStorage() && original.Width() == 1 &&
                              original.Height() == 1 && original.Format() == RasterFormat::Gray8;
     if ((!uniformMask && preview.source != original) ||
-        (preview.source.HasStorage() && preview.source.Format() != expectedFormat))
+        (preview.source.HasStorage() && preview.source.Format() != expectedFormat) || preview.sourceWidth < 0 ||
+        preview.sourceHeight < 0 || preview.sourceWidth > kMaxCanvasSide || preview.sourceHeight > kMaxCanvasSide ||
+        ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) ||
+        (!preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
         return E_INVALIDARG;
     if (uniformMask)
     {
@@ -1153,6 +1156,8 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
                            old.mask == preview.mask && old.width == preview.width && old.height == preview.height &&
                            old.transform == preview.transform && old.source == preview.source &&
                            old.sourceX == preview.sourceX && old.sourceY == preview.sourceY && old.fill == preview.fill;
+        compatibleStroke =
+            compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
         if (!compatibleStroke)
             return E_INVALIDARG; // Changed tiles cannot reconstruct an incompatible previous working grid.
     }
@@ -1193,11 +1198,17 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     const bool gray = stroke.mask;
     PixelRect region{0, 0, stroke.width, stroke.height};
     int scale = 1;
+    const int sourceWidth = stroke.sourceWidth ? stroke.sourceWidth : stroke.source.Width();
+    const int sourceHeight = stroke.sourceHeight ? stroke.sourceHeight : stroke.source.Height();
+    const bool stretched =
+        stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
     if (stroke.width <= _textureLimit && stroke.height <= _textureLimit)
     {
         // The whole grid, assembled on the GPU from the source's own texture and the tiles.
-        const HRESULT result = CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX,
-                                                   stroke.sourceY, stroke.fill, tiles, _strokeTexture);
+        const HRESULT result =
+            stretched ? E_NOTIMPL
+                      : CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX,
+                                            stroke.sourceY, stroke.fill, tiles, _strokeTexture);
         if (result != E_NOTIMPL)
         {
             return result;
@@ -1238,31 +1249,49 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     gpu.sourceHeight = stroke.height;
     gpu.scale = scale;
     const int channels = gray ? 1 : 4;
-    result = UploadRows(gpu,
-                        [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
+    result = UploadRows(
+        gpu,
+        [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
+        {
+            for (int row = 0; row < height; ++row)
+            {
+                std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
+                            static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
+            }
+            if (!stroke.source.HasStorage())
+            {
+                return;
+            }
+            const int left = std::max(x, stroke.sourceX);
+            const int top = std::max(y, stroke.sourceY);
+            const int right = std::min(x + width, stroke.sourceX + sourceWidth);
+            const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
+            if (right > left && bottom > top)
+            {
+                if (!stretched)
+                    stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left, bottom - top,
+                                             out + static_cast<std::size_t>(top - y) * stride +
+                                                 static_cast<std::size_t>(left - x) * channels,
+                                             static_cast<int>(stride), stroke.fill);
+                else
+                    for (int row = top; row < bottom; ++row)
+                    {
+                        if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+                            return;
+                        const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) *
+                                                        stroke.source.Height() / sourceHeight);
+                        for (int column = left; column < right; ++column)
                         {
-                            for (int row = 0; row < height; ++row)
-                            {
-                                std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
-                                            static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
-                            }
-                            if (!stroke.source.HasStorage())
-                            {
-                                return;
-                            }
-                            const int left = std::max(x, stroke.sourceX);
-                            const int top = std::max(y, stroke.sourceY);
-                            const int right = std::min(x + width, stroke.sourceX + stroke.source.Width());
-                            const int bottom = std::min(y + height, stroke.sourceY + stroke.source.Height());
-                            if (right > left && bottom > top)
-                            {
-                                stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left,
-                                                         bottom - top,
-                                                         out + static_cast<std::size_t>(top - y) * stride +
-                                                             static_cast<std::size_t>(left - x) * channels,
-                                                         static_cast<int>(stride), stroke.fill);
-                            }
-                        });
+                            const int sx = static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) *
+                                                            stroke.source.Width() / sourceWidth);
+                            stroke.source.ReadRegion(sx, sy, 1, 1,
+                                                     out + static_cast<std::size_t>(row - y) * stride +
+                                                         static_cast<std::size_t>(column - x) * channels,
+                                                     channels, stroke.fill);
+                        }
+                    }
+            }
+        });
     if (FAILED(result))
     {
         return result;

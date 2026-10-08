@@ -551,3 +551,45 @@ cancels useful graph preparation. Existing graphs keep their original reservatio
 last-use acknowledgements, producer joins and worker destruction. Repeated requests while suspended admit
 no replacement and create no ready loop. One actual visible-state transition requests the current document;
 there is no synchronous composition fallback. A qualification fixture may explicitly enable hidden rendering.
+
+### Opt-in original stroke preview parent
+
+The experimental sample parent retains one original scheduler ticket and physical input ordinal through the
+live gesture and final publication. A private graph owns its complete working grid, canvas/mips, immutable
+source, recording context and command transport. Admit current/replacement overlap before creation. The new
+grid copies the acknowledged previous grid and updates only changed tiles; the previous graph is immutable.
+Publish only after the actual recorder joins and every original batch acknowledges. Frames then blit this
+acknowledged preview; pan/zoom performs no composition. The committed-only controller cannot adopt a stroke
+preview as its committed document cache.
+
+Explicit source width/height describe a nearest stretch onto the stroke grid. An unplaced mask of different
+pixel dimensions uses `floor(localCoordinate * sourceDimension / placedDimension)`, matching the brush's
+existing nearest reference. Source/fill assembly remains worker work. A previous preview is compatible only
+when its exact source identity, placement dimensions, grid, target and transform agree.
+
+Before retiring a previous preview, exclude later frames and acknowledge the original last-frame barrier.
+Keep the original completion context through final coverage and final display publication: retiring density
+does not acknowledge a preview frame. Cancel and device replacement stop useful work, retain original owners
+through real joins/acknowledgements, and retire complete roots off the owner. Ordinary startup remains disabled
+pending the actual mode/fault matrix, full qualification and measured G1.
+
+### Private recorded adjustment previews
+
+`RecordedDisplayGraph::PrepareAdjustmentForWork` prepares only on the admitted recording worker.
+The graph copies owning source, selection and lookup handles; no caller stack metadata survives recording.
+The original parent joins recording, acknowledges every original command batch and retires transport before
+publication. It excludes subsequent frame/seed borrows and acknowledges the last original-context use before
+worker destruction. The committed-only controller MUST NOT adopt this pending graph as a committed cache.
+
+Destructive previews require the exact source raster identity in the target layer, BGRA8 pixels, a supported
+lookup kind, finite scale in (0,1], and optional same-grid Gray8 selection. Pass 8 runs on the layer grid before
+ordinary transform, opacity, mask and blend passes. Grain uses layer-pixel positions divided by preview scale.
+Live adjustment previews require the retained original adjustment and source target to agree; they retain
+passes 6/7 and document-space grain. Unknown kinds, incomplete HSV cubes, invalid targets/grids/scales and
+pre-cancellation refuse before private graphics creation. Owner calls refuse before metadata traversal.
+
+The parent separately admits the private target and its mips, selection texture/mips, lookup, upload scratch,
+containers, command shadows and all current/seed/replacement owners. A committed-only manifest is insufficient.
+Software logical graphics allocations also remain charged to physical/commit memory. The fixed 128 MiB test
+reservation is a harness declaration and cannot serve as production admission or a responsiveness measurement.
+Ordinary pending-edit routing remains disabled until host admission, retirement and G1 qualification close.

@@ -32,6 +32,10 @@ class StrokeSampleInput final
     {
         return *_stroke;
     }
+    [[nodiscard]] const CanvasDocument& CapturedDocumentForWork() const noexcept
+    {
+        return _source;
+    }
 
   private:
     friend class DocumentSession;

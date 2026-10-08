@@ -2,6 +2,7 @@
 
 #include "../Support/DocumentFixture.h"
 #include "Adjust.h"
+#include "AdjustmentClosureWork.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Selection.h"
@@ -736,6 +737,78 @@ void LiveAdjustmentLookupDisplaysIntermediateWithoutRollingControlsBack()
                !session.PendingColorEdit()->previewLookup,
            "live-lookup-cancel-rejects-late-result-after-reopen");
 }
+
+void DeferredLiveTicksRetainSourceUntilPreparedClosure()
+{
+    constexpr std::array kinds{AdjustmentKind::Levels,      AdjustmentKind::Curves, AdjustmentKind::Exposure,
+                               AdjustmentKind::GradientMap, AdjustmentKind::Hsv,    AdjustmentKind::Grain};
+    for (const auto kind : kinds)
+    {
+        for (const bool commit : {false, true})
+        {
+            DocumentSession session = Session();
+            session.SetColorDisplayJobsEnabled(true);
+            const Raster below = session.ActiveLayer()->asset->image;
+            session.AddAdjustment(kind);
+            const auto id = session.AdjustmentEditingID();
+            const bool opened = id && session.BeginAdjustmentEditing(id.value(), below, true);
+            Expect(opened, "live-ticks.deferred-panel-opened");
+            if (!opened)
+                continue;
+            const auto originalRoot = session.Document()->layers;
+            const auto generation = session.Generation();
+            const auto revision = session.history.CurrentRevision();
+            const auto original = session.AdjustmentOriginal().value();
+            const int undoCount = session.history.UndoCount();
+            FilterSettings settings = session.PendingColorEdit()->settings;
+            settings.levels.ranges[0].gamma = 1.5;
+            settings.curves.channels[0] = {{0, 8}, {96, 144}, {255, 244}};
+            settings.exposure = ExposureSettings{0.8, 0.04, 1.35};
+            settings.gradientMap = GradientMapSettings{{0.85, 0.08, 0.18}, {0.12, 0.35, 0.95}, false};
+            settings.hsv = Adjust::HsvSettings(72, 28, -8);
+            settings.grain = GrainSettings{58, 1.75, 42, original.Grain().seed};
+            session.UpdateColorEdit(settings, true);
+            Expect(session.Document()->layers.Identity() == originalRoot.Identity() &&
+                       session.Generation() == generation && session.ActiveLayer()->adjustment.value() == original &&
+                       session.history.CurrentRevision() == revision,
+                   "live-ticks.settings-retain-exact-original-root-generation-and-history");
+            auto previewInput = session.PrepareColorEditPreview();
+            if (!previewInput)
+            {
+                Expect(false, "live-ticks.preview-input-prepared");
+                continue;
+            }
+            previewInput->liveAdjustment = original;
+            const auto expected = Adjust::AdjustmentWithSettings(original, settings.Normalized());
+            const auto preview = Preview(previewInput.value());
+            Expect(preview.status == ColorEditJobStatus::Ready && preview.edit.previewLookup &&
+                       preview.edit.previewLookup->adjustment == expected && expected != original &&
+                       session.ApplyColorEditPreview(preview) &&
+                       session.Document()->layers.Identity() == originalRoot.Identity() &&
+                       session.ActiveLayer()->adjustment.value() == original,
+                   "live-ticks.worker-lookup-publishes-without-document-replacement");
+            session.UpdateColorEdit(settings, false);
+            Expect(!session.PendingColorEdit()->preview && session.Generation() == generation &&
+                       session.Document()->layers.Identity() == originalRoot.Identity(),
+                   "live-ticks.preview-off-retains-original-root");
+            session.UpdateColorEdit(settings, true);
+            auto closure = session.PrepareAdjustmentClosureInput(commit);
+            auto prepared = closure
+                                ? DocumentSession::PrepareAdjustmentClosurePublication(
+                                      std::move(closure.value()), session.Document(), session.history.CaptureState())
+                                : std::nullopt;
+            Expect(prepared && session.Document()->layers.Identity() == originalRoot.Identity() &&
+                       session.Generation() == generation && session.history.CurrentRevision() == revision,
+                   "live-ticks.prepared-closure-keeps-source-unmodified-until-apply");
+            const bool applied = prepared && session.ApplyPreparedAdjustmentClosureIfCurrent(prepared.value());
+            Expect(applied && !session.HasColorEdit() &&
+                       session.ActiveLayer()->adjustment.value() == (commit ? expected : original) &&
+                       session.history.UndoCount() == undoCount + (commit ? 1 : 0),
+                   commit ? "live-ticks.commit-publishes-one-exact-history-entry"
+                          : "live-ticks.cancel-keeps-original-and-adds-no-history");
+        }
+    }
+}
 } // namespace
 
 int RunColorEditDeferredTests()
@@ -755,5 +828,6 @@ int RunColorEditDeferredTests()
     LookupPreviewReusesCompatibleSelectionCoverage();
     LookupPreviewInvalidationAndPreCancellation();
     LiveAdjustmentLookupDisplaysIntermediateWithoutRollingControlsBack();
+    DeferredLiveTicksRetainSourceUntilPreparedClosure();
     return gFailures;
 }

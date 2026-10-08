@@ -661,8 +661,9 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
   just because the FIFO is empty. A matching cancellation or boundary also releases this HWND's mouse capture.
   Foreground/background picker sampling previews only the chosen chrome color until OK; Canvas Size sampling
   previews only its custom extension draft. Gradient Map sampling updates only the bound endpoint. A live
-  adjustment's own Preview can renew generation authority within the same owner/document/restore/grid while
-  subsequent points continue to read the single admitted original root. Manual input and replacement picker
+  adjustment's exact own Preview acknowledgement renews authority within the same owner/document/restore/grid.
+  Worker-mode preview retains both generation and the immutable document root; direct reference preview may
+  update live parameters. Subsequent points continue to read the single admitted original root. Manual input and replacement picker
   openings still refuse old publication. Current private qualification and remaining native/matrix/G1 work are recorded
   in [SamplerReadback](../TestRuns/SamplerReadback_2026-10-04.md).
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
@@ -1174,6 +1175,13 @@ with inconsistent settings, grid or output shape is rejected.
 
 The default direct API runs these same worker functions inline and immediately applies them, preserving its numeric
 goldens. The Application explicitly chooses deferred mode for destructive and adjustment-layer panels.
+
+With `SetColorDisplayJobsEnabled(true)`, a deferred adjustment-layer settings tick retains the original
+immutable document root and generation. Its completed worker lookup supplies the visible preview; preview off
+selects the original adjustment. Only the admitted adjustment closure constructs/publishes the final metadata
+and history. The default reference mode keeps its existing live-metadata behavior and numeric expectations.
+An exact `UpdateAdjustment` restore/no-op retains the root and generation. The application enables the worker
+display mode; it must not obtain pending GPU pixels by mutating that committed source on every tick.
 
 ### Host preview and histogram jobs (P1.1c.2)
 

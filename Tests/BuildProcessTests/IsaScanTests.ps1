@@ -45,6 +45,10 @@ if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls fail
 if ($LASTEXITCODE -ne 0) { throw 'Hoisted R15 signed byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaSignedRdxRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Signed RDX byte-remap parser controls failed.' }
+Write-Host 'BEGIN isa-r13-terminal-controls'
+& (Join-Path $PSScriptRoot 'IsaR13TerminalTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Terminal R13 DWORD parser controls failed.' }
+Write-Host 'END isa-r13-terminal-controls'
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

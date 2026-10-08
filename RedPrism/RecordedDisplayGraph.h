@@ -5,7 +5,8 @@
 
 #include <optional>
 
-// Complete owning committed-display candidate. The parent admits every source/container/device/command owner
+// Complete owning display candidate. Committed, stroke and adjustment parents admit their separate roles.
+// The parent admits every source/container/device/command owner
 // before Prepare, joins its original recorder and acknowledges all original GPU batches before Publish, and
 // excludes future frame/seed borrows plus acknowledges the last old-frame use before Detached retirement.
 // This graph owns its policy/context/root: no stack policy or borrowed layer records survive a producer.
@@ -28,6 +29,13 @@ class RecordedDisplayGraph final
                                                std::span<const RasterTile> tiles, GpuCommandStream& stream,
                                                CancelToken cancellation,
                                                const RecordedDisplayGraph* publishedSeed = nullptr) noexcept;
+    // Exclusive original preview parent. Source metadata is already prepared on its admitted worker.
+    // The adjustment/coverage owners are retained by this private graph; published seeds are read-only.
+    // The parent separately admits the preview target, coverage and lookup in addition to the document.
+    [[nodiscard]] HRESULT PrepareAdjustmentForWork(ID3D11Device* device, CanvasDocument source,
+                                                   const CanvasRenderer::AdjustmentPreview& preview,
+                                                   GpuCommandStream& stream, CancelToken cancellation,
+                                                   const RecordedDisplayGraph* publishedSeed = nullptr) noexcept;
     [[nodiscard]] bool InheritedStrokeForTestOwner() const noexcept;
     // Parent calls only after the actual scheduler recording callback joined and every original batch is
     // acknowledged. This operation validates device identity, but establishes no join/completion by itself.
@@ -48,6 +56,10 @@ class RecordedDisplayGraph final
     [[nodiscard]] CanvasRenderer* CompositionForTestOwner() noexcept;
     [[nodiscard]] ID3D11Device* DeviceForTestOwner() const noexcept;
     [[nodiscard]] ID3D11DeviceContext* ContextForTestOwner() const noexcept;
+    [[nodiscard]] bool IsUnpreparedForTest() const noexcept
+    {
+        return _phase == Phase::Empty;
+    }
 
   private:
     enum class Phase
@@ -62,7 +74,8 @@ class RecordedDisplayGraph final
     [[nodiscard]] HRESULT PrepareInternalForWork(ID3D11Device* device, CanvasDocument source, GpuCommandStream& stream,
                                                  CancelToken cancellation, const RecordedDisplayGraph* publishedSeed,
                                                  const CanvasRenderer::StrokePreview* preview,
-                                                 std::span<const RasterTile> tiles) noexcept;
+                                                 std::span<const RasterTile> tiles,
+                                                 const CanvasRenderer::AdjustmentPreview* adjustment) noexcept;
     [[nodiscard]] bool IsOwner() const noexcept;
     void ReleaseForWork() noexcept;
     std::uint32_t _ownerThread = 0;

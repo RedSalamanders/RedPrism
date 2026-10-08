@@ -274,6 +274,14 @@ void Application::ReplayCanvasBrush() noexcept
             FinishHostContinuation({HostOutcome::Failed, result});
         return; // Opening owns the complete Down/Move/Up prefix until current preparation acknowledges.
     }
+    if (_asyncStrokeSamplesEnabled && !_canvasBrushReplayed && _canvasBrushSessionOpening &&
+        EditorToolIsBrush(captured->tool))
+    {
+        const auto result = StartStrokeSamples(input->opening);
+        if (FAILED(result))
+            FinishHostContinuation({HostOutcome::Failed, result});
+        return; // Same physical ordinal; original processing parent consumes Down/Move/Up and finalizes.
+    }
     const auto event = _canvasBrushInput.Take(input->opening);
     if (!event)
         return; // A live physical gesture is idle until its producer records another event.

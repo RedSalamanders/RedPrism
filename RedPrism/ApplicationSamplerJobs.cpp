@@ -343,8 +343,8 @@ void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerInte
             auto publication = _chrome->CapturePickerSampleAuthority();
             if (publication && _chrome->ApplySampledPickerColor(publication.value(), opaqueArgb.value()))
             {
-                // Adjustment-layer picker Preview may mutate its live parameter record. Subsequent points
-                // still sample the same admitted original root; only this exact own callback renews authority.
+                // Worker-mode Preview preserves its root/generation; direct reference Preview may mutate
+                // parameters. Only this exact own callback renews authority over the admitted original root.
                 const auto current = _session.CaptureDocumentReadAuthority();
                 if (current && current->sessionIdentity == opening->source.sessionIdentity &&
                     current->documentSerial == opening->source.documentSerial &&

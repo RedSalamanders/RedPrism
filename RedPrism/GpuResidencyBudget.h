@@ -77,6 +77,12 @@ class GpuResidencyBudget final
     GpuResidencyBudget& operator=(const GpuResidencyBudget&) = delete;
     [[nodiscard]] GpuResidencyReservation ReserveOwner(std::uint64_t bytes, GpuResidencySnapshot snapshot,
                                                        GpuResidencyAdmission& result) noexcept;
+    // Serialized owner before a new useful phase, under a fresh successful same-generation device query.
+    // Grow only the complete graph's delta. Preserve its original slot/ticket and every overlapping charge;
+    // no new owner, allocation, wait or ticket is created. Equal total is a no-op; shrink/foreign/invalid
+    // provenance and pressure refuse without changing the reservation or accounting.
+    [[nodiscard]] bool IncreaseOwner(GpuResidencyReservation& original, std::uint64_t totalBytes,
+                                     GpuResidencySnapshot snapshot, GpuResidencyAdmission& result) noexcept;
     [[nodiscard]] std::uint64_t ReservedOwner() const noexcept;
     [[nodiscard]] std::size_t ActiveOwner() const noexcept;
     [[nodiscard]] bool ExhaustTicketsForTest() noexcept;

@@ -491,6 +491,22 @@ the existing checked INT3 suffix rule applies to a decoded row that crosses its 
 base/index, rows, symbols, targets, boundaries or padding and adjacent real VEX remain rejected. Independent
 parser controls cover each refusal. Runtime and tier allowlists are unchanged.
 
+The observed Release terminal enum switch uses exactly six contiguous rows: `CMP R13D,imm8`;
+`JA rel32`; `LEA RDX,imagebase`; `MOV ECX,[RDX+4*R13+tableRva]`; `ADD RCX,RDX`; `JMP RCX`.
+Only these 30 bytes and a positive unsigned maximum 1–127 establish its table extent. The anonymous,
+untyped, same-owner PDB symbol starts exactly at the aligned table RVA; maximum+1 DWORDs end at the
+owning procedure end inside the same executable contribution. Each row must match the PE and decoded
+boundaries. The default and every table target must be decoded body boundaries after dispatch and before
+that procedure's first data symbol. Complete preceding code must be known, contiguous and PE-matching,
+ending in RET or RET followed by `0f 1f 00`. An earlier contiguous anonymous DWORD span requires valid
+same-procedure body targets outside the protected guard. Direct branches/calls, including legacy prefixes
+and LOOP-family branches, cannot enter the guard interior, alignment or either data span. The selected
+table's reported rows must also be known, contiguous, nonoverlapping and PE-matching; duplicate/missing
+rows provide no proof. A final scalar listing row may consume matching bytes after the logical table end;
+a crossing vector row remains subject to the existing checked suffix rule. This proves data only, not a
+general upper-bit invariant for R13, and adds no object/function or runtime-allowlist exemption. Parser
+controls and unchanged failed-image verification are separate from full native profile qualification.
+
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
 placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named

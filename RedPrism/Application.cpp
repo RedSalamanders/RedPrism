@@ -494,7 +494,9 @@ void Application::RenderFrame() noexcept
     const auto render = [this]() noexcept
     {
         return _committedDisplayInitialized
-                   ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, _acknowledgedCommittedDisplay)
+                   ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr,
+                                      _acknowledgedStrokePreview ? _acknowledgedStrokePreview
+                                                                 : _acknowledgedCommittedDisplay)
                    : _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     };
     HRESULT result = render();
@@ -3541,6 +3543,7 @@ void Application::BindCompositionDevice() noexcept
     ID3D11DeviceContext* context = _renderer.Context();
     if (!device || !context)
     {
+        _strokeFinishSource.PrepareDeviceReplacementOwner();
         _gpuWork.RetireDevice();
         _gpuBindingError = E_UNEXPECTED;
         _composition.ReleaseDeviceResources();
@@ -3554,6 +3557,7 @@ void Application::BindCompositionDevice() noexcept
     // A rebuilt device can come back at the old one's address: the generation tells them apart.
     if (_composition.Device() != device || _boundDeviceGeneration != _renderer.DeviceGeneration())
     {
+        _strokeFinishSource.PrepareDeviceReplacementOwner();
         _boundDeviceGeneration = _renderer.DeviceGeneration();
         _gpuBindingError = _composition.CreateDeviceResources(device, context);
         if (_gpuWorkInitialized)

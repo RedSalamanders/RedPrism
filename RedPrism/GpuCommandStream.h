@@ -68,6 +68,10 @@ class GpuCommandStream final
     // Owner has observed producer completion and all submitted uses have acknowledged. Worker drops remaining
     // unsubmitted/acknowledged commands; the scheduler/parent retains this object until that worker acknowledges.
     [[nodiscard]] bool RetireForWork() noexcept;
+    // Same admitted original parent, in its successful joined retirement callback only. Reuse the two
+    // existing events/slots for another recorder stage without resetting command ordinals. Failed/stopped,
+    // unjoined, foreign or exhausted streams refuse; late previous leases never name a new command.
+    [[nodiscard]] HRESULT RestartOwner() noexcept;
     [[nodiscard]] bool WasBackpressured() const noexcept
     {
         return _backpressured.load(std::memory_order_acquire);

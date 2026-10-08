@@ -1024,7 +1024,7 @@ int Application::RunSamplerCallerSelfTest() noexcept
             return 5;
     }
 
-    // A live adjustment picker mutates document generation after its own Preview. The next real Move still
+    // Worker-mode live Preview preserves document generation and the exact root. The next real Move still
     // reads the single admitted original root, with only this own callback renewing the source authority.
     constexpr std::array<GradientPickerCase, 2> adjustmentPickers{{
         {false, "sampler-caller.picker.adjustment-shadows.first-ack-renews-own-source",
@@ -1050,6 +1050,7 @@ int Application::RunSamplerCallerSelfTest() noexcept
         const auto revision = _session.history.CurrentRevision();
         const auto undo = _session.history.UndoCount();
         const auto generation = _session.Generation();
+        const auto sourceRoot = _session.Document()->layers;
         OnAdjustAction(test.highlights ? AdjustAction::OpenHighlights : AdjustAction::OpenShadows, 0);
         wil::unique_handle acknowledged{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
         if (!acknowledged || _samplerAcknowledgedForTest)
@@ -1065,7 +1066,8 @@ int Application::RunSamplerCallerSelfTest() noexcept
         const auto* pending = FindSamplerOpening(opening);
         const auto receipt = pending ? pending->receipt : ContinuationReceipt{};
         if (!check(pending && WaitForColorWorkTestEvent(_jobs, acknowledged.get(), DispatchMessageThunk, this) &&
-                       _chrome->PickerColor() == 0xFF636363u && _session.Generation() > generation &&
+                       _chrome->PickerColor() == 0xFF636363u && _session.Generation() == generation &&
+                       _session.Document()->layers.Identity() == sourceRoot.Identity() &&
                        _session.IsDocumentReadCurrent(pending->source) && _samplerHostTicket &&
                        receipt.Read().outcome == HostOutcome::Pending && _composition.UtilitySurfaceBytes() == 0,
                    L"The live adjustment's first sample did not renew only its own admitted source authority.\n",

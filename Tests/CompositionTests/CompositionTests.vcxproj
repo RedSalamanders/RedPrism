@@ -137,9 +137,13 @@
     <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
     <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
+    <ClCompile Include="Composition.Tests.GpuResidencyGrowth.cpp" />
+    <ClCompile Include="Composition.Tests.CommandStreamRestart.cpp" />
     <ClCompile Include="Composition.Tests.GpuCommandPump.cpp" />
     <ClInclude Include="Composition.Tests.GpuCommandPump.h" />
     <ClInclude Include="Composition.Tests.GpuCommandStream.h" />
+    <ClInclude Include="Composition.Tests.GpuResidencyGrowth.h" />
+    <ClInclude Include="Composition.Tests.CommandStreamRestart.h" />
     <ClCompile Include="GpuCapabilityTests.cpp" />
     <ClCompile Include="GpuWorkTests.cpp" />
     <ClCompile Include="GpuUploadAdmissionTests.cpp" />
@@ -275,6 +279,7 @@
     <ClCompile Include="..\..\Common\RasterResidencyManifestWork.cpp" />
     <ClCompile Include="Composition.Tests.RecordedBlit.cpp" />
     <ClCompile Include="Composition.Tests.RecordedDisplayParent.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedAdjustment.cpp" />
     <ClCompile Include="Composition.Tests.CommittedDisplay.cpp" />
     <ClCompile Include="Composition.Tests.DisplayVisibility.cpp" />
     <ClCompile Include="Composition.Tests.DisplayRebind.cpp" />
@@ -282,6 +287,7 @@
     <ClCompile Include="Composition.Tests.EmptyJoinedShutdown.cpp" />
     <ClInclude Include="Composition.Tests.RecordedBlit.h" />
     <ClInclude Include="Composition.Tests.RecordedDisplayParent.h" />
+    <ClInclude Include="Composition.Tests.RecordedAdjustment.h" />
     <ClInclude Include="Composition.Tests.CommittedDisplay.h" />
     <ClInclude Include="Composition.Tests.DisplayVisibility.h" />
     <ClInclude Include="Composition.Tests.DisplayRebind.h" />
