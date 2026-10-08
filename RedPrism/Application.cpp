@@ -493,9 +493,11 @@ void Application::RenderFrame() noexcept
     BindCompositionDevice();
     const auto render = [this]() noexcept
     {
+        auto* pending = _pendingDisplayInitialized ? _pendingDisplay.GraphForFrameOwner() : nullptr;
         return _committedDisplayInitialized
                    ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr,
                                       _acknowledgedStrokePreview ? _acknowledgedStrokePreview
+                                      : pending                  ? pending
                                                                  : _acknowledgedCommittedDisplay)
                    : _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     };
@@ -527,8 +529,17 @@ void Application::RenderFrame() noexcept
         return;
     }
     _frameInvalidated = false;
-    ReportCanvasFailure(_committedDisplayInitialized && FAILED(_committedDisplayFailure) ? _committedDisplayFailure
-                                                                                         : _renderer.CanvasFailure());
+    HRESULT canvasFailure = _committedDisplayInitialized && FAILED(_committedDisplayFailure)
+                                ? _committedDisplayFailure
+                                : _renderer.CanvasFailure();
+    if (_pendingDisplayInitialized && _pendingDisplayFailureKey && FAILED(_pendingDisplayFailure))
+    {
+        CommittedDisplayDescriptor current;
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(current) &&
+            current.key == _pendingDisplayFailureKey.value())
+            canvasFailure = _pendingDisplayFailure;
+    }
+    ReportCanvasFailure(canvasFailure);
     // The screenshot capture waits for a frame that reached the display (RF-409).
     if (!_screenshotPath.empty() && !_screenshotArmed && _window && _renderer.PresentCount() > 0)
     {
@@ -576,7 +587,10 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
     const bool unseen =
         _screenshotPath.empty() && (!_windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
     if (_committedDisplayInitialized)
+    {
         _committedDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
+        _pendingDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
+    }
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -3550,7 +3564,11 @@ void Application::BindCompositionDevice() noexcept
         DropBrushEngine();
         _boundDeviceGeneration = 0;
         if (_committedDisplayInitialized)
+        {
+            _recordedCommands.DeviceChangedOwner();
             _committedDisplay.DeviceChangedOwner();
+            _pendingDisplay.DeviceChangedOwner();
+        }
         _strokeFinishSource.DeviceChangedOwner();
         return;
     }
@@ -3572,7 +3590,11 @@ void Application::BindCompositionDevice() noexcept
         (void)_brushEngine.Initialize(device, context);
         _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
         if (_committedDisplayInitialized)
+        {
+            _recordedCommands.DeviceChangedOwner();
             _committedDisplay.DeviceChangedOwner();
+            _pendingDisplay.DeviceChangedOwner();
+        }
         _strokeFinishSource.DeviceChangedOwner();
     }
 }
@@ -3603,7 +3625,11 @@ void Application::Shutdown() noexcept
     _shutdownStarted = true;
     _shutdownDeferred = false;
     if (_committedDisplayInitialized)
+    {
+        _pendingDisplay.StopOwner();
         _committedDisplay.StopOwner();
+        _recordedCommands.StopOwner();
+    }
     _historyResidencySource.StopNotifications();
     _layerRowsSource.StopNotifications();
     StopHostContinuations();
@@ -3642,7 +3668,11 @@ void Application::Shutdown() noexcept
              owner._historyResidencySource.CloseAfterWorkers();
              owner.PrepareStrokeFinishJoinedShutdownOwner();
              if (owner._committedDisplayInitialized)
+             {
+                 owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
+                 owner._pendingDisplay.JoinedShutdownOwner();
                  owner._committedDisplay.JoinedShutdownOwner();
+             }
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;
              owner._shapeCommitPreview.reset();
@@ -3665,7 +3695,10 @@ void Application::Shutdown() noexcept
          {
              auto& owner = *static_cast<Application*>(opaque);
              if (owner._committedDisplayInitialized)
+             {
+                 owner._pendingDisplay.RetireShutdownForWork();
                  owner._committedDisplay.RetireShutdownForWork();
+             }
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
@@ -3707,8 +3740,10 @@ void Application::Shutdown() noexcept
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)
     {
-        if (!_committedDisplay.CloseAfterWorkersOwner())
+        if (!_pendingDisplay.CloseAfterWorkersOwner() || !_committedDisplay.CloseAfterWorkersOwner() ||
+            !_recordedCommands.CloseOwner())
             std::terminate();
+        _pendingDisplayInitialized = false;
         _committedDisplayInitialized = false;
         _committedDisplayAllowHiddenForTest = false;
         _acknowledgedCommittedDisplay = nullptr;

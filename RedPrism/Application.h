@@ -138,6 +138,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept;
@@ -166,6 +167,14 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     [[nodiscard]] bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
     void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
     void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
+    struct PendingDisplayClient final : CommittedDisplayClient
+    {
+        explicit PendingDisplayClient(Application& owner) noexcept : _owner(owner) {}
+        Application& _owner;
+        bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
+        void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
+        void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
+    };
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
     static constexpr UINT_PTR kScreenshotTimerId = 1;
     static constexpr UINT_PTR kJobIndicatorTimerId = 8;
@@ -1105,6 +1114,11 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     GpuResidencyReservation _strokeFinishShutdownDisplayGpu;
     StrokeFinishSource _strokeFinishSource{*this};
     CommittedDisplayController _committedDisplay;
+    PendingDisplayClient _pendingDisplayClient{*this};
+    CommittedDisplayController _pendingDisplay;
+    bool _pendingDisplayInitialized = false;
+    HRESULT _pendingDisplayFailure = S_OK;
+    std::optional<CommittedDisplayKey> _pendingDisplayFailureKey;
     RecordedDisplayGraph* _acknowledgedCommittedDisplay = nullptr;
     RecordedDisplayGraph* _acknowledgedStrokePreview = nullptr;
     bool _committedDisplayInitialized = false;

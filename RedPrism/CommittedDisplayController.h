@@ -3,6 +3,7 @@
 #include "GpuCommandPump.h"
 #include "GpuResidencyBudget.h"
 #include "OwnerWorkMultiplexer.h"
+#include "PendingDisplaySource.h"
 #include "RasterResidencyManifestWork.h"
 #include "RecordedDisplayGraph.h"
 #include "SharedPublicationMemory.h"
@@ -12,10 +13,23 @@
 #include <memory>
 #include <optional>
 
+enum class DisplaySourcePurpose : std::uint8_t
+{
+    Committed,
+    Transform,
+    Color,
+    Adjustment
+};
+
 struct CommittedDisplayKey final
 {
     DocumentReadAuthority document;
     std::uint64_t deviceGeneration = 0;
+    DisplaySourcePurpose purpose = DisplaySourcePurpose::Committed;
+    std::uint64_t opening = 0;
+    std::uint64_t publication = 0;
+    const void* sourceIdentity = nullptr; // A published root holds this immutable source, never an address-only cache.
+    const void* lookupIdentity = nullptr; // Its original admitted root holds this lookup.
     [[nodiscard]] bool operator==(const CommittedDisplayKey&) const noexcept = default;
 };
 
@@ -28,6 +42,7 @@ struct CommittedDisplayDescriptor final
     ID3D11Device* device = nullptr;
     ID3D11DeviceContext* immediate = nullptr;
     bool software = false;
+    std::optional<PendingDisplaySource> pending; // Scalar borrows only; copied owners follow original CPU admission.
 };
 
 class CommittedDisplayController;
@@ -121,8 +136,9 @@ class CommittedDisplayPublicationSlot final
     JobTicket _original;
 };
 
-// At most one cached display and one admitted replacement/retiring display. This committed-only controller is
-// not a pending-edit/brush/utility controller. Its application client must separately admit those consumers.
+// At most one cache and one admitted replacement/retiring root per instance. Pending instances have distinct
+// keys and preview admission; they cannot provide a committed seed or accept original-parent final publication.
+// Shared transport lifetime is closed by its application owner after ALL instances detach.
 class CommittedDisplayController final : public OwnerWorkPump
 {
   public:
@@ -132,7 +148,10 @@ class CommittedDisplayController final : public OwnerWorkPump
     CommittedDisplayController& operator=(const CommittedDisplayController&) = delete;
     [[nodiscard]] HRESULT InitializeOwner(JobScheduler& jobs, GpuWorkQueue& queue, GpuCommandPump& commands,
                                           OwnerWorkMultiplexer& routes, CommittedDisplayClient& client,
-                                          GpuResidencyBudget* sharedBudget = nullptr) noexcept;
+                                          GpuResidencyBudget* sharedBudget = nullptr, bool pending = false,
+                                          bool ownsCommandPump = true) noexcept;
+    // Bounded current-opening validation immediately before a frame; no fallback derivation or GPU work.
+    [[nodiscard]] RecordedDisplayGraph* GraphForFrameOwner() const noexcept;
     // Visibility transition only. Suspension excludes pixels immediately, cancels useful preparation and
     // retires existing roots through their original acknowledgements. Repeated suspension does not rearm.
     // Resume requests the current immutable document; no hidden replacement or synchronous fallback.
@@ -237,6 +256,8 @@ class CommittedDisplayController final : public OwnerWorkPump
     Cell* _published = nullptr;
     std::optional<CommittedDisplayKey> _failed;
     std::uint32_t _ownerThread = 0;
+    bool _pending = false;
+    bool _ownsCommandPump = true;
     bool _requested = false;
     bool _ready = false;
     bool _suspended = false;

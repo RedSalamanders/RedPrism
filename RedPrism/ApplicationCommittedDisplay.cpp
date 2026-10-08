@@ -10,8 +10,8 @@ bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
         return false;
     if (FAILED(_recordedCommands.InitializeOwner(_jobs, _gpuWork, _ownerWork)))
         return false;
-    if (FAILED(
-            _committedDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, *this, &_graphGpuBudget)))
+    if (FAILED(_committedDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, *this,
+                                                 &_graphGpuBudget, false, false)))
     {
         _recordedCommands.StopOwner();
         _recordedCommands.AcknowledgeJoinedShutdownOwner(); // No source/producer was ever attached.
@@ -19,6 +19,18 @@ bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
             std::terminate();
         return false;
     }
+    if (FAILED(_pendingDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, _pendingDisplayClient,
+                                               &_graphGpuBudget, true, false)))
+    {
+        _committedDisplay.StopOwner();
+        _recordedCommands.StopOwner();
+        _recordedCommands.AcknowledgeJoinedShutdownOwner();
+        _committedDisplay.JoinedShutdownOwner(); // No graph was requested or captured.
+        if (!_committedDisplay.CloseAfterWorkersOwner() || !_recordedCommands.CloseOwner())
+            std::terminate();
+        return false;
+    }
+    _pendingDisplayInitialized = true;
     _committedDisplayInitialized = true;
     _committedDisplayAllowHiddenForTest = allowHidden;
     ReleaseSurfacesWhileUnseen();
@@ -57,4 +69,51 @@ void Application::CommittedDisplayFailedOwner(CommittedDisplayKey, HRESULT failu
 {
     _committedDisplayFailure = failure;
     _frameInvalidated = true; // Existing canvas-error notice runs outside scheduler/owner-pump callbacks.
+}
+
+bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept
+{
+    descriptor = {};
+    if (_owner._shutdownStarted || !_owner._pendingDisplayInitialized || !_owner._rendererReady ||
+        !_owner._gpuWorkInitialized || FAILED(_owner._gpuBindingError))
+        return false;
+    PendingDisplaySource source;
+    if (!_owner._session.DescribePendingDisplaySource(source))
+        return false;
+    // Accepted Cancel excludes useful preview immediately. Its original panel/source still belongs to the
+    // selected closure until acknowledgement; admission refusal and another opening must not hide it.
+    if (source.kind != PendingDisplaySource::Kind::Transform &&
+        _owner._pendingCancelOpening == std::optional(source.opening) &&
+        _owner._pendingCancelDocumentSerial == _owner._session.DocumentSerial() &&
+        _owner._pendingCancelReceipt.Read().outcome == HostOutcome::Pending)
+        return false;
+    descriptor.key.document = source.authority;
+    descriptor.key.deviceGeneration = _owner._gpuWork.DeviceGeneration();
+    descriptor.key.purpose = source.kind == PendingDisplaySource::Kind::Transform ? DisplaySourcePurpose::Transform
+                             : source.kind == PendingDisplaySource::Kind::Color   ? DisplaySourcePurpose::Color
+                                                                                  : DisplaySourcePurpose::Adjustment;
+    descriptor.key.opening = source.opening;
+    descriptor.key.publication = source.publication;
+    descriptor.key.sourceIdentity = source.sourceIdentity;
+    descriptor.key.lookupIdentity = source.lookup && *source.lookup ? source.lookup->get() : nullptr;
+    descriptor.document = source.document;
+    descriptor.device = _owner._renderer.Device();
+    descriptor.immediate = _owner._renderer.Context();
+    descriptor.software = _owner._renderer.IsWarp();
+    descriptor.pending = source;
+    return true;
+}
+
+void Application::PendingDisplayClient::CommittedDisplayPublishedOwner(RecordedDisplayGraph*) noexcept
+{
+    _owner._pendingDisplayFailure = S_OK;
+    _owner._pendingDisplayFailureKey.reset();
+    _owner._frameInvalidated = true;
+}
+
+void Application::PendingDisplayClient::CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept
+{
+    _owner._pendingDisplayFailure = failure;
+    _owner._pendingDisplayFailureKey = key;
+    _owner._frameInvalidated = true;
 }

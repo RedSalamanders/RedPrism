@@ -1368,6 +1368,7 @@ class PreparedShapeEdit;
 class TransformCommitInput;
 class TransformPreviewInput;
 class PreparedTransformPreview;
+struct PendingDisplaySource;
 struct TransformPreviewResult;
 struct TransformPreviewObserver;
 class TransformCancellationInput;
@@ -2355,6 +2356,8 @@ class DocumentSession
     // The document as the canvas draws it: the pending transform, mask placement and distortion (at preview size)
     // applied to a cached copy that shares every raster with the real document.
     [[nodiscard]] const CanvasDocument* DisplayDocument() const;
+    // Borrow only a completed pending source: no clone, pixel derivation or ownership capture.
+    [[nodiscard]] bool DescribePendingDisplaySource(PendingDisplaySource& output) const noexcept;
 
     // Selection (C9, Specs/Document/Document_Tools.md). Outlines live in the document, so history covers them;
     // drafts, the outline-move origin and the header settings are session state.

@@ -23,6 +23,7 @@
 #include "Document.Tests.HealWork.h"
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
+#include "Document.Tests.PendingDisplaySource.h"
 #include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
@@ -8184,6 +8185,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunLayerRowsWorkTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
+    gFailures += RunPendingDisplaySourceDescriptorTests();
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();

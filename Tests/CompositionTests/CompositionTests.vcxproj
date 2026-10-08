@@ -208,6 +208,7 @@
     <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
+    <ClCompile Include="..\..\Common\AdjustmentDisplayAdmission.cpp" />
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
@@ -280,6 +281,7 @@
     <ClCompile Include="Composition.Tests.RecordedBlit.cpp" />
     <ClCompile Include="Composition.Tests.RecordedDisplayParent.cpp" />
     <ClCompile Include="Composition.Tests.RecordedAdjustment.cpp" />
+    <ClCompile Include="Composition.Tests.AdjustmentDisplayAdmission.cpp" />
     <ClCompile Include="Composition.Tests.CommittedDisplay.cpp" />
     <ClCompile Include="Composition.Tests.DisplayVisibility.cpp" />
     <ClCompile Include="Composition.Tests.DisplayRebind.cpp" />
@@ -288,6 +290,7 @@
     <ClInclude Include="Composition.Tests.RecordedBlit.h" />
     <ClInclude Include="Composition.Tests.RecordedDisplayParent.h" />
     <ClInclude Include="Composition.Tests.RecordedAdjustment.h" />
+    <ClInclude Include="Composition.Tests.AdjustmentDisplayAdmission.h" />
     <ClInclude Include="Composition.Tests.CommittedDisplay.h" />
     <ClInclude Include="Composition.Tests.DisplayVisibility.h" />
     <ClInclude Include="Composition.Tests.DisplayRebind.h" />

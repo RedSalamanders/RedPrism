@@ -1,7 +1,7 @@
 # Canvas composition
 
 Status: current normative product contract
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-08
 Owner: `RedPrism/CanvasRenderer.*`, `RedPrism/CanvasViewport.h`, HLSL under `RedPrism/Shaders/`, the frame loop's
 failure handling in `RedPrism/Renderer.*` and `Application::RenderFrame`
 
@@ -507,8 +507,9 @@ does not qualify live display integration, oversized mapping, complete resource 
 ## Opt-in recorded committed display
 
 `CommittedDisplayController` has two fixed owner cells: one published cache and an admitted replacement or
-retiring graph. This route is enabled only by the hidden application qualification fixture. Normal application
-display, pending previews, strokes and utilities retain their existing consumers until their separate admission
+retiring graph. This route is enabled only by the hidden application qualification fixtures. A separate pending controller
+is described below. Normal application display, pending previews, strokes and utilities retain their existing
+consumers until their separate admission
 and scenario gates close. Helper integration does not qualify H4/P1 or a first-display latency.
 
 The original scheduler record admits CPU source/manifest/scratch before capture, plans resources on a compute
@@ -593,3 +594,44 @@ containers, command shadows and all current/seed/replacement owners. A committed
 Software logical graphics allocations also remain charged to physical/commit memory. The fixed 128 MiB test
 reservation is a harness declaration and cannot serve as production admission or a responsiveness measurement.
 Ordinary pending-edit routing remains disabled until host admission, retirement and G1 qualification close.
+
+
+### Opt-in pending-display controller
+
+The Application qualification route owns separate two-cell committed and pending controllers, sharing one
+GPU reservation ledger and one startup command pump. The Application owns that pump's shutdown; an individual
+controller cannot stop or close the shared transport. Each controller permits one active replacement;
+a cached graph has already detached its recording source. Existing two-borrower transport capacity still
+requires actual next-operation coexistence qualification before ordinary startup activation.
+
+`DescribePendingDisplaySource` borrows only a completed deferred color/adjustment or transform source.
+Description MUST NOT build pixels, lookups, materialized rasters or replacement documents. It supplies complete
+document authority, kind, opening, publication, retained layer-root identity and optional prepared lookup/source/
+coverage/original-adjustment fields. Refusal leaves its output unchanged. The controller revalidates those
+borrows immediately before admitted owning capture. Unsupported draft kinds refuse; they cannot silently use
+the committed document as a substitute pending preview.
+
+Pending keys and owners remain distinct from committed keys. They cannot lend a committed seed or accept final
+document publication. Worker color ticks keep the committed generation/root/history unchanged; a compatible
+acknowledged preview may remain visible while newer settings prepare. Preview off, a different opening,
+document/device replacement or suspension excludes incompatible pixels before the next frame. Accepted Cancel
+also excludes pending pixels immediately, keyed by its exact document/opening and pending receipt. The closure
+still retains its original panel/source until worker acknowledgement. Refused admission or a completed/stale
+receipt cannot hide a new opening. Notify the pending controller to stop useful work and retire acknowledged
+roots; exclusion alone does not authorize destruction or refund. An earlier
+failure is reported only while its exact pending key remains current. Lookup-only destructive previews use
+pass 8 before normal layer composition; live adjustments retain passes 6/7 and their original adjustment.
+
+Before owning capture, reserve the base source/manifest and additional preview envelope: retained raster and
+lookup capacities, original/copy curve storage, BGRA target and optional Gray8 coverage with complete mips,
+lookup texture, bounded upload/reduction rows, container/view/driver allowances and command shadows. WARP
+logical graphics storage is additionally charged to physical/commit admission. Fresh successful actual segment
+admission covers old, replacement and retiring GPU reservations; a fixed fixture budget is insufficient.
+Publication requires the actual original recorder join and every submitted GPU acknowledgement. Retirement
+keeps the original owners and charges through last frame barriers and final worker destruction.
+
+The opt-in renderer selects acknowledged stroke, then current pending, then committed display, and records only
+a blit in the frame. It does not run owner composition as a fallback for this route. Shutdown excludes future
+frames and preparation, joins both controllers' producers and waits, acknowledges destruction-only original
+uses, retires graph/source/lookup/context owners on the worker, then detaches both controllers and closes the
+one shared pump. Hidden fixtures and arithmetic controls alone do not qualify production peaks or G1.

@@ -118,6 +118,7 @@
     <ClInclude Include="..\..\Common\InputRevision.h" />
     <ClInclude Include="ColorEditWorkTests.h" />
     <ClInclude Include="ColorEditDeferredTests.h" />
+    <ClInclude Include="Document.Tests.PendingDisplaySource.h" />
     <ClInclude Include="FilterCancellationTests.h" />
     <ClInclude Include="DocumentSizingWorkTests.h" />
     <ClInclude Include="SelectionStorageTests.h" />
@@ -240,6 +241,7 @@
     <ClCompile Include="CopyPixelsTransformTests.cpp" />
     <ClCompile Include="ColorEditWorkTests.cpp" />
     <ClCompile Include="ColorEditDeferredTests.cpp" />
+    <ClCompile Include="Document.Tests.PendingDisplaySource.cpp" />
     <ClCompile Include="FilterCancellationTests.cpp" />
     <ClCompile Include="DocumentSizingWorkTests.cpp" />
     <ClCompile Include="SelectionStorageTests.cpp" />
@@ -355,6 +357,7 @@
     <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PendingDisplaySource.cpp" />
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />

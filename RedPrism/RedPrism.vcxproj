@@ -259,6 +259,8 @@
     <ClCompile Include="..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
+    <ClCompile Include="..\Common\PendingDisplaySource.cpp" />
+    <ClCompile Include="..\Common\AdjustmentDisplayAdmission.cpp" />
     <ClCompile Include="..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\Common\ColorDisplayWork.cpp" />
     <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
@@ -532,6 +534,7 @@
     <ClCompile Include="CommittedDisplayController.cpp" />
     <ClCompile Include="ApplicationCommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingDisplay.cpp" />
     <ClCompile Include="Application.Tests.RowPublication.cpp" />
     <ClInclude Include="Application.Tests.RowPublication.h" />
     <ClCompile Include="Application.Tests.StrokeFinish.cpp" />

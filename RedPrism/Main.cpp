@@ -307,6 +307,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
             return failed;
         if (const int failed = Application::RunStandaloneLiveShutdownSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePendingDisplaySelfTest\n");
+        if (const int failed = Application::RunStandalonePendingDisplaySelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneCommittedDisplaySelfTest\n");
         if (const int failed = Application::RunStandaloneCommittedDisplaySelfTest(instance); failed != 0)
             return failed;

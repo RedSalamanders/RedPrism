@@ -1,5 +1,7 @@
 #include "CommittedDisplayController.h"
 
+#include "AdjustmentDisplayAdmission.h"
+
 #include <exception>
 #include <limits>
 #include <new>
@@ -15,6 +17,92 @@ bool Add(std::uint64_t& value, std::uint64_t extra) noexcept
     if (extra > (std::numeric_limits<std::uint64_t>::max)() - value)
         return false;
     value += extra;
+    return true;
+}
+
+bool SameVisibleOpening(const CommittedDisplayKey& first, const CommittedDisplayKey& second) noexcept
+{
+    if (first.purpose == DisplaySourcePurpose::Committed && second.purpose == DisplaySourcePurpose::Committed)
+        return first.document.sessionIdentity == second.document.sessionIdentity &&
+               first.document.documentSerial == second.document.documentSerial &&
+               first.deviceGeneration == second.deviceGeneration;
+    return first.purpose == second.purpose && first.opening == second.opening && first.document == second.document &&
+           first.deviceGeneration == second.deviceGeneration;
+}
+
+bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pending) noexcept
+{
+    if (!descriptor.document || !descriptor.device || !descriptor.immediate || !descriptor.key.deviceGeneration)
+        return false;
+    if (!pending)
+        return descriptor.key.purpose == DisplaySourcePurpose::Committed && !descriptor.pending &&
+               !descriptor.key.opening && !descriptor.key.publication && !descriptor.key.sourceIdentity &&
+               !descriptor.key.lookupIdentity;
+    if (!descriptor.pending || descriptor.key.purpose == DisplaySourcePurpose::Committed)
+        return false;
+    const auto& source = descriptor.pending.value();
+    if (source.kind != PendingDisplaySource::Kind::Transform && source.kind != PendingDisplaySource::Kind::Color &&
+        source.kind != PendingDisplaySource::Kind::Adjustment)
+        return false;
+    if (source.kind == PendingDisplaySource::Kind::Adjustment &&
+        (!source.original || !source.lookup || !*source.lookup || source.adjustmentSource ||
+         source.adjustmentCoverage || source.previewScale != 1))
+        return false;
+    if (source.kind != PendingDisplaySource::Kind::Adjustment && source.original)
+        return false;
+    if (source.kind == PendingDisplaySource::Kind::Transform &&
+        (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.previewScale != 1))
+        return false;
+    const auto purpose = source.kind == PendingDisplaySource::Kind::Transform ? DisplaySourcePurpose::Transform
+                         : source.kind == PendingDisplaySource::Kind::Color   ? DisplaySourcePurpose::Color
+                                                                              : DisplaySourcePurpose::Adjustment;
+    return source.document == descriptor.document && source.authority == descriptor.key.document && source.opening &&
+           source.publication && source.opening == descriptor.key.opening &&
+           source.publication == descriptor.key.publication && purpose == descriptor.key.purpose &&
+           source.sourceIdentity == descriptor.key.sourceIdentity &&
+           descriptor.document->layers.Identity() == source.sourceIdentity &&
+           (source.lookup && *source.lookup ? source.lookup->get() : nullptr) == descriptor.key.lookupIdentity;
+}
+
+bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDisplayAdmission::Envelope& result,
+                     std::uint64_t& heldBytes) noexcept
+{
+    heldBytes = 0;
+    if (!descriptor.pending || !descriptor.pending->lookup)
+        return true; // The completed CPU document is already covered by the base manifest admission.
+    const auto& source = descriptor.pending.value();
+    if (!*source.lookup)
+        return false;
+    const auto& lookup = **source.lookup;
+    AdjustmentDisplayAdmission::Descriptor additional;
+    additional.kind = lookup.adjustment.kind;
+    additional.software = descriptor.software;
+    additional.liveAdjustment = source.original != nullptr;
+    if (!additional.liveAdjustment)
+    {
+        if (!source.adjustmentSource || !source.adjustmentSource->HasStorage() || !source.adjustmentCoverage)
+            return false;
+        additional.width = static_cast<std::uint32_t>(source.adjustmentSource->Width());
+        additional.height = static_cast<std::uint32_t>(source.adjustmentSource->Height());
+        additional.selectionCoverage = source.adjustmentCoverage->HasStorage();
+        if (!Add(heldBytes, source.adjustmentSource->RetirementMemoryBytes()) ||
+            !Add(heldBytes, source.adjustmentCoverage->RetirementMemoryBytes()))
+            return false;
+    }
+    const auto measured = AdjustmentDisplayAdmission::Estimate(additional);
+    if (!measured || lookup.cube.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(float) ||
+        !Add(heldBytes, sizeof(AdjustmentLookup) + 256) || !Add(heldBytes, lookup.cube.capacity() * sizeof(float)))
+        return false;
+    for (const auto& channel : lookup.adjustment.curves.channels)
+        if (channel.capacity() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) ||
+            !Add(heldBytes, channel.capacity() * sizeof(CurvePoint)))
+            return false;
+    if (source.original)
+        for (const auto& channel : source.original->curves.channels)
+            if (channel.size() > (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) ||
+                !Add(heldBytes, channel.size() * sizeof(CurvePoint)))
+                return false;
+    result = measured.value();
     return true;
 }
 
@@ -39,6 +127,8 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
     std::shared_ptr<const SharedPublicationMemory> publicationMemory;
     CommittedDisplayController::Cell* cell = nullptr;
     CanvasDocument source;
+    std::optional<CanvasRenderer::AdjustmentPreview> adjustment;
+    AdjustmentDisplayAdmission::Envelope previewEnvelope;
     RasterResidencyManifestWork::Handle manifest;
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> immediate;
@@ -64,6 +154,7 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
                 std::terminate();
             graphRetired = true;
         }
+        adjustment.reset();
         manifest.reset();
         source = {};
         captured = {};
@@ -118,8 +209,12 @@ class CommittedDisplayController::DisplayJob final : public Job
                 root.stream.FinishProducerForWork(status);
                 root.producerFinished = true;
             });
-        status = root.graph.PrepareForWork(root.device.get(), root.manifest->Plan().Source(), root.stream,
-                                           context.cancellation, root.seed);
+        status = root.adjustment
+                     ? root.graph.PrepareAdjustmentForWork(root.device.get(), root.manifest->Plan().Source(),
+                                                           root.adjustment.value(), root.stream, context.cancellation,
+                                                           root.seed)
+                     : root.graph.PrepareForWork(root.device.get(), root.manifest->Plan().Source(), root.stream,
+                                                 context.cancellation, root.seed);
         return Result(status);
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
@@ -176,6 +271,25 @@ class CommittedDisplayController::DisplayJob final : public Job
                 root->bytes = _cpuBytes;
                 root->destroy = &CommittedDisplayController::DestroyRootForWork;
                 root->source = *descriptor.document;
+                std::uint64_t heldBytes = 0;
+                if (!PreviewEnvelope(descriptor, root->previewEnvelope, heldBytes))
+                    std::terminate(); // Revalidated unchanged descriptor after its original complete admission.
+                if (descriptor.pending && descriptor.pending->lookup)
+                {
+                    const auto& source = descriptor.pending.value();
+                    root->adjustment.emplace();
+                    auto& preview = root->adjustment.value();
+                    preview.layerId = source.target;
+                    preview.lookup = *source.lookup;
+                    preview.previewScale = source.previewScale;
+                    if (source.original)
+                        preview.liveOriginal = *source.original;
+                    else
+                    {
+                        preview.source = *source.adjustmentSource;
+                        preview.coverage = *source.adjustmentCoverage;
+                    }
+                }
                 root->device = descriptor.device;
                 root->immediate = descriptor.immediate;
                 root->software = descriptor.software;
@@ -288,9 +402,9 @@ CommittedDisplaySeedLease::~CommittedDisplaySeedLease()
 bool CommittedDisplayController::AcquirePublishedSeedOwner(CommittedDisplayKey key,
                                                            CommittedDisplaySeedLease& lease) noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended || lease || !_published || _published->phase != Phase::Cached ||
-        _published->retirementRequested || _published->externalBorrow || _published->key != key || !_published->root ||
-        !CurrentOwner(*_published) ||
+    if (!IsOwner() || !_jobs || _pending || _stopped || _suspended || lease || !_published ||
+        _published->phase != Phase::Cached || _published->retirementRequested || _published->externalBorrow ||
+        _published->key != key || !_published->root || !CurrentOwner(*_published) ||
         _published->externalBorrowGeneration == (std::numeric_limits<std::uint64_t>::max)())
         return false;
     auto& cell = *_published;
@@ -337,7 +451,8 @@ bool CommittedDisplayController::IsOwner() const noexcept
 }
 HRESULT CommittedDisplayController::InitializeOwner(JobScheduler& jobs, GpuWorkQueue& queue, GpuCommandPump& commands,
                                                     OwnerWorkMultiplexer& routes, CommittedDisplayClient& client,
-                                                    GpuResidencyBudget* sharedBudget) noexcept
+                                                    GpuResidencyBudget* sharedBudget, bool pending,
+                                                    bool ownsCommandPump) noexcept
 {
     if (!IsOwner() || _jobs || !jobs.WakeHandle() || !routes.Attach(*this))
         return E_INVALIDARG;
@@ -347,8 +462,25 @@ HRESULT CommittedDisplayController::InitializeOwner(JobScheduler& jobs, GpuWorkQ
     _routes = &routes;
     _client = &client;
     _gpuBudget = sharedBudget ? sharedBudget : &_ownedGpuBudget;
+    _pending = pending;
+    _ownsCommandPump = ownsCommandPump;
     return S_OK;
 }
+RecordedDisplayGraph* CommittedDisplayController::GraphForFrameOwner() const noexcept
+{
+    if (!IsOwner() || !_jobs || _stopped || _suspended || !_published || !_published->root ||
+        _published->retirementRequested || _published->phase != Phase::Cached)
+        return nullptr;
+    CommittedDisplayDescriptor descriptor;
+    if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
+        !SameVisibleOpening(_published->key, descriptor.key) ||
+        descriptor.key.deviceGeneration != _queue->DeviceGeneration() ||
+        descriptor.device != _published->root->device.get() ||
+        descriptor.immediate != _published->root->immediate.get())
+        return nullptr;
+    return &_published->root->graph;
+}
+
 void CommittedDisplayController::WakeOwner() noexcept
 {
     _ready = true;
@@ -385,10 +517,8 @@ void CommittedDisplayController::RequestOwner() noexcept
     if (_published)
     {
         CommittedDisplayDescriptor descriptor;
-        if (!_client->DescribeCommittedDisplayOwner(descriptor) ||
-            _published->key.document.sessionIdentity != descriptor.key.document.sessionIdentity ||
-            _published->key.document.documentSerial != descriptor.key.document.documentSerial ||
-            _published->key.deviceGeneration != descriptor.key.deviceGeneration)
+        if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
+            !SameVisibleOpening(_published->key, descriptor.key))
             RetireCacheOwner(*_published); // Exclude old document pixels before the next owner route/frame.
     }
     _requested = true;
@@ -406,8 +536,7 @@ bool CommittedDisplayController::CurrentOwner(const Cell& cell, CommittedDisplay
 {
     CommittedDisplayDescriptor descriptor;
     if (_stopped || _suspended || !_client->DescribeCommittedDisplayOwner(descriptor) || descriptor.key != cell.key ||
-        !descriptor.document || !descriptor.device || !descriptor.immediate ||
-        descriptor.key.deviceGeneration != _queue->DeviceGeneration())
+        !DescriptorMatches(descriptor, _pending) || descriptor.key.deviceGeneration != _queue->DeviceGeneration())
         return false;
     if (cell.root &&
         (descriptor.device != cell.root->device.get() || descriptor.immediate != cell.root->immediate.get()))
@@ -442,7 +571,11 @@ void CommittedDisplayController::BeginOwner(const CommittedDisplayDescriptor& de
     options.deviceGeneration = descriptor.key.deviceGeneration;
     const auto admission = RasterResidencyCpuAdmission::Estimate(*descriptor.document, options);
     auto bytes = admission.CpuBytes();
-    if (!admission.IsValid() || !Add(bytes, sizeof(Root) + sizeof(DisplayJob) + kGraphFixedCpuBytes))
+    AdjustmentDisplayAdmission::Envelope preview;
+    std::uint64_t heldBytes = 0;
+    if (!DescriptorMatches(descriptor, _pending) || !admission.IsValid() ||
+        !PreviewEnvelope(descriptor, preview, heldBytes) || !Add(bytes, preview.additionalCpuBytes) ||
+        !Add(bytes, heldBytes) || !Add(bytes, sizeof(Root) + sizeof(DisplayJob) + kGraphFixedCpuBytes))
     {
         _failed = descriptor.key;
         _client->CommittedDisplayFailedOwner(descriptor.key, E_OUTOFMEMORY);
@@ -501,8 +634,11 @@ HRESULT CommittedDisplayController::AdmitRecordingOwner(Cell& cell,
     if (!segment.available || !segment.budget)
         return FAILED(segment.queryResult) ? segment.queryResult : E_OUTOFMEMORY;
     GpuResidencyAdmission decision{};
-    cell.gpu = _gpuBudget->ReserveOwner(root.manifest->RequiredGpuBytes(),
-                                        {cell.key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
+    auto gpu = root.manifest->RequiredGpuBytes();
+    if (!Add(gpu, root.previewEnvelope.additionalGpuBytes))
+        return E_OUTOFMEMORY;
+    cell.gpu =
+        _gpuBudget->ReserveOwner(gpu, {cell.key.deviceGeneration, segment.budget, segment.currentUsage}, decision);
     if (!cell.gpu)
         return E_OUTOFMEMORY;
     result = root.stream.InitializeOwner(*_jobs, cell.ticket, cell.key.deviceGeneration);
@@ -711,10 +847,8 @@ void CommittedDisplayController::Pump() noexcept
     {
         CommittedDisplayDescriptor descriptor;
         const bool described = _client->DescribeCommittedDisplayOwner(descriptor);
-        if (_published &&
-            (!described || _published->key.document.sessionIdentity != descriptor.key.document.sessionIdentity ||
-             _published->key.document.documentSerial != descriptor.key.document.documentSerial ||
-             _published->key.deviceGeneration != descriptor.key.deviceGeneration))
+        if (_published && (!described || !DescriptorMatches(descriptor, _pending) ||
+                           !SameVisibleOpening(_published->key, descriptor.key)))
             RetireCacheOwner(*_published); // A different document/device cannot display the old document's pixels.
         for (auto& cell : _cells)
             if (cell.phase == Phase::Active && (!described || cell.key != descriptor.key))
@@ -737,7 +871,8 @@ void CommittedDisplayController::DeviceChangedOwner() noexcept
 {
     if (!IsOwner() || _stopped)
         return;
-    _commands->DeviceChangedOwner();
+    if (_ownsCommandPump)
+        _commands->DeviceChangedOwner();
     for (auto& cell : _cells)
         if (cell.phase == Phase::RetiringGpu && cell.quarantine)
             cell.recoveryArmed = true;
@@ -762,7 +897,8 @@ void CommittedDisplayController::StopOwner() noexcept
                 cell.root->streamInitialized)
                 cell.root->stream.RequestStopOwner();
         }
-    _commands->StopOwner();
+    if (_ownsCommandPump)
+        _commands->StopOwner();
 }
 void CommittedDisplayController::JoinedShutdownOwner() noexcept
 {
@@ -770,7 +906,8 @@ void CommittedDisplayController::JoinedShutdownOwner() noexcept
         std::terminate();
     // Actual scheduler producer joins precede this hook. The pump handles an empty recorder that never ran
     // separately from every submitted use, without delivering callbacks or successful pixels.
-    _commands->AcknowledgeJoinedShutdownOwner();
+    if (_ownsCommandPump)
+        _commands->AcknowledgeJoinedShutdownOwner();
     for (auto& cell : _cells)
     {
         if (cell.externalBorrow || cell.phase == Phase::Publication)
@@ -838,7 +975,7 @@ bool CommittedDisplayController::CloseAfterWorkersOwner() noexcept
         cell.gpu.ResetOwner();
         cell.phase = Phase::Empty;
     }
-    if (!_commands->CloseOwner() || !_routes->Detach(*this))
+    if ((_ownsCommandPump && !_commands->CloseOwner()) || !_routes->Detach(*this))
         return false;
     _routes = nullptr;
     _jobs = nullptr;
@@ -964,8 +1101,8 @@ const CommittedDisplayController::Cell* CommittedDisplayController::PublicationC
 bool CommittedDisplayController::ClaimPublicationSlotOwner(JobTicket original,
                                                            CommittedDisplayPublicationSlot& slot) noexcept
 {
-    if (!IsOwner() || !_jobs || _stopped || _suspended || slot || original.slot >= JobScheduler::kCapacity ||
-        !original.generation || !_jobs->InAcknowledgedJobCallback(original))
+    if (!IsOwner() || !_jobs || _pending || _stopped || _suspended || slot ||
+        original.slot >= JobScheduler::kCapacity || !original.generation || !_jobs->InAcknowledgedJobCallback(original))
         return false;
     for (const auto& cell : _cells)
         if (cell.phase == Phase::Active || cell.phase == Phase::Publication)

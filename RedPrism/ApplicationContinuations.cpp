@@ -76,6 +76,8 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
         _pendingCancelOpening = opening;
         _pendingCancelDocumentSerial = _session.DocumentSerial();
         _pendingCancelReceipt = receipt;
+        if (_pendingDisplayInitialized)
+            _pendingDisplay.RequestOwner(); // Exclude/cancel useful preview; original owners retire after join.
         SyncAdjustPanel();
         _frameInvalidated = true;
     }

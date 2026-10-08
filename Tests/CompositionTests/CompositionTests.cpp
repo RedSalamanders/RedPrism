@@ -5,6 +5,7 @@
 #include "BrushStroke.h"
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
+#include "Composition.Tests.AdjustmentDisplayAdmission.h"
 #include "Composition.Tests.BrushDensityClear.h"
 #include "Composition.Tests.BrushEpoch.h"
 #include "Composition.Tests.CapturedCompletion.h"
@@ -2120,6 +2121,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuCommandPumpTests();
     gFailures += RunRecordedDisplayParentTests();
     gFailures += RunRecordedAdjustmentParentTests();
+    gFailures += RedPrism::CompositionTests::RunAdjustmentDisplayAdmissionTests();
     gFailures += RunCommittedDisplayControllerTests();
     gFailures += RunPublicationParentTests();
     gFailures += RunCommittedDisplayVisibilityTests();

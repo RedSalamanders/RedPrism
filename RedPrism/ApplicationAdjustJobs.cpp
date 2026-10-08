@@ -503,6 +503,11 @@ void Application::ConfigureColorLookupPreview(ColorEditJobInput& input) const
 
 void Application::SyncColorLookupPreview() noexcept
 {
+    if (_pendingDisplayInitialized)
+    {
+        _pendingDisplay.RequestOwner();
+        return; // This admitted recorder owns lookup/raster/coverage handles and all graphics work.
+    }
     const auto& edit = _session.PendingColorEdit();
     if (edit && _session.AdjustmentEditingID() && _session.AdjustmentOriginal())
     {

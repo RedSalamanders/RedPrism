@@ -1969,3 +1969,27 @@ In the display-worker mode, `ColorEditDeferredTests` also covers all six adjustm
 Cancel: settings/preview-off/lookup publication retain the exact original root, generation and history;
 prepared closure does not mutate the source until apply; OK adds one exact entry and Cancel adds none.
 The 72 new state assertions supplement the unchanged direct-mode literal adjustment closure expectations.
+
+
+### Pending source, admission and actual host display (P1)
+
+`Document.Tests.PendingDisplaySource` checks that only completed deferred worker sources are describable,
+including live/destructive color and affine/distort transforms. Borrowed authority, root, opening, publication,
+lookup, original settings and same-grid coverage must match. Description preserves document/generation/history;
+preview off, disabled reference mode and late results from a cancelled opening refuse.
+
+`Composition.Tests.AdjustmentDisplayAdmission` uses independent 2x2 and 1x8 mip totals, exact LUT/cube/curve
+storage arithmetic, all six adjustment kinds, software host-memory charges and invalid dimensions/kinds.
+These declared envelopes do not replace measured production CPU/driver peaks.
+
+`RunStandalonePendingDisplaySelfTest` uses actual hidden WARP Applications and the shared original command
+pump. Four destructive/live Exposure OK/Cancel cases require independent linear-light exposure 128 -> 176 -> 92 literals, unchanged
+source/history during preview, actual Present without owner Compose, committed-seed refusal, compatible old
+preview retention, both-root device rebinding, preview off/on, final OK/Cancel history and complete joined
+retirement. Accepted OK retains the panel until acknowledgement; accepted Cancel immediately excludes the
+acknowledged preview while retaining the panel, original source and history. Four additional cases stop
+immediately after the original planning callback attaches its recorder,
+before a later owner pass can execute the first batch: Cancel/reopen, joined shutdown, document replacement
+and suspension/resume. Unpublished cancelled pixels cannot become a frame; all original charges remain until
+producer/transport/worker retirement. Fifteen-second event waits are deadlock bounds, not G1 measurements.
+Ordinary activation, recorder coexistence, full peaks and the large-document latency gates remain separate.
