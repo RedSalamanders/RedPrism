@@ -1337,7 +1337,7 @@ Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, i
 
 bool DocumentSession::CanEditSelection() const noexcept
 {
-    return _document.has_value() && !_transformEdit.has_value();
+    return _document.has_value() && !_transformEdit.has_value() && !_warpUpdatingOpening && !_warpFinishingOpening;
 }
 
 const std::optional<DocumentSelection>& DocumentSession::Selection() const noexcept

@@ -60,7 +60,7 @@ namespace
 
 bool DocumentSession::CanAdjustColors() const noexcept
 {
-    if (!_document.has_value() || HasColorEdit() || _brush || _warp || _pixelMove || _maskSelected)
+    if (!_document.has_value() || HasColorEdit() || _brush || HasPendingWarp() || _pixelMove || _maskSelected)
     {
         return false;
     }

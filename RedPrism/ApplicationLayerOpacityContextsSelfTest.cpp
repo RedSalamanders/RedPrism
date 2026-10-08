@@ -65,7 +65,13 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
     };
     const auto cleanup = wil::scope_exit([&cancelLiveState] { cancelLiveState(); });
     const auto originalViewport = _viewport;
-    const auto restoreViewport = wil::scope_exit([this, originalViewport] { _viewport = originalViewport; });
+    const auto originalSmearMode = _session.smearMode;
+    const auto restoreViewport = wil::scope_exit(
+        [this, originalViewport, originalSmearMode]
+        {
+            _viewport = originalViewport;
+            _session.smearMode = originalSmearMode;
+        });
 
     const auto prepare = [this, &cancelLiveState]() noexcept
     {
@@ -73,6 +79,8 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
         _session.ClearDocument();
         _session.CreateDocument(4, 3, true);
         _session.AddBlankLayer();
+        // Document replacement preserves tool settings; this fixture needs a supported Warp mode.
+        _session.smearMode = SmearMode::Liquify;
         _session.history.Reset();
         _session.history.MarkSaved();
         _opacityEdit.reset();

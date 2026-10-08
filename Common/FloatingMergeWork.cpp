@@ -27,7 +27,7 @@ bool DocumentSession::IsFloatingRestoreCurrent(const PreparedFloatingRestore& pr
 {
     return _document && _transformEdit && _transformEdit->floating && _transformEdit->layerID == prepared._floating &&
            _transformEdit->floating->before == prepared._before && !_transformDuplicate && !_gradient && !_pixelMove &&
-           !_brush && !_warp && !_colorEdit && !_shapeDraft && !_lassoDraft && !_selectionMoveOrigin &&
+           !_brush && !HasPendingWarp() && !_colorEdit && !_shapeDraft && !_lassoDraft && !_selectionMoveOrigin &&
            CanApplyImageImport(prepared._publication._authority) && prepared._publication._history &&
            history.CanPublish(prepared._publication._history.value());
 }

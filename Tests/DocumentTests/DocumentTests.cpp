@@ -24,6 +24,7 @@
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.PendingDisplaySource.h"
+#include "Document.Tests.PlacedRasterWork.h"
 #include "Document.Tests.PreparedRasterPreview.h"
 #include "Document.Tests.PreviewMetadataAdmission.h"
 #include "Document.Tests.RecordLookup.h"
@@ -37,6 +38,12 @@
 #include "Document.Tests.StrokeSample.h"
 #include "Document.Tests.StrokeSampleSession.h"
 #include "Document.Tests.WandBooleanAdmission.h"
+#include "Document.Tests.WarpLazyTiles.h"
+#include "Document.Tests.WarpOpening.h"
+#include "Document.Tests.WarpSamplePlan.h"
+#include "Document.Tests.WarpSampleSession.h"
+#include "Document.Tests.WarpWorkerCancellation.h"
+#include "Document.Tests.WarpWorkerSnapshots.h"
 #include "Document.h"
 #include "DocumentDraftTests.h"
 #include "DocumentFixtureTests.h"
@@ -8192,6 +8199,13 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreparedRasterPreviewTests();
     gFailures += RunPreviewMetadataAdmissionTests();
     gFailures += RunSelectionDisplayValueTests();
+    gFailures += RunWarpWorkerCancellationTests();
+    gFailures += RunWarpWorkerSnapshotsTests();
+    gFailures += RunWarpOpeningTests();
+    gFailures += RunWarpLazyTilesTests();
+    gFailures += RunWarpSamplePlanTests();
+    gFailures += RunWarpSampleSessionTests();
+    gFailures += RunPlacedRasterWorkTests() ? 0 : 1;
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();

@@ -1163,6 +1163,9 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _brushFinishingOpening.reset();
     _brushUpdatingOpening.reset();
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
     _gradient.reset();
     _shapeDraft.reset();
     _pixelMove.reset();
@@ -1864,8 +1867,8 @@ bool EffectivelyVisible(std::span<const ImageLayer> layers, const Guid& id) noex
 
 bool DocumentSession::CanPaint() const noexcept
 {
-    if (!_document.has_value() || _transformEdit.has_value() || _brush || HasColorEdit() ||
-        (_pixelMove && _pixelMove->deferred))
+    if (!_document.has_value() || _transformEdit.has_value() || _brush || HasColorEdit() || _warpUpdatingOpening ||
+        _warpFinishingOpening || (_pixelMove && _pixelMove->deferred))
     {
         return false;
     }
@@ -2882,11 +2885,13 @@ Raster DocumentSession::BlurSample(bool mask) const
 
 bool DocumentSession::BeginWarp(Vec2 point)
 {
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || _warpOpening == UINT64_MAX)
+        return false;
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
-    if (!CanPaint() || _maskSelected || _warp)
+    if (!CanPaint() || _maskSelected || HasPendingWarp())
     {
         return false;
     }
@@ -2913,8 +2918,10 @@ bool DocumentSession::BeginWarp(Vec2 point)
     {
         return false;
     }
-    _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
     warp->Append(point);
+    if (!warp->IsValid())
+        return false;
+    _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
     ++_warpOpening;
     _warp = std::move(warp);
     _lastBrushPoint = LastBrushPoint{point, layer->id, false};
@@ -2923,11 +2930,16 @@ bool DocumentSession::BeginWarp(Vec2 point)
 
 void DocumentSession::ContinueWarp(Vec2 point)
 {
-    if (!_warp)
+    if (!_warp || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     _warp->Append(point);
+    if (!_warp->IsValid())
+    {
+        _lastBrushPoint.reset();
+        return;
+    }
     if (_lastBrushPoint.has_value())
     {
         _lastBrushPoint->point = point;
@@ -2937,6 +2949,9 @@ void DocumentSession::ContinueWarp(Vec2 point)
 void DocumentSession::CancelWarp() noexcept
 {
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
 }
 
 void DocumentSession::FinishWarp()
@@ -2947,7 +2962,7 @@ void DocumentSession::FinishWarp()
     }
     const std::shared_ptr<WarpStroke> warp = std::move(_warp);
     _warp.reset();
-    if (warp->Points().empty() || !_document.has_value() || HasDeferredTransform())
+    if (!warp->IsValid() || warp->Points().empty() || !_document.has_value() || HasDeferredTransform())
     {
         return;
     }
@@ -4020,7 +4035,7 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
                                           PreparedRasterEdit* publication)
 {
     if (!token.target || token.generation != _generation || !CanApplyJobResult(token, token.sequence) || _brush ||
-        _warp || (_pixelMove && !pixelMoveCommit) || _transformEdit || (_gradient && !gradientCommit) ||
+        HasPendingWarp() || (_pixelMove && !pixelMoveCommit) || _transformEdit || (_gradient && !gradientCommit) ||
         HasColorEdit() || _activeLayerID != token.target->layerId || _maskSelected != mask)
         return false;
     if (pixelMoveCommit && (!_pixelMove || !_pixelMove->deferred || mask || !movedSelection || !_document->selection))
@@ -4167,7 +4182,7 @@ void DocumentSession::DeleteKeyPressed()
 
 bool DocumentSession::CanInvert() const noexcept
 {
-    if (!_document.has_value() || _brush || _warp || _pixelMove)
+    if (!_document.has_value() || _brush || HasPendingWarp() || _pixelMove)
     {
         return false;
     }

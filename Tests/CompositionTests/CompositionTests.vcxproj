@@ -194,6 +194,8 @@
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
+    <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />

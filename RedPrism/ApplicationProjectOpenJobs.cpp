@@ -489,6 +489,7 @@ int Application::RunProjectOpenSelfTest() noexcept
     const auto settle = [this]() noexcept
     { return SettleJobs(_jobs, 20000, DispatchMessageThunk, this) == SettleResult::Settled; };
     const auto priorDiscard = _forcedDiscardAnswer;
+    const auto priorSmearMode = _session.smearMode;
     const auto* priorPrompts = _prompts;
     const auto parent = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
     const auto leaf = L"RedPrism.ProjectOpenHost." + Guid::Generate().ToString();
@@ -507,6 +508,7 @@ int Application::RunProjectOpenSelfTest() noexcept
                 std::_Exit(5);
             _projectOpenTestGate.reset();
             _forcedDiscardAnswer = priorDiscard;
+            _session.smearMode = priorSmearMode;
             _prompts = priorPrompts;
             std::error_code error;
             const auto actual = std::filesystem::weakly_canonical(root, error);
@@ -613,7 +615,7 @@ int Application::RunProjectOpenSelfTest() noexcept
                     case 5:
                         return _session.PendingLasso().has_value();
                     case 6:
-                        return _session.PendingWarp() != nullptr;
+                        return _session.HasPendingWarp();
                     case 7:
                         return _session.PendingShape().has_value();
                     case 8:
@@ -655,8 +657,14 @@ int Application::RunProjectOpenSelfTest() noexcept
                         _session.ExtendLasso({4, 2});
                         break;
                     case 6:
+                        // ClearDocument preserves tool settings. The preceding Smear test can leave Blur,
+                        // whose ordinary path is a brush; this fixture explicitly exercises a live Warp.
+                        _session.smearMode = SmearMode::Liquify;
                         if (!_session.BeginWarp({2, 2}))
+                        {
+                            std::fprintf(stderr, "FAIL project-open-host.fixture-warp-opening\n");
                             return 5;
+                        }
                         break;
                     case 7:
                         _session.BeginShape({0, 0});

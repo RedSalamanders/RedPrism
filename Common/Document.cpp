@@ -1852,7 +1852,7 @@ bool DocumentSession::CancelPendingEdit()
         CancelBrush();
         return true;
     }
-    if (_warp)
+    if (HasPendingWarp())
     {
         CancelWarp();
         return true;
@@ -2594,6 +2594,9 @@ void DocumentSession::ClearDocument()
     _lastBrushCommit.reset();
     _cloneOffset.reset();
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
     _warpSource = {};
     _gradient.reset();
     _shapeDraft.reset();
@@ -3067,8 +3070,8 @@ bool DocumentSession::ApplyPreparedMergeIfCurrent(PreparedMergePublication& prep
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     static_assert(std::is_nothrow_swappable_v<std::unordered_set<Guid>>);
-    if (!prepared._document || _gradient || _pixelMove || _transformEdit || HasColorEdit() || _brush || _warp ||
-        _shapeDraft || _selectionMoveOrigin || _activeLayerID != prepared._beforeActive ||
+    if (!prepared._document || _gradient || _pixelMove || _transformEdit || HasColorEdit() || _brush ||
+        HasPendingWarp() || _shapeDraft || _selectionMoveOrigin || _activeLayerID != prepared._beforeActive ||
         !CanApplyJobResult(prepared._token, prepared._token.sequence) || !history.CanPublish(prepared._history))
         return false;
     if (!history.Publish(prepared._history))

@@ -47,7 +47,7 @@ std::optional<StrokeOpeningInput> DocumentSession::PrepareStrokeOpeningInput(
 {
     static_assert(std::is_nothrow_copy_constructible_v<CanvasDocument>);
     if (!_document || !_activeLayerID || !CanPaint() || _brush || _brushFinishingOpening || _brushUpdatingOpening ||
-        _brushOpening == UINT64_MAX || _transformEdit || _gradient || _pixelMove || _warp || _colorEdit ||
+        _brushOpening == UINT64_MAX || _transformEdit || _gradient || _pixelMove || HasPendingWarp() || _colorEdit ||
         _shapeDraft || !OptionsValid(options, _document.value(), _maskSelected) || !_document->RetirementMemoryBytes())
         return std::nullopt;
     const auto* layer = ActiveLayer();
@@ -146,7 +146,7 @@ bool DocumentSession::IsPreparedStrokeOpeningCurrent(const PreparedStrokeOpening
 {
     return !prepared._applied && prepared._stroke && prepared._stroke->IsValid() && !_brush &&
            !_brushFinishingOpening && !_brushUpdatingOpening && _brushOpening != UINT64_MAX && !_transformEdit &&
-           !_gradient && !_pixelMove && !_warp && !_colorEdit && !_shapeDraft &&
+           !_gradient && !_pixelMove && !HasPendingWarp() && !_colorEdit && !_shapeDraft &&
            CanApplyImageImport(prepared._input._authority) && history.IsCurrent(prepared._input._history) &&
            _document && _document->layers.Identity() == prepared._input._source.layers.Identity() &&
            _document->width == prepared._input._source.width && _document->height == prepared._input._source.height &&

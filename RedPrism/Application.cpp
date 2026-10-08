@@ -1806,8 +1806,8 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONUP, 0, 130.0, 100.0);
         std::array<int, 4> smudged{};
-        if (_session.PendingWarp() != nullptr || _session.history.UndoName() != L"Smudge" ||
-            !pixelAt(115, 100, smudged) || smudged[2] <= smudged[0])
+        if (_session.HasPendingWarp() || _session.history.UndoName() != L"Smudge" || !pixelAt(115, 100, smudged) ||
+            smudged[2] <= smudged[0])
         {
             SelfTestFailure(L"Smudge did not drag the red mark along.\n");
             return 5;
@@ -3003,7 +3003,7 @@ void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
         return;
     }
     // A stroke or warp in progress keeps its target (legacy selectLayerTarget waits for it).
-    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr)
+    if (_session.PendingBrush() != nullptr || _session.HasPendingWarp())
     {
         return;
     }
@@ -4148,7 +4148,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 bool Application::PointerBusy() const noexcept
 {
     return !std::holds_alternative<std::monostate>(_drag) || _session.PendingBrush() != nullptr ||
-           _session.PendingWarp() != nullptr || _session.PendingShape().has_value();
+           _session.HasPendingWarp() || _session.PendingShape().has_value();
 }
 
 void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept
@@ -4246,7 +4246,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
         return false;
     }
     // The session's own drags: a warp, a stroke, a shape draft.
-    if (_session.PendingWarp() != nullptr)
+    if (_session.HasPendingWarp())
     {
         ContinueWarpStroke(view);
         if (release)
@@ -5121,7 +5121,7 @@ void Application::OnCommand(int command) noexcept
         // Not under a stroke or warp in progress (legacy canEditLayers), whose layer and mask they change.
         if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value() &&
                                                                _session.PendingBrush() == nullptr &&
-                                                               _session.PendingWarp() == nullptr)
+                                                               !_session.HasPendingWarp())
         {
             // The link and the switch change what the layer shows: a pending gradient applies first (Decision D3).
             const Guid id = active->id;
@@ -5207,7 +5207,7 @@ bool Application::EditUnderWay(CanvasEdit edit) const noexcept
     case CanvasEdit::PixelMove:
         return _session.PendingPixelMove() != nullptr || std::holds_alternative<PixelDrag>(_drag);
     case CanvasEdit::Warp:
-        return _session.PendingWarp() != nullptr;
+        return _session.HasPendingWarp();
     case CanvasEdit::Brush:
         return _session.PendingBrush() != nullptr;
     case CanvasEdit::Shape:
@@ -7225,6 +7225,10 @@ void Application::BeginPreparedBrushStrokeAt(Vec2 pixel, unsigned int modifiers)
 
 void Application::PushPreviewTiles() noexcept
 {
+    // A detached Warp retains its last immutable preview. Never infer settlement or walk another draft
+    // while its original worker exclusively owns the mutable tiles.
+    if (_session.HasPendingWarp() && !_session.PendingWarp())
+        return;
     if (!_composition.HasStroke())
     {
         _frameInvalidated = true;
@@ -7413,7 +7417,7 @@ void Application::SyncStrokePreview() noexcept
     // The one teardown: with no raster edit under way (a stroke or warp dropped or committed, a gradient applied,
     // cancelled or undone, pixels put down) the preview ends, adopting its texture only for the commit the session
     // just made on its own layer and target.
-    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && _session.PendingWarp() == nullptr)
+    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && !_session.HasPendingWarp())
     {
         EndStrokePreview(_session.TakeLastBrushCommit());
         _frameInvalidated = true;
@@ -7649,7 +7653,7 @@ bool Application::WarpsWithSmear() const noexcept
 
 void Application::BeginWarpStroke(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value() || _session.PendingWarp() != nullptr || _session.PendingBrush() != nullptr)
+    if (!_session.Document().has_value() || _session.HasPendingWarp() || _session.PendingBrush() != nullptr)
     {
         return;
     }

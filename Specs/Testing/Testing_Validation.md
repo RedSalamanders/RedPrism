@@ -11,6 +11,29 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Detached Warp CPU and exclusive samples
+
+`DocumentTests` runs the Warp worker cancellation (43 assertions), adopted snapshots (36), detached opening (54),
+lazy tile snapshots (24), placed source sampler (31), sample plans (48) and exclusive sample sessions (45).
+The new plan/session references are independently calculated spacing centers, clipped tile geometry, explicit
+capacity growth, unchanged source/root/history/generation and exact joined transfer states. The constant-color
+Smudge check keeps its entire pickup inside the image. A separate radius-2, hardness-.98 edge pickup followed by
+one +1 pixel dab requires exactly three transparent pixels at x=0, y=1/2/3; all other pixels and the source remain
+the literal input. A constant image is not invariant when a pickup carries transparent exterior pixels.
+
+Sample tests require foreign/edited/stale plan refusal, known-owner mutation refusal, sole-strong-owner capture,
+moved-input invalidation, one worker append, prepared-before-stale rejection, unchanged document/history on sample
+apply, and opening-plus-sequence-specific discard. Reopening an identical source and an old discard within the
+same gesture cannot authorize or clear a younger sample. Failure-only fixture diagnostics cannot substitute for
+the fixed success inventory and exact summary counts.
+
+`HostTests` additionally runs 24 `warp-factory-lifetime.*` lifetime/admission controls on actual joined workers. Both weak
+control and deferred-graph destruction orders must retain the original charge through the last owner, including
+drafts below the large-release threshold. Existing legacy numeric Warp controls remain unchanged. Complete
+source/product/profile binding and predecessor order/multiplicity are required. Original-parent live/final host
+admission, display publication, ordinary activation and G1 remain separate gates. See
+[the source-bound run record](../TestRuns/P1WarpWorkers_2026-10-08.md).
+
 ### Completed raster-preview metadata and accounting
 
 `DocumentTests` runs `RunPreparedRasterPreviewTests`: 52 assertions cover immutable completed image gradients,

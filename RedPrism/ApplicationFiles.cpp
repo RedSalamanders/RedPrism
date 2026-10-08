@@ -290,8 +290,7 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return true;
     }
-    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr ||
-        _session.PendingGradient() != nullptr)
+    if (_session.PendingBrush() != nullptr || _session.HasPendingWarp() || _session.PendingGradient() != nullptr)
     {
         return true;
     }

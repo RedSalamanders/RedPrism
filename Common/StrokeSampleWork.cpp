@@ -10,7 +10,8 @@ std::optional<StrokeSampleInput> DocumentSession::TakeStrokeSampleInput(std::uin
     static_assert(std::is_nothrow_copy_constructible_v<CanvasDocument>);
     if (ownerEngine || !_document || !_brush || _brushUpdatingOpening || _brushFinishingOpening ||
         opening != _brushOpening || !_activeLayerID || _brush->LayerID() != _activeLayerID.value() ||
-        _brush->IsMask() != _maskSelected || _transformEdit || _gradient || _pixelMove || _warp || _colorEdit)
+        _brush->IsMask() != _maskSelected || _transformEdit || _gradient || _pixelMove || HasPendingWarp() ||
+        _colorEdit)
         return std::nullopt;
     const auto plan = _brush->PlanSampleMemory(point);
     if (!plan)
@@ -28,8 +29,8 @@ std::optional<StrokeSampleInput> DocumentSession::TakeStrokeSampleInput(std::uin
 bool DocumentSession::IsStrokeSampleCurrent(const StrokeSampleInput& input) const noexcept
 {
     return input._valid && input._stroke && !_brush && _document && _brushUpdatingOpening == input._opening &&
-           !_brushFinishingOpening && !_transformEdit && !_gradient && !_pixelMove && !_warp && !_colorEdit &&
-           !_shapeDraft && CanApplyImageImport(input._authority) && history.IsCurrent(input._history) &&
+           !_brushFinishingOpening && !_transformEdit && !_gradient && !_pixelMove && !HasPendingWarp() &&
+           !_colorEdit && !_shapeDraft && CanApplyImageImport(input._authority) && history.IsCurrent(input._history) &&
            _document->layers.Identity() == input._source.layers.Identity() && _document->width == input._source.width &&
            _document->height == input._source.height && _document->resolution == input._source.resolution &&
            _document->selection.has_value() == input._source.selection.has_value() &&

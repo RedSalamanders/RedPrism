@@ -70,8 +70,8 @@ std::optional<ColorDisplayPreviewMemory> DocumentSession::ColorDisplayPreviewMem
     bool lookupPreview) const noexcept
 {
     if (!_colorDisplayJobsEnabled || !_document || !_colorEdit || !_colorEdit->deferred || _adjustmentEditingID ||
-        _transformEdit || _gradient || _pixelMove || _brush || _warp || _shapeDraft || _selectionMoveOrigin ||
-        _lassoDraft)
+        _transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _shapeDraft ||
+        _selectionMoveOrigin || _lassoDraft)
         return std::nullopt;
     const auto& edit = _colorEdit.value();
     const auto display = ColorDisplayMemoryBytes(_document.value(), {edit.layerID, edit.original, edit.transform});
@@ -180,9 +180,10 @@ bool DocumentSession::ApplyPreparedColorDisplayPreviewIfCurrent(PreparedColorDis
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     static_assert(std::is_nothrow_swappable_v<Raster>);
     if (prepared._consumed || !prepared._input._valid || !_colorDisplayJobsEnabled || !_colorEdit ||
-        !_colorEdit->deferred || _adjustmentEditingID || _transformEdit || _gradient || _pixelMove || _brush || _warp ||
-        _shapeDraft || _selectionMoveOrigin || _lassoDraft || !CanApplyImageImport(prepared._input._authority) ||
-        !history.IsCurrent(prepared._input._history) || prepared._result.edit.previewLookupOnly)
+        !_colorEdit->deferred || _adjustmentEditingID || _transformEdit || _gradient || _pixelMove || _brush ||
+        HasPendingWarp() || _shapeDraft || _selectionMoveOrigin || _lassoDraft ||
+        !CanApplyImageImport(prepared._input._authority) || !history.IsCurrent(prepared._input._history) ||
+        prepared._result.edit.previewLookupOnly)
         return false;
     const auto status = prepared._result.status;
     const auto& selection = prepared._input._source.selection;

@@ -17,8 +17,8 @@ bool AddCommitBytes(std::uint64_t& bytes, std::uint64_t amount) noexcept
 
 std::uint64_t DocumentSession::TransformCommitPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_transformEdit || _transformEdit->floating || _gradient || _pixelMove || _brush || _warp ||
-        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
+    if (!_document || !_transformEdit || _transformEdit->floating || _gradient || _pixelMove || _brush ||
+        HasPendingWarp() || _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return 0;
     auto bytes = TransformPixelsMemoryBytes(_document.value(), _transformEdit.value());
     const auto historyBytes = history.EditMemoryBytes(_document);
@@ -86,8 +86,9 @@ bool DocumentSession::ApplyPreparedTransformCommitIfCurrent(PreparedTransformCom
     static_assert(std::is_nothrow_swappable_v<std::optional<TransformEdit>>);
     static_assert(std::is_nothrow_swappable_v<SnapGuides>);
     if (!_transformEdit || _transformEdit->floating || _editRevision != prepared._revision ||
-        _transformDuplicate != prepared._duplicate || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
-        _shapeDraft || _selectionMoveOrigin || _lassoDraft || !ApplyPreparedImageImportIfCurrent(prepared._publication))
+        _transformDuplicate != prepared._duplicate || _gradient || _pixelMove || _brush || HasPendingWarp() ||
+        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft ||
+        !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     std::swap(_transformEdit, prepared._retiredEdit);
     std::swap(_snapGuides, prepared._retiredGuides);

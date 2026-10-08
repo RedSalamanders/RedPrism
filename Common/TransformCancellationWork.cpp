@@ -9,8 +9,8 @@
 
 std::uint64_t DocumentSession::TransformCancellationPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_transformEdit || _transformEdit->floating || _gradient || _pixelMove || _brush || _warp ||
-        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft ||
+    if (!_document || !_transformEdit || _transformEdit->floating || _gradient || _pixelMove || _brush ||
+        HasPendingWarp() || _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft ||
         (_transformDuplicate &&
          (_transformDuplicate->first != _transformEdit->layerID || history.CaptureState().Depth() < 1)))
         return 0;
@@ -94,8 +94,8 @@ bool DocumentSession::ApplyPreparedTransformCancellationIfCurrent(PreparedTransf
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     if (prepared._consumed || !_transformEdit || _transformEdit->floating ||
         _transformEdit->layerID != prepared._layer || _editRevision != prepared._revision ||
-        _transformDuplicate != prepared._duplicate || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
-        _shapeDraft || _selectionMoveOrigin || _lassoDraft || !CanApplyImageImport(prepared._authority) ||
+        _transformDuplicate != prepared._duplicate || _gradient || _pixelMove || _brush || HasPendingWarp() ||
+        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft || !CanApplyImageImport(prepared._authority) ||
         !history.IsCurrent(prepared._history))
         return false;
     if (prepared._publication && !ApplyPreparedImageImportIfCurrent(prepared._publication.value()))

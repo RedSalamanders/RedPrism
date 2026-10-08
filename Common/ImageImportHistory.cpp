@@ -304,6 +304,9 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             _brushFinishingOpening.reset();
             _brushUpdatingOpening.reset();
             std::swap(_warp, drafts.warp);
+            _warpUpdatingOpening.reset();
+            _warpUpdatingSequence.reset();
+            _warpFinishingOpening.reset();
             std::swap(_gradient, drafts.gradient);
             std::swap(_shapeDraft, drafts.shape);
             std::swap(_pixelMove, drafts.pixelMove);

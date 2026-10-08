@@ -278,7 +278,7 @@ ShapeEditResult DocumentSession::PrepareShapeEditPublication(ShapeEditInput inpu
 
 bool DocumentSession::ApplyPreparedShapeEditIfCurrent(PreparedShapeEdit& prepared) noexcept
 {
-    if (_transformEdit || _gradient || _pixelMove || _shapeDraft || _brush || _warp || _colorEdit ||
+    if (_transformEdit || _gradient || _pixelMove || _shapeDraft || _brush || HasPendingWarp() || _colorEdit ||
         !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     if (prepared._parent)
@@ -290,7 +290,7 @@ std::uint64_t DocumentSession::ShapeEditPreparationMemoryBytes(const ShapeDraft&
 {
     int width = 0;
     int height = 0;
-    if (!_document || _transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
+    if (!_document || _transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit ||
         _document->layers.size() >= kMaxLayerCount ||
         InspectShapeDraft(draft, width, height) != ShapeEditStatus::Ready ||
         static_cast<std::int64_t>(width) * height > PixelBudgetLeft(false))

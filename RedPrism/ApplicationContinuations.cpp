@@ -114,7 +114,7 @@ bool Application::CanQueueSelectionMoveClick() const noexcept
 {
     // Match the settled selection factory's gesture exclusions while this outline is still open.
     return !_session.HasColorEdit() && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
-           !_session.PendingBrush() && !_session.PendingWarp() && !_session.PendingPixelMove() &&
+           !_session.PendingBrush() && !_session.HasPendingWarp() && !_session.PendingPixelMove() &&
            !_session.PendingShape() && !_session.PendingLasso();
 }
 

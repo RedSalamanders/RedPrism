@@ -7,7 +7,7 @@
 bool DocumentSession::DescribePendingDisplaySource(PendingDisplaySource& output) const noexcept
 {
     const auto authority = CaptureDocumentReadAuthority();
-    if (!authority || _brush || _warp || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
+    if (!authority || _brush || HasPendingWarp() || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return false;
     PendingDisplaySource result;
     result.authority = authority.value();

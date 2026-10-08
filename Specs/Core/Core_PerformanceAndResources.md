@@ -76,6 +76,27 @@ never qualification evidence. Full UI benchmark modes fail if presentation is un
 
 ## Pointer input and the chrome
 
+### Detached Warp CPU work
+
+The admitted Warp factory retains the immutable placed layer and uses a lazy 256-square private tile directory.
+Opening MUST NOT render or copy a document-sized working image. Sparse reads use four reusable 64-square source
+windows and MUST NOT materialize shared sparse storage. Serial dabs retain the existing Smudge/Liquify arithmetic.
+Cancellation or failed preparation closes every snapshot path over partially changed private pixels.
+
+Before exclusive sample transfer, the known owner uses cached geometry, path/scratch capacities and the fixed
+original-source bound to declare persistent private storage and old/new construction overlap. Planning MUST NOT
+walk tiles, pixels or accumulated points. Explicit geometric path reserve and declared scratch reserve precede
+mutation; an outside-only sample retains the previous allocation envelope. These private CPU declarations are
+not complete operation admission: the original parent additionally charges captured document/history, retained
+preview generations, recorder/transport/display owners, CPU/GPU storage and final retirement before capture.
+
+Transfer requires sole strong ownership of the mutable draft. The session retains scalar opening and sample
+sequence only until its useful producer joins. Competing edits and settled-history routes refuse during transfer.
+Joined apply performs only current-authority checks and handle/scalar updates; discard matches both opening and
+sequence. An old callback from the same gesture MUST NOT clear a newer transfer. Original accounting and queued
+graph destruction survive both final semantic ownership and weak control-block ownership, including small drafts.
+These core APIs do not activate the ordinary Warp host path or establish G1 timing qualification.
+
 `PointerInputStream` provides fixed owner-only storage for one admitted gesture. Captured context and samples are
 trivial owning values; published samples cannot borrow session or control state. Accepted path samples retain FIFO
 order. Up/Lost uses a separate terminal slot, including when the move ring is full. Overflow refuses the offered

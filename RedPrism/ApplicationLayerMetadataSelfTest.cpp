@@ -105,13 +105,15 @@ int Application::RunLayerMetadataSelfTest() noexcept
         return condition;
     };
     const auto originalViewport = _viewport;
+    const auto originalSmearMode = _session.smearMode;
     const auto cleanup = wil::scope_exit(
-        [this, originalViewport]
+        [this, originalViewport, originalSmearMode]
         {
             if (_layerMetadataTestGate)
                 (void)SetEvent(_layerMetadataTestGate->release.get());
             _layerMetadataTestGate.reset();
             _viewport = originalViewport;
+            _session.smearMode = originalSmearMode;
         });
     const auto prepare = [this]()
     {
@@ -392,8 +394,17 @@ int Application::RunLayerMetadataSelfTest() noexcept
             _layerMetadataTestGate = gate;
             if (context == 0 && !_session.BeginBrush({0.5, 0.5}))
                 return 5;
-            if (context == 1 && !_session.BeginWarp({0.5, 0.5}))
-                return 5;
+            if (context == 1)
+            {
+                // Tool settings survive document replacement. Blur from an earlier fixture is a brush,
+                // not a Warp mode: this case explicitly exercises the supported Liquify gesture.
+                _session.smearMode = SmearMode::Liquify;
+                if (!_session.BeginWarp({0.5, 0.5}))
+                {
+                    SelfTestFailure(L"The layer metadata Liquify fixture could not open its Warp gesture.\n");
+                    return 5;
+                }
+            }
             if (context == 2)
                 _session.BeginShape({0.5, 0.5});
             if (context == 3)

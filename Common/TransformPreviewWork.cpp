@@ -228,8 +228,8 @@ TransformDisplayResult PrepareTransformDisplay(const CanvasDocument& source, con
 
 std::uint64_t DocumentSession::TransformPreviewPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
-        _selectionMoveOrigin || _lassoDraft)
+    if (!_document || !_transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit ||
+        _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return 0;
     auto bytes = TransformDisplayMemoryBytes(_document.value(), _transformEdit.value());
     const auto retirement = ImageImportRetirementMemoryBytes();
@@ -270,7 +270,7 @@ bool DocumentSession::ApplyPreparedTransformPreviewIfCurrent(PreparedTransformPr
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     if (prepared._consumed || !prepared._display || !_transformEdit || _editRevision != prepared._revision ||
-        _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft || _selectionMoveOrigin ||
+        _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft || _selectionMoveOrigin ||
         _lassoDraft || !CanApplyImageImport(prepared._authority) || !history.IsCurrent(prepared._history))
         return false;
     std::swap(_displayCopy, prepared._display);

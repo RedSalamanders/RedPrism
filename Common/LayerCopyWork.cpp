@@ -67,7 +67,7 @@ std::wstring LayerCopyName(const CanvasDocument& document, CancelToken cancellat
 std::uint64_t DocumentSession::LayerCopyPreparationMemoryBytes() const
 {
     if (!_document || _document->layers.size() >= static_cast<std::size_t>(kMaxLayerCount) || !_activeLayerID ||
-        _transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
+        _transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft ||
         _selectionMoveOrigin || _lassoDraft)
         return 0;
     const auto* layer = ActiveLayer();
@@ -197,7 +197,7 @@ LayerCopyResult DocumentSession::PrepareLayerCopyPublication(LayerCopyInput inpu
 
 bool DocumentSession::ApplyPreparedLayerCopyIfCurrent(PreparedLayerCopy& prepared) noexcept
 {
-    if (_transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
+    if (_transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft ||
         _selectionMoveOrigin || _lassoDraft || !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     if (prepared._expandParent)

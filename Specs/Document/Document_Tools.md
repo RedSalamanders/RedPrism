@@ -598,6 +598,51 @@ composite)`; the kernels, the tile composition and the warp model live in
   what it leaves by the strength; Liquify moves pixels with the brush, most at the center. `FinishWarp` paints the
   result into the layer along the dabs with a hard tip four pixels wider, replacing the pixels under it (`Liquify`,
   `Smudge`); `CancelWarp` drops it; `PendingWarp` is the stroke in progress. Never on a mask.
+
+  Exclusive worker primitives check operation/shutdown cancellation at each serial dab and tip/snapshot row.
+  Refusal, cancellation or a throwing allocation invalidates the private draft: image and changed-tile APIs
+  expose no partial pixels, even though its private dab prefix may remain. Session finish drops an invalid draft
+  without changing document or history. Worker image/tile snapshots adopt initialized storage; dirty flags clear
+  only after the entire successful tile publication. The original finite supported-input dab formulas and
+  spacing remain unchanged. These primitives alone do not migrate the production Warp path.
+
+  `PrepareWarpOpeningInput` captures the event-time mode, tip, point, owner, immutable document/history and
+  opening counter without reading pixels or settling another gesture. `PrepareWarpOpeningPublication` constructs
+  a lazy `WarpSourceView` draft on a worker. `PlacedRasterReader` samples the original placed layer with the
+  transient Nearest/single-bilinear rules above, transparent outside; High remains Smooth. It borrows contiguous
+  pixels or reads sparse pixels through four reusable 64-square private windows, retaining the source and never
+  assembling its shared cache. Writable 256-square document-grid tiles appear only when a tip reads/writes them.
+  A blank layer allocates no full transparent canvas. Owner apply validates the captured opening counter, session,
+  document/root, target, history, selection and old Warp source before swapping the ready draft; it creates no
+  pixels or history. Cancellation/refusal preserves document/history and retires private owners through the
+  caller's original admission. These are detached core APIs; ordinary `BeginWarpStroke` still uses its earlier
+  synchronous copy and requires migration.
+
+  `AllTouchedTilesForWork` returns a complete immutable snapshot in row-major document-grid order, including
+  clipped edge tiles. It shares unchanged published tile versions and adopts one new pixel allocation for each
+  changed tile. Only successful completion clears the changed bits; the ever-touched bits survive. A recorder
+  needs the original placed source plus this complete snapshot, independent of skipped/replaced earlier previews.
+  `TakeChangedTilesForWork` continues to return only the consumed generation's changes. The complete old/new tile,
+  source-window, point/scratch, preview, display and final-history overlaps require admission before allocation;
+  the opening-only budget covers captured owners, metadata/windows, first-tip tiles and Smudge's pickup plane.
+
+  `PlanSampleMemory` is designated-owner-only metadata planning before capture: cached allocation bounds,
+  source bounds and path/scratch capacities declare the complete private draft plus one old/new snapshot overlap.
+  It performs no pixel reads or tile traversal. Plans retain their producer's weak control and private original
+  point; foreign, edited and stale plans refuse without mutating a valid draft. Explicit geometric point growth
+  and pre-reserved scratch follow the declaration before dabs. The caller must add complete source/history,
+  other retained preview, CPU/GPU transport, display and final-publication owners under its original admission.
+  These draft bounds alone do not approve a whole application operation.
+
+  `TakeWarpSampleInput` requires the original opening, current plan and sole strong draft owner. Capture retains
+  immutable document/history, moves the mutable draft and leaves scalar pending-opening authority in the session.
+  During transfer `PendingWarp`/`MutableWarp` expose no draft; competing pixel, selection, adjustment, settled-history
+  and preview-teardown routes refuse. Preserved metadata tracks the original opening and waits for joined return.
+  The input's known owner cannot append or borrow mutable work; the admitted worker appends at most once.
+  Only joined current apply restores the same draft and last point, without pixel work, document mutation or history.
+  Discard must match both opening and sample sequence; an old callback from the same gesture cannot clear a
+  newer transfer. Cancel/replacement/shutdown invalidates late publication while
+  the original worker input retains its graph until retirement. Normal Warp samples/finalization are still due.
 - **Tip families**: `SwitchBrushTipFamily(from, to)` parks the size, hardness and opacity per family (0 the Brush,
   Eraser and Spot Healing; 1 Clone Stamp; 2 Smear; the parked families start soft at 40 px).
 - **Gradient** (`gradientSettings`: shape Linear / Radial, style Foreground to Transparent default / Foreground to

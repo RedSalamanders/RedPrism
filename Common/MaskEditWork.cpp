@@ -52,8 +52,8 @@ MaskEditStatus MaskDimensions(const ImageLayer& layer, bool selected, int& width
 
 std::uint64_t DocumentSession::MaskEditPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_activeLayerID || _transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
-        _shapeDraft || _selectionMoveOrigin || _lassoDraft)
+    if (!_document || !_activeLayerID || _transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() ||
+        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return 0;
     const auto* layer = ActiveLayer();
     int width = 0;
@@ -216,7 +216,7 @@ MaskEditResult DocumentSession::PrepareMaskEditPublication(MaskEditInput input, 
 
 bool DocumentSession::ApplyPreparedMaskEditIfCurrent(PreparedMaskEdit& prepared) noexcept
 {
-    if (_transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
+    if (_transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft ||
         _selectionMoveOrigin || _lassoDraft)
         return false;
     return ApplyPreparedImageImportIfCurrent(prepared._publication);

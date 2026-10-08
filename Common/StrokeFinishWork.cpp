@@ -32,7 +32,7 @@ std::optional<StrokeFinishInput> DocumentSession::TakeStrokeFinishInput(std::uin
     if (ownerEngine || !_document || !_brush || _brushFinishingOpening || _brushUpdatingOpening ||
         opening != _brushOpening || !_brush->IsValid() || !_activeLayerID ||
         _brush->LayerID() != _activeLayerID.value() || _brush->IsMask() != _maskSelected || _transformEdit ||
-        _gradient || _pixelMove || _warp || _colorEdit)
+        _gradient || _pixelMove || HasPendingWarp() || _colorEdit)
         return std::nullopt;
     // All capture here is immutable handle/scalar copying. A failed exclusive transfer leaves the live draft.
     StrokeFinishInput input(CaptureImageImportAuthority(), _document.value(), _activeLayerID, history.CaptureState(),
@@ -179,7 +179,7 @@ bool DocumentSession::IsPreparedStrokeFinishCurrent(const PreparedStrokeFinish& 
 {
     return !prepared._applied && prepared._input._valid && prepared._document && _document && !_brush &&
            _brushFinishingOpening == prepared._input._opening && !_transformEdit && !_gradient && !_pixelMove &&
-           !_warp && !_colorEdit && CanApplyImageImport(prepared._input._authority) &&
+           !HasPendingWarp() && !_colorEdit && CanApplyImageImport(prepared._input._authority) &&
            _document->layers.Identity() == prepared._input._source.layers.Identity() &&
            _document->width == prepared._input._source.width && _document->height == prepared._input._source.height &&
            _document->resolution == prepared._input._source.resolution &&

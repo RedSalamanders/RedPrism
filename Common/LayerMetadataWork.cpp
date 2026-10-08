@@ -29,7 +29,7 @@ LayerMetadataAuthority DocumentSession::CaptureLayerMetadataAuthority(bool prese
         result._settled._valid =
             _document && !HasColorEdit() && !_gradient && !_transformEdit && !_pixelMove && !_selectionMoveOrigin;
         result._brushOpening = _brush ? std::optional(_brushOpening) : std::nullopt;
-        result._warpOpening = _warp ? std::optional(_warpOpening) : std::nullopt;
+        result._warpOpening = PendingWarpOpening();
         result._shapeOpening = _shapeDraft ? std::optional(_shapeOpening) : std::nullopt;
         result._lassoOpening = _lassoDraft ? std::optional(_lassoOpening) : std::nullopt;
     }
@@ -46,8 +46,8 @@ bool DocumentSession::CanApplyLayerMetadataAuthority(const LayerMetadataAuthorit
            captured._restoreSerial == _restoreSerial && captured._active == _activeLayerID &&
            captured._maskSelected == _maskSelected && captured._crop == _cropRect && !HasColorEdit() && !_gradient &&
            !_transformEdit && !_pixelMove && !_selectionMoveOrigin &&
-           authority._brushOpening == (_brush ? std::optional(_brushOpening) : std::nullopt) &&
-           authority._warpOpening == (_warp ? std::optional(_warpOpening) : std::nullopt) &&
+           authority._brushOpening == (_brush ? std::optional(_brushOpening) : std::nullopt) && !_warpUpdatingOpening &&
+           !_warpFinishingOpening && authority._warpOpening == PendingWarpOpening() &&
            authority._shapeOpening == (_shapeDraft ? std::optional(_shapeOpening) : std::nullopt) &&
            authority._lassoOpening == (_lassoDraft ? std::optional(_lassoOpening) : std::nullopt);
 }

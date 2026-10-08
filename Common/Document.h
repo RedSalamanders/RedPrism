@@ -1408,6 +1408,14 @@ struct MaskEditResult;
 struct MaskWorkObserver;
 class LayerCopyInput;
 class PreparedLayerCopy;
+class SharedPublicationMemory;
+class WarpSampleInput;
+struct WarpSampleMemoryPlan;
+class WarpOpeningInput;
+class PreparedWarpOpening;
+struct WarpOpeningOptions;
+struct WarpOpeningResult;
+struct WarpOpeningObserver;
 class StrokeOpeningInput;
 class PreparedStrokeOpening;
 struct StrokeOpeningOptions;
@@ -2570,6 +2578,29 @@ class DocumentSession
     // Smudge and Liquify (the Smear tool's warp modes) work on a document-size copy of the active layer's pixels,
     // never on a mask; `FinishWarp` paints the result into the layer along the stroke as one entry (`Liquify`,
     // `Smudge`).
+    // Whole-graph admission precedes immutable owner capture. Useful construction and first sample are worker-only.
+    [[nodiscard]] std::uint64_t WarpOpeningMemoryBytes(const WarpOpeningOptions& options) const noexcept;
+    [[nodiscard]] std::optional<WarpOpeningInput> PrepareWarpOpeningInput(WarpOpeningOptions options) const noexcept;
+    [[nodiscard]] static WarpOpeningResult PrepareWarpOpeningPublication(
+        WarpOpeningInput input, CancelToken cancellation, WarpOpeningObserver observer,
+        std::shared_ptr<const SharedPublicationMemory> memory);
+    [[nodiscard]] bool IsPreparedWarpOpeningCurrent(const PreparedWarpOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedWarpOpeningIfCurrent(PreparedWarpOpening& prepared) noexcept;
+    // Original complete admission precedes capture. Only a joined original worker may mutate this input.
+    [[nodiscard]] std::optional<WarpSampleInput> TakeWarpSampleInput(std::uint64_t opening,
+                                                                     const WarpSampleMemoryPlan& plan) noexcept;
+    [[nodiscard]] bool IsWarpSampleCurrent(const WarpSampleInput& input) const noexcept;
+    [[nodiscard]] bool ApplyWarpSampleIfCurrent(WarpSampleInput& input) noexcept;
+    [[nodiscard]] bool DiscardWarpSampleIfCurrent(std::uint64_t opening, std::uint64_t sequence) noexcept;
+    [[nodiscard]] bool HasPendingWarp() const noexcept
+    {
+        return _warp || _warpUpdatingOpening || _warpFinishingOpening;
+    }
+    [[nodiscard]] std::optional<std::uint64_t> PendingWarpOpening() const noexcept
+    {
+        return _warp ? std::optional(_warpOpening)
+                     : (_warpUpdatingOpening ? _warpUpdatingOpening : _warpFinishingOpening);
+    }
     bool BeginWarp(Vec2 point);
     void ContinueWarp(Vec2 point);
     void FinishWarp();
@@ -3254,6 +3285,9 @@ class DocumentSession
     std::optional<Vec2> _cloneOffset;
     std::shared_ptr<WarpStroke> _warp;
     std::uint64_t _warpOpening = 0;
+    std::optional<std::uint64_t> _warpUpdatingOpening;
+    std::optional<std::uint64_t> _warpUpdatingSequence;
+    std::optional<std::uint64_t> _warpFinishingOpening;
     struct WarpSource
     {
         Guid layerID;
