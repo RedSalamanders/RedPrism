@@ -361,6 +361,16 @@
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
+    <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
+    <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
+    <ClCompile Include="Document.Tests.PreparedRasterPreview.cpp" />
+    <ClInclude Include="Document.Tests.PreparedRasterPreview.h" />
+    <ClCompile Include="Document.Tests.PreviewMetadataAdmission.cpp" />
+    <ClCompile Include="Document.Tests.SelectionDisplayValue.cpp" />
+    <ClInclude Include="Document.Tests.PreviewMetadataAdmission.h" />
+    <ClInclude Include="Document.Tests.SelectionDisplayValue.h" />
     <ClCompile Include="..\..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />

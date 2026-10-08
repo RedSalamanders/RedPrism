@@ -72,6 +72,14 @@ bool SharedPublicationMemory::IsBound() const noexcept
 {
     return static_cast<bool>(_node->lease);
 }
+
+std::int32_t SharedPublicationMemory::BindAfterCompletedWork(JobScheduler& scheduler, JobTicket original) noexcept
+{
+    const auto result = scheduler.RetainMemory(original, _node->lease);
+    if (result >= 0)
+        _node->original = original;
+    return result;
+}
 std::uint64_t SharedPublicationMemory::Bytes() const noexcept
 {
     return _node->lease.Bytes();

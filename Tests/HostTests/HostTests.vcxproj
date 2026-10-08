@@ -170,6 +170,13 @@
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
+    <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
+    <ClCompile Include="Host.Tests.CompletedPreviewMemory.cpp" />
+    <ClInclude Include="Host.Tests.CompletedPreviewMemory.h" />
+    <ClCompile Include="Host.Tests.PreparedRasterPreviewLifetime.cpp" />
+    <ClInclude Include="Host.Tests.PreparedRasterPreviewLifetime.h" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />

@@ -139,6 +139,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
@@ -227,7 +228,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     [[nodiscard]] std::optional<TransformOverlayGeometry> TransformBox() const;
     void SyncTransformOverlay() noexcept;
     // The selection outline and the lasso draft over the canvas; `shown` null keeps the selection shown last.
-    void SyncSelectionOverlay(const std::optional<DocumentSelection>* shown) noexcept;
+    void SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept;
     [[nodiscard]] float ChromeDpi() const noexcept;
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
@@ -1465,6 +1466,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;
+    Vec2 _overlaySelectionTranslation{};
+    Vec2 _overlaySelectionAnchor{};
     std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
     std::wstring _bench;
     std::unique_ptr<UiBenchmarkState> _uiBenchmark;

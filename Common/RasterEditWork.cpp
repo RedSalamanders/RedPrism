@@ -2,6 +2,8 @@
 
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
+#include "PreparedRasterPreview.h"
+#include "PublicationGraphAllocator.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -188,6 +190,7 @@ namespace
 #pragma warning(disable : 4324)
 struct OwnedPreviewStroke final : DeferredReleaseNode
 {
+    std::shared_ptr<const SharedPublicationMemory> memory;
     std::unique_ptr<BrushStroke> stroke;
     OwnedPreviewStroke() noexcept
     {
@@ -203,7 +206,8 @@ struct RetirePreviewStroke final
     OwnedPreviewStroke* owner;
     void operator()(BrushStroke*) const noexcept
     {
-        if (!TryDeferRelease(*owner))
+        if (!TryDeferRelease(*owner, owner->memory ? DeferredReleasePolicy::AlwaysOnOwner
+                                                   : DeferredReleasePolicy::SizeThreshold))
         {
             const std::unique_ptr<OwnedPreviewStroke> owned(owner);
         }
@@ -214,6 +218,7 @@ struct RetirePreviewStroke final
 #pragma warning(disable : 4324)
 struct OwnedPixelMoveOpening final : DeferredReleaseNode
 {
+    std::shared_ptr<const SharedPublicationMemory> memory;
     std::optional<PixelMoveOpening> value;
     OwnedPixelMoveOpening() noexcept
     {
@@ -228,15 +233,16 @@ struct RetirePixelMoveOpening final
 {
     void operator()(OwnedPixelMoveOpening* node) const noexcept
     {
-        if (node && !TryDeferRelease(*node))
+        if (node && !TryDeferRelease(*node, node->memory ? DeferredReleasePolicy::AlwaysOnOwner
+                                                         : DeferredReleasePolicy::SizeThreshold))
         {
             const std::unique_ptr<OwnedPixelMoveOpening> owned(node);
         }
     }
 };
 
-[[nodiscard]] std::shared_ptr<const PixelMoveOpening> OpeningForWork(const RasterEditInput& input,
-                                                                     const BrushStroke& stroke)
+[[nodiscard]] std::shared_ptr<const PixelMoveOpening> OpeningForWork(
+    const RasterEditInput& input, const BrushStroke& stroke, std::shared_ptr<const SharedPublicationMemory> memory = {})
 {
     if (input.kind != RasterEditKind::PixelMove)
         return {};
@@ -250,8 +256,15 @@ struct RetirePixelMoveOpening final
         !AddBytes(bytes, sizeof(OwnedPixelMoveOpening) + 256))
         return {};
     std::unique_ptr<OwnedPixelMoveOpening, RetirePixelMoveOpening> owned(new OwnedPixelMoveOpening);
+    owned->memory = memory;
     owned->bytes = (std::max)(bytes, kDeferredReleaseThreshold);
     owned->value.emplace(std::move(captured.value()), input.selection.value(), input.layer.id);
+    if (memory)
+    {
+        auto shared = std::shared_ptr<OwnedPixelMoveOpening>(owned.release(), RetirePixelMoveOpening{},
+                                                             PublicationGraphAllocator<OwnedPixelMoveOpening>{memory});
+        return std::shared_ptr<const PixelMoveOpening>(shared, &shared->value.value());
+    }
     auto shared = std::shared_ptr<OwnedPixelMoveOpening>(owned.release(), RetirePixelMoveOpening{});
     return std::shared_ptr<const PixelMoveOpening>(shared, &shared->value.value());
 }
@@ -428,19 +441,29 @@ RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancell
 
 RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation)
 {
+    if (input.prepareDisplay &&
+        (input.ownerThread == std::thread::id{} || input.ownerThread == std::this_thread::get_id()))
+        return {RasterEditStatus::Invalid};
     const auto status = InputStatus(input, cancellation);
     if (status != RasterEditStatus::Ready)
         return {status};
     auto owner = std::make_unique<OwnedPreviewStroke>();
+    auto memory = input.prepareDisplay ? SharedPublicationMemory::CreateForWork() : nullptr;
+    owner->memory = memory;
     owner->stroke = std::make_unique<BrushStroke>(input.layer, input.mask, BrushSettings{}, input.canvasWidth,
                                                   input.canvasHeight, nullptr);
     const auto rendered = PaintForWork(input, *owner->stroke, cancellation);
     if (rendered != RasterEditStatus::Ready)
         return {rendered};
-    auto opening = OpeningForWork(input, *owner->stroke);
+    auto opening = OpeningForWork(input, *owner->stroke, memory);
     if (input.kind == RasterEditKind::PixelMove && !opening)
         return {RasterEditStatus::Memory};
     owner->stroke->EndWorkerPreparation(); // no callback/context or job cancellation state escapes Run
+    auto display = input.prepareDisplay
+                       ? PrepareRasterPreviewForWork(*owner->stroke, input.ownerThread, cancellation, memory)
+                       : nullptr;
+    if (input.prepareDisplay && !display)
+        return {cancellation.IsCancelled() ? RasterEditStatus::Cancelled : RasterEditStatus::Invalid};
     // The declared whole preparation peak also bounds the privately owned stroke/coverage/tile graph. Retained
     // source storages were not charged as new allocations, but may lose their last other owner after replacement.
     owner->bytes = input.kind == RasterEditKind::PixelMove
@@ -472,6 +495,11 @@ RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, Cance
     // shared_ptr invokes its deleter if allocating its control block fails. Transfer the unique node exactly
     // once before construction; evaluating a release and dereference in different arguments is unsafe.
     auto* transferred = owner.release();
+    if (input.prepareDisplay)
+        return {RasterEditStatus::Ready,
+                std::shared_ptr<BrushStroke>(transferred->stroke.get(), RetirePreviewStroke{transferred},
+                                             PublicationGraphAllocator<BrushStroke>{memory}),
+                std::move(opening), std::move(memory), std::move(display)};
     return {RasterEditStatus::Ready,
             std::shared_ptr<BrushStroke>(transferred->stroke.get(), RetirePreviewStroke{transferred}),
             std::move(opening)};

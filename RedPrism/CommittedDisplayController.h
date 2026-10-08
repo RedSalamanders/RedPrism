@@ -18,7 +18,9 @@ enum class DisplaySourcePurpose : std::uint8_t
     Committed,
     Transform,
     Color,
-    Adjustment
+    Adjustment,
+    Gradient,
+    PixelMove
 };
 
 struct CommittedDisplayKey final
@@ -30,6 +32,7 @@ struct CommittedDisplayKey final
     std::uint64_t publication = 0;
     const void* sourceIdentity = nullptr; // A published root holds this immutable source, never an address-only cache.
     const void* lookupIdentity = nullptr; // Its original admitted root holds this lookup.
+    const void* rasterPreviewIdentity = nullptr; // Strong immutable metadata held by the admitted root.
     [[nodiscard]] bool operator==(const CommittedDisplayKey&) const noexcept = default;
 };
 

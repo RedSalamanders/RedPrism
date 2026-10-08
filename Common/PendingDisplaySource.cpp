@@ -1,15 +1,51 @@
 #include "PendingDisplaySource.h"
 
 #include "ColorEditWork.h"
+#include "PreparedRasterPreview.h"
+#include "SharedPublicationMemory.h"
 
 bool DocumentSession::DescribePendingDisplaySource(PendingDisplaySource& output) const noexcept
 {
     const auto authority = CaptureDocumentReadAuthority();
-    if (!authority || _brush || _warp || _gradient || _pixelMove || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
+    if (!authority || _brush || _warp || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return false;
     PendingDisplaySource result;
     result.authority = authority.value();
-    if (_transformEdit)
+    if (_gradient || _pixelMove)
+    {
+        const auto* gradient = _gradient ? &_gradient.value() : nullptr;
+        const auto* move = _pixelMove ? &_pixelMove.value() : nullptr;
+        bool mask = false;
+        if (gradient)
+        {
+            if (!gradient->deferred || !gradient->HasLine() || !gradient->raster || !gradient->publishedSequence ||
+                gradient->publishedGeneration != Generation())
+                return false;
+            result.kind = PendingDisplaySource::Kind::Gradient;
+            result.opening = gradient->opening;
+            result.publication = gradient->publishedSequence;
+            result.target = gradient->target;
+            result.rasterPreview = &gradient->display;
+            mask = gradient->mask;
+        }
+        else
+        {
+            if (!move || !move->deferred || !move->HasOffset() || !move->raster || !move->publishedSequence ||
+                move->openingGeneration != Generation() || move->publishedGeneration != Generation())
+                return false;
+            result.kind = PendingDisplaySource::Kind::PixelMove;
+            result.opening = move->opening;
+            result.publication = move->publishedSequence;
+            result.target = move->target;
+            result.rasterPreview = &move->display;
+        }
+        const auto& preview = *result.rasterPreview;
+        if (!preview || !preview->memory || !preview->memory->IsBound() || !preview->ownershipBytes ||
+            preview->target != result.target || preview->mask != mask)
+            return false;
+        result.document = &_document.value();
+    }
+    else if (_transformEdit)
     {
         if (!_transformEdit->deferred || !_displayCopy || _displayTransformOpening != _transformEdit->opening ||
             _displaySourceGeneration != Generation())

@@ -310,6 +310,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandalonePendingDisplaySelfTest\n");
         if (const int failed = Application::RunStandalonePendingDisplaySelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePendingRasterDisplaySelfTest\n");
+        if (const int failed = Application::RunStandalonePendingRasterDisplaySelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandalonePendingDisplayTransportSelfTest\n");
         if (const int failed = Application::RunStandalonePendingDisplayTransportSelfTest(instance); failed != 0)
             return failed;

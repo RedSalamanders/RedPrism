@@ -11,7 +11,9 @@ struct PendingDisplaySource final
     {
         Transform,
         Color,
-        Adjustment
+        Adjustment,
+        Gradient,
+        PixelMove
     };
     DocumentReadAuthority authority;
     Kind kind = Kind::Transform;
@@ -25,4 +27,5 @@ struct PendingDisplaySource final
     const std::shared_ptr<const AdjustmentLookup>* lookup = nullptr;
     const LayerAdjustment* original = nullptr;
     double previewScale = 1;
+    const std::shared_ptr<const PreparedRasterPreview>* rasterPreview = nullptr;
 };

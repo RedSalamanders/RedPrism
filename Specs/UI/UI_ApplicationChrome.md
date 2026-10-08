@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-08
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -209,7 +209,14 @@ a STRINGTABLE entry (`IDS_SELECTION_*`, `IDS_WAND_*`).
 The dash offset steps one DIP every 120 ms through its 8 DIP cycle (legacy `EditorCanvas` ants timer) while a
 non-empty outline is showing and the window is visible, powered, and not occluded: the frame loop waits for the
 next step with a timed message wait and presents one frame per step, never a frame per vsync; each step's dash style
-is made once and kept. The path geometry is rebuilt only when the selection or the view mapping changes. A settled
+is made once and kept. The overlay holds its immutable source loops and caches points relative to the source's
+construction-cached minimum bounds. Pixel Move carries its rounded offset separately. Pan, zoom, DPI and Pixel
+Move offsets update only the scalar world mapping; they neither translate the loop arrays nor rebuild the path.
+The white stroke and black 4/4 dash use fixed stroke transforms: their width and dash lengths stay in DIP while
+the geometry follows the view. The path is rebuilt when its source identity or Direct2D factory changes; the
+cache retains both owners to prevent address reuse. Explicit empty selection remains distinct from no selection;
+either stops animation and releases the preceding path. The pinned single-threaded factory remains owner-only.
+Initial point conversion/path construction and large last-owner retirement remain P1/S5 work. A settled
 document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
 polylines, the polygonal rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle
 or ellipse) is a white line over a dark one. Outline and draft changes re-composite chrome only, never the document.

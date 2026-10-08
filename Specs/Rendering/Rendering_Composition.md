@@ -41,6 +41,22 @@ derivatives are undefined across the hole's edge). Layer textures are mipmapped 
 allows; otherwise a single-level fallback). `LayerSampling::Nearest` samples with point filtering; `Smooth` and
 `High` sample linearly.
 
+Layer and mask `SampleGrad` footprints come from the exact affine inverse placement, never lane derivatives.
+For size `s`, rotation `(sin, cos)`, flips `f`, window scale `v` and regional texture scale `r = rect.zw`, the
+normalized texture rates are `dx = (cos, -sin) × v × f × r / max(s, 1e-5)` and
+`dy = (sin, cos) × v × f × r / max(s, 1e-5)`. An unplaced raster mask uses the layer's placement; a placed mask
+and folder coverage use the mask's placement. This preserves point/linear filtering and minification mips at
+thin targets, clipped edges and recording scissor boundaries. Computing `ddx`/`ddy` before a source-level branch
+is insufficient: optimized FXC can sink those instructions into divergent unit-square/alpha branches, as the
+archived Release r460 shader shows. Exact affine rates avoid that dependency; the constant-buffer ABI is unchanged.
+
+`samplingfootprint.*` uses an independent pixel-center reference for this existing sampling contract: a two-texel
+row `[31,219]` stretched to four pixels reads `[31,31,219,219]` with nearest sampling and `[31,78,172,219]` with
+linear clamp (±1 for UNORM rounding). Placed/clipped masks read `[0,31,219,0]`; flips reverse the row; a 90-degree
+rotation gives the same row as a column; a uniform mask remains 128. Minifying `[0,255,0,255]` to two pixels
+selects the reduced pair averages `[128,128]` (±1). These checks cover source images, unplaced/placed raster masks
+and folder masks without changing any legacy golden or tolerance.
+
 ## Document-space model
 
 Document space has its origin at the top-left, +Y down, one unit per document pixel. A `LayerTransform` places the
@@ -635,3 +651,34 @@ a blit in the frame. It does not run owner composition as a fallback for this ro
 frames and preparation, joins both controllers' producers and waits, acknowledges destruction-only original
 uses, retires graph/source/lookup/context owners on the worker, then detaches both controllers and closes the
 one shared pump. Hidden fixtures and arithmetic controls alone do not qualify production peaks or G1.
+
+### Experimental completed Gradient and Pixel Move display
+
+The explicit display opt-in also accepts completed Gradient and Pixel Move CPU previews. Their pending descriptor
+borrows the exact immutable `PreparedRasterPreview` handle and validates its bound original CPU accounting owner,
+target, document authority, opening and acknowledged publication. The key holds a separate metadata identity;
+the owning graph retains that metadata so storage addresses cannot alias. Ordinary startup remains disabled.
+
+The CPU producer reserves the complete preview/source/cache peak and preclaims its retained-memory slot before
+capture. Only its successful original completion binds that reservation, before session publication or lifted
+opening-cache retention. Replacement previews refuse local admission rather than waiting on their own retained
+cache. Failed or cancelled opted-in payloads also retire as complete worker-owned graphs, including small outputs.
+
+A recorder reconstructs a complete snapshot from the immutable original source, fill and every current touched
+tile. It MUST NOT seed these complete snapshots with the preceding stroke grid: a moved selection may omit a former
+landing tile, which must return to the original source. The graphics stage separately admits its source/metadata,
+directory/construction overlap, texture and full mip bound, bounded upload/reduction scratch, view/container/driver
+allowances and command shadows. WARP additionally charges logical graphics storage to CPU admission. Actual fresh
+segment admission and original recording/GPU/frame acknowledgements remain mandatory.
+
+A real pending image may supply the first pixels of an otherwise empty layer; ordinary empty layers still cover
+nothing. Mask pixels retain their original placed/stretched/uniform geometry and semantic thumbnail while previewing.
+Commit publishes the worker's new eager semantic thumbnail, so a placed mask's exterior can change at its existing
+edge threshold. This preserves the direct composition and commit rules. Returning a gradient to zero length or a
+move to zero offset clears both CPU preview and metadata, excludes the old frame and requires fresh acknowledgement
+before a resumed input becomes visible. A new opening cannot publish through a cancelled original ticket.
+
+The actual hidden Application WARP stage uses independent image, mask and three-tile move literals, real Apply,
+Cancel, Undo, zero/redrag, failure and reopen controls. The source-bound qualification and earlier failed fixture
+are in `Specs/TestRuns/P1RasterPreview_2026-10-08.md`. These controls do not qualify large production phase peaks,
+all remaining consumers, ordinary activation or measured G1.

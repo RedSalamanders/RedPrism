@@ -3,8 +3,10 @@
 
 #include "Heal.h"
 #include "ImageFilters.h"
+#include "PreparedRasterPreview.h"
 #include "RasterEditWork.h"
 #include "RasterWork.h"
+#include "SharedPublicationMemory.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
 
@@ -3130,7 +3132,7 @@ bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
         return false;
     // Vec2 and a moved shared_ptr cannot throw: no allocation is left to catch (unlike a pixel move's selection
     // copy).
-    _gradient = GradientEdit{std::move(raster), point, point, layer->id, mask, deferred, ++_gradientOpening};
+    _gradient = GradientEdit{{}, std::move(raster), point, point, layer->id, mask, deferred, ++_gradientOpening};
     return true;
 }
 
@@ -3168,7 +3170,10 @@ void DocumentSession::RefreshGradient(bool useLiveInputs)
     if (_gradient->deferred)
     {
         if (!_gradient->HasLine())
+        {
             _gradient->raster.reset(); // a redrag without a line must not keep the previous pixels visible
+            _gradient->display.reset();
+        }
         return;
     }
     if (!_gradient->HasLine())
@@ -3210,7 +3215,8 @@ void DocumentSession::CommitGradient()
 }
 
 bool DocumentSession::PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
-                                             std::uint64_t opening, std::uint64_t sequence) noexcept
+                                             std::uint64_t opening, std::uint64_t sequence,
+                                             std::shared_ptr<const PreparedRasterPreview> display) noexcept
 {
     if (!_gradient || !_gradient->deferred || !_gradient->HasLine() || _gradient->opening != opening || !token.target ||
         token.generation != _generation || !CanApplyJobResult(token, token.sequence) ||
@@ -3219,6 +3225,14 @@ bool DocumentSession::PublishGradientPreview(std::shared_ptr<BrushStroke>&& rast
         sequence <= _gradient->publishedSequence || !raster || !raster->IsValid() ||
         raster->LayerID() != _gradient->target || raster->IsMask() != _gradient->mask)
         return false;
+    // Completed CPU producer only: validate cached scalar identities without walking tiles on the owner.
+    if (display && (!display->memory || !display->memory->IsBound() || !display->ownershipBytes ||
+                    display->target != raster->LayerID() || display->mask != raster->IsMask() ||
+                    display->width != raster->Width() || display->height != raster->Height() ||
+                    display->transform != raster->PaintTransform() || display->fill != raster->FillValue() ||
+                    display->source != raster->SourceImage() || display->sourceRect != raster->SourceRect()))
+        return false;
+    _gradient->display = std::move(display);
     _gradient->raster = std::move(raster);
     _gradient->publishedSequence = sequence;
     _gradient->publishedGeneration = _generation;
@@ -4238,8 +4252,8 @@ bool DocumentSession::BeginPixelMoveImpl(bool duplicate, bool deferred)
         raster->SetEditName(duplicate ? L"Duplicate Pixels" : L"Move Pixels");
     }
     // Pixel and immutable selection handles are shared with the document until the move is committed.
-    _pixelMove = PixelMove{std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0}, layer->id,
-                           deferred,          ++_pixelMoveOpening};
+    _pixelMove = PixelMove{{},        std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0},
+                           layer->id, deferred,          ++_pixelMoveOpening};
     _pixelMove->openingGeneration = _generation;
     return true;
 }
@@ -4263,7 +4277,10 @@ void DocumentSession::MovePixels(double dx, double dy)
         _pixelMove->offset = rounded;
         ++_pixelMove->sequence;
         if (!_pixelMove->HasOffset())
+        {
             _pixelMove->raster.reset(); // an older worker cannot resurrect a zero-offset preview
+            _pixelMove->display.reset();
+        }
         return;
     }
     if (!_pixelMove->raster->MoveLifted(rounded, _pixelMove->duplicate))
@@ -4272,6 +4289,13 @@ void DocumentSession::MovePixels(double dx, double dy)
         return;
     }
     _pixelMove->offset = rounded;
+}
+
+SelectionDisplayValue DocumentSession::DisplayedSelectionValue() const
+{
+    if (_pixelMove && !HasDeferredTransform())
+        return {_pixelMove->origin, _pixelMove->offset};
+    return {DisplayedSelection(), {}};
 }
 
 std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
@@ -4334,7 +4358,8 @@ void DocumentSession::CancelPixelMove() noexcept
 }
 
 bool DocumentSession::PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,
-                                              std::uint64_t opening, std::uint64_t sequence) noexcept
+                                              std::uint64_t opening, std::uint64_t sequence,
+                                              std::shared_ptr<const PreparedRasterPreview> display) noexcept
 {
     if (!_pixelMove || !_pixelMove->deferred || !_pixelMove->HasOffset() || _pixelMove->opening != opening ||
         _pixelMove->openingGeneration != _generation || sequence <= _pixelMove->publishedSequence ||
@@ -4343,6 +4368,14 @@ bool DocumentSession::PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& str
         _activeLayerID != _pixelMove->target || _maskSelected || !stroke || !stroke->IsValid() ||
         stroke->LayerID() != _pixelMove->target || stroke->IsMask())
         return false;
+    // Completed CPU producer only: validate cached scalar identities without walking tiles on the owner.
+    if (display && (!display->memory || !display->memory->IsBound() || !display->ownershipBytes ||
+                    display->target != stroke->LayerID() || display->mask != stroke->IsMask() ||
+                    display->width != stroke->Width() || display->height != stroke->Height() ||
+                    display->transform != stroke->PaintTransform() || display->fill != stroke->FillValue() ||
+                    display->source != stroke->SourceImage() || display->sourceRect != stroke->SourceRect()))
+        return false;
+    _pixelMove->display = std::move(display);
     _pixelMove->raster = std::move(stroke);
     _pixelMove->publishedSequence = sequence;
     _pixelMove->publishedGeneration = _generation;

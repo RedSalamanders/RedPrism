@@ -177,6 +177,13 @@
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
+    <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
+    <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />
     <ClCompile Include="..\..\Common\ImageImportHistory.cpp" />

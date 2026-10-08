@@ -556,6 +556,112 @@ void TestRasterMasks(Harness& h)
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "mask.placement-hide-all-background");
 }
 
+void TestAffineSamplingFootprint(Harness& h)
+{
+    // Independent pixel-center reference for the existing unit-square sampling contract. Two texels cover
+    // four document pixels; nearest reads [0,0,1,1], linear clamp reads [0,1/4,3/4,1] between them. Thin targets
+    // leave helper lanes outside the layer and exposed optimized ddx/ddy sinking in Release r460.
+    constexpr std::array<std::uint8_t, 8> source{31, 31, 31, 31, 219, 219, 219, 219};
+    const auto image = Raster::Make(2, 1, RasterFormat::Bgra8888, source.data(), source.size());
+    CanvasDocument document;
+    document.width = 4;
+    document.height = 1;
+    ImageLayer layer = LayerFrom(image, LayerBlendMode::Normal, L"Thin source");
+    layer.transform.size = {4, 1};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
+    const auto check = [&](std::initializer_list<int> expected, int tolerance, const char* name)
+    {
+        const auto pixels = h.Render(document);
+        bool matches = pixels.size() == expected.size() * 4;
+        std::size_t offset = 0;
+        for (const auto value : expected)
+        {
+            for (std::size_t channel = 0; channel < 4 && matches; ++channel)
+                matches = ChannelClose(pixels[offset + channel], value, tolerance);
+            offset += 4;
+        }
+        if (!matches)
+            PrintPixels(name, pixels);
+        Expect(matches, name);
+    };
+    check({31, 31, 219, 219}, 0, "samplingfootprint.image-thin-nearest");
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].transform.sampling = LayerSampling::Smooth; });
+    check({31, 78, 172, 219}, 1, "samplingfootprint.image-thin-linear");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers[0].asset->image = Solid(4, 1, 255, 255, 255, 255);
+                            fixture.layers[0].transform.sampling = LayerSampling::Nearest;
+                            fixture.layers[0].mask = MaskOf(Gray(2, 1, {31, 219}));
+                        });
+    check({31, 31, 219, 219}, 0, "samplingfootprint.mask-unplaced-stretched");
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].mask->placement = LayerTransform{Vec2{1, 0}, Vec2{2, 1}}; });
+    check({0, 31, 219, 0}, 0, "samplingfootprint.mask-placed-hide-outside");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers[0].mask->placement.reset();
+                            fixture.layers[0].transform.flipX = true;
+                        });
+    check({219, 219, 31, 31}, 0, "samplingfootprint.mask-flip-x");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers[0].transform.flipX = false;
+                            fixture.layers[0].transform.sampling = LayerSampling::Smooth;
+                        });
+    check({31, 78, 172, 219}, 1, "samplingfootprint.mask-linear-stretched");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.width = 1;
+                            fixture.height = 4;
+                            fixture.layers[0].transform.sampling = LayerSampling::Nearest;
+                            fixture.layers[0].transform.origin = {-1.5, 1.5};
+                            fixture.layers[0].transform.rotation = 90;
+                        });
+    check({31, 31, 219, 219}, 0, "samplingfootprint.mask-rotated-thin-column");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(1, 1, {128})); });
+    check({128, 128, 128, 128}, 0, "samplingfootprint.mask-uniform-rotated-column");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.width = 2;
+                            fixture.height = 1;
+                            fixture.layers.clear();
+                            constexpr std::array<std::uint8_t, 16> alternating{0, 0, 0, 0, 255, 255, 255, 255,
+                                                                               0, 0, 0, 0, 255, 255, 255, 255};
+                            auto scaledLayer = LayerFrom(
+                                Raster::Make(4, 1, RasterFormat::Bgra8888, alternating.data(), alternating.size()),
+                                LayerBlendMode::Normal, L"Minified source");
+                            scaledLayer.transform.size = {2, 1};
+                            fixture.layers.push_back(std::move(scaledLayer));
+                        });
+    // A two-texel footprint selects mip 1; each pair averages to 127.5 (UNORM rounds to 128).
+    check({128, 128}, 1, "samplingfootprint.image-minification-retains-mips");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.width = 4;
+                            fixture.layers.clear();
+                            auto folder = ImageLayer::Blank(L"Thin folder", Vec2{4, 1});
+                            folder.isGroup = true;
+                            folder.transform.sampling = LayerSampling::Nearest;
+                            folder.mask = MaskOf(Gray(2, 1, {31, 219}));
+                            auto child = LayerFrom(Solid(4, 1, 255, 255, 255, 255), LayerBlendMode::Normal, L"Child");
+                            child.parentID = folder.id;
+                            fixture.layers.push_back(std::move(folder));
+                            fixture.layers.push_back(std::move(child));
+                        });
+    check({31, 31, 219, 219}, 0, "samplingfootprint.folder-mask-stretched");
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].mask->placement = LayerTransform{Vec2{1, 0}, Vec2{2, 1}}; });
+    check({0, 31, 219, 0}, 0, "samplingfootprint.folder-mask-placed-clipped");
+}
+
 void TestLiveMasks(Harness& h)
 {
     // Legacy LiveMaskTests.fixture: white target clipped to a hidden black source with soft alpha.
@@ -2149,6 +2255,7 @@ int wmain(int argc, wchar_t** argv)
         TestBlendModes(harness);
         TestOrderAndBlankLayers(harness);
         TestRasterMasks(harness);
+        TestAffineSamplingFootprint(harness);
         TestLiveMasks(harness);
         TestClippingStack(harness);
         TestFolderMasks(harness);

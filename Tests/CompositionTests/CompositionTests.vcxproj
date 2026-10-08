@@ -212,6 +212,9 @@
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
+    <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
     <ClCompile Include="..\..\Common\Selection.cpp" />
     <ClCompile Include="..\..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\..\Common\DocumentSizeHistory.cpp" />

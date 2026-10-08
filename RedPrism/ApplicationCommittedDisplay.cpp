@@ -1,6 +1,7 @@
 // Opt-in committed display route. Normal startup remains on the existing path until pending edits,
 // strokes, utilities, rows and complete resource admission have also been migrated and qualified.
 #include "Application.h"
+#include "PreparedRasterPreview.h"
 
 bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
 {
@@ -89,13 +90,17 @@ bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedD
         return false;
     descriptor.key.document = source.authority;
     descriptor.key.deviceGeneration = _owner._gpuWork.DeviceGeneration();
-    descriptor.key.purpose = source.kind == PendingDisplaySource::Kind::Transform ? DisplaySourcePurpose::Transform
-                             : source.kind == PendingDisplaySource::Kind::Color   ? DisplaySourcePurpose::Color
-                                                                                  : DisplaySourcePurpose::Adjustment;
+    descriptor.key.purpose = source.kind == PendingDisplaySource::Kind::Transform   ? DisplaySourcePurpose::Transform
+                             : source.kind == PendingDisplaySource::Kind::Color     ? DisplaySourcePurpose::Color
+                             : source.kind == PendingDisplaySource::Kind::Gradient  ? DisplaySourcePurpose::Gradient
+                             : source.kind == PendingDisplaySource::Kind::PixelMove ? DisplaySourcePurpose::PixelMove
+                                                                                    : DisplaySourcePurpose::Adjustment;
     descriptor.key.opening = source.opening;
     descriptor.key.publication = source.publication;
     descriptor.key.sourceIdentity = source.sourceIdentity;
     descriptor.key.lookupIdentity = source.lookup && *source.lookup ? source.lookup->get() : nullptr;
+    descriptor.key.rasterPreviewIdentity =
+        source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get() : nullptr;
     descriptor.document = source.document;
     descriptor.device = _owner._renderer.Device();
     descriptor.immediate = _owner._renderer.Context();

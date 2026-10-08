@@ -266,6 +266,9 @@
     <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\Common\PreparedRasterPreview.cpp" />
+    <ClInclude Include="..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\Common\PublicationGraphAllocator.h" />
     <ClCompile Include="..\Common\RasterUploadReductionWork.cpp" />
     <ClCompile Include="..\Common\RasterUploadWork.cpp" />
     <ClCompile Include="..\Common\RasterUploadLayout.cpp" />
@@ -535,6 +538,7 @@
     <ClCompile Include="ApplicationCommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.PendingDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingRasterDisplay.cpp" />
     <ClCompile Include="Application.Tests.PendingDisplayTransport.cpp" />
     <ClCompile Include="Application.Tests.RowPublication.cpp" />
     <ClInclude Include="Application.Tests.RowPublication.h" />

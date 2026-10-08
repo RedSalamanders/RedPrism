@@ -27,6 +27,10 @@ class SharedPublicationMemory final
     // Worker only, under the original complete admission. Allocation failure reaches the Job runner.
     [[nodiscard]] static std::shared_ptr<SharedPublicationMemory> CreateForWork();
     [[nodiscard]] std::int32_t BindForPublication(JobScheduler& scheduler, JobTicket original) noexcept;
+    // Exact successful Completed callback, after this original job's useful producers have joined. Transfers
+    // the entire descriptor-reserved admission before exposing immutable preview metadata. No fresh admission,
+    // allocation or query. This does not authorize document mutation or acknowledge GPU work.
+    [[nodiscard]] std::int32_t BindAfterCompletedWork(JobScheduler& scheduler, JobTicket original) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.

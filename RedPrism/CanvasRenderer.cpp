@@ -1115,10 +1115,10 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
         preview.width < 1 || preview.height < 1 || preview.width > kMaxCanvasSide || preview.height > kMaxCanvasSide)
         return E_INVALIDARG;
     const auto* target = document.layers.FindKey(preview.layerID);
-    if (!target || (preview.mask && !target->mask) || (!preview.mask && !target->asset))
+    if (!target || target->isGroup || target->adjustment || (preview.mask && !target->mask))
         return E_INVALIDARG;
     const auto expectedFormat = preview.mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888;
-    const auto& original = preview.mask ? target->mask->asset.image : target->asset->image;
+    const Raster original = preview.mask ? target->mask->asset.image : target->asset ? target->asset->image : Raster{};
     const bool uniformMask = preview.mask && !preview.source.HasStorage() && original.Width() == 1 &&
                              original.Height() == 1 && original.Format() == RasterFormat::Gray8;
     if ((!uniformMask && preview.source != original) ||
@@ -1566,9 +1566,9 @@ HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noe
     }
     ID3D11RenderTargetView* target = _coverage[static_cast<std::size_t>(index)].rtv.get();
     ClearRecorded(target, kClearZero.data());
-    if (layer == nullptr || !layer->asset.has_value())
+    if (layer == nullptr || (!layer->asset.has_value() && !DrawsStrokeImage(*layer)))
     {
-        // A blank source covers nothing: the clipped layer is hidden entirely (legacy draws nothing).
+        // A blank source covers nothing until its admitted stroke texture supplies the image.
         return S_OK;
     }
     int upstream = kNoCoverage;

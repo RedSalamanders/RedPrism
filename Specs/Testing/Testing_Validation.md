@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-08
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -10,6 +10,43 @@ This contract owns how RedPrism is proven. Domain specs name the behavior; this 
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
 ## Entrypoint
+
+### Completed raster-preview metadata and accounting
+
+`DocumentTests` runs `RunPreparedRasterPreviewTests`: 52 assertions cover immutable completed image gradients,
+placed and unplaced stretched masks, lifted-pixel source/grid metadata, unchanged changed flags/list and source
+bytes, owner/unknown-owner/pre-cancel refusal, and below-threshold complete metadata retirement on a joined worker.
+The pixel references are literal four-pixel BGRA and two-pixel Gray8 expectations, with explicit source rectangle
+and tile bounds; implementation output is not a golden generator.
+
+`HostTests` runs ten `completed-preview-memory.*` controls for actual successful/failed original completion,
+ticket generation, provenance, duplicate/outside-callback refusal and exact whole-admission retention/refund.
+It also runs 39 `prepared-raster-preview-lifetime.*` controls through the actual opted-in CPU raster-edit path.
+Joined workers destroy semantic nodes while separately retained stroke, metadata and lifted-opening weak controls
+keep the complete original 4 MiB admission charged. The final weak reset and owner drain must refund it exactly.
+A separate strong lifted-opening cache must retain the charge after stroke/metadata retirement and release its
+last semantic owner on a joined worker before the owner can refund. All existing predecessor controls remain
+required. These controls qualify CPU metadata/accounting only; display consumers, normal activation and G1 are
+separate gates. See [the exact-source record](../TestRuns/P1RasterPreview_2026-10-08.md).
+
+### Selection outline source and mapped cache
+
+`DocumentTests` runs 37 `selectiondisplayvalue.*` controls. Independent literal loops require separate rounded
+Pixel Move translation, source storage identity/ownership, empty versus absent selection, direct/deferred
+transform precedence, finite-input behavior, unchanged document/generation/history and a captured display
+value retaining its source after all other owners are gone. The existing numeric translated-outline API
+remains separately checked.
+
+The actual pending-raster WARP host requires 56 `application-pending-raster.outline-*` assertions (14 in each
+Move/Copy × Cancel/Apply case). Four literal corners use an independent center/zoom/pan/current-DPI formula;
+source conversions and actual painted paths are reused through both landings, pan, zoom, DPI, zero/redrag and
+all eight marching-ant phases. Equal points with a new source rebuild once; cache-only source ownership,
+empty/absent transitions and actual device/factory replacement are checked. Fixed 1 DIP strokes and 4/4 DIP
+dashes preserve pen dimensions under zoom. The unchanged no-outline Hand pan gate requires zero repaint and
+preparation work. Complete registries and predecessor order/multiplicity remain required; only the existing
+source-bound recorded-brush callback windows admit their documented partial order. These controls prove
+semantics and lifetime; initial geometry construction, large-owner retirement, ordinary display activation
+and measured G1 remain separate requirements. See [the run record](../TestRuns/P1SelectionOutlineCache_2026-10-08.md).
 
 ### Original publication and application final-stroke controls
 

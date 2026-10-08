@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-08
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -635,6 +635,37 @@ graph is queued and its original lease is still awaiting acknowledgement; diagno
 disjoint totals. The existing owner-only `RetainedMemoryTicket` API remains available for caches whose lifetime is
 owner-confined. This primitive is an experimental foundation; the prepared layer/accessibility consumer adoption
 below remains a disabled draft until its full consumer matrix and H4/G1 gates pass.
+
+#### Completed CPU raster-preview ownership
+
+An opted-in `RunRasterEditPreview` prepares immutable `PreparedRasterPreview` metadata on its exclusive CPU
+worker after pixel work completes. It preserves the source raster, source rectangle, paint transform, fill and
+every touched immutable tile. Preparing this metadata MUST NOT materialize pixels, consume `TakeChanged`, mutate
+the stroke, clone a document or retain a GPU engine. An unknown owner, the owner thread or a cancelled worker
+refuses preparation. A consumer validates cached scalar source/target/geometry identities before publication;
+graphics preparation and its complete resource admission remain separate operations.
+
+The original admission includes source/output overlap and additional directory, container, control-block and
+accounting-node storage before capture. `RasterPreviewMetadataMemoryBytes` describes the actual grid, including
+inverse-placement growth; invalid sides or checked-arithmetic failure return zero. Its current directory bound
+is 1 MiB plus two `RasterTile` records for every possible 256-pixel grid cell. This does not substitute for the
+raster-edit pixel, coverage, lifted-opening or source-retirement bounds.
+
+One worker-created `SharedPublicationMemory` owner spans the preview stroke, immutable metadata and any newly
+prepared lifted-pixel opening. A successful original `Completed` callback may bind it through
+`BindAfterCompletedWork` only when that descriptor preclaimed a retained-memory slot. Wrong generation, foreign
+scheduler, duplicate binding, failed completion or a call outside the original completion refuses transfer.
+No output or cache may escape before this binding succeeds. This success-only completed-CPU transfer is distinct
+from the acknowledged publication callback used by recording parents; neither authorizes document mutation.
+
+Every semantic node and its allocator-owned weak control retain that original accounting owner. Expiration of
+the final strong reference is insufficient for a refund: an expired weak witness can still own its control.
+`PublicationGraphAllocator` keeps the lease alive through actual control deallocation. Last semantic release on
+the live owner queues the complete graph for worker destruction even below the ordinary size threshold; foreign
+readers may finish destruction themselves. The original scheduler consumes the independent final acknowledgement
+before refunding. A lifted-pixel cache alone must preserve the whole original admission after the preview stroke
+and metadata retire. Default raster-edit callers retain their existing behavior until consumer activation is
+qualified. These foundations do not qualify ordinary display activation or G1.
 
 #### Experimental prepared layer/accessibility graph
 

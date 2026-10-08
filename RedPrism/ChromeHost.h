@@ -424,8 +424,13 @@ class ChromeHost final : public CommandIds
                              const std::vector<float>& guideYs) noexcept;
     // The selection tools' header: kinds, mode, wand settings, Anti-alias, Expand / Contract and Deselect.
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
-    // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
+    // Selection vertices are document coordinates relative to the retained anchor. Mapping is independent.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
+    void SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept;
+    [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept;
+    [[nodiscard]] CanvasOverlay::SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
+    [[nodiscard]] const std::vector<CanvasOverlay::OutlineLoop>* SelectionOutlineForTest() const noexcept;
+    // Lasso draft remains in canvas-hole pixels.
     void SetSelectionAntPhase(float phase) noexcept;
     [[nodiscard]] float SelectionAntPhase() const noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
@@ -591,6 +596,9 @@ class ChromeHost final : public CommandIds
         std::uint64_t menus = 0;     // SetUndoRedoNames, SetEditTargets or SetMaskCommands rebuilt their captions
         std::uint64_t texts = 0;     // SetStatus or SetDocumentTitle wrote a text
         std::uint64_t headers = 0;   // a tool header, the adjust panel or a size card wrote its controls
+        std::uint64_t selectionOutlines = 0;
+        std::uint64_t selectionVertices = 0;
+        std::uint64_t selectionMappings = 0;
         std::uint64_t overlays = 0;  // the canvas overlay took something new to draw
         std::uint64_t publishes = 0; // the UI Automation snapshot was republished
     };

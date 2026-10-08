@@ -18,8 +18,10 @@
 #include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
+#include "Host.Tests.CompletedPreviewMemory.h"
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
+#include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
 #include "Host.Tests.PublicationCallback.h"
 #include "Host.Tests.PublicationRetention.h"
@@ -1849,6 +1851,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobMemoryTests();
     gFailures += RunRetainedJobMemoryTests();
     gFailures += RunSharedRetainedJobMemoryTests();
+    gFailures += RunCompletedPreviewMemoryTests();
+    gFailures += RunPreparedRasterPreviewLifetimeTests();
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();

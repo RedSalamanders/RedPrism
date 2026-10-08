@@ -213,7 +213,7 @@ int Application::RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance
                     "transport-paint-receipt-reaches-terminal-result"))
             return 5;
         const auto paintResult = paintReceipt.Read();
-        const HRESULT capacityRefusal = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        const auto capacityRefusal = static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
         if (paintResult.outcome != HostOutcome::Failed || paintResult.error != capacityRefusal)
             std::printf("INFO application-pending-display-transport.paint-result outcome=%u error=%08x "
                         "attached=%zu quarantined=%zu\n",

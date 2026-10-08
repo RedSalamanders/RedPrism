@@ -102,8 +102,24 @@ bool CanvasOverlay::SetGuides(const std::vector<float>& xs, const std::vector<fl
 void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops)
 {
     _outline = std::move(loops);
+    if (_outline.empty())
+        _outlineGeometry.reset();
     _outlineDirty = true;
     RequestInvalidate();
+}
+
+bool CanvasOverlay::SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept
+{
+    if (!std::isfinite(originDip.x) || !std::isfinite(originDip.y) || !std::isfinite(scale) || scale <= 0 ||
+        (Same(originDip, _selectionOrigin) && scale == _selectionScale))
+        return false;
+    _selectionOrigin = originDip;
+    _selectionScale = scale;
+    // Keep the current mapping for a later source, without repainting an absent outline.
+    if (_outline.empty())
+        return false;
+    RequestInvalidate();
+    return true;
 }
 
 void CanvasOverlay::SetAntPhase(float phase) noexcept
@@ -270,23 +286,36 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
     if (factory.get() != _factory.get())
     {
         // Geometry and stroke styles belong to the factory that made them.
-        _factory = factory;
+        wil::com_ptr_nothrow<ID2D1Factory1> selectionFactory;
+        if (FAILED(factory.query_to(selectionFactory.put())))
+            return false;
+        _factory = std::move(factory);
+        _selectionFactory = std::move(selectionFactory);
+        _selectionStyle.reset();
         _outlineGeometry.reset();
-        for (wil::com_ptr_nothrow<ID2D1StrokeStyle>& style : _antStyles)
+        for (wil::com_ptr_nothrow<ID2D1StrokeStyle1>& style : _antStyles)
         {
             style.reset();
         }
         _outlineDirty = true;
     }
-    wil::com_ptr_nothrow<ID2D1StrokeStyle>& ants = _antStyles[AntStep()];
+    if (!_selectionStyle)
+    {
+        const auto properties = D2D1::StrokeStyleProperties1(
+            D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_MITER, 10.0f,
+            D2D1_DASH_STYLE_SOLID, 0.0f, D2D1_STROKE_TRANSFORM_TYPE_FIXED);
+        if (FAILED(_selectionFactory->CreateStrokeStyle(properties, nullptr, 0, _selectionStyle.put())))
+            return false;
+    }
+    wil::com_ptr_nothrow<ID2D1StrokeStyle1>& ants = _antStyles[AntStep()];
     if (!ants)
     {
-        const D2D1_STROKE_STYLE_PROPERTIES properties = D2D1::StrokeStyleProperties(
+        const D2D1_STROKE_STYLE_PROPERTIES1 properties = D2D1::StrokeStyleProperties1(
             D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_MITER, 10.0f,
-            D2D1_DASH_STYLE_CUSTOM, static_cast<float>(AntStep()));
+            D2D1_DASH_STYLE_CUSTOM, static_cast<float>(AntStep()), D2D1_STROKE_TRANSFORM_TYPE_FIXED);
         // Dash lengths are multiples of the stroke width: four DIP on, four off.
         const float dashes[] = {kAntsDashDip, kAntsDashDip};
-        if (FAILED(_factory->CreateStrokeStyle(properties, dashes, 2, ants.put())))
+        if (FAILED(_selectionFactory->CreateStrokeStyle(properties, dashes, 2, ants.put())))
         {
             return false;
         }
@@ -319,9 +348,25 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
             return false;
         }
         _outlineGeometry = std::move(geometry);
+        ++_selectionPathsBuilt;
         _outlineDirty = false;
     }
     return true;
+}
+
+CanvasOverlay::SelectionResourcesForTest CanvasOverlay::SelectionResourcesStateForTest() const noexcept
+{
+    SelectionResourcesForTest result;
+    result.pathsBuilt = _selectionPathsBuilt;
+    result.hasPath = _outlineGeometry != nullptr;
+    result.fixedSolid =
+        _selectionStyle && _selectionStyle->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED;
+    const auto& ants = _antStyles[AntStep()];
+    result.fixedDashes =
+        ants && ants->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED && ants->GetDashesCount() == 2;
+    if (result.fixedDashes)
+        ants->GetDashes(result.dashes.data(), 2);
+    return result;
 }
 
 void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
@@ -335,8 +380,8 @@ void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& ho
     ID2D1SolidColorBrush* black = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     D2D1_MATRIX_3X2_F previous{};
     dc->GetTransform(&previous);
-    dc->SetTransform(D2D1::Matrix3x2F::Translation(bounds.left, bounds.top) * previous);
-    dc->DrawGeometry(_outlineGeometry.get(), white, kLineWidthDip);
+    dc->SetTransform(SelectionMappingForTest() * D2D1::Matrix3x2F::Translation(bounds.left, bounds.top) * previous);
+    dc->DrawGeometry(_outlineGeometry.get(), white, kLineWidthDip, _selectionStyle.get());
     dc->DrawGeometry(_outlineGeometry.get(), black, kLineWidthDip, _antStyles[AntStep()].get());
     dc->SetTransform(previous);
 }

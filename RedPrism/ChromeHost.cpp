@@ -3787,18 +3787,41 @@ void ChromeHost::SetSelectionInspector(const SelectionInspectorState& state) noe
 void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept
 {
     if (!_overlay)
-    {
         return;
-    }
-    ++_syncCounters.overlays; // the Application pushes an outline only when it or the view mapping changed
-    for (std::vector<D2D1_POINT_2F>& loop : loops)
-    {
-        for (D2D1_POINT_2F& point : loop)
-        {
-            point = PixelToDip(point);
-        }
-    }
+    ++_syncCounters.overlays;
+    ++_syncCounters.selectionOutlines;
+    for (const auto& loop : loops)
+        _syncCounters.selectionVertices += loop.size();
     _overlay->SetSelectionOutline(std::move(loops));
+}
+
+void ChromeHost::SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept
+{
+    // The caller supplies the current frame DPI; interaction preparation can still retain the previous one.
+    // Divide while values are double so a large document anchor is not narrowed before cancellation/mapping.
+    const double dipPerPixel = dpi > 0 ? 96.0 / dpi : 1.0;
+    if (_overlay && _overlay->SetSelectionMapping(D2D1::Point2F(static_cast<float>(originPixels.x * dipPerPixel),
+                                                                static_cast<float>(originPixels.y * dipPerPixel)),
+                                                  static_cast<float>(pixelsPerDocumentPixel * dipPerPixel)))
+    {
+        ++_syncCounters.overlays;
+        ++_syncCounters.selectionMappings;
+    }
+}
+
+D2D1_MATRIX_3X2_F ChromeHost::SelectionMappingForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionMappingForTest() : D2D1::Matrix3x2F::Identity();
+}
+
+CanvasOverlay::SelectionResourcesForTest ChromeHost::SelectionResourcesStateForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionResourcesStateForTest() : CanvasOverlay::SelectionResourcesForTest{};
+}
+
+const std::vector<CanvasOverlay::OutlineLoop>* ChromeHost::SelectionOutlineForTest() const noexcept
+{
+    return _overlay ? &_overlay->SelectionOutlineForTest() : nullptr;
 }
 
 void ChromeHost::SetSelectionAntPhase(float phase) noexcept

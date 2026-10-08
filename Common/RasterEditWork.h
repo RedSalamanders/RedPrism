@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <thread>
 
 enum class RasterEditKind : std::uint8_t
 {
@@ -28,6 +29,8 @@ enum class RasterEditStatus : std::uint8_t
 };
 
 class PixelMoveOpening;
+class SharedPublicationMemory;
+struct PreparedRasterPreview;
 
 // Captured under the complete reservation, after earlier history work settles. Only value metadata and shared
 // immutable raster/selection owners cross the worker boundary. Clear on a mask is the captured background fill.
@@ -58,6 +61,10 @@ struct RasterEditInput final
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
     void* progressContext = nullptr;
+    // Opt-in recorded display: build immutable metadata on this admitted worker, and hold the original
+    // accounting owner through every stroke/metadata control block. Unknown/current owner refuses work.
+    bool prepareDisplay = false;
+    std::thread::id ownerThread;
 };
 
 struct RasterEditResult final
@@ -134,6 +141,8 @@ struct RasterEditPreviewResult final
     RasterEditStatus status = RasterEditStatus::Invalid;
     std::shared_ptr<BrushStroke> stroke;
     std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
+    std::shared_ptr<SharedPublicationMemory> memory;
+    std::shared_ptr<const PreparedRasterPreview> display;
 };
 
 // Cached complete ownership bound; no raster materialization, allocation or graph traversal.

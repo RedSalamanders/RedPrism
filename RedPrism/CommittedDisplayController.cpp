@@ -1,6 +1,7 @@
 #include "CommittedDisplayController.h"
 
 #include "AdjustmentDisplayAdmission.h"
+#include "PreparedRasterPreview.h"
 
 #include <exception>
 #include <limits>
@@ -37,12 +38,13 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
     if (!pending)
         return descriptor.key.purpose == DisplaySourcePurpose::Committed && !descriptor.pending &&
                !descriptor.key.opening && !descriptor.key.publication && !descriptor.key.sourceIdentity &&
-               !descriptor.key.lookupIdentity;
+               !descriptor.key.lookupIdentity && !descriptor.key.rasterPreviewIdentity;
     if (!descriptor.pending || descriptor.key.purpose == DisplaySourcePurpose::Committed)
         return false;
     const auto& source = descriptor.pending.value();
     if (source.kind != PendingDisplaySource::Kind::Transform && source.kind != PendingDisplaySource::Kind::Color &&
-        source.kind != PendingDisplaySource::Kind::Adjustment)
+        source.kind != PendingDisplaySource::Kind::Adjustment && source.kind != PendingDisplaySource::Kind::Gradient &&
+        source.kind != PendingDisplaySource::Kind::PixelMove)
         return false;
     if (source.kind == PendingDisplaySource::Kind::Adjustment &&
         (!source.original || !source.lookup || !*source.lookup || source.adjustmentSource ||
@@ -53,21 +55,65 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
     if (source.kind == PendingDisplaySource::Kind::Transform &&
         (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.previewScale != 1))
         return false;
-    const auto purpose = source.kind == PendingDisplaySource::Kind::Transform ? DisplaySourcePurpose::Transform
-                         : source.kind == PendingDisplaySource::Kind::Color   ? DisplaySourcePurpose::Color
-                                                                              : DisplaySourcePurpose::Adjustment;
+    const bool raster =
+        source.kind == PendingDisplaySource::Kind::Gradient || source.kind == PendingDisplaySource::Kind::PixelMove;
+    if (raster != (source.rasterPreview && *source.rasterPreview))
+        return false;
+    if (raster && (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.original ||
+                   source.previewScale != 1 || (*source.rasterPreview)->target != source.target ||
+                   !(*source.rasterPreview)->memory || !(*source.rasterPreview)->memory->IsBound()))
+        return false;
+    const auto purpose = source.kind == PendingDisplaySource::Kind::Transform   ? DisplaySourcePurpose::Transform
+                         : source.kind == PendingDisplaySource::Kind::Color     ? DisplaySourcePurpose::Color
+                         : source.kind == PendingDisplaySource::Kind::Gradient  ? DisplaySourcePurpose::Gradient
+                         : source.kind == PendingDisplaySource::Kind::PixelMove ? DisplaySourcePurpose::PixelMove
+                                                                                : DisplaySourcePurpose::Adjustment;
     return source.document == descriptor.document && source.authority == descriptor.key.document && source.opening &&
            source.publication && source.opening == descriptor.key.opening &&
            source.publication == descriptor.key.publication && purpose == descriptor.key.purpose &&
            source.sourceIdentity == descriptor.key.sourceIdentity &&
            descriptor.document->layers.Identity() == source.sourceIdentity &&
-           (source.lookup && *source.lookup ? source.lookup->get() : nullptr) == descriptor.key.lookupIdentity;
+           (source.lookup && *source.lookup ? source.lookup->get() : nullptr) == descriptor.key.lookupIdentity &&
+           (source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get() : nullptr) ==
+               descriptor.key.rasterPreviewIdentity;
 }
 
 bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDisplayAdmission::Envelope& result,
                      std::uint64_t& heldBytes) noexcept
 {
     heldBytes = 0;
+    if (descriptor.pending && descriptor.pending->rasterPreview)
+    {
+        const auto& source = *descriptor.pending->rasterPreview;
+        if (!source || source->width <= 0 || source->height <= 0 || source->width > kMaxCanvasSide ||
+            source->height > kMaxCanvasSide || !source->ownershipBytes)
+            return false;
+        heldBytes = source->ownershipBytes;
+        // Full-grid chain is a conservative bound for the recorder's document-window proxy too. It never
+        // creates a texture larger than the real device limit. Directory/sparse construction is a separate
+        // graphics-stage overlap, in addition to the original completed CPU producer's retained reservation.
+        std::uint64_t texels = 0;
+        auto width = static_cast<std::uint64_t>(source->width);
+        auto height = static_cast<std::uint64_t>(source->height);
+        for (;;)
+        {
+            if (!Add(texels, width * height))
+                return false;
+            ++result.mipLevels;
+            if (width == 1 && height == 1)
+                break;
+            width = width > 1 ? width / 2 : 1;
+            height = height > 1 ? height / 2 : 1;
+        }
+        result.textureCount = 1;
+        result.logicalGpuBytes = texels * (source->mask ? 1ull : 4ull);
+        result.additionalGpuBytes = result.logicalGpuBytes + 4ull * 65536;
+        result.logicalCpuBytes = 1024ull * 1024 + static_cast<std::uint64_t>(source->width) * 4 * 8;
+        result.additionalCpuBytes = result.logicalCpuBytes;
+        const auto directory = RasterPreviewMetadataMemoryBytes(source->width, source->height);
+        return directory && Add(result.additionalCpuBytes, directory) &&
+               (!descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
+    }
     if (!descriptor.pending || !descriptor.pending->lookup)
         return true; // The completed CPU document is already covered by the base manifest admission.
     const auto& source = descriptor.pending.value();
@@ -128,6 +174,8 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
     CommittedDisplayController::Cell* cell = nullptr;
     CanvasDocument source;
     std::optional<CanvasRenderer::AdjustmentPreview> adjustment;
+    std::shared_ptr<const PreparedRasterPreview> rasterPreview;
+    std::optional<CanvasRenderer::StrokePreview> stroke;
     AdjustmentDisplayAdmission::Envelope previewEnvelope;
     RasterResidencyManifestWork::Handle manifest;
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -155,6 +203,8 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
             graphRetired = true;
         }
         adjustment.reset();
+        stroke.reset();
+        rasterPreview.reset();
         manifest.reset();
         source = {};
         captured = {};
@@ -209,7 +259,12 @@ class CommittedDisplayController::DisplayJob final : public Job
                 root.stream.FinishProducerForWork(status);
                 root.producerFinished = true;
             });
-        status = root.adjustment
+        // Each raster publication describes ALL touched tiles from its original opening. Inheriting the old
+        // stroke grid would retain a previous pixel-move landing when it is absent from the new tile set.
+        status = root.stroke ? root.graph.PrepareStrokeForWork(root.device.get(), root.manifest->Plan().Source(),
+                                                               root.stroke.value(), root.rasterPreview->tiles,
+                                                               root.stream, context.cancellation, nullptr)
+                 : root.adjustment
                      ? root.graph.PrepareAdjustmentForWork(root.device.get(), root.manifest->Plan().Source(),
                                                            root.adjustment.value(), root.stream, context.cancellation,
                                                            root.seed)
@@ -290,11 +345,30 @@ class CommittedDisplayController::DisplayJob final : public Job
                         preview.coverage = *source.adjustmentCoverage;
                     }
                 }
+                if (descriptor.pending && descriptor.pending->rasterPreview)
+                {
+                    root->rasterPreview = *descriptor.pending->rasterPreview;
+                    const auto& metadata = *root->rasterPreview;
+                    root->stroke.emplace();
+                    auto& preview = root->stroke.value();
+                    preview.layerID = metadata.target;
+                    preview.mask = metadata.mask;
+                    preview.width = metadata.width;
+                    preview.height = metadata.height;
+                    preview.transform = metadata.transform;
+                    preview.source = metadata.source;
+                    preview.sourceX = metadata.sourceRect.x;
+                    preview.sourceY = metadata.sourceRect.y;
+                    preview.sourceWidth = metadata.source.HasStorage() ? metadata.sourceRect.width : 0;
+                    preview.sourceHeight = metadata.source.HasStorage() ? metadata.sourceRect.height : 0;
+                    preview.fill = metadata.fill;
+                }
                 root->device = descriptor.device;
                 root->immediate = descriptor.immediate;
                 root->software = descriptor.software;
                 _cell.root = root.release();
-                if (_owner._published && _owner._published->key.deviceGeneration == _cell.key.deviceGeneration)
+                if (!_cell.root->stroke && _owner._published &&
+                    _owner._published->key.deviceGeneration == _cell.key.deviceGeneration)
                 {
                     const auto& seed = *_owner._published->root;
                     _cell.root->seed = &seed.graph;

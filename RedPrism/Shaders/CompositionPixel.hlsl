@@ -228,9 +228,7 @@ float4 PremulOver(float4 src, float4 dst, uint mode)
     return float4(outRgb, outA);
 }
 
-// A texture coordinate with its screen derivatives. Coordinates are taken before any branch on the unit square, so
-// every pixel of a 2 x 2 quad supplies them and the mip level stays defined at a layer's or a mask's edge (implicit
-// derivatives inside such a branch are undefined).
+// A texture coordinate with the exact affine screen footprint; no lane derivatives at clipped boundaries.
 struct TexelCoordinate
 {
     float2 texel;
@@ -238,24 +236,39 @@ struct TexelCoordinate
     float2 dy;
 };
 
-TexelCoordinate Coordinate(float2 texel)
+TexelCoordinate Coordinate(float2 uv, float4 rect, float2 size, float2 sinCos, float2 flip)
 {
     TexelCoordinate coordinate;
-    coordinate.texel = texel;
-    coordinate.dx = ddx(texel);
-    coordinate.dy = ddy(texel);
+    coordinate.texel = (uv - rect.xy) * rect.zw;
+    // DocumentToUnit is affine. Its exact footprint is independent of neighboring lanes, including helpers
+    // outside a thin/clipped layer. FXC can sink ddx/ddy into the unit-square branches even when the source
+    // computes them before those branches; that selects incorrect mips in optimized builds.
+    float2 extent = max(size, float2(1e-5, 1e-5));
+    float2 scale = viewScale * flip * rect.zw / extent;
+    coordinate.dx = float2(sinCos.y, -sinCos.x) * scale;
+    coordinate.dy = float2(sinCos.x, sinCos.y) * scale;
     return coordinate;
 }
 
 // The raster's unit square onto the texels the texture holds (the whole raster, or a part of it, reduced).
 TexelCoordinate SourceCoordinate(float2 uv)
 {
-    return Coordinate((uv - sourceRect.xy) * sourceRect.zw);
+    return Coordinate(uv, sourceRect, layerSize, layerSinCos, layerFlip);
+}
+
+TexelCoordinate PlacedMaskCoordinate(float2 uv)
+{
+    return Coordinate(uv, maskRect, maskSize, maskSinCos, maskFlip);
 }
 
 TexelCoordinate MaskCoordinate(float2 uv)
 {
-    return Coordinate((uv - maskRect.xy) * maskRect.zw);
+    TexelCoordinate coordinate = Coordinate(uv, maskRect, layerSize, layerSinCos, layerFlip);
+    if ((flags & kCompositionFlagMaskPlaced) != 0)
+    {
+        coordinate = PlacedMaskCoordinate(uv);
+    }
+    return coordinate;
 }
 
 float4 SampleSource(TexelCoordinate coordinate)
@@ -489,7 +502,7 @@ float4 PixelMain(PixelInput input) : SV_TARGET
     if (passMode == kCompositionPassMaskCoverage)
     {
         float2 maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
-        TexelCoordinate mask = MaskCoordinate(maskUv);
+        TexelCoordinate mask = PlacedMaskCoordinate(maskUv);
         float coverage = 0.0;
         if (!OutsideUnit(maskUv))
         {

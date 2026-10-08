@@ -24,7 +24,10 @@
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.PendingDisplaySource.h"
+#include "Document.Tests.PreparedRasterPreview.h"
+#include "Document.Tests.PreviewMetadataAdmission.h"
 #include "Document.Tests.RecordLookup.h"
+#include "Document.Tests.SelectionDisplayValue.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
 #include "Document.Tests.StrokeFinishPlan.h"
@@ -8186,6 +8189,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunPendingDisplaySourceDescriptorTests();
+    gFailures += RunPreparedRasterPreviewTests();
+    gFailures += RunPreviewMetadataAdmissionTests();
+    gFailures += RunSelectionDisplayValueTests();
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();

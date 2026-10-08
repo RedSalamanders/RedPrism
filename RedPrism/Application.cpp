@@ -3250,10 +3250,10 @@ void Application::SyncChrome() noexcept
     selection.canModify = _session.CanModifySelection();
     selection.expandAmount = _selectionExpandAmount;
     selection.contractAmount = _selectionContractAmount;
-    // The outline follows a pixel move and the floating pixels of a selection transform.
-    const std::optional<DocumentSelection> current = _session.DisplayedSelection();
-    selection.hasSelection = current.has_value();
-    selection.isEmpty = current.has_value() && current->IsEmpty();
+    // The overlay shares the original pixel-move geometry; dragging changes only its scalar mapping.
+    const SelectionDisplayValue current = _session.DisplayedSelectionValue();
+    selection.hasSelection = current.selection.has_value();
+    selection.isEmpty = current.selection.has_value() && current.selection->IsEmpty();
     _chrome->SetSelectionInspector(selection);
     SyncSelectionOverlay(&current);
 
@@ -3479,55 +3479,62 @@ void Application::SyncTransformOverlay() noexcept
     _chrome->SetTransformOverlay(_overlayGeometry, _guideXs, _guideYs);
 }
 
-void Application::SyncSelectionOverlay(const std::optional<DocumentSelection>* shown) noexcept
+void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept
 {
     const bool hasDocument = _session.Document().has_value();
-    // A view change keeps the selection shown last (`shown` null): only the mapping moved.
-    const std::optional<DocumentSelection>& current = shown != nullptr ? *shown : _overlaySelection;
+    const auto& current = shown ? shown->selection : _overlaySelection;
+    const Vec2 translation = shown ? shown->translation : _overlaySelectionTranslation;
     const Vec2 documentSize = DocumentSize();
     const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
     const double scale = _viewport.ViewScale();
-    // The frame loop steps the ants only while a non-empty outline shows (RF-408): read here, never per loop pass.
     _marchingAnts = hasDocument && current.has_value() && !current->IsEmpty();
-    // The outline geometry is rebuilt only when the selection or the view mapping changes (the chrome converts the
-    // device pixels to DIPs, so a new display scale rebuilds it too).
+    // Source identity is held by the cache. View and pixel-move changes never compare or convert every point.
+    const bool geometryChanged =
+        shown && (current.has_value() != _overlaySelection.has_value() ||
+                  (current && current.value().loops.Identity() != _overlaySelection.value().loops.Identity()));
     if (!hasDocument)
     {
-        if (_overlaySelection.has_value())
+        if (_overlaySelection)
         {
             _overlaySelection.reset();
+            _overlaySelectionTranslation = {};
+            _overlaySelectionAnchor = {};
             _chrome->SetSelectionOutline({});
         }
     }
-    else if ((shown != nullptr && *shown != _overlaySelection) ||
-             (current.has_value() &&
-              (origin != _overlayOrigin || scale != _overlayScale || _viewport.backingScale != _overlayBacking)))
+    else if (geometryChanged)
     {
-        // (Without a selection a new view mapping draws nothing new: the outline stays empty.)
         std::vector<std::vector<D2D1_POINT_2F>> loops;
-        if (current.has_value())
+        _overlaySelectionAnchor = {};
+        if (current)
         {
-            loops.reserve(current->loops.size());
-            for (const SelectionLoop& loop : current->loops)
+            if (const auto bounds = current.value().Bounds())
+                _overlaySelectionAnchor = {bounds->minX, bounds->minY};
+            loops.reserve(current.value().loops.size());
+            for (const SelectionLoop& loop : current.value().loops)
             {
                 std::vector<D2D1_POINT_2F> converted;
                 converted.reserve(loop.size());
                 for (const Vec2& point : loop)
-                {
-                    converted.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
-                                                      static_cast<float>(origin.y + point.y * scale)));
-                }
+                    converted.push_back(D2D1::Point2F(static_cast<float>(point.x - _overlaySelectionAnchor.x),
+                                                      static_cast<float>(point.y - _overlaySelectionAnchor.y)));
                 loops.push_back(std::move(converted));
             }
         }
-        if (shown != nullptr)
-        {
-            _overlaySelection = *shown;
-        }
+        _overlaySelection = current;
+        _chrome->SetSelectionOutline(std::move(loops));
+    }
+    if (hasDocument && (geometryChanged || origin != _overlayOrigin || scale != _overlayScale ||
+                        _viewport.backingScale != _overlayBacking || translation != _overlaySelectionTranslation))
+    {
+        // Add the anchor in double before narrowing; large translated coordinates do not cancel in float.
+        const Vec2 mapped{origin.x + (_overlaySelectionAnchor.x + translation.x) * scale,
+                          origin.y + (_overlaySelectionAnchor.y + translation.y) * scale};
+        _chrome->SetSelectionMapping(mapped, scale, ChromeDpi());
         _overlayOrigin = origin;
         _overlayScale = scale;
         _overlayBacking = _viewport.backingScale;
-        _chrome->SetSelectionOutline(std::move(loops));
+        _overlaySelectionTranslation = translation;
     }
     std::optional<CanvasOverlay::Draft> draft;
     if (hasDocument && _session.PendingLasso().has_value())
@@ -7362,6 +7369,18 @@ void Application::EndStrokePreview(const std::optional<BrushCommitInfo>& commit)
 
 void Application::SyncStrokePreview() noexcept
 {
+    if (_pendingDisplayInitialized)
+    {
+        _pendingDisplay.RequestOwner(); // Also excludes a closed/zero-input opening from future frames.
+        if ((_session.PendingGradient() && _session.PendingGradient()->deferred) ||
+            (_session.PendingPixelMove() && _session.PendingPixelMove()->deferred))
+        {
+            // Completed immutable metadata is consumed by the admitted recorder. No owner tile walk,
+            // BeginStroke upload, TakeChanged or mutable CPU preview crosses this route.
+            _frameInvalidated = true;
+            return;
+        }
+    }
     // A pending gradient or lifted pixels show their raster; a new one (a new line, another layer or target) ends
     // the preview of the one before, adopting its texture only for its own commit, and begins afresh (RF-407).
     BrushStroke* raster = nullptr;

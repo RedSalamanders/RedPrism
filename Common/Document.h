@@ -838,6 +838,14 @@ struct DocumentSelection
     }
 };
 
+// Overlay readers share immutable geometry and carry a pixel-move offset as bounded scalar metadata.
+// The numeric DisplayedSelection reference still returns translated geometry.
+struct SelectionDisplayValue final
+{
+    std::optional<DocumentSelection> selection;
+    Vec2 translation{};
+};
+
 enum class LassoKind : std::uint8_t
 {
     Freehand,
@@ -1173,6 +1181,7 @@ class PreparedClipboardCommand;
 class ClipboardPasteInput;
 class PreparedClipboardPaste;
 struct GridRect;
+struct PreparedRasterPreview;
 class BrushCoverageEngine;
 class WarpStroke;
 
@@ -1188,6 +1197,7 @@ struct GradientEdit
         bool maskWhite;
         [[nodiscard]] bool operator==(const CapturedInputs&) const noexcept = default;
     };
+    std::shared_ptr<const PreparedRasterPreview> display;
     std::shared_ptr<BrushStroke> raster;
     Vec2 start;
     Vec2 end;
@@ -1229,6 +1239,7 @@ enum class FillSource : std::uint8_t
 // Selected pixels being dragged (C9b): the lifted raster plus the outline it started from.
 struct PixelMove
 {
+    std::shared_ptr<const PreparedRasterPreview> display;
     std::shared_ptr<BrushStroke> raster;
     DocumentSelection origin;
     bool duplicate = false;
@@ -2588,7 +2599,8 @@ class DocumentSession
     [[nodiscard]] bool BeginDeferredGradient(Vec2 point);
     [[nodiscard]] bool BeginDeferredGradient(Vec2 point, GradientEdit::CapturedInputs inputs);
     [[nodiscard]] bool PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
-                                              std::uint64_t opening, std::uint64_t sequence) noexcept;
+                                              std::uint64_t opening, std::uint64_t sequence,
+                                              std::shared_ptr<const PreparedRasterPreview> display = {}) noexcept;
     [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
                                               std::uint64_t sequence);
     [[nodiscard]] bool ApplyPreparedGradientIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
@@ -2679,7 +2691,8 @@ class DocumentSession
     // Metadata-only production opening. Its workers own all lifted pixels/coverage and prepared previews.
     [[nodiscard]] bool BeginDeferredPixelMove(bool duplicate = false);
     [[nodiscard]] bool PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,
-                                               std::uint64_t opening, std::uint64_t sequence) noexcept;
+                                               std::uint64_t opening, std::uint64_t sequence,
+                                               std::shared_ptr<const PreparedRasterPreview> display = {}) noexcept;
     [[nodiscard]] bool ApplyPixelMoveIfCurrent(ImageLayer&& prepared, DocumentSelection&& movedSelection,
                                                const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
     [[nodiscard]] bool ApplyPreparedPixelMoveIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
@@ -2700,6 +2713,7 @@ class DocumentSession
     // The outline to draw: during a pixel move the original shifted by the drag; while transforming selected
     // pixels it follows the handles (and a distortion).
     [[nodiscard]] std::optional<DocumentSelection> DisplayedSelection() const;
+    [[nodiscard]] SelectionDisplayValue DisplayedSelectionValue() const;
     // Add Mask with a selection: a mask on the layer's pixel grid hiding the selection (or, not revealing, showing
     // only it), dropping the selection and targeting the mask (`Add Mask from Selection`); without one,
     // `AddLayerMask`.

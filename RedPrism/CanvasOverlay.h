@@ -45,6 +45,25 @@ class CanvasOverlay final : public DxUi::Control
     bool SetGeometry(const std::optional<Geometry>& geometry) noexcept;
     bool SetGuides(const std::vector<float>& xs, const std::vector<float>& ys);
     void SetSelectionOutline(std::vector<OutlineLoop> loops);
+    bool SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept;
+    [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept
+    {
+        return D2D1::Matrix3x2F::Scale(_selectionScale, _selectionScale) *
+               D2D1::Matrix3x2F::Translation(_selectionOrigin.x, _selectionOrigin.y);
+    }
+    struct SelectionResourcesForTest
+    {
+        std::uint64_t pathsBuilt = 0;
+        bool hasPath = false;
+        bool fixedSolid = false;
+        bool fixedDashes = false;
+        std::array<float, 2> dashes{};
+    };
+    [[nodiscard]] SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
+    [[nodiscard]] const std::vector<OutlineLoop>& SelectionOutlineForTest() const noexcept
+    {
+        return _outline;
+    }
     // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
     // is made once and kept.
     void SetAntPhase(float phase) noexcept;
@@ -123,10 +142,15 @@ class CanvasOverlay final : public DxUi::Control
     std::optional<SampleRing> _sampleRing;
     std::optional<D2D1_POINT_2F> _cloneSource;
     // Device-independent Direct2D resources, rebuilt when the outline or the factory changes.
+    D2D1_POINT_2F _selectionOrigin{};
+    float _selectionScale = 1;
     mutable wil::com_ptr_nothrow<ID2D1Factory> _factory;
+    mutable wil::com_ptr_nothrow<ID2D1Factory1> _selectionFactory;
+    mutable wil::com_ptr_nothrow<ID2D1StrokeStyle1> _selectionStyle;
     mutable wil::com_ptr_nothrow<ID2D1PathGeometry> _outlineGeometry;
     // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
-    mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle>, 8> _antStyles;
+    mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle1>, 8> _antStyles;
+    mutable std::uint64_t _selectionPathsBuilt = 0;
     mutable bool _outlineDirty = false;
     float _antPhase = 0.0f;
 };
