@@ -189,6 +189,15 @@
       inputs, with 28 root assertions and 331 parser controls per x64 configuration
       ([qualified record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
+    - [x] Original history-residency startup/failure/shutdown prefix: normal `Application::Run` starts the source after
+      `InitializeDocument`/`ApplySettings` and before startup paths or ordinary input. The actual-Run fixture covers
+      normal notification and history-only growth/trim, failure after successful subscription, full subscription and
+      owner-route admission failures, startup rollback, joined shutdown, route detachment, repeated shutdown and quit
+      isolation (36 controls). The current pushed x64 full-suite Release548, Debug549 and real-ASan550 receipts use the
+      same 1,084-input source freeze and include all 120 Application stages; `Main` invokes this self-test
+      ([receipt](../../TestRuns/P1WarpLive_2026-10-09.md)). This qualifies the original prefix on x64 only; it does
+      not close native ARM64 runtime, remaining direct/reference materializers, incremental H3 accounting/cost,
+      measured G1 or P1.
     - [x] Managed immutable index and unique retirement slice passes full Debug r74, Release r75 and ASan Debug r76: 6,729 document / 9,298 application controls, unchanged 79 stages, 46 added document controls and nine owner-policy HostTests controls; the 1,041-copy Debug/Release and 1,048-copy ASan archives verify. Changed-entry membership, live exclusion, partial construction faults and retirement are covered. Worker container clones/sampling/bounds still scan unique owners; late-cache synchronization/reprepare, reference/delta cost, analysis/ARM64, native activation and G1 remain open ([evidence](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
     - [x] Cached immutable history-stack metadata/ownership/node bounds and constant-time edit/restore/retirement admission pass full Debug r71: 19 reviewed root-cache and 11 snapshot/history controls preserve the preceding registry. r69 compilation and r70 fixture failures remain archived. This conservative occurrence bound does not close exact identity accounting or late residency; current Release/analysis/ARM64 and native activation remain open.
     - [x] Shape-source trim omission repair passes full Debug r71: both direct/prepared paths charge history-only `shapeImage` and exclude the same live owner; four literal 1 MiB / half-MiB controls pass after the fixture performs a real rename. Original derived-cache equality and legacy goldens remain unchanged. Current matrix and native activation remain open.
@@ -207,9 +216,10 @@
     - [ ] Complete late sparse-materialization activation and synchronization. The managed nonmovable
       same-thread lease, epoch/notice, worker reprepare/permit, semantic mask thumbnail and several real callers
       are integrated and qualified in the r85–r88 core and later caller matrices. Full Debug r278 preserves these
-      controls on its 877-input source; remaining current-source profiles are due. `HistoryResidencySource::Start`
-      still has only explicit self-test callers, so normal startup does not subscribe for proactive history-only
-      maintenance. Enable normal startup with failure/teardown proof; cover remaining direct/reference writers.
+      controls on its 877-input source; current-source x64 Debug/Release/ASan qualification is recorded in
+      [P1WarpLive](../../TestRuns/P1WarpLive_2026-10-09.md). `HistoryResidencySource::Start` is wired into normal
+      `Application::Run`; the original startup/failure/shutdown prefix is qualified in the checklist entry above.
+      Remaining direct/reference writers and their caller-specific proofs stay open.
       Current ImageCodecs/ProjectStore encoders and Warp root copying use private read bands. Nested sparse tiles
       can still reach `Data()` through `BlitTile`; `TransformEdit::PixelsOf` is another direct materializer. A
       cached topology never authorizes stale resident totals. Keep the actual growth/refresh/trim gates and

@@ -106,6 +106,9 @@ struct DeferredSinkScope final
     DeferredSinkScope& operator=(const DeferredSinkScope&) = delete;
 };
 
+// DeferredReleaseNode deliberately requires 16-byte SLIST alignment, including trailing padding.
+#pragma warning(push)
+#pragma warning(disable : 4324)
 struct DeferredMemoryGraph final
 {
     DeferredReleaseNode node{};
@@ -125,6 +128,7 @@ struct DeferredMemoryGraph final
         graph.destroyed = true;
     }
 };
+#pragma warning(pop)
 static_assert(offsetof(DeferredMemoryGraph, node) == 0);
 
 void DestroyQueuedOnJoinedWorker(DeferredQueue& queue)

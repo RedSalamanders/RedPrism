@@ -589,6 +589,48 @@ costs until those shared-root/accounting slices qualify.
 
 ## Admission and cancellation requirements
 
+### Current boolean implementation review (2026-10-09)
+
+- [x] Obtain and independently verify the exact Clipper2 2.0.1 implementation against the pinned vcpkg
+  SHA-512 and all nine installed public headers. The official `Clipper2_2.0.1` archive hash matches the installed
+  SPDX package and baseline port; all thirteen implementation files match the archive byte for byte.
+- [x] Review allocation and failure paths in `clipper.engine.cpp`, `clipper.engine.h` and `clipper.h`.
+  This is source review, not an allocation ceiling or native cancellation/fault qualification.
+- [ ] Implement an enforceable boolean workspace ceiling and interruption points before ordinary Add/Subtract
+  activation. A geometric output estimate alone does not cover library working storage.
+- [ ] Preserve one original Wand ticket, FIFO ordinal, source/history authority and reservation across trace,
+  complete boolean admission, publication and retirement. Grow that same reservation only after the first
+  worker has returned and actual immutable outline counts are available; refusal publishes nothing.
+- [ ] Qualify both active-layer and detached all-layer sources, empty/no-match outcomes, captured AA/mode,
+  selected/clipped geometry, exact history and actual Cancel/stale/shutdown at each boundary.
+
+The verified source is the official
+[Clipper2 2.0.1 release](https://github.com/AngusJohnson/Clipper2/releases/tag/Clipper2_2.0.1), SHA-512
+`ce753ae3752b7516a9e0cb23c9788d9533c204819d5451ee50cf3b69a06e24165fa9f5270781764c036ad597eef83cf80532a5bebce5c96f5230179dc3ed499a`.
+The local source and main verification receipt are under `.build/P1Drafts/WandBoolean-r1/`; these are preparation
+artifacts, not a native feature receipt. Current production Add/Subtract still uses the direct reference route.
+
+Specific remaining constraints:
+
+1. `AddPaths_` allocates its vertex array before allocating local minima and before storing that array in
+   `vertexLists`. `NewOutRec` likewise allocates a raw record before growing its owner list. Any bounded
+   allocator/admission implementation must make these intermediate owners exception safe and inject refusal
+   at the second allocation; catching `bad_alloc` at the job boundary alone does not prove cleanup.
+2. Intersections, horizontal trial segments/joins, duplicated `OutPt` nodes and cleanup-created records all
+   contribute to the peak. Include private sort buffers, converted `PathsD`/scaled `Paths64`, final loop growth,
+   history construction and every retired source/result owner. Cached point counts are usable descriptors,
+   not a proof that every library allocation is linear in those counts.
+3. `ClipperD::Execute` reports success, but the free BooleanOp/Union/Difference/Intersect convenience wrappers
+   discard that result. A cancellable/budgeted adapter must consume the explicit execution status and reject
+   partial output; an interrupted operation must not be interpreted as a successful empty selection.
+4. No cancellation callback bounds the existing sorting/intersection/cleanup loops. Adding a token check before
+   or after the call does not establish the stop-to-return target. Any library change must preserve precision
+   two, NonZero fill, path ordering where observable, existing numerical goldens and the default reference API.
+5. Prefer scoped allocation enforcement to an invented linear estimate or a global allocator override. If a
+   pinned library patch is required, version and reproduce it through vcpkg, keep the original source/license,
+   and qualify cleanup and all existing geometry goldens in the affected native profiles. Do not silently
+   lower the eight-million tracing limit or publish a speculative ceiling as complete admission.
+
 Pinned Clipper2 2.0.1 review confirms that `BuildIntersectList` retains pair intersections in a vector, and the
 offset path performs a preliminary Union and a cleanup Union after round-point generation. `CalcSolutionCapacity`
 counts path slots, not vertex/workspace capacity. The eight-million-edge limit applies to wand/mask tracing;

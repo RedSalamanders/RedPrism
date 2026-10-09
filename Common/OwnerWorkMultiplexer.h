@@ -11,7 +11,7 @@
 class OwnerWorkMultiplexer final : public OwnerWorkPump
 {
   public:
-    static constexpr std::size_t kCapacity = 8;
+    static constexpr std::size_t kCapacity = 9;
 
     [[nodiscard]] bool Attach(OwnerWorkPump& source) noexcept
     {

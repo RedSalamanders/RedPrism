@@ -26,7 +26,9 @@
 #include "LayerRowsWork.h"
 #include "MaskEditWork.h"
 #include "OwnerWorkMultiplexer.h"
+#include "PathClassificationRead.h"
 #include "PathClassificationWork.h"
+#include "PathReadWait.h"
 #include "PointerInputStream.h"
 #include "PreviewMailbox.h"
 #include "ProjectStore.h"
@@ -136,6 +138,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsGroupSelectionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
@@ -1121,6 +1124,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     JobScheduler _jobs;
     OwnerWorkMultiplexer _ownerWork;
     RetryWaitQueue _retryWait;
+    PathReadWait _pathReadWait;
+    PathClassificationReadSource _pathReadSource; // Absent in production; test contexts survive Close.
     GpuWorkQueue _gpuWork;
     GpuCommandPump _recordedCommands;
     GpuResidencyBudget _graphGpuBudget;

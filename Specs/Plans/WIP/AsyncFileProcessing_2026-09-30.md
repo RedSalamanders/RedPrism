@@ -161,39 +161,51 @@ from structural band bounds. Preserve imported orientation and ICC policy and PN
 
 ### F6 shared native-read continuation — implementation sequence (2026-10-09)
 
-Preparation (2026-10-09): main has unqualified native-read/wait/original-parent drafts and independently reviewed staged path-transfer and native primitive tests. They remain outside compiled sources while the Warp checkpoint qualifies. Every read, including immediate completion and an issue skipped by cancellation, consumes its original registered callback before event reuse. Readiness cannot resume a still-running stage; owner delivery is armed only after the original worker joins. Cancellation requests a worker stage without faking `OVERLAPPED.hEvent`; actual `GetOverlappedResult` acknowledgement precedes reuse/free. A premature callback requires worker reset followed by a nonblocking recheck before owner rearm, preserving a completion that races that reset. Shutdown joins wait callbacks, detaches borrowed wrappers while retaining the IO event, runs final worker cancellation/acknowledgement, and closes the event only after scheduler Close returns.
+Implementation status (2026-10-09): The shared native-read checkpoint is qualified on freeze `1125320A...2FA421E` (1,093 inputs): focused Debug556/Host557/actual WARP App558, full x64 Release560/Debug561/real-ASan562, Release analysis559 and ARM64 r63 Debug/Release/ASan cross-builds. Main verifies exact archived copies/receipts, 44 primitive/26 transfer/144 host controls, 121 stages and all predecessors. Both ASan stress executions and the separately preserved actual probe pass. Preserved checker refusals change no native expectations. Skills15/format964/diff-check pass; native ARM64 runtime is unavailable. Identity exhaustion, complete phase peaks, writer/session-end and measured G1 remain open. [Evidence](../../TestRuns/P1NativePathRead_2026-10-09.md).
 
-Main has staged nine actual hidden-host fixtures on exactly one compute worker: three read cycles, premature event, pending cancel, replacement, late cancel, shutdown, cancellation after a premature event, shutdown after a premature event, and early readiness before issue-worker return. The added case holds the actual issue worker while the readiness callback runs before AwaitRead can arm; it proves there is no premature continuation, and still requires actual GetOverlappedResult acknowledgement. Three startup resource faults cover event creation, wait registration and route attachment; the 144-control registry remains uncompiled. The pending fixture supplies bytes only from an independent admitted job on the same one-worker pool. Main reviews the cheaper agent's primitive registry and adds real native-open/read-access refusals, yielding eight cases/44 controls, then repairs temporary-file cleanup on setup refusal. Main repairs five success-path setup assertions in the 26-control transfer registry and retains every expected case. The staged integration now resolves startup, cancellation, shutdown, registration, the private native-producer lifetime amendment and ninth owner-work route in memory; it has not edited compiled sources. The capacity test explicitly admits nine leaves and refuses the tenth. Main corrects the independent output checker's missing order check and primitive case-prefix mismatch, then verifies fourteen synthetic checker controls. None is native qualification. Integrate after the current Warp checkpoint's required profiles are qualified and committed, then compile and execute every required gate. Refuse unbudgeted fabricated path roots; production path factories already own a bounded reservation. The no-copy transfer API trusts caller provenance, so the parent must check its original ordinal/serial and restore only its own unchanged worker-owned vector. Console primitive drafts are not host/nonblocking proof. Large host-input retirement on admission/allocation refusal remains part of H1/G1.
+Every read, including immediate completion and cancellation before issue, consumes its original registered callback before event reuse. Readiness cannot resume a running issue worker; Await arms only after joined return. A stop request invokes actual worker CancelIoEx without faking hEvent. GetOverlappedResult acknowledges before reuse/free, with reset/recheck for premature readiness. Shutdown joins readiness callbacks, detaches borrowed wrappers while retaining the event, and closes it after final worker native acknowledgement and scheduler Close. The ninth route preserves fair rotation and explicit nine-source/tenth-refusal controls.
+
+The fixed native inventories are eight primitive cases/44 controls, 26 transfer controls and nine hidden-host scenarios plus three startup prefixes/144 controls. The early-ready case holds the actual issue worker until a readiness callback occurs before Await arms; only subsequent actual native acknowledgement can satisfy its controls. Other cases cover three read cycles, premature signal, cancel, replacement, late cancel, shutdown and premature-signal cancellation/shutdown. A separate job on the same one-worker pool supplies the pending read bytes. The independently reviewed output checker passes fourteen explicitly synthetic controls; those are checker tests only. All existing host classification and predecessor gates remain required. Unbudgeted fabricated path roots refuse before capture; the owner retains original receipt/input budget while its unchanged vector swaps into and back from the private worker payload. Large input refusal retirement, complete phase bounds, OS stop-to-return, writer durability/session-end faults and F5d/G1 remain open.
 
 
-- [ ] Create one stable Application-owned header-read event/source at processing startup. Register its wait
+- [x] Create one stable Application-owned header-read event/source at processing startup. Register its wait
   with JobScheduler outside callbacks; RegisterEventWait/RemoveEventWait are startup/teardown APIs and cannot
   be called from a job completion. The callback only publishes readiness and wakes the owner. Rearm the
   existing registration for the exact suspended original classification job; never create a new job per file.
-- [ ] Split worker attribute/open/issue from pending completion. A pending ReadFile yields its compute lane.
+- [x] Split worker attribute/open/issue from pending completion. A pending ReadFile yields its compute lane.
   Keep file, four-byte buffer, OVERLAPPED, path scratch and exact original ticket/ordinal alive. On readiness,
   resume the original stage and use GetOverlappedResult without waiting. Incomplete/old readiness yields back
   to the same event route. Synchronous attribute/open calls remain private worker calls with measured limits.
-- [ ] Preserve cancellation authority on skipped worker stages: the retirement worker requests CancelIoEx
+- [x] Preserve cancellation authority on skipped worker stages: the retirement worker requests CancelIoEx
   for the exact operation; a stop request never acknowledges it. Pending cancellation keeps the same event,
   inputs and reservation until actual native completion, then retires the whole private payload on a worker.
   Close joins event callbacks before workers. Its final worker cleanup must cancel/acknowledge any remaining
   native operation before releasing its file/event/buffer; report uninterruptible OS stop-to-return separately.
-- [ ] Remove the current owner path-vector copy before Submit. HostInputBudget caps aggregate input storage
+- [x] Remove the current owner path-vector copy before Submit. HostInputBudget caps aggregate input storage
   at 1 MiB. Admit complete cached path-storage/scratch/metadata bounds first, allocate the private payload on
   the original worker, then transfer the selected request's vector in constant time at the exact joined owner
   callback. Keep the host receipt/reservation on the owner; its owner-affine budget ticket must never be freed
   by the worker. Restore paths to that same selected request after successful classification so its existing
   ordered project/image continuation works. Failure/Close retains any transferred paths through worker release.
-- [ ] Add real pending-operation fixtures (an admitted test file source may supply a real overlapped pipe),
+- [x] Add real pending-operation fixtures (an admitted test file source may supply a real overlapped pipe),
   plus immediate file success/short header/API refusal, stop-before-issue, pending cancel, already-completed
   cancel, late signal, repeated rearm, replacement, original FIFO, hidden shutdown and joined Close. Require
   actual GetOverlappedResult acknowledgement; synthetic readiness is never completion proof. Keep existing
   .prism-extension/directory/ZIP-signature/empty-host-path ordering semantics and independent literal bytes.
+- [x] Qualify this 1,093-input source checkpoint in all full x64 profiles, Release analysis and all three ARM64 cross-builds. Actual results and independent inventories are recorded above; this does not close the remaining phase/stop-to-return/G1 requirements or the later exhaustion repair.
 - [ ] Qualify every current-source profile, exact native resource/retirement bounds and the F6 stop-to-return
   measurements before activation/closure. The existing blocking helper may remain a reference test surface;
   ordinary classification must use the shared continuation. Writer flush/close/rename/cleanup failures and
   F5d/G1 remain separate open gates, including the preserved unexplained exploded-save failures.
+- [ ] Close native-read identity exhaustion without losing a pending OS owner. Current `PrepareRead` increments
+  for a new issue and for rearm after premature readiness; at the final identity, the latter refuses and the
+  pending-read host branch terminates. A rearm must retain the same native operation identity and exact original
+  ticket, leaving the event unreset. Only a new operation consumes an identity and may refuse before issue.
+  Prove real last-identity premature readiness, actual incomplete/native acknowledgements, same-pool progress,
+  next-issue refusal, truthful original error/younger continuation and complete worker retirement. Also prove an
+  initially exhausted source and zero/foreign-ticket rearm refusal. The ignored native candidate and 20-control Host / 34-control actual Application proof
+  drafts under `.build/P1Drafts/PathReadExhaustion-r1` are preparation only; current F6 native inputs stay frozen
+  until the qualified checkpoint is committed/pushed. This finding remains open even if those profiles pass.
 
 ## Preparation and application
 

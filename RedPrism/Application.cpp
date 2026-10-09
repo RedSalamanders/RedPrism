@@ -192,8 +192,9 @@ HRESULT Application::InitializeProcessing() noexcept
     };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
-    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(
-        0, {JobNoticeThunk, this}, _processingTestProbe ? _processingTestProbe->memory : MemorySource{})));
+    RETURN_IF_FAILED(static_cast<HRESULT>(
+        _jobs.Initialize(_processingTestProbe ? _processingTestProbe->workerCount : 0, {JobNoticeThunk, this},
+                         _processingTestProbe ? _processingTestProbe->memory : MemorySource{})));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
@@ -219,6 +220,9 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_OUTOFMEMORY;
     }
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Recycling));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_pathReadWait.Initialize(
+        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->pathReadWait : PathReadWaitObserver{})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::NativeRead));
     return S_OK;
 }
 
@@ -3651,6 +3655,7 @@ void Application::Shutdown() noexcept
     {
         ShowWindow(_window.get(), SW_HIDE);
     }
+    _pathReadWait.StopNotifications();
     _retryWait.StopNotifications();
     _gpuWork.StopNotifications();
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
@@ -3662,6 +3667,8 @@ void Application::Shutdown() noexcept
              // Producer callbacks and their wrappers have joined; graphics ownership remains here.
              if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
                  probe->checkJoined(probe->checkContext);
+             // The native callback joined, but its event remains alive through final worker IO acknowledgement.
+             owner._pathReadWait.DetachJoinedOwner();
              // Detach engines without CancelBrush's synchronous CPU-graph destruction.
              owner._session.DetachCoverageForShutdown();
              owner._brushEngine.Release();
@@ -3743,6 +3750,8 @@ void Application::Shutdown() noexcept
              }
          },
          this});
+    _pathClassificationTicket.reset();
+    _pathReadWait.CloseAfterFinalWorkers();
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)

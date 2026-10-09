@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-09
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -119,7 +119,7 @@ event tickets. Handles and contexts remain borrowed until owner teardown removes
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
 `OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
-borrows at most eight distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
+borrows at most nine distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
 scheduler's one-source registration contract. Application registers this router once and attaches GPU and
@@ -217,8 +217,11 @@ in `ColorCommitContinuations_2026-09-30.md`.
 Budgeted host construction reserves declared retained storage before allocating the result publisher. An
 allocation failure returns the reservation and leaves the input owned by its caller. The ticket moves with the
 request across queued/active ownership and returns only after publication and input destruction. The budget is
-an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after
-construction. Borrowed path batches, write paths and layer names use the length/count preflight and copy
+an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after construction except the original joined-stage path transfer. A pending
+request may swap its admitted vector into an empty zero-capacity worker payload and restore that unchanged
+vector to its original request after successful classification. The owner validates ordinal/session identity;
+receipt and input-budget ticket remain owner-affine. Terminal or wrong-variant requests refuse transfer,
+and payload destruction never returns the request's separate input charge. Borrowed path batches, write paths and layer names use the length/count preflight and copy
 builders before any owned input copy. Terminated Win32 paths first use a bounded scan. The builders reserve the
 complete declared copy peak before construction and reconcile it to retained capacities before publishing a
 request; a partial input or result allocation failure releases storage and returns its reservation.
@@ -299,7 +302,7 @@ Shutdown drops pending completion callbacks and UI actions after producers have 
 callback defer teardown until the callback has returned.
 
 Processing startup acquires trace registration, scheduler, owner routing, GPU wait slots, retry wait slots,
-host continuation source, deferred-release binding and recycling in that order. `Main` calls Shutdown after
+host continuation source, deferred-release binding, recycling and the native header-read event in that order. `Main` calls Shutdown after
 an initialization failure as well as after success. Cleanup must stop/join acquired producers, detach borrowed
 routes and clear bindings before releasing their owners; a second Shutdown repeats no retirement hooks.
 Harness-only borrowed startup checkpoints run after each successful stage; retry initialization reuses the
@@ -312,10 +315,15 @@ payload destruction. Waiting admission uses records, never blocked workers; memo
 from an OS snapshot. An independent intrusive release queue can return memory even at the scheduler record cap.
 `Raster` and `PixelBuffer` own their release nodes. A thread-local sink binds only the application owner to the
 queue. Close joins producers while retaining the sink, then drops owner-affine job/action wrappers outside locks
-so their admitted CPU aggregates enqueue retirement. Borrowed `CloseHooks` may detach external owner resources
+so their admitted CPU aggregates enqueue retirement. An explicit native header read retains its file, buffer,
+OVERLAPPED and stable event while its compute/recorder callbacks join. Its final worker cancels and
+acknowledges that existing OS operation before freeing storage; a stop token or readiness callback is not
+completion. Ordinary stages use only nonblocking acknowledgement and yield the compute lane. No wall-clock
+bound is claimed for a driver that cannot complete cancellation. Borrowed `CloseHooks` may detach external owner resources
 after wrapper destruction while the sink remains installed. Close clears the binding before the final MTA hook,
-which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or
-reenter Close; their context outlives acknowledgement. Uninitialized or repeated Close runs neither hook.
+which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or reenter Close; their context outlives acknowledgement. After those
+hooks return, the final worker release drain may acknowledge an already-issued native read before
+destroying its OS-owned storage. No useful work or new native producer is allowed in that drain. Uninitialized or repeated Close runs neither hook.
 Application detaches session coverage engines, brush/composition resources and joined GPU/retry receivers on the
 owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Application's
 sampling raster, cached selection geometry and benchmark document/image roots also retire on that worker.
@@ -386,12 +394,20 @@ the same change.
 
 ## Document and chrome
 
-`ApplicationFileJobs.cpp` owns the nonmutating Open-batch classification job and its owner completion. The job
-owns its immutable paths and fixed result; it reads no session or UI state. `Common/PathClassificationWork.*`
-has a standard-only public interface and private Win32/WIL IO. Local and shutdown stop registrations signal
-an owned event; the worker alone cancels and acknowledges its overlapped header read before destroying the
-file, events, buffer or `OVERLAPPED`. The selected host request outlives acknowledgement and uses one cached
-result for project/image routing. This foundation does not yet move project/image/clipboard processing.
+`ApplicationFileJobs.cpp` owns the nonmutating Open-batch classification parent. One original admitted
+Io ticket, FIFO position, ordinal, session identity and complete memory charge span allocation, joined
+path transfer, every four-byte header read and worker payload retirement. Workers access only their private
+payload and fixed result. `Common/PathClassificationRead.*` owns private Win32/WIL IO behind a standard-only
+header; `PathReadWait` owns one startup event/registration on the shared WaitPool and ninth owner route.
+An issued cycle consumes its callback even on immediate completion, API refusal or cancellation before
+issue. Awaiting starts only after the original worker returns. A premature event resets and nonblocking
+rechecks the same operation before rearm, preserving a racing native completion. Cancellation requests
+exact CancelIoEx on the worker; it never signals hEvent to fake completion. GetOverlappedResult acknowledges
+the original operation before reuse/free. Shutdown disarms/joins wait callbacks, detaches borrowed owner
+wrappers while retaining the event, and closes it only after final worker native acknowledgement and
+scheduler Close. The legacy blocking `PathClassificationWork` helper remains a reference test surface.
+Successful classification restores the unchanged path allocation to the same selected owner request for
+ordered project/image routing; stale/failure/cancel paths publish no classification success.
 
 C4 owns `CanvasDocument` / `ImageLayer` / `DocumentHistory` as C++ value types with shared immutable `Raster`
 storage. `Application` owns `CanvasRenderer` (borrowed device). DxUi `EmbeddedHost` composites chrome into the same

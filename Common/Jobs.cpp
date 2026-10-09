@@ -1345,7 +1345,8 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
                             auto& stopped = state.scheduler;
                             stopped.CheckOwner();
                             (void)InterlockedFlushSList(&stopped.completions);
-                            // Every producer has actually joined. Grant only original terminal accounting,
+                            // Every compute/recorder callback joined. An explicit native read may remain
+                            // owned through final-worker acknowledgement. Grant only terminal accounting,
                             // outside the scheduler lock and before resetting cancelled wrappers. Success-only
                             // capture/publication hooks remain unset and no useful callback is invoked.
                             stopped.inCallback = true;

@@ -665,7 +665,12 @@ class HostRequest final
     }
     HostRequest(const HostRequest&) = delete;
     HostRequest& operator=(const HostRequest&) = delete;
-    HostRequest(HostRequest&&) noexcept = default;
+    HostRequest(HostRequest&& other) noexcept
+        : _reservation(std::move(other._reservation)), _selectedOutput(std::move(other._selectedOutput)),
+          _input(std::move(other._input)), _completion(std::move(other._completion)),
+          _pathsDetached(std::exchange(other._pathsDetached, false))
+    {
+    }
     HostRequest& operator=(HostRequest&& other) noexcept
     {
         if (this != &other)
@@ -676,6 +681,7 @@ class HostRequest final
             _selectedOutput = std::move(other._selectedOutput);
             _completion = std::move(other._completion);
             _reservation = std::move(other._reservation); // old input is gone before returning its charge
+            _pathsDetached = std::exchange(other._pathsDetached, false);
         }
         return *this;
     }
@@ -687,6 +693,46 @@ class HostRequest final
     [[nodiscard]] const HostRequestInput& Input() const noexcept
     {
         return _input;
+    }
+    [[nodiscard]] std::size_t ReservedInputBytes() const noexcept
+    {
+        return _reservation._bytes;
+    }
+    // Transfer the admitted path vector after the successful joined stage. The caller supplies an empty,
+    // zero-capacity owner slot so this request never frees a previous large allocation on the transfer path.
+    // The original receipt and reservation stay with this request; only the exact pending path payload can detach.
+    [[nodiscard]] bool TryTakePaths(std::vector<std::wstring>& emptyDestination) noexcept
+    {
+        if (!emptyDestination.empty() || emptyDestination.capacity() != 0 || _pathsDetached ||
+            Receipt().Read().outcome != ContinuationOutcome::Pending)
+        {
+            return false;
+        }
+        auto* const paths = std::get_if<HostPathsInput>(&_input);
+        if (!paths)
+        {
+            return false;
+        }
+        emptyDestination.swap(paths->paths);
+        _pathsDetached = true;
+        return true;
+    }
+    // Restore the detached owner only to this still-pending request and only into its empty zero-capacity slot.
+    // Swapping preserves vector and string allocations; an empty batch remains distinguishable via the flag.
+    [[nodiscard]] bool TryRestorePaths(std::vector<std::wstring>& source) noexcept
+    {
+        if (!_pathsDetached || Receipt().Read().outcome != ContinuationOutcome::Pending)
+        {
+            return false;
+        }
+        auto* const paths = std::get_if<HostPathsInput>(&_input);
+        if (!paths || !paths->paths.empty() || paths->paths.capacity() != 0)
+        {
+            return false;
+        }
+        paths->paths.swap(source);
+        _pathsDetached = false;
+        return true;
     }
     // Selection is an active-stage operation. On refusal or allocation failure preserve the old output; the
     // replacement's reservation must coexist with it. The returned view is borrowed only while this owner lives.
@@ -790,6 +836,7 @@ class HostRequest final
     {
     }
     ContinuationCompletion _completion;
+    bool _pathsDetached = false;
 };
 
 static_assert(sizeof(HostRequest) <= sizeof(HostRequestInput) + 256);

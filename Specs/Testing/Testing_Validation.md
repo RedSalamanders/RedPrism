@@ -1617,6 +1617,39 @@ quality-1 white-matte stripes straddling a band boundary (12/255 RGB tolerance a
 the shared source to remain unmaterialized, complete precancelled output clearing, preserved distinct previous
 destination bytes on cancelled/failed export, unrelated temp preservation and owned-temp cleanup.
 
+### Shared native classification continuation (P1.7 F6)
+
+The independent reference is the native-operation state machine, original host FIFO/session identity,
+the fixed input-budget ownership contract and literal four-byte ZIP/image headers. No timeout is a
+performance threshold. HostTests runs eight real filesystem/overlapped-pipe primitive cases with
+44 fixed ordered controls: directory and extension shortcuts, missing/unreadable/invalid paths,
+stop-before-prepare/issue, skipped-issue retirement, all three ZIP signatures, non-ZIP/short reuse,
+premature readiness, real pending cancellation, forced retirement without token cancellation,
+final native shutdown acknowledgement, refused open and actual ReadFile access refusal.
+
+Twenty-six path-input transfer controls require the same vector/string allocations, original ordered
+Unicode values/action/drop point, pending receipt and owner-affine reservation through joined transfer,
+restore, request moves, refusal and destruction. No native worker or host proof follows from these
+console ownership controls alone.
+
+The actual hidden WARP Application fixture uses exactly one compute worker and supplies pending-read
+bytes only from an independent admitted job on that same pool. Nine scenarios cover three acknowledged
+native read cycles, a premature event, pending cancel, replacement, late cancel after native acknowledgement,
+pending shutdown, cancellation after a premature event, shutdown after a premature event and an actual
+readiness callback while the issue worker is held before return. Await cannot resume that worker. Each has
+14 fixed controls for original ticket/ordinal/receipt/full charge, unchanged vector restoration, younger
+command ordering, literal inverted pixels/history or unchanged/stale state, MTA payload retirement,
+hidden zero-Present behavior and complete event/input/reservation shutdown. Three startup-resource faults
+(event creation, registration, route attachment) each have six reached-prefix/cleanup/idempotence controls.
+The exact total is 144. GetOverlappedResult, never readiness or stop alone, acknowledges pending IO.
+Normal cancellation yields the original record; only final worker shutdown may join its existing read.
+
+The ninth owner route has a literal capacity control: nine distinct sources attach and the tenth refuses.
+Existing fair one-leaf rotation and mutation/reentrancy refusals remain unchanged. Processing startup
+adds its native-read checkpoint after recycling, retaining all prior stage indices and prefix checks.
+All existing path-classification host scenarios remain required. Full Debug/Release/real ASan, analysis,
+ARM64 cross-build, complete memory/stop-to-return and G1 qualification remain separate release obligations.
+
 ### UI timing foundations (P0.1a)
 
 HostTests runs `ui-timing-histogram.*` and `ui-timing.*` numeric and state checks. Independent expectations cover bucket

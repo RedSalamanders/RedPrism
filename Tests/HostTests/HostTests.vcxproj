@@ -248,4 +248,12 @@
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <ClInclude Include="..\..\Common\PathClassificationRead.h" />
+    <ClCompile Include="..\..\Common\PathClassificationRead.cpp" />
+    <ClInclude Include="Host.Tests.PathClassificationRead.h" />
+    <ClCompile Include="Host.Tests.PathClassificationRead.cpp" />
+    <ClInclude Include="Host.Tests.PathInputTransfer.h" />
+    <ClCompile Include="Host.Tests.PathInputTransfer.cpp" />
+  </ItemGroup>
 </Project>

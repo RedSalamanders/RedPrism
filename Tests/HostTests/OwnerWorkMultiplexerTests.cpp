@@ -76,15 +76,15 @@ int RunOwnerWorkMultiplexerTests()
     Expect(!mux.HasPending() && !mux.HasReady(), "owner-work.empty-inactive");
     mux.Pump();
 
-    std::array<MockSource, 9> sources{};
-    for (std::size_t i = 0; i < 8; ++i)
+    std::array<MockSource, 10> sources{};
+    for (std::size_t i = 0; i < 9; ++i)
     {
         sources[i].index = static_cast<int>(i);
         Expect(mux.Attach(sources[i]), "owner-work.attach-within-capacity");
     }
     Expect(!mux.Attach(sources[0]), "owner-work.duplicate-rejected");
     Expect(!mux.Attach(mux), "owner-work.self-attach-rejected");
-    Expect(!mux.Attach(sources[8]), "owner-work.capacity-rejected");
+    Expect(!mux.Attach(sources[9]), "owner-work.capacity-rejected");
     MockSource foreign;
     Expect(!mux.Detach(foreign), "owner-work.foreign-detach-rejected");
 

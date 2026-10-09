@@ -183,12 +183,18 @@ class Job
   public:
     virtual ~Job() = default;
     // Only bad_alloc is translated by the runner, to a failed operation. Other unexpected exceptions retain
-    // the process crash policy. Kernels themselves do not catch. Run cannot leave any producer in flight.
+    // the process crash policy. Kernels themselves do not catch. Compute/recorder producers join before return.
+    // The explicit native-read continuation may retain a pending OS operation: its original admitted job
+    // holds file/buffer/OVERLAPPED/event and complete reservation through actual native acknowledgement.
+    // Readiness or a stop request never acknowledges that operation; no pending read blocks a compute lane.
     [[nodiscard]] virtual JobResult Run(JobContext& context) = 0;
     // Worker-only, after this stage's useful producers have joined and cancellation/bad_alloc has been
     // normalized, before publishing completion. Called for deferredRetirement only, even when cancellation
     // skipped Run entirely. This is bounded nonthrowing retirement of already-detached owned graphs; never
-    // useful work, owner callbacks, context commands, new producers or fence waiting. The original record,
+    // useful work, owner callbacks, context commands, new producers or fence waiting. Native-read retirement
+    // may request exact cancellation and nonblocking acknowledgement, yielding while still incomplete.
+    // Only final joined shutdown may wait for that existing operation before destroying its OS-owned buffer.
+    // The original record,
     // FIFO and complete reservation remain held. Owner resumes a retirement stage only after external users
     // acknowledge. Close instead retains the existing joined owner/final-worker cleanup protocol.
     virtual void RetireWorkerStage(JobContext&, JobResult) noexcept {}
@@ -204,7 +210,8 @@ class Job
     {
         return false;
     }
-    // Owner-only, before DeferCompletion/Completed, after all worker producers have returned. Called only for
+    // Owner-only, before DeferCompletion/Completed, after compute/recorder producers returned. A retained
+    // native read may still await its explicit OS acknowledgement. Called only for
     // options.deferredRetirement, including failed/cancelled stages. True retains the original suspended ticket,
     // FIFO and whole reservation until an external acknowledgement calls Resume. The hook must preserve a
     // terminal failure in its own state, acknowledge unrun mapped loans, and never restart cancelled useful work.

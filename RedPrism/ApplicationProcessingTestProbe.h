@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MemoryBudget.h"
+#include "PathReadWait.h"
 #include "RetryWaitQueue.h"
 
 #include <cstdint>
@@ -15,6 +16,7 @@ enum class ApplicationProcessingStage : std::uint8_t
     Continuations,
     DeferredRelease,
     Recycling,
+    NativeRead,
     Count,
 };
 
@@ -30,4 +32,6 @@ struct ApplicationProcessingTestProbe final
     // Actual Run startup checkpoint, after document/settings and real runtime notification subscription.
     // Absent in production. Its borrowed context survives Run and Shutdown; failure exercises acquired cleanup.
     std::int32_t (*afterRuntimeSources)(void*) noexcept = nullptr;
+    unsigned int workerCount = 0;      // Startup-only; zero preserves the production automatic count.
+    PathReadWaitObserver pathReadWait; // Reached-resource faults, alive through partial-startup Close.
 };

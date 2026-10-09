@@ -21,6 +21,8 @@
 #include "Host.Tests.CompletedPreviewMemory.h"
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
+#include "Host.Tests.PathClassificationRead.h"
+#include "Host.Tests.PathInputTransfer.h"
 #include "Host.Tests.PointerInputStreamPeek.h"
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
@@ -1843,6 +1845,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();
     gFailures += RunOwnerWorkMultiplexerTests();
+    gFailures += RunHostPathClassificationReadTests();
+    gFailures += RunPathInputTransferTests();
     gFailures += RunRetryWaitQueueTests();
     gFailures += RunRetryWaitCancellationTests();
     gFailures += RunJobUiPolicyTests();
