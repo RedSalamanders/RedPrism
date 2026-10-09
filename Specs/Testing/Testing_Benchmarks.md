@@ -1,7 +1,7 @@
 # Application and image benchmarks
 
 Status: current normative diagnostic contract
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-09
 Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Build/bench/`
 
 ## Immutable record primitive comparison
@@ -44,6 +44,20 @@ checks. Setup, scheduler admission and result drain are outside the interval. No
 to the ordinary correctness suite, and this diagnostic establishes neither UI responsiveness nor SIMD speed.
 
 ## UI application benchmark
+
+`ui-prepared|ui-prepared45|ui-prepared100|ui-prepared-smoke` selects the explicit experimental prepared
+display and row route on the corresponding fixture. These modes require exact current committed/pending
+publication keys and current rows after all owner pumps settle; an older visible-opening fallback cannot
+complete a sample. The row reports `UI BENCH ROUTE display=prepared rows=prepared asyncStroke=0 asyncWarp=0
+ordinaryActivation=0`. The direct diagnostic reports its direct route with the same two tools disabled.
+Normal editor activation is a separate milestone. These 27 cases do not cover every P1 operation or establish G1.
+
+The prepared sampler must release its transient ticket/barrier/utility ownership and return to its settled
+prepared-cache memory charge captured before the operation. The direct route still requires zero reserved
+memory. This is an exact unchanged-cache check, not a larger leak allowance. The full smoke gate executes
+both direct and prepared rosters; all pixel/history/readback/receipt and presentation expectations remain
+required. Timings from either 64×48 smoke route are correctness diagnostics only.
+
 
 `RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is an opt-in measurement of application commands through the real
 window, message, job-completion and frame loop. It uses the selected D3D device, runs quietly without prompts, and
@@ -160,8 +174,23 @@ GPU-completion instrumentation belongs to the asynchronous GPU phase before usin
 
 Warmup is excluded. `elapsedMedianUs`, `elapsedP95Us`, and `elapsedMaxUs` summarize the per-operation outer
 intervals. Histogram `*P99UpperUs` values are the upper bound of the bucket containing the nearest-rank p99;
-`*MaxUs` values are the exact largest observed duration. Smoke uses the same behavior and output shape with two
-recorded runs, but makes no timing assertion. Smoke verifies median ≤ p95 ≤ maximum and at least two total
+`*MaxUs` values are the exact largest observed duration. Recorded operation rows and the sampler's two excluded
+boundary rows also expose `actionP99UpperUs` from their existing `UiAction` histograms. The completion report
+retains its existing shape; no separate aggregate histogram is maintained.
+
+`invalidationToPresentSamples`, `invalidationToPresentP99UpperUs` and `invalidationToPresentMaxUs` describe
+capture-local first invalidation through the next actual non-occluded Present. Repeated invalidations preserve
+the first timestamp. This includes owner scheduling, wait for presentation pacing and the frame; `frame*` still
+reports frame duration separately. The hooks are passive: disabled captures read no clock, own no timer/event,
+and alter no scheduling. Only a real Present-count increment closes the interval. Failed or occluded presentation
+abandons it without recording a fake zero, exposed in `abandonedFrameIntervals`; invalid clocks increment
+`clockFailures`. Existing settled trial resets exclude setup/warmup and their pending interval. Nested captures
+have independent interval state. These observations do not assert display scan-out timing, Escape acceptance,
+OS stop-to-return, ordinary prepared-route activation or G1.
+
+Smoke uses the same behavior and output shape with two recorded runs, but makes no timing assertion. It requires
+these fields, at least two completed invalidation intervals per recorded operation, valid percentile bucket
+boundaries (which may exceed the exact maximum in the same finite bucket), and zero clock/abandonment diagnostics. Smoke verifies median ≤ p95 ≤ maximum and at least two total
 presentations across its two recorded trials. Zero durations are legal after clock quantization. No benchmark
 timing threshold is part of the ordinary test suite.
 

@@ -237,6 +237,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 $global:LASTEXITCODE = 0
 
+Write-Host 'Running prepared display benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute prepared
+if ($LASTEXITCODE -ne 0) {
+    throw "Prepared display benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
 Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
     -ExecutablePath $executable -OutputDirectory $outputRoot

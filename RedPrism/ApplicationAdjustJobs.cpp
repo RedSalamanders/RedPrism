@@ -425,7 +425,7 @@ class Application::ColorHistogramJob final : public Job
                 if (_owner._session.ApplyColorEditHistogram(result))
                 {
                     _owner.SyncChrome();
-                    _owner._frameInvalidated = true;
+                    _owner.InvalidateFrame();
                 }
                 else if (result.status == ColorEditJobStatus::Failed)
                     error = E_FAIL;

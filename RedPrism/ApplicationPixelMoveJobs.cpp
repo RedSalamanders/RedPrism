@@ -359,7 +359,7 @@ class Application::PixelMoveJob final : public Job
             (void)_owner._pixelMovePreviews.Finish(_preview.value(), produced);
             _owner.SyncStrokePreview();
             _owner.SyncChrome(); // observes a new opening/tick and launches the latest pending request
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         if (_owner._pixelMoveMailboxOpen && _owner._pixelMovePreviews.HasPending())
             (void)_owner._jobs.RequestUiActionSource(_owner._continuationAction);

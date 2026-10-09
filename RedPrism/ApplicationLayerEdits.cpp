@@ -30,7 +30,7 @@ void Application::RenameActiveLayer() noexcept
     // The card renames the layer it opened for, whichever layer is active when it commits.
     _renameLayer = active->id;
     _chrome->OpenRenameCard(active->name);
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnLayerInvoked(Guid id) noexcept

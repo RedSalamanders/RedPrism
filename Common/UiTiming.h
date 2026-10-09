@@ -24,10 +24,27 @@ enum class UiTimingKind : std::uint8_t
     Count
 };
 
+// Passive interval state. Clock values are supplied by the caller; tests use independent synthetic
+// timestamps. Repeated invalidations preserve the first accepted timestamp until presentation or abandonment.
+class UiFrameLatency final
+{
+  public:
+    [[nodiscard]] bool Begin(std::int64_t ticks) noexcept;
+    [[nodiscard]] bool Pending() const noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> Complete(std::int64_t end, std::int64_t frequency) noexcept;
+    void Reset() noexcept;
+
+  private:
+    std::int64_t _begin = -1;
+};
+
 struct UiTimingStats final
 {
     std::array<UiTimingHistogram, static_cast<std::size_t>(UiTimingKind::Count)> durations;
     std::uint64_t clockFailures = 0;
+    UiTimingHistogram frameLatency;
+    UiFrameLatency frameLatencyInterval;
+    std::uint64_t abandonedFrameIntervals = 0;
 };
 
 // QPC durations round up to microseconds (zero ticks stays zero). Invalid clocks are refused; durations beyond
@@ -68,3 +85,9 @@ class ScopedUiTiming final
     bool _active = false;
     bool _trace = false;
 };
+
+// Capture-only owner hooks. Disabled calls read no clock, allocate nothing and own no timer/event.
+// Presentation is reported only after a real non-occluded Present increment; failures abandon an interval.
+void NoteUiFrameInvalidation() noexcept;
+void NoteUiFramePresentation() noexcept;
+void AbandonUiFrameLatency() noexcept;

@@ -249,6 +249,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     // The frame loop (Rendering_Composition.md "Failures"): one frame with device-loss recovery, the canvas failure
     // notice, the stop that asks to close through the save prompt, surfaces dropped while unseen, the exit code.
     void RenderFrame() noexcept;
+    void InvalidateFrame() noexcept;
     void ReportCanvasFailure(HRESULT failure) noexcept;
     void OnFrameLoopFailure(HRESULT failure) noexcept;
     void ReleaseSurfacesWhileUnseen() noexcept;

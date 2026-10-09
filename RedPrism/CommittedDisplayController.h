@@ -155,6 +155,9 @@ class CommittedDisplayController final : public OwnerWorkPump
                                           bool ownsCommandPump = true) noexcept;
     // Bounded current-opening validation immediately before a frame; no fallback derivation or GPU work.
     [[nodiscard]] RecordedDisplayGraph* GraphForFrameOwner() const noexcept;
+    // Exact full descriptor key, unlike the allowed previous-frame fallback from the same visible opening.
+    // Passive owner observation only; no join, publication or borrowed-resource authority is established.
+    [[nodiscard]] bool HasCurrentPublicationOwner() const noexcept;
     // Visibility transition only. Suspension excludes pixels immediately, cancels useful preparation and
     // retires existing roots through their original acknowledgements. Repeated suspension does not rearm.
     // Resume requests the current immutable document; no hidden replacement or synchronous fallback.

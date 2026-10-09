@@ -141,3 +141,72 @@ ScopedUiTiming::~ScopedUiTiming()
         TracePipelineUi(_kind, duration.value(), _detail);
     }
 }
+
+bool UiFrameLatency::Begin(std::int64_t ticks) noexcept
+{
+    if (ticks < 0)
+        return false;
+    if (!Pending())
+        _begin = ticks;
+    return true;
+}
+
+bool UiFrameLatency::Pending() const noexcept
+{
+    return _begin >= 0;
+}
+
+std::optional<std::uint64_t> UiFrameLatency::Complete(std::int64_t end, std::int64_t frequency) noexcept
+{
+    if (!Pending())
+        return std::nullopt;
+    const auto begin = _begin;
+    Reset();
+    return UiDurationMicroseconds(begin, end, frequency);
+}
+
+void UiFrameLatency::Reset() noexcept
+{
+    _begin = -1;
+}
+
+void NoteUiFrameInvalidation() noexcept
+{
+    auto* stats = g_uiTimingStats;
+    if (!stats || stats->frameLatencyInterval.Pending())
+        return;
+    LARGE_INTEGER begin{};
+    if (!QueryPerformanceCounter(&begin) || Frequency() <= 0 || !stats->frameLatencyInterval.Begin(begin.QuadPart))
+        ClockFailed(stats);
+}
+
+void NoteUiFramePresentation() noexcept
+{
+    auto* stats = g_uiTimingStats;
+    if (!stats || !stats->frameLatencyInterval.Pending())
+        return;
+    LARGE_INTEGER end{};
+    if (!QueryPerformanceCounter(&end))
+    {
+        stats->frameLatencyInterval.Reset();
+        ClockFailed(stats);
+        return;
+    }
+    const auto duration = stats->frameLatencyInterval.Complete(end.QuadPart, Frequency());
+    if (!duration)
+    {
+        ClockFailed(stats);
+        return;
+    }
+    stats->frameLatency.Record(*duration);
+}
+
+void AbandonUiFrameLatency() noexcept
+{
+    auto* stats = g_uiTimingStats;
+    if (!stats || !stats->frameLatencyInterval.Pending())
+        return;
+    stats->frameLatencyInterval.Reset();
+    if (stats->abandonedFrameIntervals < (std::numeric_limits<std::uint64_t>::max)())
+        ++stats->abandonedFrameIntervals;
+}

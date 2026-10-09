@@ -63,13 +63,13 @@ void Application::CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) no
 {
     _acknowledgedCommittedDisplay = graph;
     _committedDisplayFailure = S_OK;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CommittedDisplayFailedOwner(CommittedDisplayKey, HRESULT failure) noexcept
 {
     _committedDisplayFailure = failure;
-    _frameInvalidated = true; // Existing canvas-error notice runs outside scheduler/owner-pump callbacks.
+    InvalidateFrame(); // Existing canvas-error notice runs outside scheduler/owner-pump callbacks.
 }
 
 bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept
@@ -113,12 +113,12 @@ void Application::PendingDisplayClient::CommittedDisplayPublishedOwner(RecordedD
 {
     _owner._pendingDisplayFailure = S_OK;
     _owner._pendingDisplayFailureKey.reset();
-    _owner._frameInvalidated = true;
+    _owner.InvalidateFrame();
 }
 
 void Application::PendingDisplayClient::CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept
 {
     _owner._pendingDisplayFailure = failure;
     _owner._pendingDisplayFailureKey = key;
-    _owner._frameInvalidated = true;
+    _owner.InvalidateFrame();
 }

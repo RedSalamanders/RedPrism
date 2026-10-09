@@ -305,7 +305,7 @@ class Application::RasterEditJob final : public Job
         else
         {
             _owner.SyncChrome();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         (void)_owner._historyWork.Finish(_stamp);
         _owner.ResumeHostHistory(_stamp, outcome, error);

@@ -223,14 +223,17 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         auto next = std::make_unique<UiBenchmarkState>();
         const bool samplerOnly =
             mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
-        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke";
-        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100";
-        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45";
+        const bool preparedDisplay = mode == L"ui-prepared" || mode == L"ui-prepared45" || mode == L"ui-prepared100" ||
+                                     mode == L"ui-prepared-smoke";
+        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke";
+        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100";
+        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45";
         const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
         const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
         next->samplerOnly = samplerOnly;
+        next->preparedDisplay = preparedDisplay;
         next->operation = samplerOnly ? kOperations.size() - 1 : 0;
         const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
         auto& temporary = *temporaryStorage;
@@ -329,14 +332,14 @@ struct Distribution final
     std::uint64_t maximumUs = 0;
 };
 
-Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcept
+template <typename Select> Distribution SummarizeSelected(const UiBenchmarkState& state, Select select) noexcept
 {
     std::array<std::uint64_t, UiTimingHistogram::kBucketCount> buckets{};
     std::uint64_t count = 0;
     Distribution result;
     for (unsigned int run = 0; run < state.runs; ++run)
     {
-        const auto& histogram = state.samples[run].timing.durations[static_cast<std::size_t>(kind)];
+        const auto& histogram = select(state.samples[run].timing);
         count += histogram.SampleCount();
         result.maximumUs = (std::max)(result.maximumUs, histogram.MaximumMicroseconds());
         for (std::size_t bucket = 0; bucket < buckets.size(); ++bucket)
@@ -362,6 +365,12 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
         }
     }
     return result;
+}
+
+Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind)
+{
+    return SummarizeSelected(state, [kind](const UiTimingStats& stats) -> const UiTimingHistogram&
+                             { return stats.durations[static_cast<std::size_t>(kind)]; });
 }
 
 constexpr std::array<std::pair<UiTimingKind, const char*>, 6> kResourceStages{{
@@ -405,11 +414,15 @@ void Report(const UiBenchmarkState& state)
         return;
     }
     std::uint64_t frames = 0;
+    std::uint64_t clockFailures = 0;
+    std::uint64_t abandonedFrames = 0;
     GpuReadbackStatistics readback;
     for (std::size_t run = 0; run < runs; ++run)
     {
         elapsed[run] = state.samples[run].elapsedUs;
         frames += state.samples[run].frames;
+        clockFailures += state.samples[run].timing.clockFailures;
+        abandonedFrames += state.samples[run].timing.abandonedFrameIntervals;
         readback.copies += state.samples[run].readback.copies;
         readback.maps += state.samples[run].readback.maps;
         readback.readinessBarriers += state.samples[run].readback.readinessBarriers;
@@ -422,21 +435,27 @@ void Report(const UiBenchmarkState& state)
     const auto apply = Summarize(state, UiTimingKind::ResultApply);
     const auto action = Summarize(state, UiTimingKind::UiAction);
     const auto frame = Summarize(state, UiTimingKind::Frame);
+    const auto frameLatency = SummarizeSelected(state, [](const UiTimingStats& stats) -> const UiTimingHistogram&
+                                                { return stats.frameLatency; });
     const double median =
         static_cast<double>(elapsed.at((runs - 1) / 2)) * 0.5 + static_cast<double>(elapsed.at(runs / 2)) * 0.5;
-    std::printf("%s\n",
-                std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
-                            "elapsedP95Us={} elapsedMaxUs={} "
-                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                            "drainP99UpperUs={} drainMaxUs={} "
-                            "applyMaxUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
-                            "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
-                            CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
-                            elapsed.at((runs * 95 + 99) / 100 - 1), elapsed.at(runs - 1), dispatch.p99UpperUs,
-                            dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs,
-                            drain.maximumUs, apply.maximumUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs,
-                            frames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
-                    .c_str());
+    std::printf(
+        "%s\n",
+        std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
+                    "elapsedP95Us={} elapsedMaxUs={} "
+                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                    "drainP99UpperUs={} drainMaxUs={} "
+                    "applyMaxUs={} actionP99UpperUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
+                    "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                    "invalidationToPresentMaxUs={} clockFailures={} abandonedFrameIntervals={} "
+                    "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
+                    CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
+                    elapsed.at((runs * 95 + 99) / 100 - 1), elapsed.at(runs - 1), dispatch.p99UpperUs,
+                    dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs, drain.maximumUs,
+                    apply.maximumUs, action.p99UpperUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs, frames,
+                    frameLatency.samples, frameLatency.p99UpperUs, frameLatency.maximumUs, clockFailures,
+                    abandonedFrames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
+            .c_str());
     std::fflush(stdout);
     ReportResourceStages(state, "recorded", true);
 }
@@ -455,13 +474,18 @@ void ReportSamplerBoundary(const UiBenchmarkState& state, const char* boundary)
     std::printf("%s\n",
                 std::format("UI BENCH BOUNDARY name=sampler-accepted-prefix boundary={} width={} height={} "
                             "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                            "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionMaxUs={} "
-                            "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={}",
+                            "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionP99UpperUs={} actionMaxUs={} "
+                            "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={} "
+                            "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                            "invalidationToPresentMaxUs={} abandonedFrameIntervals={}",
                             boundary, state.fixture.width, state.fixture.height, dispatch.PercentileUpperBound(99),
                             dispatch.MaximumMicroseconds(), message.PercentileUpperBound(99),
                             message.MaximumMicroseconds(), drain.PercentileUpperBound(99), drain.MaximumMicroseconds(),
-                            apply.MaximumMicroseconds(), action.MaximumMicroseconds(), frame.PercentileUpperBound(99),
-                            frame.MaximumMicroseconds(), frame.SampleCount(), timing.clockFailures)
+                            apply.MaximumMicroseconds(), action.PercentileUpperBound(99), action.MaximumMicroseconds(),
+                            frame.PercentileUpperBound(99), frame.MaximumMicroseconds(), frame.SampleCount(),
+                            timing.clockFailures, timing.frameLatency.SampleCount(),
+                            timing.frameLatency.PercentileUpperBound(99), timing.frameLatency.MaximumMicroseconds(),
+                            timing.abandonedFrameIntervals)
                     .c_str());
     std::fflush(stdout);
     ReportResourceStages(state, boundary, false);
@@ -524,6 +548,10 @@ HRESULT Application::InitializeUiBenchmark() noexcept
     {
         auto& state = *_uiBenchmark;
         auto& machine = state.machine;
+        // Explicit experiment only: qualify the actual prepared controller/row caller chain before normal
+        // activation. Refusal is an operation failure; no fallback silently measures the legacy display.
+        if (state.preparedDisplay && (!EnablePreparedLayerRows() || !EnableCommittedDisplayForTest(false)))
+            return E_FAIL;
         machine.applicationVersion = Utf8(RedPrism::FormatRunningModuleVersion(L"unknown"));
         machine.isa = Utf8(KernelIsaName(ActiveKernels().isa));
         machine.workerCount = _jobs.WorkerCount();
@@ -546,6 +574,10 @@ HRESULT Application::InitializeUiBenchmark() noexcept
         }
         std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n", FormatBenchmarkMachineInfo(machine).c_str(),
                     _renderer.IsWarp() ? "WARP" : "hardware", static_cast<unsigned long long>(state.fixtureChecksum));
+        std::printf("UI BENCH ROUTE display=%s rows=%s asyncStroke=%d asyncWarp=%d ordinaryActivation=0\n",
+                    _committedDisplayInitialized ? "prepared" : "direct",
+                    _preparedLayerRowsEnabled ? "prepared" : "direct", _asyncStrokeSamplesEnabled,
+                    _asyncWarpLiveEnabled);
         // A single failure deadline for an opt-in harness, never a normal application polling timer.
         if (SetTimer(_window.get(), kUiBenchmarkTimerId, state.smoke ? 90000 : 1800000, nullptr) == 0)
         {
@@ -815,7 +847,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         OnAdjustAction(operation.action, operation.value);
     }
     _uiBenchmark->phase = UiBenchmarkState::Phase::AwaitingFrame;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::AdvanceUiBenchmark() noexcept
@@ -840,6 +872,38 @@ void Application::AdvanceUiBenchmark() noexcept
     if (!_jobs.IsIdle() || _frameInvalidated || _renderer.PresentCount() <= state.previousPresents)
     {
         return;
+    }
+    if (state.preparedDisplay)
+    {
+        if (!_committedDisplayInitialized || !_pendingDisplayInitialized || !_preparedLayerRowsEnabled ||
+            FAILED(_committedDisplayFailure) || _layerRowsRetryAvailable)
+        {
+            FailUiBenchmark("prepared-display-or-row-route-failed");
+            return;
+        }
+        // Joining the generic scheduler alone does not establish current display/row publication authority.
+        // Keep all real owner pumps pending, then require the controller's descriptor-checked frame root.
+        if (_committedDisplay.HasPending() || _committedDisplay.HasReady() || _pendingDisplay.HasPending() ||
+            _pendingDisplay.HasReady() || _recordedCommands.HasPending() || _recordedCommands.HasReady() ||
+            _layerRowsTicket || _layerRowsSource.HasPending() || _layerRowsSource.HasReady())
+            return;
+        if (_session.Document() && !_committedDisplay.HasCurrentPublicationOwner())
+        {
+            FailUiBenchmark("prepared-committed-root-not-current");
+            return;
+        }
+        CommittedDisplayDescriptor pending;
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(pending) &&
+            !_pendingDisplay.HasCurrentPublicationOwner())
+        {
+            FailUiBenchmark("prepared-pending-root-not-current");
+            return;
+        }
+        if (!_layerRowsPublishedKey || _layerRowsPublishedKey.value() != CurrentLayerRowsKey())
+        {
+            FailUiBenchmark("prepared-rows-not-current");
+            return;
+        }
     }
     if (state.phase == UiBenchmarkState::Phase::Preparing)
     {
@@ -891,6 +955,7 @@ void Application::AdvanceUiBenchmark() noexcept
             }
         }
         state.previousReadback = _gpuWork.Statistics();
+        state.previousReservedMemoryBytes = _jobs.ReservedMemoryBytes();
         const auto* layer = _session.ActiveLayer();
         if (!layer || !layer->asset.has_value())
         {
@@ -1045,8 +1110,9 @@ void Application::AdvanceUiBenchmark() noexcept
         _session.history.IsModified() == state.previousModified && layer && layer->asset &&
         layer->asset->image == state.previousImage && !edit && !std::holds_alternative<ColorSampling>(_drag) &&
         !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
-        !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0 &&
-        samplerReadback.copies - state.previousReadback.copies == 3 &&
+        !_historyWork.Busy() &&
+        _jobs.ReservedMemoryBytes() == (state.preparedDisplay ? state.previousReservedMemoryBytes : 0) &&
+        _composition.UtilitySurfaceBytes() == 0 && samplerReadback.copies - state.previousReadback.copies == 3 &&
         samplerReadback.busyFailures == state.previousReadback.busyFailures;
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
         !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||

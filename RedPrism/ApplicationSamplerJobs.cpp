@@ -366,5 +366,5 @@ void Application::PublishSamplerPoint(std::uint64_t openingId, const SamplerInte
         }
     }
     _layoutDirty = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }

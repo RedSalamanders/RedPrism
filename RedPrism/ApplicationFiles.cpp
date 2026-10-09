@@ -326,7 +326,7 @@ bool Application::SettleForWrite() noexcept
     else
     {
         SyncChrome();
-        _frameInvalidated = true; // cleared guides/chrome do not require recomposing settled pixels
+        InvalidateFrame(); // cleared guides/chrome do not require recomposing settled pixels
     }
     return !_session.HasColorEdit();
 }
@@ -972,7 +972,7 @@ void Application::EndPointerInteractions() noexcept
         DxUi::PointerEvent leave{};
         leave.action = DxUi::PointerAction::Leave;
         (void)_chrome->DispatchPointer(leave);
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (_window && GetCapture() == _window.get())
     {

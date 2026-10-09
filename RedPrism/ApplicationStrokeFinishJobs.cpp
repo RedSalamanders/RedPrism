@@ -1026,7 +1026,7 @@ class Application::StrokeFinishJob final : public Job,
         // A recorder can still use the immutable preview seed. Exclude later frames now; detach that graph
         // only after its actual recorder acknowledgement, through normal original-stream retirement.
         _owner._acknowledgedStrokePreview = nullptr;
-        _owner._frameInvalidated = true;
+        _owner.InvalidateFrame();
         auto* live = _owner._session.MutableBrush();
         if (live && _liveRetirement)
         {
@@ -1419,7 +1419,7 @@ class Application::StrokeFinishJob final : public Job,
                 _gate->previewsReplaced.fetch_add(1);
         }
         _owner._acknowledgedStrokePreview = _payload->previewCurrent.get();
-        _owner._frameInvalidated = true;
+        _owner.InvalidateFrame();
         _owner.SyncBrushCursor();
         if (_payload->previewPrevious && !_payload->previewPrevious->DetachOwner())
             std::terminate();
@@ -1621,7 +1621,7 @@ class Application::StrokeFinishJob final : public Job,
         if (_owner._acknowledgedStrokePreview == _payload->previewCurrent.get())
         {
             _owner._acknowledgedStrokePreview = nullptr;
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         for (auto* graph : {_payload->previewCurrent.get(), _payload->previewCandidate.get()})
             if (graph && !graph->DetachOwner())

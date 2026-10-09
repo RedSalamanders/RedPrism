@@ -282,7 +282,7 @@ class Application::HistoryResidencyJob final : public Job
             // Only history membership changed. Preserve document/generation/user revision/saved marker and
             // settled canvas composition. Refresh the existing history chrome; never synthesize a user edit.
             _owner.SyncChrome();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         _owner.ResumeHostHistory(_stamp, outcome, error);
         _owner._historyResidencySource.RetryDeferred();

@@ -179,7 +179,7 @@ bool Application::CancelCanvasBrush(bool physicalOnly) noexcept
         // Withdraw future preview frames immediately. The original parent retains the graph/resources;
         // producer, command and last-frame acknowledgements still precede detachment and retirement.
         _acknowledgedStrokePreview = nullptr;
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushCancelledOpening);
     if (captured && _utilityTicket)
@@ -385,7 +385,7 @@ void Application::ReplayCanvasBrush() noexcept
             }
         }
         SyncToolOverlays();
-        _frameInvalidated = true;
+        InvalidateFrame();
         if (_canvasBrushInput.TerminalConsumed())
             FinishHostContinuation(
                 {_canvasBrushInput.Overflowed() ? HostOutcome::Failed : HostOutcome::Succeeded,
@@ -476,7 +476,7 @@ bool Application::RouteDeferredCanvasPan(const DxUi::PointerEvent& event, UINT m
         if (view.x < 0 || view.y < 0 || view.x >= hole.width || view.y >= hole.height)
             return false;
         _canvasPanLast = view;
-        _frameInvalidated = true;
+        InvalidateFrame();
         return true;
     }
     if (event.action == DxUi::PointerAction::Move)

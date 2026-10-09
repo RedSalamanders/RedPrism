@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdio>
 #include <memory>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -159,7 +160,9 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
         FAILED(queue.Bind(device.get(), context.get())) || FAILED(commands.InitializeOwner(jobs, queue, routes)) ||
         FAILED(display.InitializeOwner(jobs, queue, commands, routes, client)))
         std::terminate(); // Probe setup failure is not a successful controller result.
+    Expect("current-query-empty-controller-refuses", !display.HasCurrentPublicationOwner());
     Expect("actual-fixture-session-established", client.InstallFixture(31));
+    Expect("current-query-unpublished-document-refuses", !display.HasCurrentPublicationOwner());
     display.RequestOwner();
     Expect("request-alone-does-not-capture-or-publish", !client.graph && jobs.ReservedMemoryBytes() == 0);
     const bool refused = Until(jobs, routes, [&]() noexcept { return client.errors == 1 || client.publications != 0; });
@@ -167,6 +170,7 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
            refused && client.errors == 1 && !client.graph && client.publications == 0 &&
                client.error == E_OUTOFMEMORY && !display.HasPending() && jobs.ReservedMemoryBytes() == 0);
 
+    Expect("current-query-memory-refusal-has-no-publication", !display.HasCurrentPublicationOwner());
     const auto samplesAfterRefusal = memory.samples;
     for (unsigned int request = 0; request < 3; ++request)
     {
@@ -192,6 +196,7 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                client.errors == 1 && client.graph && client.graph->IsPublishedOnOwner(device.get(), context.get()));
         if (client.graph)
         {
+            Expect("current-query-first-exact-publication", display.HasCurrentPublicationOwner());
             std::vector<std::uint8_t> latestPixels;
             UINT latestWidth = 0;
             UINT latestHeight = 0;
@@ -211,6 +216,8 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                    client.graph == old && client.publications == 1 && jobs.ReservedMemoryBytes() == firstCharge &&
                        old->CompositionForTestOwner()->CompositeCount() == composites);
             client.session.SetOpacity(0.5);
+            Expect("current-query-stale-generation-refuses-old-visible-opening",
+                   !display.HasCurrentPublicationOwner() && display.GraphForFrameOwner() == old);
             display.RequestOwner();
             Expect("same-document-keeps-last-frame-until-replacement", client.graph == old);
             Expect("replacement-and-last-use-retirement-settle",
@@ -233,7 +240,29 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                    client.errors == 1 && client.publications == 2 && client.graph &&
                        client.graph->IsPublishedOnOwner(device.get(), context.get()) &&
                        jobs.ReservedMemoryBytes() != 0 && jobs.ReleasingMemoryBytes() == 0);
+            Expect("current-query-replacement-is-exact", display.HasCurrentPublicationOwner());
+            auto* const heldDevice = client.device;
+            auto* const heldContext = client.context;
+            auto* const heldGraph = client.graph;
+            const auto heldCharge = jobs.ReservedMemoryBytes();
+            client.device = nullptr;
+            Expect("current-query-device-descriptor-mismatch-refuses", !display.HasCurrentPublicationOwner());
+            client.device = heldDevice;
+            client.context = nullptr;
+            Expect("current-query-context-descriptor-mismatch-refuses", !display.HasCurrentPublicationOwner());
+            client.context = heldContext;
+            Expect("current-query-restored-descriptor-keeps-publication-and-charge",
+                   display.HasCurrentPublicationOwner() && client.graph == heldGraph &&
+                       jobs.ReservedMemoryBytes() == heldCharge);
+            bool workerCurrent = true;
+            std::thread observer([&]() noexcept { workerCurrent = display.HasCurrentPublicationOwner(); });
+            observer.join();
+            Expect("current-query-nonowner-refuses-without-changing-owner-publication",
+                   !workerCurrent && display.HasCurrentPublicationOwner() && client.graph == heldGraph &&
+                       jobs.ReservedMemoryBytes() == heldCharge);
             Expect("different-document-fixture-installed", client.InstallFixture(73));
+            Expect("current-query-replaced-document-refuses-before-next-route",
+                   !display.HasCurrentPublicationOwner() && !display.GraphForFrameOwner());
             display.RequestOwner();
             Expect("new-document-excludes-old-pixels-before-next-route", client.graph == nullptr);
             Expect("new-document-parent-and-old-retirement-settle",
@@ -241,7 +270,9 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                          { return (client.publications == 3 && !display.HasPending()) || client.errors > 1; }));
             Expect("new-document-published-without-refusal",
                    client.publications == 3 && client.errors == 1 && client.graph);
+            Expect("current-query-new-document-publication-is-exact", display.HasCurrentPublicationOwner());
             client.session.ClearDocument();
+            Expect("current-query-cleared-document-refuses", !display.HasCurrentPublicationOwner());
             display.RequestOwner();
             Expect("clearing-document-excludes-pixels-immediately", client.graph == nullptr);
             Expect("last-root-destruction-refunds-full-charge", Until(jobs, routes,
@@ -266,6 +297,7 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                                                                       }));
     }
     display.StopOwner();
+    Expect("current-query-stopped-controller-refuses", !display.HasCurrentPublicationOwner());
     queue.StopNotifications();
     struct Closing
     {
@@ -281,6 +313,7 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
                 [](void* opaque) noexcept { static_cast<Closing*>(opaque)->display.RetireShutdownForWork(); },
                 &closing});
     Expect("actual-joined-shutdown-removes-all-controller-routes", display.CloseAfterWorkersOwner());
+    Expect("current-query-joined-controller-refuses", !display.HasCurrentPublicationOwner());
     Expect("actual-joined-shutdown-returns-all-CPU-charges",
            jobs.ReservedMemoryBytes() == 0 && jobs.ReleasingMemoryBytes() == 0);
     return failures == 0;

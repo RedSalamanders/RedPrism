@@ -555,6 +555,20 @@ RecordedDisplayGraph* CommittedDisplayController::GraphForFrameOwner() const noe
     return &_published->root->graph;
 }
 
+bool CommittedDisplayController::HasCurrentPublicationOwner() const noexcept
+{
+    if (!IsOwner() || !_jobs || _stopped || _suspended || !_published || !_published->root ||
+        _published->retirementRequested || _published->phase != Phase::Cached)
+        return false;
+    CommittedDisplayDescriptor descriptor;
+    if (!_client->DescribeCommittedDisplayOwner(descriptor) || !DescriptorMatches(descriptor, _pending) ||
+        _published->key != descriptor.key || descriptor.key.deviceGeneration != _queue->DeviceGeneration() ||
+        descriptor.device != _published->root->device.get() ||
+        descriptor.immediate != _published->root->immediate.get())
+        return false;
+    return true;
+}
+
 void CommittedDisplayController::WakeOwner() noexcept
 {
     _ready = true;

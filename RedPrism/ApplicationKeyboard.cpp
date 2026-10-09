@@ -191,7 +191,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
             // (its WM_CHAR) opens that menu. A key the bar used types nothing where the keyboard goes next.
             if (_chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press)))
             {
-                _frameInvalidated = true;
+                InvalidateFrame();
                 _suppressCharacter = true;
             }
             return 0;
@@ -223,7 +223,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
     {
         _lastKeyHandled = true;
         _suppressCharacter = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         (void)movedKeyboard();
         // DefWindowProc still sees an Alt chord a command took (its character stays dropped), so it knows Alt was
         // not tapped alone: releasing Alt, before or after the chord's key, gives the menu bar nothing.
@@ -238,7 +238,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
         !heldPress && _chrome && _chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press));
     if (chromeHandled)
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (heldPress || movedKeyboard())
     {
@@ -277,7 +277,7 @@ LRESULT Application::OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lP
     else if (virtualKey != VK_MENU && virtualKey != VK_F10 && _chrome &&
              _chrome->DispatchKey(virtualKey, false, HeldModifiers()))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     // Every key up reaches DefWindowProc, which tells a tapped Alt or F10 (it sends SC_KEYMENU, which OnKeyMenu gives
     // to the menu bar) from a key up that ends the tap: releasing Alt after Alt+Backspace opens nothing.
@@ -304,13 +304,13 @@ LRESULT Application::OnCharacter(HWND window, UINT message, WPARAM wParam, LPARA
         // Alt+letter opens the menu with that mnemonic; an Alt+key nothing took does nothing, without a beep.
         if (_chrome && _chrome->OpenMenuByMnemonic(character))
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     }
     if (_chrome && _chrome->DispatchCharacter(character, HeldModifiers()))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return 0;
 }
@@ -338,7 +338,7 @@ void Application::OnKeyboardLayoutChanged() noexcept
     if (_chrome)
     {
         _chrome->SetCommandBindings(&_bindings); // retitles the menus, the Command List and the tooltips
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
 }
 
@@ -376,7 +376,7 @@ void Application::OnKeyMenu(wchar_t character) noexcept
     {
         (void)_chrome->OpenMenuByMnemonic(character);
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 KeyState Application::CurrentKeyState() const noexcept

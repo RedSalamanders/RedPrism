@@ -357,7 +357,7 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
                     else
                     {
                         _owner.SyncChrome();
-                        _owner._frameInvalidated = true;
+                        _owner.InvalidateFrame();
                     }
                 }
                 else if (_kind != ClipboardCommandKind::Cut)
@@ -664,7 +664,7 @@ class Application::ClipboardPrefillJob final : public Job, public RetryWaitRecei
             _owner._sizeDialog.newWidth = info.width;
             _owner._sizeDialog.newHeight = info.height;
             _owner.SyncSizeCard();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         // Optional suggestion failure is local. It neither overwrites the draft nor publishes a notice/history.
     }

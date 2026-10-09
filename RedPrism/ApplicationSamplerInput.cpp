@@ -207,7 +207,7 @@ void Application::RetireSamplerOpening(std::uint64_t openingId) noexcept
             _releasingCapture = false;
         }
         _layoutDirty = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
 }
 
@@ -228,7 +228,7 @@ void Application::SealSamplerForBoundary() noexcept
             _releasingCapture = false;
         }
         _layoutDirty = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (changed)
         (void)_jobs.RequestUiActionSource(_continuationAction);

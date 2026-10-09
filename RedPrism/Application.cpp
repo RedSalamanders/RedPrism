@@ -253,7 +253,7 @@ void Application::RequestFrameThunk(void* context) noexcept
     auto* application = static_cast<Application*>(context);
     if (application)
     {
-        application->_frameInvalidated = true;
+        application->InvalidateFrame();
     }
 }
 
@@ -324,7 +324,7 @@ int Application::Run(int showCommand) noexcept
         // The capture timer starts after the first frame that reached the display (RenderFrame, RF-409).
         ShowWindow(_window.get(), SW_SHOWNOACTIVATE);
         _windowVisible = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         if (_chrome)
         {
             _chrome->SetVisible(true);
@@ -399,13 +399,13 @@ int Application::Run(int showCommand) noexcept
             if (phase != _chrome->SelectionAntPhase())
             {
                 _chrome->SetSelectionAntPhase(phase);
-                _frameInvalidated = true;
+                InvalidateFrame();
             }
             waitTimeout = MillisecondsToNextAntStep(now);
         }
         if (_chrome && _chrome->NeedsPreparation())
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
 
         HostFrameState state;
@@ -441,7 +441,7 @@ int Application::Run(int showCommand) noexcept
                 continue;
             }
             ReleaseSurfacesWhileUnseen(); // The actual occlusion probe permits one display resume transition.
-            _frameInvalidated = true;
+            InvalidateFrame();
             frameAction = HostFrameAction::Render;
         }
 
@@ -492,8 +492,15 @@ int Application::ExitCode(int quitCode) const noexcept
     return quitCode;
 }
 
+void Application::InvalidateFrame() noexcept
+{
+    _frameInvalidated = true;
+    NoteUiFrameInvalidation();
+}
+
 void Application::RenderFrame() noexcept
 {
+    const auto previousPresents = _renderer.PresentCount();
     BindCompositionDevice();
     const auto render = [this]() noexcept
     {
@@ -519,6 +526,7 @@ void Application::RenderFrame() noexcept
         ++_failedFrames;
         _lastFrameFailure = result;
         _frameInvalidated = false;
+        AbandonUiFrameLatency();
         OutputDebugStringW(L"Frame rendering failed.\n");
         if (_failedFrames >= kFailedFramesBeforeClose)
         {
@@ -533,6 +541,10 @@ void Application::RenderFrame() noexcept
         return;
     }
     _frameInvalidated = false;
+    if (_renderer.PresentCount() > previousPresents)
+        NoteUiFramePresentation();
+    else
+        AbandonUiFrameLatency(); // An occluded Present is not a completed visible frame.
     HRESULT canvasFailure = _committedDisplayInitialized && FAILED(_committedDisplayFailure)
                                 ? _committedDisplayFailure
                                 : _renderer.CanvasFailure();
@@ -2950,7 +2962,7 @@ HRESULT Application::InitializeRenderer() noexcept
         return result;
     }
     _rendererReady = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
     if (_committedDisplayInitialized)
     {
         // The first admitted display needs this actual queue context before its initial source request.
@@ -2977,7 +2989,7 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetOwnerWindow(_window.get());
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
-    _frameInvalidated = true;
+    InvalidateFrame();
     return S_OK;
 }
 
@@ -2994,7 +3006,7 @@ void Application::OnLayerSelected(Guid id) noexcept
     CloseOpacityEdit();
     _session.SelectLayer(id);
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
@@ -3036,7 +3048,7 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
     if (_session.CollapsedGroupIDs().contains(id) != !expanded)
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
@@ -3096,7 +3108,7 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
             }
             RefreshGradientJobs();
             _layoutDirty = true;
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return;
     case PickerTarget::GradientShadows:
@@ -3112,7 +3124,7 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
 void Application::OnChromeLayout() noexcept
 {
     _layoutDirty = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 HRESULT Application::InitializeDocument() noexcept
@@ -3151,7 +3163,7 @@ void Application::DocumentChanged() noexcept
     SyncColorLookupPreview();
     _composition.InvalidateDocument();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::SyncChrome() noexcept
@@ -3329,7 +3341,7 @@ void Application::SyncView() noexcept
     SyncBrushCursor();
     SyncCropChrome();
     SyncToolOverlays();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 float Application::ChromeDpi() const noexcept
@@ -3956,7 +3968,7 @@ void Application::CheckDeviceAdapter() noexcept
     if (result == S_OK)
     {
         BindCompositionDevice();
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     if (FAILED(result))
@@ -4079,7 +4091,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             TargetLayer(target->id, target->mask, target->mask && (event.modifiers & MK_SHIFT) != 0);
             if (target->mask)
             {
-                _frameInvalidated = true;
+                InvalidateFrame();
                 return;
             }
         }
@@ -4090,7 +4102,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         PointerBusy() && (event.action == DxUi::PointerAction::Move || event.action == DxUi::PointerAction::Up);
     if (!canvasDrag && _chrome->DispatchPointer(event))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         // DxUi takes every leave for its hover; the canvas still hears it (the tip circle and a drag end there).
         if (event.action != DxUi::PointerAction::Leave)
         {
@@ -4165,7 +4177,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     if (_spacePan || _tool == EditorTool::Hand)
     {
         _drag = PanDrag{view};
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     // An open panel's armed eyedropper or targeted adjustment takes the press first.
@@ -4187,7 +4199,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         const auto* source = FindSamplerOpening(opening.value());
         _drag = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
         _layoutDirty = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
@@ -4244,7 +4256,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         _drag = ZoomDrag{view, _viewport.zoom, false};
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexcept
@@ -4580,7 +4592,7 @@ void Application::OnCommand(int command) noexcept
             _session.ResetPaletteColors();
         RefreshGradientJobs();
         _layoutDirty = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         return; // Explicit input invalidates old sample publication at event time, outside document history.
     }
     if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
@@ -4886,7 +4898,7 @@ void Application::OnCommand(int command) noexcept
         }
         _session.SwapPaletteColors();
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         break;
     case ChromeHost::kCommandResetPalette:
         if (_chrome != nullptr && _chrome->ColorPickerOpen())
@@ -4895,7 +4907,7 @@ void Application::OnCommand(int command) noexcept
         }
         _session.ResetPaletteColors();
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         break;
     case ChromeHost::kCommandNudgeSelectionLeft:
     case ChromeHost::kCommandNudgeSelectionRight:
@@ -5471,7 +5483,7 @@ void Application::OnTool(EditorTool tool) noexcept
         _chrome->SetTool(tool);
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::NewDocument() noexcept
@@ -5680,7 +5692,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         if (_windowVisible)
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     case WM_DROPFILES:
@@ -5831,7 +5843,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 ReleaseSurfacesWhileUnseen();
                 if (_displayPoweredOn)
                 {
-                    _frameInvalidated = true;
+                    InvalidateFrame();
                 }
             }
         }
@@ -5842,7 +5854,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
-        _frameInvalidated = true;
+        InvalidateFrame();
         ValidateRect(window, nullptr);
         return 0;
     case WM_CLOSE:
@@ -5870,7 +5882,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         if (_prompts->ShowNotice(_chrome.get(),
                                  FormatPostedNotice(static_cast<UINT>(wParam), static_cast<int>(lParam))))
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     case WM_DESTROY:
@@ -5911,7 +5923,7 @@ LRESULT Application::OnSize(UINT width, UINT height) noexcept
     if (SUCCEEDED(result) && width != 0 && height != 0)
     {
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (FAILED(result))
     {
@@ -5963,7 +5975,7 @@ LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noex
         return 0;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
     return 0;
 }
 
@@ -6128,7 +6140,7 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
     case TransformAction::ShowControls:
         _showsTransformControls = value != 0.0;
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     case TransformAction::LockRatio:
         _locksTransformRatio = value != 0.0;
@@ -6983,7 +6995,7 @@ void Application::UpdateSelectionModifiers() noexcept
 void Application::SelectionChanged() noexcept
 {
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
@@ -7094,7 +7106,7 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
         break;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 namespace
@@ -7240,7 +7252,7 @@ void Application::PushPreviewTiles() noexcept
         return;
     if (!_composition.HasStroke())
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     std::vector<RasterTile> tiles;
@@ -7266,7 +7278,7 @@ void Application::PushPreviewTiles() noexcept
         }
         if (raster == nullptr)
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
             return;
         }
         if (_composition.StrokeTextureMissing())
@@ -7287,7 +7299,7 @@ void Application::PushPreviewTiles() noexcept
     {
         (void)_composition.UpdateStrokeTiles(tiles);
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::ContinueBrushStroke(Vec2 view) noexcept
@@ -7390,7 +7402,7 @@ void Application::SyncStrokePreview() noexcept
         {
             // Completed immutable metadata is consumed by the admitted recorder. No owner tile walk,
             // BeginStroke upload, TakeChanged or mutable CPU preview crosses this route.
-            _frameInvalidated = true;
+            InvalidateFrame();
             return;
         }
     }
@@ -7429,7 +7441,7 @@ void Application::SyncStrokePreview() noexcept
     if (_composition.HasStroke() && _session.PendingBrush() == nullptr && !_session.HasPendingWarp())
     {
         EndStrokePreview(_session.TakeLastBrushCommit());
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
 }
 
@@ -7463,7 +7475,7 @@ void Application::SyncBrushCursor() noexcept
         cursor = circle;
     }
     _chrome->SetBrushCursor(cursor);
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 namespace
@@ -7502,7 +7514,8 @@ int Application::RunBenchmark() noexcept
     }
     if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
         _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
-        _bench == L"ui-sampler-smoke")
+        _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" || _bench == L"ui-prepared45" ||
+        _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke")
     {
         return RunUiBenchmark();
     }
@@ -7792,7 +7805,7 @@ void Application::OnGradientAction(GradientAction action, double value) noexcept
     }
     _session.RefreshGradient();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::BeginGradientDrag(Vec2 view) noexcept
@@ -7862,7 +7875,7 @@ void Application::EndGradientDrag() noexcept
     DropDrag<GradientDrag>();
     _session.EndGradientDrag();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CommitGradient() noexcept
@@ -7941,7 +7954,7 @@ int Application::RunRenderingSelfTest() noexcept
     };
     const auto frame = [&]()
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         RenderFrame();
     };
 
@@ -8053,7 +8066,7 @@ int Application::RunRenderingSelfTest() noexcept
                                             !_chrome->SizeCardOpen();
         const HRESULT reattached = _chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         if (!allClosedWhileDetached || FAILED(reattached))
         {
             SelfTestFailure(std::format(L"A detached chrome did not read every card as closed, or did not "
@@ -8656,7 +8669,7 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
         break;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CancelShapeDraft() noexcept
@@ -8668,7 +8681,7 @@ void Application::CancelShapeDraft() noexcept
     }
     _session.CancelShape();
     SyncToolOverlays();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::FinishShapeDraft() noexcept
@@ -8719,7 +8732,7 @@ void Application::SampleColorAt(Vec2 view) noexcept
     {
         RecordSamplerPoint(sampling->opening.value(), pixel);
         _layoutDirty = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     if (sampling->composite.has_value())
@@ -8738,7 +8751,7 @@ void Application::SampleColorAt(Vec2 view) noexcept
         }
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::EndColorSampling() noexcept
@@ -8752,7 +8765,7 @@ void Application::EndColorSampling() noexcept
         SealSamplerOpening(sampling->opening.value()); // Up/leave/loss seal; they never add a release coordinate.
     _drag = PointerDrag{};
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::SyncToolOverlays() noexcept

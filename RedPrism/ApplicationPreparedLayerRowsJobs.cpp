@@ -153,7 +153,7 @@ void Application::ReportLayerRowsFailure() noexcept
     _layerRowsRetryAvailable = true;
     SyncPreparedLayerRows();
     _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
-    _frameInvalidated = true;
+    InvalidateFrame();
     _layoutDirty = true;
 }
 
@@ -164,7 +164,7 @@ void Application::RetryPreparedLayerRows() noexcept
     _layerRowsRetryAvailable = false;
     SyncPreparedLayerRows();
     _layerRowsSource.Request(); // One new ticket for explicit input; unchanged-key memory events never rearm it.
-    _frameInvalidated = true;
+    InvalidateFrame();
     _layoutDirty = true;
 }
 
@@ -280,7 +280,7 @@ class Application::LayerRowsJob final : public Job
                 _owner.SyncPreparedLayerRows(); // Swap borrowing before any old rows lose their final owner.
                 previous.reset();
                 // Old snapshot readers keep the old original reservation until its complete graph retires.
-                _owner._frameInvalidated = true;
+                _owner.InvalidateFrame();
             }
         }
         if (ownsTicket && Current() &&

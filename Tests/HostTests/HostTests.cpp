@@ -33,6 +33,7 @@
 #include "Host.Tests.RetainedGrowth.h"
 #include "Host.Tests.RetainedSlotAdmission.h"
 #include "Host.Tests.RetirementMemory.h"
+#include "Host.Tests.UiFrameLatency.h"
 #include "Host.Tests.WarpFactoryLifetime.h"
 #include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerStageRetirement.h"
@@ -265,6 +266,55 @@ void TestCommandLine() noexcept
     Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath != nullptr &&
                parsed.screenshotPath == std::wstring_view{png},
            "cli.screenshot-parse");
+
+    struct PreparedBenchCase final
+    {
+        const wchar_t* token;
+        const char* name;
+    };
+    constexpr std::array preparedBenchCases{
+        PreparedBenchCase{L"ui-prepared", "cli.prepared-bench-ui-prepared"},
+        PreparedBenchCase{L"ui-prepared45", "cli.prepared-bench-ui-prepared45"},
+        PreparedBenchCase{L"ui-prepared100", "cli.prepared-bench-ui-prepared100"},
+        PreparedBenchCase{L"ui-prepared-smoke", "cli.prepared-bench-ui-prepared-smoke"},
+    };
+    wchar_t preparedBenchSwitch[] = L"--bench";
+    wchar_t preparedWarpSwitch[] = L"--warp";
+    for (const PreparedBenchCase& testCase : preparedBenchCases)
+    {
+        wchar_t* preparedArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                   const_cast<wchar_t*>(testCase.token)};
+        parsed = {};
+        const bool withoutWarp = RedPrismParseCommandLine(preparedArgs, 3, parsed, &error) && !parsed.warp &&
+                                 parsed.bench && std::wstring_view{parsed.bench} == std::wstring_view{testCase.token} &&
+                                 parsed.inputPathCount == 0;
+        wchar_t* preparedWarpArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                       const_cast<wchar_t*>(testCase.token), preparedWarpSwitch};
+        parsed = {};
+        const bool withWarp = RedPrismParseCommandLine(preparedWarpArgs, 4, parsed, &error) && parsed.warp &&
+                              parsed.bench && std::wstring_view{parsed.bench} == std::wstring_view{testCase.token} &&
+                              parsed.inputPathCount == 0;
+        Expect(withoutWarp && withWarp, testCase.name);
+    }
+
+    wchar_t malformedPreparedValue[] = L"ui-prepared999";
+    wchar_t* malformedPreparedArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                        malformedPreparedValue};
+    parsed = {};
+    parsed.warp = true;
+    parsed.bench = L"sentinel";
+    parsed.inputPathCount = 1;
+    parsed.inputPaths[0] = L"sentinel-path";
+    Expect(!RedPrismParseCommandLine(malformedPreparedArgs, 3, parsed, &error) && error == malformedPreparedValue &&
+               parsed.warp && parsed.bench == std::wstring_view{L"sentinel"} && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0] == std::wstring_view{L"sentinel-path"},
+           "cli.prepared-bench-malformed-atomic-rejection");
+
+    wchar_t preparedInputPath[] = L"input.prism";
+    wchar_t* preparedWithInputArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                        const_cast<wchar_t*>(L"ui-prepared"), preparedInputPath};
+    Expect(!RedPrismParseCommandLine(preparedWithInputArgs, 4, parsed, &error) && error == preparedInputPath,
+           "cli.prepared-bench-refuses-positional-input");
 
     wchar_t* missingScreenshotValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot};
     Expect(!RedPrismParseCommandLine(missingScreenshotValueArgs, 2, parsed, &error) && error == screenshot,
@@ -1842,6 +1892,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunBenchmarkMachineTests();
     gFailures += RunUiTimingHistogramTests();
     gFailures += RunUiTimingTests();
+    gFailures += RunHostUiFrameLatencyTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();

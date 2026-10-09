@@ -113,7 +113,7 @@ class Application::ProjectSaveJob final : public Job
                           : HostOutcome::Succeeded;
             error = outcome == HostOutcome::Cancelled ? E_ABORT : S_OK;
             _owner.SyncChrome();
-            _owner._frameInvalidated = true; // save changes chrome, never document composition
+            _owner.InvalidateFrame(); // save changes chrome, never document composition
         }
         else if (!current)
         {

@@ -2,6 +2,11 @@
 
 ## Implementation checklist
 
+Current step (2026-10-09): the bounded native-read identity repair is qualified and committed/pushed as `205ce70`.
+Main has reviewed manifest/ZIP durability gates and 20 actual ZIP/folder session-end fault preparations (248 new
+expected host assertions plus 87 helper assertions). They remain ignored, uncompiled drafts until the current
+frame/prepared-display source qualification completes. [Fault preparation and checklist](../../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md).
+
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.
 - [x] F3 — Worker project open and ordered image import, detached results and token-checked owner application. Full configuration matrix and real-loop measurements pass; residual apply/frame targets remain F6/P1.9.
@@ -197,19 +202,17 @@ The fixed native inventories are eight primitive cases/44 controls, 26 transfer 
   measurements before activation/closure. The existing blocking helper may remain a reference test surface;
   ordinary classification must use the shared continuation. Writer flush/close/rename/cleanup failures and
   F5d/G1 remain separate open gates, including the preserved unexplained exploded-save failures.
-- [ ] Close native-read identity exhaustion without losing a pending OS owner. The qualified predecessor increments
-  for a new issue and for rearm after premature readiness; at the final identity, the latter refuses and the
-  pending-read host branch terminates. The integrated follow-up advances only a new native operation; its
-  same-ticket rearm retains the final identity. Focused Debug563/Host564/App565 qualify 20/34
-  additions and all predecessors. Analysis566 fails the fixture's error-type comparison and is preserved;
-  main casts only that comparison, with unchanged expected error bits. Current-source qualification is due. A rearm must retain the same native operation identity and exact original
-  ticket, leaving the event unreset. Only a new operation consumes an identity and may refuse before issue.
-  Prove real last-identity premature readiness, actual incomplete/native acknowledgements, same-pool progress,
-  next-issue refusal, truthful original error/younger continuation and complete worker retirement. Also prove an
-  initially exhausted source and zero/foreign-ticket rearm refusal. The main-reviewed candidate and 20-control Host / 34-control actual Application
-  proofs are integrated after committing/pushing c8e253f. Main corrected the agent's API-seam misunderstanding,
-  startup-callback race, atomic observation, forbidden setup catch and 19-to-20 inventory count. No unrun
-  qualification is claimed. This finding remains open even if those profiles pass.
+- [x] Close the bounded native-read identity-exhaustion defect without losing a pending OS owner. Only a new
+  operation consumes an identity and may refuse before reset/issue; incomplete same-ticket rearm retains the
+  nonzero final identity and leaves the event unreset. Twenty Host and 34 actual Application controls prove
+  last-identity premature readiness, real incomplete/native acknowledgements, same-pool progress, next-issue
+  refusal, original error/younger continuation, complete retirement, initial exhaustion and zero/foreign-ticket
+  refusal. Full Release572, Debug573, real ASan574, analysis571 and all ARM64 r66 cross-builds qualify the repaired
+  1,096-input source; exact archives, products, sanitizer probe and predecessor inventories authenticate.
+  The step is committed/pushed as `205ce70`. Earlier analysis/ISA failures and verifier/launcher refusals remain
+  preserved in [the identity record](../../TestRuns/P1NativeReadIdentity_2026-10-09.md). This closes the counter
+  defect only; complete F6 phase bounds, measured stop-to-return, writer faults and later source qualification
+  remain open.
 
 ## Preparation and application
 

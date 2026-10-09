@@ -58,7 +58,7 @@ ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcep
     {
         _pendingPanelOpening = opening;
         SyncAdjustPanel();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return receipt;
 }
@@ -79,7 +79,7 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
         if (_pendingDisplayInitialized)
             _pendingDisplay.RequestOwner(); // Exclude/cancel useful preview; original owners retire after join.
         SyncAdjustPanel();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return receipt;
 }
@@ -490,7 +490,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     {
         _shapeCommitPreview.reset();
         SyncToolOverlays();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     _activeHostRequest.reset();
     SweepSamplerOpenings();

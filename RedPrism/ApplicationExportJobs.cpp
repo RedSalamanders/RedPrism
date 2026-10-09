@@ -129,7 +129,7 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
         _owner._exportStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
         _owner.SyncChrome();
-        _owner._frameInvalidated = true; // exports never alter the document/path/saved revision
+        _owner.InvalidateFrame(); // exports never alter the document/path/saved revision
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
     JobResult PassGate(JobContext& context, UINT message = ExportWorkTestGate::kMessage) noexcept

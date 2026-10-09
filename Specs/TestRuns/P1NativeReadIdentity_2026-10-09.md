@@ -1,6 +1,6 @@
 # P1 native-read identity exhaustion
 
-Status: repaired integrated source; full current-source qualification pending
+Status: bounded identity fix qualified and committed/pushed as `205ce70`; broader F6 and later changed-source qualification remain separate
 
 ## Checklist
 
@@ -19,7 +19,7 @@ The last-read case starts at UINT64_MAX-2. A real first file reaches MAX-1. The 
 
 The pure Host fixture uses actual scheduler tickets and the shared registered wait pool. It asserts unchanged pre-signalled events on MAX/zero/foreign refusal and permits a same-ticket rearm at the last valid identity. Startup registration already arms the wait; its callback at MAX-1 is deliberately consumed before preparing the new operation, removing a test race. The observer cycle is atomic. These events prove readiness only; the Application pipe supplies native-I/O proof.
 
-## Source and current run
+## Historical source and first focused run
 
 Debug build r563 runs from 1,095 frozen inputs. Native source stays fixed through actual completion and authenticated preservation. Existing application stages remain 121; the prior nine read cases/three startup cases and 144 controls remain required. New expected Host/application inventories are fixed before runtime under `.build/P1Drafts/PathReadExhaustion-r1/Main-boundary-registry.json` (20 / 34 assertions plus one Application summary).
 
