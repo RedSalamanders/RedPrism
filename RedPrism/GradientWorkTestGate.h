@@ -23,7 +23,9 @@ enum class GradientWorkTestKind : std::uint8_t
 struct GradientWorkTestGate final
 {
     static constexpr unsigned int kMessage = WM_APP + 53;
-    wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    // One worker owns the preview ticket at a time. Each visit consumes its own owner release, so a
+    // coalesced preview cannot pass a later gate using the preceding visit's signaled event.
+    wil::unique_handle release{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
     GradientWorkTestKind kind = GradientWorkTestKind::Preview;
     bool afterPreparation = false;
     bool throwAdmissionFailure = false;

@@ -563,7 +563,9 @@ retained source/private tiles and callback-borrow termination without shared spa
 `gradient-host.*` exercises the actual preview and selected commit callers at event gates. Capture follows full
 reservation; input/history/tickets survive early/late cancellation. Admission/capture/worker OOM, returned statuses,
 source/selection/generation/restore/opening changes cannot authorize dependent edits. Coalesced endpoints and
-palette refreshes finish at the latest settings with no history entry. Image/mask commits use literal pixels and
+palette refreshes finish at the latest settings with no history entry. The Gradient gate consumes one release per
+worker visit: the second coalesced preview stays held until the owner checks the first immutable publication.
+Image/mask commits use literal pixels and
 one named entry; Undo drops an uncommitted line. Existing GPU checks await acknowledgement, retaining their
 canvas-vs-raster tolerance and adoption count. Full x64 suites and ARM64 cross-builds are required. No event-gate
 deadline is a performance assertion; real-loop drag/settle timing and owner upload/history budgets remain open.
@@ -1124,6 +1126,16 @@ targets. Every high displacement byte is tested independently; malformed opcodes
 overlapping/mismatched rows, incorrect metadata/end/targets and an unrelated later symbol refuse the data proof.
 Adjacent real VEX remains a violation while all eleven DWORD data rows are still recognized. Recheck the exact
 archived failing image before rebuilding, with the runtime allowlist and executable/runtime/tier counts preserved.
+
+`IsaInlineTableTests.ps1` also adds 60 independent `isa-inline-table.UnsignedStackTerminal*` controls for the
+observed ASan WindowHost disp8 DWORD switch. This form requires CMP/unsigned short JA/zero-extending MOV EAX
+from the same stack slot, the exact four-row RCX dispatch, bound 1…127, actual PE/listing/nonoverlap agreement,
+same-owner anonymous aligned data, decoded body/default targets, an immediately preceding RET and the exact
+terminal PDB procedure end. The separate default must be a forward decoded body boundary. Wrong or missing
+guards, registers, stack slots, returns, metadata, bounds and targets refuse; a later unrelated data symbol
+cannot prove the range. Adjacent real VEX remains a violation. Reparse the exact retained failed image before
+rebuilding; only its six proved table DWORDs change classification. The runtime allowlist and DxUi pin stay
+unchanged. Parser proof is separate from native ASan qualification ([record](../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md)).
 
 The ASan `std::variant` visit switch additionally has 73 QWORD-stack/RAX-base controls: four valid tables and
 69 refusals. The seven contiguous CMP/JA/LEA/MOV/load/ADD/JMP rows require exact PE/listing agreement, equal

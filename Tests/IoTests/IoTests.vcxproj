@@ -122,6 +122,7 @@
     <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
     <ClInclude Include="ClipboardTransferTests.h" />
     <ClInclude Include="ProjectPublicationRetryTests.h" />
+    <ClInclude Include="Io.Tests.ProjectDurabilityFaults.h" />
     <ClInclude Include="ClipboardAvailabilityTests.h" />
     <ClInclude Include="ClipboardReceiptTests.h" />
     <ClInclude Include="ClipboardFingerprintTests.h" />
@@ -208,6 +209,7 @@
     <ClCompile Include="CodecMemoryStreamTests.cpp" />
     <ClCompile Include="ProjectCancellationTests.cpp" />
     <ClCompile Include="ProjectPublicationRetryTests.cpp" />
+    <ClCompile Include="Io.Tests.ProjectDurabilityFaults.cpp" />
     <ClCompile Include="FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>

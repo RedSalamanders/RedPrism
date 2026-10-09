@@ -273,6 +273,7 @@ namespace RedPrismBuild
         // anonymous data symbol belongs to another procedure. Application::EditUnderWay uses the same
         // terminal dispatch with a long JA; EndCanvasEdit uses its disp32 stack form. Prove only these
         // exact stack guards and RCX dispatches, every reported/PE byte and the exact terminal procedure end.
+        // WindowHost also emits a disp8 MOV EAX index (zero extended), short JA and RET directly before data.
         private static InlineTable ReadGuardedTerminalDwordTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
@@ -284,17 +285,21 @@ namespace RedPrismBuild
                 ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
                 imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true) ??
                 ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
-                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true, true);
+                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true, true) ??
+                ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
+                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, false, false, true);
         }
 
         private static InlineTable ReadGuardedTerminalDwordTableForm(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
-            Dictionary<ulong, byte[]> guardRows, bool longJa, bool wideFrame = false)
+            Dictionary<ulong, byte[]> guardRows, bool longJa, bool wideFrame = false, bool unsignedIndex = false)
         {
+            if (unsignedIndex && (longJa || wideFrame)) return null;
             int stackLength = wideFrame ? 8 : 5;
-            int guardLength = 2 * stackLength + (longJa ? 6 : 2);
+            int indexLength = unsignedIndex ? 4 : stackLength;
+            int guardLength = stackLength + indexLength + (longJa ? 6 : 2);
             int branchLength = longJa ? 6 : 2;
             int indexStart = stackLength + branchLength;
             if (dispatch < imageBase + (ulong)guardLength || dispatch - imageBase > UInt32.MaxValue || afterJump != dispatch + 19)
@@ -311,9 +316,10 @@ namespace RedPrismBuild
             if (raw > pe.Length - (guardLength + 19) ||
                 !StartsWithAt(pe, raw, 0x83, wideFrame ? (byte)0xbc : (byte)0x7c, 0x24) ||
                 (longJa ? !StartsWithAt(pe, raw + stackLength, 0x0f, 0x87) : pe[raw + stackLength] != 0x77) ||
-                !StartsWithAt(pe, raw + indexStart, 0x48, 0x63, wideFrame ? (byte)0x84 : (byte)0x44, 0x24) ||
+                (unsignedIndex ? !StartsWithAt(pe, raw + indexStart, 0x8b, 0x44, 0x24) :
+                 !StartsWithAt(pe, raw + indexStart, 0x48, 0x63, wideFrame ? (byte)0x84 : (byte)0x44, 0x24)) ||
                 (wideFrame ? BitConverter.ToUInt32(pe, raw + 3) != BitConverter.ToUInt32(pe, raw + indexStart + 4) :
-                 pe[raw + 3] != pe[raw + indexStart + 4]) ||
+                 pe[raw + 3] != pe[raw + indexStart + (unsignedIndex ? 3 : 4)]) ||
                 !StartsWithAt(pe, raw + guardLength, 0x48, 0x8d, 0x0d) ||
                 (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + guardLength + 3) != (long)imageBase ||
                 !StartsWithAt(pe, raw + guardLength + 7, 0x8b, 0x84, 0x81) ||
@@ -323,7 +329,7 @@ namespace RedPrismBuild
             uint maximum = pe[raw + stackLength - 1];
             if (maximum == 0 || maximum >= 128) return null; // CMP imm8 must be nonnegative
             int[] starts = { 0, stackLength, indexStart, guardLength, guardLength + 7, guardLength + 14, guardLength + 17 };
-            int[] lengths = { stackLength, branchLength, stackLength, 7, 7, 3, 2 };
+            int[] lengths = { stackLength, branchLength, indexLength, 7, 7, 3, 2 };
             for (int i = 0; i < starts.Length; ++i)
             {
                 ulong address = prefix + (ulong)starts[i];
@@ -333,6 +339,10 @@ namespace RedPrismBuild
             }
             ulong end = checked(begin + 4 * (maximum + 1));
             if (end > owner.End) return null;
+            if (unsignedIndex && (!guardRows.TryGetValue(begin - 1, out byte[] terminal) ||
+                terminal.Length != 1 || terminal[0] != 0xc3 ||
+                !MatchesDecodedPe(pe, sections, imageBase, begin - 1, terminal, contributions, decoded, decodedStarts)))
+                return null;
             foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
                 if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
             long defaultAddress = longJa ? (long)prefix + stackLength + 6 + BitConverter.ToInt32(pe, raw + stackLength + 2) :
@@ -353,8 +363,8 @@ namespace RedPrismBuild
                         !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts)) return null;
                     table.Targets.Add(target);
                 }
-                if (defaultAddress >= 0 && (longJa
-                    ? (ulong)defaultAddress >= procedure.Begin && (ulong)defaultAddress < begin &&
+                if (defaultAddress >= 0 && (longJa || unsignedIndex
+                    ? (ulong)defaultAddress >= (unsignedIndex ? afterJump : procedure.Begin) && (ulong)defaultAddress < begin &&
                       IsDecodedBoundary((ulong)defaultAddress, owner.Module, contributions, decoded, decodedStarts)
                     : table.Targets.Contains((ulong)defaultAddress))) return table;
             }
@@ -3076,8 +3086,19 @@ namespace RedPrismBuild
                 }
                 if (candidateBytes[2] == "0d")
                 {
-                    int[] offsets = { -25, -22, -21, -18, -17, -16, -15, -13, -12, -11, -10, -7, -5, -4, 0, 7, 14, 15, 17, 22, 25 };
+                    int[] offsets = { -25, -22, -21, -18, -17, -16, -15, -13, -12, -11, -10, -7, -6, -5, -4, 0, 7, 14, 15, 17, 22, 25 };
                     foreach (int offset in offsets) rdxGuardCandidates.Add(checked((ulong)((long)candidateAddress + offset)));
+                    try
+                    {
+                        uint rva = checked((uint)(candidateAddress - imageBase));
+                        int raw = checked((int)Offset(rva, sections, pe.Length));
+                        if (raw <= pe.Length - 14 && StartsWithAt(pe, raw + 7, 0x8b, 0x84, 0x81))
+                        {
+                            ulong table = checked(imageBase + BitConverter.ToUInt32(pe, raw + 10));
+                            if (table > imageBase) rdxGuardCandidates.Add(table - 1);
+                        }
+                    }
+                    catch (InvalidDataException) { /* Unmapped candidate; no terminal row retained. */ }
                     continue;
                 }
                 // Exact byte-index guard plus its four dispatch rows. Keep only candidates, not all encodings.

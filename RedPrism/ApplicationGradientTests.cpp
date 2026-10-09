@@ -516,18 +516,38 @@ int Application::RunGradientWorkSelfTest() noexcept
                     _session.history.CurrentRevision(),
                     _session.ActiveLayer()->asset->image,
                     _gradientPreviewOpening};
-    if (SettleJobs(_jobs, 15000, dispatch, &coalesced) != SettleResult::Settled || !coalesced.visited ||
-        !coalesced.held || !coalesced.firstPreviewShown || _gradientWorkTestGate->visits.load() != 2 || !terminal() ||
+    const auto coalescedSettled = SettleJobs(_jobs, 15000, dispatch, &coalesced);
+    if (coalescedSettled != SettleResult::Settled || !coalesced.visited || !coalesced.held ||
+        !coalesced.firstPreviewShown || _gradientWorkTestGate->visits.load() != 2 || !terminal() ||
         _session.history.UndoCount() != 0 || !_session.PendingGradient() ||
         _session.PendingGradient()->publishedSequence != _session.PendingGradient()->sequence)
+    {
+        const auto* pending = _session.PendingGradient();
+        std::fprintf(stderr,
+                     "gradient-host.coalesced settled=%u visited=%u held=%u first-shown=%u visits=%u terminal=%u "
+                     "undo=%d pending=%u published=%llu sequence=%llu\n",
+                     static_cast<unsigned int>(coalescedSettled), coalesced.visited ? 1U : 0U, coalesced.held ? 1U : 0U,
+                     coalesced.firstPreviewShown ? 1U : 0U, _gradientWorkTestGate->visits.load(), terminal() ? 1U : 0U,
+                     _session.history.UndoCount(), pending ? 1U : 0U,
+                     static_cast<unsigned long long>(pending ? pending->publishedSequence : 0),
+                     static_cast<unsigned long long>(pending ? pending->sequence : 0));
+        SelfTestFailure(L"The coalesced gradient preview lost its held intermediate publication or ownership.\n");
         return 5;
+    }
     const auto latest = _session.PendingGradient()->raster->PaintSnapshot();
     std::array<std::uint8_t, 16> latestBytes{};
     if (latest)
         latest->image.ReadRegion(0, 0, 4, 1, latestBytes.data(), 16, 0);
     if (!latest || latestBytes != std::array<std::uint8_t, 16>{0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255,
                                                                255, 255, 255, 255})
+    {
+        std::fprintf(stderr, "gradient-host.coalesced latest=%u bytes=", latest ? 1U : 0U);
+        for (const auto byte : latestBytes)
+            std::fprintf(stderr, "%u,", static_cast<unsigned int>(byte));
+        std::fprintf(stderr, "\n");
+        SelfTestFailure(L"The coalesced gradient preview did not match the independent latest endpoint bytes.\n");
         return 5;
+    }
     std::printf("PASS gradient-host.latest-preview\n");
     _gradientWorkTestGate.reset();
     return 0;

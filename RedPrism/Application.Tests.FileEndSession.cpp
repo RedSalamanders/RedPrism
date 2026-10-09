@@ -11,6 +11,7 @@
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -63,6 +64,64 @@ bool ReadLiteralFile(const std::filesystem::path& path, std::vector<std::uint8_t
            read == bytes.size();
 }
 
+struct SessionProjectEntry final
+{
+    std::wstring relative;
+    bool directory = false;
+    std::vector<std::uint8_t> bytes;
+    [[nodiscard]] bool operator==(const SessionProjectEntry&) const = default;
+};
+
+bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProjectEntry>& entries)
+{
+    entries.clear();
+    const auto rootAttributes = GetFileAttributesW(root.c_str());
+    if (rootAttributes == INVALID_FILE_ATTRIBUTES || (rootAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+        (rootAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return false;
+    std::error_code error;
+    std::filesystem::recursive_directory_iterator iterator(root, error), end;
+    if (error)
+        return false;
+    for (; iterator != end; iterator.increment(error))
+    {
+        if (error)
+            return false;
+        const auto& path = iterator->path();
+        const auto attributes = GetFileAttributesW(path.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            return false;
+        SessionProjectEntry entry{
+            path.lexically_relative(root).generic_wstring(), (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, {}};
+        if (!entry.directory && !ReadLiteralFile(path, entry.bytes))
+            return false;
+        entries.push_back(std::move(entry));
+    }
+    if (error)
+        return false;
+    std::ranges::sort(entries, {}, &SessionProjectEntry::relative);
+    return true;
+}
+
+bool HasNoOwnedSaveSiblings(const std::filesystem::path& destination)
+{
+    const auto stagingPrefix = destination.filename().wstring() + L".~";
+    const auto backupName = destination.filename().wstring() + L".old";
+    std::error_code error;
+    std::filesystem::directory_iterator iterator(destination.parent_path(), error), end;
+    if (error)
+        return false;
+    for (; iterator != end; iterator.increment(error))
+    {
+        if (error)
+            return false;
+        const auto name = iterator->path().filename().wstring();
+        if (name.starts_with(stagingPrefix) || name == backupName)
+            return false;
+    }
+    return !error;
+}
+
 CanvasDocument LiteralFileDocument(std::uint32_t color)
 {
     DocumentFixture document;
@@ -113,7 +172,13 @@ int Application::RunFileEndSessionSelfTest() noexcept
         bool readback;
         bool savedReadback = false;
         bool pendingPrompt = false;
+        ProjectSaveFaultStage fault = ProjectSaveFaultStage::Count;
+        bool folder = false;
     };
+    constexpr auto faultCase = [](const char* name, ProjectSaveFaultStage stage, bool ending) constexpr noexcept
+    { return Scenario{name, HostWriteFormat::Project, false, ending, false, false, false, false, stage}; };
+    constexpr auto folderFaultCase = [](const char* name, ProjectSaveFaultStage stage, bool ending) constexpr noexcept
+    { return Scenario{name, HostWriteFormat::Project, false, ending, false, false, false, false, stage, true}; };
     constexpr std::array scenarios{
         Scenario{"save-before-publication", HostWriteFormat::Project, false, true, false, false},
         Scenario{"save-after-publication", HostWriteFormat::Project, true, true, false, false},
@@ -127,6 +192,26 @@ int Application::RunFileEndSessionSelfTest() noexcept
         Scenario{"png-saved-readback-cancel", HostWriteFormat::Png, false, true, false, true, true},
         Scenario{"jpeg-worker-wait", HostWriteFormat::Jpeg, false, true, false, false},
         Scenario{"save-with-earlier-unsaved-query", HostWriteFormat::Project, false, true, false, false, false, true},
+        faultCase("save-manifest-flush-end", ProjectSaveFaultStage::ManifestFlush, true),
+        faultCase("save-manifest-flush-false", ProjectSaveFaultStage::ManifestFlush, false),
+        faultCase("save-manifest-close-end", ProjectSaveFaultStage::ManifestClose, true),
+        faultCase("save-manifest-close-false", ProjectSaveFaultStage::ManifestClose, false),
+        faultCase("save-archive-commit-end", ProjectSaveFaultStage::ArchiveCommit, true),
+        faultCase("save-archive-commit-false", ProjectSaveFaultStage::ArchiveCommit, false),
+        faultCase("save-archive-flush-end", ProjectSaveFaultStage::ArchiveFlush, true),
+        faultCase("save-archive-flush-false", ProjectSaveFaultStage::ArchiveFlush, false),
+        faultCase("save-archive-close-end", ProjectSaveFaultStage::ArchiveClose, true),
+        faultCase("save-archive-close-false", ProjectSaveFaultStage::ArchiveClose, false),
+        faultCase("save-archive-replace-end", ProjectSaveFaultStage::ArchiveReplace, true),
+        faultCase("save-archive-replace-false", ProjectSaveFaultStage::ArchiveReplace, false),
+        folderFaultCase("folder-manifest-flush-end", ProjectSaveFaultStage::ManifestFlush, true),
+        folderFaultCase("folder-manifest-flush-false", ProjectSaveFaultStage::ManifestFlush, false),
+        folderFaultCase("folder-manifest-close-end", ProjectSaveFaultStage::ManifestClose, true),
+        folderFaultCase("folder-manifest-close-false", ProjectSaveFaultStage::ManifestClose, false),
+        folderFaultCase("folder-rotation-end", ProjectSaveFaultStage::DestinationToBackupRename, true),
+        folderFaultCase("folder-rotation-false", ProjectSaveFaultStage::DestinationToBackupRename, false),
+        folderFaultCase("folder-publication-end", ProjectSaveFaultStage::StagingToDestinationRename, true),
+        folderFaultCase("folder-publication-false", ProjectSaveFaultStage::StagingToDestinationRename, false),
     };
     std::error_code error;
     const auto root =
@@ -264,13 +349,15 @@ int Application::RunFileEndSessionSelfTest() noexcept
         // Setup is a tiny harness operation. Expected final pixels are literals, independent from the writer.
         auto oldDocument = LiteralFileDocument(0xFF202020);
         const auto oldActive = oldDocument.layers.front().id;
-        bool installedOld = project
-                                ? SaveProject(output.c_str(), oldDocument, oldActive, true) == ProjectIoStatus::Ok
-                                : (jpeg ? EncodeJpegFile(oldDocument.layers.front().asset->image, {}, output.c_str())
-                                        : EncodePngFile(oldDocument.layers.front().asset->image, 72, output.c_str())) ==
-                                      ImageCodecStatus::Ok;
+        bool installedOld =
+            project ? SaveProject(output.c_str(), oldDocument, oldActive, !scenario.folder) == ProjectIoStatus::Ok
+                    : (jpeg ? EncodeJpegFile(oldDocument.layers.front().asset->image, {}, output.c_str())
+                            : EncodePngFile(oldDocument.layers.front().asset->image, 72, output.c_str())) ==
+                          ImageCodecStatus::Ok;
         std::vector<std::uint8_t> oldBytes;
-        installedOld = installedOld && ReadLiteralFile(output, oldBytes);
+        std::vector<SessionProjectEntry> oldTree;
+        installedOld =
+            installedOld && (scenario.folder ? ReadLiteralTree(output, oldTree) : ReadLiteralFile(output, oldBytes));
         if (!installedOld)
             return 5;
         auto input = LiteralFileDocument(0xFF404040);
@@ -293,7 +380,10 @@ int Application::RunFileEndSessionSelfTest() noexcept
             (project ? !_projectSaveTestGate->release : !_exportWorkTestGate->release))
             return 5;
         if (project)
+        {
             _projectSaveTestGate->afterPublication = scenario.afterPublication;
+            _projectSaveTestGate->faultStageForTest = scenario.fault;
+        }
         else
         {
             _exportWorkTestGate->afterPublication = scenario.afterPublication;
@@ -325,6 +415,7 @@ int Application::RunFileEndSessionSelfTest() noexcept
                 ++failures;
         };
         const bool cancelled = scenario.timeout || scenario.readback;
+        const bool fault = scenario.fault != ProjectSaveFaultStage::Count;
         expect(state.visited && state.heldBefore, "original-writer-graph-is-held-at-actual-phase");
         expect(state.earlierQueryHeld && state.reason && state.critical && state.queryDidNotCancel,
                "queries-obey-stage-policy-with-localized-reason");
@@ -332,13 +423,17 @@ int Application::RunFileEndSessionSelfTest() noexcept
         expect(state.originalHeldAfter && state.noOwnerApply,
                "event-confers-no-receipt-path-or-saved-revision-authority");
         expect(state.cancelAfter == cancelled, "only-timeout-or-readback-cancels-original-history-stamp");
-        expect(state.receipt.Read().outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Succeeded),
+        expect(state.receipt.Read().outcome == (cancelled ? HostOutcome::Cancelled
+                                                : fault   ? HostOutcome::Failed
+                                                          : HostOutcome::Succeeded),
                "original-receipt-finishes-after-ordinary-acknowledgement");
         bool outputCorrect = false;
-        if (cancelled)
+        if (cancelled || fault)
         {
             std::vector<std::uint8_t> actualBytes;
-            outputCorrect = ReadLiteralFile(output, actualBytes) && actualBytes == oldBytes;
+            std::vector<SessionProjectEntry> actualTree;
+            outputCorrect = scenario.folder ? ReadLiteralTree(output, actualTree) && actualTree == oldTree
+                                            : ReadLiteralFile(output, actualBytes) && actualBytes == oldBytes;
         }
         else if (project)
         {
@@ -355,15 +450,77 @@ int Application::RunFileEndSessionSelfTest() noexcept
         }
         expect(outputCorrect, "publication-is-literal-or-old-file-is-byte-exact");
         expect(_session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
-                   _session.history.IsModified() == (!scenario.savedReadback && (!project || cancelled)) &&
-                   _documentPath == (project && !cancelled ? output.wstring() : L"before-session-write.prism"),
+                   _session.history.IsModified() == (!scenario.savedReadback && (!project || cancelled || fault)) &&
+                   _documentPath == (project && !cancelled && !fault ? output.wstring() : L"before-session-write.prism"),
                "only-current-save-completion-marks-its-published-revision");
         expect(!_projectSaveTicket && !_projectSaveStamp && !_projectSaveWrite && !_exportTicket && !_exportStamp &&
                    !_exportWrite && !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&
                    _hostInputBudget.Used() == 0 && _gpuWork.LentCount() == 0 && !_gpuWork.HasPending() &&
                    _composition.UtilitySurfaceBytes() == 0 && _renderer.PresentCount() == presents &&
-                   _errorsShown == notices,
-               "tickets-events-budgets-and-utility-owners-retire-without-present-or-notice");
+                   _errorsShown == notices + (fault ? 1 : 0) && (!fault || _lastErrorId == IDS_ERROR_SAVE_PROJECT),
+               fault ? "tickets-events-budgets-and-utility-owners-retire-with-one-failure-notice"
+                     : "tickets-events-budgets-and-utility-owners-retire-without-present-or-notice");
+        if (fault)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            const auto index = static_cast<std::size_t>(scenario.fault);
+            const auto rollback = static_cast<std::size_t>(ProjectSaveFaultStage::RollbackRename);
+            bool correctShape = true;
+            if (scenario.folder)
+            {
+                correctShape = trace.faultVisits[rollback] ==
+                               (scenario.fault == ProjectSaveFaultStage::StagingToDestinationRename ? 1u : 0u);
+                for (const auto zipStage : {ProjectSaveFaultStage::ArchiveCommit, ProjectSaveFaultStage::ArchiveFlush,
+                                            ProjectSaveFaultStage::ArchiveClose, ProjectSaveFaultStage::ArchiveReplace})
+                    correctShape = correctShape && trace.faultVisits[static_cast<std::size_t>(zipStage)] == 0;
+            }
+            expect(trace.saveStatus == ProjectIoStatus::Encode && index < trace.faultVisits.size() &&
+                       trace.faultVisits[index] == 1 && !trace.faultTraceTruncated && correctShape &&
+                       state.receipt.Read().error == static_cast<std::int32_t>(E_FAIL),
+                   "original-writer-fault-once-and-ordinary-failure-acknowledgement");
+            const ProjectIoStage expectedStage =
+                scenario.fault == ProjectSaveFaultStage::ManifestFlush ||
+                        scenario.fault == ProjectSaveFaultStage::ArchiveFlush
+                    ? ProjectIoStage::FlushFailed
+                : scenario.fault == ProjectSaveFaultStage::ArchiveReplace ||
+                        scenario.fault == ProjectSaveFaultStage::StagingToDestinationRename
+                    ? ProjectIoStage::StagingToDestinationFailed
+                : scenario.fault == ProjectSaveFaultStage::DestinationToBackupRename
+                    ? ProjectIoStage::DestinationToBackupFailed
+                    : ProjectIoStage::CloseFailed;
+            unsigned int exactErrors = 0, publications = 0, staged = 0;
+            std::size_t errorIndex = trace.observationCount, stagedIndex = trace.observationCount;
+            for (std::size_t i = 0; i < trace.observationCount; ++i)
+            {
+                const auto& observed = trace.observations[i];
+                if (observed.stage == expectedStage && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++exactErrors;
+                    errorIndex = i;
+                }
+                publications += observed.stage == ProjectIoStage::Published ? 1u : 0u;
+                if (observed.stage == ProjectIoStage::Staged)
+                {
+                    ++staged;
+                    stagedIndex = i;
+                }
+            }
+            const bool replacement = scenario.fault == ProjectSaveFaultStage::ArchiveReplace ||
+                                     scenario.fault == ProjectSaveFaultStage::DestinationToBackupRename ||
+                                     scenario.fault == ProjectSaveFaultStage::StagingToDestinationRename;
+            expect(exactErrors == 1 && publications == 0 && !trace.traceTruncated &&
+                       staged == (replacement ? 1u : 0u) && (!replacement || stagedIndex < errorIndex),
+                   "exact-io-error-and-unpublished-durability-boundary");
+            const auto reloaded = LoadProject(output.c_str());
+            expect(reloaded.status == ProjectIoStatus::Ok && reloaded.activeLayerID == oldActive &&
+                       reloaded.document.id == oldDocument.id && reloaded.document.layers.size() == 1 &&
+                       reloaded.document.layers.front().id == oldActive && reloaded.document.layers.front().asset &&
+                       HasLiteralPixel(reloaded.document.layers.front().asset->image, 32),
+                   "prepublication-fault-keeps-old-literal-project");
+            if (scenario.folder)
+                expect(outputCorrect && HasNoOwnedSaveSiblings(output),
+                       "folder-shape-retains-old-tree-and-cleans-owned-siblings");
+        }
         _projectSaveTestGate.reset();
         _exportWorkTestGate.reset();
         _endSessionWriteTestGate.reset();

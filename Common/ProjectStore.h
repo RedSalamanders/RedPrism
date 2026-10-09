@@ -85,14 +85,17 @@ struct ProjectIoObserver
     void* context = nullptr;
 };
 
-// Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
-// value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
-// there is no process-wide test state. Injected operation errors are final; only native rename errors get the
-// bounded recovery attempts. DestinationTimerCreate/Arm/Wait apply only after a native prepublication rename
-// refusal; cancellation can stop there with the current destination intact. RecoveryTimerCreate/Arm/Wait fault results
-// stop that recovery operation while the observer still receives the native rollback rename error. Publication
-// timer faults preserve the native staging rename error; cancellation stops publication only before rotation.
-// ZIP saves do not consult this policy.
+// Optional deterministic failure seam for checked durability and destination publication. The callback returns a Win32
+// error value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call; there
+// is no process-wide test state. Injected operation errors are final; only native rename errors get the bounded
+// recovery attempts. DestinationTimerCreate/Arm/Wait apply only after a native prepublication rename refusal;
+// cancellation can stop there with the current destination intact. RecoveryTimerCreate/Arm/Wait fault results stop that
+// recovery operation while the observer still receives the native rollback rename error. Publication timer faults
+// preserve the native staging rename error; cancellation stops publication only before rotation. Manifest durability
+// gates apply to both shapes. Archive commit/flush/close/replacement gates apply only to ZIP saves; ZIP saves never
+// consult directory rename/recovery/cleanup stages. Injected durability/replacement errors are reported before cleanup
+// and refuse publication with Encode. They deny a gate before its real operation, while RAII still closes/discards its
+// exclusively owned resources.
 enum class ProjectSaveFaultStage : std::uint8_t
 {
     DestinationToBackupRename,
@@ -109,7 +112,17 @@ enum class ProjectSaveFaultStage : std::uint8_t
     PublicationTimerCreate,
     PublicationTimerArm,
     PublicationTimerWait,
+    ManifestFlush,
+    ManifestClose,
+    ArchiveCommit,
+    ArchiveFlush,
+    ArchiveClose,
+    ArchiveReplace,
+    Count,
 };
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::PublicationTimerWait) == 13);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::ManifestFlush) == 14);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::Count) == 20);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RollbackRename) == 2);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerCreate) == 5);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerArm) == 6);

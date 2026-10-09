@@ -5,6 +5,8 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <windows.h>
 
 #pragma warning(push)
@@ -28,6 +30,11 @@ struct ProjectSaveTestGate final
     std::array<Observation, 32> observations{}; // worker writes; harness reads only after acknowledgement
     std::size_t observationCount = 0;
     bool traceTruncated = false;
+    // Immutable harness request before submission. Worker-only writes; read after the original acknowledgement.
+    ProjectSaveFaultStage faultStageForTest = ProjectSaveFaultStage::Count;
+    std::uint32_t faultErrorForTest = ERROR_WRITE_FAULT;
+    std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> faultVisits{};
+    bool faultTraceTruncated = false;
     ProjectIoStatus saveStatus = ProjectIoStatus::Encode;
     JobResult result;
     std::atomic<unsigned int> visits{0};

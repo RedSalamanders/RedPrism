@@ -2169,3 +2169,126 @@ foreach ($fault in 'RealVexInBody','RealVexInPad','RealVexAtProcedureEnd','RealV
     ++$biasedR8Count
 }
 Write-Host "Signed biased R8 byte-index synthetic controls passed: $biasedR8Count"
+
+function New-UnsignedStackTerminalCase([string]$Name, [string]$Fault = '', [int]$Maximum = 5) {
+    $case = New-SyntheticCase ($Name + 'Seed') -PdbData
+    $pe = [IO.File]::ReadAllBytes($case.Binary)
+    [UInt32]$section = $script:sectionRva
+    [UInt32]$dispatch = $section + 0x890
+    [UInt32]$prefix = $dispatch - 11
+    [UInt32]$table = $section + 0x900
+    [UInt32]$target = $section + 0x8c5
+    [UInt32]$default = $target + 4
+    [UInt32]$end = $table + 4 * ($Maximum + 1)
+    # Independent observed CMP DWORD/RSP+disp8; unsigned short JA; zero-extending MOV EAX.
+    [byte[]]$guard = @(0x83,0x7c,0x24,0x20,$Maximum,0x77,($default-($prefix+7)),0x8b,0x44,0x24,0x20)
+    switch ($Fault) {
+        'WrongCmp' { $guard[1] = 0x7d }
+        'WrongJa' { $guard[5] = 0x76 }
+        'WrongIndexOpcode' { $guard[7] = 0x89 }
+        'WrongIndexRegister' { $guard[8] = 0x4c }
+        'WrongIndexSib' { $guard[9] = 0x25 }
+        'DifferentStackSlot' { $guard[10]++ }
+        'ZeroRange' { $guard[4] = 0 }
+        'Range128' { $guard[4] = 128 }
+        'Range255' { $guard[4] = 255 }
+        'WrongDefault' { $guard[6]++ }
+        'BackwardDefault' { $guard[6] = 0 }
+    }
+    [byte[]]$lea = @(0x48,0x8d,0x0d,0,0,0,0)
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes([Int32](-[Int64]($dispatch+7))))
+    [byte[]]$load = @(0x8b,0x84,0x81,0,0,0,0)
+    Set-U32 $load 3 $table
+    [byte[]]$add = @(0x48,0x03,0xc1)
+    [byte[]]$jump = @(0xff,0xe0)
+    switch ($Fault) {
+        'WrongImageBase' { $lea[3]++ }
+        'WrongLoad' { $load[2] = 0x82 }
+        'WrongLoadIndex' { $load[2] = 0x91 }
+        'WrongAdd' { $add[2] = 0xc2 }
+        'WrongJump' { $jump[1] = 0xe1 }
+    }
+    $rows = [Collections.Generic.List[string]]::new()
+    $instructions = @([byte[]]$guard[0..4],[byte[]]$guard[5..6],[byte[]]$guard[7..10],$lea,$load,$add,$jump)
+    $offsets = @(0,5,7,11,18,25,28)
+    for ($i=0; $i -lt $instructions.Count; ++$i) {
+        [byte[]]$bytes = $instructions[$i]
+        Put-Bytes $pe (0x400+$prefix-$section+$offsets[$i]) $bytes
+        if ($Fault -eq "MissingRow$i") { continue }
+        [byte[]]$reported = $bytes.Clone()
+        if ($Fault -eq "ListingRow$i") { $reported[$reported.Length-1] = $reported[$reported.Length-1] -bxor 1 }
+        $text = if ($Fault -eq "UnknownRow$i") { '<unknown>' } else { 'guard-dispatch' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$prefix+$offsets[$i]), (Hex-Bytes $reported), $text))
+    }
+    if ($Fault -eq 'OverlappingGuard') { $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$prefix+1))) }
+    if ($Fault -eq 'OverlappingDispatch') { $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$dispatch+1))) }
+    if ($Fault -eq 'DuplicateGuard') { $rows.Add(('{0:x}: 77 00 ja' -f ($script:imageBase+$prefix+5))) }
+    foreach ($address in @($target,$default)) {
+        [byte[]]$bytes = if ($address -eq $target) { @(0xb0,0x01) } else { @(0x32,0xc0) }
+        Put-Bytes $pe (0x400+$address-$section) $bytes
+        $text = if ($Fault -eq 'UnknownTarget' -and $address -eq $target) { '<unknown>' } else { 'scalar-target' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$address), (Hex-Bytes $bytes), $text))
+    }
+    $pe[0x400+$table-$section-1] = if ($Fault -eq 'WrongRet') { 0x90 } else { 0xc3 }
+    if ($Fault -ne 'MissingRet') {
+        $ret = if ($Fault -eq 'ListingRet') { '90' } else { '{0:x2}' -f $pe[0x400+$table-$section-1] }
+        $text = if ($Fault -eq 'UnknownRet') { '<unknown>' } else { 'ret' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$table-1), $ret, $text))
+    }
+    if ($Fault -eq 'OverlappingRet') { $rows.Add(('{0:x}: 90 c3 nop' -f ($script:imageBase+$table-2))) }
+    for ($i=0; $i -le $Maximum; ++$i) {
+        [UInt32]$entry = $target
+        if ($i -eq $Maximum -and $Fault -eq 'MiddleTarget') { $entry++ }
+        if ($i -eq $Maximum -and $Fault -eq 'OutsideTarget') { $entry = $prefix-1 }
+        Set-U32 $pe (0x400+$table-$section+4*$i) $entry
+        $bytes = [byte[]]$pe[(0x400+$table-$section+4*$i)..(0x400+$table-$section+4*$i+3)]
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$table+4*$i), (Hex-Bytes $bytes)))
+    }
+    $procEnd = $end
+    if ($Fault -eq 'ShortProcedure') { $procEnd -= 4 }
+    if ($Fault -eq 'LongProcedure') { $procEnd += 4 }
+    $procOwner = if ($Fault -eq 'WrongProcedureOwner') { 1 } else { 0 }
+    $sym = "  Mod $procOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $sym += "  0 | S_GPROC32 [size = 16] ``UnsignedStackTerminal`` `n  addr = 0001:$($prefix-$section), code size = $($procEnd-$prefix)`n"
+    }
+    $dataOwner = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+    $sym += "  Mod $dataOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingData') {
+        $data = if ($Fault -eq 'WrongDataStart') { $table+4 } else { $table }
+        $sym += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($data-$section)`n"
+    }
+    if ($Fault -eq 'EarlyDataSymbol') {
+        $sym += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($table-$section+8)`n"
+    }
+    # Force the terminal proof: the next anonymous data symbol belongs to an unrelated procedure.
+    $sym += "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:4096`n"
+    if ($Fault -eq 'AdjacentVex') {
+        [byte[]]$vex = @(0xc5,0xf8,0x10,0x00)
+        Put-Bytes $pe (0x400+$end-$section) $vex
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$end), (Hex-Bytes $vex)))
+    }
+    Set-Content -LiteralPath $case.Symbols -Value $sym -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value (@($rows | Sort-Object { [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber) }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary,$pe)
+    $case.Name = $Name
+    return $case
+}
+$unsignedStackCount = 0
+foreach ($maximum in 1,5,127) {
+    Invoke-Control (New-UnsignedStackTerminalCase "UnsignedStackTerminalMaximum$maximum" '' $maximum) $true ($maximum+1) 0
+    ++$unsignedStackCount
+}
+Invoke-Control (New-UnsignedStackTerminalCase 'UnsignedStackTerminalAdjacentVex' 'AdjacentVex') $false 6 1
+++ $unsignedStackCount
+$unsignedStackFaults = @('WrongCmp','WrongJa','WrongIndexOpcode','WrongIndexRegister','WrongIndexSib','DifferentStackSlot',
+    'ZeroRange','Range128','Range255','WrongDefault','BackwardDefault','WrongImageBase','WrongLoad','WrongLoadIndex','WrongAdd','WrongJump',
+    'OverlappingGuard','OverlappingDispatch','DuplicateGuard','UnknownTarget','WrongRet','MissingRet','ListingRet','UnknownRet','OverlappingRet',
+    'MiddleTarget','OutsideTarget','ShortProcedure','LongProcedure','WrongProcedureOwner','MissingProcedure','WrongDataOwner','MissingData',
+    'WrongDataStart','EarlyDataSymbol')
+foreach ($i in 0..6) { $unsignedStackFaults += "MissingRow$i", "ListingRow$i", "UnknownRow$i" }
+foreach ($fault in $unsignedStackFaults) {
+    Invoke-Control (New-UnsignedStackTerminalCase ("UnsignedStackTerminal$fault") $fault) $false
+    ++$unsignedStackCount
+}
+Write-Host "Unsigned stack terminal DWORD synthetic controls passed: $unsignedStackCount"

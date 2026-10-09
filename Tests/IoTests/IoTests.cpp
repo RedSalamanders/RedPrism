@@ -15,6 +15,7 @@
 #include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
 #include "ImageImportWorkTests.h"
+#include "Io.Tests.ProjectDurabilityFaults.h"
 #include "PathClassificationWorkTests.h"
 #include "ProjectCancellationTests.h"
 #include "ProjectLoadWorkTests.h"
@@ -1716,14 +1717,14 @@ struct RotationFaultPlan
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::DestinationToBackupRename;
     std::uint32_t error = ERROR_ACCESS_DENIED;
     unsigned int failOnVisit = 1;
-    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::Count)]{};
 };
 
 struct RecoveryTimerFaultPlan
 {
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::RecoveryTimerCreate;
     std::uint32_t error = ERROR_NOT_ENOUGH_MEMORY;
-    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::Count)]{};
 };
 
 std::uint32_t FailPublishAndRecoveryTimerAt(void* context, ProjectSaveFaultStage stage) noexcept
@@ -1908,8 +1909,7 @@ void TestNativeDestinationRotation()
             RotationEventLog events;
             wil::unique_hfile reader;
             CancelSource cancellation;
-            std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1>
-                visits{};
+            std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> visits{};
         } control{mode};
         const bool needsReader = mode != Mode::InjectedFinal && mode != Mode::Healthy;
         if (needsReader)
@@ -2353,7 +2353,7 @@ void TestProjectRotationFaultRecovery()
     // The fault callback can select one stage at a time, so use a context that fails the second requested point.
     struct TwoFaults
     {
-        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::Count)]{};
     } twoFaults;
     const auto failPublishAndRollback = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2485,7 +2485,7 @@ void TestProjectRotationFaultRecovery()
     RotationEventLog stagingCleanupEvents{};
     struct RenameAndCleanupFaults
     {
-        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::Count)]{};
     } renameAndCleanupFaults;
     const auto failRenameAndStagingCleanup = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2762,6 +2762,7 @@ int wmain(int argc, wchar_t** argv)
     TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
     gFailures += RunProjectPublicationRetryTests();
+    gFailures += RunIoProjectDurabilityFaultTests();
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
     gFailures += RunClipboardDibWorkTests();

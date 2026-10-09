@@ -1,7 +1,7 @@
 # Project format (`.prism`)
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-09
 Owner: `Common/ProjectStore.*`, `Common/ZipOwner.h`
 
 ## Scope
@@ -94,6 +94,15 @@ successfully before publication; ZIP close, flush, and handle close must all suc
 pre-publication staging or durability step leaves the previous destination intact and removes only the temporary
 file or directory owned by that save. Existing ZIP readers accept both stored and deflated entries. Writers store
 already encoded PNG assets and deflate the manifest.
+
+The optional, per-call `ProjectSaveFaultPolicy` also exposes manifest flush/close for both shapes and ZIP commit,
+archive flush/close and replacement. Existing directory fault slots 0–13 remain stable; the six durability slots
+are appended, with `Count` bounding visitor arrays. A nonzero callback denies its operation before execution,
+returns `Encode` without `Published`, and reports the exact error before RAII discard/close and owned temporary
+cleanup. Flush errors report `FlushFailed`, close/commit errors `CloseFailed`, and replacement errors
+`StagingToDestinationFailed`. ZIP replacement alone among these six gates follows `Staged`. The default empty
+policy executes the real operations and creates no injection state. These seams qualify controlled failure
+boundaries; they do not establish interruption or cancellation latency for a codec or filesystem call in flight.
 
 Both shapes first encode assets serially into bounded files in the owned sibling staging directory. ZIP saves
 use file sources for those assets through close; they retain filenames/manifest, not all encoded PNG vectors.
@@ -282,8 +291,11 @@ The worker reports publication independently from its scheduler result. On curre
 records the captured path and marks only the captured revision saved; a later edit therefore remains modified.
 Publication followed by cancellation still records the external file and captured saved revision, but cancellation
 suppresses a dependent close/replacement. Cancellation before publication and failed publication preserve the old
-destination and document path/revision. Returned failure and worker `bad_alloc` fail the receipt and show the save
-notice. A stale lineage cannot update the path or saved revision. Clipboard commands use admitted worker graphs and owned OS transfers; see [`IO_ImageCodecs.md`](IO_ImageCodecs.md) for publication and qualification. Project open and image import are worker graphs.
+destination and document path/revision. For a current, uncancelled lineage, returned failure and worker `bad_alloc`
+fail the receipt and show the save notice. An accepted cancellation on an unpublished current lineage keeps the
+receipt Cancelled/E_ABORT even when a later native I/O error is observed; that error remains a worker diagnostic
+fact and cannot show another notice or acquire path/saved-revision authority. A stale lineage cannot update the
+path or saved revision. Clipboard commands use admitted worker graphs and owned OS transfers; see [`IO_ImageCodecs.md`](IO_ImageCodecs.md) for publication and qualification. Project open and image import are worker graphs.
 
 Preflight declares one whole-graph peak before owning job construction; submission reserves it before any worker
 decode/encode or staged output allocation. The resolved path and worker object are

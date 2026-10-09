@@ -161,11 +161,14 @@ struct Manifest
     return ProjectIoStatus::Ok;
 }
 
+[[nodiscard]] std::uint32_t RequestedFailure(ProjectSaveFaultPolicy policy, ProjectSaveFaultStage stage) noexcept;
+
 // Project assets are staged beside their destination and must be fully written, flushed, and closed before the
 // directory rotation can publish them. Keep the manifest close result observable here; asset encodes use the
 // codec's separate checked file-stream publication path.
 [[nodiscard]] ProjectIoStatus WriteFileBytes(const wchar_t* path, const std::uint8_t* bytes, std::size_t size,
-                                             CancelToken cancellation, ProjectIoObserver observer)
+                                             CancelToken cancellation, ProjectIoObserver observer,
+                                             ProjectSaveFaultPolicy faultPolicy)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -199,10 +202,18 @@ struct Manifest
     }
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (!FlushFileBuffers(file.get()))
+    const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ManifestFlush);
+    if (flushFailure != 0 || !FlushFileBuffers(file.get()))
     {
-        Report(observer, ProjectIoStage::FlushFailed, GetLastError());
+        const auto error = flushFailure != 0 ? flushFailure : GetLastError();
+        Report(observer, ProjectIoStage::FlushFailed, error);
         return ProjectIoStatus::Encode;
+    }
+    const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ManifestClose);
+    if (closeFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, closeFailure);
+        return ProjectIoStatus::Encode; // Original RAII owner still closes before staging cleanup.
     }
     HANDLE raw = file.release();
     if (!CloseHandle(raw))
@@ -215,16 +226,36 @@ struct Manifest
 
 // libzip closes its own handle internally; reopen the completed archive and require both flush and close to succeed
 // before the caller can publish it over the current destination.
-[[nodiscard]] bool FlushFileToDisk(const wchar_t* path) noexcept
+[[nodiscard]] bool FlushFileToDisk(const wchar_t* path, ProjectIoObserver observer,
+                                   ProjectSaveFaultPolicy faultPolicy) noexcept
 {
     wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL, nullptr)};
-    if (!file || !FlushFileBuffers(file.get()))
+    if (!file)
     {
+        Report(observer, ProjectIoStage::CreateFailed, GetLastError());
+        return false;
+    }
+    const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveFlush);
+    if (flushFailure != 0 || !FlushFileBuffers(file.get()))
+    {
+        const auto error = flushFailure != 0 ? flushFailure : GetLastError();
+        Report(observer, ProjectIoStage::FlushFailed, error);
+        return false;
+    }
+    const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveClose);
+    if (closeFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, closeFailure);
         return false;
     }
     HANDLE raw = file.release();
-    return CloseHandle(raw) != 0;
+    if (!CloseHandle(raw))
+    {
+        Report(observer, ProjectIoStage::CloseFailed, GetLastError());
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] std::wstring UniqueSiblingPath(const std::wstring& destination)
@@ -1762,7 +1793,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
 
 [[nodiscard]] ProjectIoStatus SaveZip(const wchar_t* path, const std::string& json, const std::wstring& images,
                                       const std::vector<std::string>& files, CancelToken cancellation,
-                                      ProjectIoObserver observer)
+                                      ProjectIoObserver observer, ProjectSaveFaultPolicy faultPolicy)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1842,13 +1873,19 @@ constexpr unsigned int kMaxCleanupDepth = 128;
             return ProjectIoStatus::Encode;
         }
     }
+    const auto commitFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveCommit);
+    if (commitFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, commitFailure);
+        return ProjectIoStatus::Encode; // Discard precedes exclusive temporary cleanup.
+    }
     if (!ZipCommit(zip))
     {
         return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Encode;
     }
     // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
     // another file. Publication is refused when that flush or its transferred handle close fails.
-    if (!FlushFileToDisk(temp.c_str()))
+    if (!FlushFileToDisk(temp.c_str(), observer, faultPolicy))
     {
         return ProjectIoStatus::Encode;
     }
@@ -1856,6 +1893,12 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     // An acknowledged stop before this boundary leaves dest intact. Publication is not cancelled midway.
+    const auto replaceFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveReplace);
+    if (replaceFailure != 0)
+    {
+        Report(observer, ProjectIoStage::StagingToDestinationFailed, replaceFailure);
+        return ProjectIoStatus::Encode;
+    }
     if (IsFile(dest.c_str()))
     {
         if (!ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) &&
@@ -2180,7 +2223,7 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
     }
     const auto manifestStatus =
         WriteFileBytes((staging + L"\\manifest.json").c_str(), reinterpret_cast<const std::uint8_t*>(json.data()),
-                       json.size(), cancellation, observer);
+                       json.size(), cancellation, observer, faultPolicy);
     if (manifestStatus != ProjectIoStatus::Ok)
         return manifestStatus;
     // Assets are bounded direct-to-file encodes. libzip later streams these files using STORE instead of
@@ -2192,7 +2235,7 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
         return encoded;
     }
     const auto status = zipArchive
-                            ? SaveZip(path, json, images, files, cancellation, observer)
+                            ? SaveZip(path, json, images, files, cancellation, observer, faultPolicy)
                             : SaveExploded(destination, staging, cancellation, observer, faultPolicy, *cleanupScratch);
     if (status == ProjectIoStatus::Ok && !zipArchive)
         cleanup.release(); // rotation transferred the directory; this name no longer denotes our staging.

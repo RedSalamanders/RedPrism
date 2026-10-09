@@ -83,7 +83,24 @@ class Application::ProjectSaveJob final : public Job
                                                  stateValue.context.ReportProgress(99);
                                          },
                                          &progress};
-        _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer);
+        ProjectSaveFaultPolicy faultPolicy;
+        if (_gate && _gate->faultStageForTest != ProjectSaveFaultStage::Count)
+        {
+            faultPolicy = {[](void* raw, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+                           {
+                               auto& trace = *static_cast<ProjectSaveTestGate*>(raw);
+                               const auto index = static_cast<std::size_t>(stage);
+                               if (index >= trace.faultVisits.size())
+                               {
+                                   trace.faultTraceTruncated = true;
+                                   return ERROR_ARITHMETIC_OVERFLOW;
+                               }
+                               ++trace.faultVisits[index];
+                               return stage == trace.faultStageForTest ? trace.faultErrorForTest : 0;
+                           },
+                           _gate.get()};
+        }
+        _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer, faultPolicy);
         if (_gate)
             _gate->saveStatus = _status;
         if (_gate && !_gate->traceOnly && _gate->afterPublication)

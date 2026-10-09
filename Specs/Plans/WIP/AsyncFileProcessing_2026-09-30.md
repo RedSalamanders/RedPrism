@@ -2,10 +2,7 @@
 
 ## Implementation checklist
 
-Current step (2026-10-09): the bounded native-read identity repair is qualified and committed/pushed as `205ce70`.
-Main has reviewed manifest/ZIP durability gates and 20 actual ZIP/folder session-end fault preparations (248 new
-expected host assertions plus 87 helper assertions). They remain ignored, uncompiled drafts until the current
-frame/prepared-display source qualification completes. [Fault preparation and checklist](../../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md).
+Current step (2026-10-09): the project durability/session-end and strict scanner checkpoint passes full x64 Debug r593, Release r594, real ASan r595, Release analysis r596 and all ARM64 r70 Debug/Release/ASan cross-builds on the identical 1,100-input F346 source. Main independently authenticates the archives, original sanitizer diagnostic, complete predecessor inventories, 87 helper/248 new host assertions, 356 session-end records and both display smoke routes; native ARM64 runtime remains unavailable. Formatting (970 files), 15 skills and diff checks pass. No DxUi source/pin or runtime allowlist change. Next: integrate and execute the reviewed 22 cleanup/rollback/recovery/late-timeout, locked PNG/JPEG and actual project-asset failure cases (338 expected additions / 694 namespace records); these remain uncompiled drafts. A separate eight-control shared-deadline policy draft remains pending. Ordinary activation, complete admission, remaining F6 and measured G1 block P1 Done. [Current checklist and proof](../../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md).
 
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.

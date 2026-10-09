@@ -85,7 +85,7 @@ struct Control final
     unsigned int rollbackFailures = 0;
     unsigned int timerFaultError = 0;
     bool foreignCreated = false;
-    std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1> visits{};
+    std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> visits{};
 };
 
 bool LocksSource(Mode mode) noexcept
