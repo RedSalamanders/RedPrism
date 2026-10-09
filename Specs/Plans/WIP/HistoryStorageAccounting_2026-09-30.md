@@ -155,11 +155,13 @@
         - [x] Private typed-opacity core: preview/restore without history and original-to-final publication pass
           112 independent controls and all 5,880 preceding controls in Debug/Release/ASan, with identical 316
           core/test inputs and independently verified archives.
-        - [ ] Typed-opacity host: ordered opening/sequence closure, requested/shown separation, coalescing,
-          late-value suppression and all caller prerequisites. Worker intent plumbing is prepared privately;
-          explicit queue coalescing privately passes 154 existing and 20 new controls plus all six profiles.
-          The 81 application caller files compile privately after reviewed fixture and worker draft conversions;
-          full application linkage/runtime and host integration remain open. The detailed checklist is in the record above.
+        - [x] Tested typed-opacity host ordering, requested/shown separation, coalescing and late-value
+          suppression: the later complete WARP application r6/r7/r8 matrix qualifies 31 typed and 36 context
+          controls in Debug/Release/real ASan, with all predecessor labels preserved. The earlier private
+          plumbing-only status is superseded by [the typed host matrix](../../TestRuns/DocumentRecordRoots_2026-10-03.md#typed-host-application-matrix-qualified-2026-10-04).
+        - [ ] Remaining typed-opacity pointer/lifetime and caller-prerequisite closure, ordinary activation,
+          complete current-source qualification, H3/H4 and measured G1. The qualified ordering fixture does
+          not close these separate requirements; do not reintroduce its tested ordering as generic missing code.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering

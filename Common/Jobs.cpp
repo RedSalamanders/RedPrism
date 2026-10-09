@@ -794,7 +794,8 @@ std::int32_t JobScheduler::RetainMemory(JobTicket ticket, RetainedMemoryTicket& 
     return RetainMemoryImpl(ticket, retained, false);
 }
 
-std::int32_t JobScheduler::RetainMemoryImpl(JobTicket ticket, RetainedMemoryTicket& retained, bool publication) noexcept
+std::int32_t JobScheduler::RetainMemoryImpl(JobTicket ticket, RetainedMemoryTicket& retained, bool publication,
+                                            bool retirement) noexcept
 {
     if (!_impl || _impl->closed)
         return E_UNEXPECTED;
@@ -807,12 +808,12 @@ std::int32_t JobScheduler::RetainMemoryImpl(JobTicket ticket, RetainedMemoryTick
     WorkerResources::ExclusiveLock guard{self.lock};
     auto& record = self.records[ticket.slot];
     const auto expectedState = publication ? Impl::State::Suspended : Impl::State::Completed;
-    if (self.closing || record.generation != ticket.generation || record.state != expectedState ||
-        record.reserved == 0 || record.result.status != JobStatus::Finished || !record.cancel ||
-        record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
+    if (record.generation != ticket.generation || record.state != expectedState || record.reserved == 0 ||
+        (!retirement && (self.closing || record.result.status != JobStatus::Finished || !record.cancel ||
+                         record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    if (publication && (!record.options.deferredRetirement || !record.options.reserveRetainedMemory ||
-                        record.retainedSlot >= kRetainedMemoryCapacity))
+    if ((publication || retirement) && (!record.options.deferredRetirement || !record.options.reserveRetainedMemory ||
+                                        record.retainedSlot >= kRetainedMemoryCapacity))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     if (record.retainedSlot < kRetainedMemoryCapacity)
     {
@@ -855,6 +856,11 @@ std::int32_t JobScheduler::RetainPublicationMemory(JobTicket ticket, SharedRetai
     return RetainSharedMemoryImpl(ticket, retained, true);
 }
 
+std::int32_t JobScheduler::RetainRetirementMemory(JobTicket ticket, SharedRetainedMemoryLease& retained) noexcept
+{
+    return RetainSharedMemoryImpl(ticket, retained, false, true);
+}
+
 bool JobScheduler::OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept
 {
     if (!_impl)
@@ -865,12 +871,12 @@ bool JobScheduler::OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& r
 }
 
 std::int32_t JobScheduler::RetainSharedMemoryImpl(JobTicket ticket, SharedRetainedMemoryLease& retained,
-                                                  bool publication) noexcept
+                                                  bool publication, bool retirement) noexcept
 {
     if (retained)
         return E_INVALIDARG;
     RetainedMemoryTicket transfer{};
-    const auto result = RetainMemoryImpl(ticket, transfer, publication);
+    const auto result = RetainMemoryImpl(ticket, transfer, publication, retirement);
     if (result != S_OK)
         return result;
     auto& self = *_impl;
@@ -1325,9 +1331,10 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
     self.highMemory.reset();
     struct CloseState final
     {
+        JobScheduler& owner;
         Impl& scheduler;
         CloseHooks hooks;
-    } closeState{self, hooks};
+    } closeState{*this, self, hooks};
     // Recorder callbacks borrow the same records and general executor. Join them before general-pool
     // teardown, job-wrapper destruction, owner cleanup and final worker graph retirement.
     if (self.recorders)
@@ -1338,6 +1345,31 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
                             auto& stopped = state.scheduler;
                             stopped.CheckOwner();
                             (void)InterlockedFlushSList(&stopped.completions);
+                            // Every producer has actually joined. Grant only original terminal accounting,
+                            // outside the scheduler lock and before resetting cancelled wrappers. Success-only
+                            // capture/publication hooks remain unset and no useful callback is invoked.
+                            stopped.inCallback = true;
+                            for (std::size_t index = 0; index < stopped.records.size(); ++index)
+                            {
+                                Job* joined = nullptr;
+                                JobTicket original{};
+                                {
+                                    WorkerResources::ExclusiveLock guard{stopped.lock};
+                                    auto& record = stopped.records[index];
+                                    if (record.job)
+                                    {
+                                        record.state = Impl::State::Completed;
+                                        joined = record.job.get();
+                                        original = {index, record.generation};
+                                    }
+                                }
+                                if (!joined)
+                                    continue;
+                                stopped.retainedMemoryCallback = original;
+                                joined->RetainJoinedRetirement(state.owner, original);
+                                stopped.retainedMemoryCallback.reset();
+                            }
+                            stopped.inCallback = false;
                             std::array<std::unique_ptr<Job>, kCapacity> retired;
                             {
                                 WorkerResources::ExclusiveLock guard{stopped.lock};

@@ -13,6 +13,15 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ### Detached Warp CPU and exclusive samples
 
+`RunRecordedWarpPreviewParentTests` runs the actual original scheduler/command parent on WARP and available
+hardware with ten literal source/mode cases per driver: translated, scaled, rotated 180 degrees, truly
+unmaterialized sparse and blank, each with Liquify and Smudge. Three actual GPU readbacks compare first preview
+with independently placed literal bytes and touched/committed results with original contiguous scalar Warp,
+with zero byte tolerance. The acknowledged old grid remains unchanged. Invalid/incomplete descriptors refuse
+before private resource creation, and original transport plus last-use acknowledgements precede worker retirement.
+The summary separately records completed WARP/hardware cases and explicit hardware skips. A cross-build does
+not qualify runtime, and this graphics fixture does not activate ordinary Warp or close G1.
+
 `DocumentTests` runs the Warp worker cancellation (43 assertions), adopted snapshots (36), detached opening (54),
 lazy tile snapshots (24), placed source sampler (31), sample plans (48) and exclusive sample sessions (45).
 The new plan/session references are independently calculated spacing centers, clipped tile geometry, explicit
@@ -2120,3 +2129,72 @@ its retained Paint receipt without changing the opacity-published pixels or hist
 release both originals and all reservations. No failure field delivered only after retirement, synthetic
 acknowledgement or transient-ticket timing observation qualifies this scenario. The event timeout is a
 deadlock bound. This does not qualify ordinary activation, complete peaks or G1.
+
+### Terminal retirement memory (P1)
+
+Normal `HostTests` runs 90 independent `retirement-memory.*` controls. Actual worker/event gates exercise
+successful completion, `E_FAIL`, cancellation and joined Close in both graph-first and weak-first release
+orders. The callback transfers one entire original descriptor reservation without useful acknowledgement;
+wrong ticket, occupied output, outside callback and missing descriptor slot refuse. Success-only publication
+and completed-work binding must remain refused on failed/cancelled/closing paths while the reservation is
+still present, so an already-empty reservation cannot mask a broken authority check.
+
+An independently admitted real lease observes the original shared endpoint after Close without holding a
+strong reference to the tested owner. A joined worker destroys the queued CPU graph; a surviving expired
+weak control must keep the complete original charge until its actual release. The observer's own 4 KiB charge
+remains separately accounted. A replacement scheduler cannot own the old endpoint. The fixed summary must
+report `passed=90 failed=0 controls=90 expected=90`. This accounting reference does not qualify GPU completion,
+live Warp activation or G1; those need the original application-parent gates.
+
+### Original Warp input and retirement prerequisites (P1)
+
+Normal DocumentTests runs the fixed 21 `warp-retirement.*` controls: verified owner/opening capture,
+zero-point no-history retirement, a genuinely prepared updating sample refused after retirement capture,
+complete detached-input/cache lifetime, stale/duplicate/foreign refusal, and exact sample-before-finish
+acknowledgement. A joined worker with an independent destruction sink observes actual final draft release.
+Normal HostTests runs 36 `host-pointer-input-stream-peek.*` controls, including returned-copy independence,
+terminal authority through acknowledgement, stale openings and an actual wrapped ring index.
+
+The hidden original live Warp fixture enters through QueueCanvasBrush and the real HostCanvasBrushInput
+FIFO. The 18 fixed controls cover Liquify/Smudge Down prime, captured-mode changes, Move GPU pixels, duplicate
+sample acknowledgement, same ticket/ordinal through held final preparation, scalar-reference final pixels,
+matching committed display/rows, joined off-owner retirement, exact Undo and primed-only Lost. Initial/Move
+GPU pixels use zero tolerance; final scalar/compute parity retains the existing 2/255 tolerance. Counts and
+unique labels must match the fixed registry. Real cancellation/stale/refusal/replacement/Close coverage,
+complete phase peaks, the current-source matrix, ordinary activation and G1 are separate required gates;
+these prerequisite or basic fixture passes cannot close P1.
+
+
+The original live Warp fault registry contains exactly 54 scenarios and 268 controls: Liquify/Smudge,
+opening, sample composition, recorded preview, returning draft, final preparation, final composition and
+dormant input; cancellation, producer failure, real device replacement and joined shutdown (a dormant
+parent has no useful producer to inject a failure into). A held final-composed boundary requires its
+exact sample-boundary visit plus the event; an earlier final-prepare event cannot satisfy it. Each case
+retains original ticket/ordinal and complete charges until the actual producer/transport retirement.
+
+Four real Lost/FIFO-overflow cases require 24 controls. The fixed 512-event capacity accepts only its
+prefix; later Up/Move must not extend it. Overflow commits that prefix, then reports the original receipt
+as Failed with HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA), as the pointer-input contract requires.
+Ordinary Lost reports Succeeded/S_OK. Numeric parity keeps the existing final 2/255 tolerance.
+
+The target registry requires seven literal target geometries in both modes and 84 controls: translated,
+scaled, rotated, sparse, blank, selected and masked. The reference constructs placed pixels independently,
+then uses the established contiguous Warp and scalar brush; final display placement has explicit index
+arithmetic. It checks preview, final source/display, exact receipt, rows, worker retirement and exact Undo.
+The four memory-refusal scenarios require 44 controls: query failure or zero physical/commit headroom in
+both modes after the first real preview and before a cross-tile second sample. Exactly one fresh owner
+query must refuse with E_OUTOFMEMORY before further acknowledgement/publication; original pixels/history
+stay unchanged, the entire parent retires off-owner and all CPU/GPU/releasing charges return to baseline.
+These fixed registries are required gates, not claims that their latest execution has passed. Full current
+configuration qualification, remaining stale/lifetime cases, complete peaks, ordinary activation and G1
+remain separate; preserve actual failed attempts before repairs.
+
+
+The original live Warp stale registry requires 12 scenarios/72 controls: both modes, actual worker-held
+opening/sample/final composition and a changed captured tool or active layer. It enters through real
+Queue/Record input and changes authority on the owner without synthetic cancellation. The exact boundary
+visit plus its event is required. Original ticket/ordinal and CPU/GPU charges remain through producer join;
+opening retains its existing GPU baseline, later sample/final phases own additional admission. Completion
+must report Stale/E_ABORT, preserve both independent literal images and their identities/history, retire the
+original draft/input/preview/payload off-owner, and return all CPU/GPU/releasing charges to baseline while
+retaining the requested authority change. This registry is required proof, not a passing execution claim.

@@ -30,6 +30,7 @@
 // the part the window shows, reduced by a power of two when that part is still too large; nothing ever asks the
 // device for a texture it cannot create (Decision D1, Rendering_Composition.md "Documents larger than the device").
 class GpuRecordingCommands;
+struct PreparedWarpPreview;
 
 class CanvasRenderer final
 {
@@ -112,7 +113,9 @@ class CanvasRenderer final
         int height = 0;
         LayerTransform transform; // places the grid on the document
         Raster source;            // the layer's image (or mask) the stroke started from; may be empty
-        int sourceX = 0;          // where the source sits in the grid
+        // Recorded worker only: complete document-grid Warp bytes over the exact placed original.
+        std::shared_ptr<const PreparedWarpPreview> warpSource;
+        int sourceX = 0; // where the source sits in the grid
         int sourceY = 0;
         // Explicit nearest stretch of the immutable source in the private recorder. Zero uses source size.
         int sourceWidth = 0;

@@ -84,6 +84,14 @@ std::uint64_t SharedPublicationMemory::Bytes() const noexcept
 {
     return _node->lease.Bytes();
 }
+
+std::int32_t SharedPublicationMemory::BindForRetirement(JobScheduler& scheduler, JobTicket original) noexcept
+{
+    const auto result = scheduler.RetainRetirementMemory(original, _node->lease);
+    if (result >= 0)
+        _node->original = original;
+    return result;
+}
 std::uint64_t SharedPublicationMemory::ResidentBytes() const noexcept
 {
     return _node->lease.ResidentBytes();

@@ -21,6 +21,8 @@ struct StrokeFinishTestGate final
     enum class SampleBoundary : std::uint8_t
     {
         None,
+        OpeningPrepared,
+        FinalComposed,
         Prepared,
         Composed,
         PreviewRecorded,

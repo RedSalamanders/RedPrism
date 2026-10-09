@@ -143,6 +143,12 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeFinishSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneWarpFinishSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveHostSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveFaultSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveInputSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveTargetsSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveAdmissionSelfTest(HINSTANCE instance) noexcept;
+    static int RunWarpLiveStaleSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneStrokeSampleInputSelfTest(HINSTANCE instance) noexcept;
@@ -278,6 +284,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
         std::optional<Vec2> cloneOffset;
         bool cloneAllLayers = false;
         SpotHealingMode healing = SpotHealingMode::ContentAware;
+        SmearMode smear = SmearMode::Liquify; // mode captured at physical Down, never reread from a later header
     };
     struct CanvasBrushSample final
     {
@@ -320,14 +327,16 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     };
     [[nodiscard]] HRESULT StartStrokeFinish(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartWarpFinish(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartWarpLive(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartStrokeSamples(std::uint64_t opening) noexcept;
-    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples,
-                                                bool warpReplay = false) noexcept;
+    [[nodiscard]] HRESULT StartStrokeProcessing(std::uint64_t opening, bool processingSamples, bool warpReplay = false,
+                                                bool warpLive = false) noexcept;
     void PrepareStrokeFinishJoinedShutdownOwner() noexcept;
     StrokeFinishJob* _strokeFinishCurrent = nullptr;
     std::shared_ptr<struct StrokeFinishTestGate> _strokeFinishTestGate;
     bool _asyncStrokeFinishEnabled = false;
     bool _asyncStrokeSamplesEnabled = false;
+    bool _asyncWarpLiveEnabled = false; // ordinary activation requires actual lifecycle and G1 qualification
     class StrokeOpeningJob;
     [[nodiscard]] HRESULT StartStrokeOpening(std::uint64_t opening) noexcept;
     void BeginPreparedBrushStrokeAt(Vec2 point, unsigned int modifiers) noexcept;

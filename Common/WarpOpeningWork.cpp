@@ -103,7 +103,8 @@ bool DocumentSession::ApplyPreparedWarpOpeningIfCurrent(PreparedWarpOpening& pre
     const auto* target = prepared._input._source.layers.FindKey(prepared._input._target);
     if (!target)
         return false;
-    _warpSource = WarpSource{target->id, target->asset ? target->asset->image : Raster{}, target->transform};
+    _warpSource = WarpSource{target->id, target->asset ? target->asset->image : Raster{}, target->transform,
+                             prepared._input._options.ownerThread};
     _warp = prepared._draft;
     ++_warpOpening;
     _lastBrushPoint = LastBrushPoint{prepared._input._options.point, target->id, false};

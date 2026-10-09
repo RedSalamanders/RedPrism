@@ -590,6 +590,33 @@ does not acknowledge a preview frame. Cancel and device replacement stop useful 
 through real joins/acknowledgements, and retire complete roots off the owner. Ordinary startup remains disabled
 pending the actual mode/fault matrix, full qualification and measured G1.
 
+### Private recorded Warp source previews
+
+An optional owning `StrokePreview::warpSource` represents complete immutable document-grid bytes: the exact
+placed original source plus complete touched tiles prepared by the worker factory. Its completeness certificate
+cannot be copied into a mutable descriptor. Source identity, original layer placement, document dimensions,
+image target, transparent fill and identity document-grid placement must agree before private resource creation.
+Mask-target, incomplete, mismatched and pre-cancelled descriptors refuse; an owner call cannot sample this source.
+
+The first private grid samples the placed original through bounded upload bands on the recording worker, with
+cancellation checked between rectangles of at most 256 by 256 pixels. It never materializes a full CPU image or
+an unmaterialized sparse source. A compatible next graph inherits the exact acknowledged previous grid and writes
+only changed tiles; capture changed tiles before the complete snapshot factory consumes the draft's dirty flags.
+Each graph retains its immutable source, including the old source held by the published seed.
+
+The original parent separately admits source/draft/snapshot ownership, source windows, upload scratch, both
+private grids and mip chains, complete document/stack graphs, command shadows and all last-frame retirement
+overlap. Logical WARP allocations also remain charged to physical/commit memory. The fixture's 128 MiB peak
+is a declared test reservation, not a production admission estimate or a responsiveness measurement.
+
+The recorded-parent fixture uses literal translated, scaled, 180-degree rotated, unmaterialized sparse and blank
+sources in both Liquify and Smudge modes. It reads actual first/touched/committed GPU composites at document
+resolution. Initial pixels match the independently placed literal bytes exactly; touched and committed pixels
+match the original contiguous scalar Warp exactly. The old published grid must remain unchanged. Every graph
+publishes after actual original command acknowledgement and retires on the worker after the real last-use barrier.
+WARP is required; unavailable hardware is recorded explicitly without a hardware pass claim. Ordinary live
+Warp routing and measured G1 remain separate acceptance gates.
+
 ### Private recorded adjustment previews
 
 `RecordedDisplayGraph::PrepareAdjustmentForWork` prepares only on the admitted recording worker.

@@ -137,6 +137,8 @@
     <ClCompile Include="Composition.Tests.GpuBufferSlots.cpp" />
     <ClCompile Include="CompositionTests.cpp" />
     <ClCompile Include="Composition.Tests.WarpReplayCompute.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedWarpPreview.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedWarpPreview.h" />
     <ClInclude Include="Composition.Tests.WarpReplayCompute.h" />
     <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
     <ClCompile Include="Composition.Tests.GpuResidencyGrowth.cpp" />

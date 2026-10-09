@@ -697,6 +697,31 @@ disjoint totals. The existing owner-only `RetainedMemoryTicket` API remains avai
 owner-confined. This primitive is an experimental foundation; the prepared layer/accessibility consumer adoption
 below remains a disabled draft until its full consumer matrix and H4/G1 gates pass.
 
+#### Joined terminal destruction accounting
+
+`RetainRetirementMemory` is a separate accounting transfer for a terminal original job with
+`deferredRetirement` and a descriptor-reserved retained slot. It transfers the entire remaining reservation
+without allocating, querying memory or admitting another job. Only the exact original terminal callback, or
+that original job's `RetainJoinedRetirement` hook during joined Close, can call it. Wrong ticket/generation,
+occupied output, a missing descriptor slot or an unrelated callback refuses without changing the charge.
+Failed/cancelled jobs may use this transfer solely to keep already-created CPU graphs and allocator-owned weak
+controls charged through final destruction. The successful `RetainMemory` and `RetainPublicationMemory` APIs
+retain their existing success-only rules.
+
+Close invokes `RetainJoinedRetirement` after all recorder and compute producers actually join and before
+wrapper destruction or owner detachment. It grants no successful source-capture callback, publication,
+document/history mutation, resume, command submission or GPU completion. External graphics users still need
+their actual original last-use acknowledgements. A `SharedPublicationMemory::BindForRetirement` owner retains
+the original endpoint and complete charge after scheduler Close; only final graph and weak-control destruction
+can release it. No foreign lease may attach to a reconstructed scheduler.
+
+The stroke parent retains a scalar accounting owner through whole-payload worker retirement, then binds it
+only at its exact terminal callback. Joined Close handles an owner created before the first successful owner
+acknowledgement as well. This accounting owner contains no draft, pixels, UI or GPU resource. Qualification
+requires success, failure, cancellation and real joined shutdown in both final-strong/weak-release orders,
+with an independently admitted endpoint observer proving weak-only residency after Close. These changes
+alone do not activate the live Warp route or qualify G1.
+
 #### Completed CPU raster-preview ownership
 
 An opted-in `RunRasterEditPreview` prepares immutable `PreparedRasterPreview` metadata on its exclusive CPU

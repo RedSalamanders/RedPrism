@@ -430,3 +430,40 @@ do not mutate fields an active producer uses or release live density on the owne
 preserves every original context and reservation until its actual acknowledgement or joined shutdown.
 Final publication reuses the admitted final coverage/history/display/rows path. This experimental route remains
 disabled in ordinary startup until actual mode/fault coverage, the complete validation matrix and G1 pass.
+
+### Opt-in original Warp parent
+
+The experimental Liquify/Smudge route admits its original processing parent before opening capture. The
+physical Down context owns the mode, settings, target and document coordinates. Inspect Down without
+consuming it; admit the complete opening/source/cache overlap, capture immutable input on the owner,
+and construct/prime the lazy draft on the worker. Apply only exact current opening authority. Retire
+all consumed opening/source aliases on the worker before the first exclusive sample transfer. Down
+primes without adding a dab; a later header setting cannot change the accepted mode.
+
+For each Move/Up, grow the same ticket's complete CPU/GPU phase maximum before consuming the event or
+capturing the exclusive sample. Include both private grid mip chains, both document graphs, old/new
+immutable tile versions, source/history/cache ownership, upload/reader scratch and recorder/shadow/frame
+retirement; WARP mirrors logical GPU allocation in CPU admission. Revisited points do not accumulate
+fixed allowances. The worker captures changed tiles before constructing the complete immutable Warp
+preview. Record and acknowledge the original GPU stream before owner draft return and graph publication.
+Duplicate/no-pixel samples return the draft without replacing the graph. Between inputs the parent blocks
+on existing events. Up processes its accepted endpoint before the original ordered final replay; Lost
+finalizes only the accepted prefix. A primed-only gesture retires without a history entry.
+
+Accepted cancellation immediately excludes the acknowledged preview from later frames; this does not
+detach its resources or acknowledge a producer. Once final replay owns the exclusive finish input, the
+live retirement capture MUST refuse: final coverage/publication and its input retire through that original
+final authority, including after the worker has consumed the input handle.
+
+Cancellation, failure, replacement and Close retain the same original ticket/context/reservations. After
+useful producers actually join, capture the session's original live draft/cache for destruction only;
+a separately detached updating input stays on the whole worker-owned payload. Cached owner and exact
+opening/sample sequence are mandatory. A retirement capture sets the finishing barrier even for an
+updating input, preventing prepared-sample reapply. After joined worker destruction, acknowledge the exact
+updating sample before the finishing opening. Old, foreign, duplicate and premature acknowledgements
+must refuse. This grants neither useful publication nor GPU acknowledgement. The complete original
+accounting charge also survives expired weak control owners through the separate joined-retirement API.
+
+The original final parent performs ordered brush coverage/readback, prepared history, committed display
+and rows. No live sample publishes history. This route stays disabled in ordinary startup pending actual
+host mode/fault/lifetime qualification, the complete current-source matrix, phase peaks and measured G1.

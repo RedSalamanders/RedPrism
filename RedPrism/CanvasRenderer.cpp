@@ -5,6 +5,7 @@
 #include "Jobs.h"
 #include "Shaders/CompositionShared.h"
 #include "UiTiming.h"
+#include "WarpPreviewWork.h"
 
 #include "CompositionBlitPixelShader.h"
 #include "CompositionPixelShader.h"
@@ -17,6 +18,7 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <type_traits>
 
 namespace
 {
@@ -653,7 +655,16 @@ template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, R
         const int bandTexels = std::min(texelRowsPerBand, gpu.height - texelRow);
         const int firstRow = texelRow * scale;
         const int rowCount = std::min(bandTexels * scale, gpu.regionHeight - firstRow);
-        read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
+        if constexpr (std::is_same_v<std::invoke_result_t<Reader&, int, int, int, int, std::uint8_t*, std::size_t>,
+                                     HRESULT>)
+        {
+            const HRESULT status =
+                read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
+            if (FAILED(status))
+                return status; // No upload from an incomplete source band.
+        }
+        else
+            read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
         const std::uint8_t* data = rows.data();
         std::size_t pitch = rowBytes;
         if (scale > 1)
@@ -1094,7 +1105,7 @@ HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noe
 
 HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
 {
-    if (preview.width < 1 || preview.height < 1)
+    if (preview.width < 1 || preview.height < 1 || (preview.warpSource && !_recordingCommands))
     {
         return E_INVALIDARG;
     }
@@ -1127,6 +1138,19 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
         ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) ||
         (!preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
         return E_INVALIDARG;
+    if (preview.warpSource)
+    {
+        const auto& source = preview.warpSource->source;
+        WarpPreviewReader reader(preview.warpSource);
+        const LayerTransform documentGrid{
+            Vec2{0, 0}, Vec2{static_cast<double>(document.width), static_cast<double>(document.height)}};
+        if (preview.mask || !reader.IsValidForWork() || source.image != original ||
+            source.placement != target->transform || source.width != document.width ||
+            source.height != document.height || preview.width != document.width || preview.height != document.height ||
+            preview.transform != documentGrid || preview.sourceX || preview.sourceY || preview.sourceWidth ||
+            preview.sourceHeight || preview.fill)
+            return E_INVALIDARG;
+    }
     if (uniformMask)
     {
         std::uint8_t tone = 0;
@@ -1158,6 +1182,15 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
                            old.sourceX == preview.sourceX && old.sourceY == preview.sourceY && old.fill == preview.fill;
         compatibleStroke =
             compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
+        compatibleStroke =
+            compatibleStroke && static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource);
+        if (compatibleStroke && preview.warpSource)
+        {
+            const auto& previous = old.warpSource->source;
+            const auto& current = preview.warpSource->source;
+            compatibleStroke = previous.image == current.image && previous.placement == current.placement &&
+                               previous.width == current.width && previous.height == current.height;
+        }
         if (!compatibleStroke)
             return E_INVALIDARG; // Changed tiles cannot reconstruct an incompatible previous working grid.
     }
@@ -1202,7 +1235,7 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     const int sourceHeight = stroke.sourceHeight ? stroke.sourceHeight : stroke.source.Height();
     const bool stretched =
         stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
-    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit)
+    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && !stroke.warpSource)
     {
         // The whole grid, assembled on the GPU from the source's own texture and the tiles.
         const HRESULT result =
@@ -1214,7 +1247,7 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
             return result;
         }
     }
-    else
+    else if (stroke.width > _textureLimit || stroke.height > _textureLimit)
     {
         // A grid larger than the device: the part the display shows (the whole document at its proxy scale), on the
         // tile grid, reduced to fit.
@@ -1249,49 +1282,78 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     gpu.sourceHeight = stroke.height;
     gpu.scale = scale;
     const int channels = gray ? 1 : 4;
-    result = UploadRows(
-        gpu,
-        [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
-        {
-            for (int row = 0; row < height; ++row)
+    if (stroke.warpSource)
+    {
+        if (!_recordingCommands)
+            return E_INVALIDARG; // Warp sampling must never run on the application owner.
+        WarpPreviewReader reader(stroke.warpSource);
+        result = UploadRows(
+            gpu,
+            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
             {
-                std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
-                            static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
-            }
-            if (!stroke.source.HasStorage())
-            {
-                return;
-            }
-            const int left = std::max(x, stroke.sourceX);
-            const int top = std::max(y, stroke.sourceY);
-            const int right = std::min(x + width, stroke.sourceX + sourceWidth);
-            const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
-            if (right > left && bottom > top)
-            {
-                if (!stretched)
-                    stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left, bottom - top,
-                                             out + static_cast<std::size_t>(top - y) * stride +
-                                                 static_cast<std::size_t>(left - x) * channels,
-                                             static_cast<int>(stride), stroke.fill);
-                else
-                    for (int row = top; row < bottom; ++row)
+                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+                const std::span<std::uint8_t> band{out, bytes};
+                for (int row = 0; row < height; row += 256)
+                    for (int column = 0; column < width; column += 256)
                     {
-                        if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
-                            return;
-                        const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) *
-                                                        stroke.source.Height() / sourceHeight);
-                        for (int column = left; column < right; ++column)
-                        {
-                            const int sx = static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) *
-                                                            stroke.source.Width() / sourceWidth);
-                            stroke.source.ReadRegion(sx, sy, 1, 1,
-                                                     out + static_cast<std::size_t>(row - y) * stride +
-                                                         static_cast<std::size_t>(column - x) * channels,
-                                                     channels, stroke.fill);
-                        }
+                        const HRESULT status = _recordingCommands->StatusForWork();
+                        if (FAILED(status))
+                            return status;
+                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                        const auto offset =
+                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                        if (!reader.Read({x + column, y + row, columns, rows}, band.subspan(offset), stride))
+                            return E_ABORT;
                     }
-            }
-        });
+                return _recordingCommands->StatusForWork();
+            });
+    }
+    else
+        result =
+            UploadRows(gpu,
+                       [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
+                       {
+                           for (int row = 0; row < height; ++row)
+                           {
+                               std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
+                                           static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
+                           }
+                           if (!stroke.source.HasStorage())
+                           {
+                               return;
+                           }
+                           const int left = std::max(x, stroke.sourceX);
+                           const int top = std::max(y, stroke.sourceY);
+                           const int right = std::min(x + width, stroke.sourceX + sourceWidth);
+                           const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
+                           if (right > left && bottom > top)
+                           {
+                               if (!stretched)
+                                   stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left,
+                                                            bottom - top,
+                                                            out + static_cast<std::size_t>(top - y) * stride +
+                                                                static_cast<std::size_t>(left - x) * channels,
+                                                            static_cast<int>(stride), stroke.fill);
+                               else
+                                   for (int row = top; row < bottom; ++row)
+                                   {
+                                       if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+                                           return;
+                                       const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) *
+                                                                       stroke.source.Height() / sourceHeight);
+                                       for (int column = left; column < right; ++column)
+                                       {
+                                           const int sx =
+                                               static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) *
+                                                                stroke.source.Width() / sourceWidth);
+                                           stroke.source.ReadRegion(sx, sy, 1, 1,
+                                                                    out + static_cast<std::size_t>(row - y) * stride +
+                                                                        static_cast<std::size_t>(column - x) * channels,
+                                                                    channels, stroke.fill);
+                                       }
+                                   }
+                           }
+                       });
     if (FAILED(result))
     {
         return result;

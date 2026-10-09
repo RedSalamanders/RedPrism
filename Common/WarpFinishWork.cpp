@@ -93,7 +93,7 @@ std::optional<WarpFinishInput> DocumentSession::TakeWarpFinishInput(std::uint64_
 
 bool DocumentSession::DiscardWarpFinishIfCurrent(std::uint64_t opening) noexcept
 {
-    if (_warpFinishingOpening != opening)
+    if (_warpFinishingOpening != opening || _warpUpdatingOpening)
         return false;
     _warpSource.image = {}; // detached input still retains this exact source through original worker retirement
     _warpFinishingOpening.reset();

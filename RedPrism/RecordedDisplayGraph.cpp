@@ -1,4 +1,5 @@
 #include "RecordedDisplayGraph.h"
+#include "WarpPreviewWork.h"
 
 #include <cmath>
 #include <exception>
@@ -117,6 +118,22 @@ HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, Canva
         return E_INVALIDARG;
     if (cancellation.IsCancelled())
         return E_ABORT;
+    if (preview && preview->warpSource)
+    {
+        // Reject an invalid immutable Warp descriptor before creating a private resource prefix.
+        // The original parent has already admitted all phase/source/transport overlap on its worker.
+        const auto* target = source.layers.FindKey(preview->layerID);
+        const auto& warp = preview->warpSource->source;
+        WarpPreviewReader reader(preview->warpSource);
+        const LayerTransform grid{{0, 0}, {static_cast<double>(source.width), static_cast<double>(source.height)}};
+        const Raster original = target && target->asset ? target->asset->image : Raster{};
+        if (!target || target->isGroup || target->adjustment || preview->mask || !reader.IsValidForWork() ||
+            source.width != warp.width || source.height != warp.height || warp.image != original ||
+            warp.placement != target->transform || preview->source != original || preview->width != source.width ||
+            preview->height != source.height || preview->transform != grid || preview->sourceX || preview->sourceY ||
+            preview->sourceWidth || preview->sourceHeight || preview->fill)
+            return E_INVALIDARG;
+    }
     D3D11_FEATURE_DATA_THREADING threading{};
     const HRESULT capabilities = device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &threading, sizeof(threading));
     if (FAILED(capabilities) || !threading.DriverConcurrentCreates)

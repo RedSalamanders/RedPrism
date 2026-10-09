@@ -7709,6 +7709,12 @@ void Application::ContinueWarpStroke(Vec2 view) noexcept
 
 void Application::FinishWarpStroke() noexcept
 {
+    const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+    if (_asyncWarpLiveEnabled && captured && captured->tool == EditorTool::Smear && captured->smear != SmearMode::Blur)
+    {
+        SealCanvasBrushForBoundary();
+        return;
+    }
     if (_session.PendingWarp() == nullptr)
     {
         return;
@@ -7722,6 +7728,12 @@ void Application::FinishWarpStroke() noexcept
 
 void Application::CancelWarpStroke() noexcept
 {
+    const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+    if (_asyncWarpLiveEnabled && captured && captured->tool == EditorTool::Smear && captured->smear != SmearMode::Blur)
+    {
+        (void)CancelCanvasBrush(false);
+        return;
+    }
     if (_session.PendingWarp() == nullptr)
     {
         return;

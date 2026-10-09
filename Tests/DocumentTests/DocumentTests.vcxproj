@@ -338,6 +338,8 @@
     <ClInclude Include="..\..\Common\WarpPreviewWork.h" />
     <ClCompile Include="..\..\Common\WarpFinishWork.cpp" />
     <ClInclude Include="..\..\Common\WarpFinishWork.h" />
+    <ClCompile Include="..\..\Common\WarpRetirementWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpRetirementWork.h" />
     <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
     <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
@@ -399,6 +401,8 @@
     <ClInclude Include="Document.Tests.WarpFinish.h" />
     <ClCompile Include="Document.Tests.WarpFinishAdmission.cpp" />
     <ClInclude Include="Document.Tests.WarpFinishAdmission.h" />
+    <ClCompile Include="Document.Tests.WarpRetirement.cpp" />
+    <ClInclude Include="Document.Tests.WarpRetirement.h" />
     <ClCompile Include="Document.Tests.WarpLazyTiles.cpp" />
     <ClInclude Include="Document.Tests.WarpLazyTiles.h" />
     <ClCompile Include="Document.Tests.PlacedRasterWork.cpp" />

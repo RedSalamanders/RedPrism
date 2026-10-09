@@ -21,6 +21,7 @@
 #include "Host.Tests.CompletedPreviewMemory.h"
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
+#include "Host.Tests.PointerInputStreamPeek.h"
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
 #include "Host.Tests.PublicationCallback.h"
@@ -28,6 +29,7 @@
 #include "Host.Tests.ReservationGrowth.h"
 #include "Host.Tests.RetainedGrowth.h"
 #include "Host.Tests.RetainedSlotAdmission.h"
+#include "Host.Tests.RetirementMemory.h"
 #include "Host.Tests.WarpFactoryLifetime.h"
 #include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerStageRetirement.h"
@@ -1854,6 +1856,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRetainedJobMemoryTests();
     gFailures += RunSharedRetainedJobMemoryTests();
     gFailures += RunCompletedPreviewMemoryTests();
+    gFailures += RunRetirementMemoryTests();
     gFailures += RunPreparedRasterPreviewLifetimeTests();
     gFailures += RunWarpFactoryLifetimeTests();
     gFailures += RunWarpPreviewLifetimeTests();
@@ -1875,6 +1878,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunContinuationPendingViewTests();
     gFailures += RunOpacityInputOrderTests();
     gFailures += RunPointerInputStreamTests();
+    gFailures += RunHostPointerInputStreamPeekTests();
     gFailures += RunSamplerInputTests();
     gFailures += RunSamplerIntentInputTests();
     gFailures += RunContinuationReceiptTests();

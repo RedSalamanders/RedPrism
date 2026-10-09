@@ -328,6 +328,24 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneWarpFinishSelfTest\n");
         if (const int failed = Application::RunStandaloneWarpFinishSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunWarpLiveHostSelfTest\n");
+        if (const int failed = Application::RunWarpLiveHostSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveFaultSelfTest\n");
+        if (const int failed = Application::RunWarpLiveFaultSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveInputSelfTest\n");
+        if (const int failed = Application::RunWarpLiveInputSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveTargetsSelfTest\n");
+        if (const int failed = Application::RunWarpLiveTargetsSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveAdmissionSelfTest\n");
+        if (const int failed = Application::RunWarpLiveAdmissionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveStaleSelfTest\n");
+        if (const int failed = Application::RunWarpLiveStaleSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneStrokeSampleSelfTest\n");
         if (const int failed = Application::RunStandaloneStrokeSampleSelfTest(instance); failed != 0)
             return failed;

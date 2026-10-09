@@ -92,6 +92,15 @@ template <class Context, class Sample, std::size_t Capacity> class PointerInputS
         return Admission::Recorded;
     }
 
+    [[nodiscard]] std::optional<Event> Peek(std::uint64_t opening) const noexcept
+    {
+        if (!_context || opening != _opening)
+            return std::nullopt;
+        if (_size != 0)
+            return _events[_front];
+        return _terminal;
+    }
+
     [[nodiscard]] std::optional<Event> Take(std::uint64_t opening) noexcept
     {
         if (!_context || opening != _opening)

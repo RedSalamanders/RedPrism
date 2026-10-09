@@ -31,6 +31,9 @@ class SharedPublicationMemory final
     // the entire descriptor-reserved admission before exposing immutable preview metadata. No fresh admission,
     // allocation or query. This does not authorize document mutation or acknowledge GPU work.
     [[nodiscard]] std::int32_t BindAfterCompletedWork(JobScheduler& scheduler, JobTicket original) noexcept;
+    // Destruction accounting only: exact terminal callback or original joined Close hook. Failure/cancel
+    // never becomes a successful publication. Last weak control owner continues to carry the whole charge.
+    [[nodiscard]] std::int32_t BindForRetirement(JobScheduler& scheduler, JobTicket original) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.

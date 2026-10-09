@@ -13,6 +13,13 @@
 // Holds no mutable stroke, session, UI or GPU owner. This value grants no document/publication authority.
 struct PreparedWarpPreview final
 {
+    PreparedWarpPreview() = default;
+    // A completed factory certificate cannot be copied into a mutable forged descriptor.
+    PreparedWarpPreview(const PreparedWarpPreview&) = delete;
+    PreparedWarpPreview& operator=(const PreparedWarpPreview&) = delete;
+    PreparedWarpPreview(PreparedWarpPreview&&) = delete;
+    PreparedWarpPreview& operator=(PreparedWarpPreview&&) = delete;
+
     std::shared_ptr<const SharedPublicationMemory> memory; // dies after every retained CPU owner
     std::thread::id ownerThread;
     WarpSourceView source;

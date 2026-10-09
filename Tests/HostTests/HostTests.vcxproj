@@ -114,6 +114,7 @@
     <ClInclude Include="Host.Tests.PreservedContinuation.h" />
     <ClInclude Include="JobRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
+    <ClInclude Include="Host.Tests.PointerInputStreamPeek.h" />
     <ClInclude Include="SamplerInputTests.h" />
     <ClInclude Include="SamplerIntentInputTests.h" />
     <ClInclude Include="..\..\Common\SamplerInput.h" />
@@ -210,6 +211,8 @@
     <ClCompile Include="Host.Tests.WorkerStageRetirement.cpp" />
     <ClCompile Include="Host.Tests.PublicationCallback.cpp" />
     <ClCompile Include="Host.Tests.PublicationRetention.cpp" />
+    <ClCompile Include="Host.Tests.RetirementMemory.cpp" />
+    <ClInclude Include="Host.Tests.RetirementMemory.h" />
     <ClCompile Include="Host.Tests.GpuRecordingLane.cpp" />
     <ClInclude Include="Host.Tests.GpuRecordingLane.h" />
     <ClCompile Include="Host.Tests.ExecutionLaneStages.cpp" />
@@ -232,6 +235,7 @@
     <ClCompile Include="ContinuationPendingViewTests.cpp" />
     <ClCompile Include="OpacityInputOrderTests.cpp" />
     <ClCompile Include="PointerInputStreamTests.cpp" />
+    <ClCompile Include="Host.Tests.PointerInputStreamPeek.cpp" />
     <ClCompile Include="SamplerInputTests.cpp" />
     <ClCompile Include="SamplerIntentInputTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />

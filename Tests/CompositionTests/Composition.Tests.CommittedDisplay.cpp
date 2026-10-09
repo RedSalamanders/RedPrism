@@ -214,8 +214,21 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
             display.RequestOwner();
             Expect("same-document-keeps-last-frame-until-replacement", client.graph == old);
             Expect("replacement-and-last-use-retirement-settle",
-                   Until(jobs, routes, [&]() noexcept
-                         { return (client.publications == 2 && !display.HasPending()) || client.errors > 1; }));
+                   Until(jobs, routes,
+                         [&]() noexcept
+                         {
+                             // The root publishes workerRetired from inside its deferred destroy callback.
+                             // Scheduler release counters acknowledge after that callback returns. Preserve
+                             // the zero-releasing-byte postcondition by waiting for the full original idle.
+                             return (client.publications == 2 && !display.HasPending() && jobs.IsIdle()) ||
+                                    client.errors > 1;
+                         }));
+            std::printf("INFO admitted-display.replacement errors=%u publications=%u graph=%u published=%u "
+                        "reserved=%llu releasing=%llu idle=%u\n",
+                        client.errors, client.publications, client.graph ? 1U : 0U,
+                        client.graph && client.graph->IsPublishedOnOwner(device.get(), context.get()) ? 1U : 0U,
+                        static_cast<unsigned long long>(jobs.ReservedMemoryBytes()),
+                        static_cast<unsigned long long>(jobs.ReleasingMemoryBytes()), jobs.IsIdle() ? 1U : 0U);
             Expect("replacement-publishes-on-same-real-context",
                    client.errors == 1 && client.publications == 2 && client.graph &&
                        client.graph->IsPublishedOnOwner(device.get(), context.get()) &&

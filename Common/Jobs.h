@@ -61,7 +61,8 @@ struct JobOptions final
     bool allowMemoryWaiting = true;
     // Reserve one of the fixed retained-memory slots at descriptor admission, before any capture/publication.
     // Other jobs cannot consume it. Successful final RetainMemory transfers the original reservation into
-    // that slot; failure/cancellation/untransferred completion/Close returns it. It charges no extra bytes.
+    // that slot. Exact joined destruction accounting may also retain it on failure/cancellation/Close;
+    // otherwise untransferred terminal records return it. It charges no extra bytes.
     bool reserveRetainedMemory = false;
     // Explicit opt-in; never run a capacity-blocked command recorder on the ordinary kernel workers.
     JobExecutionLane executionLane = JobExecutionLane::Compute;
@@ -175,6 +176,8 @@ class JobContext final
     void* _context;
 };
 
+class JobScheduler;
+
 class Job
 {
   public:
@@ -189,6 +192,11 @@ class Job
     // FIFO and complete reservation remain held. Owner resumes a retirement stage only after external users
     // acknowledge. Close instead retains the existing joined owner/final-worker cleanup protocol.
     virtual void RetireWorkerStage(JobContext&, JobResult) noexcept {}
+    // Exact final joined shutdown callback only, before this wrapper's owner-affine detachment. Every
+    // compute/recorder producer has joined. May transfer its descriptor-reserved accounting into a
+    // preallocated retirement owner; cannot capture sources, apply, publish, resume, submit or pump.
+    // Normal completion uses the exact terminal Completed callback instead. Default has no accounting owner.
+    virtual void RetainJoinedRetirement(JobScheduler&, JobTicket) noexcept {}
     // Owner thread after a successful worker stage, before final apply. Returning true retains this job, its
     // ticket, reservation and FIFO position until Resume. Failed/cancelled stages skip this hook. Resume may
     // be requested here; the next worker stage cannot start until this hook returns. A false return finalizes.
@@ -273,6 +281,11 @@ class JobScheduler final
     // No fresh query/allocation/admission or early refund. Failure preserves the record/output. This call
     // supplies accounting, not a publication authority, worker acknowledgement, GPU completion or history permit.
     [[nodiscard]] std::int32_t RetainPublicationMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
+    // Exact terminal callback or the joined Close retirement hook, including failed/cancelled jobs. Transfers
+    // the entire original reservation to a preallocated owner with a descriptor-reserved slot. This is only
+    // accounting for final destruction/weak-control ownership; no useful-work or publication authority and
+    // no GPU acknowledgement. Caller joins/retains all external users through their real last-use barrier.
+    [[nodiscard]] std::int32_t RetainRetirementMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
     // Owner-only identity of the live shared endpoint. A closed or reconstructed scheduler cannot own
     // an older lease, even if its wrapper address and first job slot/generation have been reused.
     // This query performs no admission, transfer or publication authorization.
@@ -338,7 +351,8 @@ class JobScheduler final
         void* context = nullptr;
     };
     // Borrowed context outlives this call. Hooks cannot submit, pump, wait or reenter Close. After producer join
-    // and job-wrapper destruction, owner detaches borrowed resources while the release sink remains installed.
+    // each original job may retain destruction accounting, then job wrappers die and the owner detaches
+    // borrowed resources while the release sink remains installed. No successful-work authority is granted.
     // The preallocated final MTA callback runs worker before release/recycle drain and teardown. No hook is run
     // for an uninitialized/already closed scheduler, and useful-work cancellation cannot suppress retirement.
     void Close(CloseHooks hooks = {}) noexcept;
@@ -366,10 +380,10 @@ class JobScheduler final
     using Apply = void (*)(void*, Job&, JobResult) noexcept;
 
   private:
-    [[nodiscard]] std::int32_t RetainMemoryImpl(JobTicket job, RetainedMemoryTicket& retained,
-                                                bool publication) noexcept;
+    [[nodiscard]] std::int32_t RetainMemoryImpl(JobTicket job, RetainedMemoryTicket& retained, bool publication,
+                                                bool retirement = false) noexcept;
     [[nodiscard]] std::int32_t RetainSharedMemoryImpl(JobTicket job, SharedRetainedMemoryLease& retained,
-                                                      bool publication) noexcept;
+                                                      bool publication, bool retirement = false) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
     friend std::size_t DrainCompletions(JobScheduler&, Apply, void*) noexcept;

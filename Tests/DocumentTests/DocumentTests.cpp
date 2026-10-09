@@ -44,6 +44,7 @@
 #include "Document.Tests.WarpOpening.h"
 #include "Document.Tests.WarpPreviewReader.h"
 #include "Document.Tests.WarpReplay.h"
+#include "Document.Tests.WarpRetirement.h"
 #include "Document.Tests.WarpSamplePlan.h"
 #include "Document.Tests.WarpSampleSession.h"
 #include "Document.Tests.WarpWorkerCancellation.h"
@@ -8213,6 +8214,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWarpReplayTests();
     gFailures += RunWarpFinishTests();
     gFailures += RunWarpFinishAdmissionTests();
+    gFailures += RunWarpRetirementCoreTests();
     gFailures += RunPlacedRasterWorkTests() ? 0 : 1;
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();
