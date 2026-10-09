@@ -702,6 +702,12 @@ Release, which has no such checks. A run that does not end is blocked on a dialo
 
 The self-test reads a keyboard of its own (`RedPrism/KeyboardState.h`): its drivers hold exactly the modifiers a
 step names, and the input code reads Shift, Ctrl and Alt from that keyboard, never from the thread's key state.
+Nested drivers use `KeyboardState::ScopedSynthetic`: each starts with all keys up and restores the enclosing
+driver's previous mode and complete key bytes on normal or early return. An inner test cannot switch the outer
+test to physical input. The sampler caller's existing exact snapshot restoration preserves the same contract.
+`HostTests` runs 15 `keyboard-synthetic.*` literal state controls for two/three levels, held modifiers, toggle
+bytes, early return and restoration of initially physical or synthetic input. This harness state is UI-thread-only;
+the scope performs no native keyboard writes and ordinary input continues to use the message thread's key state.
 Windows writes every physical key transition into each thread's key state at once, the hidden self-test window's
 thread included, so without it a Shift or Ctrl the user types in another application while a gate runs changes a
 step at random (RF-1110); with the thread's key state, a Ctrl the user held turned a typed S into Save and left

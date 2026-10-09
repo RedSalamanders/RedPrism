@@ -103,7 +103,7 @@ bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProje
     return true;
 }
 
-bool HasNoOwnedSaveSiblings(const std::filesystem::path& destination)
+bool HasNoOwnedSaveSiblings(const std::filesystem::path& destination, bool retainedBackup = false)
 {
     const auto stagingPrefix = destination.filename().wstring() + L".~";
     const auto backupName = destination.filename().wstring() + L".old";
@@ -116,7 +116,7 @@ bool HasNoOwnedSaveSiblings(const std::filesystem::path& destination)
         if (error)
             return false;
         const auto name = iterator->path().filename().wstring();
-        if (name.starts_with(stagingPrefix) || name == backupName)
+        if (name.starts_with(stagingPrefix) || (!retainedBackup && name == backupName))
             return false;
     }
     return !error;
@@ -162,6 +162,14 @@ bool HasLiteralPixel(const Raster& image, unsigned int channel, unsigned int tol
 
 int Application::RunFileEndSessionSelfTest() noexcept
 {
+    enum class RecoveryMode : unsigned int
+    {
+        None,
+        Exhaustion,
+        TimerCreate,
+        TimerArm,
+        TimerWait
+    };
     struct Scenario final
     {
         const char* name;
@@ -174,11 +182,97 @@ int Application::RunFileEndSessionSelfTest() noexcept
         bool pendingPrompt = false;
         ProjectSaveFaultStage fault = ProjectSaveFaultStage::Count;
         bool folder = false;
+        bool publishedCleanup = false;
+        bool failedRollback = false;
+        RecoveryMode recovery = RecoveryMode::None;
+        bool timeoutFault = false;
+        bool lockedOutput = false;
+        bool nativeAssetError = false;
     };
     constexpr auto faultCase = [](const char* name, ProjectSaveFaultStage stage, bool ending) constexpr noexcept
     { return Scenario{name, HostWriteFormat::Project, false, ending, false, false, false, false, stage}; };
     constexpr auto folderFaultCase = [](const char* name, ProjectSaveFaultStage stage, bool ending) constexpr noexcept
     { return Scenario{name, HostWriteFormat::Project, false, ending, false, false, false, false, stage, true}; };
+    constexpr auto cleanupCase = [](const char* name, bool ending) constexpr noexcept
+    {
+        return Scenario{name,
+                        HostWriteFormat::Project,
+                        false,
+                        ending,
+                        false,
+                        false,
+                        false,
+                        false,
+                        ProjectSaveFaultStage::BackupCleanup,
+                        true,
+                        true};
+    };
+    constexpr auto rollbackCase = [](const char* name, bool ending) constexpr noexcept
+    {
+        return Scenario{name,
+                        HostWriteFormat::Project,
+                        false,
+                        ending,
+                        false,
+                        false,
+                        false,
+                        false,
+                        ProjectSaveFaultStage::RollbackRename,
+                        true,
+                        false,
+                        true};
+    };
+    constexpr auto recoveryCase = [](const char* name, bool ending, RecoveryMode mode) constexpr noexcept
+    {
+        const auto stage = mode == RecoveryMode::TimerCreate ? ProjectSaveFaultStage::RecoveryTimerCreate
+                           : mode == RecoveryMode::TimerArm  ? ProjectSaveFaultStage::RecoveryTimerArm
+                           : mode == RecoveryMode::TimerWait ? ProjectSaveFaultStage::RecoveryTimerWait
+                                                             : ProjectSaveFaultStage::Count;
+        return Scenario{
+            name, HostWriteFormat::Project, false, ending, false, false, false, false, stage, true, false, false, mode};
+    };
+    constexpr auto timeoutFaultCase = [](const char* name, bool folder, ProjectSaveFaultStage stage) constexpr noexcept
+    {
+        return Scenario{name,  HostWriteFormat::Project, false, true, true, false, false, false, stage, folder, false,
+                        false, RecoveryMode::None,       true};
+    };
+    constexpr auto lockedExportCase = [](const char* name, HostWriteFormat format, bool ending) constexpr noexcept
+    {
+        return Scenario{name,
+                        format,
+                        false,
+                        ending,
+                        false,
+                        false,
+                        false,
+                        false,
+                        ProjectSaveFaultStage::Count,
+                        false,
+                        false,
+                        false,
+                        RecoveryMode::None,
+                        false,
+                        true};
+    };
+    constexpr auto nativeAssetCase = [](const char* name, bool folder, bool ending) constexpr noexcept
+    {
+        return Scenario{name,
+                        HostWriteFormat::Project,
+                        false,
+                        ending,
+                        false,
+                        false,
+                        false,
+                        false,
+                        ProjectSaveFaultStage::Count,
+                        folder,
+                        false,
+                        false,
+                        RecoveryMode::None,
+                        false,
+                        false,
+                        true};
+    };
     constexpr std::array scenarios{
         Scenario{"save-before-publication", HostWriteFormat::Project, false, true, false, false},
         Scenario{"save-after-publication", HostWriteFormat::Project, true, true, false, false},
@@ -212,14 +306,37 @@ int Application::RunFileEndSessionSelfTest() noexcept
         folderFaultCase("folder-rotation-false", ProjectSaveFaultStage::DestinationToBackupRename, false),
         folderFaultCase("folder-publication-end", ProjectSaveFaultStage::StagingToDestinationRename, true),
         folderFaultCase("folder-publication-false", ProjectSaveFaultStage::StagingToDestinationRename, false),
+        cleanupCase("folder-published-cleanup-end", true),
+        cleanupCase("folder-published-cleanup-false", false),
+        rollbackCase("folder-failed-rollback-end", true),
+        rollbackCase("folder-failed-rollback-false", false),
+        recoveryCase("folder-recovery-exhaustion-end", true, RecoveryMode::Exhaustion),
+        recoveryCase("folder-recovery-exhaustion-false", false, RecoveryMode::Exhaustion),
+        recoveryCase("folder-recovery-create-end", true, RecoveryMode::TimerCreate),
+        recoveryCase("folder-recovery-create-false", false, RecoveryMode::TimerCreate),
+        recoveryCase("folder-recovery-arm-end", true, RecoveryMode::TimerArm),
+        recoveryCase("folder-recovery-arm-false", false, RecoveryMode::TimerArm),
+        recoveryCase("folder-recovery-wait-end", true, RecoveryMode::TimerWait),
+        recoveryCase("folder-recovery-wait-false", false, RecoveryMode::TimerWait),
+        timeoutFaultCase("save-late-manifest-close-timeout", false, ProjectSaveFaultStage::ManifestClose),
+        timeoutFaultCase("folder-late-publication-timeout", true, ProjectSaveFaultStage::StagingToDestinationRename),
+        lockedExportCase("png-native-locked-output-end", HostWriteFormat::Png, true),
+        lockedExportCase("png-native-locked-output-false", HostWriteFormat::Png, false),
+        lockedExportCase("jpeg-native-locked-output-end", HostWriteFormat::Jpeg, true),
+        lockedExportCase("jpeg-native-locked-output-false", HostWriteFormat::Jpeg, false),
+        nativeAssetCase("save-native-asset-collision-end", false, true),
+        nativeAssetCase("save-native-asset-collision-false", false, false),
+        nativeAssetCase("folder-native-asset-collision-end", true, true),
+        nativeAssetCase("folder-native-asset-collision-false", true, false),
     };
     std::error_code error;
-    const auto root =
-        std::filesystem::temp_directory_path(error) / (L"RedPrism.SessionEndWrites." + Guid::Generate().ToString());
+    // Keep headroom for both GUID siblings and the staged asset name on hosts with legacy Win32 path limits.
+    const auto root = std::filesystem::temp_directory_path(error) / (L"SE-" + Guid::Generate().ToString());
     if (error || !std::filesystem::create_directory(root, error) || error)
         return 5;
     const std::wstring previousSettings = _settingsPath;
     const auto previousDiscard = _forcedDiscard;
+    bool retainFailedFixture = false;
     _settingsPath = (root / L"settings.json").wstring();
     _forcedDiscard = false;
     const auto restore = wil::scope_exit(
@@ -238,8 +355,13 @@ int Application::RunFileEndSessionSelfTest() noexcept
             OnEndSession(false);
             _settingsPath = previousSettings;
             _forcedDiscard = previousDiscard;
-            std::error_code ignored;
-            std::filesystem::remove_all(root, ignored); // exact Guid-owned test directory
+            if (retainFailedFixture)
+                std::fwprintf(stderr, L"session-end-fixture.retained root=%ls\n", root.c_str());
+            else
+            {
+                std::error_code ignored;
+                std::filesystem::remove_all(root, ignored); // exact Guid-owned test directory
+            }
         });
 
     struct State final
@@ -340,6 +462,7 @@ int Application::RunFileEndSessionSelfTest() noexcept
     int failures = 0;
     for (const auto& scenario : scenarios)
     {
+        const bool nativeRecovery = scenario.recovery != RecoveryMode::None;
         const bool project = scenario.format == HostWriteFormat::Project;
         const bool jpeg = scenario.format == HostWriteFormat::Jpeg;
         const auto output =
@@ -349,17 +472,34 @@ int Application::RunFileEndSessionSelfTest() noexcept
         // Setup is a tiny harness operation. Expected final pixels are literals, independent from the writer.
         auto oldDocument = LiteralFileDocument(0xFF202020);
         const auto oldActive = oldDocument.layers.front().id;
-        bool installedOld =
-            project ? SaveProject(output.c_str(), oldDocument, oldActive, !scenario.folder) == ProjectIoStatus::Ok
-                    : (jpeg ? EncodeJpegFile(oldDocument.layers.front().asset->image, {}, output.c_str())
-                            : EncodePngFile(oldDocument.layers.front().asset->image, 72, output.c_str())) ==
-                          ImageCodecStatus::Ok;
+        const auto oldProjectStatus =
+            project ? SaveProject(output.c_str(), oldDocument, oldActive, !scenario.folder) : ProjectIoStatus::Invalid;
+        const auto oldImageStatus = project ? ImageCodecStatus::Encode
+                                    : jpeg ? EncodeJpegFile(oldDocument.layers.front().asset->image, {}, output.c_str())
+                                           : EncodePngFile(oldDocument.layers.front().asset->image, 72, output.c_str());
+        bool installedOld = project ? oldProjectStatus == ProjectIoStatus::Ok : oldImageStatus == ImageCodecStatus::Ok;
         std::vector<std::uint8_t> oldBytes;
         std::vector<SessionProjectEntry> oldTree;
         installedOld =
             installedOld && (scenario.folder ? ReadLiteralTree(output, oldTree) : ReadLiteralFile(output, oldBytes));
         if (!installedOld)
+        {
+            std::fprintf(stderr,
+                         "session-end-fixture.setup case=%s project=%u folder=%u project-status=%u image-status=%u "
+                         "root-units=%zu output-units=%zu\n",
+                         scenario.name, project ? 1u : 0u, scenario.folder ? 1u : 0u,
+                         static_cast<unsigned int>(oldProjectStatus), static_cast<unsigned int>(oldImageStatus),
+                         root.native().size(), output.native().size());
             return 5;
+        }
+        wil::unique_hfile outputReader;
+        if (scenario.lockedOutput)
+        {
+            outputReader.reset(CreateFileW(output.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                           FILE_ATTRIBUTE_NORMAL, nullptr));
+            if (!outputReader)
+                return 5; // Exclusive fixture destination must be held through the actual encoder publication.
+        }
         auto input = LiteralFileDocument(0xFF404040);
         const auto active = input.layers.front().id;
         _session.ReplaceDocument(std::move(input), active);
@@ -382,7 +522,23 @@ int Application::RunFileEndSessionSelfTest() noexcept
         if (project)
         {
             _projectSaveTestGate->afterPublication = scenario.afterPublication;
+            _projectSaveTestGate->traceOnly = scenario.timeoutFault;
+            _projectSaveTestGate->holdAtFaultForTest = scenario.timeoutFault;
+            _projectSaveTestGate->createAssetCollisionForTest = scenario.nativeAssetError;
+            if (scenario.nativeAssetError)
+            {
+                _projectSaveTestGate->assetStagingPatternForTest = output.wstring() + L".~*";
+                _projectSaveTestGate->assetStagingParentForTest = output.parent_path().wstring() + L"\\";
+                _projectSaveTestGate->assetLeafForTest = _session.Document()->layers.front().id.ToString() + L".png";
+            }
             _projectSaveTestGate->faultStageForTest = scenario.fault;
+            _projectSaveTestGate->faultAtVisitForTest = scenario.publishedCleanup ? 2u : 1u;
+            _projectSaveTestGate->precedingFaultStageForTest = (scenario.failedRollback || nativeRecovery)
+                                                                   ? ProjectSaveFaultStage::StagingToDestinationRename
+                                                                   : ProjectSaveFaultStage::Count;
+            _projectSaveTestGate->holdRecoveryReaderForTest = nativeRecovery;
+            if (nativeRecovery)
+                _projectSaveTestGate->recoveryManifestForTest = output.wstring() + L".old\\manifest.json";
         }
         else
         {
@@ -412,10 +568,17 @@ int Application::RunFileEndSessionSelfTest() noexcept
         {
             std::printf("%s file-end-session.%s.%s\n", condition ? "PASS" : "FAIL", scenario.name, name);
             if (!condition)
+            {
                 ++failures;
+                retainFailedFixture = true;
+            }
         };
         const bool cancelled = scenario.timeout || scenario.readback;
-        const bool fault = scenario.fault != ProjectSaveFaultStage::Count;
+        const bool fault = (scenario.fault != ProjectSaveFaultStage::Count && !scenario.publishedCleanup) ||
+                           nativeRecovery || scenario.lockedOutput || scenario.nativeAssetError;
+        const auto failureNotice = static_cast<unsigned int>(project ? IDS_ERROR_SAVE_PROJECT
+                                                             : jpeg  ? IDS_ERROR_EXPORT_JPEG
+                                                                     : IDS_ERROR_EXPORT_PNG);
         expect(state.visited && state.heldBefore, "original-writer-graph-is-held-at-actual-phase");
         expect(state.earlierQueryHeld && state.reason && state.critical && state.queryDidNotCancel,
                "queries-obey-stage-policy-with-localized-reason");
@@ -428,7 +591,13 @@ int Application::RunFileEndSessionSelfTest() noexcept
                                                           : HostOutcome::Succeeded),
                "original-receipt-finishes-after-ordinary-acknowledgement");
         bool outputCorrect = false;
-        if (cancelled || fault)
+        if (scenario.failedRollback || nativeRecovery)
+        {
+            const std::filesystem::path backup{output.wstring() + L".old"};
+            std::vector<SessionProjectEntry> retained;
+            outputCorrect = ReadLiteralTree(backup, retained) && retained == oldTree;
+        }
+        else if (cancelled || fault)
         {
             std::vector<std::uint8_t> actualBytes;
             std::vector<SessionProjectEntry> actualTree;
@@ -457,10 +626,12 @@ int Application::RunFileEndSessionSelfTest() noexcept
                    !_exportWrite && !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&
                    _hostInputBudget.Used() == 0 && _gpuWork.LentCount() == 0 && !_gpuWork.HasPending() &&
                    _composition.UtilitySurfaceBytes() == 0 && _renderer.PresentCount() == presents &&
-                   _errorsShown == notices + (fault ? 1 : 0) && (!fault || _lastErrorId == IDS_ERROR_SAVE_PROJECT),
-               fault ? "tickets-events-budgets-and-utility-owners-retire-with-one-failure-notice"
-                     : "tickets-events-budgets-and-utility-owners-retire-without-present-or-notice");
-        if (fault)
+                   _errorsShown == notices + (fault && !cancelled ? 1 : 0) &&
+                   (!fault || cancelled || _lastErrorId == failureNotice),
+               fault && !cancelled ? "tickets-events-budgets-and-utility-owners-retire-with-one-failure-notice"
+                                   : "tickets-events-budgets-and-utility-owners-retire-without-present-or-notice");
+        if (fault && project && !scenario.failedRollback && !nativeRecovery && !scenario.timeoutFault &&
+            !scenario.nativeAssetError)
         {
             const auto& trace = *_projectSaveTestGate;
             const auto index = static_cast<std::size_t>(scenario.fault);
@@ -521,9 +692,407 @@ int Application::RunFileEndSessionSelfTest() noexcept
                 expect(outputCorrect && HasNoOwnedSaveSiblings(output),
                        "folder-shape-retains-old-tree-and-cleans-owned-siblings");
         }
+        if (scenario.publishedCleanup)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            expect(trace.saveStatus == ProjectIoStatus::Ok && !trace.faultTraceTruncated &&
+                       trace.faultVisits[static_cast<std::size_t>(ProjectSaveFaultStage::BackupCleanup)] == 2 &&
+                       state.receipt.Read().outcome == HostOutcome::Succeeded && state.receipt.Read().error == S_OK,
+                   "postpublication-cleanup-fault-keeps-succeeded-original-receipt");
+            unsigned int publications = 0, cleanupErrors = 0, staged = 0;
+            std::size_t stagedAt = trace.observationCount, publishedAt = trace.observationCount,
+                        cleanupAt = trace.observationCount;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+            {
+                const auto& observed = trace.observations[index];
+                if (observed.stage == ProjectIoStage::Staged)
+                {
+                    ++staged;
+                    stagedAt = index;
+                }
+                if (observed.stage == ProjectIoStage::Published)
+                {
+                    ++publications;
+                    publishedAt = index;
+                }
+                if (observed.stage == ProjectIoStage::BackupCleanupFailed && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++cleanupErrors;
+                    cleanupAt = index;
+                }
+            }
+            expect(!trace.traceTruncated && staged == 1 && publications == 1 && cleanupErrors == 1 &&
+                       stagedAt < publishedAt && publishedAt < cleanupAt,
+                   "published-fact-precedes-exact-cleanup-error-once");
+            const std::filesystem::path backup{output.wstring() + L".old"};
+            std::vector<SessionProjectEntry> retained;
+            const auto recovered = LoadProject(backup.c_str());
+            expect(ReadLiteralTree(backup, retained) && retained == oldTree &&
+                       recovered.status == ProjectIoStatus::Ok && recovered.document.id == oldDocument.id &&
+                       recovered.activeLayerID == oldActive && recovered.document.layers.size() == 1 &&
+                       recovered.document.layers.front().id == oldActive && recovered.document.layers.front().asset &&
+                       HasLiteralPixel(recovered.document.layers.front().asset->image, 32),
+                   "cleanup-fault-retains-exact-reloadable-old-backup");
+            const auto published = LoadProject(output.c_str());
+            expect(outputCorrect && published.status == ProjectIoStatus::Ok &&
+                       published.document.id == _session.Document()->id && published.activeLayerID == active &&
+                       published.document.layers.size() == 1 && published.document.layers.front().id == active &&
+                       published.document.layers.front().asset &&
+                       HasLiteralPixel(published.document.layers.front().asset->image, 191),
+                   "cleanup-fault-keeps-literal-new-published-project");
+            expect(HasNoOwnedSaveSiblings(output, true) && _errorsShown == notices &&
+                       _documentPath == output.wstring() && !_session.history.IsModified(),
+                   "only-owned-backup-remains-with-saved-authority-and-no-failure-notice");
+        }
+        if (scenario.failedRollback)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            const auto visits = [&](ProjectSaveFaultStage stage) noexcept
+            { return trace.faultVisits[static_cast<std::size_t>(stage)]; };
+            expect(trace.saveStatus == ProjectIoStatus::Encode && !trace.faultTraceTruncated &&
+                       visits(ProjectSaveFaultStage::DestinationToBackupRename) == 1 &&
+                       visits(ProjectSaveFaultStage::StagingToDestinationRename) == 1 &&
+                       visits(ProjectSaveFaultStage::RollbackRename) == 1 &&
+                       state.receipt.Read().outcome == HostOutcome::Failed && state.receipt.Read().error == E_FAIL,
+                   "original-publication-and-rollback-fail-once-with-failed-receipt");
+            unsigned int staged = 0, publicationErrors = 0, rollbackErrors = 0, publications = 0, retries = 0;
+            std::size_t stagedAt = trace.observationCount, publicationAt = trace.observationCount,
+                        rollbackAt = trace.observationCount;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+            {
+                const auto& observed = trace.observations[index];
+                if (observed.stage == ProjectIoStage::Staged)
+                {
+                    ++staged;
+                    stagedAt = index;
+                }
+                if (observed.stage == ProjectIoStage::StagingToDestinationFailed && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++publicationErrors;
+                    publicationAt = index;
+                }
+                if (observed.stage == ProjectIoStage::RollbackFailed && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++rollbackErrors;
+                    rollbackAt = index;
+                }
+                publications += observed.stage == ProjectIoStage::Published ? 1u : 0u;
+                retries += observed.stage == ProjectIoStage::RollbackRetryScheduled ? 1u : 0u;
+            }
+            expect(!trace.traceTruncated && staged == 1 && publicationErrors == 1 && rollbackErrors == 1 &&
+                       publications == 0 && stagedAt < publicationAt && publicationAt < rollbackAt,
+                   "staged-then-exact-publication-and-rollback-errors-without-publication");
+            const std::filesystem::path backup{output.wstring() + L".old"};
+            const auto recovered = LoadProject(backup.c_str());
+            expect(outputCorrect && recovered.status == ProjectIoStatus::Ok &&
+                       recovered.document.id == oldDocument.id && recovered.activeLayerID == oldActive &&
+                       recovered.document.layers.size() == 1 && recovered.document.layers.front().id == oldActive &&
+                       recovered.document.layers.front().asset &&
+                       HasLiteralPixel(recovered.document.layers.front().asset->image, 32),
+                   "failed-rollback-keeps-byte-exact-reloadable-old-backup");
+            const auto attributes = GetFileAttributesW(output.c_str());
+            const auto absentError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+            expect(attributes == INVALID_FILE_ATTRIBUTES &&
+                       (absentError == ERROR_FILE_NOT_FOUND || absentError == ERROR_PATH_NOT_FOUND) &&
+                       HasNoOwnedSaveSiblings(output, true),
+                   "destination-is-truthfully-absent-and-owned-staging-is-retired");
+            expect(retries == 0 && visits(ProjectSaveFaultStage::RecoveryTimerCreate) == 0 &&
+                       visits(ProjectSaveFaultStage::RecoveryTimerArm) == 0 &&
+                       visits(ProjectSaveFaultStage::RecoveryTimerWait) == 0,
+                   "injected-final-rollback-error-never-starts-recovery-timers");
+            expect(_session.ActiveLayerID() == active && _session.ActiveLayer() && _session.ActiveLayer()->asset &&
+                       HasLiteralPixel(_session.ActiveLayer()->asset->image, 191) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
+                       _session.history.IsModified() && _documentPath == L"before-session-write.prism" &&
+                       _errorsShown == notices + 1 && _lastErrorId == IDS_ERROR_SAVE_PROJECT,
+                   "failed-rollback-preserves-source-history-path-and-one-notice-authority");
+        }
+        if (nativeRecovery)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            const std::filesystem::path backup{output.wstring() + L".old"};
+            wil::unique_handle deleteAccess{CreateFileW(trace.recoveryManifestForTest.c_str(), DELETE,
+                                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+            const auto deleteAccessError = deleteAccess ? ERROR_SUCCESS : GetLastError();
+            const bool deleteAccessAfterAcknowledgement = static_cast<bool>(deleteAccess);
+            deleteAccess.reset(); // Do not leave DELETE access open across the independent backup reload.
+            if (!trace.recoveryDeleteAccessDeniedWhileHeldForTest || !deleteAccessAfterAcknowledgement)
+                std::fprintf(stderr,
+                             "session-end-fixture.reader-probe case=%s held-denied=%u held-error=%u "
+                             "postack-opened=%u postack-error=%lu manifest-units=%zu\n",
+                             scenario.name, trace.recoveryDeleteAccessDeniedWhileHeldForTest ? 1u : 0u,
+                             trace.recoveryDeleteAccessErrorWhileHeldForTest,
+                             deleteAccessAfterAcknowledgement ? 1u : 0u, deleteAccessError,
+                             trace.recoveryManifestForTest.size());
+            expect(trace.recoveryDeleteAccessDeniedWhileHeldForTest && deleteAccessAfterAcknowledgement,
+                   "actual-reader-retirement-permits-postack-delete-access-without-mutating-backup");
+            const auto visits = [&](ProjectSaveFaultStage stage) noexcept
+            { return trace.faultVisits[static_cast<std::size_t>(stage)]; };
+            const unsigned int retriesExpected = scenario.recovery == RecoveryMode::Exhaustion  ? 2u
+                                                 : scenario.recovery == RecoveryMode::TimerWait ? 1u
+                                                                                                : 0u;
+            const unsigned int armsExpected = scenario.recovery == RecoveryMode::TimerCreate  ? 0u
+                                              : scenario.recovery == RecoveryMode::Exhaustion ? 2u
+                                                                                              : 1u;
+            const unsigned int waitsExpected =
+                scenario.recovery == RecoveryMode::TimerCreate || scenario.recovery == RecoveryMode::TimerArm ? 0u
+                : scenario.recovery == RecoveryMode::Exhaustion                                               ? 2u
+                                                                                                              : 1u;
+            expect(trace.recoveryReaderOpenedForTest && trace.recoveryReaderErrorForTest == ERROR_SUCCESS &&
+                       trace.recoveryDeleteAccessDeniedWhileHeldForTest &&
+                       trace.recoveryDeleteAccessErrorWhileHeldForTest == ERROR_SHARING_VIOLATION &&
+                       trace.recoveryReaderRetiredForTest && !trace.faultTraceTruncated &&
+                       visits(ProjectSaveFaultStage::DestinationToBackupRename) == 1 &&
+                       visits(ProjectSaveFaultStage::StagingToDestinationRename) == 1 &&
+                       visits(ProjectSaveFaultStage::RollbackRename) == 1,
+                   "real-backup-child-reader-blocks-native-rollback-and-retires-before-ack");
+            expect(visits(ProjectSaveFaultStage::RecoveryTimerCreate) == 1 &&
+                       visits(ProjectSaveFaultStage::RecoveryTimerArm) == armsExpected &&
+                       visits(ProjectSaveFaultStage::RecoveryTimerWait) == waitsExpected,
+                   "recovery-timer-visits-match-exhaustion-or-selected-final-refusal");
+            unsigned int staged = 0, publicationErrors = 0, rollbackErrors = 0, publications = 0, retries = 0;
+            unsigned int nativeError = 0;
+            std::size_t stagedAt = trace.observationCount, publicationAt = trace.observationCount,
+                        rollbackAt = trace.observationCount;
+            bool retryErrorsMatch = true;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+            {
+                const auto& observed = trace.observations[index];
+                if (observed.stage == ProjectIoStage::Staged)
+                {
+                    ++staged;
+                    stagedAt = index;
+                }
+                if (observed.stage == ProjectIoStage::StagingToDestinationFailed && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++publicationErrors;
+                    publicationAt = index;
+                }
+                if (observed.stage == ProjectIoStage::RollbackFailed)
+                {
+                    ++rollbackErrors;
+                    rollbackAt = index;
+                    nativeError = observed.value;
+                }
+                publications += observed.stage == ProjectIoStage::Published ? 1u : 0u;
+                retries += observed.stage == ProjectIoStage::RollbackRetryScheduled ? 1u : 0u;
+            }
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+                if (trace.observations[index].stage == ProjectIoStage::RollbackRetryScheduled)
+                    retryErrorsMatch = retryErrorsMatch && trace.observations[index].value == nativeError &&
+                                       index > publicationAt && index < rollbackAt;
+            expect(!trace.traceTruncated && staged == 1 && publicationErrors == 1 && rollbackErrors == 1 &&
+                       publications == 0 && stagedAt < publicationAt && publicationAt < rollbackAt &&
+                       retries == retriesExpected && retryErrorsMatch &&
+                       (nativeError == ERROR_ACCESS_DENIED || nativeError == ERROR_SHARING_VIOLATION) &&
+                       nativeError != trace.faultErrorForTest,
+                   "native-rename-error-survives-bounded-retries-and-timer-refusal-with-no-published-fact");
+            expect(trace.saveStatus == ProjectIoStatus::Encode && state.receipt.Read().outcome == HostOutcome::Failed &&
+                       state.receipt.Read().error == E_FAIL && _errorsShown == notices + 1 &&
+                       _lastErrorId == IDS_ERROR_SAVE_PROJECT,
+                   "native-recovery-failure-applies-one-failed-original-receipt-and-localized-notice");
+            const auto recovered = LoadProject(backup.c_str());
+            expect(outputCorrect && recovered.status == ProjectIoStatus::Ok &&
+                       recovered.document.id == oldDocument.id && recovered.activeLayerID == oldActive &&
+                       recovered.document.layers.size() == 1 && recovered.document.layers.front().id == oldActive &&
+                       recovered.document.layers.front().asset &&
+                       HasLiteralPixel(recovered.document.layers.front().asset->image, 32),
+                   "native-recovery-failure-retains-byte-exact-reloadable-old-backup");
+            expect(GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES &&
+                       HasNoOwnedSaveSiblings(output, true),
+                   "native-recovery-leaves-truthful-destination-absence-and-only-recovery-backup");
+            expect(HasLiteralPixel(_session.Document()->layers.front().asset->image, 191) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
+                       _session.history.IsModified() && _documentPath == L"before-session-write.prism",
+                   "native-recovery-failure-preserves-dirty-source-path-and-history-authority");
+        }
+        if (scenario.timeoutFault)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            expect(trace.heldFaultResultForTest.status == JobStatus::Cancelled && trace.heldFaultCancelledForTest &&
+                       trace.visits.load() == 1 && state.cancelAfter && state.waitAcknowledged && state.noOwnerApply,
+                   "late-fault-gate-releases-only-after-native-timeout-and-records-cancellation");
+            unsigned int errors = 0, publications = 0, staged = 0, rollbackErrors = 0;
+            std::size_t stagedAt = trace.observationCount, errorAt = trace.observationCount;
+            const auto expectedStage =
+                scenario.folder ? ProjectIoStage::StagingToDestinationFailed : ProjectIoStage::CloseFailed;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+            {
+                const auto& observed = trace.observations[index];
+                if (observed.stage == expectedStage && observed.value == ERROR_WRITE_FAULT)
+                {
+                    ++errors;
+                    errorAt = index;
+                }
+                if (observed.stage == ProjectIoStage::Staged)
+                {
+                    ++staged;
+                    stagedAt = index;
+                }
+                publications += observed.stage == ProjectIoStage::Published ? 1u : 0u;
+                rollbackErrors += observed.stage == ProjectIoStage::RollbackFailed ? 1u : 0u;
+            }
+            expect(trace.saveStatus == ProjectIoStatus::Encode && !trace.traceTruncated && !trace.faultTraceTruncated &&
+                       trace.faultVisits[static_cast<std::size_t>(scenario.fault)] == 1 && errors == 1 &&
+                       publications == 0 && rollbackErrors == 0 && staged == (scenario.folder ? 1u : 0u) &&
+                       (!scenario.folder || stagedAt < errorAt),
+                   "actual-posttimeout-io-failure-keeps-exact-unpublished-native-error-fact");
+            const auto reloaded = LoadProject(output.c_str());
+            expect(outputCorrect && reloaded.status == ProjectIoStatus::Ok && reloaded.document.id == oldDocument.id &&
+                       reloaded.activeLayerID == oldActive && reloaded.document.layers.size() == 1 &&
+                       reloaded.document.layers.front().id == oldActive && reloaded.document.layers.front().asset &&
+                       HasLiteralPixel(reloaded.document.layers.front().asset->image, 32) &&
+                       HasNoOwnedSaveSiblings(output),
+                   "posttimeout-failure-preserves-exact-reloadable-old-project-and-retires-staging");
+            expect(state.receipt.Read().outcome == HostOutcome::Cancelled && state.receipt.Read().error == E_ABORT &&
+                       _errorsShown == notices && _session.history.CurrentRevision() == revision &&
+                       _session.history.UndoCount() == undoCount && _session.history.IsModified() &&
+                       HasLiteralPixel(_session.Document()->layers.front().asset->image, 191) &&
+                       _documentPath == L"before-session-write.prism",
+                   "cancelled-stamp-keeps-one-quiet-cancelled-receipt-and-no-late-save-authority");
+            expect(state.originalHeldAfter && !_projectSaveTicket && !_projectSaveStamp && !_projectSaveWrite &&
+                       !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&
+                       _hostInputBudget.Used() == 0 && _renderer.PresentCount() == presents,
+                   "original-timeout-ticket-event-and-reservation-retire-only-after-late-worker-ack");
+        }
+        if (scenario.lockedOutput)
+        {
+            const auto& trace = *_exportWorkTestGate;
+            expect(outputReader && trace.encodeAttempts.load() == 1 &&
+                       trace.encodedStatusForTest == ImageCodecStatus::Encode && !trace.publishedForTest,
+                   "real-destination-reader-refuses-original-encoder-publication-once");
+            expect(state.receipt.Read().outcome == HostOutcome::Failed && state.receipt.Read().error == E_FAIL &&
+                       _errorsShown == notices + 1 && _lastErrorId == failureNotice,
+                   "actual-native-encode-failure-applies-one-original-receipt-and-format-notice");
+            std::vector<std::uint8_t> retained;
+            expect(ReadLiteralFile(output, retained) && retained == oldBytes && HasNoOwnedSaveSiblings(output),
+                   "actual-native-encode-failure-preserves-exact-old-bytes-and-retires-owned-temporaries");
+            outputReader.reset(); // The original OS reader has no authority over any application state.
+            DecodedImage decoded;
+            expect(ImportImageFile(output.c_str(), 2, decoded) == ImageCodecStatus::Ok &&
+                       HasLiteralPixel(decoded.image, 32, jpeg ? 3 : 0),
+                   "failed-native-publication-keeps-independent-reloadable-old-pixels");
+            expect(HasLiteralPixel(_session.Document()->layers.front().asset->image, 191) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
+                       _session.history.IsModified() && _documentPath == L"before-session-write.prism",
+                   "actual-native-export-error-keeps-dirty-source-history-and-project-path");
+            expect(state.originalHeldAfter && !_exportTicket && !_exportStamp && !_exportWrite &&
+                       !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&
+                       _hostInputBudget.Used() == 0 && _gpuWork.LentCount() == 0 && !_gpuWork.HasPending() &&
+                       _composition.UtilitySurfaceBytes() == 0 && _renderer.PresentCount() == presents,
+                   "original-native-error-graph-retires-only-after-owner-ack-with-no-present");
+        }
+        if (scenario.nativeAssetError)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            expect(trace.assetStagingMatchesForTest == 1 && trace.assetCollisionCreatedForTest &&
+                       trace.assetCollisionErrorForTest == ERROR_SUCCESS && !trace.faultTraceTruncated &&
+                       trace.faultVisits[static_cast<std::size_t>(ProjectSaveFaultStage::ManifestClose)] == 1,
+                   "one-owned-staging-asset-directory-conflict-is-created-without-synthesized-failure");
+            unsigned int assets = 0, staged = 0, publications = 0;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+            {
+                assets += trace.observations[index].stage == ProjectIoStage::AssetEncoded ? 1u : 0u;
+                staged += trace.observations[index].stage == ProjectIoStage::Staged ? 1u : 0u;
+                publications += trace.observations[index].stage == ProjectIoStage::Published ? 1u : 0u;
+            }
+            expect(!trace.traceTruncated && trace.saveStatus == ProjectIoStatus::Encode && assets == 0 && staged == 0 &&
+                       publications == 0,
+                   "real-asset-encoder-failure-precedes-staging-and-publication-in-original-save-graph");
+            const auto old = LoadProject(output.c_str());
+            expect(outputCorrect && old.status == ProjectIoStatus::Ok && old.document.id == oldDocument.id &&
+                       old.activeLayerID == oldActive && old.document.layers.size() == 1 &&
+                       old.document.layers.front().id == oldActive && old.document.layers.front().asset &&
+                       HasLiteralPixel(old.document.layers.front().asset->image, 32) && HasNoOwnedSaveSiblings(output),
+                   "actual-native-asset-error-keeps-exact-old-project-and-cleans-only-owned-staging");
+            expect(state.receipt.Read().outcome == HostOutcome::Failed && state.receipt.Read().error == E_FAIL &&
+                       _errorsShown == notices + 1 && _lastErrorId == IDS_ERROR_SAVE_PROJECT &&
+                       HasLiteralPixel(_session.Document()->layers.front().asset->image, 191) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
+                       _session.history.IsModified() && _documentPath == L"before-session-write.prism",
+                   "actual-native-asset-error-applies-one-failed-receipt-notice-and-no-late-source-authority");
+            expect(state.originalHeldAfter && !_projectSaveTicket && !_projectSaveStamp && !_projectSaveWrite &&
+                       !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&
+                       _hostInputBudget.Used() == 0 && _renderer.PresentCount() == presents,
+                   "original-native-asset-error-retains-ticket-event-and-reservation-through-acknowledgement");
+        }
         _projectSaveTestGate.reset();
         _exportWorkTestGate.reset();
         _endSessionWriteTestGate.reset();
+    }
+    {
+        // Deliberately synthetic policy records: ordinary host admission serializes project save and
+        // export. These invalid, unregistered tickets test only the defensive overlapping-flag budget,
+        // never the original writer graphs, their receipts or two admitted concurrent writers.
+        const auto expect = [&](bool value, const char* label)
+        {
+            std::printf("%s session-end-shared-deadline-policy.%s\n", value ? "PASS" : "FAIL", label);
+            failures += value ? 0 : 1;
+        };
+        const bool idle = !_projectSaveTicket && !_exportTicket && !_projectSaveWrite && !_exportWrite &&
+                          !_projectSaveStamp && !_exportStamp && _jobs.IsIdle() && !_historyWork.Busy() &&
+                          !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0;
+        expect(idle, "fixture-has-no-admitted-original-writer");
+        if (!idle)
+            return 5;
+        const auto save = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Writing);
+        const auto exportWrite = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Queued);
+        auto gate = std::make_shared<EndSessionWriteTestGate>();
+        const bool created =
+            SUCCEEDED(save->CreationError()) && SUCCEEDED(exportWrite->CreationError()) && gate->waitEntered;
+        expect(created, "owned-policy-events-exist");
+        if (!created)
+            return 5;
+        const auto revision = _session.history.CurrentRevision();
+        const auto undoCount = _session.history.UndoCount();
+        const auto modified = _session.history.IsModified();
+        const auto path = _documentPath;
+        const auto presents = _renderer.PresentCount();
+        const auto notices = _errorsShown;
+        const auto restorePolicyRecords = wil::scope_exit(
+            [&]() noexcept
+            {
+                _projectSaveTicket.reset();
+                _exportTicket.reset();
+                _projectSaveWrite.reset();
+                _exportWrite.reset();
+                _endSessionWriteTestGate.reset();
+                OnEndSession(false);
+            });
+        _projectSaveTicket = JobTicket{};
+        _exportTicket = JobTicket{};
+        _projectSaveWrite = save;
+        _exportWrite = exportWrite;
+        _endSessionWriteTestGate = gate;
+        const JobTicket unregistered{};
+        expect(!_jobs.Cancel(unregistered), "invalid-policy-ticket-is-not-a-scheduler-job");
+        (void)SendMessageW(_window.get(), WM_ENDSESSION, FALSE, 0);
+        expect(gate->waitVisits.load() == 0 && save->Current() == WorkerWriteCompletion::Phase::Writing &&
+                   exportWrite->Current() == WorkerWriteCompletion::Phase::Queued,
+               "false-session-end-does-not-wait-or-cancel-either-policy-record");
+        (void)SendMessageW(_window.get(), WM_ENDSESSION, TRUE, 0);
+        expect(gate->waitVisits.load() == 2 && !gate->traceTruncated && gate->waits[0].deadline != 0 &&
+                   gate->waits[0].deadline == gate->waits[1].deadline,
+               "true-session-end-forwards-one-absolute-deadline-to-both-records");
+        expect(gate->waits[0].remaining <= 1500 && gate->waits[0].result == WAIT_TIMEOUT &&
+                   gate->waits[1].remaining <= gate->waits[0].remaining && gate->waits[1].result == WAIT_TIMEOUT,
+               "second-record-reuses-the-remaining-absolute-budget");
+        expect(_projectSaveWrite == save && _exportWrite == exportWrite && _projectSaveTicket == unregistered &&
+                   _exportTicket == unregistered && _jobs.IsIdle() && _jobs.ReservedMemoryBytes() == 0 &&
+                   !_historyWork.Busy() && _session.history.CurrentRevision() == revision &&
+                   _session.history.UndoCount() == undoCount && _session.history.IsModified() == modified &&
+                   _documentPath == path && _renderer.PresentCount() == presents && _errorsShown == notices,
+               "native-policy-waits-have-no-owner-publication-or-receipt-authority");
+        save->Acknowledge();
+        exportWrite->Acknowledge();
+        WaitForEndSessionWriter(save, _projectSaveTicket, std::nullopt, gate->waits[0].deadline);
+        WaitForEndSessionWriter(exportWrite, _exportTicket, std::nullopt, gate->waits[0].deadline);
+        expect(save->Current() == WorkerWriteCompletion::Phase::Finished &&
+                   exportWrite->Current() == WorkerWriteCompletion::Phase::Finished && gate->waitVisits.load() == 2 &&
+                   WaitForSingleObject(save->Event(), 0) == WAIT_OBJECT_0 &&
+                   WaitForSingleObject(exportWrite->Event(), 0) == WAIT_OBJECT_0,
+               "finished-policy-records-skip-subsequent-native-waits");
     }
     return failures == 0 ? 0 : 5;
 }

@@ -17,8 +17,7 @@
 // documented selected-folder grouping flow through an actual prepared Tree row.
 int Application::RunStandalonePreparedLayerRowsGroupSelectionSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned checks = 0;
     int failures = 0;
     const auto expect = [&](bool condition, const char* name) noexcept

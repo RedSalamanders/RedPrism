@@ -31,6 +31,29 @@ inline void UseSynthetic(bool active) noexcept
     Detail::g_synthetic.keys = {};
 }
 
+// A nested self-test owns its temporary keyboard, not the surrounding driver's state. Restore both the
+// previous mode and every held/toggled key, including when the inner test returns early. UI thread only;
+// this scope owns no Windows keyboard state and never changes an ordinary application's input policy.
+class ScopedSynthetic final
+{
+  public:
+    ScopedSynthetic() noexcept : _previous(Detail::g_synthetic)
+    {
+        UseSynthetic(true);
+    }
+    ~ScopedSynthetic()
+    {
+        Detail::g_synthetic = _previous;
+    }
+    ScopedSynthetic(const ScopedSynthetic&) = delete;
+    ScopedSynthetic& operator=(const ScopedSynthetic&) = delete;
+    ScopedSynthetic(ScopedSynthetic&&) = delete;
+    ScopedSynthetic& operator=(ScopedSynthetic&&) = delete;
+
+  private:
+    const Detail::Synthetic _previous;
+};
+
 // GetKeyState(key) < 0, or the self-test's keyboard while it is on.
 [[nodiscard]] inline bool Held(int virtualKey) noexcept
 {

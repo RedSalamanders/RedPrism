@@ -191,8 +191,7 @@ bool SameDisplay(RecordedDisplayGraph* graph, const Raster& reference, int toler
 
 int Application::RunWarpLiveTargetsSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned checks = 0, failures = 0;
     const auto fail = [](const char* name) noexcept
     {

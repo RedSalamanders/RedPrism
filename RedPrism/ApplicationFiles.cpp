@@ -862,15 +862,24 @@ void Application::WaitForEndSessionWriter(const std::shared_ptr<WorkerWriteCompl
         return;
     const auto now = GetTickCount64();
     const DWORD remaining = now < deadline ? static_cast<DWORD>(deadline - now) : 0;
+    unsigned int observation = 0;
     if (_endSessionWriteTestGate)
     {
-        _endSessionWriteTestGate->waitVisits.fetch_add(1);
+        observation = _endSessionWriteTestGate->waitVisits.fetch_add(1);
+        if (observation < _endSessionWriteTestGate->waits.size())
+            _endSessionWriteTestGate->waits[observation] = {deadline, remaining, WAIT_FAILED};
+        else
+            _endSessionWriteTestGate->traceTruncated = true;
         (void)SetEvent(_endSessionWriteTestGate->waitEntered.get());
     }
     // No dispatch, owner action, GPU work or completion application is possible inside this native wait.
     const DWORD result = WaitForSingleObject(write->Event(), remaining);
     if (_endSessionWriteTestGate)
+    {
         _endSessionWriteTestGate->waitResult.store(result);
+        if (observation < _endSessionWriteTestGate->waits.size())
+            _endSessionWriteTestGate->waits[observation].result = result;
+    }
     if (result != WAIT_OBJECT_0)
     {
         if (stamp && _historyWork.IsCurrent(stamp.value()))

@@ -63,8 +63,7 @@ bool IsClear(const DocumentSession& session) noexcept
 
 int Application::RunStandaloneStrokeSampleFaultSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned checks = 0;
     unsigned failures = 0;
     const auto expect = [&](bool value, const char* phase, const char* fault, const char* control) noexcept

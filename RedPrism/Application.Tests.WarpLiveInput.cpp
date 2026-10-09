@@ -155,8 +155,7 @@ bool SameDisplay(RecordedDisplayGraph* graph, const Raster& expected, int tolera
 int Application::RunWarpLiveInputSelfTest(HINSTANCE instance) noexcept
 {
     static_assert(CanvasBrushInput::kCapacity == kDocumentedInputCapacity);
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned int checks = 0;
     unsigned int failures = 0;
     const auto expect = [&](bool condition, const char* mode, const char* scenario, const char* control) noexcept

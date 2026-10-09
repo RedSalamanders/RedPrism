@@ -696,8 +696,7 @@ int Application::RunSelfTest() noexcept
     _quietUi = true;
     _prompts = &QuietPrompts();
     // Nor does it read the user's keyboard: its drivers hold the keys each step names (KeyboardState.h, RF-1110).
-    KeyboardState::UseSynthetic(true);
-    const auto realKeyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic syntheticKeyboard;
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     HRESULT result = RegisterWindowClass();
@@ -1378,6 +1377,15 @@ int Application::RunSelfTest() noexcept
             !closeTo(box->maxY, 100.0) || _session.history.UndoName() != L"Rectangular Marquee" ||
             _session.PendingLasso().has_value())
         {
+            std::fprintf(stderr,
+                         "self-test.marquee synthetic=%u shift=%u control=%u alt=%u tool=%u kind=%u selected=%u "
+                         "bounds=%.3f,%.3f,%.3f,%.3f pending-lasso=%u history-busy=%u host-active=%u host-queued=%zu\n",
+                         KeyboardState::Detail::g_synthetic.active ? 1u : 0u, KeyboardState::Held(VK_SHIFT) ? 1u : 0u,
+                         KeyboardState::Held(VK_CONTROL) ? 1u : 0u, KeyboardState::Held(VK_MENU) ? 1u : 0u,
+                         static_cast<unsigned int>(_tool), static_cast<unsigned int>(_session.marqueeKind),
+                         box.has_value() ? 1u : 0u, box ? box->minX : 0.0, box ? box->minY : 0.0, box ? box->maxX : 0.0,
+                         box ? box->maxY : 0.0, _session.PendingLasso().has_value() ? 1u : 0u,
+                         _historyWork.Busy() ? 1u : 0u, _activeHostRequest.has_value() ? 1u : 0u, _hostRequests.Size());
             SelfTestFailure(L"Dragging the Marquee did not select a whole-pixel rectangle.\n");
             return 5;
         }

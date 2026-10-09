@@ -127,8 +127,7 @@ bool ReadPreviewPixel(RecordedDisplayGraph* graph, int x, int y, Pixel& pixel) n
 
 int Application::RunStandaloneStrokeSampleAdmissionSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned checks = 0;
     unsigned failures = 0;
     const auto expect = [&](bool value, const char* scenario, const char* control) noexcept

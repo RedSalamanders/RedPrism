@@ -173,8 +173,7 @@ bool DisplayMatches(RecordedDisplayGraph* graph, const Raster& reference) noexce
 
 int Application::RunWarpLiveAdmissionSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned int checks = 0;
     unsigned int failures = 0;
     unsigned int scenarios = 0;

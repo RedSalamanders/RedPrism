@@ -10,12 +10,14 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <cwchar>
 #include <cwctype>
 #include <filesystem>
 #include <limits>
 #include <memory>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 
 class Application::ProjectSaveJob final : public Job
@@ -54,7 +56,8 @@ class Application::ProjectSaveJob final : public Job
         {
             ProjectSaveJob& job;
             JobContext& context;
-        } progress{*this, context};
+            wil::unique_hfile recoveryReader;
+        } progress{*this, context, {}};
         const ProjectIoObserver observer{[](void* state, ProjectIoStage stage, unsigned int value) noexcept
                                          {
                                              auto& stateValue = *static_cast<Progress*>(state);
@@ -84,23 +87,111 @@ class Application::ProjectSaveJob final : public Job
                                          },
                                          &progress};
         ProjectSaveFaultPolicy faultPolicy;
-        if (_gate && _gate->faultStageForTest != ProjectSaveFaultStage::Count)
+        if (_gate && (_gate->faultStageForTest != ProjectSaveFaultStage::Count || _gate->holdRecoveryReaderForTest ||
+                      _gate->createAssetCollisionForTest))
         {
-            faultPolicy = {[](void* raw, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
-                           {
-                               auto& trace = *static_cast<ProjectSaveTestGate*>(raw);
-                               const auto index = static_cast<std::size_t>(stage);
-                               if (index >= trace.faultVisits.size())
-                               {
-                                   trace.faultTraceTruncated = true;
-                                   return ERROR_ARITHMETIC_OVERFLOW;
-                               }
-                               ++trace.faultVisits[index];
-                               return stage == trace.faultStageForTest ? trace.faultErrorForTest : 0;
-                           },
-                           _gate.get()};
+            faultPolicy = {
+                [](void* raw, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+                {
+                    auto& state = *static_cast<Progress*>(raw);
+                    auto& trace = *state.job._gate;
+                    const auto index = static_cast<std::size_t>(stage);
+                    if (index >= trace.faultVisits.size())
+                    {
+                        trace.faultTraceTruncated = true;
+                        return ERROR_ARITHMETIC_OVERFLOW;
+                    }
+                    ++trace.faultVisits[index];
+                    if (trace.createAssetCollisionForTest && stage == ProjectSaveFaultStage::ManifestClose)
+                    {
+                        // Only the exclusive fixture's one owned staging directory is eligible. Keep the
+                        // noexcept operation seam allocation-free; all request strings were prepared by the owner.
+                        WIN32_FIND_DATAW found{};
+                        wil::unique_hfind search{FindFirstFileW(trace.assetStagingPatternForTest.c_str(), &found)};
+                        std::array<wchar_t, MAX_PATH> leaf{};
+                        bool endedNormally = false;
+                        if (search)
+                        {
+                            do
+                            {
+                                if ((found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
+                                    (found.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
+                                {
+                                    ++trace.assetStagingMatchesForTest;
+                                    if (trace.assetStagingMatchesForTest == 1)
+                                        std::wmemcpy(leaf.data(), found.cFileName, std::wcslen(found.cFileName) + 1);
+                                    else
+                                        break;
+                                }
+                            } while (FindNextFileW(search.get(), &found));
+                            endedNormally =
+                                trace.assetStagingMatchesForTest == 1 && GetLastError() == ERROR_NO_MORE_FILES;
+                        }
+                        std::array<wchar_t, 1024> collision{};
+                        constexpr std::wstring_view images{L"\\images\\"};
+                        const auto leafLength = std::wcslen(leaf.data());
+                        const bool boundedRequest = trace.assetStagingParentForTest.size() < collision.size() &&
+                                                    trace.assetLeafForTest.size() < collision.size();
+                        const auto length = boundedRequest ? trace.assetStagingParentForTest.size() + leafLength +
+                                                                 images.size() + trace.assetLeafForTest.size()
+                                                           : collision.size();
+                        if (endedNormally && length < collision.size())
+                        {
+                            auto* next = collision.data();
+                            std::wmemcpy(next, trace.assetStagingParentForTest.data(),
+                                         trace.assetStagingParentForTest.size());
+                            next += trace.assetStagingParentForTest.size();
+                            std::wmemcpy(next, leaf.data(), leafLength);
+                            next += leafLength;
+                            std::wmemcpy(next, images.data(), images.size());
+                            next += images.size();
+                            std::wmemcpy(next, trace.assetLeafForTest.data(), trace.assetLeafForTest.size());
+                            trace.assetCollisionCreatedForTest = CreateDirectoryW(collision.data(), nullptr) != FALSE;
+                            trace.assetCollisionErrorForTest =
+                                trace.assetCollisionCreatedForTest ? ERROR_SUCCESS : GetLastError();
+                        }
+                        else
+                            trace.assetCollisionErrorForTest = ERROR_INVALID_DATA;
+                        // Return the ordinary healthy operation policy. The real asset encoder must refuse
+                        // replacing this directory, and own both its file temp and parent-tree cleanup.
+                    }
+                    if (trace.holdAtFaultForTest && stage == trace.faultStageForTest &&
+                        trace.faultVisits[index] == trace.faultAtVisitForTest)
+                    {
+                        // The real writer remains owned. Test failure arrives only after the native timeout returns.
+                        trace.heldFaultResultForTest = state.job.PassGate(state.context);
+                        trace.heldFaultCancelledForTest = state.context.cancellation.IsCancelled();
+                    }
+                    if (trace.holdRecoveryReaderForTest && stage == ProjectSaveFaultStage::StagingToDestinationRename)
+                    {
+                        // Rotation has succeeded. No DELETE sharing: native rollback must actually fail.
+                        state.recoveryReader.reset(CreateFileW(trace.recoveryManifestForTest.c_str(), GENERIC_READ,
+                                                               FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                                               FILE_ATTRIBUTE_NORMAL, nullptr));
+                        trace.recoveryReaderOpenedForTest = static_cast<bool>(state.recoveryReader);
+                        trace.recoveryReaderErrorForTest = state.recoveryReader ? ERROR_SUCCESS : GetLastError();
+                        const wil::unique_handle deleteAccess{
+                            CreateFileW(trace.recoveryManifestForTest.c_str(), DELETE,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                        FILE_ATTRIBUTE_NORMAL, nullptr)};
+                        trace.recoveryDeleteAccessErrorWhileHeldForTest = deleteAccess ? ERROR_SUCCESS : GetLastError();
+                        trace.recoveryDeleteAccessDeniedWhileHeldForTest =
+                            !deleteAccess && trace.recoveryDeleteAccessErrorWhileHeldForTest == ERROR_SHARING_VIOLATION;
+                    }
+                    return (stage == trace.faultStageForTest &&
+                            trace.faultVisits[index] == trace.faultAtVisitForTest) ||
+                                   stage == trace.precedingFaultStageForTest
+                               ? trace.faultErrorForTest
+                               : 0;
+                },
+                &progress};
         }
         _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer, faultPolicy);
+        if (_gate && _gate->holdRecoveryReaderForTest)
+        {
+            progress.recoveryReader.reset(); // Retire the actual reader before the original acknowledgement.
+            _gate->recoveryReaderRetiredForTest = true;
+        }
         if (_gate)
             _gate->saveStatus = _status;
         if (_gate && !_gate->traceOnly && _gate->afterPublication)

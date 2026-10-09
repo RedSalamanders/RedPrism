@@ -370,8 +370,7 @@ int Application::RunCloneReadbackSelfTest() noexcept
 
 int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     unsigned int checks = 0;
     int failures = 0;
     for (const bool live : std::array{false, true})

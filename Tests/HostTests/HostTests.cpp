@@ -67,6 +67,7 @@
 #include "RetryWaitQueueTests.h"
 #include "SamplerInputTests.h"
 #include "SamplerIntentInputTests.h"
+#include "Scope.Tests.KeyboardState.h"
 #include "SettingsStore.h"
 #include "SharedRetainedJobMemoryTests.h"
 #include "TransformOverlay.h"
@@ -1892,6 +1893,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunBenchmarkMachineTests();
     gFailures += RunUiTimingHistogramTests();
     gFailures += RunUiTimingTests();
+    gFailures += RunKeyboardStateScopeTests();
     gFailures += RunHostUiFrameLatencyTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);

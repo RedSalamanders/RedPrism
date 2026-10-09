@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ImageCodecs.h"
 #include "Jobs.h"
 
 #include <atomic>
@@ -19,6 +20,9 @@ struct ExportWorkTestGate final
     std::atomic<unsigned int> visits{0}, encodeAttempts{0};
     std::atomic<double> quality{0}, resolution{0};
     JobResult result;
+    // Worker facts read only after the original writer acknowledgement; absent with no harness gate.
+    ImageCodecStatus encodedStatusForTest = ImageCodecStatus::Encode;
+    bool publishedForTest = false;
     bool afterPublication = false;
     bool holdReadback = false; // hold the actual worker snapshot stage before any GPU tile
     bool throwAllocationFailure = false;

@@ -135,8 +135,7 @@ bool CloseLayer(const ImageLayer* actual, const ImageLayer* reference)
 
 int Application::RunStandaloneStrokeSampleParitySelfTest(HINSTANCE instance) noexcept
 {
-    KeyboardState::UseSynthetic(true);
-    const auto keyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic keyboard;
     constexpr std::array cases{ParityCase{"soft-alpha", BrushKind::Paint},
                                ParityCase{"erase-alpha", BrushKind::Erase},
                                ParityCase{"soft-selection", BrushKind::Paint, false, true},

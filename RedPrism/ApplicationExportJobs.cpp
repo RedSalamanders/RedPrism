@@ -72,6 +72,11 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
                       ? EncodeJpegFile(image, _options, _path.c_str(), context.cancellation)
                       : EncodePngFile(image, _options.resolution, _path.c_str(), context.cancellation);
         _published = _status == ImageCodecStatus::Ok;
+        if (_gate)
+        {
+            _gate->encodedStatusForTest = _status;
+            _gate->publishedForTest = _published;
+        }
         // Encoding has returned and no future tile reads this raster. Release large CPU output on its worker.
         image = {};
         if (_gate && _gate->afterPublication)
