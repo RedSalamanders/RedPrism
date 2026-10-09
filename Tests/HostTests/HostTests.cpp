@@ -23,6 +23,7 @@
 #include "Host.Tests.GpuRecordingLane.h"
 #include "Host.Tests.PathClassificationRead.h"
 #include "Host.Tests.PathInputTransfer.h"
+#include "Host.Tests.PathReadWaitCycleExhaustion.h"
 #include "Host.Tests.PointerInputStreamPeek.h"
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
@@ -1847,6 +1848,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunOwnerWorkMultiplexerTests();
     gFailures += RunHostPathClassificationReadTests();
     gFailures += RunPathInputTransferTests();
+    gFailures += RunHostPathReadWaitCycleExhaustionTests();
     gFailures += RunRetryWaitQueueTests();
     gFailures += RunRetryWaitCancellationTests();
     gFailures += RunJobUiPolicyTests();

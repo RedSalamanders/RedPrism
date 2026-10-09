@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-08
+Last reviewed: 2026-10-09
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -1642,6 +1642,18 @@ command ordering, literal inverted pixels/history or unchanged/stale state, MTA 
 hidden zero-Present behavior and complete event/input/reservation shutdown. Three startup-resource faults
 (event creation, registration, route attachment) each have six reached-prefix/cleanup/idempotence controls.
 The exact total is 144. GetOverlappedResult, never readiness or stop alone, acknowledges pending IO.
+
+Twenty additional `path-read-wait-cycle.*` Host controls use actual scheduler tickets and the shared event pool
+for zero/foreign-ticket refusal, initially exhausted new-operation refusal before event reset, the last valid
+identity, same-operation rearm and unchanged signalled-event delivery. The MAX-1 preparation drains the real
+startup callback before testing reset; callback observation uses an atomic cycle. These are readiness tests,
+not native I/O acknowledgements. Two actual hidden-host boundary cases add 17 controls each (34 total): seed
+MAX for first-issue refusal, and MAX-2 for a real first file followed by the final-identity pending pipe,
+premature/incomplete readiness, same-pool byte production, actual native acknowledgement and next-read refusal.
+Both require exact arithmetic-overflow receipts, truthful no classification publication, original FIFO/charge,
+younger Invert, literal pixels/single history entry, MTA payload retirement, zero hidden Present and joined
+idempotent shutdown. The original nine scenarios/144 controls remain unchanged.
+
 Normal cancellation yields the original record; only final worker shutdown may join its existing read.
 
 The ninth owner route has a literal capacity control: nine distinct sources attach and the tenth refuses.

@@ -399,8 +399,10 @@ Io ticket, FIFO position, ordinal, session identity and complete memory charge s
 path transfer, every four-byte header read and worker payload retirement. Workers access only their private
 payload and fixed result. `Common/PathClassificationRead.*` owns private Win32/WIL IO behind a standard-only
 header; `PathReadWait` owns one startup event/registration on the shared WaitPool and ninth owner route.
-An issued cycle consumes its callback even on immediate completion, API refusal or cancellation before
-issue. Awaiting starts only after the original worker returns. A premature event resets and nonblocking
+An issued operation consumes registered readiness even on immediate completion, API refusal or cancellation before
+issue. Its nonzero 64-bit identity advances only for a new operation. An incomplete-read rearm retains that
+identity and exact original ticket, without resetting the event. A new read refuses arithmetic overflow before
+reset or issue; the final valid read can still rearm and acknowledge without wrap. Awaiting starts only after the original worker returns. A premature event resets and nonblocking
 rechecks the same operation before rearm, preserving a racing native completion. Cancellation requests
 exact CancelIoEx on the worker; it never signals hEvent to fake completion. GetOverlappedResult acknowledges
 the original operation before reuse/free. Shutdown disarms/joins wait callbacks, detaches borrowed owner

@@ -197,15 +197,19 @@ The fixed native inventories are eight primitive cases/44 controls, 26 transfer 
   measurements before activation/closure. The existing blocking helper may remain a reference test surface;
   ordinary classification must use the shared continuation. Writer flush/close/rename/cleanup failures and
   F5d/G1 remain separate open gates, including the preserved unexplained exploded-save failures.
-- [ ] Close native-read identity exhaustion without losing a pending OS owner. Current `PrepareRead` increments
+- [ ] Close native-read identity exhaustion without losing a pending OS owner. The qualified predecessor increments
   for a new issue and for rearm after premature readiness; at the final identity, the latter refuses and the
-  pending-read host branch terminates. A rearm must retain the same native operation identity and exact original
+  pending-read host branch terminates. The integrated follow-up advances only a new native operation; its
+  same-ticket rearm retains the final identity. Focused Debug563/Host564/App565 qualify 20/34
+  additions and all predecessors. Analysis566 fails the fixture's error-type comparison and is preserved;
+  main casts only that comparison, with unchanged expected error bits. Current-source qualification is due. A rearm must retain the same native operation identity and exact original
   ticket, leaving the event unreset. Only a new operation consumes an identity and may refuse before issue.
   Prove real last-identity premature readiness, actual incomplete/native acknowledgements, same-pool progress,
   next-issue refusal, truthful original error/younger continuation and complete worker retirement. Also prove an
-  initially exhausted source and zero/foreign-ticket rearm refusal. The ignored native candidate and 20-control Host / 34-control actual Application proof
-  drafts under `.build/P1Drafts/PathReadExhaustion-r1` are preparation only; current F6 native inputs stay frozen
-  until the qualified checkpoint is committed/pushed. This finding remains open even if those profiles pass.
+  initially exhausted source and zero/foreign-ticket rearm refusal. The main-reviewed candidate and 20-control Host / 34-control actual Application
+  proofs are integrated after committing/pushing c8e253f. Main corrected the agent's API-seam misunderstanding,
+  startup-callback race, atomic observation, forbidden setup catch and 19-to-20 inventory count. No unrun
+  qualification is claimed. This finding remains open even if those profiles pass.
 
 ## Preparation and application
 

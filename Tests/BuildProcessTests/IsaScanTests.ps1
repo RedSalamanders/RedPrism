@@ -21,6 +21,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Compact signed RCX byte-remap parser controls 
 if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaDisp8RcxImm8ByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX imm8 byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaWideRcxByteRemapTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Wide RCX imm32 byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR10EcxGuardTests.ps1')

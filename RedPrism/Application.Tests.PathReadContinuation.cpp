@@ -1,4 +1,4 @@
-// Main-owned F6 draft. Not compiled or qualified until integrated after the Warp source checkpoint.
+// Original-ticket native path-read lifetime and actual host boundary fixtures.
 #include "Application.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ApplicationShutdownTestProbe.h"
@@ -253,7 +253,9 @@ enum class Mode : std::uint8_t
     Shutdown,
     PrematureCancel,
     PrematureShutdown,
-    EarlyReady
+    EarlyReady,
+    InitiallyExhausted,
+    LastValidRead
 };
 constexpr std::array kCases{"normal-three-read-cycles",
                             "premature-event",
@@ -264,6 +266,26 @@ constexpr std::array kCases{"normal-three-read-cycles",
                             "cancel-after-premature-event",
                             "shutdown-after-premature-event",
                             "early-ready-before-issue-worker-return"};
+constexpr std::array kBoundaryCases{"initially-exhausted", "last-valid-read-rearm"};
+constexpr std::array kBoundaryControls{
+    "one-real-compute-worker-and-hidden-host",
+    "original-root-is-admitted-before-native-issue",
+    "original-ticket-ordinal-and-charge-survive-until-worker-acknowledgement",
+    "failed-classification-never-restores-or-publishes-detached-paths",
+    "younger-command-waits-for-original-root",
+    "only-actual-incomplete-read-can-request-rearm",
+    "only-pending-read-needs-the-independent-compute-job",
+    "last-native-read-acknowledges-once-without-cancellation",
+    "new-read-refuses-before-issue-after-exact-successful-prefix",
+    "original-fails-and-younger-command-succeeds",
+    "literal-inverted-pixels-and-single-history-entry",
+    "entire-payload-retires-on-mta-worker",
+    "hidden-host-presents-no-frames",
+    "all-original-owners-retire-at-shutdown",
+    "exact-arithmetic-overflow-receipt",
+    "rearm-preserves-last-identity-and-never-wraps",
+    "second-shutdown-is-idempotent",
+};
 constexpr std::array kControls{
     "one-real-compute-worker-and-hidden-host",
     "first-owner-root-is-budgeted-and-unduplicated",
@@ -284,7 +306,7 @@ constexpr std::array kControls{
 
 int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) noexcept
 {
-    unsigned int checks = 0, failures = 0;
+    unsigned int checks = 0, failures = 0, boundaryChecks = 0;
     constexpr std::array resourceCases{"event-creation", "wait-registration", "route-attachment"};
     for (unsigned int caseIndex = 0; caseIndex < resourceCases.size(); ++caseIndex)
     {
@@ -332,19 +354,25 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
                    owner->_jobs.ReleasingMemoryBytes() == 0,
                "second-shutdown-does-not-repeat-resources-or-faults");
     }
-    for (unsigned int caseIndex = 0; caseIndex < kCases.size(); ++caseIndex)
+    for (unsigned int caseIndex = 0; caseIndex < kCases.size() + kBoundaryCases.size(); ++caseIndex)
     {
         const auto mode = static_cast<Mode>(caseIndex);
+        const bool boundary = caseIndex >= kCases.size();
+        const bool initiallyExhausted = mode == Mode::InitiallyExhausted;
+        const auto caseName = boundary ? kBoundaryCases[caseIndex - kCases.size()] : kCases[caseIndex];
         const bool premature = mode == Mode::Premature || mode == Mode::PrematureCancel ||
-                               mode == Mode::PrematureShutdown || mode == Mode::EarlyReady;
+                               mode == Mode::PrematureShutdown || mode == Mode::EarlyReady ||
+                               mode == Mode::LastValidRead;
         const bool shuttingDown = mode == Mode::Shutdown || mode == Mode::PrematureShutdown;
         const bool cancelled = mode == Mode::Cancel || mode == Mode::PrematureCancel;
         const auto expect = [&](bool condition, unsigned int control) noexcept
         {
             ++checks;
+            boundaryChecks += boundary ? 1u : 0u;
             failures += condition ? 0u : 1u;
-            std::printf("%s application-path-read.%s.%s\n", condition ? "PASS" : "FAIL", kCases[caseIndex],
-                        kControls[control]);
+            std::printf("%s %s.%s.%s\n", condition ? "PASS" : "FAIL",
+                        boundary ? "application-path-read-boundary" : "application-path-read", caseName,
+                        boundary ? kBoundaryControls[control] : kControls[control]);
         };
         TestFile first, placeholder, last;
         TestPipe pipe;
@@ -360,7 +388,8 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         source.pipePath = placeholder.Path();
         ApplicationProcessingTestProbe processing;
         processing.workerCount = 1; // Startup-only override; production retains its existing automatic count.
-        processing.pathReadWait = {&source, nullptr, Source::Ready};
+        processing.pathReadWait = {&source, nullptr, Source::Ready,
+                                   boundary ? (initiallyExhausted ? UINT64_MAX : UINT64_MAX - 2) : 0};
         // These borrowed ping values outlive the shutdown guard, including setup/timeout failure exits.
         bool pingCompleted = false;
         JobResult pingResult{JobStatus::Failed, E_UNEXPECTED};
@@ -418,7 +447,7 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
             FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
             FAILED(owner->InitializeChrome()))
         {
-            std::printf("FAIL application-path-read.%s.setup\n", kCases[caseIndex]);
+            std::printf("FAIL application-path-read.%s.setup\n", caseName);
             return 5;
         }
         joined.readEvent = static_cast<HANDLE>(owner->_pathReadWait.EventForWorker());
@@ -440,6 +469,7 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         joined.revision = revision;
         const auto historyCount = owner->_session.history.UndoCount();
         const auto presents = owner->_renderer.PresentCount();
+        const auto initialReadCycle = owner->_pathReadWait.ReadCycleForTest();
         expect(owner->_jobs.WorkerCount() == 1 && owner->_renderer.IsWarp() && owner->_window && owner->_chrome &&
                    !IsWindowVisible(owner->_window.get()),
                0);
@@ -449,7 +479,7 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         (void)RunUiActions(owner->_jobs);
         if (!owner->_activeHostRequest || !owner->_pathClassificationTicket)
         {
-            std::printf("FAIL application-path-read.%s.original-root-start\n", kCases[caseIndex]);
+            std::printf("FAIL application-path-read.%s.original-root-start\n", caseName);
             return 5;
         }
         const auto ordinal = owner->_activeHostRequest->ordinal;
@@ -466,6 +496,15 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         bool pendingObserved = false, held = false, detached = false, youngerHeld = false;
         bool prematureObserved = false, restored = false, classified = false, stopNow = false, earlyReadyHeld = false;
         bool pingSubmitted = false;
+        bool lastIdentityStable = true;
+        if (initiallyExhausted)
+        {
+            held = owner->_pathClassificationTicket == ticket && owner->_activeHostRequest->ordinal == ordinal &&
+                   owner->_jobs.ReservedMemoryBytes() >= inputBytes + 96 * 1024 &&
+                   receipt.Read().outcome == HostOutcome::Pending &&
+                   owner->_session.history.CurrentRevision() == revision;
+            youngerHeld = younger.Read().outcome == HostOutcome::Pending;
+        }
         const auto submitPing = [&]() noexcept
         {
             if (pingSubmitted)
@@ -495,6 +534,8 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
             if (notice == PathClassificationReadNotice::Pending)
             {
                 pendingObserved = true;
+                if (mode == Mode::LastValidRead)
+                    lastIdentityStable = lastIdentityStable && owner->_pathReadWait.ReadCycleForTest() == UINT64_MAX;
                 held = owner->_pathClassificationTicket == ticket && owner->_activeHostRequest &&
                        owner->_activeHostRequest->ordinal == ordinal &&
                        receipt.Read().outcome == HostOutcome::Pending &&
@@ -526,6 +567,8 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
             }
             else if (notice == PathClassificationReadNotice::Incomplete && premature)
             {
+                if (mode == Mode::LastValidRead)
+                    lastIdentityStable = lastIdentityStable && owner->_pathReadWait.ReadCycleForTest() == UINT64_MAX;
                 prematureObserved = source.acknowledged.load() == 0 && receipt.Read().outcome == HostOutcome::Pending &&
                                     owner->_pathClassificationTicket == ticket && owner->_activeHostRequest &&
                                     owner->_activeHostRequest->ordinal == ordinal;
@@ -591,14 +634,16 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
             if (waited != WAIT_OBJECT_0 && waited != WAIT_OBJECT_0 + 1)
                 break;
         }
-        expect(pendingObserved && held, 2);
-        expect(detached, 3);
+        expect((initiallyExhausted || pendingObserved) && held, 2);
+        expect(boundary ? !classified && !restored && (initiallyExhausted ? source.destroyed.load() == 1 : detached)
+                        : detached,
+               3);
         expect(youngerHeld, 4);
         // Cancellation may need an additional real incomplete acknowledgement before its IO event arrives.
         expect((!premature || (prematureObserved && source.incomplete.load() >= 1)) &&
                    (mode != Mode::EarlyReady || earlyReadyHeld),
                5);
-        const bool pingExpected = !cancelled && !shuttingDown;
+        const bool pingExpected = !cancelled && !shuttingDown && !initiallyExhausted;
         expect(pingExpected
                    ? pingSubmitted && pingCompleted && pingRuns.load() == 1 && pingResult.status == JobStatus::Finished
                    : pingRuns.load() == 0,
@@ -607,21 +652,29 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
             (void)SetEvent(issueRelease.get()); // Release the controlled producer before any shutdown join.
         if (shuttingDown || !settled)
             owner->Shutdown(); // Actual outstanding native operation must acknowledge on the final MTA worker.
-        expect(source.pending.load() == 1 && source.acknowledged.load() == 1 &&
-                   source.cancellations.load() == (cancelled || shuttingDown ? 1u : 0u),
+        expect(initiallyExhausted
+                   ? source.pending.load() == 0 && source.acknowledged.load() == 0 && source.cancellations.load() == 0
+                   : source.pending.load() == 1 && source.acknowledged.load() == 1 &&
+                         source.cancellations.load() == (cancelled || shuttingDown ? 1u : 0u),
                7);
         const bool threeNativeReads = source.opens.load() == 3 && source.issueFailures.load() == 0 &&
                                       source.immediate.load() + source.nativeAcknowledgements.load() == 3;
-        expect(mode == Mode::Normal || mode == Mode::Premature || mode == Mode::EarlyReady
+        expect(boundary ? !restored && !classified && source.opens.load() == (initiallyExhausted ? 1u : 3u) &&
+                              source.issueFailures.load() == 0 &&
+                              source.immediate.load() + source.nativeAcknowledgements.load() ==
+                                  (initiallyExhausted ? 0u : 2u)
+               : mode == Mode::Normal || mode == Mode::Premature || mode == Mode::EarlyReady
                    ? restored && classified && threeNativeReads
                    : !classified,
                8);
-        const auto expected = mode == Mode::Replace ? HostOutcome::Stale : HostOutcome::Cancelled;
-        const auto expectedYounger =
-            mode == Mode::Normal || mode == Mode::Premature || mode == Mode::EarlyReady || mode == Mode::LateCancel
-                ? HostOutcome::Succeeded
-            : mode == Mode::Replace ? HostOutcome::Stale
-                                    : HostOutcome::Cancelled;
+        const auto expected = boundary                ? HostOutcome::Failed
+                              : mode == Mode::Replace ? HostOutcome::Stale
+                                                      : HostOutcome::Cancelled;
+        const auto expectedYounger = boundary || mode == Mode::Normal || mode == Mode::Premature ||
+                                             mode == Mode::EarlyReady || mode == Mode::LateCancel
+                                         ? HostOutcome::Succeeded
+                                     : mode == Mode::Replace ? HostOutcome::Stale
+                                                             : HostOutcome::Cancelled;
         expect((settled || (shuttingDown && stopNow)) && receipt.Read().outcome == expected &&
                    younger.Read().outcome == expectedYounger,
                9);
@@ -652,15 +705,40 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         expect(pixels, 10);
         expect(source.destroyed.load() == 1 && source.offOwner.load() && source.mta.load() && source.posted.load(), 11);
         expect(owner->_renderer.PresentCount() == presents, 12);
+        if (boundary)
+        {
+            expect(receipt.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW)),
+                   14);
+            expect(initialReadCycle == (initiallyExhausted ? UINT64_MAX : UINT64_MAX - 2) &&
+                       owner->_pathReadWait.ReadCycleForTest() == UINT64_MAX && lastIdentityStable &&
+                       !owner->_pathReadWait.HasPending() && !owner->_pathReadWait.HasReady() &&
+                       (initiallyExhausted
+                            ? source.incomplete.load() == 0 &&
+                                  WaitForSingleObject(static_cast<HANDLE>(owner->_pathReadWait.EventForWorker()), 0) ==
+                                      WAIT_TIMEOUT
+                            : prematureObserved && source.incomplete.load() >= 1),
+                   15);
+        }
         owner->Shutdown();
         expect(owner->_shutdownComplete && !owner->_jobs.WakeHandle() && owner->_jobs.ReservedMemoryBytes() == 0 &&
                    owner->_jobs.ReleasingMemoryBytes() == 0 && owner->_hostInputBudget.Used() == 0 &&
                    !owner->_pathClassificationTicket && !owner->_pathReadWait.HasPending() &&
                    !owner->_pathReadWait.HasReady() && !owner->_pathReadWait.EventForWorker(),
                13);
+        if (boundary)
+        {
+            owner->Shutdown();
+            expect(owner->_shutdownComplete && source.destroyed.load() == 1 &&
+                       owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
+                       !owner->_pathReadWait.EventForWorker() && !owner->_pathReadWait.HasReady() &&
+                       !owner->_pathReadWait.HasPending(),
+                   16);
+        }
         (void)PumpMessages();
     }
-    std::printf("SUMMARY application-path-read cases=9 startupCases=3 checks=%u expected=144 failures=%u\n", checks,
+    std::printf("SUMMARY application-path-read cases=9 startupCases=3 checks=%u expected=144 failures=%u\n",
+                checks - boundaryChecks, failures);
+    std::printf("SUMMARY application-path-read-boundary cases=2 checks=%u expected=34 failures=%u\n", boundaryChecks,
                 failures);
-    return checks == 144 && !failures ? 0 : 5;
+    return checks == 178 && boundaryChecks == 34 && !failures ? 0 : 5;
 }

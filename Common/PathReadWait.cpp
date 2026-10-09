@@ -67,6 +67,7 @@ std::int32_t PathReadWait::Initialize(JobScheduler& scheduler, OwnerWorkMultiple
     self.scheduler = &scheduler;
     self.routes = &routes;
     self.observer = observer;
+    self.readCycle.store(observer.initialReadCycleForTest, std::memory_order_relaxed);
     const auto fault = [&](PathReadWaitFault point) noexcept -> std::int32_t
     { return observer.fault ? observer.fault(observer.context, point) : S_OK; };
     const auto eventFault = fault(PathReadWaitFault::EventCreation);
@@ -99,12 +100,15 @@ std::int32_t PathReadWait::PrepareRead(JobTicket ticket, CancelToken cancellatio
     if (self.receiver)
         return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
     const auto cycle = self.readCycle.load(std::memory_order_relaxed);
-    if (cycle == UINT64_MAX)
+    if (resetEvent && cycle == UINT64_MAX)
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    if (!resetEvent && (!cycle || self.ticket != ticket))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     if (resetEvent && !ResetEvent(self.event.get()))
         return HRESULT_FROM_WIN32(GetLastError());
     self.ready.store(false, std::memory_order_relaxed);
-    self.readCycle.store(cycle + 1, std::memory_order_relaxed);
+    if (resetEvent)
+        self.readCycle.store(cycle + 1, std::memory_order_relaxed);
     self.ticket = ticket;
     self.cancellation = cancellation;
     self.receiver = &receiver;

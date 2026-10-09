@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-09
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -379,6 +379,21 @@ including the observed maximum 27 / stack displacement 40, invalid signed maxima
 fault and genuine body/adjacent VEX/EVEX rejection. Only proved data receives data status; runtime
 and tier allowlists are unchanged. The [unchanged-image record](../TestRuns/P1WandReadbackRebind_2026-10-06.md)
 preserves the original false instruction report and exact failed binary/PDB.
+
+The observed ASan DxUi message switch uses the exact 51-byte zero-extending wide form:
+`CMP dword [RSP+disp32],imm32; JA rel32; MOV EAX,[RSP+the same disp32]`, followed by the contiguous
+RCX image-base LEA, byte-remap load, DWORD target load, ADD RAX,RCX and JMP RAX. The unsigned maximum
+is 1…4095. All four stack-displacement bytes agree and all eight rows match PE bytes, decoded lengths
+and nonoverlapping known boundaries. Anonymous same-owner PDB symbols bound the adjacent DWORD and
+byte spans. Exactly max+1 byte indices end at the owning procedure end, every index is below the
+DWORD count, and every target/default is a decoded body boundary before the DWORD table. Missing,
+malformed or contradictory evidence cannot be rescued by a later symbol or broader contribution.
+No other same-contribution procedure entry may begin inside these proved tables. Reported vector rows
+must match PE bytes. Genuine body/adjacent VEX/EVEX remains gated; this proof
+adds no object/function/runtime allowance and changes neither the pinned DxUi code nor its pin.
+`IsaWideRcxByteRemapTests.ps1` owns 136 independent encoded acceptance/refusal controls, including
+the observed maximum 226/stack 0xc98, shifted image/section, all eight row proof failures, full
+displacements, metadata/content/target boundaries and genuine vectors in/after the body.
 
 The ASan `Application::EndCanvasEdit` terminal switch uses exactly `CMP dword [RSP+disp32],imm8;
 JA rel32; MOVSXD RAX,dword [RSP+the same disp32]`, followed by the contiguous RCX image-base DWORD dispatch,

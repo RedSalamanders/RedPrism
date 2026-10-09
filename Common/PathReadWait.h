@@ -19,6 +19,8 @@ struct PathReadWaitObserver final
     std::int32_t (*fault)(void*, PathReadWaitFault) noexcept = nullptr;
     // Harness-only acknowledgement that the actual wait callback published readiness. Never IO completion.
     void (*signalled)(void*, std::uint64_t readCycle) noexcept = nullptr;
+    // Harness-only initial identity; ordinary startup begins at zero.
+    std::uint64_t initialReadCycleForTest = 0;
 };
 
 class PathReadWaitReceiver
@@ -31,8 +33,9 @@ class PathReadWaitReceiver
 };
 
 // One native read belongs to the selected ordered host path request. Its startup registration shares the
-// scheduler wait pool. Each issued read consumes one callback even if ReadFile completes immediately;
-// the event is never reused until that callback publishes and the original worker acknowledges the read.
+// scheduler wait pool. Immediate or refused issue still consumes readiness; an incomplete native read
+// can rearm that registration while retaining its identity. A new read cannot reuse the event until the
+// preceding registered readiness and original worker/native acknowledgements have joined.
 class PathReadWait final : public OwnerWorkPump
 {
   public:
@@ -44,6 +47,8 @@ class PathReadWait final : public OwnerWorkPump
     // Owner joined-stage callback, before the issuing worker resumes. Reset only with no pending IO.
     // For an incomplete result after a consumed event, the worker resets and rechecks before this call;
     // resetEvent=false preserves a completion which arrived between that recheck and this rearm.
+    // Rearm retains this same native read identity; it must match the original ticket. Only a new
+    // resetEvent=true operation consumes an identity and can refuse counter exhaustion before issue.
     [[nodiscard]] std::int32_t PrepareRead(JobTicket, CancelToken, PathReadWaitReceiver&, bool resetEvent) noexcept;
     // Exact worker joined stage. Readiness cannot Resume a still-running producer.
     [[nodiscard]] bool AwaitRead(JobTicket) noexcept;

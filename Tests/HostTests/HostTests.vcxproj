@@ -255,5 +255,9 @@
     <ClCompile Include="Host.Tests.PathClassificationRead.cpp" />
     <ClInclude Include="Host.Tests.PathInputTransfer.h" />
     <ClCompile Include="Host.Tests.PathInputTransfer.cpp" />
+    <ClInclude Include="..\..\Common\PathReadWait.h" />
+    <ClCompile Include="..\..\Common\PathReadWait.cpp" />
+    <ClInclude Include="Host.Tests.PathReadWaitCycleExhaustion.h" />
+    <ClCompile Include="Host.Tests.PathReadWaitCycleExhaustion.cpp" />
   </ItemGroup>
 </Project>
