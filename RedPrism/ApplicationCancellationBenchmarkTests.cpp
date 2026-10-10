@@ -155,6 +155,16 @@ int Application::RunUiCancellationDispatchSelfTest() noexcept
         (void)SetEvent(gate->release.get());
         if (!settle())
             return 5;
+        if (!refused)
+        {
+            // This hidden caller fixture settles jobs without rendering. It proves acceptance only;
+            // the actual direct/prepared Escape benchmarks prove the immediate visible frame ordinal.
+            expect(trial.original && trial.acceptancePresentOrdinal == _renderer.PresentCount() &&
+                       trial.firstFrame.Current() == UiCancellationFrame::State::AwaitingFirstVisibleFrame,
+                   "accepted-escape-retains-baseline-and-original-identity", refused);
+            expect(trial.firstFrame.QualifiedOrdinal() == 0 && trial.feedbackPresented < 0,
+                   "settling-without-present-cannot-manufacture-first-frame-proof", refused);
+        }
         expect(trial.applyReceipt && trial.applyReceipt.value().Read().outcome == HostOutcome::Cancelled &&
                    trial.applyReceipt.value().Read().error == E_ABORT,
                "original-ok-acknowledges-cancelled-result", refused);
@@ -176,7 +186,7 @@ int Application::RunUiCancellationDispatchSelfTest() noexcept
         expect(gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load(),
                "original-payload-retires-only-on-joined-worker", refused);
     }
-    constexpr unsigned int kExpectedChecks = 34;
+    constexpr unsigned int kExpectedChecks = 36;
     std::printf("%s ui-cancel-dispatch.summary controls=%u failed=%u visiblePresentMeasured=0 bodyReturnMeasured=0\n",
                 failures == 0 && checks == kExpectedChecks ? "PASS" : "FAIL", checks, failures);
     std::fflush(stdout);

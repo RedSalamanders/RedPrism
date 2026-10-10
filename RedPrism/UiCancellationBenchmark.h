@@ -2,6 +2,7 @@
 
 #include "ContinuationReceipt.h"
 #include "Document.h"
+#include "UiCancellationFrame.h"
 #include "UiCancellationObservation.h"
 #include "UiCancellationRefusal.h"
 #include "UiTiming.h"
@@ -30,6 +31,8 @@ struct UiCancellationBenchmark final
     };
     std::unique_ptr<UiCancellationObservation> observation;
     std::optional<UiCancellationBody> body;
+    UiCancellationFrame firstFrame;
+    std::uint64_t acceptancePresentOrdinal = 0;
     std::size_t cursor = 0; // Write-once log: never rewind or reuse published storage between trials.
     Phase phase = Phase::Preparing;
     std::uint64_t opening = 0;
@@ -64,6 +67,8 @@ struct UiCancellationBenchmark final
     void ResetTrialOwner() noexcept
     {
         body.reset();
+        firstFrame = {};
+        acceptancePresentOrdinal = 0;
         original.reset();
         applyReceipt.reset();
         cancelReceipt.reset();

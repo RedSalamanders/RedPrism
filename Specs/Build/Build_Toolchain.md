@@ -452,6 +452,16 @@ The padded extension retains those controls and all other predecessor parser sui
 and four unchanged archived images pass the [terminal-padding proof](../TestRuns/IsaQwordPadding_2026-10-03.md).
 Native qualification remains separately required for its activation.
 
+The additionally observed ASan DWORD zero-stack form is exactly `CMP dword [RSP],imm8; JA rel8;
+LEA RAX,imagebase; MOV ECX,[RSP]; MOV ECX,[RAX+4*RCX+tableRva]; ADD RCX,RAX; JMP RCX`.
+Its unsigned bound is 1…127, its ECX stack load zero-extends, and its seven PE/listing boundaries are contiguous
+and nonoverlapping. The same QWORD-form terminal symbol/count/target and complete padded-body proof above
+applies: anonymous same-owner untyped data, exact owning procedure end, all max+1 entries, a proved fallback,
+known PE-matched body rows and no outside transfer into guard interior or table/padding. The exact zero-stack
+form cannot infer another stack displacement or operand width. Missing, duplicate, unknown, contradictory or
+changed evidence withholds the exemption. Genuine body/adjacent VEX and EVEX instructions stay gated; no
+runtime exception is added. See [109 parser controls and the original failed-image proof](../TestRuns/IsaDwordZeroStack_2026-10-10.md).
+
 The observed Release variant form loads a signed byte into RAX from RBP+disp8 or RBP+disp32 immediately before
 LEA RCX of image base. Only `48 0F BE 45 <disp8>` or `48 0F BE 85 <disp32>` proves that index; a different
 destination, REX prefix, frame base, SIB or load width does not. Its DWORD load can point exactly one entry after

@@ -25,6 +25,19 @@ graph bound; future host jobs additionally charge wrappers and construction peak
 cache never walks paths or materializes rasters. Existing history/metadata traversals remain H2/H3 work, and the
 core APIs alone establish no host closure, frame latency or G1 qualification.
 
+## Responsive source acquisition
+
+The shared startup owner acquires prepared layer rows, committed/pending display and the stroke source in that
+order after the renderer, chrome, document and history subscription are ready. No asynchronous finish, sample
+or Warp engine flag is published until every acquisition and the final readiness boundary succeeds. A reached
+boundary that closes the owner MUST prevent every later acquisition even when its callback returns success.
+Any failed prefix returns startup failure before queued paths or input dispatch; existing joined `Shutdown`
+retires acquired sources and held input. Duplicate or closed-owner acquisition refuses without callbacks.
+
+The current shared route is explicitly exercised by the actual-Run startup fixture. Ordinary activation retains
+the separate complete consumer, admission, lifetime and measured-cost requirements of the P1 plan. Startup
+state tests grant no first-frame, gesture, Apply or G1 timing qualification.
+
 ## Mandatory runtime rules (C1 host)
 
 Sampler source admission reads `CanvasDocument::RetirementMemoryBytes` before retaining its immutable document.
@@ -89,6 +102,24 @@ posts Escape before the declared minimum interval, and every completed row repor
 Declared large-fixture pixel-budget refusals retain their original notice, source/history and settled preparation
 owners. They admit no Commit or Escape timer and contribute no cancellation or owner-cost duration. Setup
 workers may have run; refusal cost must be measured separately by the original UI operation benchmark.
+
+Cancellation-check diagnostics borrow a Run-local binding only when the scheduler's separate
+`JobExecutionObserver.cancellationObserved` callback is installed. A true `CancelToken::IsCancelled` check
+reports through that binding; false checks perform no TLS lookup, clock read, callback or diagnostic allocation.
+A lock-free Run-local first guard reports at most once with exact original ticket/class/lane and no raw result.
+The binding is never retained in a token, draft or cached operation. Joined WorkerPool helpers borrow the
+captured group binding and restore their prior binding before return. Every useful Run joins participants and
+restores the scope before BodyExited, allocation-failure translation, cancellation normalization or retirement.
+The group capture adds one TLS binding copy per parallel group, whose affected throughput cost MUST be
+measured. Default/body-only observers retain their existing notice inventory and never enable the check callback.
+
+The first true check is separate from original Run exit. Checks before the stop-call return remain explicitly
+before-stop or stop-overlap; they cannot manufacture positive acceptance latency. Source-frame qualification
+captures the successful-visible Present ordinal at accepted receipt admission. Only that exact baseline plus
+one, with held original authority/raster/history, hidden card and actual committed source selection, qualifies.
+A stale first frame, skipped ordinal or changed original identity permanently refuses the trial; a later restore
+cannot repair it. Unsuccessful/occluded attempts do not increment the visible ordinal. Mere job settlement
+cannot qualify visible presentation, and baseline zero is valid. The ordinal proves ordering, not scanout time.
 
 ## Pointer input and the chrome
 

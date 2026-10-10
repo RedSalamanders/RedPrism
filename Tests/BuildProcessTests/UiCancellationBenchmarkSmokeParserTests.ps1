@@ -18,17 +18,21 @@ function New-ValidCancellationLines {
             $applyOutcome = if ($outcome -eq 'finished-before-escape') { 1 } else { 2 }
             $applyError = if ($outcome -eq 'finished-before-escape') { '0x00000000' } else { '0x80004004' }
             $cancelKnown = if ($outcome -eq 'finished-before-escape') { 0 } else { 1 }
+            $checkOutcome = if ($outcome -eq 'finished-before-escape') { 'unobserved' } elseif ($outcome -eq 'finish-overlap') { 'stop-overlap' } else { 'after-acceptance' }
+            $checkKnown = [int]($checkOutcome -ne 'unobserved')
+            $checkLatencyKnown = [int]($checkOutcome -eq 'after-acceptance')
             $cancelOutcome = if ($cancelKnown) { 1 } else { 0 }
             $sourcePresent = if ($cancelKnown) { 1 } else { 0 }
             $hidden = if ($cancelKnown) { 1 } else { 0 }
             $fields = [ordered]@{
-                name=$name; trial=$trial; warmup=$(if ($trial -eq 0) { 1 } else { 0 }); width=64; height=48; outcome=$outcome; measured=$measured
-                previewEnabled=$(if ($name -in @('gaussian250','motion2000')) { 0 } else { 1 })
-                requestedDelayUs=20000; entryToPostedUs=0; postedToDispatchUs=0; entryToDispatchUs=0; delayKnown=1
+                name=$name; trial=$trial; warmup=$(if ($trial -eq 0) { 1 } else { 0 }); width=64; height=48
+                previewEnabled=$(if ($name -in @('gaussian250','motion2000')) { 0 } else { 1 }); outcome=$outcome; measured=$measured
+                requestedDelayUs=20000; deadlineRearms=0; entryToPostedUs=0; postedToDispatchUs=0; entryToDispatchUs=0; delayKnown=1
                 ticketSlot=0; ticketGeneration=1; usefulOrdinal=2; dispatchUs=1; admissionUs=1; stopToReturnUs=1; escapeToSourcePresentUs=1; settleUs=1
                 rawKnown=1; rawStatus=$rawStatus; rawError='0x00000000'; applyKnown=1; applyOutcome=$applyOutcome; applyError=$applyError
                 cancelKnown=$cancelKnown; cancelOutcome=$cancelOutcome; cancelError='0x00000000'; sourcePresent=$sourcePresent; hiddenAtAcceptance=$hidden
-                diagnosticBytes=1; ownerBatch=32; actionP99UpperUs=1; actionMaxUs=1; applyMaxUs=1; ordinaryActivation=0; g1=0; deadlineRearms=0
+                diagnosticBytes=1; ownerBatch=32; actionP99UpperUs=1; actionMaxUs=1; applyMaxUs=1; ordinaryActivation=0; g1=0
+                checkKnown=$checkKnown; checkOutcome=$checkOutcome; acceptedToCheckUs=0; checkLatencyKnown=$checkLatencyKnown; acceptancePresentOrdinal=100; sourcePresentOrdinal=$(if ($sourcePresent) { 101 } else { 0 }); firstFrameProved=$sourcePresent
             }
             $tokens = foreach ($key in $fields.Keys) { "$key=$($fields[$key])" }
             $lines.Add('UI CANCEL ' + ($tokens -join ' '))
@@ -82,13 +86,43 @@ $prepared = [string[]]$valid.Clone(); $prepared[1] = $prepared[1] -replace 'disp
 Write-Host 'PASS ui-cancel-parser.valid.prepared-route'
 $allEarly = [string[]]$valid.Clone()
 for ($index=2; $index -lt 32; ++$index) {
-    $allEarly[$index] = $allEarly[$index] -replace 'outcome=[a-z-]+','outcome=finished-before-escape' -replace 'measured=[01]','measured=0' -replace 'rawStatus=[01]','rawStatus=0' -replace 'applyOutcome=[12]','applyOutcome=1' -replace 'applyError=0x[0-9a-fA-F]{8}','applyError=0x00000000' -replace 'cancelKnown=[01]','cancelKnown=0' -replace 'cancelOutcome=[01]','cancelOutcome=0' -replace 'sourcePresent=[01]','sourcePresent=0' -replace 'hiddenAtAcceptance=[01]','hiddenAtAcceptance=0'
+    $allEarly[$index] = $allEarly[$index] -replace 'outcome=[a-z-]+','outcome=finished-before-escape' -replace 'measured=[01]','measured=0' -replace 'rawStatus=[01]','rawStatus=0' -replace 'applyOutcome=[12]','applyOutcome=1' -replace 'applyError=0x[0-9a-fA-F]{8}','applyError=0x00000000' -replace 'cancelKnown=[01]','cancelKnown=0' -replace 'cancelOutcome=[01]','cancelOutcome=0' -replace 'sourcePresent=[01]','sourcePresent=0' -replace 'hiddenAtAcceptance=[01]','hiddenAtAcceptance=0' -replace 'checkKnown=[01]','checkKnown=0' -replace 'checkOutcome=[a-z-]+','checkOutcome=unobserved' -replace 'acceptedToCheckUs=\d+','acceptedToCheckUs=0' -replace 'checkLatencyKnown=[01]','checkLatencyKnown=0' -replace 'sourcePresent=[01]','sourcePresent=0' -replace 'sourcePresentOrdinal=\d+','sourcePresentOrdinal=0' -replace 'firstFrameProved=[01]','firstFrameProved=0'
 }
 $null = Parse-UiCancellationSmoke $allEarly 'direct'
 Write-Host 'PASS ui-cancel-parser.valid.all-early-is-honest-unmeasured'
 $rawFinished = Replace-RowField $valid 3 'rawStatus=1' 'rawStatus=0'; $null = Parse-UiCancellationSmoke $rawFinished 'direct'
 Write-Host 'PASS ui-cancel-parser.valid.raw-finished-is-not-normalized'
-if ($script:UiCancelRefusals -ne 21) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
-Write-Host 'PASS UI cancellation parser pure controls: 5 positive models and 21 refusal cases; no native execution'
+$beforeStop = Replace-RowField $valid 3 'checkKnown=1 checkOutcome=after-acceptance' 'checkKnown=1 checkOutcome=before-stop'
+$beforeStop = Replace-RowField $beforeStop 3 'acceptedToCheckUs=0 checkLatencyKnown=1' 'acceptedToCheckUs=0 checkLatencyKnown=0'
+$null = Parse-UiCancellationSmoke $beforeStop 'direct'
+Write-Host 'PASS ui-cancel-parser.valid.before-stop-check'
+$boundary = Replace-RowField $valid 3 'stopToReturnUs=1' 'stopToReturnUs=140'
+$boundary = Replace-RowField $boundary 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=140'
+$boundary = Replace-RowField $boundary 3 'acceptancePresentOrdinal=100 sourcePresentOrdinal=101' 'acceptancePresentOrdinal=18446744073709551614 sourcePresentOrdinal=18446744073709551615'
+$boundaryResult = Parse-UiCancellationSmoke $boundary 'direct'
+if ($boundaryResult.Rows[1].Fields.acceptedToCheckUs -ne 140 -or [decimal]$boundaryResult.Rows[1].Fields.acceptancePresentOrdinal -ne [decimal]::Parse('18446744073709551614',[System.Globalization.CultureInfo]::InvariantCulture) -or [decimal]$boundaryResult.Rows[1].Fields.sourcePresentOrdinal -ne [decimal]::Parse('18446744073709551615',[System.Globalization.CultureInfo]::InvariantCulture)) { throw 'UInt64 boundary values lost exactness.' }
+Write-Host 'PASS ui-cancel-parser.valid.uint64-boundary-exact'
+Assert-Rejected 'missing check field' (Replace-RowField $valid 3 ' checkOutcome=after-acceptance' '')
+Assert-Rejected 'reordered check fields' (Replace-RowField $valid 3 'checkKnown=1 checkOutcome=after-acceptance' 'checkOutcome=after-acceptance checkKnown=1')
+Assert-Rejected 'duplicate check field' (Replace-RowField $valid 3 '$' ' checkKnown=1')
+Assert-Rejected 'check boolean range' (Replace-RowField $valid 3 'checkKnown=1' 'checkKnown=2')
+Assert-Rejected 'check boolean negative' (Replace-RowField $valid 3 'checkLatencyKnown=1' 'checkLatencyKnown=-1')
+Assert-Rejected 'check count decimal' (Replace-RowField $valid 3 'acceptancePresentOrdinal=100' 'acceptancePresentOrdinal=1.0')
+Assert-Rejected 'check count overflow' (Replace-RowField $valid 3 'acceptancePresentOrdinal=100' 'acceptancePresentOrdinal=18446744073709551616')
+Assert-Rejected 'check duration negative' (Replace-RowField $valid 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=-1')
+Assert-Rejected 'known check mismatch' (Replace-RowField $valid 3 'checkKnown=1' 'checkKnown=0')
+Assert-Rejected 'fake body-exit proxy overlap duration' (Replace-RowField $valid 4 'acceptedToCheckUs=0' 'acceptedToCheckUs=1')
+Assert-Rejected 'known check missing raw body' (Replace-RowField $valid 3 'rawKnown=1' 'rawKnown=0')
+Assert-Rejected 'stale later frame gap' (Replace-RowField $valid 3 'sourcePresentOrdinal=101' 'sourcePresentOrdinal=102')
+Assert-Rejected 'equal acceptance and source count' (Replace-RowField $valid 3 'sourcePresentOrdinal=101' 'sourcePresentOrdinal=100')
+Assert-Rejected 'unknown proof with source count' (Replace-RowField $valid 3 'sourcePresent=1' 'sourcePresent=0')
+Assert-Rejected 'measured without first frame' (Replace-RowField $valid 3 'firstFrameProved=1' 'firstFrameProved=0')
+Assert-Rejected 'first frame acceptance overflow' (Replace-RowField $valid 3 'acceptancePresentOrdinal=100 sourcePresentOrdinal=101' 'acceptancePresentOrdinal=18446744073709551615 sourcePresentOrdinal=0')
+Assert-Rejected 'after-acceptance latency unknown' (Replace-RowField $valid 3 'checkLatencyKnown=1' 'checkLatencyKnown=0')
+Assert-Rejected 'check after body return' (Replace-RowField $valid 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=141')
+Assert-Rejected 'canonical preview field order' (Replace-RowField $valid 3 'previewEnabled=1 outcome=returned-after-stop measured=1' 'outcome=returned-after-stop measured=1 previewEnabled=1')
+Assert-Rejected 'check tail field order' (Replace-RowField $valid 3 'checkKnown=1 checkOutcome=after-acceptance' 'checkOutcome=after-acceptance checkKnown=1')
+if ($script:UiCancelRefusals -ne 41) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
+Write-Host 'PASS UI cancellation parser pure controls: 6 positive models and 41 refusal cases; no native execution'
 
 

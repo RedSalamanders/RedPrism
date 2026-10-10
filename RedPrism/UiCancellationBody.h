@@ -33,6 +33,16 @@ class UiCancellationBody final
         Malformed
     };
 
+    enum class CheckOutcome
+    {
+        Unobserved,
+        BeforeStop,
+        StopOverlap,
+        ObservedAfterAcceptance,
+        ClockFailed,
+        Malformed
+    };
+
     UiCancellationBody(JobTicket ticket, JobClass kind, JobExecutionLane lane, std::uint64_t ordinal) noexcept
         : _ticket(ticket), _kind(kind), _lane(lane), _selectedOrdinal(ordinal)
     {
@@ -63,6 +73,7 @@ class UiCancellationBody final
             }
             ++_ordinal;
             _running = true;
+            _checkSeenThisRun = false;
             if (_ordinal == _selectedOrdinal)
             {
                 _entered = true;
@@ -82,6 +93,16 @@ class UiCancellationBody final
                 _exitTicks = ticks;
                 _result = notice.result;
             }
+            break;
+        case JobExecutionBoundary::CancellationObserved:
+            if (!_running || notice.result || _checkSeenThisRun)
+            {
+                _malformed = true;
+                return;
+            }
+            _checkSeenThisRun = true;
+            if (_ordinal == _selectedOrdinal)
+                _checkTicks = ticks;
             break;
         case JobExecutionBoundary::BodySkipped:
             if (_running || !notice.result || notice.result.value().status != JobStatus::Cancelled ||
@@ -136,9 +157,28 @@ class UiCancellationBody final
         return StopOutcome::ReturnedAfterAcceptance;
     }
 
+    // The first true check can race request_stop's return. Preserve that overlap separately instead
+    // of inventing a negative acceptance-to-check duration or substituting body exit.
+    [[nodiscard]] CheckOutcome ClassifyCheck(std::int64_t begin, std::int64_t accepted) const noexcept
+    {
+        if (_malformed)
+            return CheckOutcome::Malformed;
+        if (_clockFailed || begin < 0 || accepted < begin)
+            return CheckOutcome::ClockFailed;
+        if (_checkTicks < 0)
+            return CheckOutcome::Unobserved;
+        if (_checkTicks < begin)
+            return CheckOutcome::BeforeStop;
+        return _checkTicks <= accepted ? CheckOutcome::StopOverlap : CheckOutcome::ObservedAfterAcceptance;
+    }
+
     [[nodiscard]] std::int64_t EntryTicks() const noexcept
     {
         return _entryTicks;
+    }
+    [[nodiscard]] std::int64_t CheckTicks() const noexcept
+    {
+        return _checkTicks;
     }
     [[nodiscard]] std::int64_t ExitTicks() const noexcept
     {
@@ -174,8 +214,10 @@ class UiCancellationBody final
     std::int64_t _lastTicks = -1;
     std::int64_t _entryTicks = -1;
     std::int64_t _exitTicks = -1;
+    std::int64_t _checkTicks = -1;
     std::optional<JobResult> _result;
     bool _running = false;
+    bool _checkSeenThisRun = false;
     bool _entered = false;
     bool _exited = false;
     bool _skipped = false;

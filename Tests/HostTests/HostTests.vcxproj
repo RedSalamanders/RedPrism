@@ -120,10 +120,14 @@
     <ClInclude Include="..\..\Common\SamplerInput.h" />
     <ClInclude Include="..\..\Common\SamplerIntentInput.h" />
     <ClInclude Include="..\..\RedPrism\UiCancellationCapture.h" />
+    <ClInclude Include="..\..\Common\CancellationObservation.h" />
     <ClInclude Include="..\..\RedPrism\UiCancellationBody.h" />
+    <ClInclude Include="..\..\RedPrism\UiCancellationFrame.h" />
     <ClInclude Include="..\..\RedPrism\UiCancellationObservation.h" />
     <ClInclude Include="Scope.Tests.UiCancellationCapture.h" />
+    <ClInclude Include="Scope.Tests.CancellationCheck.h" />
     <ClInclude Include="Scope.Tests.UiCancellationBody.h" />
+    <ClInclude Include="Scope.Tests.UiCancellationFrame.h" />
     <ClInclude Include="Scope.Tests.UiCancellationObservation.h" />
     <ClInclude Include="Scope.Tests.UiCancellationCli.h" />
     <ClInclude Include="Scope.Tests.UiCancellationRefusal.h" />
@@ -148,7 +152,9 @@
     <ClCompile Include="Scope.Tests.KeyboardState.cpp" />
     <ClCompile Include="Scope.Tests.JobExecutionObservation.cpp" />
     <ClCompile Include="Scope.Tests.UiCancellationCapture.cpp" />
+    <ClCompile Include="Scope.Tests.CancellationCheck.cpp" />
     <ClCompile Include="Scope.Tests.UiCancellationBody.cpp" />
+    <ClCompile Include="Scope.Tests.UiCancellationFrame.cpp" />
     <ClCompile Include="Scope.Tests.UiCancellationObservation.cpp" />
     <ClCompile Include="Scope.Tests.UiCancellationCli.cpp" />
     <ClCompile Include="Scope.Tests.UiCancellationRefusal.cpp" />

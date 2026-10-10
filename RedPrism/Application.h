@@ -130,6 +130,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -230,6 +231,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void NoteUiCancellationKeyUp(UINT message, WPARAM key) noexcept;
     bool OnUiCancellationTimer(std::uintptr_t timer) noexcept;
     bool UiCancellationSourceSelected(RecordedDisplayGraph* graph, const CanvasDocument* direct) const noexcept;
+    bool UiCancellationOriginalStateCurrent() const noexcept;
     void NoteUiCancellationPresentation(bool sourceSelected) noexcept;
     static constexpr UINT kUiBenchmarkMessage = WM_APP + 10;
     static constexpr UINT_PTR kUiBenchmarkTimerId = 9;
@@ -266,6 +268,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     // The selection outline and the lasso draft over the canvas; `shown` null keeps the selection shown last.
     void SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept;
     [[nodiscard]] float ChromeDpi() const noexcept;
+    [[nodiscard]] bool InitializePreparedDisplayOwner(bool allowHidden) noexcept;
+    [[nodiscard]] bool InitializeResponsiveSourcesOwner(bool allowHidden) noexcept;
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
     void CloseMainWindow() noexcept;

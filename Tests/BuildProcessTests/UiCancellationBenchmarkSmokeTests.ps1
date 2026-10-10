@@ -16,6 +16,14 @@ $ErrorActionPreference = 'Stop'
 
 $script:UiCancelNames = @('levels', 'hsv', 'exposure', 'curves', 'gradient-map', 'grain', 'gaussian250', 'motion2000', 'noise', 'lens')
 $script:UiCancelHistogramBounds = @(0L, 1L, 2L, 4L, 8L, 16L, 32L, 64L, 125L, 250L, 500L, 1000L, 2000L, 4000L, 8000L, 16000L, 33000L, 50000L, 100000L, 250000L, 1000000L)
+$script:UiCancelActiveFieldOrder = @(
+    'name','trial','warmup','width','height','previewEnabled','outcome','measured','requestedDelayUs','deadlineRearms',
+    'entryToPostedUs','postedToDispatchUs','entryToDispatchUs','delayKnown','ticketSlot','ticketGeneration','usefulOrdinal',
+    'dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','rawKnown','rawStatus','rawError',
+    'applyKnown','applyOutcome','applyError','cancelKnown','cancelOutcome','cancelError','sourcePresent','hiddenAtAcceptance',
+    'diagnosticBytes','ownerBatch','actionP99UpperUs','actionMaxUs','applyMaxUs','ordinaryActivation','g1',
+    'checkKnown','checkOutcome','acceptedToCheckUs','checkLatencyKnown','acceptancePresentOrdinal','sourcePresentOrdinal','firstFrameProved'
+)
 $script:UiCancelFieldTypes = @{
     name='string'; trial='uint'; warmup='uint'; width='uint'; height='uint'; outcome='string'; measured='uint'; previewEnabled='uint'
     requestedDelayUs='uint64'; entryToPostedUs='uint64'; postedToDispatchUs='uint64'; entryToDispatchUs='uint64'; delayKnown='uint'
@@ -24,6 +32,7 @@ $script:UiCancelFieldTypes = @{
     rawError='hex32'; applyKnown='uint'; applyOutcome='uint'; applyError='hex32'; cancelKnown='uint'; cancelOutcome='uint'
     cancelError='hex32'; sourcePresent='uint'; hiddenAtAcceptance='uint'; diagnosticBytes='uint'; ownerBatch='uint'
     actionP99UpperUs='uint64'; actionMaxUs='uint64'; applyMaxUs='uint64'; ordinaryActivation='uint'; g1='uint'; deadlineRearms='uint'
+    checkKnown='uint'; checkOutcome='string'; acceptedToCheckUs='uint64'; checkLatencyKnown='uint'; acceptancePresentOrdinal='uint64'; sourcePresentOrdinal='uint64'; firstFrameProved='uint'
 }
 
 function Convert-UiCancelField([string] $Key, [string] $Value, [string] $Row) {
@@ -56,6 +65,10 @@ function Convert-UiCancelRow([string] $Row) {
     if (-not $Row.StartsWith('UI CANCEL ', [System.StringComparison]::Ordinal)) { throw "Malformed UI CANCEL row: $Row" }
     $fields = [System.Collections.Generic.Dictionary[string,object]]::new([System.StringComparer]::Ordinal)
     $tokens = $Row.Substring('UI CANCEL '.Length).Split([char[]]@(' '), [System.StringSplitOptions]::RemoveEmptyEntries)
+    if ($tokens.Count -ne $script:UiCancelActiveFieldOrder.Count) { throw "UI CANCEL field count is not exact: $Row" }
+    for ($i=0; $i -lt $tokens.Count; ++$i) {
+        if ($tokens[$i] -cnotmatch '^(?<key>[A-Za-z][A-Za-z0-9]*)=\S+$' -or $Matches.key -cne $script:UiCancelActiveFieldOrder[$i]) { throw "UI CANCEL field order mismatch at field $($i+1): $Row" }
+    }
     foreach ($token in $tokens) {
         if ($token -cnotmatch '^(?<key>[A-Za-z][A-Za-z0-9]*)=(?<value>\S+)$') { throw "Malformed field token '$token': $Row" }
         $key = $Matches.key
@@ -64,10 +77,10 @@ function Convert-UiCancelRow([string] $Row) {
     }
     if ($fields.Count -ne $script:UiCancelFieldTypes.Count) { throw "UI CANCEL row has missing or extra fields: $Row" }
     foreach ($key in $script:UiCancelFieldTypes.Keys) { if (-not $fields.ContainsKey($key)) { throw "Missing UI CANCEL field '$key': $Row" } }
-    foreach ($key in 'warmup','measured','previewEnabled','delayKnown','rawKnown','applyKnown','cancelKnown','sourcePresent','hiddenAtAcceptance','ordinaryActivation','g1') {
+    foreach ($key in 'warmup','measured','previewEnabled','delayKnown','rawKnown','applyKnown','cancelKnown','sourcePresent','hiddenAtAcceptance','ordinaryActivation','g1','checkKnown','checkLatencyKnown','firstFrameProved') {
         if ($fields[$key] -notin 0,1) { throw "UI CANCEL boolean field '$key' must be 0 or 1: $Row" }
     }
-    foreach ($key in 'requestedDelayUs','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','actionP99UpperUs','actionMaxUs','applyMaxUs') {
+    foreach ($key in 'requestedDelayUs','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','actionP99UpperUs','actionMaxUs','applyMaxUs','acceptedToCheckUs') {
         if ($fields[$key] -lt 0) { throw "Negative duration in '$key': $Row" }
     }
     if ($fields.width -ne 64 -or $fields.height -ne 48 -or $fields.requestedDelayUs -ne 20000 -or $fields.usefulOrdinal -ne 2 -or
@@ -83,6 +96,22 @@ function Convert-UiCancelRow([string] $Row) {
     foreach ($bound in $script:UiCancelHistogramBounds) { if ($fields.actionMaxUs -le $bound) { $bucketUpper = $bound; break } }
     if ($fields.actionP99UpperUs -gt $bucketUpper) { throw "actionP99UpperUs exceeds the maximum sample bucket: $Row" }
 
+    if ($fields.checkOutcome -cnotin @('unobserved','before-stop','stop-overlap','after-acceptance')) { throw "Disallowed cancellation check outcome: $Row" }
+    if (($fields.checkKnown -eq 0) -ne ($fields.checkOutcome -ceq 'unobserved')) { throw "checkKnown/checkOutcome disagree: $Row" }
+    if ($fields.checkKnown -eq 0) {
+        if ($fields.acceptedToCheckUs -ne [uint64]0 -or $fields.checkLatencyKnown -ne 0) { throw "Unobserved check has fabricated latency: $Row" }
+    } else {
+        if ($fields.rawKnown -ne 1) { throw "Known check lacks original useful raw body observation: $Row" }
+        if ($fields.checkOutcome -ceq 'after-acceptance') {
+            if ([decimal]$fields.acceptedToCheckUs -gt [decimal]$fields.stopToReturnUs) { throw "First cancellation check follows original body return: $Row" }
+            if ($fields.checkLatencyKnown -ne 1) { throw "After-acceptance check requires known latency: $Row" }
+        } elseif ($fields.acceptedToCheckUs -ne [uint64]0 -or $fields.checkLatencyKnown -ne 0) { throw "Before-stop or overlap check cannot claim acceptance latency: $Row" }
+    }
+    if ($fields.sourcePresent -ne $fields.firstFrameProved) { throw "sourcePresent must equal firstFrameProved: $Row" }
+    if ($fields.firstFrameProved -eq 1) {
+        if ([decimal]$fields.acceptancePresentOrdinal -eq [decimal]::Parse('18446744073709551615',[System.Globalization.CultureInfo]::InvariantCulture) -or [decimal]$fields.sourcePresentOrdinal -ne ([decimal]$fields.acceptancePresentOrdinal + [decimal]1)) { throw "First-frame proof is not the immediate exact present after acceptance: $Row" }
+    } elseif ($fields.sourcePresentOrdinal -ne [uint64]0) { throw "Unproved first frame cannot report a source present ordinal: $Row" }
+    if ($fields.measured -eq 1 -and $fields.firstFrameProved -ne 1) { throw "Measured active row must prove the first frame: $Row" }
     if ($fields.outcome -cnotin @('returned-after-stop','finish-overlap','finished-before-stop','finished-before-escape')) {
         throw "Disallowed UI cancellation smoke outcome '$($fields.outcome)': $Row"
     }

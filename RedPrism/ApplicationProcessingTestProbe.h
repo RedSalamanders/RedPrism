@@ -20,6 +20,15 @@ enum class ApplicationProcessingStage : std::uint8_t
     Count,
 };
 
+enum class ApplicationResponsiveSourceStage : std::uint8_t
+{
+    BeforeAcquisition,
+    LayerRows,
+    Display,
+    Stroke,
+    ReadyToEnable
+};
+
 // Borrowed startup-only controls. afterStage runs only after the named subsystem successfully initializes;
 // it tests acquired-prefix cleanup, not failures inside that subsystem. retryWait uses the queue's existing
 // reached event/registration fault seam. Its context outlives InitializeProcessing and Shutdown.
@@ -32,6 +41,9 @@ struct ApplicationProcessingTestProbe final
     // Actual Run startup checkpoint, after document/settings and real runtime notification subscription.
     // Absent in production. Its borrowed context survives Run and Shutdown; failure exercises acquired cleanup.
     std::int32_t (*afterRuntimeSources)(void*) noexcept = nullptr;
+    // Explicit actual-Run startup fixture only. Borrowed context survives Run and joined Shutdown.
+    bool responsiveSourcesForTest = false;
+    std::int32_t (*afterResponsiveSourceStage)(void*, ApplicationResponsiveSourceStage) noexcept = nullptr;
     unsigned int workerCount = 0;      // Startup-only; zero preserves the production automatic count.
     PathReadWaitObserver pathReadWait; // Reached-resource faults, alive through partial-startup Close.
 };

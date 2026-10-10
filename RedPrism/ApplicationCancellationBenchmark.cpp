@@ -217,6 +217,7 @@ void Application::NoteUiCancellationReceipt(std::uint64_t opening, ContinuationR
     if (trial.cancelReceipt.value().Read().outcome == HostOutcome::Pending)
     {
         trial.receiptAccepted = CancelClock();
+        trial.acceptancePresentOrdinal = _renderer.PresentCount();
         // Exact receipt admission is stamped before SyncAdjustPanel; actual hidden-card state is read
         // separately at the end of the real Escape dispatch.
     }
@@ -250,6 +251,15 @@ void Application::EndUiCancellationKey() noexcept
             trial.receiptAccepted >= 0 && _chrome && !_chrome->AdjustPanelOpen() && ColorCancelPending();
         trial.dispatchActive = false;
         trial.phase = UiCancellationBenchmark::Phase::Settling;
+        if (trial.receiptAccepted >= 0 &&
+            (!trial.original || _renderer.PresentCount() != trial.acceptancePresentOrdinal ||
+             !trial.firstFrame.Accept({trial.original.value(), trial.documentSerial, trial.opening,
+                                       trial.acceptancePresentOrdinal, UiCancellationOriginalStateCurrent(),
+                                       trial.cardHiddenAtAcceptance})))
+        {
+            FailUiBenchmark("cancel-frame-acceptance-identity-or-intervening-present");
+            return;
+        }
     }
 }
 
@@ -328,15 +338,37 @@ bool Application::UiCancellationSourceSelected(RecordedDisplayGraph* graph, cons
     return !graph && document && direct == &document.value();
 }
 
+bool Application::UiCancellationOriginalStateCurrent() const noexcept
+{
+    if (!_uiBenchmark || !_uiBenchmark->cancellation)
+        return false;
+    const auto& state = *_uiBenchmark;
+    const auto& trial = *state.cancellation;
+    const auto* layer = _session.ActiveLayer();
+    return trial.authority && _session.IsDocumentReadCurrent(trial.authority.value()) && layer && layer->asset &&
+           layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
+           _session.history.UndoCount() == state.previousUndoCount;
+}
+
 void Application::NoteUiCancellationPresentation(bool sourceSelected) noexcept
 {
-    if (!_uiBenchmark || !_uiBenchmark->cancellation || !sourceSelected)
+    if (!_uiBenchmark || !_uiBenchmark->cancellation)
         return;
     auto& trial = *_uiBenchmark->cancellation;
-    // Recheck authority after the actual renderer/Present returns; reentrant mutation cannot qualify a frame.
-    if (trial.feedbackPresented < 0 && trial.authority && _session.IsDocumentReadCurrent(trial.authority.value()) &&
-        _chrome && !_chrome->AdjustPanelOpen())
-        trial.feedbackPresented = CancelClock();
+    if (trial.receiptAccepted < 0 || trial.feedbackPresented >= 0)
+        return;
+    // Every successful visible Present reaches this path, including an intervening stale frame. Recheck
+    // exact owned authority/raster/history after Render returns; a later restore cannot hide that frame.
+    const auto result = trial.firstFrame.Observe(
+        {trial.original.value_or(JobTicket{}), _session.DocumentSerial(), trial.opening, _renderer.PresentCount(),
+         UiCancellationFrame::PresentAttempt::SuccessfulVisible, UiCancellationOriginalStateCurrent(), sourceSelected,
+         !sourceSelected, _chrome && !_chrome->AdjustPanelOpen()});
+    if (result != UiCancellationFrame::State::Qualified)
+    {
+        FailUiBenchmark("cancel-first-successful-present-did-not-restore-original-source");
+        return;
+    }
+    trial.feedbackPresented = CancelClock();
 }
 
 void Application::AdvanceUiCancellationBenchmark() noexcept
@@ -561,6 +593,41 @@ void Application::FinishUiCancellationTrial(const char* outcome, bool measured) 
         FailUiBenchmark("cancel-measured-clock");
         return;
     }
+    const bool checkKnown = trial.body && trial.body.value().CheckTicks() >= 0;
+    const auto checkOutcome = checkKnown ? trial.body.value().ClassifyCheck(trial.stopBegin, trial.stopAccepted)
+                                         : UiCancellationBody::CheckOutcome::Unobserved;
+    if (checkOutcome == UiCancellationBody::CheckOutcome::ClockFailed ||
+        checkOutcome == UiCancellationBody::CheckOutcome::Malformed)
+    {
+        FailUiBenchmark("cancel-invalid-first-check-observation");
+        return;
+    }
+    const auto acceptedToCheck = checkOutcome == UiCancellationBody::CheckOutcome::ObservedAfterAcceptance
+                                     ? duration(trial.stopAccepted, trial.body.value().CheckTicks())
+                                     : std::nullopt;
+    if ((checkOutcome == UiCancellationBody::CheckOutcome::ObservedAfterAcceptance && !acceptedToCheck) ||
+        (acceptedToCheck && (!returned || acceptedToCheck.value() > returned.value())) ||
+        (measured && trial.firstFrame.Current() != UiCancellationFrame::State::Qualified))
+    {
+        FailUiBenchmark("cancel-first-check-or-first-frame-proof");
+        return;
+    }
+    const auto checkName = [](UiCancellationBody::CheckOutcome outcome) noexcept
+    {
+        switch (outcome)
+        {
+        case UiCancellationBody::CheckOutcome::Unobserved:
+            return "unobserved";
+        case UiCancellationBody::CheckOutcome::BeforeStop:
+            return "before-stop";
+        case UiCancellationBody::CheckOutcome::StopOverlap:
+            return "stop-overlap";
+        case UiCancellationBody::CheckOutcome::ObservedAfterAcceptance:
+            return "after-acceptance";
+        default:
+            return "malformed";
+        }
+    };
     const auto raw = trial.body ? trial.body.value().RawResult() : std::nullopt;
     const auto apply = trial.applyReceipt ? std::optional{trial.applyReceipt.value().Read()} : std::nullopt;
     const auto cancel = trial.cancelReceipt ? std::optional{trial.cancelReceipt.value().Read()} : std::nullopt;
@@ -573,7 +640,8 @@ void Application::FinishUiCancellationTrial(const char* outcome, bool measured) 
         "rawKnown=%d rawStatus=%u rawError=0x%08x applyKnown=%d applyOutcome=%u applyError=0x%08x "
         "cancelKnown=%d cancelOutcome=%u cancelError=0x%08x sourcePresent=%d hiddenAtAcceptance=%d "
         "diagnosticBytes=%zu ownerBatch=32 actionP99UpperUs=%llu actionMaxUs=%llu applyMaxUs=%llu ordinaryActivation=0 "
-        "g1=0\n",
+        "g1=0 checkKnown=%d checkOutcome=%s acceptedToCheckUs=%llu checkLatencyKnown=%d "
+        "acceptancePresentOrdinal=%llu sourcePresentOrdinal=%llu firstFrameProved=%d\n",
         UiCancellationOperationName(), state.trial, state.trial == 0, state.fixture.width, state.fixture.height,
         trial.previewEnabled, outcome, measured && state.trial != 0, trial.deadlineRearms,
         static_cast<unsigned long long>(entryToPosted.value_or(0)),
@@ -596,7 +664,11 @@ void Application::FinishUiCancellationTrial(const char* outcome, bool measured) 
         static_cast<unsigned long long>(
             state.timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)].MaximumMicroseconds()),
         static_cast<unsigned long long>(
-            state.timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)].MaximumMicroseconds()));
+            state.timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)].MaximumMicroseconds()),
+        checkKnown, checkName(checkOutcome), static_cast<unsigned long long>(acceptedToCheck.value_or(0)),
+        acceptedToCheck.has_value(), static_cast<unsigned long long>(trial.acceptancePresentOrdinal),
+        static_cast<unsigned long long>(trial.firstFrame.QualifiedOrdinal()),
+        trial.firstFrame.Current() == UiCancellationFrame::State::Qualified);
     std::fflush(stdout);
     AdvanceUiCancellationTrial();
 }

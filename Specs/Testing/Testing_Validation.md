@@ -18,6 +18,21 @@ unknown or overlapping rows, body gaps, changed loop operands, invalid symbols/t
 entries and adjacent genuine VEX/EVEX code MUST withhold data proof or remain ordinary ISA violations.
 Synthetic parser controls never execute their bytes and grant no native runtime or performance qualification.
 
+### Responsive startup acquisition
+
+`RunStandaloneResponsiveStartupSelfTest` requires 14 actual hidden-Application cases and 217 independent
+assertions: successful acquisition, refusal and reentrant joined shutdown at each of five boundaries, and real
+owner-route exhaustion before row, display and stroke acquisition. It preserves the original document,
+generation and history, holds startup paths until full acquisition, publishes all async engine flags together,
+and proves joined cleanup, detach, closed/repeat refusal and drained quit state. Capacity refusal comes from
+actual borrowed routes filling the original multiplexer, never a fabricated quota HRESULT. Fixture storage
+outlives joined `Shutdown`. These state gates do not qualify ordinary startup, first frame or gesture cost.
+
+The x64 ISA gate also runs `IsaDwordZeroStackTests.ps1`: 109 encoded parser controls, five accepted and 104
+refused. PE/PDB identity, exact guard/dispatch rows, complete table, terminal body and decoded control flow must
+all agree; genuine vector instructions beside the table remain subject to the ordinary ISA gate. These bytes
+are parsed and never executed. The runtime allowlist is unchanged.
+
 ### Opt-in Escape cancellation diagnostics
 
 HostTests adds 14 immutable capture, 28 original-body/clock partition, 25 real event transport and 35 CLI
@@ -27,7 +42,7 @@ Transport controls read immutable payloads while original producers are still ev
 verify the exact bounded32record rearm/exhaustion policy. The factory's nonempty output refusal preserves
 its existing live event owner. Production callbacks own no Application/scheduler access or producer wait.
 
-`RunUiCancellationDispatchSelfTest` adds 34 real hidden-HWND controls in accepted/refused pairs. The
+`RunUiCancellationDispatchSelfTest` adds 36 real hidden-HWND controls in accepted/refused pairs. The
 independent four-gray-pixel source remains unchanged while its real original Commit body is event-held.
 Real WM_KEYDOWN/WM_KEYUP must bind the original ticket, preserve exact receipt errors, hide only an accepted
 Cancel card and retain logical/history/source authority until acknowledgement. Stale disarmed timer identity
@@ -62,7 +77,7 @@ No duration threshold is a correctness assertion. Original predecessor suites, n
 probe/stress and both existing27operation smoke routes remain required. Runtime claims still require their
 exact source/dependency/binary/profile binding; pure parser tests and cross-builds are not runtime evidence.
 
-Five positive parser models and 21 refusal controls include exact `previewEnabled` context and bounded
+Six positive parser models and 41 refusal controls include exact `previewEnabled` context and bounded
 `deadlineRearms` (0–2) checks:
 Gaussian 250/Motion 2000 use the actual Preview-off checkbox outside timed Commit; the other eight cases
 keep their live previews. The actual smoke must observe useful-body notices from the original scheduler
@@ -2326,6 +2341,25 @@ opening retains its existing GPU baseline, later sample/final phases own additio
 must report Stale/E_ABORT, preserve both independent literal images and their identities/history, retire the
 original draft/input/preview/payload off-owner, and return all CPU/GPU/releasing charges to baseline while
 retaining the requested authority change. This registry is required proof, not a passing execution claim.
+
+### Actual first cancellation check and first-frame proof
+
+`RunCancellationCheckTests` requires 37 independent controls: false/local/shutdown token semantics, nested
+bindings, null suppression/restoration, retained tokens outside and across useful Runs, real joined helper
+propagation and exact first-check original identity. Event-held local and scheduler shutdown cases each require
+Entry, one first Check, Exit ordering; repeated true checks cannot publish again. The allocation-failure case
+requires raw Failed/E_OUTOFMEMORY at body exit, unchanged normalized Cancelled completion, an empty binding in
+real worker retirement and no retained-token republication. Deadlock bounds are test failures, not timings.
+
+The body reducer requires 42 literal controls, including selected ordinal 2 versus capture stub 1, separate
+check/exit timestamps, before-stop/overlap classification, unobserved checks and malformed duplicate/order
+refusals. `RunUiCancellationFrameTests` requires 15 independent ordering/identity controls: only the first exact
+successful-visible ordinal qualifies; failed/occluded attempts remain unqualified; stale/gapped/changed identity,
+unknown attempts and overflow refuse irreversibly. Hidden caller tests prove accepted baseline retention and
+that settlement without Present cannot create first-frame proof. Actual direct/prepared native cancellation
+smokes must satisfy the appended check/frame schema and retain every predecessor context. The strict full
+reader additionally requires 42 negative controls and all six route/profile models; pure models never qualify
+native performance, ordinary activation or G1. Affected ordinary kernel/group overhead must be measured.
 
 ### Optional worker body observations
 

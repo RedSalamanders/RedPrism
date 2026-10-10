@@ -110,6 +110,7 @@
     <ClInclude Include="..\Common\Version.h" />
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\AdjustmentClosureWork.h" />
+    <ClInclude Include="..\Common\CancellationObservation.h" />
     <ClInclude Include="..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\Common\LayerMetadataWork.h" />
@@ -171,6 +172,7 @@
     <ClInclude Include="..\Common\ZipOwner.h" />
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
+    <ClInclude Include="UiCancellationFrame.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
     <ClInclude Include="LayerMetadataTestGate.h" />
@@ -450,6 +452,8 @@
     <ClCompile Include="ApplicationLifecycleCloseTests.cpp" />
     <ClCompile Include="ApplicationShutdownTests.cpp" />
     <ClCompile Include="ApplicationProcessingTests.cpp" />
+    <ClCompile Include="Application.Tests.ResponsiveStartup.cpp" />
+    <ClCompile Include="ApplicationResponsiveSources.cpp" />
     <ClCompile Include="Application.Tests.HistoryResidencyStartup.cpp" />
     <ClCompile Include="ApplicationLiveShutdownTests.cpp" />
     <ClCompile Include="ApplicationLeaseShutdownTests.cpp" />

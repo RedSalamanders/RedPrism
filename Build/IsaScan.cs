@@ -419,8 +419,23 @@ namespace RedPrismBuild
             ulong imageBase, ulong dispatch, Dictionary<ulong, DecodedInstruction> decoded,
             List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows)
         {
-            if (dispatch < imageBase + 15 || dispatch - imageBase > UInt32.MaxValue) return null;
-            ulong prefix = dispatch - 15, afterJump = checked(dispatch + 27);
+            return ReadGuardedStackRaxTableForm(pe, sections, contributions, dataSymbols, procedures,
+                imageBase, dispatch, decoded, decodedStarts, guardRows, false) ??
+                ReadGuardedStackRaxTableForm(pe, sections, contributions, dataSymbols, procedures,
+                    imageBase, dispatch, decoded, decodedStarts, guardRows, true);
+        }
+
+        // The second exact form is DWORD [RSP] CMP/short JA, RAX image base, and unsigned ECX [RSP].
+        // Both forms retain the same terminal PDB, target, whole-body and byte/listing proofs below.
+        private static InlineTable ReadGuardedStackRaxTableForm(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, ulong dispatch, Dictionary<ulong, DecodedInstruction> decoded,
+            List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows, bool zeroStackDword)
+        {
+            int prefixLength = zeroStackDword ? 6 : 15;
+            int dispatchLength = zeroStackDword ? 22 : 27;
+            if (dispatch < imageBase + (ulong)prefixLength || dispatch - imageBase > UInt32.MaxValue) return null;
+            ulong prefix = dispatch - (ulong)prefixLength, afterJump = checked(dispatch + (ulong)dispatchLength);
             int ownerIndex = FindContribution(contributions, prefix);
             if (ownerIndex < 0 || FindContribution(contributions, dispatch) != ownerIndex) return null;
             Contribution owner = contributions[ownerIndex];
@@ -428,20 +443,32 @@ namespace RedPrismBuild
             int raw;
             try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
             catch (InvalidDataException) { return null; }
-            if (raw > pe.Length - 42 ||
-                !StartsWithAt(pe, raw, 0x48, 0x83, 0xbc, 0x24) ||
-                !StartsWithAt(pe, raw + 9, 0x0f, 0x87) ||
-                !StartsWithAt(pe, raw + 15, 0x48, 0x8d, 0x05) ||
-                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 18) != (long)imageBase ||
-                !StartsWithAt(pe, raw + 22, 0x48, 0x8b, 0x8c, 0x24) ||
-                BitConverter.ToUInt32(pe, raw + 4) != BitConverter.ToUInt32(pe, raw + 26) ||
-                !StartsWithAt(pe, raw + 30, 0x8b, 0x8c, 0x88) ||
-                !StartsWithAt(pe, raw + 37, 0x48, 0x03, 0xc8) ||
-                !StartsWithAt(pe, raw + 40, 0xff, 0xe1)) return null;
-            uint maximum = pe[raw + 8];
+            if (zeroStackDword)
+            {
+                if (raw > pe.Length - 28 || !StartsWithAt(pe, raw, 0x83, 0x3c, 0x24) ||
+                    pe[raw + 4] != 0x77 || !StartsWithAt(pe, raw + 6, 0x48, 0x8d, 0x05) ||
+                    (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 9) != (long)imageBase ||
+                    !StartsWithAt(pe, raw + 13, 0x8b, 0x0c, 0x24) ||
+                    !StartsWithAt(pe, raw + 16, 0x8b, 0x8c, 0x88) ||
+                    !StartsWithAt(pe, raw + 23, 0x48, 0x03, 0xc8) ||
+                    !StartsWithAt(pe, raw + 26, 0xff, 0xe1)) return null;
+            }
+            else
+            {
+                if (raw > pe.Length - 42 || !StartsWithAt(pe, raw, 0x48, 0x83, 0xbc, 0x24) ||
+                    !StartsWithAt(pe, raw + 9, 0x0f, 0x87) ||
+                    !StartsWithAt(pe, raw + 15, 0x48, 0x8d, 0x05) ||
+                    (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 18) != (long)imageBase ||
+                    !StartsWithAt(pe, raw + 22, 0x48, 0x8b, 0x8c, 0x24) ||
+                    BitConverter.ToUInt32(pe, raw + 4) != BitConverter.ToUInt32(pe, raw + 26) ||
+                    !StartsWithAt(pe, raw + 30, 0x8b, 0x8c, 0x88) ||
+                    !StartsWithAt(pe, raw + 37, 0x48, 0x03, 0xc8) ||
+                    !StartsWithAt(pe, raw + 40, 0xff, 0xe1)) return null;
+            }
+            uint maximum = pe[raw + (zeroStackDword ? 3 : 8)];
             if (maximum == 0 || maximum >= 128) return null; // sign-extended CMP imm8 must be nonnegative
-            int[] starts = { 0, 9, 15, 22, 30, 37, 40 };
-            int[] lengths = { 9, 6, 7, 8, 7, 3, 2 };
+            int[] starts = zeroStackDword ? new int[] { 0, 4, 6, 13, 16, 23, 26 } : new int[] { 0, 9, 15, 22, 30, 37, 40 };
+            int[] lengths = zeroStackDword ? new int[] { 4, 2, 7, 3, 7, 3, 2 } : new int[] { 9, 6, 7, 8, 7, 3, 2 };
             for (int i = 0; i < starts.Length; ++i)
             {
                 ulong address = prefix + (ulong)starts[i];
@@ -449,9 +476,10 @@ namespace RedPrismBuild
                     !MatchesDecodedPe(pe, sections, imageBase, address, reported, contributions, decoded, decodedStarts))
                     return null;
             }
-            uint tableRva = BitConverter.ToUInt32(pe, raw + 33);
+            uint tableRva = BitConverter.ToUInt32(pe, raw + (zeroStackDword ? 19 : 33));
             ulong begin = checked(imageBase + tableRva), end = checked(begin + 4 * (maximum + 1));
-            long fallback = checked((long)prefix + 15 + BitConverter.ToInt32(pe, raw + 11));
+            long fallback = zeroStackDword ? checked((long)prefix + 6 + unchecked((sbyte)pe[raw + 5])) :
+                checked((long)prefix + 15 + BitConverter.ToInt32(pe, raw + 11));
             if ((begin & 3) != 0 || begin <= afterJump || end > owner.End ||
                 fallback < (long)afterJump || fallback >= (long)begin ||
                 !dataSymbols.TryGetValue(begin, out int dataOwner) || dataOwner != owner.Module) return null;
@@ -3139,26 +3167,29 @@ namespace RedPrismBuild
                     if (address >= imageBase + 15)
                     {
                         raxStackCandidates.Add(address);
-                        foreach (int offset in new int[] { -15, -6, 0, 7, 15, 22, 25 })
+                        foreach (int offset in new int[] { -15, -6, -2, 0, 7, 10, 15, 17, 20, 22, 25 })
                             rdxGuardCandidates.Add(checked((ulong)((long)address + offset)));
                         try
                         {
-                            int at = checked((int)Offset(checked((uint)(address + 15 - imageBase)), sections, pe.Length));
-                            if (at <= pe.Length - 7 && StartsWithAt(pe, at, 0x8b, 0x8c, 0x88))
+                            foreach (int loadOffset in new int[] { 15, 10 })
                             {
-                                ulong table = checked(imageBase + BitConverter.ToUInt32(pe, at + 3));
-                                if (table > imageBase) rdxGuardCandidates.Add(table - 1);
-                                if (table >= imageBase + 2) rdxGuardCandidates.Add(table - 2);
-                                if (table >= imageBase + 4)
+                                int at = checked((int)Offset(checked((uint)(address + (ulong)loadOffset - imageBase)), sections, pe.Length));
+                                if (at <= pe.Length - 7 && StartsWithAt(pe, at, 0x8b, 0x8c, 0x88))
                                 {
-                                    rdxGuardCandidates.Add(table - 4);
-                                    rdxGuardCandidates.Add(table - 3);
-                                    int tableRaw = checked((int)Offset(checked((uint)(table - imageBase)), sections, pe.Length));
-                                    if ((tableRaw >= 2 && StartsWithAt(pe, tableRaw - 2, 0xc3, 0x90)) ||
-                                        (tableRaw >= 4 && StartsWithAt(pe, tableRaw - 4, 0xc3, 0x0f, 0x1f, 0x00)))
-                                        foreach (Function procedure in procedures)
-                                            if (procedure.Begin <= address - 15 && procedure.End > table)
-                                                raxPaddingBodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = table });
+                                    ulong table = checked(imageBase + BitConverter.ToUInt32(pe, at + 3));
+                                    if (table > imageBase) rdxGuardCandidates.Add(table - 1);
+                                    if (table >= imageBase + 2) rdxGuardCandidates.Add(table - 2);
+                                    if (table >= imageBase + 4)
+                                    {
+                                        rdxGuardCandidates.Add(table - 4);
+                                        rdxGuardCandidates.Add(table - 3);
+                                        int tableRaw = checked((int)Offset(checked((uint)(table - imageBase)), sections, pe.Length));
+                                        if ((tableRaw >= 2 && StartsWithAt(pe, tableRaw - 2, 0xc3, 0x90)) ||
+                                            (tableRaw >= 4 && StartsWithAt(pe, tableRaw - 4, 0xc3, 0x0f, 0x1f, 0x00)))
+                                            foreach (Function procedure in procedures)
+                                                if (procedure.Begin <= address - (ulong)(loadOffset == 10 ? 6 : 15) && procedure.End > table)
+                                                    raxPaddingBodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = table });
+                                    }
                                 }
                             }
                         }

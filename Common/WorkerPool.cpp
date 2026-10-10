@@ -68,6 +68,7 @@ struct ParallelCall final
     void* context;
     Executor::Participant run;
     WorkPriority priority;
+    CancellationObservation::Binding cancellation;
 };
 
 HRESULT InitializePool(unsigned int threads, WorkerResources::UniquePool& pool,
@@ -253,6 +254,7 @@ void CALLBACK WorkerPool::ParallelCallback(PTP_CALLBACK_INSTANCE, void* context,
 {
     const auto& call = *static_cast<ParallelCall*>(context);
     CallbackScope scope{call.pool, call.priority, L"RedPrism.Workers"};
+    const CancellationObservation::Scope cancellationScope{call.cancellation};
     call.run(call.context);
 }
 
@@ -283,7 +285,8 @@ void WorkerPool::RunParticipants(void* context, Participant run, unsigned int pa
         run(context);
         return;
     }
-    ParallelCall call{this, context, run, g_currentPool == this ? g_currentPriority : WorkPriority::Normal};
+    ParallelCall call{this, context, run, g_currentPool == this ? g_currentPriority : WorkPriority::Normal,
+                      CancellationObservation::Current()};
     TP_CALLBACK_ENVIRON environment;
     InitializeThreadpoolEnvironment(&environment);
     SetThreadpoolCallbackPool(&environment, _pool.get());

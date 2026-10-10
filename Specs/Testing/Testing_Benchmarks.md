@@ -102,6 +102,24 @@ non-occluded Present and final original settlement separately. The selected rend
 current original committed source, with unchanged document/history/target authority and hidden card; a
 foreign equivalent document address or stale prepared publication cannot qualify a frame. Present submission
 is not monitor scanout. BodyExited includes Run-local cleanup but grants no native/GPU acknowledgement.
+A separate first-true-check notice from the selected useful Run is required to describe worker check latency;
+BodyExited MUST NOT substitute. Active rows append exactly seven fields after the existing `g1=0`:
+`checkKnown`, `checkOutcome`, `acceptedToCheckUs`, `checkLatencyKnown`, `acceptancePresentOrdinal`,
+`sourcePresentOrdinal`, `firstFrameProved`. Allowed check outcomes are `unobserved`, `before-stop`,
+`stop-overlap` and `after-acceptance`. Unknown, before-stop and overlap checks report zero duration and unknown
+latency; an after-acceptance check requires known original raw body observation and duration no greater than
+accepted-stop-to-body-return. A known zero microsecond duration remains valid clock quantization. Clock failures
+or malformed notice order fail the diagnostic rather than inventing unknown success.
+
+First-frame proof requires exact successful-visible ordinal `acceptancePresentOrdinal + 1` with unchanged
+original held authority/raster/history, hidden card and committed source selected in the actual render call.
+No overflow is allowed; a qualified source ordinal is nonzero. An unproved row reports source ordinal zero,
+and `sourcePresent` equals `firstFrameProved`. Measured active rows require proof; a first stale frame permanently
+refuses even if a later frame restores the source. The parser uses exact UInt64/decimal ordinal arithmetic;
+large ordinals must not pass through lossy double or signed duration conversions. Refusal rows stay unchanged.
+Check-boundary and first-frame controls establish causal evidence only; selected-tier check spans, ordinary
+activation, first-frame latency and G1 still require actual affected throughput and owner measurements.
+
 Only complete original owner/worker/GPU settlement permits fixture replacement or receipt retirement.
 Published immutable row caches retain their completed memory-charge ticket while displayed. That identity
 remains owned and charged; pending row preparation has a separate ticket. Settlement waits for pending work,

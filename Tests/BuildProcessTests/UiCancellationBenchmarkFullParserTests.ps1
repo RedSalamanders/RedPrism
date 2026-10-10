@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'UiCancellationBenchmarkFullTests.ps1')
 
 $script:Names = @('levels','hsv','exposure','curves','gradient-map','grain','gaussian250','motion2000','noise','lens')
-$script:ActiveOrder = @('name','trial','warmup','width','height','previewEnabled','outcome','measured','requestedDelayUs','deadlineRearms','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','delayKnown','ticketSlot','ticketGeneration','usefulOrdinal','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','rawKnown','rawStatus','rawError','applyKnown','applyOutcome','applyError','cancelKnown','cancelOutcome','cancelError','sourcePresent','hiddenAtAcceptance','diagnosticBytes','ownerBatch','actionP99UpperUs','actionMaxUs','applyMaxUs','ordinaryActivation','g1')
+$script:ActiveOrder = @('name','trial','warmup','width','height','previewEnabled','outcome','measured','requestedDelayUs','deadlineRearms','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','delayKnown','ticketSlot','ticketGeneration','usefulOrdinal','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','rawKnown','rawStatus','rawError','applyKnown','applyOutcome','applyError','cancelKnown','cancelOutcome','cancelError','sourcePresent','hiddenAtAcceptance','diagnosticBytes','ownerBatch','actionP99UpperUs','actionMaxUs','applyMaxUs','ordinaryActivation','g1','checkKnown','checkOutcome','acceptedToCheckUs','checkLatencyKnown','acceptancePresentOrdinal','sourcePresentOrdinal','firstFrameProved')
 
 function New-ActiveLine([string] $Name, [int] $Trial, [int] $Width, [int] $Height, [bool] $AllExcluded) {
     $early = $AllExcluded -or $Trial -eq 0
@@ -21,6 +21,7 @@ function New-ActiveLine([string] $Name, [int] $Trial, [int] $Width, [int] $Heigh
         hiddenAtAcceptance=[int](-not $early); diagnosticBytes=64; ownerBatch=32; actionP99UpperUs=125
         actionMaxUs=130; applyMaxUs=50
         ordinaryActivation=0; g1=0
+        checkKnown=[int](-not $early); checkOutcome=$(if ($early) { 'unobserved' } elseif ($Trial % 2 -eq 0) { 'stop-overlap' } else { 'after-acceptance' }); acceptedToCheckUs=0; checkLatencyKnown=[int](-not $early -and $Trial % 2 -ne 0); acceptancePresentOrdinal=100; sourcePresentOrdinal=$(if (-not $early) { 101 } else { 0 }); firstFrameProved=[int](-not $early)
     }
     $tokens = foreach ($key in $script:ActiveOrder) { "$key=$($values[$key])" }
     'UI CANCEL ' + ($tokens -join ' ')
@@ -112,6 +113,22 @@ try {
     if (Test-Path -LiteralPath $cliPath) { Remove-Item -LiteralPath $cliPath -Force }
 }
 
+$fourK = New-FullOutput
+$beforeStopModel = [string[]]$fourK.Clone()
+$beforeStopModel[2] = [regex]::Replace($beforeStopModel[2], 'checkKnown=0 checkOutcome=unobserved', 'checkKnown=1 checkOutcome=before-stop')
+$beforeStopResult = Parse-UiCancellationFull $beforeStopModel 'direct' '3840x2160'
+if ($beforeStopResult.Rows[0].Fields.checkOutcome -cne 'before-stop' -or $beforeStopResult.Rows[0].Fields.checkLatencyKnown -ne 0) { throw 'before-stop check positive model failed.' }
+$boundaryModel = [string[]]$fourK.Clone()
+$boundaryModel[3] = [regex]::Replace($boundaryModel[3], 'acceptedToCheckUs=0', 'acceptedToCheckUs=140')
+$boundaryModel[3] = [regex]::Replace($boundaryModel[3], 'acceptancePresentOrdinal=100 sourcePresentOrdinal=101', 'acceptancePresentOrdinal=18446744073709551614 sourcePresentOrdinal=18446744073709551615')
+
+$boundaryResult = Parse-UiCancellationFull $boundaryModel 'direct' '3840x2160'
+if ($boundaryResult.Rows[1].Fields.acceptedToCheckUs -ne 140 -or [decimal]$boundaryResult.Rows[1].Fields.acceptancePresentOrdinal -ne [decimal]::Parse('18446744073709551614',[System.Globalization.CultureInfo]::InvariantCulture) -or [decimal]$boundaryResult.Rows[1].Fields.sourcePresentOrdinal -ne [decimal]::Parse('18446744073709551615',[System.Globalization.CultureInfo]::InvariantCulture)) { throw 'Full parser UInt64 boundary values lost exactness.' }
+Write-Host 'PASS ui-cancel-full.check.before-stop-and-uint64-boundary'
+$overlapBody = [string[]]$fourK.Clone(); $overlapBody[4] = [regex]::Replace($overlapBody[4], 'outcome=returned-after-stop measured=1', 'outcome=finish-overlap measured=0')
+$overlapResult = Parse-UiCancellationFull $overlapBody 'direct' '3840x2160'
+if ($overlapResult.Summary.measuredRows -ne 99 -or $overlapResult.Summary.measuredDistributions.stopToReturnUs.count -ne 99 -or $overlapResult.Summary.excludedOutcomeCounts['finish-overlap'] -ne 1) { throw 'Body-return distribution included finish-overlap work.' }
+Write-Host 'PASS ui-cancel-full.distribution.excludes-body-overlap'
 $large = New-FullOutput '8192x5464'
 $refusalIndex = Find-Refusal $large
 Assert-Rejected 'refusal-wrong-stage' (Replace-Line $large $refusalIndex 'stage=settings' 'stage=opening') 'direct' '8192x5464'
@@ -141,6 +158,23 @@ Assert-Rejected 'active-receipt-field' (Replace-Line $fourK ($activeIndex+1) 'ap
 Assert-Rejected 'active-flag-misclaim' (Replace-Line $fourK $activeIndex 'ordinaryActivation=0' 'ordinaryActivation=1')
 Assert-Rejected 'active-order' (Replace-Line $fourK 2 '^UI CANCEL ' 'UI CANCEL REFUSAL ')
 
+Assert-Rejected 'check missing field' (Replace-Line $fourK $activeIndex ' checkOutcome=unobserved' '')
+Assert-Rejected 'check fields reordered' (Replace-Line $fourK $activeIndex 'checkKnown=0 checkOutcome=unobserved' 'checkOutcome=unobserved checkKnown=0')
+Assert-Rejected 'duplicate check field' (Replace-Line $fourK $activeIndex '$' ' checkKnown=0')
+Assert-Rejected 'check boolean range' (Replace-Line $fourK $activeIndex 'checkKnown=0' 'checkKnown=2')
+Assert-Rejected 'check count decimal' (Replace-Line $fourK $activeIndex 'acceptancePresentOrdinal=100' 'acceptancePresentOrdinal=1.0')
+Assert-Rejected 'check count overflow' (Replace-Line $fourK $activeIndex 'acceptancePresentOrdinal=100' 'acceptancePresentOrdinal=18446744073709551616')
+Assert-Rejected 'negative check duration' (Replace-Line $fourK $activeIndex 'acceptedToCheckUs=0' 'acceptedToCheckUs=-1')
+Assert-Rejected 'known mismatch' (Replace-Line $fourK 3 'checkKnown=1' 'checkKnown=0')
+Assert-Rejected 'overlap duration body-exit proxy' (Replace-Line $fourK 4 'acceptedToCheckUs=0' 'acceptedToCheckUs=140')
+Assert-Rejected 'known check missing raw body' (Replace-Line $fourK 3 'rawKnown=1' 'rawKnown=0')
+Assert-Rejected 'stale later present gap' (Replace-Line $fourK 3 'sourcePresentOrdinal=101' 'sourcePresentOrdinal=102')
+Assert-Rejected 'equal acceptance and source ordinal' (Replace-Line $fourK 3 'sourcePresentOrdinal=101' 'sourcePresentOrdinal=100')
+Assert-Rejected 'unknown frame proof source ordinal' (Replace-Line $fourK 3 'firstFrameProved=1' 'firstFrameProved=0')
+Assert-Rejected 'measured frame unproved' (Replace-Line $fourK 3 'firstFrameProved=1' 'firstFrameProved=0')
+Assert-Rejected 'acceptance ordinal overflow' (Replace-Line $fourK 3 'acceptancePresentOrdinal=100 sourcePresentOrdinal=101' 'acceptancePresentOrdinal=18446744073709551615 sourcePresentOrdinal=0')
+Assert-Rejected 'after acceptance latency unknown' (Replace-Line $fourK 3 'checkLatencyKnown=1' 'checkLatencyKnown=0')
+Assert-Rejected 'check after body return' (Replace-Line $fourK 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=141')
 $reordered = [string[]]$fourK.Clone(); $temp=$reordered[2]; $reordered[2]=$reordered[3]; $reordered[3]=$temp
 Assert-Rejected 'context-order' $reordered
 $wrongReport = Replace-Line $fourK ($fourK.Count-1) 'operations=10' 'operations=9'
@@ -152,5 +186,5 @@ Assert-Rejected 'selected-route' $wrongRoute 'direct' '3840x2160'
 $wrongStageProfile = New-FullOutput '10000x10000'
 Assert-Rejected '100mp-opening-stage' (Replace-Line $wrongStageProfile (Find-Refusal $wrongStageProfile) 'stage=opening' 'stage=settings') 'direct' '10000x10000'
 
-if ($script:Rejected -ne 25) { throw "Expected 25 independent negative controls; observed $script:Rejected." }
-Write-Host "PASS UI cancellation full parser pure controls: six profile/route positives, independent distributions, empty-statistics control and $script:Rejected negative controls; no native execution."
+if ($script:Rejected -ne 42) { throw "Expected 42 independent negative controls; observed $script:Rejected." }
+Write-Host "PASS UI cancellation full parser pure controls: six profile/route positives, check boundary models, independent distributions, empty-statistics control and $script:Rejected negative controls; no native execution."

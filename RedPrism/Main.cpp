@@ -298,6 +298,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsNotificationSelfTest\n");
         if (const int failed = Application::RunStandalonePreparedLayerRowsNotificationSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneResponsiveStartupSelfTest\n");
+        if (const int failed = Application::RunStandaloneResponsiveStartupSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneHistoryResidencyStartupSelfTest\n");
         if (const int failed = Application::RunStandaloneHistoryResidencyStartupSelfTest(instance); failed != 0)
             return failed;

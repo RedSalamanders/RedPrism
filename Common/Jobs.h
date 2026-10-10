@@ -155,7 +155,8 @@ enum class JobExecutionBoundary : std::uint8_t
 {
     BodyEntered,
     BodyExited,
-    BodySkipped, // Dispatched worker stage cancelled before Run; no entry/body/exit pair.
+    BodySkipped,          // Dispatched worker stage cancelled before Run; no entry/body/exit pair.
+    CancellationObserved, // First true CancelToken check inside one joined useful Run, not body exit.
 };
 
 struct JobExecutionNotice final
@@ -181,6 +182,9 @@ struct JobExecutionObserver final
 {
     void (*notify)(void*, JobExecutionNotice) noexcept = nullptr;
     void* context = nullptr;
+    // Separately opt in to the first actual true cancellation check in each useful Run. Existing body-only
+    // observers receive exactly their original boundaries. No clock/TLS diagnostic work on false checks.
+    void (*cancellationObserved)(void*, JobExecutionNotice) noexcept = nullptr;
 };
 
 class JobContext final

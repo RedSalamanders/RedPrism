@@ -30,6 +30,7 @@ if ($LASTEXITCODE -ne 0) { throw 'R10 ECX terminal DWORD parser controls failed.
 & (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaDwordZeroStackTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaQwordPaddingTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaQwordRetNopTests.ps1')

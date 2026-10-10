@@ -63,7 +63,7 @@ class UiCancellationObservation final
 
     [[nodiscard]] JobExecutionObserver Observer() noexcept
     {
-        return {Notify, this};
+        return {Notify, this, Notify};
     }
 
     [[nodiscard]] HANDLE WakeHandle() const noexcept

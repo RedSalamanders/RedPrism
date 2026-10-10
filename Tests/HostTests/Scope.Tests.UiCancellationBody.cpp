@@ -179,6 +179,64 @@ void Refusals() noexcept
                UiCancellationBody(kOriginal, kKind, kLane, 0).Current() == UiCancellationBody::State::Malformed,
            "invalid-original-ticket-or-zero-ordinal-refused");
 }
+
+void ActualCheckSequences() noexcept
+{
+    const auto check = [](UiCancellationBody& body, std::int64_t tick) noexcept
+    { body.Observe({JobExecutionBoundary::CancellationObserved, kOriginal, kKind, kLane, std::nullopt}, tick); };
+    UiCancellationBody body(kOriginal, kKind, kLane, 2);
+    Enter(body, 10);
+    check(body, 15);
+    Exit(body, 20);
+    Expect(body.CheckTicks() == -1, "admission-stub-check-is-not-useful-check");
+    Enter(body, 100);
+    check(body, 115);
+    Expect(body.Current() == UiCancellationBody::State::Entered && body.CheckTicks() == 115 && body.ExitTicks() == -1 &&
+               !body.RawResult(),
+           "actual-check-does-not-invent-body-exit-or-result");
+    Expect(body.ClassifyCheck(105, 110) == UiCancellationBody::CheckOutcome::ObservedAfterAcceptance,
+           "actual-check-after-acceptance-is-distinct-sample");
+    Expect(body.ClassifyCheck(105, 115) == UiCancellationBody::CheckOutcome::StopOverlap,
+           "actual-check-at-acceptance-remains-overlap");
+    Expect(body.ClassifyCheck(114, 116) == UiCancellationBody::CheckOutcome::StopOverlap,
+           "actual-check-during-stop-dispatch-remains-overlap");
+    Expect(body.ClassifyCheck(116, 120) == UiCancellationBody::CheckOutcome::BeforeStop,
+           "actual-check-before-selected-stop-is-not-positive-latency");
+    Expect(body.ClassifyStop(105, 110) == UiCancellationBody::StopOutcome::Pending,
+           "actual-check-cannot-qualify-unreturned-body");
+    Exit(body, 150, {JobStatus::Cancelled});
+    Enter(body, 160);
+    check(body, 165);
+    Exit(body, 180);
+    Expect(body.CheckTicks() == 115 && body.ExitTicks() == 150, "later-body-cannot-replace-selected-check-or-exit");
+
+    UiCancellationBody missing(kOriginal, kKind, kLane, 1);
+    Enter(missing, 100);
+    Exit(missing, 150, {JobStatus::Cancelled});
+    Expect(missing.ClassifyCheck(105, 110) == UiCancellationBody::CheckOutcome::Unobserved &&
+               missing.CheckTicks() == -1,
+           "cancelled-body-exit-is-not-an-observed-check");
+    Expect(missing.ClassifyCheck(-1, 110) == UiCancellationBody::CheckOutcome::ClockFailed,
+           "missing-check-does-not-hide-invalid-stop-clock");
+    UiCancellationBody outside(kOriginal, kKind, kLane, 1);
+    check(outside, 100);
+    Expect(outside.Current() == UiCancellationBody::State::Malformed, "check-outside-useful-run-refuses");
+    UiCancellationBody duplicate(kOriginal, kKind, kLane, 1);
+    Enter(duplicate, 100);
+    check(duplicate, 110);
+    check(duplicate, 111);
+    Expect(duplicate.ClassifyCheck(105, 109) == UiCancellationBody::CheckOutcome::Malformed,
+           "duplicate-first-check-refuses");
+    UiCancellationBody result(kOriginal, kKind, kLane, 1);
+    Enter(result, 100);
+    result.Observe({JobExecutionBoundary::CancellationObserved, kOriginal, kKind, kLane, JobResult{}}, 110);
+    Expect(result.Current() == UiCancellationBody::State::Malformed, "check-cannot-carry-a-raw-result");
+    UiCancellationBody clock(kOriginal, kKind, kLane, 1);
+    Enter(clock, 100);
+    check(clock, 99);
+    Expect(clock.ClassifyCheck(105, 109) == UiCancellationBody::CheckOutcome::ClockFailed,
+           "reversed-check-clock-refuses");
+}
 } // namespace
 
 bool RunUiCancellationBodyTests() noexcept
@@ -188,7 +246,8 @@ bool RunUiCancellationBodyTests() noexcept
     OriginalResumedBody();
     StopPartitions();
     Refusals();
-    const bool passed = gFailures == 0 && gChecks == 28;
+    ActualCheckSequences();
+    const bool passed = gFailures == 0 && gChecks == 42;
     std::printf("%s UI cancellation body reduction: %u checks, %u failures.\n", passed ? "PASS" : "FAIL", gChecks,
                 gFailures);
     std::fflush(stdout);

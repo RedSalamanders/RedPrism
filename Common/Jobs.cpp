@@ -529,6 +529,31 @@ struct JobScheduler::Impl final
             executionObserver.notify(executionObserver.context,
                                      {boundary, identity.ticket, identity.kind, identity.lane, result});
     }
+    JobResult RunBody(Record& record, JobContext& execution, const JobExecutionNotice& identity)
+    {
+        if (!executionObserver.cancellationObserved)
+            return record.job->Run(execution);
+        struct FirstCheck final
+        {
+            Impl& scheduler;
+            const JobExecutionNotice& identity;
+            std::atomic<bool> reported{false};
+        } first{*this, identity};
+        static_assert(std::atomic<bool>::is_always_lock_free);
+        const CancellationObservation::Scope scope{{[](void* context) noexcept
+                                                    {
+                                                        auto& check = *static_cast<FirstCheck*>(context);
+                                                        if (!check.reported.exchange(true, std::memory_order_relaxed))
+                                                            check.scheduler.executionObserver.cancellationObserved(
+                                                                check.scheduler.executionObserver.context,
+                                                                {JobExecutionBoundary::CancellationObserved,
+                                                                 check.identity.ticket, check.identity.kind,
+                                                                 check.identity.lane, std::nullopt});
+                                                    },
+                                                    &first}};
+        // The job and executor contract joins helpers before return/unwind; no retained token owns scope.
+        return record.job->Run(execution);
+    }
     static void DispatchLane(void* context, WorkPriority priority, JobExecutionLane lane) noexcept
     {
         auto& self = *static_cast<Impl*>(context);
@@ -540,7 +565,10 @@ struct JobScheduler::Impl final
         // The optional immutable identity is captured under Take's existing lock. Observers run outside
         // that lock and never inspect the guarded slot array; normal execution captures no identity.
         JobExecutionNotice observation{};
-        while (Record* record = self.Take(priority, lane, self.executionObserver.notify ? &observation : nullptr))
+        while (Record* record = self.Take(priority, lane,
+                                          (self.executionObserver.notify || self.executionObserver.cancellationObserved)
+                                              ? &observation
+                                              : nullptr))
         {
             JobContext execution{self.workers,
                                  record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
@@ -555,7 +583,7 @@ struct JobScheduler::Impl final
                 self.ObserveExecution(observation, JobExecutionBoundary::BodyEntered, std::nullopt);
                 try
                 {
-                    result = record->job->Run(execution);
+                    result = self.RunBody(*record, execution, observation);
                 }
                 catch (const std::bad_alloc&)
                 {

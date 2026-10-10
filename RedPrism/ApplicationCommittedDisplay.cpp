@@ -5,6 +5,11 @@
 
 bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
 {
+    return InitializePreparedDisplayOwner(allowHidden);
+}
+
+bool Application::InitializePreparedDisplayOwner(bool allowHidden) noexcept
+{
     if (_shutdownStarted || _committedDisplayInitialized || _jobs.InUiCallback())
         return false;
     if (FAILED(_jobs.EnableGpuRecordingLane()))

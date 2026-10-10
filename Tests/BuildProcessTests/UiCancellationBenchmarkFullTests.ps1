@@ -23,7 +23,8 @@ $script:UiFullActiveFieldOrder = @(
     'entryToPostedUs','postedToDispatchUs','entryToDispatchUs','delayKnown','ticketSlot','ticketGeneration','usefulOrdinal',
     'dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','rawKnown','rawStatus','rawError',
     'applyKnown','applyOutcome','applyError','cancelKnown','cancelOutcome','cancelError','sourcePresent','hiddenAtAcceptance',
-    'diagnosticBytes','ownerBatch','actionP99UpperUs','actionMaxUs','applyMaxUs','ordinaryActivation','g1'
+    'diagnosticBytes','ownerBatch','actionP99UpperUs','actionMaxUs','applyMaxUs','ordinaryActivation','g1',
+    'checkKnown','checkOutcome','acceptedToCheckUs','checkLatencyKnown','acceptancePresentOrdinal','sourcePresentOrdinal','firstFrameProved'
 )
 $script:UiFullRefusalFieldOrder = @(
     'name','trial','warmup','width','height','stage','reportedBudgetNotices','sourceUnchanged','historyUnchanged',
@@ -63,8 +64,8 @@ function Convert-UiFullActiveRow([string] $Line, [int] $ExpectedWidth, [int] $Ex
     }
     if ($fields.Count -ne $script:UiCancelFieldTypes.Count) { throw 'Active UI CANCEL field roster is incomplete or has extras.' }
     $f = $fields
-    foreach ($key in 'warmup','measured','previewEnabled','delayKnown','rawKnown','applyKnown','cancelKnown','sourcePresent','hiddenAtAcceptance','ordinaryActivation','g1') { if ($f[$key] -notin 0,1) { throw "Active boolean field $key must be 0 or 1." } }
-    foreach ($key in 'requestedDelayUs','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','actionP99UpperUs','actionMaxUs','applyMaxUs') { if ($f[$key] -lt 0) { throw "Negative active duration $key." } }
+    foreach ($key in 'warmup','measured','previewEnabled','delayKnown','rawKnown','applyKnown','cancelKnown','sourcePresent','hiddenAtAcceptance','ordinaryActivation','g1','checkKnown','checkLatencyKnown','firstFrameProved') { if ($f[$key] -notin 0,1) { throw "Active boolean field $key must be 0 or 1." } }
+    foreach ($key in 'requestedDelayUs','entryToPostedUs','postedToDispatchUs','entryToDispatchUs','dispatchUs','admissionUs','stopToReturnUs','escapeToSourcePresentUs','settleUs','actionP99UpperUs','actionMaxUs','applyMaxUs','acceptedToCheckUs') { if ($f[$key] -lt 0) { throw "Negative active duration $key." } }
     if ($f.width -ne $ExpectedWidth -or $f.height -ne $ExpectedHeight -or $f.requestedDelayUs -ne 20000 -or $f.usefulOrdinal -ne 2 -or $f.ticketSlot -ge 128 -or $f.ticketGeneration -eq 0 -or $f.diagnosticBytes -eq 0 -or $f.ownerBatch -ne 32 -or $f.ordinaryActivation -ne 0 -or $f.g1 -ne 0 -or $f.delayKnown -ne 1 -or $f.deadlineRearms -gt 2) { throw 'Active UI CANCEL fixed dimensions or admission diagnostics failed.' }
     if ($f.actionP99UpperUs -notin $script:UiCancelHistogramBounds -and -not ($f.actionMaxUs -gt 1000000 -and $f.actionP99UpperUs -eq $f.actionMaxUs)) { throw 'Invalid active action P99 histogram boundary.' }
     $maxBucket = $f.actionMaxUs; foreach ($bound in $script:UiCancelHistogramBounds) { if ($f.actionMaxUs -le $bound) { $maxBucket=$bound; break } }
@@ -73,6 +74,22 @@ function Convert-UiFullActiveRow([string] $Line, [int] $ExpectedWidth, [int] $Ex
     if ($f.outcome -cnotin @('returned-after-stop','finish-overlap','finished-before-stop','finished-before-escape')) { throw "Disallowed active outcome '$($f.outcome)'." }
     $mustMeasure = $f.outcome -ceq 'returned-after-stop' -and $f.trial -ne 0
     if ($f.measured -ne [int]$mustMeasure) { throw 'Active measured flag does not match outcome and warmup status.' }
+    if ($f.checkOutcome -cnotin @('unobserved','before-stop','stop-overlap','after-acceptance')) { throw "Disallowed cancellation check outcome: " }
+    if (($f.checkKnown -eq 0) -ne ($f.checkOutcome -ceq 'unobserved')) { throw "checkKnown/checkOutcome disagree: " }
+    if ($f.checkKnown -eq 0) {
+        if ($f.acceptedToCheckUs -ne [uint64]0 -or $f.checkLatencyKnown -ne 0) { throw "Unobserved check has fabricated latency: " }
+    } else {
+        if ($f.rawKnown -ne 1) { throw "Known check lacks original useful raw body observation: " }
+        if ($f.checkOutcome -ceq 'after-acceptance') {
+            if ([decimal]$f.acceptedToCheckUs -gt [decimal]$f.stopToReturnUs) { throw 'First cancellation check follows original body return.' }
+            if ($f.checkLatencyKnown -ne 1) { throw "After-acceptance check requires known latency: " }
+        } elseif ($f.acceptedToCheckUs -ne [uint64]0 -or $f.checkLatencyKnown -ne 0) { throw "Before-stop or overlap check cannot claim acceptance latency: " }
+    }
+    if ($f.sourcePresent -ne $f.firstFrameProved) { throw "sourcePresent must equal firstFrameProved: " }
+    if ($f.firstFrameProved -eq 1) {
+        if ([decimal]$f.acceptancePresentOrdinal -eq [decimal]::Parse('18446744073709551615',[System.Globalization.CultureInfo]::InvariantCulture) -or [decimal]$f.sourcePresentOrdinal -ne ([decimal]$f.acceptancePresentOrdinal + [decimal]1)) { throw "First-frame proof is not the immediate exact present after acceptance: " }
+    } elseif ($f.sourcePresentOrdinal -ne [uint64]0) { throw "Unproved first frame cannot report a source present ordinal: " }
+    if ($f.measured -eq 1 -and $f.firstFrameProved -ne 1) { throw "Measured active row must prove the first frame: " }
     if ($f.outcome -ceq 'finished-before-escape') {
         if ($f.rawKnown -ne 1 -or $f.rawStatus -ne 0 -or $f.rawError -ne 0 -or $f.applyKnown -ne 1 -or $f.applyOutcome -ne 1 -or $f.applyError -ne 0 -or $f.cancelKnown -ne 0 -or $f.sourcePresent -ne 0 -or $f.hiddenAtAcceptance -ne 0 -or $f.measured -ne 0) { throw 'Active finished-before-escape receipt contract failed.' }
     } else {
