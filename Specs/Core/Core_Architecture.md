@@ -181,6 +181,22 @@ its lock. Submitted precedes worker dispatch; Retired follows the job's completi
 Shutdown drops notices with callbacks. Observers must not call the scheduler, pump, or wait. The context outlives
 Close. `Application` uses these notices to update its fixed-capacity `JobActivity` and the delayed progress control.
 
+An optional `JobExecutionObserver`, installed at scheduler initialization, publishes `BodyEntered`, `BodyExited`
+and `BodySkipped` on the actual compute or recording worker, outside scheduler locks. Each notice carries the
+original slot/generation ticket, class and lane, captured during locked worker selection. Callbacks borrow that
+immutable identity outside the lock and do not inspect the guarded record array. Entry has no result; exit carries the raw `Run` result or the
+runner's translated `bad_alloc`; a dispatched cancelled stage that never calls `Run` reports Cancelled/Skipped.
+Body exit follows destruction of `Run` locals and precedes cancellation normalization, `RetireWorkerStage`,
+completion publication and owner apply/drop. Resumed tickets may have multiple body pairs. Descriptors retired
+without dispatch and queued work discarded by Close emit no body notice. A cancelled queued stage that is
+dispatched still emits `BodySkipped`.
+
+Execution callbacks are bounded, nonthrowing and safe for concurrent workers. They may write fixed atomic
+samples and signal their own borrowed event; they MUST NOT call the scheduler, wait, pump, or access the UI or
+document. Their context outlives joined Close, including final running-body notices during shutdown. Default
+startup installs no callback, captures no clock, allocates no observation state and creates no diagnostic wake-up.
+These notices acknowledge neither external native/GPU work nor final retirement and grant no apply authority.
+
 UI-owned `PreviewMailbox`, `ContinuationQueue`, `HistoryWork` and `StrokeReplay` define input and apply ordering.
 `HistoryWork` spans scheduler classes and keeps the document busy until apply/drop. Its shared input ordinals merge
 the command queue with recorded strokes. The mailbox, barrier and application outlive all their workers; pointer

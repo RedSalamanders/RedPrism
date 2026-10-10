@@ -137,7 +137,9 @@
     <ClCompile Include="UiTimingHistogramTests.cpp" />
     <ClCompile Include="UiTimingTests.cpp" />
     <ClCompile Include="Scope.Tests.KeyboardState.cpp" />
+    <ClCompile Include="Scope.Tests.JobExecutionObservation.cpp" />
     <ClInclude Include="Scope.Tests.KeyboardState.h" />
+    <ClInclude Include="Scope.Tests.JobExecutionObservation.h" />
     <ClCompile Include="Host.Tests.UiFrameLatency.cpp" />
     <ClInclude Include="Host.Tests.UiFrameLatency.h" />
     <ClCompile Include="..\..\Common\Document.cpp" />

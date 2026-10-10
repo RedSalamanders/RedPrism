@@ -38,10 +38,15 @@ The final configuration gates include these corrections.
 
 ## Release cancellation measurement
 
+Measurement-boundary correction (2026-10-09): the original harness sampled inside `Run` before its final local
+destructors and function return. The historical numbers below are retained unchanged, but their complete
+returned-body/scratch-destruction claim is withdrawn. They do not qualify the new `BodyExited` boundary; a fresh
+run of the corrected harness is required. No numeric legacy golden is changed.
+
 R1: Ryzen 9 9950X3D, Windows 11 build 26200, 61.6 GiB RAM, Balanced power plan, scalar CPU dispatch. No build or
 other benchmark ran concurrently. `HostTests.exe --bench-filter-cancel` uses one scheduler job at a time on
 8192×5464 pixels, one warmup and ten observations. It requests cancellation after a 20 ms event wait following
-worker entry. Values below include scratch destruction and OS scheduling; they do not directly measure the gap
+worker entry. Values below include OS scheduling and scratch destroyed before the in-body timestamp; they do not measure complete Run-local destruction or the gap
 between adjacent cancellation checks. All cases reported `status=ok`.
 
 | Case | Cancelled samples | Completed early / overlap | Median (ms) | p95 / maximum (ms) |
@@ -64,8 +69,8 @@ between adjacent cancellation checks. All cases reported `status=ok`.
 | Carried mask | 3 | 6 / 1 | 1.355 | 1.434 |
 | Private sparse copy | 10 | 0 / 0 | 5.706 | 6.048 |
 
-The maximum observed cancelled return was 9.659 ms. Most full-image copies pay the worker's buffer release cost;
-the histogram has no such output. Hard coverage finished before every cancellation, and three carried-mask samples
+The maximum historical stop-to-in-body timestamp was 9.659 ms. This interval does not establish final worker
+buffer-release cost. Hard coverage finished before every cancellation, and three carried-mask samples
 are insufficient for a strong tail estimate. These observations cover these inputs and cancellation timing only.
 
 ## Full-output parity and timing
@@ -96,3 +101,9 @@ includes the review corrections. Skill validation, formatting and whitespace che
 Native ARM64 execution is unavailable. Final configuration logs are
 `.build/logs/filter-cancellation-x64-{Debug,Release,ASan-Debug}-final-tests.log` and
 `.build/logs/filter-cancellation-arm64-{Debug,Release,ASan-Debug}-final-build.log`.
+
+## Corrected returned-body follow-up (2026-10-10)
+
+[Original Release r639](P1WorkerBodyObservation_2026-10-09.md#actual-returned-body-measurements-2026-10-10) now measures `BodyExited` after actual return/local destruction. All twenty 45 MP scalar cases pass: 192 measured cancellations, seven early finishes and one overlap, maximum observed 11.130 ms. Sizing cancellation produces empty detached output, preserves source and stays below its 2 GiB admission cap. Exact current source/executable/PDB/DLL, machine, original receipt and archive hashes are recorded there. The earlier numbers and their inside-Run boundary remain historical; no speedup comparison is made across these different boundaries and Windows builds. UI Escape/Present, external acknowledgement, G1 and RAW/Photoshop qualification remain separate.
+
+Current immutable-snapshot source measurement r650 (2026-10-10) completes 194 measured / five early / one overlap trial slots across the same twenty cases. Maximum accepted-stop-to-return including Run-local cleanup is 12.787 ms (gradient map); this remains distinct from actual Escape/presentation and the active-tier kernel cancel interval. Full current Debug/Release/real ASan and actual Release analysis qualify. Original receipts, exact machine/method and all twenty rows are in [the current worker-body record](P1WorkerBodyObservation_2026-10-09.md#current-returned-body-measurement-r650).

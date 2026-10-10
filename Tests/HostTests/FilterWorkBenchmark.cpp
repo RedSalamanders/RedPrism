@@ -2,9 +2,11 @@
 
 #include "../Support/DocumentFixture.h"
 #include "Adjust.h"
+#include "BenchmarkMachine.h"
 #include "CanvasSize.h"
 #include "ColorEditWork.h"
 #include "Jobs.h"
+#include "Kernels.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -33,12 +35,32 @@ struct Observation final
 {
     wil::unique_event_nothrow started;
     wil::unique_event_nothrow returned;
+    JobTicket ticket{};
+    bool returnClockValid = false;
     LARGE_INTEGER finish{};
     JobResult completion;
     bool produced = false;
     std::optional<ResizeStatus> resizeStatus;
     CanvasDocument resized;
 };
+
+// One original job per sample. Set current before Submit; ticket assignment precedes dispatch. Change/clear
+// only after joined SettleJobs or Close. The context and borrowed event outlive the scheduler's Close.
+struct FilterExecutionObservation final
+{
+    Observation* current = nullptr;
+};
+
+void NoteFilterBodyBoundary(void* opaque, JobExecutionNotice notice) noexcept
+{
+    auto& context = *static_cast<FilterExecutionObservation*>(opaque);
+    auto* const current = context.current;
+    if (!current || notice.ticket != current->ticket || notice.boundary != JobExecutionBoundary::BodyExited)
+        return;
+    // Run's locals and its stack have unwound. This timestamp excludes later worker retirement and owner apply.
+    current->returnClockValid = QueryPerformanceCounter(&current->finish) != FALSE;
+    current->returned.SetEvent();
+}
 
 class FilterWork final : public Job
 {
@@ -100,8 +122,7 @@ class FilterWork final : public Job
             }
         }
         _observed.produced = _observed.produced || output.HasStorage();
-        QueryPerformanceCounter(&_observed.finish);
-        _observed.returned.SetEvent();
+
         return {};
     }
     void Completed(JobResult result) noexcept override
@@ -140,8 +161,7 @@ class SizingWork final : public Job
             _options);
         const ResizeStatus status = _observed.resizeStatus.value();
         _observed.produced = status == ResizeStatus::Ok || status == ResizeStatus::Unchanged;
-        QueryPerformanceCounter(&_observed.finish);
-        _observed.returned.SetEvent();
+
         return context.cancellation.IsCancelled() || status == ResizeStatus::Cancelled ? JobResult{JobStatus::Cancelled}
                                                                                        : JobResult{};
     }
@@ -160,6 +180,9 @@ class SizingWork final : public Job
 
 int RunFilterWorkBenchmark()
 {
+    // Explicit scalar reference diagnostic; topology/report allocation is outside every measured interval.
+    if (InitializeKernels(KernelIsa::Scalar) != KernelSelection::Selected)
+        return 1;
     const std::size_t pixels = static_cast<std::size_t>(kWidth) * kHeight;
     PixelBuffer bytes = PixelBuffer::TryAllocate(pixels * 4);
     PixelBuffer maskBytes = PixelBuffer::TryAllocate(pixels);
@@ -214,11 +237,18 @@ int RunFilterWorkBenchmark()
     {
         return 1;
     }
+    FilterExecutionObservation executionObservation;
     JobScheduler scheduler;
-    if (scheduler.Initialize() < 0)
+    if (scheduler.Initialize(0, {}, {}, {NoteFilterBodyBoundary, &executionObservation}) < 0)
     {
         return 1;
     }
+    auto machine = ReadBenchmarkMachine();
+    machine.isa = "scalar";
+    machine.workerCount = scheduler.WorkerCount();
+    std::printf("BENCH MACHINE %s harness=filter-cancel\n", FormatBenchmarkMachineInfo(machine).c_str());
+    std::printf("FILTER CANCEL METHOD clock=QPC returnBoundary=job-body-exited warmup=1 samplesPerCase=10 "
+                "excludes=worker-retirement,owner-apply\n");
     bool succeeded = true;
     for (std::size_t operation = 0; operation < names.size() && succeeded; ++operation)
     {
@@ -276,10 +306,10 @@ int RunFilterWorkBenchmark()
                 job = std::make_unique<SizingWork>(sizingSource, sizingOptions, observation);
             else
                 job = std::make_unique<FilterWork>(source, mask, static_cast<int>(operation), observation);
-            JobTicket ticket;
+            executionObservation.current = &observation;
             // This benchmark runs one job at a time. 2 GiB covers the largest 45 MP case's whole graph;
             // production filter jobs use ColorEditJobMemoryBytes instead of this measurement-only ceiling.
-            if (scheduler.Submit(job, {JobClass::Commit, 0, reservation}, ticket) < 0 ||
+            if (scheduler.Submit(job, {JobClass::Commit, 0, reservation}, observation.ticket) < 0 ||
                 WaitForSingleObject(observation.started.get(), 5000) != WAIT_OBJECT_0)
             {
                 scheduler.Close(); // Join before the observation and its handles leave scope.
@@ -290,13 +320,25 @@ int RunFilterWorkBenchmark()
             LARGE_INTEGER requested{};
             if (wait == WAIT_TIMEOUT)
             {
-                QueryPerformanceCounter(&requested);
-                (void)scheduler.Cancel(ticket);
+                if (!QueryPerformanceCounter(&requested) || !scheduler.Cancel(observation.ticket))
+                {
+                    scheduler.Close(); // Join every observer before the current sample leaves scope.
+                    executionObservation.current = nullptr;
+                    succeeded = false;
+                    break;
+                }
             }
             if ((wait != WAIT_TIMEOUT && wait != WAIT_OBJECT_0) ||
                 SettleJobs(scheduler, 10000) != SettleResult::Settled)
             {
                 scheduler.Close();
+                succeeded = false;
+                break;
+            }
+            executionObservation.current = nullptr; // Exact original completion joined every body observation.
+            if (!observation.returnClockValid || observation.finish.QuadPart < 0)
+            {
+                std::printf("FILTER CANCEL ERROR name=%s reason=body-return-clock\n", operationName);
                 succeeded = false;
                 break;
             }

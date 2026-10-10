@@ -132,6 +132,7 @@ struct JobScheduler::Impl final
     std::optional<JobTicket> publicationMemoryCallback; // exact acknowledged successful DeferCompletion only
     bool closed = false;
     JobObserver observer;
+    JobExecutionObserver executionObserver; // Immutable after initialization; borrowed through joined Close.
     MemorySource memorySource;
     MemoryBudget memory;
     bool releaseSinkInstalled = false;
@@ -482,7 +483,7 @@ struct JobScheduler::Impl final
         AdmitWaiting();
     }
 
-    Record* Take(WorkPriority priority, JobExecutionLane lane) noexcept
+    Record* Take(WorkPriority priority, JobExecutionLane lane, JobExecutionNotice* observation) noexcept
     {
         WorkerResources::ExclusiveLock guard{lock};
         if (closing)
@@ -502,6 +503,12 @@ struct JobScheduler::Impl final
         if (selected)
         {
             selected->state = State::Running;
+            if (observation)
+                *observation = {JobExecutionBoundary::BodyEntered,
+                                {static_cast<std::size_t>(selected - records.data()), selected->generation},
+                                selected->options.kind,
+                                selected->options.executionLane,
+                                std::nullopt};
         }
         return selected;
     }
@@ -514,6 +521,14 @@ struct JobScheduler::Impl final
     {
         DispatchLane(context, priority, JobExecutionLane::GpuRecording);
     }
+
+    void ObserveExecution(const JobExecutionNotice& identity, JobExecutionBoundary boundary,
+                          std::optional<JobResult> result) noexcept
+    {
+        if (executionObserver.notify)
+            executionObserver.notify(executionObserver.context,
+                                     {boundary, identity.ticket, identity.kind, identity.lane, result});
+    }
     static void DispatchLane(void* context, WorkPriority priority, JobExecutionLane lane) noexcept
     {
         auto& self = *static_cast<Impl*>(context);
@@ -522,7 +537,10 @@ struct JobScheduler::Impl final
             self.DrainReleases();
             self.TrimRecycle();
         }
-        while (Record* record = self.Take(priority, lane))
+        // The optional immutable identity is captured under Take's existing lock. Observers run outside
+        // that lock and never inspect the guarded slot array; normal execution captures no identity.
+        JobExecutionNotice observation{};
+        while (Record* record = self.Take(priority, lane, self.executionObserver.notify ? &observation : nullptr))
         {
             JobContext execution{self.workers,
                                  record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
@@ -534,6 +552,7 @@ struct JobScheduler::Impl final
             JobResult result{JobStatus::Cancelled};
             if (!execution.cancellation.IsCancelled())
             {
+                self.ObserveExecution(observation, JobExecutionBoundary::BodyEntered, std::nullopt);
                 try
                 {
                     result = record->job->Run(execution);
@@ -542,7 +561,10 @@ struct JobScheduler::Impl final
                 {
                     result = {JobStatus::Failed, E_OUTOFMEMORY};
                 }
+                self.ObserveExecution(observation, JobExecutionBoundary::BodyExited, result);
             }
+            else
+                self.ObserveExecution(observation, JobExecutionBoundary::BodySkipped, result);
             if (execution.cancellation.IsCancelled())
             {
                 result = {JobStatus::Cancelled};
@@ -643,7 +665,8 @@ JobScheduler::~JobScheduler()
     Close();
 }
 
-std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer, MemorySource memory) noexcept
+std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer, MemorySource memory,
+                                      JobExecutionObserver execution) noexcept
 {
     if (_impl)
     {
@@ -681,6 +704,7 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
         return result;
     }
     _impl->observer = observer;
+    _impl->executionObserver = execution;
     _impl->memorySource = memory;
     HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
     if (SUCCEEDED(result) && !memory.sample)

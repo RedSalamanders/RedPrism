@@ -1,6 +1,6 @@
 # P1 project durability and session-end faults
 
-Status: checkpoint `5b297c3` is pushed. The corrected 1,102-input `881470BB...3701CCC` source passes full Debug r622, Release r627, real ASan r628 and Release analysis r629. Main independently authenticates their complete archives and exact predecessor inventories, including both ASan HostTests executions, the original detection probe, 121 Application stages, 54 writer cases / 694 assertions, eight separately synthetic policy controls and both UI smoke routes. All 15 skills and 972 format inputs pass. All three ARM64 r73 cross-builds pass with 15 image/PDB pairs and five real-ASan compiler controls; native ARM64 runtime is not claimed. This bounded checkpoint is ready to commit and push. The next returned-body diagnostic is prepared but unintegrated. Ordinary activation, complete admission, remaining F6 and measured G1 still block P1 Done.
+Status: **The durability/session-end checkpoint is qualified and pushed as `8fc0ce6`; remaining F6/P1 work stays open.** The later worker-body observer is integrated and has current immutable-snapshot Release analysis r643/full Debug r645 qualification. Current-source Release/real ASan, returned-body measurements and ARM64 remain in progress; see [the worker body observation ledger](P1WorkerBodyObservation_2026-10-09.md). The original r642 analysis failure and r645 postprocessor refusal remain preserved with their independently reviewed repairs. No P1 Done or ordinary activation claim is made.
 
 ## Checklist
 

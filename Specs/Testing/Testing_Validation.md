@@ -2261,3 +2261,13 @@ opening retains its existing GPU baseline, later sample/final phases own additio
 must report Stale/E_ABORT, preserve both independent literal images and their identities/history, retire the
 original draft/input/preview/payload off-owner, and return all CPU/GPU/releasing charges to baseline while
 retaining the requested authority change. This registry is required proof, not a passing execution claim.
+
+### Optional worker body observations
+
+`RunJobExecutionObservationTests` contributes 36 independent event-gated assertions and one fixed PASS summary.
+The controls require original ticket/class/lane identity and exact entry/exit ordering, concurrent compute and
+recording lanes, raw failed results, translated allocation failure after local unwinding, cancelled unrun stages,
+raw running results before cancellation normalization, three resumed body pairs, and visible body exit while
+worker retirement remains held. Default initialization emits no execution callback. Owner-only Close signals
+its real shutdown event before a bounded helper releases the held worker, joins all observer activity before
+borrowed context/event destruction and drops owner completion. No wall-clock performance threshold is asserted.

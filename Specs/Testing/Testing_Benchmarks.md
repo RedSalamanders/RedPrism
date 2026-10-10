@@ -36,12 +36,25 @@ the harness requests cancellation after an event wait of 20 ms. Entry does not i
 allocation was active at the stop request. Completed-before-cancel and deadline races are
 reported separately and excluded from the cancellation distribution. The source has opaque BGRA channels
 `(17p,13p,7p) mod 256`, alpha 255, with a selected central third in both axes. Gaussian uses radius 250 and motion
-uses distance 2000. The headless harness reserves a conservative 2 GiB for one job at a time.
+uses distance 2000. The headless harness runs one job at a time: non-sizing cases reserve a conservative 2 GiB;
+size cases reserve their `SizingMemoryBytes` result and refuse a zero or greater-than-2-GiB graph.
 
-Rows include median, p95 and maximum from stop request to kernel return. These durations include scheduling,
-page faults and destruction of private scratch; they are **not** a direct measurement of adjacent cancellation
-checks. Setup, scheduler admission and result drain are outside the interval. No timer or timing assertion belongs
-to the ordinary correctness suite, and this diagnostic establishes neither UI responsiveness nor SIMD speed.
+Rows include median, p95 and maximum from the QPC sampled immediately before the accepted stop request to
+the original job's `BodyExited` observation after `Run` returns or `bad_alloc` unwinds. This includes scheduling,
+page faults and destruction of Run-local scratch; it excludes later worker retirement and owner apply/drop.
+It is **not** a direct measurement of adjacent cancellation checks, external native/GPU acknowledgement or UI
+Escape/visible feedback. Setup, scheduler admission and result drain are outside the interval. The observer is
+borrowed through joined settlement/Close and matches the exact original ticket; it performs only QPC capture
+and event signalling. A failed clock or invalid cancellation admission fails the diagnostic.
+
+The report includes the exact method row
+`FILTER CANCEL METHOD clock=QPC returnBoundary=job-body-exited warmup=1 samplesPerCase=10 excludes=worker-retirement,owner-apply`
+and the shared `BENCH MACHINE` formatter with `harness=filter-cancel`, scalar ISA and the actual scheduler worker
+count. Machine collection, scalar initialization and formatting occur outside timed intervals. The 20 result
+rows retain fixed order, 8192×5464 dimensions, 20 ms requested delay, one warmup and ten observations per case.
+Measured, early and overlap counts sum to ten; cancelled sizing results are empty and retain the unchanged source.
+No timer or timing assertion belongs to the ordinary correctness suite. This diagnostic establishes neither UI
+responsiveness nor SIMD speed; old pre-return measurements cannot qualify this returned-body boundary.
 
 ## UI application benchmark
 

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 // This boundary deliberately has no Windows types. Jobs own immutable input and result values. Worker bodies
 // never access a session, a window, chrome or an immediate graphics context. The explicitly enabled recording
@@ -150,6 +151,38 @@ struct JobObserver final
     void* context = nullptr;
 };
 
+enum class JobExecutionBoundary : std::uint8_t
+{
+    BodyEntered,
+    BodyExited,
+    BodySkipped, // Dispatched worker stage cancelled before Run; no entry/body/exit pair.
+};
+
+struct JobExecutionNotice final
+{
+    JobExecutionBoundary boundary;
+    JobTicket ticket;
+    JobClass kind;
+    JobExecutionLane lane;
+    // Absent at entry; raw Run result (or translated bad_alloc) at exit; Cancelled for a dispatched unrun stage.
+    // Neither this diagnostic nor a returned body acknowledges external native/GPU work or authorizes apply.
+    std::optional<JobResult> result;
+};
+
+// Opt-in diagnostics installed before admission. Callbacks run concurrently on compute/recording workers,
+// outside scheduler locks, and must be bounded, nonthrowing and thread-safe. They may publish fixed atomic
+// samples and signal their own borrowed event; no scheduler calls, waits, message pumping or document/UI access.
+// The context outlives Close. Default captures no clock, allocates no state and creates no wake-up.
+// BodyExited precedes RetireWorkerStage and owner apply/drop; it measures Run, not final retirement or an
+// isolated kernel cancellation-check interval. Resumed original tickets can produce several body pairs.
+// Descriptors that retire without dispatch and queued stages dropped by Close emit no body notice.
+// A cancelled queued stage that is dispatched still emits BodySkipped.
+struct JobExecutionObserver final
+{
+    void (*notify)(void*, JobExecutionNotice) noexcept = nullptr;
+    void* context = nullptr;
+};
+
 class JobContext final
 {
   public:
@@ -261,8 +294,8 @@ class JobScheduler final
     JobScheduler(const JobScheduler&) = delete;
     JobScheduler& operator=(const JobScheduler&) = delete;
 
-    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {},
-                                          MemorySource memory = {}) noexcept;
+    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {}, MemorySource memory = {},
+                                          JobExecutionObserver execution = {}) noexcept;
     // Owner startup only, outside callbacks and before any admitted record. Failure leaves recording disabled.
     // No second scheduler or memory budget. GPU APIs remain private to the opted-in RedPrism recorder job.
     [[nodiscard]] std::int32_t EnableGpuRecordingLane() noexcept;
