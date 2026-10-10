@@ -362,7 +362,8 @@ menu. Its cursor, and the Gradient's and Shape's, is the crosshair. Every string
 ## Adjustment panel
 
 Every color adjustment and filter edits in one card (`ChromeHost::BuildAdjustPanel`, `ChromeHostAdjust.cpp`) that
-floats over the top-right of the canvas hole below the header while a session edit is open (`AdjustInspectorState`
+floats over the top-right of the canvas hole below the header while a session edit is open, except during its
+accepted matching cancellation (`AdjustInspectorState`
 mirrors the session; the panel never re-lays out inside a drag callback). It shows the edit's title (`<Kind>
 Adjustment` when an adjustment layer is edited), the kind's controls, a Preview checkbox, a `Limited to the
 selection` note for a pixel layer with a selection, and Cancel / OK (Enter and Escape do the same, with the canvas
@@ -381,6 +382,13 @@ commit. Numeric text follows the existing focus rule: partial text stays while e
 parsed value, and a complete decimal such as `2.5` keeps that value. This control contract is
 used by normal OK/write callers through the ordered engine and their owned continuations. An accepted OK freezes
 mutation callbacks immediately, before the source admits its worker snapshot. Cancel stays available.
+
+An accepted Cancel or Escape hides that exact opening's card immediately. The logical panel, source, settings,
+original ticket and history barrier remain owned until the closure acknowledges its outcome. A refused admission
+leaves the card visible. A failed or stale closure, or a queued cancellation that is discarded, restores the still-open
+card with its unchanged values and normal prerequisites; pending display is requested again through its admitted
+owner route. Another opening or document is never hidden by an old receipt. Shutdown does not reopen or refresh
+chrome. Visibility feedback does not acknowledge pixel work, native I/O, GPU use or resource retirement.
 
 - **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
   points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the

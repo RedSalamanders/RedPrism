@@ -462,6 +462,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         if (_window)
             (void)ShutdownBlockReasonDestroy(_window.get());
     }
+    const bool refreshCancelFeedback = ColorCancelPending();
     if (const auto* cancel = std::get_if<HostPanelCancelInput>(&_activeHostRequest->input.Input());
         cancel && _pendingCancelOpening == std::optional(cancel->opening) &&
         _pendingCancelDocumentSerial == _activeHostRequest->documentSerial)
@@ -506,6 +507,13 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostWriteInFlight = false;
     _hostBatchFailed = false;
     _hostBatchError = S_OK;
+    if (refreshCancelFeedback && !_shutdownStarted)
+    {
+        SyncAdjustPanel();
+        if (_pendingDisplayInitialized)
+            _pendingDisplay.RequestOwner(); // Re-admit useful preview after failed/stale close acknowledgement.
+        InvalidateFrame();
+    }
     _pathClassifications = {};
     _historyResidencySource.RetryDeferred();
     if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime))
@@ -1497,6 +1505,7 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
 
 void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 {
+    const bool cancelFeedbackWasPending = ColorCancelPending();
     // Inspect at most the fixed eight slots before mutation. A sealed stroke may still be queued behind
     // opacity or sampling; only its scalar key survives ClearExcept. Active requests live outside that ring.
     const bool preserve = preserveSealedStroke && CanvasBrushSealedStrokePending();
@@ -1528,6 +1537,20 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
     else
         (void)_hostRequests.Clear(RetireHostContinuation);
     _pendingPanelOpening.reset();
+    // Clear publishes queued receipt retirement synchronously. A discarded Cancel never reaches the
+    // selected finisher, so restore its still-open card here without releasing its live panel payload.
+    if (_pendingCancelOpening && _pendingCancelReceipt.Read().outcome != HostOutcome::Pending)
+    {
+        _pendingCancelOpening.reset();
+        _pendingCancelReceipt = {};
+        if (cancelFeedbackWasPending && !_shutdownStarted)
+        {
+            SyncAdjustPanel();
+            if (_pendingDisplayInitialized)
+                _pendingDisplay.RequestOwner(); // The discarded receipt no longer excludes its live preview.
+            InvalidateFrame();
+        }
+    }
     if (preserveActive)
     {
         SweepSamplerOpenings();

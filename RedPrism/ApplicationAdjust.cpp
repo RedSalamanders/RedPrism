@@ -520,7 +520,9 @@ void Application::SyncAdjustPanel() noexcept
     AdjustInspectorState state;
     state.busy = ColorControlsFrozen();
     state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
-    if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value())
+    // Visual cancellation is immediate; the session retains the original panel and its source until
+    // acknowledgement. A refused or stale close re-exposes that unchanged panel at terminal publication.
+    if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value() && !ColorCancelPending())
     {
         const std::wstring name = FilterKindName(edit->kind);
         state.title = state.editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, name) : name;

@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ApplicationShutdownTestProbe.h"
+#include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 #include "Prompts.h"
 
@@ -113,6 +114,127 @@ int Application::RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) n
         if (!passed)
         {
             SelfTestFailure(L"Color display shutdown published a late result or failed to acknowledge retirement.\n");
+            return 5;
+        }
+    }
+
+    for (const bool metadata : {false, true})
+    {
+        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+        owner->_quietUi = true;
+        owner->_prompts = &QuietPrompts();
+        const auto finishOwner = wil::scope_exit(
+            [&]() noexcept
+            {
+                if (owner)
+                    owner->Shutdown();
+            });
+        if (FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
+            FAILED(owner->InitializeChrome()))
+        {
+            SelfTestFailure(L"Cancellation feedback shutdown fixture could not initialize its independent owner.\n");
+            return 5;
+        }
+        owner->BindCompositionDevice();
+        owner->_session.CreateDocument(4, 1, false);
+        (void)InsertPaintedLayer(owner->_session, L"Cancellation shutdown source", 4, 1, {}, 0, 0xFF808080u);
+        const auto* painted = owner->_session.ActiveLayer();
+        if (!painted || !painted->asset)
+        {
+            SelfTestFailure(L"Cancellation shutdown could not prepare its independent source image.\n");
+            return 5;
+        }
+        const Raster originalImage = painted->asset->image;
+        if (metadata)
+        {
+            owner->_session.AddAdjustment(AdjustmentKind::Exposure);
+            const auto adjustment = owner->_session.ActiveLayerID();
+            if (!adjustment)
+            {
+                SelfTestFailure(L"Cancellation shutdown could not add its independent adjustment layer.\n");
+                return 5;
+            }
+            owner->_session.SetAdjustmentEditingID(adjustment);
+            if (!owner->_session.BeginAdjustmentEditing(adjustment.value(), originalImage, true))
+            {
+                SelfTestFailure(L"Cancellation shutdown could not open its adjustment metadata panel.\n");
+                return 5;
+            }
+        }
+        else
+            owner->_session.BeginColorEdit(FilterKind::Exposure, true);
+        owner->DocumentChanged();
+        if (SettleJobs(owner->_jobs, 10000, DispatchMessageThunk, owner.get()) != SettleResult::Settled ||
+            !owner->_session.PendingColorEdit() || !owner->_chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(L"Cancellation feedback shutdown fixture did not prepare its live card.\n");
+            return 5;
+        }
+        const auto originalDocument = owner->_session.Document();
+        const auto originalActive = owner->_session.ActiveLayerID();
+        const auto originalRevision = owner->_session.history.CurrentRevision();
+        const int originalDepth = owner->_session.history.UndoCount();
+        const auto originalOpening = owner->_session.PendingColorEdit()->openingSequence;
+        auto gate = std::make_shared<ColorWorkTestGate>();
+        gate->kind = ColorWorkTestKind::Commit;
+        owner->_colorWorkTestGate = gate;
+        const auto receipt = owner->QueuePanelCancel(originalOpening);
+        if (!WaitForColorWorkTestEvent(owner->_jobs, gate->entered.get(), DispatchMessageThunk, owner.get()) ||
+            receipt.Read().outcome != HostOutcome::Pending || !owner->_colorCommitStamp ||
+            owner->_chrome->AdjustPanelOpen() || !owner->_session.HasColorEdit())
+        {
+            SelfTestFailure(L"Cancellation feedback shutdown fixture did not retain its hidden original closure.\n");
+            return 5;
+        }
+        struct JoinedFeedback final
+        {
+            Application* owner;
+            Guid revision;
+            int depth;
+            std::uint64_t opening;
+            std::uint64_t chromeSyncs;
+            std::optional<CanvasDocument> document;
+            std::optional<Guid> active;
+            unsigned int visits = 0;
+            bool unchangedAndHidden = false;
+        } joined{owner.get(),         originalRevision, originalDepth, originalOpening,
+                 owner->_chromeSyncs, originalDocument, originalActive};
+        ApplicationShutdownTestProbe probe;
+        probe.checkContext = &joined;
+        probe.checkJoined = [](void* opaque) noexcept
+        {
+            auto& state = *static_cast<JoinedFeedback*>(opaque);
+            auto& current = *state.owner;
+            ++state.visits;
+            state.unchangedAndHidden =
+                current._shutdownStarted && current._chrome && !current._chrome->AdjustPanelOpen() &&
+                !current.ColorCancelPending() && current._chromeSyncs == state.chromeSyncs &&
+                current._session.PendingColorEdit() &&
+                current._session.PendingColorEdit()->openingSequence == state.opening &&
+                current._session.Document() == state.document && current._session.ActiveLayerID() == state.active &&
+                current._session.history.CurrentRevision() == state.revision &&
+                current._session.history.UndoCount() == state.depth;
+        };
+        owner->_shutdownTestProbe = &probe;
+        owner->Shutdown(); // The real shutdown event releases the held original worker; the harness never does.
+        const bool hiddenAtJoin = joined.visits == 1 && joined.unchangedAndHidden;
+        std::fprintf(stderr, "%s color-cancel-feedback.shutdown-joined metadata=%u\n", hiddenAtJoin ? "PASS" : "FAIL",
+                     static_cast<unsigned int>(metadata));
+        const bool retired = owner->_shutdownComplete && !owner->_chrome &&
+                             receipt.Read().outcome == HostOutcome::Cancelled && gate->payloadRetired.load() &&
+                             gate->payloadRetiredOffOwner.load() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                             owner->_jobs.ReleasingMemoryBytes() == 0;
+        std::fprintf(stderr, "%s color-cancel-feedback.shutdown-retired metadata=%u\n", retired ? "PASS" : "FAIL",
+                     static_cast<unsigned int>(metadata));
+        owner->_shutdownTestProbe = nullptr;
+        owner.reset();
+        while (PumpMessages().quit)
+        {
+        }
+        if (!hiddenAtJoin || !retired)
+        {
+            SelfTestFailure(L"Shutdown restored cancellation chrome or lost its original joined ownership.\n");
             return 5;
         }
     }

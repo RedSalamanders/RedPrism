@@ -506,14 +506,19 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     {
         return _colorCommitStamp.has_value();
     }
+    [[nodiscard]] bool ColorCancelPending() const noexcept
+    {
+        const auto& panel = _session.PendingColorEdit();
+        return _pendingCancelOpening && panel && _pendingCancelOpening.value() == panel->openingSequence &&
+               _pendingCancelDocumentSerial == _session.DocumentSerial() &&
+               _pendingCancelReceipt.Read().outcome == HostOutcome::Pending;
+    }
     [[nodiscard]] bool ColorControlsFrozen() const noexcept
     {
         const auto& panel = _session.PendingColorEdit();
         return ColorCommitBusy() ||
                (_pendingPanelOpening && panel && _pendingPanelOpening.value() == panel->openingSequence) ||
-               (_pendingCancelOpening && panel && _pendingCancelOpening.value() == panel->openingSequence &&
-                _pendingCancelDocumentSerial == _session.DocumentSerial() &&
-                _pendingCancelReceipt.Read().outcome == HostOutcome::Pending);
+               ColorCancelPending();
     }
     void CancelColorCommit() noexcept;
     void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,

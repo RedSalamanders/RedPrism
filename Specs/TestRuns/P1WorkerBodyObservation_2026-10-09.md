@@ -2,7 +2,7 @@
 
 ## Delivery checklist
 
-Status: **Integrated; current full Debug r645/Release r647/real ASan r649, Release analysis r643 and original returned-body measurement r650 qualified. All three ARM64 r75 cross-builds qualified; commit/push due. P1 WIP.**
+Status: **Integrated; current full Debug r645/Release r647/real ASan r649, Release analysis r643 and original returned-body measurement r650 qualified. All three ARM64 r75 cross-builds qualified; committed/pushed `49a3f6d`. P1 WIP.**
 
 - [x] Independently review the optional worker observation boundary, callback lifetime, concurrent lanes,
   resumed tickets, cancellation normalization and shutdown ownership.
@@ -14,7 +14,7 @@ Status: **Integrated; current full Debug r645/Release r647/real ASan r649, Relea
 - [x] Verify every candidate/base hash, integrate, compile and execute original HostTests on the repaired source: r633/r634; all 36 fixed controls and 8,509 predecessor records match.
 - [x] Run and independently authenticate original Release r639: all twenty operation records, source/product/machine binding, race classifications, exact empty sizing outcomes and unchanged source pass.
 - [x] Complete current-source Debug r645, Release r647, real ASan r649, analysis r643 and all three ARM64 r75 cross-builds with original receipts, current source/product binding and unchanged predecessor controls.
-- [ ] Update this checklist, owning contracts and the P1 plan; commit and push the qualified step.
+- [x] Update the checklist, owning contracts and P1 plan; commit and push the qualified step as `49a3f6d`. The remote branch identity is verified before the next source integration.
 - [ ] Measure actual Escape acceptance, restored-source presentation, body exit and external acknowledgement
   separately in the application loop. This headless diagnostic cannot close measured G1 or P1.
 
@@ -221,3 +221,5 @@ Main authenticates all three actual ARM64 r75 children against their complete ar
 | ASan | 53024 / 2026-10-10T01:04:29.596785+00:00–2026-10-10T01:05:40.432324+00:00 | `B0AB42863F492B20032BDDFB5C1411B68A24CCBAA6C49F0055456C5C2B538A13` |
 
 Q-r6/Main-current-qualified-closeout.json binds current full x64 Debug/Release/real ASan, actual analysis r643, original returned-body measurement r650, all cross-builds and the same-source formatting/skills checks. Native inputs are rehashed after the last producer joins. DxUi API3 pin remains `8e8994079e82f79e6765e6a885c03fc687957591`; no DxUi source changed. This closes the observer step only. Actual Escape acceptance/restored-source presentation, ordinary activation, measured G1 and the nine remaining P1 delivery areas remain open.
+
+Qualified observer step committed and pushed as `49a3f6dd6b30e834e2432b77d5fb0530fc607add`. Immediate Cancel-card feedback is the next integrated source and requires its own qualification; the observer checkpoint remains original historical evidence for that successor.
