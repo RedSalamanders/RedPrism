@@ -32,9 +32,11 @@ HRESULT GpuCommandPump::InitializeOwner(JobScheduler& scheduler, GpuWorkQueue& q
 }
 
 HRESULT GpuCommandPump::AttachOwner(GpuCommandStream& stream, JobTicket ticket, GpuCommandSourceReceiver& receiver,
-                                    GpuCommandSourceLease& empty) noexcept
+                                    GpuCommandSourceLease& empty, GpuCommandFailureDisposition failure) noexcept
 {
-    if (!IsOwner() || _stopped || _inCallback || empty.generation ||
+    if ((failure != GpuCommandFailureDisposition::CancelOriginal &&
+         failure != GpuCommandFailureDisposition::RetainOriginalForRecovery) ||
+        !IsOwner() || _stopped || _inCallback || empty.generation ||
         !stream.BelongsToOwner(*_scheduler, ticket, _queue->DeviceGeneration()))
         return E_INVALIDARG;
     if (_nextGeneration == (std::numeric_limits<std::uint64_t>::max)())
@@ -55,6 +57,7 @@ HRESULT GpuCommandPump::AttachOwner(GpuCommandStream& stream, JobTicket ticket, 
     source.stream = &stream;
     source.receiver = &receiver;
     source.ticket = ticket;
+    source.failure = failure;
     source.generation = ++_nextGeneration;
     empty = {index, source.generation};
     return S_OK;
@@ -72,7 +75,8 @@ void GpuCommandPump::FailOwner(Source& source, HRESULT error) noexcept
 {
     source.error = FAILED(error) ? error : E_UNEXPECTED;
     source.stream->RequestStopOwner();
-    (void)_scheduler->Cancel(source.ticket);
+    if (source.failure == GpuCommandFailureDisposition::CancelOriginal)
+        (void)_scheduler->Cancel(source.ticket);
     if (!source.failureReported)
     {
         source.failureReported = true;
@@ -133,7 +137,19 @@ bool GpuCommandPump::DetachOwner(GpuCommandSourceLease lease, GpuCompletionConte
     source->quarantined = false;
     source->recoveryArmed = false;
     source->failureReported = false;
+    source->failure = GpuCommandFailureDisposition::CancelOriginal;
+    _scheduler->NotifyOwnerWork(); // One capacity transition wakes an original suspended source.
     return true;
+}
+
+bool GpuCommandPump::HasSourceSlotOwner() const noexcept
+{
+    if (!IsOwner() || _stopped || _inCallback || _nextGeneration == (std::numeric_limits<std::uint64_t>::max)())
+        return false;
+    for (const auto& source : _sources)
+        if (!source.stream)
+            return true;
+    return false;
 }
 
 bool GpuCommandPump::HasPending() const noexcept

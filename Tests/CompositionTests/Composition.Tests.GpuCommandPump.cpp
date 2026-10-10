@@ -1,6 +1,7 @@
 #include "Composition.Tests.GpuCommandPump.h"
 
 #include "GpuCommandPump.h"
+#include "GpuRecordingCommands.h"
 #include "OwnerWorkMultiplexer.h"
 
 #include <atomic>
@@ -10,9 +11,11 @@
 namespace
 {
 int gFailures = 0;
+bool recoveryCase = false;
 void Expect(bool passed, const char* name) noexcept
 {
-    std::printf("%s recording-pump.%s\n", passed ? "PASS" : "FAIL", name);
+    std::printf("%s %s.%s\n", passed ? "PASS" : "FAIL", recoveryCase ? "recording-pump-recovery" : "recording-pump",
+                name);
     std::fflush(stdout);
     gFailures += passed ? 0 : 1;
 }
@@ -40,6 +43,12 @@ struct State final : GpuCommandSourceReceiver
     unsigned int acknowledgements = 0;
     unsigned int failures = 0;
     HRESULT failure = S_OK;
+    GpuCommandFailureDisposition disposition = GpuCommandFailureDisposition::CancelOriginal;
+    bool retireBodyEntered = false;
+    bool retirementTokenCancelled = false;
+    bool policyInitialized = false;
+    bool policyStopped = false;
+    bool recordingTokenLive = false;
     bool initialized = false;
     bool attached = false;
     bool recorderJoined = false;
@@ -52,6 +61,8 @@ struct State final : GpuCommandSourceReceiver
                    command.ordinal == acknowledgements + 1 && SUCCEEDED(status),
                "real-callback-keeps-original-source-device-and-order");
         ++acknowledgements;
+        if (disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+            Expect(!pump.HasSourceSlotOwner(), "source-capacity-query-refuses-inside-original-callback");
         GpuCompletionContext rejected;
         Expect(!pump.DetachOwner(source, rejected) && !rejected, "callback-cannot-detach-its-own-receiver");
     }
@@ -70,9 +81,24 @@ class Recorder final : public Job
     JobResult Run(JobContext& context) override
     {
         if (_state.stage != State::Stage::Record)
+        {
+            if (_state.stage == State::Stage::Retire &&
+                _state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+            {
+                _state.retireBodyEntered = true;
+                // The original failure remains a failure: live token alone grants no device recovery/pixels.
+                return {JobStatus::Failed, _state.failure};
+            }
             return {};
+        }
         wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
         HRESULT result = _state.device.CreateDeferredContext(0, deferred.put());
+        GpuRecordingCommands policy;
+        if (SUCCEEDED(result) && _state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+        {
+            result = policy.InitializeForWork(deferred.get(), _state.stream, context.cancellation);
+            _state.policyInitialized = SUCCEEDED(result);
+        }
         for (unsigned int index = 0; SUCCEEDED(result) && index < 3; ++index)
         {
             wil::com_ptr_nothrow<ID3D11CommandList> commands;
@@ -80,9 +106,14 @@ class Recorder final : public Job
             if (SUCCEEDED(result))
                 result = _state.stream.PublishForWork(std::move(commands), context.cancellation);
         }
+        if (_state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+        {
+            _state.policyStopped = FAILED(result) && policy.StatusForWork() == E_ABORT;
+            _state.recordingTokenLive = !context.cancellation.IsCancelled();
+        }
         return FAILED(result) ? JobResult{JobStatus::Failed, result} : JobResult{};
     }
-    void RetireWorkerStage(JobContext&, JobResult result) noexcept override
+    void RetireWorkerStage(JobContext& context, JobResult result) noexcept override
     {
         if (_state.stage == State::Stage::Record)
             _state.stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK
@@ -91,6 +122,7 @@ class Recorder final : public Job
                                                     : static_cast<HRESULT>(result.error));
         else if (_state.stage == State::Stage::Retire)
         {
+            _state.retirementTokenCancelled = context.cancellation.IsCancelled();
             _state.retired.store(_state.stream.RetireForWork(), std::memory_order_release);
             _state.detached = {};
         }
@@ -104,9 +136,18 @@ class Recorder final : public Job
                 return false;
             const auto initialized = _state.stream.InitializeOwner(_state.scheduler, ticket, _state.deviceGeneration);
             _state.initialized = SUCCEEDED(initialized);
-            const auto attached = _state.initialized
-                                      ? _state.pump.AttachOwner(_state.stream, ticket, _state, _state.source)
-                                      : initialized;
+            if (_state.initialized && _state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+            {
+                GpuCommandSourceLease rejected;
+                Expect(_state.pump.HasSourceSlotOwner(), "source-capacity-available-before-original-attachment");
+                Expect(_state.pump.AttachOwner(_state.stream, ticket, _state, rejected,
+                                               static_cast<GpuCommandFailureDisposition>(255)) == E_INVALIDARG &&
+                           !rejected.generation && _state.pump.HasSourceSlotOwner(),
+                       "unknown-failure-disposition-refuses-without-consuming-source-capacity");
+            }
+            const auto attached = _state.initialized ? _state.pump.AttachOwner(_state.stream, ticket, _state,
+                                                                               _state.source, _state.disposition)
+                                                     : initialized;
             _state.attached = SUCCEEDED(attached);
             Expect(_state.attached, "opening-ack-attaches-actual-admitted-source");
             if (!_state.attached)
@@ -118,6 +159,12 @@ class Recorder final : public Job
         if (_state.stage == State::Stage::Record)
         {
             _state.recorderJoined = true;
+            if (_state.disposition == GpuCommandFailureDisposition::RetainOriginalForRecovery)
+            {
+                Expect(_state.policyInitialized, "private-policy-initializes-on-original-live-record");
+                Expect(_state.policyStopped && _state.recordingTokenLive,
+                       "stopped-original-source-refuses-private-recording-with-retained-live-token");
+            }
             return true; // The test owner waits for original GPU use acknowledgements before retirement.
         }
         Expect(ticket == _state.original, "final-retirement-keeps-original-ticket");
@@ -166,8 +213,11 @@ template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate read
     return true;
 }
 
-void Run(bool failFirst, bool failRecovery, bool foreignDevice = false)
+void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool retainOriginal = false,
+         bool userCancellation = false)
 {
+    recoveryCase = retainOriginal;
+    const auto restoreCase = wil::scope_exit([]() noexcept { recoveryCase = false; });
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> immediate;
     const D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
@@ -217,6 +267,8 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false)
         return;
     }
     State state{scheduler, pump, *(foreignDevice ? recordedDevice.get() : device.get()), queue.DeviceGeneration()};
+    state.disposition = retainOriginal ? GpuCommandFailureDisposition::RetainOriginalForRecovery
+                                       : GpuCommandFailureDisposition::CancelOriginal;
     struct Cleanup final
     {
         State& state;
@@ -300,6 +352,8 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false)
     ++foreign.generation;
     GpuCompletionContext rejected;
     Expect(!pump.DetachOwner(foreign, rejected) && !rejected, "foreign-source-lease-cannot-detach");
+    if (userCancellation)
+        Expect(scheduler.Cancel(original), "real-user-cancellation-keeps-original-ticket-and-stop-token");
     const bool detached = pump.DetachOwner(state.source, state.detached);
     Expect(detached && state.detached, "transfer-all-original-context-owners-to-worker-retirement");
     state.attached = !detached;
@@ -308,9 +362,16 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false)
     state.stage = State::Stage::Retire;
     const bool resumed = authorized && scheduler.Resume(original);
     Expect(resumed && Until(scheduler, [&]() { return state.terminal; }) &&
-               state.result.status == (fails ? JobStatus::Cancelled : JobStatus::Finished) &&
+               state.result.status == (userCancellation ? JobStatus::Cancelled
+                                       : retainOriginal ? JobStatus::Failed
+                                       : fails          ? JobStatus::Cancelled
+                                                        : JobStatus::Finished) &&
                state.retired.load(std::memory_order_acquire),
            "same-record-returns-only-after-worker-retirement");
+    if (retainOriginal)
+        Expect(state.retireBodyEntered == !userCancellation && state.retirementTokenCancelled == userCancellation &&
+                   (userCancellation || state.result.error == static_cast<std::int32_t>(state.failure)),
+               "retained-failure-token-allows-original-stage-but-real-cancellation-skips-useful-body");
     Expect(!state.detached && scheduler.ReservedMemoryBytes() == 0 && scheduler.IsIdle(),
            "last-context-reference-and-charge-retire-together");
 }
@@ -323,5 +384,8 @@ int RunGpuCommandPumpTests()
     Run(true, false);
     Run(true, true);
     Run(false, false, true);
+    Run(true, false, false, true);
+    Run(true, false, false, true, true);
+    Run(true, true, false, true);
     return gFailures;
 }

@@ -2292,3 +2292,143 @@ foreach ($fault in $unsignedStackFaults) {
     ++$unsignedStackCount
 }
 Write-Host "Unsigned stack terminal DWORD synthetic controls passed: $unsignedStackCount"
+
+# Independent short unsigned JA with signed stack reload: the default is a separate decoded body entry.
+# Eight little-endian RVA entries also decode as real VEX rows. Prove data from guard/PDB/body evidence,
+# while actual body/adjacent vector instructions continue to fail. No native instructions are executed.
+function New-SeparateShortDefaultCase([string]$Name, [string]$Fault = '', [byte]$StackSlot = 0x20) {
+    $case = New-GuardedTerminalDwordCase ($Name + 'Seed')
+    [byte[]]$pe = [IO.File]::ReadAllBytes($case.Binary)
+    [UInt32]$section = $script:sectionRva
+    [UInt32]$dispatch = $section + 0x890
+    [UInt32]$prefix = $dispatch - 12
+    [UInt32]$afterJump = $dispatch + 19
+    [UInt32]$table = $section + 0x900
+    [UInt32]$end = $table + 32
+    [UInt32]$target = $section + 0x8c5
+    [UInt32]$default = $section + 0x8d5
+    $fileBase = 0x400 - $section
+    $pe[$fileBase + $prefix + 3] = $StackSlot
+    $pe[$fileBase + $prefix + 4] = 7
+    $pe[$fileBase + $prefix + 11] = $StackSlot
+    switch ($Fault) {
+        'DefaultInGuard' { $default = $prefix }
+        'DefaultInDispatch' { $default = $dispatch }
+        'DefaultInTable' { $default = $table }
+        'DifferentStackSlot' { $pe[$fileBase + $prefix + 11]++ }
+        'WrongJa' { $pe[$fileBase + $prefix + 5] = 0x76 }
+        'SignedMaximum' { $pe[$fileBase + $prefix + 4] = 0xff }
+        'ZeroMaximum' { $pe[$fileBase + $prefix + 4] = 0 }
+        'WrongImageBase' { $pe[$fileBase + $dispatch + 3]++ }
+    }
+    $pe[$fileBase + $prefix + 6] = [byte](($default - [Int64]($prefix + 7)) -band 255)
+    $rows = [Collections.Generic.List[string]]::new()
+    $offsets = @(0,5,7,12,19,26,29)
+    $lengths = @(5,2,5,7,7,3,2)
+    for ($i = 0; $i -lt 7; ++$i) {
+        [UInt32]$address = $prefix + $offsets[$i]
+        [byte[]]$bytes = $pe[($fileBase + $address)..($fileBase + $address + $lengths[$i] - 1)]
+        if ($Fault -eq "MissingRow$i") { continue }
+        if ($Fault -eq "ListingRow$i") { $bytes[$bytes.Length - 1] = $bytes[$bytes.Length - 1] -bxor 1 }
+        $text = if ($Fault -eq "UnknownRow$i") { '<unknown>' } else { 'guard/dispatch' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase + $address), (Hex-Bytes $bytes), $text))
+        if ($Fault -eq "DuplicateRow$i") { $rows.Add($rows[$rows.Count - 1]) }
+    }
+    for ([UInt32]$cursor = $afterJump; $cursor -lt $table - 4;) {
+        [byte[]]$bytes = @(0x90)
+        $text = 'nop'
+        if ($cursor -eq $section + 0x8b0) {
+            if ($Fault -eq 'BodyBranchIntoTable') { $bytes = @(0xeb, [byte]($table - ($cursor + 2))); $text = 'jmp table' }
+            if ($Fault -eq 'BodyBranchIntoPadding') { $bytes = @(0xeb, [byte]($table - 3 - ($cursor + 2))); $text = 'jmp padding' }
+            if ($Fault -eq 'ActualBodyVex') { $bytes = @(0xc5,0xf8,0x10,0x00); $text = 'vmovups xmm0, xmmword ptr [rax]' }
+            if ($Fault -eq 'DefaultMiddleInstruction') { $bytes = @(0x66,0x90); $default = $cursor + 1; $text = 'nop' }
+        }
+        Put-Bytes $pe ($fileBase + $cursor) $bytes
+        [byte[]]$listing = $bytes.Clone()
+        if ($cursor -eq $section + 0x8b0 -and $Fault -eq 'BodyListingMismatch') { $listing[0] = 0x91 }
+        if ($cursor -eq $target -and $Fault -eq 'UnknownCaseTarget') { $text = '<unknown>' }
+        if (-not ($cursor -eq $section + 0x8b0 -and $Fault -eq 'MissingBodyRow')) {
+            $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase + $cursor), (Hex-Bytes $listing), $text))
+        }
+        $cursor += $bytes.Length
+    }
+    if ($Fault -eq 'DefaultMiddleInstruction') {
+        $pe[$fileBase + $prefix + 6] = [byte]($default - ($prefix + 7))
+        $rows[1] = '{0:x}: {1} ja default' -f ($script:imageBase + $prefix + 5),
+            (Hex-Bytes ([byte[]]$pe[($fileBase + $prefix + 5)..($fileBase + $prefix + 6)]))
+    }
+    [byte[]]$terminal = @(0xc3)
+    [byte[]]$padding = @(0x0f,0x1f,0x00)
+    if ($Fault -eq 'WrongRet') { $terminal[0] = 0x90 }
+    if ($Fault -eq 'WrongPadding') { $padding[2] = 0x01 }
+    Put-Bytes $pe ($fileBase + $table - 4) $terminal
+    Put-Bytes $pe ($fileBase + $table - 3) $padding
+    $retText = if ($Fault -eq 'UnknownRet') { '<unknown>' } else { 'ret' }
+    if ($Fault -ne 'MissingRet') { $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase + $table - 4), (Hex-Bytes $terminal), $retText)) }
+    if ($Fault -ne 'MissingPadding') { $rows.Add(('{0:x}: {1} nop' -f ($script:imageBase + $table - 3), (Hex-Bytes $padding))) }
+    for ($i = 0; $i -lt 8; ++$i) {
+        [UInt32]$entry = $target
+        if ($i -eq 7) {
+            switch ($Fault) {
+                'CaseRetBoundary' { $entry = $table - 4 }
+                'CaseInGuard' { $entry = $prefix }
+                'CaseInPadding' { $entry = $table - 3 }
+                'CaseInTable' { $entry = $table }
+            }
+        }
+        Set-U32 $pe ($fileBase + $table + 4 * $i) $entry
+        [byte[]]$bytes = $pe[($fileBase + $table + 4 * $i)..($fileBase + $table + 4 * $i + 3)]
+        if ($i -eq 3 -and $Fault -eq 'TableListingMismatch') { $bytes[3] = $bytes[3] -bxor 1 }
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase + $table + 4 * $i), (Hex-Bytes $bytes)))
+    }
+    $procEnd = $end
+    if ($Fault -eq 'ShortProcedure') { $procEnd -= 4 }
+    if ($Fault -eq 'LongProcedure') { $procEnd += 4 }
+    $procOwner = if ($Fault -eq 'WrongProcedureOwner') { 1 } else { 0 }
+    $dataOwner = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+    $symbols = "  Mod $procOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $symbols += "  0 | S_GPROC32 [size = 16] ``SeparateShortDefault`` `n  addr = 0001:$($prefix - $section), code size = $($procEnd - $prefix)`n"
+    }
+    $symbols += "  Mod $dataOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingData') {
+        $symbols += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($table - $section)`n"
+    }
+    $symbols += "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:4096`n"
+    if ($Fault -eq 'InteriorData') {
+        $symbols += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($table - $section + 4)`n"
+    }
+    if ($Fault -eq 'ActualAdjacentEvex') {
+        [byte[]]$vector = @(0x62,0xf1,0x7c,0x48,0x10,0x00)
+        Put-Bytes $pe ($fileBase + $end) $vector
+        $rows.Add(('{0:x}: {1} vmovups zmm0, zmmword ptr [rax]' -f ($script:imageBase + $end), (Hex-Bytes $vector)))
+    }
+    Set-Content -LiteralPath $case.Symbols -Value $symbols -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value (@($rows | Sort-Object {
+        [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
+    }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary, $pe)
+    $case.Name = $Name
+    return $case
+}
+
+$separateShortCount = 0
+Invoke-Control (New-SeparateShortDefaultCase 'SeparateShortDefaultSlot20') $true 8 0; ++$separateShortCount
+Invoke-Control (New-SeparateShortDefaultCase 'SeparateShortDefaultSlot40' '' 0x40) $true 8 0; ++$separateShortCount
+Invoke-Control (New-SeparateShortDefaultCase 'SeparateShortDefaultRetCase' 'CaseRetBoundary') $true 7 0; ++$separateShortCount
+$separateShortFaults = @('DefaultInGuard','DefaultInDispatch','DefaultInTable','DefaultMiddleInstruction',
+    'DifferentStackSlot','WrongJa','SignedMaximum','ZeroMaximum','WrongImageBase','BodyBranchIntoTable',
+    'BodyBranchIntoPadding','BodyListingMismatch','UnknownCaseTarget','MissingBodyRow','WrongRet','WrongPadding',
+    'UnknownRet','MissingRet','MissingPadding','CaseInGuard','CaseInPadding','CaseInTable','TableListingMismatch',
+    'ShortProcedure','LongProcedure','WrongProcedureOwner','WrongDataOwner','MissingProcedure','MissingData','InteriorData')
+foreach ($i in 0..6) { $separateShortFaults += "MissingRow$i", "ListingRow$i", "UnknownRow$i", "DuplicateRow$i" }
+foreach ($fault in $separateShortFaults) {
+    Invoke-Control (New-SeparateShortDefaultCase ("SeparateShortDefault$fault") $fault) $false
+    ++$separateShortCount
+}
+Invoke-Control (New-SeparateShortDefaultCase 'SeparateShortDefaultActualBodyVex' 'ActualBodyVex') $false 8 1
+++ $separateShortCount
+Invoke-Control (New-SeparateShortDefaultCase 'SeparateShortDefaultActualAdjacentEvex' 'ActualAdjacentEvex') $false 8 1
+++ $separateShortCount
+if ($separateShortCount -ne 63) { throw 'Separate short-default parser control roster differs.' }
+Write-Host 'Separate short-default terminal DWORD synthetic controls passed: 63 (3 accepted, 60 refused)'

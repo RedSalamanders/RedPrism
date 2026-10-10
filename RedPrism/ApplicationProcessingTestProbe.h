@@ -17,6 +17,8 @@ enum class ApplicationProcessingStage : std::uint8_t
     DeferredRelease,
     Recycling,
     NativeRead,
+    UtilityReadback,
+    RecordedCommands,
     Count,
 };
 

@@ -158,6 +158,11 @@ class GpuWorkQueue final : public OwnerWorkPump
     // Capture only into an empty value on the owner before recording dependent work. One immutable stream
     // may acknowledge multiple serial stages. A failed capture leaves the supplied empty value unchanged.
     [[nodiscard]] HRESULT CaptureCompletionContext(GpuCompletionContext& empty) const noexcept;
+    // Owner-only borrows from this exact current capture. Queue origin, actual device/context and generation
+    // must all still match. No AddRef, query, source capture, resource/command creation or GPU acknowledgment.
+    // The original admitted parent retains the strong capture through worker/command/copy/row retirement.
+    [[nodiscard]] HRESULT BorrowCurrentContextOwner(const GpuCompletionContext& captured, ID3D11Device*& device,
+                                                    ID3D11DeviceContext*& immediate) const noexcept;
     [[nodiscard]] bool HasRetirementCompletionSlot(const GpuCompletionContext& captured) const noexcept;
     // Retirement barrier only: may signal the original healthy stream after Bind/RetireDevice. No useful
     // draw, compute, copy or Map is recorded on that retired stream. S_OK callback is current; E_ABORT is
@@ -193,6 +198,9 @@ class GpuWorkQueue final : public OwnerWorkPump
     // empty target (generation 0) preserves global behavior; an exact ticket isolates one original admission
     // from unrelated cache barriers.
     void SetRetirementCompletionRefusalsForTest(HRESULT error, unsigned int attempts, JobTicket target = {}) noexcept;
+    // Refuse before signaling an actual recorded copy/producer. No completion callback or event is fabricated.
+    // Failed copies retain the original request until a real original-context retirement event or joined close.
+    void SetCopyCompletionRefusalsForTest(HRESULT error, unsigned int attempts) noexcept;
     [[nodiscard]] GpuReadbackStatistics Statistics() const noexcept;
 
   private:

@@ -224,6 +224,11 @@ HRESULT Application::InitializeProcessing() noexcept
     RETURN_IF_FAILED(static_cast<HRESULT>(_pathReadWait.Initialize(
         _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->pathReadWait : PathReadWaitObserver{})));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::NativeRead));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_utilityReadback.InitializeOwner(_jobs, _ownerWork)));
+    _utilityReadbackInitialized = true;
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::UtilityReadback));
+    RETURN_IF_FAILED(InitializeRecordedCommandsOwner());
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::RecordedCommands));
     return S_OK;
 }
 
@@ -3617,9 +3622,10 @@ void Application::BindCompositionDevice() noexcept
         _composition.ReleaseDeviceResources();
         DropBrushEngine();
         _boundDeviceGeneration = 0;
+        if (_recordedCommandsInitialized)
+            _recordedCommands.DeviceChangedOwner();
         if (_committedDisplayInitialized)
         {
-            _recordedCommands.DeviceChangedOwner();
             _committedDisplay.DeviceChangedOwner();
             _pendingDisplay.DeviceChangedOwner();
         }
@@ -3643,9 +3649,10 @@ void Application::BindCompositionDevice() noexcept
         DropBrushEngine();
         (void)_brushEngine.Initialize(device, context);
         _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
+        if (_recordedCommandsInitialized)
+            _recordedCommands.DeviceChangedOwner();
         if (_committedDisplayInitialized)
         {
-            _recordedCommands.DeviceChangedOwner();
             _committedDisplay.DeviceChangedOwner();
             _pendingDisplay.DeviceChangedOwner();
         }
@@ -3679,12 +3686,15 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    if (_utilityReadbackInitialized)
+        _utilityReadback.StopOwner();
     if (_committedDisplayInitialized)
     {
         _pendingDisplay.StopOwner();
         _committedDisplay.StopOwner();
-        _recordedCommands.StopOwner();
     }
+    if (_recordedCommandsInitialized)
+        _recordedCommands.StopOwner();
     _historyResidencySource.StopNotifications();
     _layerRowsSource.StopNotifications();
     StopHostContinuations();
@@ -3725,9 +3735,10 @@ void Application::Shutdown() noexcept
              owner._layerRowsSource.CloseAfterWorkers();
              owner._historyResidencySource.CloseAfterWorkers();
              owner.PrepareStrokeFinishJoinedShutdownOwner();
+             if (owner._recordedCommandsInitialized)
+                 owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
              if (owner._committedDisplayInitialized)
              {
-                 owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
                  owner._pendingDisplay.JoinedShutdownOwner();
                  owner._committedDisplay.JoinedShutdownOwner();
              }
@@ -3796,17 +3807,29 @@ void Application::Shutdown() noexcept
          this});
     _pathClassificationTicket.reset();
     _pathReadWait.CloseAfterFinalWorkers();
+    // Real Close has returned from final worker retirement; no useful parent or borrowed route remains.
+    if (_utilityReadbackInitialized)
+    {
+        if (!_utilityReadback.ReleaseJoinedChargesOwner() || !_utilityReadback.CloseOwner())
+            std::terminate();
+        _utilityReadbackInitialized = false;
+    }
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)
     {
-        if (!_pendingDisplay.CloseAfterWorkersOwner() || !_committedDisplay.CloseAfterWorkersOwner() ||
-            !_recordedCommands.CloseOwner())
+        if (!_pendingDisplay.CloseAfterWorkersOwner() || !_committedDisplay.CloseAfterWorkersOwner())
             std::terminate();
         _pendingDisplayInitialized = false;
         _committedDisplayInitialized = false;
         _committedDisplayAllowHiddenForTest = false;
         _acknowledgedCommittedDisplay = nullptr;
+    }
+    if (_recordedCommandsInitialized)
+    {
+        if (!_recordedCommands.CloseOwner())
+            std::terminate();
+        _recordedCommandsInitialized = false;
     }
     if (_clipboardStamp)
         (void)_historyWork.Finish(_clipboardStamp.value());

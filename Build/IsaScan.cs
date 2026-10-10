@@ -327,16 +327,20 @@ namespace RedPrismBuild
                 ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
                     imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true, true) ??
                 ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
-                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, false, false, true);
+                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, false, false, true) ??
+                ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
+                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, false, false, false, true);
         }
 
         private static InlineTable ReadGuardedTerminalDwordTableForm(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
-            Dictionary<ulong, byte[]> guardRows, bool longJa, bool wideFrame = false, bool unsignedIndex = false)
+            Dictionary<ulong, byte[]> guardRows, bool longJa, bool wideFrame = false, bool unsignedIndex = false,
+            bool separateShortDefault = false)
         {
             if (unsignedIndex && (longJa || wideFrame)) return null;
+            if (separateShortDefault && (longJa || wideFrame || unsignedIndex)) return null;
             int stackLength = wideFrame ? 8 : 5;
             int indexLength = unsignedIndex ? 4 : stackLength;
             int guardLength = stackLength + indexLength + (longJa ? 6 : 2);
@@ -392,18 +396,54 @@ namespace RedPrismBuild
                 if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
                     procedure.ContributionEnd != owner.End || prefix < procedure.Begin || begin < procedure.Begin ||
                     afterJump > begin || procedure.End != end) continue;
+                // TraceButtonVariantName emits a distinct default case with short JA and signed stack load.
+                // Admit only its RET + three-byte NOP terminal shape, complete PE-matching known body,
+                // bounded case/default destinations and exact PDB table/procedure extent. No ISA allowlist.
+                if (separateShortDefault)
+                {
+                    if (begin < afterJump + 4 || defaultAddress < (long)afterJump ||
+                        defaultAddress >= (long)begin - 4 ||
+                        !IsDecodedBoundary((ulong)defaultAddress, owner.Module, contributions, decoded, decodedStarts) ||
+                        !guardRows.TryGetValue(begin - 4, out byte[] separateTerminal) || separateTerminal.Length != 1 || separateTerminal[0] != 0xc3 ||
+                        !MatchesDecodedPe(pe, sections, imageBase, begin - 4, separateTerminal, contributions, decoded, decodedStarts) ||
+                        !guardRows.TryGetValue(begin - 3, out byte[] padding) || padding.Length != 3 ||
+                        !StartsWith(padding, 0x0f, 0x1f, 0x00) ||
+                        !MatchesDecodedPe(pe, sections, imageBase, begin - 3, padding, contributions, decoded, decodedStarts))
+                        continue;
+                    bool bodyKnown = true;
+                    for (ulong cursor = afterJump; cursor < begin - 3;)
+                    {
+                        if (!guardRows.TryGetValue(cursor, out byte[] body) || body.Length == 0 || body.Length > 15 ||
+                            cursor + (ulong)body.Length > begin - 3 ||
+                            !MatchesDecodedPe(pe, sections, imageBase, cursor, body, contributions, decoded, decodedStarts))
+                        { bodyKnown = false; break; }
+                        long destination = -1;
+                        if (body.Length == 2 && (body[0] == 0xeb || (body[0] >= 0x70 && body[0] <= 0x7f)))
+                            destination = (long)cursor + 2 + unchecked((sbyte)body[1]);
+                        else if (body.Length == 5 && (body[0] == 0xe9 || body[0] == 0xe8))
+                            destination = (long)cursor + 5 + BitConverter.ToInt32(body, 1);
+                        else if (body.Length == 6 && body[0] == 0x0f && body[1] >= 0x80 && body[1] <= 0x8f)
+                            destination = (long)cursor + 6 + BitConverter.ToInt32(body, 2);
+                        if (destination >= (long)begin - 3 && destination < (long)end)
+                        { bodyKnown = false; break; } // Body branches may not enter padding or table data.
+                        cursor += (ulong)body.Length;
+                    }
+                    if (!bodyKnown) continue;
+                }
                 var table = new InlineTable { Begin = begin, End = end, Module = owner.Module,
-                    ContributionBegin = owner.Begin, ContributionEnd = owner.End };
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End,
+                    VerifyReportedBytes = separateShortDefault };
                 int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
                 if (tableRaw > pe.Length - checked((int)(end - begin))) return null;
                 for (uint entry = 0; entry <= maximum; ++entry)
                 {
                     ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * entry))));
                     if (target < procedure.Begin || target >= begin ||
+                        (separateShortDefault && (target < afterJump || target >= begin - 3)) ||
                         !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts)) return null;
                     table.Targets.Add(target);
                 }
-                if (defaultAddress >= 0 && (longJa || unsignedIndex
+                if (defaultAddress >= 0 && (longJa || unsignedIndex || separateShortDefault
                     ? (ulong)defaultAddress >= (unsignedIndex ? afterJump : procedure.Begin) && (ulong)defaultAddress < begin &&
                       IsDecodedBoundary((ulong)defaultAddress, owner.Module, contributions, decoded, decodedStarts)
                     : table.Targets.Contains((ulong)defaultAddress))) return table;
@@ -3079,6 +3119,7 @@ namespace RedPrismBuild
             var r14LoopCandidates = new List<ulong>();
             var r15SignedCandidates = new List<ulong>();
             var r9BodyRanges = new List<InlineTable>();
+            var rcxSeparateBodyRanges = new List<InlineTable>();
             foreach (string line in disassemblyLines)
             {
                 Match candidate = InstructionLine.Match(line);
@@ -3334,6 +3375,27 @@ namespace RedPrismBuild
                         {
                             ulong table = checked(imageBase + BitConverter.ToUInt32(pe, raw + 10));
                             if (table > imageBase) rdxGuardCandidates.Add(table - 1);
+                            // Retain complete rows only for the bounded short-JA signed-stack terminal form.
+                            // Recognition below still proves every byte, target, symbol and procedure bound.
+                            if (raw >= 12 && StartsWithAt(pe, raw - 12, 0x83, 0x7c, 0x24) &&
+                                pe[raw - 7] == 0x77 && StartsWithAt(pe, raw - 5, 0x48, 0x63, 0x44, 0x24) &&
+                                pe[raw - 9] == pe[raw - 1] && pe[raw - 8] > 0 && pe[raw - 8] < 128 &&
+                                table > candidateAddress + 19 && table - candidateAddress <= 4096)
+                            {
+                                int terminalRaw = checked((int)Offset(checked((uint)(table - imageBase)), sections, pe.Length));
+                                int candidateOwner = FindContribution(contributions, candidateAddress);
+                                if (terminalRaw >= 4 && StartsWithAt(pe, terminalRaw - 4, 0xc3, 0x0f, 0x1f, 0x00) &&
+                                    candidateOwner >= 0 && dataSymbols.TryGetValue(table, out int tableOwner) &&
+                                    tableOwner == contributions[candidateOwner].Module)
+                                    foreach (Function procedure in procedures)
+                                        if (procedure.Module == tableOwner &&
+                                            procedure.ContributionBegin == contributions[candidateOwner].Begin &&
+                                            procedure.ContributionEnd == contributions[candidateOwner].End &&
+                                            procedure.Begin <= candidateAddress - 12 &&
+                                            procedure.End == table + 4ul * (pe[raw - 8] + 1ul))
+                                            rcxSeparateBodyRanges.Add(new InlineTable
+                                                { Begin = candidateAddress - 12, End = table });
+                            }
                         }
                     }
                     catch (InvalidDataException) { /* Unmapped candidate; no terminal row retained. */ }
@@ -3367,6 +3429,8 @@ namespace RedPrismBuild
                     foreach (InlineTable range in r9BodyRanges)
                         if (rowAddress >= range.Begin && rowAddress < range.End) { r9Body = true; break; }
                     foreach (InlineTable range in raxPaddingBodyRanges)
+                        if (rowAddress >= range.Begin && rowAddress < range.End) { r9Body = true; break; }
+                    foreach (InlineTable range in rcxSeparateBodyRanges)
                         if (rowAddress >= range.Begin && rowAddress < range.End) { r9Body = true; break; }
                     if (r9Body || (rowBytes.Length == 11 && rowBytes[0] == "81" && rowBytes[1] == "bc" && rowBytes[2] == "24") ||
                         (rowBytes.Length == 6 && rowBytes[0] == "0f" && rowBytes[1] == "87") ||

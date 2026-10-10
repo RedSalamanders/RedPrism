@@ -42,9 +42,10 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
         Stage boundary;
         unsigned int visits;
         std::size_t routes;
+        bool pendingRefusal = false;
     };
     // Independent acquired-prefix expectations: row/display/stroke callbacks run only after acquisition.
-    // Production has four routes before rows, five before display and eight before stroke.
+    // Production has six routes before rows, seven before display and nine before stroke.
     constexpr std::array cases{
         Case{"normal", Mode::Normal, Stage::BeforeAcquisition, 5, 0},
         Case{"refuse-before", Mode::Refuse, Stage::BeforeAcquisition, 1, 0},
@@ -57,8 +58,9 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
         Case{"close-display", Mode::ReentrantClose, Stage::Display, 3, 0},
         Case{"close-stroke", Mode::ReentrantClose, Stage::Stroke, 4, 0},
         Case{"close-ready", Mode::ReentrantClose, Stage::ReadyToEnable, 5, 0},
-        Case{"capacity-rows", Mode::Capacity, Stage::BeforeAcquisition, 1, 5},
-        Case{"capacity-display", Mode::Capacity, Stage::LayerRows, 2, 4},
+        Case{"capacity-rows", Mode::Capacity, Stage::BeforeAcquisition, 1, 4},
+        Case{"capacity-display", Mode::Capacity, Stage::LayerRows, 2, 3},
+        Case{"capacity-pending", Mode::Capacity, Stage::LayerRows, 2, 2, true},
         Case{"capacity-stroke", Mode::Capacity, Stage::Display, 3, 1},
     };
     int failures = 0;
@@ -78,6 +80,9 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
         owner->_prompts = &QuietPrompts();
         const HRESULT processing = owner->InitializeProcessing();
         expect(SUCCEEDED(processing) && owner->_jobs.WakeHandle(), "real-processing-initializes");
+        expect(owner->_utilityReadbackInitialized && !owner->_utilityReadback.HasPending() &&
+                   !owner->_utilityReadback.HasReady() && !owner->_ownerWork.Attach(owner->_utilityReadback),
+               "processing-holds-one-dormant-utility-route-before-responsive-acquisition");
         if (FAILED(processing) || !owner->_jobs.WakeHandle())
             return 5;
         if (scenario.mode != Mode::Normal)
@@ -146,6 +151,10 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
             }
             for (auto& route : state.inert)
             {
+                // The pending case leaves one actual slot for committed display; the second child
+                // refuses its attachment and rolls back the first without closing the shared pump.
+                if (state.scenario.pendingRefusal && state.attached == state.scenario.routes)
+                    break;
                 if (!app._ownerWork.Attach(route))
                     break;
                 ++state.attached;
@@ -198,6 +207,22 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
                    "independent-original-route-count-reaches-real-capacity");
         if (scenario.mode == Mode::ReentrantClose)
             expect(state.shutdownJoinedInCallback, "reentrant-close-joins-before-successful-probe-return");
+        const bool displayChildRefused = scenario.mode == Mode::Capacity && scenario.boundary == Stage::LayerRows;
+        if (displayChildRefused)
+        {
+            expect(owner->_preparedDisplayAcquisitionStarted && !owner->_committedDisplayInitialized &&
+                       !owner->_pendingDisplayInitialized && !owner->_committedDisplay.HasPending() &&
+                       !owner->_committedDisplay.HasReady() && !owner->_pendingDisplay.HasPending() &&
+                       !owner->_pendingDisplay.HasReady(),
+                   "actual-child-attachment-refusal-rolls-back-display-only");
+            expect(owner->_recordedCommandsInitialized && SUCCEEDED(owner->InitializeRecordedCommandsOwner()) &&
+                       !owner->_ownerWork.Attach(owner->_recordedCommands) &&
+                       owner->_recordedCommands.HasSourceSlotOwner() &&
+                       owner->_recordedCommands.AttachedSourceCountOwnerForTest() == 0,
+                   "display-child-refusal-keeps-original-shared-command-route-live");
+            expect(!owner->InitializePreparedDisplayOwner(false) && owner->_recordedCommands.HasSourceSlotOwner(),
+                   "partly-acquired-display-is-one-shot-without-poisoning-common-recording");
+        }
         for (std::size_t i = 0; i < state.attached; ++i)
             if (!owner->_ownerWork.Detach(inertRoutes[i]))
                 std::_Exit(5); // Borrowed route storage cannot retire until detached from its actual owner.
@@ -217,7 +242,8 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
         };
         expect(detached(owner->_layerRowsSource) && detached(owner->_historyResidencySource) &&
                    detached(owner->_strokeFinishSource) && detached(owner->_committedDisplay) &&
-                   detached(owner->_pendingDisplay) && detached(owner->_recordedCommands),
+                   detached(owner->_pendingDisplay) && detached(owner->_recordedCommands) &&
+                   detached(owner->_utilityReadback) && !owner->_utilityReadbackInitialized,
                "shutdown-detaches-every-original-responsive-source");
         const auto visits = state.visits;
         expect(!owner->InitializeResponsiveSourcesOwner(false) && state.visits == visits,

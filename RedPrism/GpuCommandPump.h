@@ -14,6 +14,15 @@ struct GpuCommandSourceLease final
     [[nodiscard]] bool operator==(const GpuCommandSourceLease&) const noexcept = default;
 };
 
+// A retryable utility may stop recording without permanently cancelling its original scheduler token.
+// This choice supplies no acknowledgement, restart/publication authority or admission refund.
+// Real user/shutdown cancellation still prevents useful continuation. Default consumers keep cancellation.
+enum class GpuCommandFailureDisposition : std::uint8_t
+{
+    CancelOriginal,
+    RetainOriginalForRecovery
+};
+
 class GpuCommandSourceReceiver
 {
   public:
@@ -42,8 +51,12 @@ class GpuCommandPump final : public OwnerWorkPump
                                           OwnerWorkMultiplexer& routes) noexcept;
     // After opening producer acknowledgement, before recording resumes. Capture binds the queue's actual
     // original immediate context/device, not a caller-supplied context or generation.
-    [[nodiscard]] HRESULT AttachOwner(GpuCommandStream& stream, JobTicket source, GpuCommandSourceReceiver& receiver,
-                                      GpuCommandSourceLease& empty) noexcept;
+    [[nodiscard]] HRESULT AttachOwner(
+        GpuCommandStream& stream, JobTicket source, GpuCommandSourceReceiver& receiver, GpuCommandSourceLease& empty,
+        GpuCommandFailureDisposition failure = GpuCommandFailureDisposition::CancelOriginal) noexcept;
+    // Owner-only free source capacity. No capture, query, command, allocation or attachment occurs here.
+    // A suspended original parent waits on existing release notifications while false, never polls.
+    [[nodiscard]] bool HasSourceSlotOwner() const noexcept;
     // Exclude future execution. Pending GPU uses/strong references remain retained until acknowledgement.
     [[nodiscard]] bool StopSourceOwner(GpuCommandSourceLease lease) noexcept;
     // Parent has joined the producer. Transfer every captured reference into an empty worker-retired owner;
@@ -77,6 +90,7 @@ class GpuCommandPump final : public OwnerWorkPump
         JobTicket ticket;
         std::uint64_t generation = 0;
         HRESULT error = S_OK;
+        GpuCommandFailureDisposition failure = GpuCommandFailureDisposition::CancelOriginal;
         bool waiting = false;
         bool quarantined = false;
         bool recoveryArmed = false;

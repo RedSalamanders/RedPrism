@@ -119,11 +119,15 @@ event tickets. Handles and contexts remain borrowed until owner teardown removes
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
 `OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
-borrows at most nine distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
+borrows at most ten distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
 scheduler's one-source registration contract. Application registers this router once and attaches GPU and
-retry readiness sources. Standalone GPU tests may retain direct registration.
+retry readiness sources. Processing startup attaches the dormant `UtilityReadbackOwnerService` after native-read
+initialization, appending its checkpoint without changing the prior stage indices. This adds capacity for a
+tenth distinct leaf; it does not promise a particular array slot or activate a utility parent. Stop the service
+before producer shutdown, and release its joined charges/detach it only after actual scheduler Close returns.
+Standalone GPU tests may retain direct registration.
 
 `RetryWaitQueue` owns eight persistent manual-reset events registered on that same WaitPool. An admitted
 suspended job owns its borrowed receiver and cancellation token until the wait callback acknowledges a
@@ -318,7 +322,8 @@ Shutdown drops pending completion callbacks and UI actions after producers have 
 callback defer teardown until the callback has returned.
 
 Processing startup acquires trace registration, scheduler, owner routing, GPU wait slots, retry wait slots,
-host continuation source, deferred-release binding, recycling and the native header-read event in that order. `Main` calls Shutdown after
+host continuation source, deferred-release binding, recycling, the native header-read event, the dormant
+utility owner service and the shared command pump/recording lane in that order. `Main` calls Shutdown after
 an initialization failure as well as after success. Cleanup must stop/join acquired producers, detach borrowed
 routes and clear bindings before releasing their owners; a second Shutdown repeats no retirement hooks.
 Harness-only borrowed startup checkpoints run after each successful stage; retry initialization reuses the

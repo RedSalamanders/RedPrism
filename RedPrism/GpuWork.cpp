@@ -23,6 +23,7 @@ struct GpuWorkQueue::Impl final
         Free,
         Pending,
         Waiting,
+        Quarantined,
         Lent
     };
     struct Slot final
@@ -33,6 +34,13 @@ struct GpuWorkQueue::Impl final
         std::uint64_t deviceGeneration = 0;
         bool mapDeferred = false;
         bool retired = false;
+        bool copyRetirementOnly = false;
+        bool retirementArmed = false;
+        HRESULT copyFailure = S_OK;
+        wil::com_ptr_nothrow<ID3D11Device> copyDevice;
+        wil::com_ptr_nothrow<ID3D11DeviceContext4> copyContext4;
+        wil::com_ptr_nothrow<IDXGIDevice2> copyDxgiDevice2;
+        GpuCapabilities::CompletionRoute copyRoute = GpuCapabilities::CompletionRoute::None;
         std::atomic<bool> ready{false};
         wil::unique_handle event;
         JobEventTicket wait;
@@ -73,6 +81,8 @@ struct GpuWorkQueue::Impl final
     bool registered = false;
     bool stopped = false;
     unsigned int testBusyMaps = 0;
+    unsigned int testCopySignalRefusals = 0;
+    HRESULT testCopySignalFailure = S_OK;
     unsigned int testSkipSuccessfulMaps = 0;
     unsigned int testMapAttempts = 0;
     bool testHoldMapRecovery = false;
@@ -114,6 +124,13 @@ struct GpuWorkQueue::Impl final
         slot.bufferReceiver = nullptr;
         slot.completionReceiver = nullptr;
         slot.producer = nullptr;
+        slot.copyDevice.reset();
+        slot.copyContext4.reset();
+        slot.copyDxgiDevice2.reset();
+        slot.copyRoute = GpuCapabilities::CompletionRoute::None;
+        slot.copyRetirementOnly = false;
+        slot.retirementArmed = false;
+        slot.copyFailure = S_OK;
         slot.state = State::Free;
         if (slot.retired)
             DropStorage(slot);
@@ -228,40 +245,92 @@ struct GpuWorkQueue::Impl final
         return S_OK;
     }
 
+    HRESULT SignalCopyCompletion(Slot& slot) noexcept
+    {
+        if (testCopySignalRefusals && FAILED(testCopySignalFailure))
+        {
+            --testCopySignalRefusals;
+            return testCopySignalFailure; // Refuse before issuing any signal; never fabricate an event.
+        }
+        HRESULT result = S_OK;
+        if (slot.copyRoute == GpuCapabilities::CompletionRoute::MonitoredFence)
+        {
+            if (fenceValue >= (std::numeric_limits<std::uint64_t>::max)() - 1)
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            result = slot.copyContext4->Signal(slot.completionFence.get(), ++fenceValue);
+            if (SUCCEEDED(result))
+                result = slot.completionFence->SetEventOnCompletion(fenceValue, slot.event.get());
+            if (SUCCEEDED(result))
+                slot.context->Flush();
+        }
+        else
+            result = slot.copyDxgiDevice2->EnqueueSetEvent(slot.event.get());
+        return result;
+    }
+
+    void QuarantineCopy(Slot& slot, HRESULT failure) noexcept
+    {
+        slot.state = State::Quarantined;
+        slot.copyFailure = failure;
+        slot.copyRetirementOnly = true;
+        slot.retirementArmed = true;
+        ++inFlight;
+        scheduler->NotifyOwnerWork(); // One bounded barrier offer; refusal afterwards remains dormant.
+    }
+
     HRESULT Record(Slot& slot) noexcept
     {
         HRESULT result = slot.completionReceiver ? S_OK : PrepareStorage(slot);
         if (FAILED(result))
             return result;
+        if (route == GpuCapabilities::CompletionRoute::MonitoredFence &&
+            fenceValue >= (std::numeric_limits<std::uint64_t>::max)() - 1)
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW); // Before any producer/copy commands.
+        slot.context = context;
+        slot.completionFence = fence;
+        slot.ready.store(false, std::memory_order_relaxed);
+        if (!scheduler->RearmEventWait(slot.wait))
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        if (!slot.completionReceiver)
+        {
+            // Strong original endpoints are retained before invoking a producer or recording a copy.
+            slot.copyDevice = device;
+            slot.copyContext4 = context4;
+            slot.copyDxgiDevice2 = dxgiDevice2;
+            slot.copyRoute = route;
+        }
         if (slot.producer)
         {
             ID3D11Texture2D* source = nullptr;
             D3D11_BOX box{};
             result = slot.producer->RecordReadbackSource(source, box);
+            if (SUCCEEDED(result))
+            {
+                result = ValidateSource(source, box);
+                if (SUCCEEDED(result) && (box.right - box.left != slot.width || box.bottom - box.top != slot.height))
+                    result = E_INVALIDARG;
+            }
             if (FAILED(result))
+            {
+                // A producer may have issued partial draws before refusing its source. No local HRESULT proves
+                // retirement. The same original context must acknowledge even when no copy follows.
+                QuarantineCopy(slot, result);
                 return result;
-            result = ValidateSource(source, box);
-            if (FAILED(result) || box.right - box.left != slot.width || box.bottom - box.top != slot.height)
-                return FAILED(result) ? result : E_INVALIDARG;
+            }
             slot.source = source;
             slot.box = box;
         }
-        slot.context = context;
-        slot.completionFence = fence; // an old-generation event registration retains its fence until delivery
-        slot.ready.store(false, std::memory_order_relaxed);
-        if (!scheduler->RearmEventWait(slot.wait))
-            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         if (!slot.completionReceiver)
         {
             if (slot.bufferReadback)
                 slot.context->CopyResource(slot.bufferStaging.get(), slot.bufferSource.get());
             else
                 slot.context->CopySubresourceRegion(slot.staging.get(), 0, 0, 0, 0, slot.source.get(), 0, &slot.box);
+            ++statistics.copies; // Count the actual command, even if completion registration then refuses.
+            result = SignalCopyCompletion(slot);
         }
-        if (route == GpuCapabilities::CompletionRoute::MonitoredFence)
+        else if (route == GpuCapabilities::CompletionRoute::MonitoredFence)
         {
-            if (fenceValue >= std::numeric_limits<std::uint64_t>::max() - 1)
-                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             result = context4->Signal(fence.get(), ++fenceValue);
             if (SUCCEEDED(result))
                 result = fence->SetEventOnCompletion(fenceValue, slot.event.get());
@@ -269,16 +338,16 @@ struct GpuWorkQueue::Impl final
                 context->Flush();
         }
         else
-            result = dxgiDevice2->EnqueueSetEvent(slot.event.get()); // includes the submit/flush
+            result = dxgiDevice2->EnqueueSetEvent(slot.event.get());
         if (SUCCEEDED(result))
         {
             slot.state = State::Waiting;
             slot.source.reset();
             slot.bufferSource.reset();
             ++inFlight;
-            if (!slot.completionReceiver)
-                ++statistics.copies;
         }
+        else if (!slot.completionReceiver)
+            QuarantineCopy(slot, result);
         return result;
     }
 
@@ -535,6 +604,23 @@ HRESULT GpuWorkQueue::CaptureCompletionContext(GpuCompletionContext& empty) cons
     return S_OK;
 }
 
+HRESULT GpuWorkQueue::BorrowCurrentContextOwner(const GpuCompletionContext& captured, ID3D11Device*& device,
+                                                ID3D11DeviceContext*& immediate) const noexcept
+{
+    device = nullptr;
+    immediate = nullptr;
+    if (!_impl || _impl->ownerThread != GetCurrentThreadId())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    const auto& self = *_impl;
+    if (self.stopped || !captured || captured._ownerThread != self.ownerThread || captured._origin != self.identity ||
+        captured._deviceGeneration != self.deviceGeneration || !self.device || !self.context ||
+        captured._device.get() != self.device.get() || captured._context.get() != self.context.get())
+        return E_ABORT;
+    device = captured._device.get();
+    immediate = captured._context.get();
+    return S_OK;
+}
+
 bool GpuWorkQueue::HasRetirementCompletionSlot(const GpuCompletionContext& captured) const noexcept
 {
     if (!_impl || _impl->stopped || !captured || captured._origin != _impl->identity ||
@@ -642,6 +728,8 @@ void GpuWorkQueue::RetireDevice() noexcept
     for (auto& slot : self.slots)
     {
         slot.retired = true;
+        if (slot.state == Impl::State::Quarantined)
+            slot.retirementArmed = true; // Actual device transition permits one offer on the retained original.
         if (slot.state == Impl::State::Free)
             self.DropStorage(slot);
     }
@@ -687,6 +775,9 @@ void GpuWorkQueue::CloseAfterWorkers() noexcept
         slot.bufferReceiver = nullptr;
         slot.completionReceiver = nullptr;
         slot.producer = nullptr;
+        slot.copyDevice.reset();
+        slot.copyContext4.reset();
+        slot.copyDxgiDevice2.reset();
         self.DropStorage(slot);
     }
     if (self.registered)
@@ -712,6 +803,7 @@ bool GpuWorkQueue::HasReady() const noexcept
     {
         if ((slot.state == Impl::State::Pending &&
              (slot.retired || (_impl->inFlight < kMaxInFlight && _impl->CanRecord(slot)))) ||
+            (slot.state == Impl::State::Quarantined && slot.retirementArmed) ||
             (slot.state == Impl::State::Waiting && !(slot.mapDeferred && _impl->testHoldMapRecovery) &&
              slot.ready.load(std::memory_order_acquire)))
             return true;
@@ -731,6 +823,13 @@ void GpuWorkQueue::Pump() noexcept
         if (slot.state != Impl::State::Waiting || (slot.mapDeferred && self.testHoldMapRecovery) ||
             !slot.ready.exchange(false, std::memory_order_acquire))
             continue;
+        if (slot.copyRetirementOnly)
+        {
+            --self.inFlight;
+            // This real original driver event acknowledges only retirement. Never Map or lend useful rows.
+            self.DeliverFailure(slot, slot.copyFailure);
+            continue;
+        }
         if (slot.completionReceiver)
         {
             --self.inFlight;
@@ -834,6 +933,22 @@ void GpuWorkQueue::Pump() noexcept
     }
     for (auto& slot : self.slots)
     {
+        if (slot.state != Impl::State::Quarantined || !slot.retirementArmed)
+            continue;
+        slot.retirementArmed = false;
+        const HRESULT removed = slot.copyDevice->GetDeviceRemovedReason();
+        if (FAILED(removed))
+        {
+            --self.inFlight;
+            self.DeliverFailure(slot, removed); // Fresh status of the actual original device, never an injection.
+        }
+        else if (SUCCEEDED(self.SignalCopyCompletion(slot)))
+            slot.state = Impl::State::Waiting;
+        // Healthy refusal retains source, staging, original context, receiver and in-flight charge. No timer,
+        // re-query loop, replacement-context signal, useful callback, row lease or apparent completion.
+    }
+    for (auto& slot : self.slots)
+    {
         if (slot.state != Impl::State::Pending)
             continue;
         if (slot.retired)
@@ -841,7 +956,7 @@ void GpuWorkQueue::Pump() noexcept
         else if (self.inFlight < kMaxInFlight && self.CanRecord(slot))
         {
             const HRESULT result = self.Record(slot);
-            if (FAILED(result))
+            if (FAILED(result) && slot.state == Impl::State::Pending)
                 self.DeliverFailure(slot, result);
         }
     }
@@ -923,4 +1038,14 @@ void GpuWorkQueue::SetRetirementCompletionRefusalsForTest(HRESULT error, unsigne
     _impl->testRetirementFailure = error;
     _impl->testRetirementRefusals = FAILED(error) ? attempts : 0;
     _impl->testRetirementTarget = target;
+}
+
+void GpuWorkQueue::SetCopyCompletionRefusalsForTest(HRESULT error, unsigned int attempts) noexcept
+{
+    if (_impl)
+    {
+        _impl->CheckOwner();
+        _impl->testCopySignalFailure = FAILED(error) ? error : S_OK;
+        _impl->testCopySignalRefusals = FAILED(error) ? attempts : 0;
+    }
 }

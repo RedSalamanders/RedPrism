@@ -261,6 +261,18 @@ poll or re-dispatch settled density after an admission failure.
 
 Only the owner records Copy, fence Signal/event registration/Flush or EnqueueSetEvent, Map READ DO_NOT_WAIT and
 Unmap. EnqueueSetEvent already flushes. Registered waits publish an atomic ready flag and wake the shared job event.
+Before invoking a source producer or recording a copy, the slot retains its original device/context/completion
+route and arms its existing wait. A failed producer may have issued partial commands; a failed completion
+signal after a copy is likewise not retirement proof. Both retain the original source, staging, receiver,
+ticket/generation and one of the two in-flight charges in quarantine. The owner offers one real retirement
+barrier on that captured context, never a replacement context. Healthy refusal then remains dormant without
+a timer, polling or useful callback. An actual device transition permits one further captured barrier offer.
+Only its real driver event, fresh removal status of the actual original device, or joined shutdown permits
+retirement. Event delivery returns the original failure with no readable rows or lease: it never recopies or
+maps. Joined shutdown drops the callback. This policy applies equally to texture and structured-buffer copies.
+Copy statistics count the actual recorded copy even when its completion registration fails; a producer
+failure before copying counts no copy. Ordinary command-completion refusal retains its separate caller-owned
+quarantine protocol.
 Map is nonblocking after completion. If it returns WAS_STILL_DRAWING, the queue may retain the original copy,
 slot, generation and in-flight charge through exactly one additional EnqueueSetEvent barrier when supported.
 Only that new event permits a second nonblocking Map; a second busy result or barrier failure is a local failure.
@@ -367,7 +379,12 @@ removal, or joined shutdown acknowledges a submitted use. Failure to enqueue/sig
 never acknowledge it. A post-execute failure stops the source and retains the exact command/context/charge.
 One bounded captured recovery barrier may resolve it. Failed healthy recovery stays dormant and quarantined;
 an actual device change permits one further attempt, otherwise joined shutdown resolves destruction ownership.
-No timer, polling or unchanged self-rearm is permitted. Failure is reported once per source.
+No timer, polling or unchanged self-rearm is permitted. Failure is reported once per source. Default failure
+cancels the original token. Explicit `RetainOriginalForRecovery` stops recording/execute but retains the token
+for a later separately acknowledged original-parent recovery stage; it neither acknowledges GPU work nor
+turns failure into useful success. Real user cancellation still wins. Unknown dispositions refuse.
+The owner-only free-source query refuses during callbacks, while stopped and off-owner. Actual joined detach
+publishes one capacity wake; refusal publishes none. A stopped stream also invalidates its recording policy.
 
 Normal detachment requires recorder callback join and all submitted GPU uses acknowledged. Captured device/context
 references transfer into an empty worker-retired owner; the UI never silently drops their last reference.
@@ -774,3 +791,29 @@ sparse assembly and retained selection metadata. Software devices additionally c
 to physical/commit admission. The parent keeps both complete charges through actual recorder, command, copy,
 row and worker-resource retirement; a mathematical estimate alone neither admits nor acknowledges a graph.
 The non-owning Descriptor overload is the independent arithmetic test seam. It creates no source authority.
+
+### Current utility context and joined accounting
+
+`GpuWorkQueue::BorrowCurrentContextOwner` returns non-owning pointers only when the actual captured queue
+origin, owner thread, current generation, device and immediate context all match a live unstopped queue. It
+clears both outputs before every refusal and performs no resource creation, command, ownership transfer or
+acknowledgement. The captured strong owner still retires on a worker after all original users acknowledge.
+
+`UtilityReadbackOwnerService` borrows at most128 parents by their exact original ticket. Attach requires the
+actual acknowledged original callback. The fixed active bitmap excludes removed parents from readiness
+queries; callbacks cannot mutate the route. Joined destruction charge transfer requires the same original
+preallocated/bound CPU accounting and a stopped service. It does not assert GPU/copy/row acknowledgement.
+Only after actual scheduler Close returns and every parent is detached can the owner refund joined GPU
+charges. Worker cleanup occurs before that return; ordinary utility caller activation remains separate.
+
+
+### Shared processing startup recorder
+
+Application processing startup enables its one bounded recording lane and registers the shared command
+pump after UtilityReadback, before any job descriptor is submitted. Prepared display borrows that same
+pump; its first or second child attachment refusal leaves the common pump live. Display acquisition is
+one-shot: partial controllers close without requested graphs, and the caller completes Application shutdown
+instead of reinitializing their stopped state. Repeat common initialization is a no-op while live.
+Actual device changes notify the common pump even when prepared display is disabled. Shutdown stops it
+independently, acknowledges only after actual producer join, closes display clients first, then detaches
+the empty common pump. Ordinary prepared display/tool/utility activation still requires its caller gates.

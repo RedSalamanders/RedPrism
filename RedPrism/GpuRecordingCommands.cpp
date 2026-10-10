@@ -120,7 +120,7 @@ HRESULT GpuRecordingCommands::StatusForWork() const noexcept
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
     if (_productionEpoch == 0 || _stream->ProductionEpochForWork() != _productionEpoch)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
-    return SUCCEEDED(_result) && _cancellation.IsCancelled() ? E_ABORT : _result;
+    return SUCCEEDED(_result) && (_cancellation.IsCancelled() || !_stream->CanRecordForWork()) ? E_ABORT : _result;
 }
 
 HRESULT GpuRecordingCommands::ContextStatusForWork(ID3D11Device* device, ID3D11DeviceContext* context) const noexcept

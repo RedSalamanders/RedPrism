@@ -637,7 +637,8 @@ suite establishes command semantics; the production host graph and current priva
 Constant-time capture and G1 remain unqualified.
 
 `owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
-pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
+pending versus ready, literal ten-leaf acceptance/eleventh refusal, bounded/duplicate/self registration refusal,
+quiescent detach/reused slot, recursive pump
 refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application. Production
 clipboard Inspect/Copy retries retain their admitted record and reservation, with Paste sharing six total
 acquisitions across Inspect and owned Copy; host qualification and its remaining limits are recorded below.
@@ -1226,6 +1227,16 @@ same-procedure decoded boundary. An unrelated later data symbol does not extend 
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
+The separate short-default terminal form adds 63 independent encoded controls (three accepted, 60 refused).
+Its signed disp8 stack reload and unsigned short JA must match the CMP slot and the complete contiguous RCX
+RVA dispatch. Only a bounded body (at most4096 bytes after the candidate dispatch) with an exact PE/listing
+`RET; NOP dword [RAX]` three-byte padding shape may use a distinct default target. Every body row is known,
+contiguous and matches PE bytes; body branches into terminal padding/table data refuse. Case/default targets
+must be decoded body boundaries; the anonymous same-owner table starts at the guarded DWORD array and ends
+exactly at its PDB procedure end. Reported table bytes must also match the PE. Missing, unknown, duplicate or
+changed rows, invalid bounds/targets/symbols and real body/adjacent VEX/EVEX instructions remain rejected.
+These are parser controls, not native execution or performance proof. The runtime allowlist and DxUi pin stay unchanged.
+
 `IsaWideStackGuardTests.ps1` reruns the original inline-table controls and adds 54 independent
 `isa-inline-table.TerminalDwordWideStack*` controls for the observed ASan EndCanvasEdit switch. The seven
 contiguous CMP/JA/MOVSXD/RCX-dispatch rows require exact PE/listing agreement, full disp32 stack-slot equality,
@@ -1554,7 +1565,9 @@ retry observer prefix/reached fault, matching live pool/routing/source/sink stat
 retry/GPU routes, empty ownership and unchanged caller apartment. Acquired pools acknowledge exactly one final
 off-owner MTA hook; a prefix with no scheduler runs no hook. Each case owns its own trace/pool/sink and supplies
 no window/device/chrome. The following complete graphics-host tests retain their separate scope.
-Full x64 logs must report `application-processing summary: 390 checks, 0 failures` and 390 named PASS controls.
+The original foundation reported `application-processing summary: 390 checks, 0 failures` and 390 named PASS
+controls. Subsequent acquired-stage additions preserve those controls; the shared RecordedCommands startup
+qualification below requires `application-processing summary: 593 checks, 0 failures` and 593 named PASS controls.
 After-stage checkpoints test prefix cleanup, not failure inside those successful APIs. Retry seams return before
 the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
 scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
@@ -1776,7 +1789,7 @@ idempotent shutdown. The original nine scenarios/144 controls remain unchanged.
 
 Normal cancellation yields the original record; only final worker shutdown may join its existing read.
 
-The ninth owner route has a literal capacity control: nine distinct sources attach and the tenth refuses.
+The ten-leaf owner router has a literal capacity control: ten distinct sources attach and the eleventh refuses.
 Existing fair one-leaf rotation and mutation/reentrancy refusals remain unchanged. Processing startup
 adds its native-read checkpoint after recycling, retaining all prior stage indices and prefix checks.
 All existing path-classification host scenarios remain required. Full Debug/Release/real ASan, analysis,
@@ -2422,3 +2435,52 @@ dense/sparse documents independently check cached ownership, one/three raster ow
 software charging and invalid document/tile bounds. Unknown source bounds, overflowing products, one byte
 beyond the exact UINT64_MAX sum and software-domain overflow refuse. No native expectation is rebaselined
 from the implementation output. Real adapter admission, acquired-prefix overlap and caller lifetime remain due.
+
+### Dormant utility ownership and original source capacity
+
+The independent reference for `utility-owner.*`, `utility-joined-close.*`, `utility-current-context.*`
+and `utility-source-capacity.*` is the original-ticket state machine, actual scheduler/queue acknowledgements
+and literal ownership/charge expectations in the corresponding `Composition.Tests.*` fixtures.
+
+Routing uses128 actual admissions, unchanged ticket/generation, bitmap boundaries63/64/127, one fair receiver
+per pass, callback/startup/mutation refusals and idle no-readiness behavior. Its graphless receiver mocks prove
+routing only. Joined Close uses a real suspended parent, CPU1MiB/GPU65536 policy charges and literal65536 bytes
+of value17. A held final worker proves CPU/GPU charges remain until actual retirement; useful Completed is
+dropped. GPU snapshot arithmetic in this fixture is accounting-policy proof, not an actual adapter query.
+
+Current-context checks use actual WARP device/context captures, origin/generation, same-pointer and real-device
+replacement, reconstructed queue identity, output clearing and worker-only strong-reference retirement. The
+source-capacity fixture fills both actual pump slots, suspends a third original1MiB ticket without recording
+or a retry timer, refuses foreign/off-owner/callback operations, then uses one real detach notification to
+attach/resume that same ticket. A held first retirement proves all three whole charges still exist. Failed
+pre-execution transport remains Failed and grants no successful pixel publication.
+Its final destruction stage explicitly switches to Compute. While that first worker is held, the third
+original recording stage must join on the available recording lane; a zero thread ID cannot pass that proof.
+
+`Composition.Tests.CopyCompletionRetirement` uses the actual WARP queue and literal4x2 BGRA/structured-buffer
+sources. Eight independent state-machine cases cover the selected completion route, actual event fallback,
+two healthy signal refusals followed by real device replacement, real original cancellation, joined Close,
+a producer that issues an actual command then refuses, and buffer recovery/cancellation. Initial refusal
+occurs after a real copy, before signaling; subsequent successful barriers use the original actual context
+and driver event. Assert one original1MiB admission, source/staging retention, no early callback/refund,
+no mapped rows, no recopy, exact original failure, cancelled useful-body exclusion and worker graph retirement.
+Joined Close must drop useful callbacks and bind original CPU accounting until final graph/control-owner
+retirement. These are transport/ownership controls, not rendered-pixel goldens or production GPU admission.
+
+Processing startup appends UtilityReadback checkpoint9 after unchanged checkpoints0..8. Test every acquired
+prefix, a real full-router refusal after NativeRead (seven inert leaves plus three original routes), native-read
+internal fault prefixes, responsive/history-source rollback, joined Close and repeated Shutdown. The service
+is dormant and must detach before its router is destroyed. This does not activate ordinary utility parents.
+Complete real caller admission/device-restart/row/shutdown matrices and G1 remain required.
+
+
+Processing startup subsequently appends RecordedCommands checkpoint10; checkpoints0..9 keep their identities.
+Preserve every earlier prefix/refusal assertion. Add the actual common-route refusal with six inert leaves
+at NativeRead: the first UtilityReadback attachment succeeds, then the full ten-leaf router refuses the
+command pump before checkpoint10. Joined rollback must detach both shared leaves and retire the enabled
+recording worker. Responsive startup has six routes before rows, seven before display and nine before
+stroke. Literal capacity seeds are4/3/1 respectively. An additional pending-child case seeds two leaves
+before display: committed attaches, pending refuses, committed closes, and the common pump remains live.
+For both display-child failures, assert empty children, one live shared pump, unchanged free source capacity,
+no repeated partial display acquisition and joined final detach. These new controls require fresh full
+source/profile qualification; they do not activate the ordinary prepared route or qualify G1.

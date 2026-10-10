@@ -81,6 +81,9 @@ int Application::RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance
         owner->_prompts = &QuietPrompts();
         const HRESULT processing = owner->InitializeProcessing();
         expect(SUCCEEDED(processing), "real-processing-initializes");
+        expect(owner->_utilityReadbackInitialized && !owner->_utilityReadback.HasPending() &&
+                   !owner->_utilityReadback.HasReady() && !owner->_ownerWork.Attach(owner->_utilityReadback),
+               "original-processing-retains-one-dormant-utility-registration");
         if (FAILED(processing) || !owner->_jobs.WakeHandle())
             return 5;
         std::size_t attached = 0;
@@ -201,6 +204,10 @@ int Application::RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance
         const bool sourceAttached = owner->_ownerWork.Attach(owner->_historyResidencySource);
         const bool sourceDetached = sourceAttached && owner->_ownerWork.Detach(owner->_historyResidencySource);
         expect(sourceAttached && sourceDetached, "shutdown-detaches-the-real-notification-route");
+        const bool utilityAttached = owner->_ownerWork.Attach(owner->_utilityReadback);
+        expect(utilityAttached && owner->_ownerWork.Detach(owner->_utilityReadback) &&
+                   !owner->_utilityReadbackInitialized && !owner->_utilityReadback.HasPending(),
+               "shutdown-detaches-dormant-utility-route-after-joined-final-worker");
         owner->Shutdown();
         expect(owner->_shutdownComplete && !owner->_jobs.WakeHandle() && !owner->_historyResidencySource.HasReady(),
                "repeat-shutdown-has-no-new-notification-or-pool");

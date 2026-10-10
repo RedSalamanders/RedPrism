@@ -3,6 +3,18 @@
 #include "Application.h"
 #include "PreparedRasterPreview.h"
 
+HRESULT Application::InitializeRecordedCommandsOwner() noexcept
+{
+    if (_shutdownStarted || _jobs.InUiCallback())
+        return E_UNEXPECTED;
+    if (_recordedCommandsInitialized)
+        return S_OK;
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.EnableGpuRecordingLane()));
+    RETURN_IF_FAILED(_recordedCommands.InitializeOwner(_jobs, _gpuWork, _ownerWork));
+    _recordedCommandsInitialized = true;
+    return S_OK;
+}
+
 bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
 {
     return InitializePreparedDisplayOwner(allowHidden);
@@ -10,29 +22,24 @@ bool Application::EnableCommittedDisplayForTest(bool allowHidden) noexcept
 
 bool Application::InitializePreparedDisplayOwner(bool allowHidden) noexcept
 {
-    if (_shutdownStarted || _committedDisplayInitialized || _jobs.InUiCallback())
+    if (_shutdownStarted || _preparedDisplayAcquisitionStarted || _committedDisplayInitialized || _jobs.InUiCallback())
         return false;
-    if (FAILED(_jobs.EnableGpuRecordingLane()))
+    if (FAILED(InitializeRecordedCommandsOwner()))
         return false;
-    if (FAILED(_recordedCommands.InitializeOwner(_jobs, _gpuWork, _ownerWork)))
-        return false;
+    // A partly acquired controller is closed on failure. Its one-shot state cannot be reinitialized;
+    // the caller joins Application shutdown. The independent shared command route remains live.
+    _preparedDisplayAcquisitionStarted = true;
     if (FAILED(_committedDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, *this,
                                                  &_graphGpuBudget, false, false)))
     {
-        _recordedCommands.StopOwner();
-        _recordedCommands.AcknowledgeJoinedShutdownOwner(); // No source/producer was ever attached.
-        if (!_recordedCommands.CloseOwner())
-            std::terminate();
         return false;
     }
     if (FAILED(_pendingDisplay.InitializeOwner(_jobs, _gpuWork, _recordedCommands, _ownerWork, _pendingDisplayClient,
                                                &_graphGpuBudget, true, false)))
     {
         _committedDisplay.StopOwner();
-        _recordedCommands.StopOwner();
-        _recordedCommands.AcknowledgeJoinedShutdownOwner();
         _committedDisplay.JoinedShutdownOwner(); // No graph was requested or captured.
-        if (!_committedDisplay.CloseAfterWorkersOwner() || !_recordedCommands.CloseOwner())
+        if (!_committedDisplay.CloseAfterWorkersOwner())
             std::terminate();
         return false;
     }

@@ -42,6 +42,7 @@
 #include "StrokeOpeningWork.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
+#include "UtilityReadbackOwnerService.h"
 
 #include <array>
 #include <atomic>
@@ -172,6 +173,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
+    [[nodiscard]] HRESULT InitializeRecordedCommandsOwner() noexcept;
     [[nodiscard]] bool OpenCommandLinePaths(std::span<const std::wstring_view> paths) noexcept;
     void Shutdown() noexcept;
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
@@ -1161,6 +1163,10 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     ApplicationProcessingTestProbe* _processingTestProbe = nullptr;
     JobScheduler _jobs;
     OwnerWorkMultiplexer _ownerWork;
+    UtilityReadbackOwnerService _utilityReadback;
+    bool _utilityReadbackInitialized = false;
+    bool _recordedCommandsInitialized = false;
+    bool _preparedDisplayAcquisitionStarted = false;
     RetryWaitQueue _retryWait;
     PathReadWait _pathReadWait;
     PathClassificationReadSource _pathReadSource; // Absent in production; test contexts survive Close.

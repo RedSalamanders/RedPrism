@@ -338,6 +338,9 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
                         resourceCases[caseIndex], control);
         };
         expect(owner->InitializeProcessing() == E_ACCESSDENIED, "exact-reached-resource-refusal");
+        expect(!owner->_utilityReadbackInitialized && !owner->_utilityReadback.HasPending() &&
+                   !owner->_utilityReadback.HasReady(),
+               "failed-native-read-prefix-never-acquires-later-utility-route");
         expect(fault.exact && fault.visits == caseIndex + 1, "only-the-successful-prefix-is-acquired");
         expect(owner->_jobs.WorkerCount() == 1 && owner->_jobs.WakeHandle() && DeferredReleaseDetail::sink.enqueue &&
                    !owner->_window && !owner->_chrome,
@@ -349,6 +352,10 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
                "shutdown-joins-and-closes-the-entire-acquired-prefix");
         const bool attached = owner->_ownerWork.Attach(owner->_pathReadWait);
         expect(attached && owner->_ownerWork.Detach(owner->_pathReadWait), "partial-native-route-is-detached");
+        const bool utilityAttached = owner->_ownerWork.Attach(owner->_utilityReadback);
+        expect(utilityAttached && owner->_ownerWork.Detach(owner->_utilityReadback) &&
+                   !owner->_utilityReadbackInitialized,
+               "failed-native-read-prefix-leaves-no-utility-registration");
         owner->Shutdown();
         expect(owner->_shutdownComplete && fault.visits == caseIndex + 1 && owner->_jobs.ReservedMemoryBytes() == 0 &&
                    owner->_jobs.ReleasingMemoryBytes() == 0,
@@ -736,9 +743,9 @@ int Application::RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) n
         }
         (void)PumpMessages();
     }
-    std::printf("SUMMARY application-path-read cases=9 startupCases=3 checks=%u expected=144 failures=%u\n",
+    std::printf("SUMMARY application-path-read cases=9 startupCases=3 checks=%u expected=150 failures=%u\n",
                 checks - boundaryChecks, failures);
     std::printf("SUMMARY application-path-read-boundary cases=2 checks=%u expected=34 failures=%u\n", boundaryChecks,
                 failures);
-    return checks == 178 && boundaryChecks == 34 && !failures ? 0 : 5;
+    return checks == 184 && boundaryChecks == 34 && !failures ? 0 : 5;
 }

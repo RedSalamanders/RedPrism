@@ -378,7 +378,10 @@ reservation, wait or queued retry. Equal totals need no snapshot. Future stages 
 keep the grown total. Software GPU graphs must charge their CPU-backed texture ownership before creation;
 this API alone establishes neither their complete declaration nor production display activation.
 
-The owner router serves one ready leaf per pump, with at most eight leaves. Application's retry source adds
+The owner router serves one ready leaf per pump, with at most ten leaves. The dormant utility service uses
+fixed original-ticket slots and a two-word active bitmap; an empty service performs no parent scan, allocation,
+wait registration or periodic wake. Processing startup alone does not activate ordinary utility parents. Joined
+GPU charges remain held on the owner until actual final worker cleanup returns. Application's retry source adds
 eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
 pressure uses two). Clipboard Inspect/Copy retries retain their admitted record, reservation and receiver while
 waiting; Paste shares a limit of six total Inspect plus owned-Copy acquisitions. A busy transfer MUST release its
@@ -1214,6 +1217,12 @@ without an owner allocation fallback. It requires live whole CPU/GPU admission a
 GPU admission uses fixed unique nonwrapping reservation records, conservative overlap and explicit driver headroom.
 The admitting domain outlives its reservations. Persistent reusable staging retains an independent charge; uncertain
 copies and joined mapped shutdown retain the exact request's charge until owner graphics/context release.
+Post-copy completion refusal retains strong original endpoints in the existing fixed readback slot and
+counts against the existing two-in-flight limit and staging cap. One captured-context retirement barrier is
+offered; healthy refusal has zero readiness until an actual device transition. There is no additional event,
+thread, retry timer, recopy or Map. Partial producer failure follows the same rule. A CPU destruction stage
+must explicitly resume on the compute lane after recording, leaving the dedicated recorder available to the
+next original source. Returning a slot or receiving a local HRESULT never acknowledges preceding commands.
 Only a final successful original-ticket callback may transfer the created destination, held source Raster and
 reservation. All old job graphics references are removed before charge transfer. A base-only request leaves
 lower mips undefined;
@@ -1321,3 +1330,13 @@ retirement completed. Reuse the existing events and slots without resetting prod
 Stopped, failed, foreign, unjoined or exhausted streams refuse. An old command lease cannot name a later
 command occupying the same physical slot. This API does not establish GPU completion or permit reusing a
 device generation after replacement.
+
+
+### Shared recorder startup cost
+
+Processing startup acquires one GPU recording worker before its first descriptor; all display and utility
+parents share it. This bounded cold-start addition replaces display's private startup acquisition. The
+worker blocks on its existing pool event while idle; an unattached command pump is not pending or ready.
+No timer, polling, extra GPU device, frame or useful image work follows registration. A refused acquired
+prefix joins the recording worker through the original scheduler Close. Startup cost and real caller
+owner/frame costs remain measurement obligations before ordinary responsive-route activation.

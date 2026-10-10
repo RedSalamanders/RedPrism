@@ -74,17 +74,20 @@ int RunOwnerWorkMultiplexerTests()
     g_failures = 0;
     OwnerWorkMultiplexer mux;
     Expect(!mux.HasPending() && !mux.HasReady(), "owner-work.empty-inactive");
+    static_assert(OwnerWorkMultiplexer::kCapacity == 10);
+    const volatile std::size_t observedCapacity = OwnerWorkMultiplexer::kCapacity;
+    Expect(observedCapacity == 10, "owner-work.literal-ten-leaf-capacity");
     mux.Pump();
 
-    std::array<MockSource, 10> sources{};
-    for (std::size_t i = 0; i < 9; ++i)
+    std::array<MockSource, 11> sources{};
+    for (std::size_t i = 0; i < 10; ++i)
     {
         sources[i].index = static_cast<int>(i);
         Expect(mux.Attach(sources[i]), "owner-work.attach-within-capacity");
     }
     Expect(!mux.Attach(sources[0]), "owner-work.duplicate-rejected");
     Expect(!mux.Attach(mux), "owner-work.self-attach-rejected");
-    Expect(!mux.Attach(sources[9]), "owner-work.capacity-rejected");
+    Expect(!mux.Attach(sources[10]), "owner-work.capacity-rejected");
     MockSource foreign;
     Expect(!mux.Detach(foreign), "owner-work.foreign-detach-rejected");
 

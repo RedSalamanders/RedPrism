@@ -11,6 +11,7 @@
 #include "Composition.Tests.CapturedCompletion.h"
 #include "Composition.Tests.CommandStreamRestart.h"
 #include "Composition.Tests.CommittedDisplay.h"
+#include "Composition.Tests.CopyCompletionRetirement.h"
 #include "Composition.Tests.DetachedEpoch.h"
 #include "Composition.Tests.DisplayRebind.h"
 #include "Composition.Tests.DisplayVisibility.h"
@@ -28,6 +29,10 @@
 #include "Composition.Tests.RecordedUtilityRegions.h"
 #include "Composition.Tests.RecordedWarpPreview.h"
 #include "Composition.Tests.UtilityAdmission.h"
+#include "Composition.Tests.UtilityCurrentContext.h"
+#include "Composition.Tests.UtilityJoinedClose.h"
+#include "Composition.Tests.UtilityOwnerService.h"
+#include "Composition.Tests.UtilitySourceCapacity.h"
 #include "Composition.Tests.VideoMemorySnapshot.h"
 #include "Composition.Tests.WarpReplayCompute.h"
 #include "CompositionStageTimingTests.h"
@@ -2231,6 +2236,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RedPrism::CompositionTests::RunUtilityAdmissionTests();
     gFailures += RedPrism::CompositionTests::RunRecordedUtilityRegionTests();
     gFailures += RunGpuCommandPumpTests();
+    gFailures += RunUtilityOwnerServiceRoutingTests();
+    gFailures += RedPrism::CompositionTests::RunUtilityJoinedCloseTests();
+    gFailures += RedPrism::CompositionTests::RunUtilityCurrentContextTests();
+    gFailures += RunUtilitySourceCapacityTests();
+    gFailures += RedPrism::CompositionTests::RunCopyCompletionRetirementTests();
     gFailures += RunRecordedDisplayParentTests();
     gFailures += RunRecordedAdjustmentParentTests();
     gFailures += RedPrism::CompositionTests::RunAdjustmentDisplayAdmissionTests();
