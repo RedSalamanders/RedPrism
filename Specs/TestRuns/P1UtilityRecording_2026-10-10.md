@@ -184,3 +184,22 @@ The original reader's wrong archive-path key refusal is preserved before its nar
 builds were not replayed. Full x64 Debug/Release/real ASan and Release analysis remain independently
 qualified components. The real utility parent, caller migration, production admission, activation and G1
 remain open. The user confirms the display is now on/unlocked; fresh actual presentation runs are due.
+
+## Fresh visible measurement and next integration
+
+The qualified component is committed/pushed as `0d2cb0e`. No production utility caller has been migrated.
+
+Original r763 actual PID76280 exits5 at 2026-10-10T15:14:26.678137+00:00 through 2026-10-10T15:14:27.553870+00:00 UTC. It reaches real Presents with visible1/displayOn1, then fails `cancel-ambient-pointer-input` before a complete timing roster. Its original reader additionally rejects inconsistent slash separators in copied-source names; that draft-reader defect does not change the native failure. Original child, copied sources, logs, verifier failure and products remain immutable in `D:\RedPrismQualificationArchives\P1-utility-1144-cancellation-r763-2026-10-10`; completion SHA256 `8132058B58E1B3B5A99670BC283858E7B461140200F975278B341397224FA3C7`. It is not passing latency evidence.
+
+The user confirms an unlocked/on display and authorizes untouched visible runs. Fresh r769/r764/r765/r766/r767/r768 are reserved for prepared45/prepared100/prepared4K-WARP/direct45/direct100/direct4K-WARP, sequentially on the exact r760 product closure and DAB609/1,144-source identity. Main fixes the reader to require the actual `UI CANCEL REPORT` and normalize safe copied-source names; the 2ms limit and all native expectations remain unchanged. Both eight-control reader checks and read-only actual source/profile/archive/ARM90/mirror preflight pass; these are reader proof, not native timing results.
+
+Next code checklist:
+
+- [ ] Integrate retained original-record command failures, stopped recorder policy and exact current-context borrowing.
+- [ ] Integrate the tenth dormant owner route and prove every processing acquisition prefix.
+- [ ] Compile/run the reviewed routing, joined-charge shutdown, current-context and two-source capacity fixtures.
+- [ ] Migrate the actual readback parent and all callers with complete CPU/GPU/output overlap and real acknowledgement.
+
+Private source/test drafts remain uncompiled and unqualified. Visible benchmarks are the only native producer while they run. Scheme restoration compares before/after active schemes; the app restores its temporary execution-state display lease by scope guard, and the actual child thread terminates. No logged power-request restoration measurement is invented.
+
+All six fresh visible cancellation rosters now have authenticated archives, original first-Present proof and all-recorded Apply costs in [the current cost record](P1CancellationCosts_2026-10-10.md). Prepared WARP measures2227us and fails the unchanged2000us gate. This qualifies the measurement evidence, not real utility callers, ordinary activation or G1.
