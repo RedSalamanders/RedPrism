@@ -2392,3 +2392,33 @@ raw running results before cancellation normalization, three resumed body pairs,
 worker retirement remains held. Default initialization emits no execution callback. Owner-only Close signals
 its real shutdown event before a bounded helper releases the held worker, joins all observer activity before
 borrowed context/event destruction and drops owner completion. No wall-clock performance threshold is asserted.
+
+### Serial private utility regions
+
+`RunCommandStreamRestartTests` retains its original three-stage parent and adds recording-policy controls for
+actual joined producer migration, stale/wrong-thread status, cancelled/foreign/null-context rebind refusal,
+same-epoch refusal and shader/state retention. Its original ticket, full charge and command ordinal controls
+must remain unchanged.
+
+`RunRecordedUtilityRegionTests` executes the original scheduler/command-pump/readback parent on WARP and
+available hardware. The owning composition contract names its independent literal sparse-pixel truth table.
+Three actual mapped-row stages compare exact premultiplied bytes, including the partial edge region. All
+stages retain the original ticket and fixture reservation; next-region recording follows actual command,
+copy and row acknowledgements. Cumulative recorded upload bytes remain unchanged after the first region.
+Final graph/source/context retirement runs off owner before the fixture reservation is refunded. The fixture's
+512 MiB charge proves accounting lifetime, not production GPU admission, host migration or a performance gate.
+
+The same original parent tests an invalid region after source capture and cancellation after an actual mapped-row
+callback. Invalid input records no command or pixel publication. Cancellation skips the useful copy body but
+acknowledges the exact original mapped lease, excludes future borrows and retires original owners off owner
+before refund. Unpublished and excluded regions refuse borrows; missing immediate context refuses publication
+without consuming the region. Hardware skips only explicit DXGI_ERROR_UNSUPPORTED/DXGI_ERROR_NOT_FOUND.
+
+`RunUtilityAdmissionTests` uses the composition contract's checked arithmetic policy. Four independently
+enumerated 2x2 descriptor records fix CPU/GPU/logical totals: dense11547152/135468632/595544;
+sparse11556368/135747160/611928; software147015784/135468632/595544;
+empty-layer11542544/134496320/16448. These synthetic ownership descriptors test arithmetic only. Real
+dense/sparse documents independently check cached ownership, one/three raster owners, caller-byte changes,
+software charging and invalid document/tile bounds. Unknown source bounds, overflowing products, one byte
+beyond the exact UINT64_MAX sum and software-domain overflow refuse. No native expectation is rebaselined
+from the implementation output. Real adapter admission, acquired-prefix overlap and caller lifetime remain due.

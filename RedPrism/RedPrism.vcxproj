@@ -557,6 +557,10 @@
 
   <ItemGroup>
     <ClCompile Include="RecordedDisplayGraph.cpp" />
+    <ClCompile Include="..\Common\UtilityReadbackAdmission.cpp" />
+    <ClInclude Include="..\Common\UtilityReadbackAdmission.h" />
+    <ClCompile Include="RecordedUtilityGraph.cpp" />
+    <ClInclude Include="RecordedUtilityGraph.h" />
     <ClCompile Include="CommittedDisplayController.cpp" />
     <ClCompile Include="ApplicationCommittedDisplay.cpp" />
     <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />

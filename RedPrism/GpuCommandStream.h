@@ -43,6 +43,8 @@ class GpuCommandStream final
                                           std::uint64_t deviceGeneration) noexcept;
     // One producer only. Capacity blocks this dedicated recorder on events, never the general compute pool.
     [[nodiscard]] bool CanRecordForWork() const noexcept;
+    // Fresh private recording stage only; the original joined RestartOwner advances this epoch.
+    [[nodiscard]] std::uint64_t ProductionEpochForWork() const noexcept;
     [[nodiscard]] bool BelongsToOwner(const JobScheduler& scheduler, JobTicket source,
                                       std::uint64_t deviceGeneration) const noexcept;
     [[nodiscard]] HRESULT PublishForWork(wil::com_ptr_nothrow<ID3D11CommandList> command,
@@ -101,6 +103,7 @@ class GpuCommandStream final
     std::uint64_t _produced = 0; // Single producer only, read on owner after _finished acquire.
     std::uint64_t _consumed = 0; // Owner only; callbacks acknowledge the exact ordinal.
     std::atomic<std::uint32_t> _producerThread{0};
+    std::atomic<std::uint64_t> _productionEpoch{0};
     std::uint32_t _ownerThread = 0;
     std::atomic<bool> _finished{false};
     std::atomic<bool> _retired{false};

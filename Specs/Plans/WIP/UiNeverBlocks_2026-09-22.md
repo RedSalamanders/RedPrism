@@ -4,7 +4,7 @@
 
 P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
 
-Current step (2026-10-10): shared startup/cancellation foundation `07a92b6` is committed/pushed. Original canvas full Debug r728 failed direct HSV Cancel before its held worker acknowledged; the failed source/output/archive is preserved. Main repairs immediate committed-source selection, LUT exclusion and cached-composition invalidation and adds eight event-held legacy pixel controls. Fresh full Debug r731 passes and authenticates on 1,136-input freeze `D9816447DCE21DCBE05AF9D9EEAA6760DA57BBBC4187339FD8AE16781C6D4B20`, with every predecessor control, all eight new controls and both actual Escape routes. Original full Release r732 and real ASan r733 also pass and authenticate; actual analysis r734 also passes/authenticates; all three ARM64 r89 cross-builds pass/authenticate (15 executable/PDB pairs, five real ASan compiler controls); affected costs remain due on this source. Baseline 2.183 ms Apply remains open. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md). All nine P1 delivery areas, ordinary activation and G1 remain open.
+Current step (2026-10-10): cancellation/display repair `c9fd72d` is committed/pushed after exact full x64 Debug r731, Release r732, real ASan r733, analysis r734 and all three ARM64 r89 cross-builds on the D981/1,136-input source. Current-source cost originals r735 and r741 stop before timings: Windows reports the display off (`presentation-unavailable`, visible1/displayOn0). Both failures and immutable archives remain; the temporary real display-power request is restored. The user now confirms the display is on and unlocked; fresh actual presentation measurements are due after the build matrix. The original display-off attempts remain failures. Baseline2.183ms Apply, G1 and ordinary activation remain open. The private utility graph/admission component now passes authenticated x64 full Debug r759, Release r760, real ASan r761 and Release analysis r762 on the same DAB609/1,144-input freeze; see [utility record](../../TestRuns/P1UtilityRecording_2026-10-10.md). ARM64 r90 Debug/Release/real ASan cross-builds also pass with all 15 EXE/PDB pairs and five sanitizer instrumentation controls independently authenticated; native ARM64 runtime remains unavailable. Real utility parent/caller integration, production admission/retirement and cache-miss measurements remain open; ordinary activation=false, G1=false and P1 Done=false. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md). All nine P1 delivery areas remain open.
 
 Current cancellation repair:
 
@@ -13,6 +13,17 @@ Current cancellation repair:
 - [x] Add eight event-held legacy pixel controls for accepted/refused cancellation; retain the earlier 36 dispatch and 24 budget controls.
 - [x] Qualify the repaired frozen source in full x64 Debug/Release/real ASan, analysis and ARM64 cross-builds. Commit/push this qualified repair step; performance and remaining P1 delivery work stay open.
 - [ ] Measure current-source cancellation/check overhead and fix specified owner/apply overruns; smoke tests do not close G1.
+
+Current utility component:
+
+- [x] Integrate private source/region recording and guarded original-stream policy restart; retain ticket, command ordinals, shaders and raster residency.
+- [x] Add independent literal sparse/edge-region mapped-pixel controls on WARP/hardware, joined producer migration and worker-retirement assertions.
+- [x] Compile/run the initial utility component: Debug r753 and complete Composition r754 pass; preserve the failed r751 fixture build. Strengthened failure/admission controls require fresh proof. [Utility record](../../TestRuns/P1UtilityRecording_2026-10-10.md).
+- [x] Qualify strengthened invalid-region/cancelled-map fixtures in r755/r756 and independent admission arithmetic in r757/r758.
+- [x] Authenticate full Debug r759 on the combined 1,144-input DAB609 source: all 124 Application stages, 41 stream, 104 region and 41 admission controls; predecessor assertions and actual smoke contracts preserved.
+- [ ] Migrate and qualify the real readback parent/callers with complete production admission, hidden/recovery/cancellation/shutdown ownership and measured cache-miss costs.
+- [x] Qualify the component-only combined x64 matrix on DAB609/1,144 inputs: full Debug r759, Release r760, real ASan r761 and Release analysis r762 pass with authenticated archives and preserved predecessor/control inventories ([evidence](../../TestRuns/P1UtilityRecording_2026-10-10.md)). This does not qualify production callers or ordinary activation.
+- [ ] Complete ARM64 r90 Debug/Release/ASan cross-build qualification; main has launched it and the result is pending.
 
 Current Warp slice:
 

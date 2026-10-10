@@ -42,6 +42,7 @@ HRESULT GpuRecordingCommands::InitializeForWork(ID3D11DeviceContext* context, Gp
         return E_ABORT;
     _workerThread = GetCurrentThreadId();
     _stream = &stream;
+    _productionEpoch = stream.ProductionEpochForWork();
     _cancellation = cancellation;
     HRESULT result = context->QueryInterface(IID_PPV_ARGS(_context.put()));
     const auto publishResult = wil::scope_exit([&]() noexcept { _result = result; });
@@ -87,6 +88,27 @@ HRESULT GpuRecordingCommands::InitializeForWork(ID3D11DeviceContext* context, Gp
     return result;
 }
 
+HRESULT GpuRecordingCommands::RestartForWork(ID3D11DeviceContext* context, GpuCommandStream& original,
+                                             CancelToken cancellation) noexcept
+{
+    if (_stream != &original || !_context || !_device || _result != S_OK ||
+        context != static_cast<ID3D11DeviceContext*>(_context.get()) || !original.CanRecordForWork())
+        return E_INVALIDARG;
+    if (cancellation.IsCancelled())
+        return E_ABORT;
+    if (_productionEpoch == (std::numeric_limits<std::uint64_t>::max)())
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    const auto epoch = original.ProductionEpochForWork();
+    if (_productionEpoch == 0 || epoch != _productionEpoch + 1)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    // The original stream advanced only in its successful acknowledged callback. The parent also joined
+    // region copy/rows and excludes concurrent recording. No shader/state recreation or UI work occurs.
+    _productionEpoch = epoch;
+    _workerThread = GetCurrentThreadId();
+    _cancellation = cancellation;
+    return S_OK;
+}
+
 bool GpuRecordingCommands::IsWorker() const noexcept
 {
     return _stream && _workerThread == GetCurrentThreadId();
@@ -96,6 +118,8 @@ HRESULT GpuRecordingCommands::StatusForWork() const noexcept
 {
     if (!IsWorker())
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    if (_productionEpoch == 0 || _stream->ProductionEpochForWork() != _productionEpoch)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     return SUCCEEDED(_result) && _cancellation.IsCancelled() ? E_ABORT : _result;
 }
 

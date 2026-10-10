@@ -143,6 +143,14 @@
     <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
     <ClCompile Include="Composition.Tests.GpuResidencyGrowth.cpp" />
     <ClCompile Include="Composition.Tests.CommandStreamRestart.cpp" />
+    <ClCompile Include="Composition.Tests.UtilityAdmission.cpp" />
+    <ClInclude Include="Composition.Tests.UtilityAdmission.h" />
+    <ClCompile Include="..\..\Common\UtilityReadbackAdmission.cpp" />
+    <ClInclude Include="..\..\Common\UtilityReadbackAdmission.h" />
+    <ClCompile Include="Composition.Tests.RecordedUtilityRegions.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedUtilityRegions.h" />
+    <ClCompile Include="..\..\RedPrism\RecordedUtilityGraph.cpp" />
+    <ClInclude Include="..\..\RedPrism\RecordedUtilityGraph.h" />
     <ClCompile Include="Composition.Tests.GpuCommandPump.cpp" />
     <ClInclude Include="Composition.Tests.GpuCommandPump.h" />
     <ClInclude Include="Composition.Tests.GpuCommandStream.h" />

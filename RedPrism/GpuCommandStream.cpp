@@ -32,6 +32,7 @@ HRESULT GpuCommandStream::InitializeOwner(JobScheduler& scheduler, JobTicket sou
     _deviceGeneration = deviceGeneration;
     _ownerThread = GetCurrentThreadId();
     _scheduler = &scheduler;
+    _productionEpoch.store(1, std::memory_order_release);
     return S_OK;
 }
 
@@ -49,6 +50,11 @@ bool GpuCommandStream::CanRecordForWork() const noexcept
 {
     return _scheduler && !IsOwner() && !_finished.load(std::memory_order_acquire) &&
            !_retirementAuthorized.load(std::memory_order_acquire) && !IsStopped();
+}
+
+std::uint64_t GpuCommandStream::ProductionEpochForWork() const noexcept
+{
+    return _scheduler && !IsOwner() ? _productionEpoch.load(std::memory_order_acquire) : 0;
 }
 
 bool GpuCommandStream::BelongsToOwner(const JobScheduler& scheduler, JobTicket source,
@@ -220,7 +226,9 @@ HRESULT GpuCommandStream::RestartOwner() noexcept
         !_finished.load(std::memory_order_acquire) || !_retirementAuthorized.load(std::memory_order_acquire) ||
         _result != S_OK || IsStopped() || _consumed != _produced)
         return E_INVALIDARG;
-    if (_produced == (std::numeric_limits<std::uint64_t>::max)())
+    const auto epoch = _productionEpoch.load(std::memory_order_relaxed);
+    if (_produced == (std::numeric_limits<std::uint64_t>::max)() ||
+        epoch == (std::numeric_limits<std::uint64_t>::max)())
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     for (const auto& slot : _slots)
         if (slot.state.load(std::memory_order_acquire) != State::Free || slot.command)
@@ -228,6 +236,7 @@ HRESULT GpuCommandStream::RestartOwner() noexcept
     if (!ResetEvent(_available.get()) || !ResetEvent(_stopped.get()))
         return HRESULT_FROM_WIN32(GetLastError());
     _producerThread.store(0, std::memory_order_relaxed);
+    _productionEpoch.store(epoch + 1, std::memory_order_release);
     _result = E_PENDING;
     _backpressured.store(false, std::memory_order_relaxed);
     _retirementAuthorized.store(false, std::memory_order_relaxed);

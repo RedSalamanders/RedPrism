@@ -17,6 +17,9 @@ class GpuRecordingCommands final
     static constexpr unsigned int kUploadBytes = 1u << 20;
     [[nodiscard]] HRESULT InitializeForWork(ID3D11DeviceContext* context, GpuCommandStream& stream,
                                             CancelToken cancellation = {}) noexcept;
+    // Same private context/stream after its actual successful joined RestartOwner; keep resident state.
+    [[nodiscard]] HRESULT RestartForWork(ID3D11DeviceContext* context, GpuCommandStream& original,
+                                         CancelToken cancellation) noexcept;
     [[nodiscard]] HRESULT StatusForWork() const noexcept;
     // Same private context/device, on the initialized producer thread; numeric generations are insufficient.
     [[nodiscard]] HRESULT ContextStatusForWork(ID3D11Device* device, ID3D11DeviceContext* context) const noexcept;
@@ -46,6 +49,7 @@ class GpuRecordingCommands final
     GpuCommandStream* _stream = nullptr;
     CancelToken _cancellation;
     std::uint64_t _uploadBytes = 0;
+    std::uint64_t _productionEpoch = 0;
     std::uint32_t _workerThread = 0;
     HRESULT _result = E_PENDING;
 };

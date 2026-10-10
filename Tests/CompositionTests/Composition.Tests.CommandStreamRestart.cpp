@@ -1,6 +1,7 @@
 #include "Composition.Tests.CommandStreamRestart.h"
 
 #include "GpuCommandPump.h"
+#include "GpuRecordingCommands.h"
 #include "OwnerWorkMultiplexer.h"
 
 #include <array>
@@ -72,6 +73,10 @@ class Parent final : public Job, public GpuCommandSourceReceiver
     GpuCompletionContext retiredCapture;
     Stage stage = Stage::Open;
     unsigned round = 0;
+    wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
+    std::unique_ptr<GpuRecordingCommands> recording;
+    bool producerFinished = false;
+    std::uint32_t firstProducer = 0;
 
     void Resume(Stage next, JobExecutionLane lane = JobExecutionLane::Compute) noexcept
     {
@@ -86,22 +91,76 @@ class Parent final : public Job, public GpuCommandSourceReceiver
         : jobs(j), queue(q), commands(c), pump(p), observation(o), device(d)
     {
     }
-    JobResult Run(JobContext&) override
+    JobResult Run(JobContext& context) override
     {
         if (stage != Stage::Record)
             return {};
-        wil::com_ptr_nothrow<ID3D11DeviceContext> deferred;
-        wil::com_ptr_nothrow<ID3D11CommandList> command;
-        HRESULT status = device.CreateDeferredContext(0, deferred.put());
-        if (SUCCEEDED(status))
-            status = deferred->FinishCommandList(FALSE, command.put());
-        if (SUCCEEDED(status))
-            status = stream.PublishForWork(std::move(command));
-        return FAILED(status) ? JobResult{JobStatus::Failed, status} : JobResult{};
+        producerFinished = false;
+        HRESULT result = E_FAIL;
+        const auto produce = [&]() noexcept
+        {
+            const auto finish = wil::scope_exit(
+                [&]() noexcept
+                {
+                    stream.FinishProducerForWork(result);
+                    producerFinished = true;
+                });
+            if (round == 0)
+            {
+                firstProducer = GetCurrentThreadId();
+                result = device.CreateDeferredContext(0, deferred.put());
+                if (SUCCEEDED(result))
+                    result = recording->InitializeForWork(deferred.get(), stream, context.cancellation);
+                Expect(SUCCEEDED(result) && stream.ProductionEpochForWork() == 1,
+                       "private-policy-initializes-on-original-first-epoch");
+            }
+            else
+            {
+                Expect(static_cast<std::int32_t>(recording->StatusForWork()) ==
+                           static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID)),
+                       "old-private-policy-cannot-record-before-fresh-epoch-rebind");
+                Expect(round != 1 || GetCurrentThreadId() != firstProducer,
+                       "second-production-stage-uses-a-different-actual-thread");
+                std::stop_source cancelled;
+                (void)cancelled.request_stop();
+                Expect(recording->RestartForWork(deferred.get(), stream, CancelToken(cancelled.get_token())) == E_ABORT,
+                       "cancelled-rebind-refuses-without-consuming-fresh-epoch");
+                GpuCommandStream foreign;
+                Expect(IsInvalidArgument(recording->RestartForWork(deferred.get(), foreign, {})),
+                       "foreign-original-stream-cannot-rebind-private-policy");
+                Expect(IsInvalidArgument(recording->RestartForWork(nullptr, stream, {})),
+                       "foreign-context-cannot-rebind-private-policy");
+                result = recording->RestartForWork(deferred.get(), stream, context.cancellation);
+                Expect(SUCCEEDED(result) && stream.ProductionEpochForWork() == round + 1,
+                       "joined-original-restart-rebinds-existing-private-residency");
+            }
+            if (FAILED(result))
+                return;
+            Expect(static_cast<std::int32_t>(recording->RestartForWork(deferred.get(), stream, {})) ==
+                       static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+                   "same-production-epoch-cannot-rebind-private-policy-twice");
+            Expect(recording->ContextStatusForWork(&device, deferred.get()) == S_OK,
+                   "rebound-policy-keeps-exact-private-device-and-context");
+            recording->CheckpointForWork();
+            result = recording->StatusForWork();
+        };
+        if (!recording)
+            recording = std::make_unique<GpuRecordingCommands>();
+        if (round == 1)
+        {
+            Expect(static_cast<std::int32_t>(recording->StatusForWork()) ==
+                       static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+                   "previous-producer-cannot-use-policy-after-original-epoch-advances");
+            std::thread nextProducer(produce);
+            nextProducer.join();
+        }
+        else
+            produce();
+        return FAILED(result) ? JobResult{JobStatus::Failed, result} : JobResult{};
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
-        if (stage == Stage::Record)
+        if (stage == Stage::Record && !producerFinished)
             stream.FinishProducerForWork(result.status == JobStatus::Finished ? S_OK : E_FAIL);
         if (stage == Stage::Retire)
         {
@@ -109,6 +168,11 @@ class Parent final : public Job, public GpuCommandSourceReceiver
             if (!stream.RetireForWork())
                 std::terminate();
             retiredCapture = {};
+            if (round == 2)
+            {
+                recording.reset();
+                deferred.reset();
+            }
         }
     }
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override

@@ -725,3 +725,52 @@ its useful LUT/raster preview. Invalidate the cached composition at acceptance, 
 and discarded queued Cancel. Restore the useful preview when its cancellation receipt no longer excludes it.
 The logical panel, preview handles, source, history barrier and original job remain owned until acknowledgement;
 rendering the restored document must not manufacture retirement. Prepared display follows the same exclusion.
+
+### Private utility region recording
+
+`RecordedUtilityGraph` owns an immutable original document and a private composition on the bounded GPU
+recording lane. Regions must be within that document and at most 2048 by 2048 pixels. Check actual concurrent
+resource creation support before acquiring the device/resource prefix; unsupported creation refuses. A sealed
+region may be published only after its original recorder has joined and all original command uses have
+acknowledged. Publication binds the actual immediate context/device. The staging callback borrows only this
+ready texture and its local box; it performs no composition, raster read or upload on the owner.
+
+The original parent keeps the region immutable through copy acknowledgement and mapped-row worker join.
+Exclude future borrows separately from acknowledging those uses. Only the original successful, joined
+`GpuCommandStream::RestartOwner` can advance its production epoch. `GpuRecordingCommands::RestartForWork`
+accepts the next epoch of that same stream/context with an uncancelled token, rebinds the actual producing
+thread, and retains shader/state/source residency. Same, stale, foreign, exhausted or cancelled epochs refuse.
+Status checks exclude the old recording policy after an epoch advance. Preserve the original ticket, full
+reservation and monotonic command ordinals through every serial region; no ticket or upload per sampler pixel.
+
+After original recorder, command, copy and row acknowledgements, retire the graph and its source/resource
+prefix on a worker before refunding admission. A failed acquired prefix is also retired on a worker. Publish,
+exclude and retire methods do not establish external acknowledgement by themselves.
+
+The independent reference is the original-ticket state machine and the literal premultiplied pixel truth
+table in `Composition.Tests.RecordedUtilityRegions.cpp`: a 7 by 5 base `[20,40,60,128]` with replacement
+`[45,15,5,64]` in `[3,5) × [2,4)`, sampled at three overlapping/edge regions. WARP and available hardware must
+return the exact bytes, reuse private source residency and retire original owners before the CPU refund.
+This component does not activate ordinary utility callers. Their complete CPU/GPU admission, recovery,
+failure/cancellation/shutdown matrix and cache-miss owner costs remain required by P1.
+
+### Utility recording admission policy
+
+`Common/UtilityReadbackAdmission` estimates the serial private utility phase without capturing roots,
+traversing records, reading pixels or allocating. Its document overload reads construction-cached ownership
+bounds; unavailable bounds and overflow refuse. Regions use a tile side from1 through2048; document sides
+and layer count remain subject to the document model limits. Additional CPU bytes must include the caller's
+output, preprocessing, encoding and retained ownership overlap before that work acquires its resources.
+
+For source ownership bound S, raster-node bound N, layer count L and tile pixels P, logical GPU policy is
+4S +16P +2LP +579088L. It covers rectangular source mip chains, old/new raster-region cache overlap, two
+BGRA canvases, two BGRA clipping-stack targets, two R8 coverage targets per record and color lookup storage.
+GPU admission additionally charges131072N +262144L +262144 +134217728 bytes for resource-allocation,
+staging and opaque-driver policy allowances. These allowances are declarations, not measurements of driver
+allocations. Actual adapter budget queries, resource-creation refusal and original-use retirement are required.
+
+CPU policy is8388608 +2S +4P +512N +4096L +3145728 +caller bytes. Source bounds already include potential
+sparse assembly and retained selection metadata. Software devices additionally charge the whole GPU envelope
+to physical/commit admission. The parent keeps both complete charges through actual recorder, command, copy,
+row and worker-resource retirement; a mathematical estimate alone neither admits nor acknowledges a graph.
+The non-owning Descriptor overload is the independent arithmetic test seam. It creates no source authority.

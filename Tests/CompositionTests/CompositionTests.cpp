@@ -25,7 +25,9 @@
 #include "Composition.Tests.RecordedAdjustment.h"
 #include "Composition.Tests.RecordedBrush.h"
 #include "Composition.Tests.RecordedDisplayParent.h"
+#include "Composition.Tests.RecordedUtilityRegions.h"
 #include "Composition.Tests.RecordedWarpPreview.h"
+#include "Composition.Tests.UtilityAdmission.h"
 #include "Composition.Tests.VideoMemorySnapshot.h"
 #include "Composition.Tests.WarpReplayCompute.h"
 #include "CompositionStageTimingTests.h"
@@ -2226,6 +2228,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuCommandStreamTests();
     gFailures += RedPrism::CompositionTests::RunGpuResidencyGrowthTests();
     gFailures += RedPrism::CompositionTests::RunCommandStreamRestartTests();
+    gFailures += RedPrism::CompositionTests::RunUtilityAdmissionTests();
+    gFailures += RedPrism::CompositionTests::RunRecordedUtilityRegionTests();
     gFailures += RunGpuCommandPumpTests();
     gFailures += RunRecordedDisplayParentTests();
     gFailures += RunRecordedAdjustmentParentTests();
