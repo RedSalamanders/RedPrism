@@ -39,6 +39,7 @@ HRESULT Renderer::Initialize(HWND window, bool forceWarp) noexcept
 void Renderer::Shutdown() noexcept
 {
     _chrome = nullptr;
+    _canvasDrawn = false;
     ReleaseDeviceResources();
     _window = nullptr;
     _forceWarp = false;
@@ -496,6 +497,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
                          const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay) noexcept
 {
     _canvasFailure = S_OK;
+    _canvasDrawn = false;
     if (_suspended)
     {
         return S_OK;
@@ -538,6 +540,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
                              ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport,
                                                               hole.left, hole.top, hole.width, hole.height)
                              : E_ABORT);
+        _canvasDrawn = canvasResult == S_OK;
         if (FAILED(canvasResult))
         {
             if (DeviceLostAfter(canvasResult))
@@ -555,6 +558,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
             canvasResult =
                 StageResult(Stage::Blit, composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport,
                                                                   hole.left, hole.top, hole.width, hole.height));
+            _canvasDrawn = canvasResult == S_OK;
         }
         if (FAILED(canvasResult))
         {

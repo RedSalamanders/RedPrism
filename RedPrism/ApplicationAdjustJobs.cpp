@@ -511,10 +511,15 @@ void Application::SyncColorLookupPreview() noexcept
     const auto& edit = _session.PendingColorEdit();
     if (edit && _session.AdjustmentEditingID() && _session.AdjustmentOriginal())
     {
-        _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
-            edit->layerID, {}, {}, edit->preview ? edit->previewLookup : nullptr, _session.AdjustmentOriginal(), 1.0});
+        _composition.SetAdjustmentPreview(
+            CanvasRenderer::AdjustmentPreview{edit->layerID,
+                                                {},
+                                                {},
+                                                edit->preview && !ColorCancelPending() ? edit->previewLookup : nullptr,
+                                                _session.AdjustmentOriginal(),
+                                                1.0});
     }
-    else if (edit && _session.ColorLookupPreviewReady() && !edit->previewLookupOnly)
+    else if (edit && !ColorCancelPending() && _session.ColorLookupPreviewReady() && !edit->previewLookupOnly)
     {
         _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
             edit->layerID, edit->previewSource, edit->previewCoverage, edit->previewLookup, {}, edit->previewScale});

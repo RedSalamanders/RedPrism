@@ -2521,9 +2521,11 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
 {
     if (_recordingCommands || (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
-    if (!_context || !target || !_canvas[_front].texture.srv)
+    if (!_context || !target || !_canvas[_front].texture.srv || targetWidth == 0 || targetHeight == 0 ||
+        holeWidth <= 0.0f || holeHeight <= 0.0f)
     {
-        return S_OK;
+        // Successful no-op remains distinct from an actual draw for the first visible source-frame proof.
+        return S_FALSE;
     }
     const double scale = viewport.ViewScale();
     const double devicePixelsPerTexel = scale * _viewScale;

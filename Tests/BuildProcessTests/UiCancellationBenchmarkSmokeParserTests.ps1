@@ -82,8 +82,15 @@ Assert-Rejected 'wrong preview context' (Replace-RowField $valid 21 'previewEnab
 Assert-Rejected 'wrong histogram bucket' (Replace-RowField $valid 3 'actionP99UpperUs=1 actionMaxUs=1' 'actionP99UpperUs=4 actionMaxUs=1')
 Assert-Rejected 'deadline rearm limit' (Replace-RowField $valid 3 'deadlineRearms=0' 'deadlineRearms=3')
 $case = [System.Collections.Generic.List[string]]::new(); $case.AddRange($valid); $case[32] = $case[32] -replace 'g1=0','g1=1'; Assert-Rejected 'unsupported G1 claim' $case.ToArray()
-$prepared = [string[]]$valid.Clone(); $prepared[1] = $prepared[1] -replace 'display=direct rows=direct','display=prepared rows=prepared'; $null = Parse-UiCancellationSmoke $prepared 'prepared'
+$prepared = [string[]]$valid.Clone(); $prepared[1] = $prepared[1] -replace 'display=direct rows=direct asyncStroke=0 asyncWarp=0','display=prepared rows=prepared asyncStroke=1 asyncWarp=1'; $null = Parse-UiCancellationSmoke $prepared 'prepared'
 Write-Host 'PASS ui-cancel-parser.valid.prepared-route'
+Assert-Rejected 'prepared partial async flags' (Replace-RowField $prepared 1 'asyncWarp=1' 'asyncWarp=0') 'prepared'
+Assert-Rejected 'prepared warp-only async flags' (Replace-RowField $prepared 1 'asyncStroke=1 asyncWarp=1' 'asyncStroke=0 asyncWarp=1') 'prepared'
+Assert-Rejected 'prepared disabled async flags' (Replace-RowField $prepared 1 'asyncStroke=1 asyncWarp=1' 'asyncStroke=0 asyncWarp=0') 'prepared'
+Assert-Rejected 'direct enabled async flags' (Replace-RowField $valid 1 'asyncStroke=0 asyncWarp=0' 'asyncStroke=1 asyncWarp=1') 'direct'
+Assert-Rejected 'route rows mismatch' (Replace-RowField $prepared 1 'rows=prepared' 'rows=direct') 'prepared'
+$duplicateRoute = [Collections.Generic.List[string]]::new(); $duplicateRoute.AddRange($prepared); $duplicateRoute.Insert(2,$prepared[1]); Assert-Rejected 'duplicate route headline' $duplicateRoute.ToArray() 'prepared'
+Assert-Rejected 'invented ordinary activation headline' (Replace-RowField $prepared 1 'ordinaryActivation=0' 'ordinaryActivation=1') 'prepared'
 $allEarly = [string[]]$valid.Clone()
 for ($index=2; $index -lt 32; ++$index) {
     $allEarly[$index] = $allEarly[$index] -replace 'outcome=[a-z-]+','outcome=finished-before-escape' -replace 'measured=[01]','measured=0' -replace 'rawStatus=[01]','rawStatus=0' -replace 'applyOutcome=[12]','applyOutcome=1' -replace 'applyError=0x[0-9a-fA-F]{8}','applyError=0x00000000' -replace 'cancelKnown=[01]','cancelKnown=0' -replace 'cancelOutcome=[01]','cancelOutcome=0' -replace 'sourcePresent=[01]','sourcePresent=0' -replace 'hiddenAtAcceptance=[01]','hiddenAtAcceptance=0' -replace 'checkKnown=[01]','checkKnown=0' -replace 'checkOutcome=[a-z-]+','checkOutcome=unobserved' -replace 'acceptedToCheckUs=\d+','acceptedToCheckUs=0' -replace 'checkLatencyKnown=[01]','checkLatencyKnown=0' -replace 'sourcePresent=[01]','sourcePresent=0' -replace 'sourcePresentOrdinal=\d+','sourcePresentOrdinal=0' -replace 'firstFrameProved=[01]','firstFrameProved=0'
@@ -122,7 +129,7 @@ Assert-Rejected 'after-acceptance latency unknown' (Replace-RowField $valid 3 'c
 Assert-Rejected 'check after body return' (Replace-RowField $valid 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=141')
 Assert-Rejected 'canonical preview field order' (Replace-RowField $valid 3 'previewEnabled=1 outcome=returned-after-stop measured=1' 'outcome=returned-after-stop measured=1 previewEnabled=1')
 Assert-Rejected 'check tail field order' (Replace-RowField $valid 3 'checkKnown=1 checkOutcome=after-acceptance' 'checkOutcome=after-acceptance checkKnown=1')
-if ($script:UiCancelRefusals -ne 41) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
-Write-Host 'PASS UI cancellation parser pure controls: 6 positive models and 41 refusal cases; no native execution'
+if ($script:UiCancelRefusals -ne 48) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
+Write-Host 'PASS UI cancellation parser pure controls: 6 positive models and 48 refusal cases; no native execution'
 
 

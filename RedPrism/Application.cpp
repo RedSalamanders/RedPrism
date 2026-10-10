@@ -502,6 +502,14 @@ void Application::InvalidateFrame() noexcept
     NoteUiFrameInvalidation();
 }
 
+const CanvasDocument* Application::DirectDisplayDocumentForFrame() const
+{
+    // Accepted Cancel hides useful preview immediately; the panel and its cached display stay owned
+    // until the original closure acknowledges. Refused, stale and discarded Cancel retain the preview.
+    const auto& document = _session.Document();
+    return ColorCancelPending() ? (document ? &document.value() : nullptr) : _session.DisplayDocument();
+}
+
 void Application::RenderFrame() noexcept
 {
     const auto previousPresents = _renderer.PresentCount();
@@ -513,7 +521,7 @@ void Application::RenderFrame() noexcept
         auto* graph = _acknowledgedStrokePreview ? _acknowledgedStrokePreview
                       : pending                  ? pending
                                                  : _acknowledgedCommittedDisplay;
-        const auto* direct = _committedDisplayInitialized ? nullptr : _session.DisplayDocument();
+        const auto* direct = _committedDisplayInitialized ? nullptr : DirectDisplayDocumentForFrame();
         // Bind the actual source argument for THIS rendering attempt, including a device-rebuild retry.
         cancellationSourceSelected =
             _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);

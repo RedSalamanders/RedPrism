@@ -33,6 +33,22 @@ refused. PE/PDB identity, exact guard/dispatch rows, complete table, terminal bo
 all agree; genuine vector instructions beside the table remain subject to the ordinary ISA gate. These bytes
 are parsed and never executed. The runtime allowlist is unchanged.
 
+### First visible canvas proof
+
+`RunStandaloneUiCancellationCanvasSelfTest` requires six actual hidden-WARP owner cases and 72 independent
+assertions: direct/prepared successful drawing, direct Compose and Blit failures, a successful skipped direct
+Blit, and a prepared Blit failure. Actual `RenderFrame` must advance the chrome Present ordinal while refusing
+source-frame proof after a failed/skipped canvas. The next successful canvas draw cannot replace that first
+frame. Source/history authority and joined owner cleanup remain exact. The fixture uses an explicit proof
+identity and suppresses only diagnostic failure reporting/WM_QUIT; it grants no real Escape admission or cost
+measurement. The existing dispatch/benchmark gates own those claims.
+
+The pure frame reducer has 17 controls, including permanent refusal of the first chrome-only Present.
+`recorded-blit.*` adds five real target/no-op HRESULT assertions: missing canvas, missing target, zero target
+dimensions and empty canvas holes return exactly `S_FALSE`, distinct from a completed `S_OK` draw.
+Prepared cancellation readers require all async tool flags enabled; direct readers require them disabled.
+The exact 47-field cancellation rows and all earlier numeric goldens remain unchanged.
+
 ### Opt-in Escape cancellation diagnostics
 
 HostTests adds 14 immutable capture, 28 original-body/clock partition, 25 real event transport and 35 CLI
@@ -49,6 +65,12 @@ Cancel card and retain logical/history/source authority until acknowledgement. S
 cannot repost Escape. After joined retirement, only the actual committed render argument is eligible; a
 separate equivalent document copy refuses. This fixture grants neither a worker-return nor visible-Present
 measurement. Its ordinary scheduler has no execution observer.
+
+Eight `ui-cancel-held-display` controls additionally compose/read back the four-gray-pixel source while the
+original Commit body remains event-held. The legacy gamma-two preview is present before Escape; accepted
+Cancel must restore the literal original pixels before acknowledgement, while admission refusal retains
+the preview. The actual frame selector, logical preview/source/history and original ticket/barrier remain
+exact. The fixture performs no Present and makes no timing or visible-frame claim.
 
 HostTests additionally requires 64 refusal classifier controls: the explicit four-profile/ten-case roster
 and both refusal stages reject changed source/history, unjoined owners, admitted Commit processing, an

@@ -4,7 +4,15 @@
 
 P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
 
-Current step (2026-10-10): baseline `ddb0b06` is committed/pushed. The combined 1,136-input startup, cancellation and exact DWORD-stack scanner source passes full Debug r726, Release r718, real ASan r719 and Release analysis r717 with independently authenticated original processes, source, products and complete predecessor records. All 217 startup assertions, 109 scanner controls, 123 application stages and both actual Escape smoke routes pass. Original r716 compiler failure and checker refusals remain preserved. Before measurements, repair the confirmed chrome-only Present proof gap and qualify the shared prepared-benchmark startup. ARM64 and affected costs follow the repaired candidate. Baseline direct45MP noise Apply reaches 2.183ms against the 2ms target and remains open. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md), [scanner proof](../../TestRuns/IsaDwordZeroStack_2026-10-10.md). Ordinary activation, G1 and all nine P1 delivery areas remain open; native ARM64 runtime is unavailable.
+Current step (2026-10-10): shared startup/cancellation foundation `07a92b6` is committed/pushed. Original canvas full Debug r728 failed direct HSV Cancel before its held worker acknowledged; the failed source/output/archive is preserved. Main repairs immediate committed-source selection, LUT exclusion and cached-composition invalidation and adds eight event-held legacy pixel controls. Fresh full Debug r731 passes and authenticates on 1,136-input freeze `D9816447DCE21DCBE05AF9D9EEAA6760DA57BBBC4187339FD8AE16781C6D4B20`, with every predecessor control, all eight new controls and both actual Escape routes. Original full Release r732 and real ASan r733 also pass and authenticate; actual analysis r734 also passes/authenticates; all three ARM64 r89 cross-builds pass/authenticate (15 executable/PDB pairs, five real ASan compiler controls); affected costs remain due on this source. Baseline 2.183 ms Apply remains open. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md). All nine P1 delivery areas, ordinary activation and G1 remain open.
+
+Current cancellation repair:
+
+- [x] Preserve/authenticate original Debug r728's direct-cancellation failure before repair.
+- [x] Implement immediate direct committed-source selection, useful LUT exclusion and cached-composition invalidation for accepted Cancel, with unchanged held logical/source/history owners.
+- [x] Add eight event-held legacy pixel controls for accepted/refused cancellation; retain the earlier 36 dispatch and 24 budget controls.
+- [x] Qualify the repaired frozen source in full x64 Debug/Release/real ASan, analysis and ARM64 cross-builds. Commit/push this qualified repair step; performance and remaining P1 delivery work stay open.
+- [ ] Measure current-source cancellation/check overhead and fix specified owner/apply overruns; smoke tests do not close G1.
 
 Current Warp slice:
 

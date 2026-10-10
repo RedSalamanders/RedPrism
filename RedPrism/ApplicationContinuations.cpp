@@ -80,8 +80,8 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
         _pendingCancelOpening = opening;
         _pendingCancelDocumentSerial = _session.DocumentSerial();
         _pendingCancelReceipt = receipt;
-        if (_pendingDisplayInitialized)
-            _pendingDisplay.RequestOwner(); // Exclude/cancel useful preview; original owners retire after join.
+        SyncColorLookupPreview(); // Exclude useful preview; original owners retire after join.
+        _composition.InvalidateDocument();
         SyncAdjustPanel();
         InvalidateFrame();
     }
@@ -514,8 +514,8 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     if (refreshCancelFeedback && !_shutdownStarted)
     {
         SyncAdjustPanel();
-        if (_pendingDisplayInitialized)
-            _pendingDisplay.RequestOwner(); // Re-admit useful preview after failed/stale close acknowledgement.
+        SyncColorLookupPreview(); // Re-admit useful preview after failed/stale close acknowledgement.
+        _composition.InvalidateDocument();
         InvalidateFrame();
     }
     _pathClassifications = {};
@@ -1550,8 +1550,8 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
         if (cancelFeedbackWasPending && !_shutdownStarted)
         {
             SyncAdjustPanel();
-            if (_pendingDisplayInitialized)
-                _pendingDisplay.RequestOwner(); // The discarded receipt no longer excludes its live preview.
+            SyncColorLookupPreview(); // The discarded receipt no longer excludes its live preview.
+            _composition.InvalidateDocument();
             InvalidateFrame();
         }
     }

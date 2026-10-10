@@ -36,7 +36,9 @@ function New-FullOutput([string] $Profile='3840x2160', [string] $Route='direct',
     $dimensions = switch ($Profile) { '3840x2160' { @(3840,2160) } '8192x5464' { @(8192,5464) } '10000x10000' { @(10000,10000) } default { throw "bad test profile: $Profile" } }
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add('BENCH MACHINE independent-fixture device=WARP fixtureChecksum=0123456789abcdef')
-    $lines.Add("UI BENCH ROUTE display=$Route rows=$Route asyncStroke=0 asyncWarp=0 ordinaryActivation=0")
+    $asyncStroke = [int]($Route -ceq 'prepared')
+    $asyncWarp = [int]($Route -ceq 'prepared')
+    $lines.Add("UI BENCH ROUTE display=$Route rows=$Route asyncStroke=$asyncStroke asyncWarp=$asyncWarp ordinaryActivation=0")
     foreach ($name in $script:Names) {
         for ($trial=0; $trial -le 10; ++$trial) {
             $refused = $Profile -cne '3840x2160' -and $name -cin @('gaussian250','motion2000')
@@ -183,8 +185,16 @@ $duplicateReport = [Collections.Generic.List[string]]::new(); $duplicateReport.A
 Assert-Rejected 'duplicate-report' $duplicateReport.ToArray()
 $wrongRoute = New-FullOutput '3840x2160' 'prepared'
 Assert-Rejected 'selected-route' $wrongRoute 'direct' '3840x2160'
+$preparedRoute = New-FullOutput '3840x2160' 'prepared'
+Assert-Rejected 'prepared partial async flags' (Replace-Line $preparedRoute 1 'asyncWarp=1' 'asyncWarp=0') 'prepared' '3840x2160'
+Assert-Rejected 'prepared warp-only async flags' (Replace-Line $preparedRoute 1 'asyncStroke=1 asyncWarp=1' 'asyncStroke=0 asyncWarp=1') 'prepared' '3840x2160'
+Assert-Rejected 'prepared disabled async flags' (Replace-Line $preparedRoute 1 'asyncStroke=1 asyncWarp=1' 'asyncStroke=0 asyncWarp=0') 'prepared' '3840x2160'
+Assert-Rejected 'direct enabled async flags' (Replace-Line $fourK 1 'asyncStroke=0 asyncWarp=0' 'asyncStroke=1 asyncWarp=1') 'direct' '3840x2160'
+Assert-Rejected 'route rows mismatch' (Replace-Line $preparedRoute 1 'rows=prepared' 'rows=direct') 'prepared' '3840x2160'
+$duplicateRoute = [Collections.Generic.List[string]]::new(); $duplicateRoute.AddRange($preparedRoute); $duplicateRoute.Insert(2,$preparedRoute[1]); Assert-Rejected 'duplicate route headline' $duplicateRoute.ToArray() 'prepared' '3840x2160'
+Assert-Rejected 'invented ordinary activation headline' (Replace-Line $preparedRoute 1 'ordinaryActivation=0' 'ordinaryActivation=1') 'prepared' '3840x2160'
 $wrongStageProfile = New-FullOutput '10000x10000'
 Assert-Rejected '100mp-opening-stage' (Replace-Line $wrongStageProfile (Find-Refusal $wrongStageProfile) 'stage=opening' 'stage=settings') 'direct' '10000x10000'
 
-if ($script:Rejected -ne 42) { throw "Expected 42 independent negative controls; observed $script:Rejected." }
+if ($script:Rejected -ne 49) { throw "Expected 49 independent negative controls; observed $script:Rejected." }
 Write-Host "PASS UI cancellation full parser pure controls: six profile/route positives, check boundary models, independent distributions, empty-statistics control and $script:Rejected negative controls; no native execution."

@@ -134,6 +134,35 @@ int RunRecordedBlitTests(RecordedBlitGraphHarness& pair, RecordedBlitGraphHarnes
                tiled.composition.PreparedDisplayTextureForTest() != nullptr,
            "all-inputs-are-sealed-prepared-display-graphs");
 
+    D3D11_TEXTURE2D_DESC noOpDescription{};
+    noOpDescription.Width = 2;
+    noOpDescription.Height = 2;
+    noOpDescription.MipLevels = 1;
+    noOpDescription.ArraySize = 1;
+    noOpDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    noOpDescription.SampleDesc.Count = 1;
+    noOpDescription.BindFlags = D3D11_BIND_RENDER_TARGET;
+    wil::com_ptr_nothrow<ID3D11Texture2D> noOpTarget;
+    wil::com_ptr_nothrow<ID3D11RenderTargetView> noOpView;
+    const bool noOpReady = SUCCEEDED(pair.device->CreateTexture2D(&noOpDescription, nullptr, noOpTarget.put())) &&
+                           SUCCEEDED(pair.device->CreateRenderTargetView(noOpTarget.get(), nullptr, noOpView.put()));
+    Expect(noOpReady, "real-no-op-render-target-initializes");
+    if (!noOpReady)
+        return 1;
+    CanvasViewport noOpViewport;
+    noOpViewport.Resize(Vec2{2, 2}, 1, Vec2{2, 2});
+    CanvasRenderer noCanvas;
+    Expect(noCanvas.BlitToTarget(noOpView.get(), 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE,
+           "missing-canvas-is-successful-no-op-without-source-draw");
+    Expect(pair.composition.BlitToTarget(nullptr, 2, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE,
+           "missing-target-is-successful-no-op-without-source-draw");
+    Expect(pair.composition.BlitToTarget(noOpView.get(), 0, 2, noOpViewport, 0, 0, 2, 2) == S_FALSE &&
+               pair.composition.BlitToTarget(noOpView.get(), 2, 0, noOpViewport, 0, 0, 2, 2) == S_FALSE,
+           "zero-target-dimensions-are-successful-no-ops");
+    Expect(pair.composition.BlitToTarget(noOpView.get(), 2, 2, noOpViewport, 0, 0, 0, 2) == S_FALSE &&
+               pair.composition.BlitToTarget(noOpView.get(), 2, 2, noOpViewport, 0, 0, 2, 0) == S_FALSE,
+           "empty-canvas-holes-are-successful-no-ops");
+
     CanvasViewport tiledView;
     tiledView.Resize(Vec2{16, 8}, 1, Vec2{513, 513});
     tiledView.SetZoom(1, tiledView.Center(), Vec2{513, 513});

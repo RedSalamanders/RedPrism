@@ -362,9 +362,18 @@ void Application::NoteUiCancellationPresentation(bool sourceSelected) noexcept
     const auto result = trial.firstFrame.Observe(
         {trial.original.value_or(JobTicket{}), _session.DocumentSerial(), trial.opening, _renderer.PresentCount(),
          UiCancellationFrame::PresentAttempt::SuccessfulVisible, UiCancellationOriginalStateCurrent(), sourceSelected,
-         !sourceSelected, _chrome && !_chrome->AdjustPanelOpen()});
+         !sourceSelected, _chrome && !_chrome->AdjustPanelOpen(), _renderer.CanvasDrawn()});
     if (result != UiCancellationFrame::State::Qualified)
     {
+        std::printf(
+            "UI CANCEL FRAME REFUSAL acceptance=%llu current=%llu sourceSelected=%u sourceCurrent=%u "
+            "canvasDrawn=%u cardHidden=%u proofState=%u\n",
+            static_cast<unsigned long long>(trial.acceptancePresentOrdinal),
+            static_cast<unsigned long long>(_renderer.PresentCount()), static_cast<unsigned int>(sourceSelected),
+            static_cast<unsigned int>(UiCancellationOriginalStateCurrent()),
+            static_cast<unsigned int>(_renderer.CanvasDrawn()),
+            static_cast<unsigned int>(_chrome && !_chrome->AdjustPanelOpen()), static_cast<unsigned int>(result));
+        std::fflush(stdout);
         FailUiBenchmark("cancel-first-successful-present-did-not-restore-original-source");
         return;
     }

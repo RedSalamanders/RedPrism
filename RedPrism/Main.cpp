@@ -325,6 +325,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneCommittedDisplaySelfTest\n");
         if (const int failed = Application::RunStandaloneCommittedDisplaySelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneUiCancellationCanvasSelfTest\n");
+        if (const int failed = Application::RunStandaloneUiCancellationCanvasSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunPreparedRowPublicationTests\n");
         if (const int failed = RunPreparedRowPublicationTests(); failed != 0)
             return failed;

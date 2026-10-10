@@ -31,7 +31,8 @@ $ErrorActionPreference = 'Stop'
 function Assert-UiBenchmarkDisplayRoute([string[]] $lines, [string] $route) {
     if ($route -cnotin 'direct', 'prepared') { throw 'Unknown benchmark display route.' }
     $rows = @($lines | Where-Object { $_ -cmatch '^UI BENCH ROUTE\b' })
-    $expected = "UI BENCH ROUTE display=$route rows=$route asyncStroke=0 asyncWarp=0 ordinaryActivation=0"
+    $async = [int]($route -ceq 'prepared')
+    $expected = "UI BENCH ROUTE display=$route rows=$route asyncStroke=$async asyncWarp=$async ordinaryActivation=0"
     if ($rows.Count -ne 1 -or $rows[0] -cne $expected) {
         throw "Benchmark must report its exact selected route once: $expected"
     }

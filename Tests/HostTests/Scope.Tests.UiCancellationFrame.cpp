@@ -25,7 +25,8 @@ UiCancellationFrame::Acceptance AcceptedAt(std::uint64_t ordinal = 40) noexcept
 
 UiCancellationFrame::Frame VisibleAt(std::uint64_t ordinal = 41) noexcept
 {
-    return {{7, 41}, 501, 29, ordinal, UiCancellationFrame::PresentAttempt::SuccessfulVisible, true, true, false, true};
+    return {{7, 41}, 501,  29,    ordinal, UiCancellationFrame::PresentAttempt::SuccessfulVisible,
+            true,    true, false, true,    true};
 }
 
 void FirstVisibleSuccessQualifies() noexcept
@@ -48,6 +49,18 @@ void StaleFirstFrameCannotBeReplacedByLaterRestore() noexcept
     Expect(first == UiCancellationFrame::State::Rejected && later == UiCancellationFrame::State::Rejected &&
                proof.QualifiedOrdinal() == 0,
            "later-restored-frame-cannot-hide-stale-first-success");
+}
+
+void ChromeOnlyFirstPresentPermanentlyRefuses() noexcept
+{
+    UiCancellationFrame proof;
+    (void)proof.Accept(AcceptedAt());
+    auto chromeOnly = VisibleAt();
+    chromeOnly.canvasDrawSucceeded = false;
+    Expect(proof.Observe(chromeOnly) == UiCancellationFrame::State::Rejected,
+           "chrome-only-present-cannot-prove-restored-source");
+    Expect(proof.Observe(VisibleAt(42)) == UiCancellationFrame::State::Rejected && proof.QualifiedOrdinal() == 0,
+           "later-canvas-success-cannot-replace-first-chrome-only-present");
 }
 
 void NoPresentAndOcclusionStayIncomplete() noexcept
@@ -205,6 +218,7 @@ bool RunUiCancellationFrameTests() noexcept
     gChecks = 0;
     FirstVisibleSuccessQualifies();
     StaleFirstFrameCannotBeReplacedByLaterRestore();
+    ChromeOnlyFirstPresentPermanentlyRefuses();
     NoPresentAndOcclusionStayIncomplete();
     TestAndFailedPresentDoNotAdvance();
     MissingIdentityAndRepeatedAcceptanceRefuse();
@@ -215,7 +229,7 @@ bool RunUiCancellationFrameTests() noexcept
     ChangedDocumentOrOriginalStateRefuses();
     CounterReversalAndOverflowRefuse();
     UnauthenticatedAttemptsRefuse();
-    const bool passed = gFailures == 0 && gChecks == 15;
+    const bool passed = gFailures == 0 && gChecks == 17;
     std::printf("%s UI cancellation frame reduction: %u checks, %u failures.\n", passed ? "PASS" : "FAIL", gChecks,
                 gFailures);
     std::fflush(stdout);

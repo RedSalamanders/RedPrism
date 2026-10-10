@@ -45,6 +45,7 @@ class UiCancellationFrame final
         bool committedSourceSelected = false;
         bool previewSelected = false;
         bool cardHidden = false;
+        bool canvasDrawSucceeded = false;
     };
 
     [[nodiscard]] bool Accept(Acceptance acceptance) noexcept
@@ -81,7 +82,7 @@ class UiCancellationFrame final
             return Reject();
         }
         if (frame.presentOrdinal != _accepted.presentOrdinal + 1 || !frame.originalStateCurrent ||
-            !frame.committedSourceSelected || frame.previewSelected || !frame.cardHidden)
+            !frame.committedSourceSelected || frame.previewSelected || !frame.cardHidden || !frame.canvasDrawSucceeded)
             return Reject();
         _state = State::Qualified;
         return _state;

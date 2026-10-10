@@ -143,6 +143,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplayTransportSelfTest(HINSTANCE instance) noexcept;
@@ -279,6 +280,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     // The frame loop (Rendering_Composition.md "Failures"): one frame with device-loss recovery, the canvas failure
     // notice, the stop that asks to close through the save prompt, surfaces dropped while unseen, the exit code.
     void RenderFrame() noexcept;
+    [[nodiscard]] const CanvasDocument* DirectDisplayDocumentForFrame() const;
     void InvalidateFrame() noexcept;
     void ReportCanvasFailure(HRESULT failure) noexcept;
     void OnFrameLoopFailure(HRESULT failure) noexcept;

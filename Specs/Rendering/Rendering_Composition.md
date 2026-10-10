@@ -709,3 +709,19 @@ The actual hidden Application WARP stage uses independent image, mask and three-
 Cancel, Undo, zero/redrag, failure and reopen controls. The source-bound qualification and earlier failed fixture
 are in `Specs/TestRuns/P1RasterPreview_2026-10-08.md`. These controls do not qualify large production phase peaks,
 all remaining consumers, ordinary activation or measured G1.
+
+### Canvas draw result and visible-frame proof
+
+`CanvasRenderer::BlitToTarget` returns `S_FALSE` for a missing context, canvas or target, zero target dimensions
+or an empty canvas hole, and `S_OK` only after recording the actual draw. Successful no-op is not a canvas draw.
+`Renderer::CanvasDrawn()` describes only the current Render attempt and resets before every attempt, including
+suspended/device-rebuild paths. Canvas failure keeps Decision D1's successful chrome Present and original
+HRESULT; it does not qualify restored source pixels. A diagnostic first-frame proof requires both the actual
+successful visible Present ordinal and successful drawing of its selected committed source. These assertions
+prove submitted drawing and causal selection, not physical display scanout.
+
+Accepted current-opening Cancel immediately selects the committed document for the direct frame and excludes
+its useful LUT/raster preview. Invalidate the cached composition at acceptance, failed/stale acknowledgement
+and discarded queued Cancel. Restore the useful preview when its cancellation receipt no longer excludes it.
+The logical panel, preview handles, source, history barrier and original job remain owned until acknowledgement;
+rendering the restored document must not manufacture retirement. Prepared display follows the same exclusion.

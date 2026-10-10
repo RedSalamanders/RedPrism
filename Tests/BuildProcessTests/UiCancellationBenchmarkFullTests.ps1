@@ -123,7 +123,9 @@ function Parse-UiCancellationFull([string[]] $Lines, [ValidateSet('direct','prep
     $profile = Get-UiFullProfile $SelectedProfile
     $machine = @($Lines | Where-Object { $_ -cmatch '^BENCH MACHINE\b' })
     if ($machine.Count -ne 1) { throw 'Expected exactly one BENCH MACHINE row.' }
-    $expectedRoute = "UI BENCH ROUTE display=$Route rows=$Route asyncStroke=0 asyncWarp=0 ordinaryActivation=0"
+    $expectedAsyncStroke = [int]($Route -ceq 'prepared')
+    $expectedAsyncWarp = [int]($Route -ceq 'prepared')
+    $expectedRoute = "UI BENCH ROUTE display=$Route rows=$Route asyncStroke=$expectedAsyncStroke asyncWarp=$expectedAsyncWarp ordinaryActivation=0"
     $routes = @($Lines | Where-Object { $_ -cmatch '^UI BENCH ROUTE\b' })
     if ($routes.Count -ne 1 -or $routes[0] -cne $expectedRoute) { throw "Expected exactly one selected route row: $expectedRoute" }
     $namespaceIndexes = [Collections.Generic.List[int]]::new()

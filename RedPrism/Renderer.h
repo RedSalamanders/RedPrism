@@ -72,6 +72,11 @@ class Renderer final
     {
         return _failedStage;
     }
+    // True only when this Render attempt completed a canvas blit, distinct from a chrome-only Present.
+    [[nodiscard]] bool CanvasDrawn() const noexcept
+    {
+        return _canvasDrawn;
+    }
     // Frames that reached the display (Present neither failed nor reported occlusion).
     [[nodiscard]] std::uint64_t PresentCount() const noexcept
     {
@@ -174,6 +179,7 @@ class Renderer final
     DWORD _occlusionStatusCookie = 0;
     bool _occlusionStatusRegistered = false;
     HRESULT _canvasFailure = S_OK;
+    bool _canvasDrawn = false;
     std::uint64_t _presentCount = 0;
     std::uint64_t _deviceGeneration = 0;
     Stage _injectedStage = Stage::Present;

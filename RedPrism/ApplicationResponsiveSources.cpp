@@ -3,7 +3,7 @@
 #include "ApplicationProcessingTestProbe.h"
 
 // One cold-start owner path for the already qualified prepared display, rows and stroke engines.
-// Run currently reaches this only through the explicit startup fixture. Ordinary activation follows
+// Run and the prepared benchmark reach this only through explicit fixtures. Ordinary activation follows
 // complete consumer/admission/lifetime and cost qualification; diagnostic direct/prepared routes stay explicit.
 bool Application::InitializeResponsiveSourcesOwner(bool allowHidden) noexcept
 {

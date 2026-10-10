@@ -141,7 +141,9 @@ function Parse-UiCancellationSmoke([string[]] $Lines, [ValidateSet('direct','pre
     if ($Route -cnotin @('direct','prepared')) { throw "Unknown display route '$Route'." }
     $machineRows = @($Lines | Where-Object { $_ -cmatch '^BENCH MACHINE\b' })
     if ($machineRows.Count -ne 1) { throw "Expected exactly one BENCH MACHINE row; found $($machineRows.Count)." }
-    $expectedRoute = "UI BENCH ROUTE display=$Route rows=$Route asyncStroke=0 asyncWarp=0 ordinaryActivation=0"
+    $expectedAsyncStroke = [int]($Route -ceq 'prepared')
+    $expectedAsyncWarp = [int]($Route -ceq 'prepared')
+    $expectedRoute = "UI BENCH ROUTE display=$Route rows=$Route asyncStroke=$expectedAsyncStroke asyncWarp=$expectedAsyncWarp ordinaryActivation=0"
     $routeRows = @($Lines | Where-Object { $_ -cmatch '^UI BENCH ROUTE\b' })
     if ($routeRows.Count -ne 1 -or $routeRows[0] -cne $expectedRoute) { throw "Expected selected UI BENCH ROUTE exactly once: $expectedRoute" }
     $namespace = @($Lines | Where-Object { $_ -cmatch '^UI CANCEL\b' })

@@ -112,7 +112,8 @@ accepted-stop-to-body-return. A known zero microsecond duration remains valid cl
 or malformed notice order fail the diagnostic rather than inventing unknown success.
 
 First-frame proof requires exact successful-visible ordinal `acceptancePresentOrdinal + 1` with unchanged
-original held authority/raster/history, hidden card and committed source selected in the actual render call.
+original held authority/raster/history, hidden card and committed source selected and successfully drawn in the actual render call.
+A chrome-only successful Present after a canvas failure or skipped blit permanently refuses first-frame proof.
 No overflow is allowed; a qualified source ordinal is nonzero. An unproved row reports source ordinal zero,
 and `sourcePresent` equals `firstFrameProved`. Measured active rows require proof; a first stale frame permanently
 refuses even if a later frame restores the source. The parser uses exact UInt64/decimal ordinal arithmetic;
@@ -167,9 +168,10 @@ measurements and original R1/W A/B/remaining-host requirements must still pass b
 `ui-prepared|ui-prepared45|ui-prepared100|ui-prepared-smoke` selects the explicit experimental prepared
 display and row route on the corresponding fixture. These modes require exact current committed/pending
 publication keys and current rows after all owner pumps settle; an older visible-opening fallback cannot
-complete a sample. The row reports `UI BENCH ROUTE display=prepared rows=prepared asyncStroke=0 asyncWarp=0
+complete a sample. The row reports `UI BENCH ROUTE display=prepared rows=prepared asyncStroke=1 asyncWarp=1
 ordinaryActivation=0`. The direct diagnostic reports its direct route with the same two tools disabled.
-Normal editor activation is a separate milestone. These 27 cases do not cover every P1 operation or establish G1.
+Prepared modes use the shared responsive initializer; rows, display and all three async tool flags activate together
+only after successful acquisition. Partial startup refuses without a synchronous fallback. Normal editor activation is a separate milestone. These 27 cases do not cover every P1 operation or establish G1.
 
 The prepared sampler must release its transient ticket/barrier/utility ownership and return to its settled
 prepared-cache memory charge captured before the operation. The direct route still requires zero reserved

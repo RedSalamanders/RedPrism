@@ -570,7 +570,7 @@ HRESULT Application::InitializeUiBenchmark() noexcept
         auto& machine = state.machine;
         // Explicit experiment only: qualify the actual prepared controller/row caller chain before normal
         // activation. Refusal is an operation failure; no fallback silently measures the legacy display.
-        if (state.preparedDisplay && (!EnablePreparedLayerRows() || !EnableCommittedDisplayForTest(false)))
+        if (state.preparedDisplay && !InitializeResponsiveSourcesOwner(false))
             return E_FAIL;
         machine.applicationVersion = Utf8(RedPrism::FormatRunningModuleVersion(L"unknown"));
         machine.isa = Utf8(KernelIsaName(ActiveKernels().isa));
