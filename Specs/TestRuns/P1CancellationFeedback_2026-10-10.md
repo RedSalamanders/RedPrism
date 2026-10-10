@@ -2,7 +2,7 @@
 
 ## Delivery checklist
 
-Status: **Exact-source x64 full gates/analysis and all three ARM64 cross-builds qualified; commit/push next**. This slice closes adjustment-card visibility semantics only. P1 delivery, actual Escape/visible-frame measurements, prepared display admission and ordinary activation remain open.
+Status: **Exact-source x64 full gates/analysis and all three ARM64 cross-builds qualified; committed and pushed `4414cf1`**. This slice closes adjustment-card visibility semantics only. P1 delivery, actual Escape/visible-frame measurements, prepared display admission and ordinary activation remain open.
 
 - [x] Main independently review the original selected and queued cancellation callers, terminal acknowledgement, stale identity and real shutdown ownership.
 - [x] Review the cheaper supplemental fixtures and repair omitted before-ack visibility, real unrelated-opening caller and actual shutdown engine coverage.
@@ -11,7 +11,7 @@ Status: **Exact-source x64 full gates/analysis and all three ARM64 cross-builds 
 - [x] Verify all 1,104 predecessor native inputs and six candidate/base hashes, preserve the original UI contract, then integrate exactly five native files and the owning contract. The other 1,099 native paths remain byte-identical.
 - [x] Compile and execute the actual current-source full Debug r651/r652; independently authenticate all 104 controls, both ordered streams, 121 stages and every predecessor suite/smoke.
 - [x] Qualify exact current-source full Debug, Release and real ASan, the original sanitizer probe, analysis and ARM64 cross-builds. Cross-builds cannot establish native ARM64 execution.
-- [ ] Update the P1 checklist and owning specs, then commit/push this qualified step.
+- [x] Update the P1 checklist and owning specs, then commit/push the qualified step as `4414cf1`. HEAD and remote branch both resolve to `4414cf1d8da6d4605fcfb4755cef4f335ed273ad` before successor source integration.
 - [ ] Measure actual Escape acceptance and a restored-source non-occluded Present separately; this functional fixture cannot close G1.
 
 ## Contract
@@ -81,3 +81,5 @@ All three original cross-builds exit 0 on the same 1,104-input source; each comp
 | ASan | 36204 | 2026-10-10T02:25:34.763650+00:00 to 2026-10-10T02:26:26.439231+00:00 | `3936E33481451CF64D0A57FBFFF2BEED0F654DC22C9CB2BDE3E532E8D02DA749` |
 
 Main's combined closeout authenticates all exact x64 report hashes, the unchanged live 1,104-input closure, all three original ARM results and archive manifests, 15 product pairs and five sanitizer controls; report `008043C990DF7A78361F3FCBEB3C3AC65E259812C78234496123AC2C4C0E0DF6`. Skills/style pass on unchanged native inputs (15 skills; 974 formatted files). Its initial short/full ASan profile-name mismatch is preserved as a checker-only schema refusal; r2 maps the `ASan` filename to the original `ASan Debug` configuration without changing reports, native source or executions. P1 Done/G1 remain false.
+
+Qualified commit `4414cf1d8da6d4605fcfb4755cef4f335ed273ad` is pushed and the remote branch identity verifies. Its source/profile evidence becomes historical after the following Escape integration. The integration separately verifies all 1,104 original inputs and 31 exact candidate/base hashes before changing native source; current Escape runtime qualification remains due.

@@ -69,10 +69,26 @@ against those same owners in the live document.
   prohibited.
 - Derived display state (DPI, client size, adapter LUID) is recomputed when its inputs change, not per idle wake.
 
-Diagnostic exception: the bounded `--bench ui-smoke` correctness harness may render with session display power
-off, as the screenshot harness does. It keeps visibility, suspension and occlusion checks, and its timings are
+Diagnostic exception: the bounded UI smoke correctness harnesses (`ui-smoke`, `ui-prepared-smoke`, focused
+sampler smoke and direct/prepared cancellation smoke) may render with session display power off, as the
+screenshot harness does. It keeps visibility, suspension and occlusion checks, and its timings are
 never qualification evidence. Full UI benchmark modes fail if presentation is unavailable. See
 [`Testing_Benchmarks.md`](../Testing/Testing_Benchmarks.md).
+
+Opt-in cancellation diagnostics additionally own one bounded write-once observer log and manual-reset event,
+created before scheduler initialization and retained through joined Close. The event joins the original
+message/frame waits; only the outer owner loop drains at most 32 immutable records. Unpublished reservation
+holes wait for their original producer. A separate one-shot native timer implements the declared stop delay;
+it is disarmed before posting Escape and owns a monotonic identity so stale messages cannot target a newer
+trial. These opt-in resources do not create an ordinary polling timer, default observer, worker wait or
+permission for early retirement. Source-Present observations require the actual committed render argument
+and non-occluded Present; elapsed clocks do not substitute for CPU/GPU acknowledgement.
+An early WM_TIMER wake can admit at most two fresh one-shots with monotonic identities and requested intervals
+of at least 10 ms. It retains the original QPC deadline; exhaustion is a diagnostic failure. It never busy-polls or
+posts Escape before the declared minimum interval, and every completed row reports its actual re-arm count.
+Declared large-fixture pixel-budget refusals retain their original notice, source/history and settled preparation
+owners. They admit no Commit or Escape timer and contribute no cancellation or owner-cost duration. Setup
+workers may have run; refusal cost must be measured separately by the original UI operation benchmark.
 
 ## Pointer input and the chrome
 

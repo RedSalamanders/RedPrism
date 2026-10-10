@@ -4,6 +4,7 @@
 #include "ContinuationRequests.h"
 #include "Document.h"
 #include "GpuWork.h"
+#include "UiCancellationBenchmark.h"
 #include "UiTiming.h"
 
 #include <array>
@@ -31,6 +32,7 @@ struct UiBenchmarkState final
         std::uint64_t frames = 0;
         GpuReadbackStatistics readback;
     };
+    std::unique_ptr<UiCancellationBenchmark> cancellation;
     CanvasDocument fixture;
     CanvasDocument imageImportBaseline;
     Guid activeLayer;

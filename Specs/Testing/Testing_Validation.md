@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-10
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -10,6 +10,71 @@ This contract owns how RedPrism is proven. Domain specs name the behavior; this 
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
 ## Entrypoint
+
+The x64 ISA gate includes independent `IsaR14LoopTableTests.ps1` parser controls for the exact hoisted
+nonvolatile-base worker loop. Valid relocated table data and checked `INT3` straddles require the complete
+producer, guard, loop, decoded PE rows, PDB ownership/extent and targets. Missing, contradictory, duplicated,
+unknown or overlapping rows, body gaps, changed loop operands, invalid symbols/targets/extents, outside
+entries and adjacent genuine VEX/EVEX code MUST withhold data proof or remain ordinary ISA violations.
+Synthetic parser controls never execute their bytes and grant no native runtime or performance qualification.
+
+### Opt-in Escape cancellation diagnostics
+
+HostTests adds 14 immutable capture, 28 original-body/clock partition, 25 real event transport and 35 CLI
+controls. Selected useful Run ordinal is explicitly 2; admission stubs, other ticket generations, malformed
+boundary/result pairs, clock failure, early return and overlap cannot qualify accepted-stop-to-return.
+Transport controls read immutable payloads while original producers are still event-held, before join, and
+verify the exact bounded32record rearm/exhaustion policy. The factory's nonempty output refusal preserves
+its existing live event owner. Production callbacks own no Application/scheduler access or producer wait.
+
+`RunUiCancellationDispatchSelfTest` adds 34 real hidden-HWND controls in accepted/refused pairs. The
+independent four-gray-pixel source remains unchanged while its real original Commit body is event-held.
+Real WM_KEYDOWN/WM_KEYUP must bind the original ticket, preserve exact receipt errors, hide only an accepted
+Cancel card and retain logical/history/source authority until acknowledgement. Stale disarmed timer identity
+cannot repost Escape. After joined retirement, only the actual committed render argument is eligible; a
+separate equivalent document copy refuses. This fixture grants neither a worker-return nor visible-Present
+measurement. Its ordinary scheduler has no execution observer.
+
+HostTests additionally requires 64 refusal classifier controls: the explicit four-profile/ten-case roster
+and both refusal stages reject changed source/history, unjoined owners, admitted Commit processing, an
+armed timer, missing/repeated notices and mismatched panel/grid state. The same actual Application dispatch
+fixture adds 24 independent `ui-cancel-refusal-caller.*` controls through real menu and settings callers.
+Hidden sparse budget holders leave exactly four pixels for opening refusal or one million for settings
+refusal; neither allocates or uploads the large holder. Gaussian and Motion must each report their original
+notice once, preserve source/history, settle all owners without Commit/timer admission, qualify the matching
+stage, and consume the notice without repeating it on DocumentChanged. These state controls measure no cost
+or Present. Four `docbudget.*-single-grid-*` controls separately exercise the exact 100 M sparse source's
+early single-raster growth limit for both blurs, with one-shot notice and unchanged unmaterialized source/history.
+
+The durable full cancellation reader and independent pure controls must preserve all 110 contexts, distinguish
+the declared 45/100 MP opening/settings refusals from admitted Commit rows, and exclude refused contexts from
+all duration/receipt distributions. Typed exact rosters, order, duplicate/missing/extra fields, fabricated
+clocks or receipts, stage mismatches and false qualification flags are required refusal controls. Small
+smoke remains strict: its 30 rows per route have no budget refusals. Pure readers establish schema correctness;
+native full-profile qualification and actual R1/W measurements remain separate requirements.
+
+The full test script runs independent cancellation output parser controls and both actual direct/prepared
+64x48 WARP cancellation smoke routes. Each route requires the exact ten-operation/three-trial roster with
+excluded warmup, known original raw/receipt results and a complete success report. Malformed, duplicate,
+missing or reordered records, false measurement, failed/refused work, invalid numeric fields and unsupported
+G1 claims refuse. All-early samples remain truthful unmeasured success rather than invented fast cancellation.
+No duration threshold is a correctness assertion. Original predecessor suites, numeric goldens, sanitizer
+probe/stress and both existing27operation smoke routes remain required. Runtime claims still require their
+exact source/dependency/binary/profile binding; pure parser tests and cross-builds are not runtime evidence.
+
+Five positive parser models and 21 refusal controls include exact `previewEnabled` context and bounded
+`deadlineRearms` (0–2) checks:
+Gaussian 250/Motion 2000 use the actual Preview-off checkbox outside timed Commit; the other eight cases
+keep their live previews. The actual smoke must observe useful-body notices from the original scheduler
+initialized at startup; constructing an observer only after scheduler initialization cannot pass. Ordinary
+startup remains observer-free. Extreme-preview latency/cancellation remain separate performance obligations.
+Prepared Preview-off setup requires current committed publication with no pending graph; Preview-on still
+requires exact current pending publication. Early native timer wakes disarm their original identity and
+permit at most two fresh event-driven one-shots, retaining the original QPC deadline. Exhaustion is failure,
+and posting before that deadline never qualifies. The actual smoke retains real re-arm and delay fields.
+The prepared smoke must progress with the published row cache's completed charge ticket retained; pending
+row preparation remains joined, row identity remains current and immutable cache memory ownership is preserved.
+
 
 ### Detached Warp CPU and exclusive samples
 

@@ -146,6 +146,7 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
     if (grownWidth < 1 || grownHeight < 1 || grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide ||
         grownWidth * grownHeight > 100'000'000)
     {
+        _budgetRefused = true;
         return false;
     }
     // Decision D7: the grown layer (and a mask on its grid carried onto it) fits the document's budget.

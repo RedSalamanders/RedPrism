@@ -7777,6 +7777,28 @@ void TestDocumentPixelBudget()
     // enforced them only on save, where the document was then rejected), refuses when they would be exceeded and
     // reports it once through TakeBudgetRefusal.
     const Raster red = SolidRaster(100, 100, 0, 0, 255, 255);
+    for (const auto kind : {FilterKind::GaussianBlur, FilterKind::MotionBlur})
+    {
+        // The exact 100 M source fits D7; any positive blur growth exceeds the single-raster limit before
+        // the aggregate-budget branch. Empty sparse storage proves refusal without allocating its pixels.
+        DocumentSession session = PixelEditSession(4, 1);
+        auto layer = BudgetLayer(10000, 10000);
+        layer.visible = true;
+        const Guid active = layer.id;
+        const Raster source = layer.asset.value().image;
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
+        session.SelectLayer(active);
+        const auto revision = session.history.CurrentRevision();
+        const auto undos = session.history.UndoCount();
+        session.BeginColorEdit(kind, true);
+        const bool gaussian = kind == FilterKind::GaussianBlur;
+        Expect(!session.HasColorEdit() && session.TakeBudgetRefusal() && !session.TakeBudgetRefusal(),
+               gaussian ? "docbudget.gaussian-single-grid-notice-once" : "docbudget.motion-single-grid-notice-once");
+        Expect(session.ActiveLayer()->asset.value().image == source && !source.IsMaterialized() &&
+                   session.history.CurrentRevision() == revision && session.history.UndoCount() == undos,
+               gaussian ? "docbudget.gaussian-single-grid-source-history"
+                        : "docbudget.motion-single-grid-source-history");
+    }
     {
         DocumentSession session = PixelEditSession(200, 200);
         EditLayerRecordsForTest(session, [&](DocumentFixture& document)

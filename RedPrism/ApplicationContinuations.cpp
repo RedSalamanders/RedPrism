@@ -54,6 +54,8 @@ void Application::RetireHostContinuation(HostRequestQueue::Entry&& entry, Contin
 ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcept
 {
     const auto receipt = QueueHostInput(HostPanelOkInput{opening});
+    if (_uiBenchmark)
+        NoteUiCancellationApplyReceipt(opening, receipt);
     if (receipt.Read().outcome == HostOutcome::Pending)
     {
         _pendingPanelOpening = opening;
@@ -71,6 +73,8 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
     CancelHostContinuations();
     CancelColorCommit(); // direct engine acquisition can exist without a selected host input
     const auto receipt = QueueHostInput(HostPanelCancelInput{opening});
+    if (_uiBenchmark)
+        NoteUiCancellationReceipt(opening, receipt);
     if (receipt.Read().outcome == HostOutcome::Pending)
     {
         _pendingCancelOpening = opening;

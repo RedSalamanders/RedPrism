@@ -375,6 +375,13 @@
     <ClCompile Include="..\Tests\ClipboardMergedBudgetTests.cpp" />
     <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
+    <ClCompile Include="ApplicationCancellationBenchmark.cpp" />
+    <ClCompile Include="ApplicationCancellationBenchmarkTests.cpp" />
+    <ClInclude Include="UiCancellationBenchmark.h" />
+    <ClInclude Include="UiCancellationObservation.h" />
+    <ClInclude Include="UiCancellationBody.h" />
+    <ClInclude Include="UiCancellationCapture.h" />
+    <ClInclude Include="UiCancellationRefusal.h" />
     <ClCompile Include="ApplicationLayerRowsBenchmark.cpp" />
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />

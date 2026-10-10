@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-10
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -461,6 +461,17 @@ symbol prove that bias. The complete table, including its default entry, must ta
 after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
 invalid default/other targets receive no exemption. This adds no runtime allowlist entry.
 
+The observed Release signed variant move also uses exactly five contiguous instructions, 27 bytes:
+`MOVSX RAX,byte [RBP+disp32]`, `LEA RDX,imagebase`, `MOV EAX,[RDX+4*RAX+tableRva]`,
+`ADD RAX,RDX`, `JMP RAX`. Every decoded row, length, nonoverlapping boundary and byte MUST match the PE.
+The exact anonymous same-owner untyped PDB data record MUST begin one DWORD before the load displacement;
+that first entry belongs to the signed index -1 default. The complete default and ordinary entries MUST target
+known decoded body instructions after the jump and before the table, with the existing contribution and
+next-data-symbol bounds. Another register, REX/frame/SIB/width, unsigned or disp8 index, bias, gap, unknown or
+conflicting row, symbol/owner or target receives no proof. A real vector instruction adjacent to this data
+remains a violation. This changes no runtime, object, function or address allowlist. Its 62 independent pure
+parser controls and same-image readback are separate from native profile qualification.
+
 The observed Release `std::variant` destruction dispatch (`_Variant_base<...>::_Destroy` of 21 alternatives) is exactly six
 contiguous instructions, 37 bytes: `MOVSX RAX,byte [RCX+disp32]`, `LEA R8,imagebase`, `MOVZX EAX,byte [R8+RAX+disp32]`,
 `MOV EDX,[R8+4*RAX+disp32]`, `ADD RDX,R8` and `JMP RDX`. The index is signed (-1 is the valueless state), so the byte load's
@@ -521,6 +532,23 @@ rows provide no proof. A final scalar listing row may consume matching bytes aft
 a crossing vector row remains subject to the existing checked suffix rule. This proves data only, not a
 general upper-bit invariant for R13, and adds no object/function or runtime-allowlist exemption. Parser
 controls and unchanged failed-image verification are separate from full native profile qualification.
+
+The observed Release worker-priority loop hoists `R14=imagebase` across exactly 35 contiguous rows (132 bytes).
+Only its complete fixed producer, two stack loads, predicates, zero-extended EAX index, unsigned guard of five,
+DWORD load, ADD/JMP, three case bodies, call, candidate update and bounded loop back edge prove this form.
+Every row and boundary MUST match the PE. Its one loop call targets outside the procedure and relies on the
+Windows x64 nonvolatile-register ABI; there is no general instruction skipping or same-procedure LEA proof.
+Outside direct branches/calls, including legacy-prefixed and LOOP-family transfers, cannot enter the protected
+loop interior. Other indirect/far jumps, far calls/returns and same-procedure direct calls invalidate proof.
+The six DWORDs start at an aligned, anonymous, untyped same-owner PDB record and end exactly at the owning
+procedure end. Each target MUST be one of the two independently decoded ordinary case starts. The full preceding
+procedure is known, contiguous, nonoverlapping and PE-matching, ending in a decoded backward JMP to a body
+boundary before the producer followed by exactly `66 90` alignment. No other same-owner data record lies in
+the procedure. Direct transfers cannot enter that alignment or table. The table listing also MUST be known,
+contiguous, nonoverlapping and byte-identical; a final row may consume only the existing checked `INT3` suffix
+when receiving vector-data status. Wrong or missing producer, loop, guard, row, symbol, extent, target or suffix
+provides no exemption. Real adjacent vector code remains gated. This changes no runtime, object, function,
+address or tier allowlist; parser/readback proof is separate from native profile qualification.
 
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly

@@ -69,6 +69,11 @@
 #include "SamplerIntentInputTests.h"
 #include "Scope.Tests.JobExecutionObservation.h"
 #include "Scope.Tests.KeyboardState.h"
+#include "Scope.Tests.UiCancellationBody.h"
+#include "Scope.Tests.UiCancellationCapture.h"
+#include "Scope.Tests.UiCancellationCli.h"
+#include "Scope.Tests.UiCancellationObservation.h"
+#include "Scope.Tests.UiCancellationRefusal.h"
 #include "SettingsStore.h"
 #include "SharedRetainedJobMemoryTests.h"
 #include "TransformOverlay.h"
@@ -1896,6 +1901,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunUiTimingTests();
     gFailures += RunKeyboardStateScopeTests();
     gFailures += RunJobExecutionObservationTests();
+    gFailures += RunUiCancellationCaptureTests();
+    gFailures += static_cast<int>(!RunUiCancellationBodyTests());
+    gFailures += RunUiCancellationObservationTransportTests();
+    gFailures += RunUiCancellationCliTests();
+    gFailures += static_cast<int>(!RunUiCancellationRefusalTests());
     gFailures += RunHostUiFrameLatencyTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);

@@ -245,6 +245,24 @@ if ($LASTEXITCODE -ne 0) {
 }
 $global:LASTEXITCODE = 0
 
+Write-Host 'Running UI cancellation parser controls...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkSmokeParserTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw "UI cancellation parser controls failed with exit code $LASTEXITCODE." }
+$global:LASTEXITCODE = 0
+
+Write-Host 'Running full UI cancellation parser controls...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkFullParserTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Full UI cancellation parser controls failed with exit code $LASTEXITCODE." }
+$global:LASTEXITCODE = 0
+
+foreach ($cancelRoute in @('direct', 'prepared')) {
+    Write-Host "Running UI cancellation smoke ($cancelRoute)..." -ForegroundColor Cyan
+    & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkSmokeTests.ps1') `
+        -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute $cancelRoute
+    if ($LASTEXITCODE -ne 0) { throw "UI cancellation smoke ($cancelRoute) failed with exit code $LASTEXITCODE." }
+    $global:LASTEXITCODE = 0
+}
+
 Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
     -ExecutablePath $executable -OutputDirectory $outputRoot

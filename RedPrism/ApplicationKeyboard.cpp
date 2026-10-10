@@ -159,6 +159,14 @@ void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
 
 LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark)
+        BeginUiCancellationKey(message, wParam, lParam);
+    const auto endCancellationDispatch = wil::scope_exit(
+        [this]() noexcept
+        {
+            if (_uiBenchmark)
+                EndUiCancellationKey();
+        });
     const KeyPress press = KeyPressFromMessage(wParam, lParam, _chrome && _chrome->TextInputFocused());
     _suppressCharacter = false;
     _lastKeyHandled = false;
@@ -255,6 +263,8 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
 
 LRESULT Application::OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark)
+        NoteUiCancellationKeyUp(message, wParam);
     const UINT virtualKey = static_cast<UINT>(wParam);
     // The key down's character, if it had one, arrived before this key up.
     _suppressCharacter = false;

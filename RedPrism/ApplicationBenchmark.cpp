@@ -221,13 +221,23 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
     try
     {
         auto next = std::make_unique<UiBenchmarkState>();
+        const bool cancellation = IsUiCancellationBenchmark(mode);
+        if (cancellation)
+        {
+            next->cancellation = std::make_unique<UiCancellationBenchmark>();
+        }
         const bool samplerOnly =
             mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
         const bool preparedDisplay = mode == L"ui-prepared" || mode == L"ui-prepared45" || mode == L"ui-prepared100" ||
-                                     mode == L"ui-prepared-smoke";
-        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke";
-        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100";
-        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45";
+                                     mode == L"ui-prepared-smoke" || mode == L"ui-cancel-prepared" ||
+                                     mode == L"ui-cancel-prepared45" || mode == L"ui-cancel-prepared100" ||
+                                     mode == L"ui-cancel-prepared-smoke";
+        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke" ||
+                           mode == L"ui-cancel-smoke" || mode == L"ui-cancel-prepared-smoke";
+        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100" ||
+                             mode == L"ui-cancel100" || mode == L"ui-cancel-prepared100";
+        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45" ||
+                               mode == L"ui-cancel45" || mode == L"ui-cancel-prepared45";
         const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
         const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
@@ -533,6 +543,16 @@ int Application::RunUiBenchmark() noexcept
         std::printf("UI BENCH REPORT status=failed setup=0x%08lx\n", static_cast<unsigned long>(status));
         return 5;
     }
+    if (_uiBenchmark->cancellation)
+    {
+        if (!_preUiCancellationObservation)
+        {
+            std::printf("UI BENCH REPORT status=failed reason=missing-startup-observer\n");
+            return 5;
+        }
+        // Transfer ownership, not the object: the scheduler already borrows this stable context/event.
+        _uiBenchmark->cancellation->observation = std::move(_preUiCancellationObservation);
+    }
     _quietUi = true;
     _prompts = &QuietPrompts();
     _screenshotDpi = 0;
@@ -610,14 +630,34 @@ void Application::FailUiBenchmark(const char* reason) noexcept
                         _session.history.IsModified() == _uiBenchmark->previousModified,
                         layer && layer->asset && layer->asset->image == _uiBenchmark->previousImage, _lastErrorId);
         }
+        if (_uiBenchmark->cancellation)
+        {
+            const auto& trial = *_uiBenchmark->cancellation;
+            std::printf("UI CANCEL DETAIL phase=%u ownerPending=%d ownerReady=%d gpuPending=%d gpuReady=%d "
+                        "committedPending=%d committedReady=%d pendingPending=%d pendingReady=%d "
+                        "commandsPending=%d commandsReady=%d rowsPending=%d rowsReady=%d historyReady=%d "
+                        "hostActive=%d hostQueued=%zu historyBusy=%d colorCommit=%d colorPreview=%d colorHistogram=%d "
+                        "rowsTicket=%d rowsCacheTicket=%d frameInvalidated=%d opening=%llu original=%d cursor=%zu\n",
+                        static_cast<unsigned int>(trial.phase), _ownerWork.HasPending(), _ownerWork.HasReady(),
+                        _gpuWork.HasPending(), _gpuWork.HasReady(), _committedDisplay.HasPending(),
+                        _committedDisplay.HasReady(), _pendingDisplay.HasPending(), _pendingDisplay.HasReady(),
+                        _recordedCommands.HasPending(), _recordedCommands.HasReady(), _layerRowsSource.HasPending(),
+                        _layerRowsSource.HasReady(), _historyResidencySource.HasReady(), _activeHostRequest.has_value(),
+                        _hostRequests.Size(), _historyWork.Busy(), _colorCommitTicket.has_value(),
+                        _colorPreviewTicket.has_value(), _colorHistogramTicket.has_value(),
+                        _layerRowsTicket.has_value(), _layerRowsCacheTicket.has_value(), _frameInvalidated,
+                        static_cast<unsigned long long>(trial.opening), trial.original.has_value(), trial.cursor);
+        }
+        DisarmUiCancellationTimer();
         _uiBenchmark->failed = true;
         _uiBenchmark->phase = UiBenchmarkState::Phase::Done;
         std::printf("UI BENCH REPORT status=failed reason=%s operation=%zu name=%s trial=%u "
                     "visible=%d displayOn=%d suspended=%d occluded=%d jobsIdle=%d presents=%llu expectedAfter=%llu "
                     "frameFailure=0x%08lx canvasFailure=0x%08lx failedStage=%u\n",
-                    reason, _uiBenchmark->operation, CurrentOperation(*_uiBenchmark).name, _uiBenchmark->trial,
-                    _windowVisible, _displayPoweredOn, _renderer.IsSuspended(), _renderer.IsOccluded(), _jobs.IsIdle(),
-                    static_cast<unsigned long long>(_renderer.PresentCount()),
+                    reason, _uiBenchmark->operation,
+                    _uiBenchmark->cancellation ? UiCancellationOperationName() : CurrentOperation(*_uiBenchmark).name,
+                    _uiBenchmark->trial, _windowVisible, _displayPoweredOn, _renderer.IsSuspended(),
+                    _renderer.IsOccluded(), _jobs.IsIdle(), static_cast<unsigned long long>(_renderer.PresentCount()),
                     static_cast<unsigned long long>(_uiBenchmark->previousPresents),
                     static_cast<unsigned long>(_lastFrameFailure),
                     static_cast<unsigned long>(_renderer.CanvasFailure()),
@@ -631,6 +671,11 @@ void Application::FailUiBenchmark(const char* reason) noexcept
 void Application::PrepareUiBenchmarkStep() noexcept
 {
     auto& state = *_uiBenchmark;
+    if (state.cancellation)
+    {
+        PrepareUiCancellationStep();
+        return;
+    }
     _session.CancelColorEdit();
     const auto operation = CurrentOperation(state);
     if (operation.expected == Expected::ImportedLayers || operation.expected == Expected::ImportedLayersRefused)
@@ -731,6 +776,11 @@ void Application::PrepareUiBenchmarkStep() noexcept
 
 void Application::ExecuteUiBenchmarkStep() noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->cancellation)
+    {
+        ExecuteUiCancellationStep();
+        return;
+    }
     if (!_uiBenchmark || _uiBenchmark->phase != UiBenchmarkState::Phase::Posted)
     {
         return;
@@ -865,6 +915,11 @@ void Application::AdvanceUiBenchmark() noexcept
     if (_failedFrames != 0 || FAILED(_frameLoopFailure) || FAILED(_renderer.CanvasFailure()))
     {
         FailUiBenchmark("render-failure");
+        return;
+    }
+    if (state.cancellation)
+    {
+        AdvanceUiCancellationBenchmark();
         return;
     }
     // A completion can arrive after an earlier frame already presented. Wait for the frame invalidated by

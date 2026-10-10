@@ -56,6 +56,94 @@ Measured, early and overlap counts sum to ten; cancelled sizing results are empt
 No timer or timing assertion belongs to the ordinary correctness suite. This diagnostic establishes neither UI
 responsiveness nor SIMD speed; old pre-return measurements cannot qualify this returned-body boundary.
 
+## UI Escape cancellation diagnostic
+
+The opt-in `ui-cancel`, `ui-cancel45`, `ui-cancel100` and `ui-cancel-smoke` modes reuse the respective
+UI fixtures and trial counts. `ui-cancel-prepared` and its `45`, `100` and `-smoke` variants require the
+explicit prepared display/row route. Ordinary editor activation remains separate. The ten ordered cases
+are Levels gamma 1.25, HSV saturation +20, Exposure +0.5, Curves with points (0,0)/(128,160)/(255,255),
+reversed Gradient Map, Grain 40, Gaussian radius 250, Motion distance 2000, Noise 20 and Lens distortion 20.
+The complete P1 operation roster, including content-aware fill and size/selection/tools, remains due.
+
+Gaussian 250 and Motion 2000 switch Preview off through the actual checkbox before setting the extreme value,
+outside the timed Commit interval. Their full-commit cancellation rows report `previewEnabled=0`; the other
+eight cases keep Preview on and report `previewEnabled=1`. This avoids running the unrelated expanded preview
+kernel during setup. These two cases do not qualify extreme-preview latency or restoration from changed
+preview pixels. Their original source/history and accepted Cancel card still require exact restoration.
+The prepared setup requires a current pending publication only with Preview on. With Preview off, it requires
+the current committed publication and no pending graph selected for rendering; row identity and settled
+ownership remain required in either case.
+
+Preparation settles previews and presents the current panel before posting actual OK. The diagnostic binds
+the exact admitted original ticket and selects its second compute Run; the first is the existing admission/
+capture stub. A bounded write-once log retains immutable worker-entry/return notices. Its manual-reset event
+joins the existing message/frame waits; the owner resets before reading at most 32 records. An unpublished
+reservation hole is never skipped or rearmed into a busy loop. No callback reads Application or scheduler
+state. The event/log are created before scheduler initialization and survive its joined Close. Ownership
+transfers to the benchmark state without moving the borrowed object/event. Ordinary startup constructs neither.
+
+One native timer requests Escape 20 ms after the observed useful entry, with clock rounding upward.
+OS timer granularity, owner scheduling and queued-message delay are retained as actual entry-to-post and
+post-to-dispatch intervals; this is not a guaranteed 20 ms delivery deadline. The timer is disarmed before
+posting real WM_KEYDOWN/WM_KEYUP. Monotonic timer identities reject stale messages without affecting a newer
+trial. Actual key dispatch stamps cancellation of the original ticket separately from admission of its
+ordered Cancel receipt. Failed admission cannot be reported as hidden-card success. Unexpected keyboard
+input or mutating pointer input fails the diagnostic; no physical modifier state is overwritten.
+
+WM_TIMER is a wake-up rather than deadline authority. If it wakes before the original QPC deadline, disarm
+that identity and admit a fresh one-shot requesting at least USER_TIMER_MINIMUM (10 ms) for the remaining interval.
+At most two such re-arms are permitted; `deadlineRearms` reports 0–2. Exhaustion, clock failure or timer
+admission failure fails the whole diagnostic. Escape is posted only at or after the original 20 ms QPC
+deadline. This bounded event-driven correction neither polls nor changes the minimum delay or recorded
+posting/dispatch timestamps. No early wake is falsely counted as a cancellation sample.
+
+Rows report actual dispatch, receipt admission, accepted-stop-to-original-BodyExited, first restored-source
+non-occluded Present and final original settlement separately. The selected render argument must be the
+current original committed source, with unchanged document/history/target authority and hidden card; a
+foreign equivalent document address or stale prepared publication cannot qualify a frame. Present submission
+is not monitor scanout. BodyExited includes Run-local cleanup but grants no native/GPU acknowledgement.
+Only complete original owner/worker/GPU settlement permits fixture replacement or receipt retirement.
+Published immutable row caches retain their completed memory-charge ticket while displayed. That identity
+remains owned and charged; pending row preparation has a separate ticket. Settlement waits for pending work,
+and current publication validates the row key without requiring its live cache ownership to disappear.
+
+Each admitted Commit trial emits `UI CANCEL`; warmup is trial 0 and never measured. Early completion before Escape, completion
+before the stop call and finish overlap are separate unmeasured outcomes. Worker failure and missing useful
+work remain unmeasured; raw worker status/error and original OK/Cancel receipt outcomes/errors are retained
+with explicit known flags. Command/settings budget refusal is never successful image processing. A returned-
+after-acceptance measurement requires valid causal clocks, an accepted original cancellation, successful
+Cancel acknowledgement, unchanged source/history, and an actual restored-source Present. No elapsed-time
+threshold is asserted by a correctness test. Every output explicitly retains `ordinaryActivation=0`/`g1=0`.
+
+The full 45 MP and 100 MP fixtures retain D7's 100 M aggregate image-pixel budget. Gaussian 250 and Motion
+2000 exceed it: the 45 MP layered fixture refuses the extreme settings after opening; the 100 MP fixture
+refuses the opening's positive blur growth. These contexts emit a distinct `UI CANCEL REFUSAL` row with
+`stage=settings` or `stage=opening`, exactly one original budget notice, unchanged source/history,
+`commitWorkerAdmitted=0`, and `kernelMeasured=0 cancelMeasured=0 ownerCostMeasured=0`. Default opening,
+preview, histogram and display preparation may have run before a settings refusal; they must be settled.
+Refusal is neither a cancellation nor a speed measurement. Its owner/notice cost remains due in the general
+UI benchmark. No refusal row carries invented durations, receipts or a useful-body ticket.
+
+Full output has 110 ordered contexts (ten cases, one warmup and ten recorded trials), followed by the exact
+success report. At 4K all 110 are admitted-Commit rows. At 45/100 MP there are 88 admitted-Commit rows and
+22 declared refusal rows: 80 active and 20 refusal recorded contexts, plus eight active and two refusal
+warmups. The full reader reports refusal counts separately, excludes them from all latency distributions,
+and preserves every recorded active owner-cost sample even when its worker finishes before Escape.
+Missing, undeclared, wrong-stage or falsely measured refusals fail the entire reader. An empty measured
+kernel distribution has count zero, an empty values array and null statistics; it never means zero latency.
+The prepared refusal also requires a current committed publication, no pending render graph, current rows,
+joined owners and a subsequent actual non-occluded Present. The reader alone grants no native qualification.
+
+The bounded smoke gate executes 30 rows (one warmup and two trials for all ten operations) on both real
+WARP direct/prepared routes. It requires exact ordered inventories, typed clocks/results, correct warmup
+exclusion, receipt/source/card outcomes and final report. It permits truthful early completion without
+requiring a measured cancellation count; it rejects refusal, worker failure, missing work or malformed output.
+The hidden actual-HWND dispatch fixture independently checks original-ticket cancellation, accepted/refused
+card visibility and joined history/source lifetime at an event-held worker boundary. It measures neither
+visible presentation nor worker-return time. Capture/reducer/transport/CLI controls use independent state
+expectations and real event-gated publication, never candidate timings as expected values. Qualified Release
+measurements and original R1/W A/B/remaining-host requirements must still pass before G1 or P1 Done.
+
 ## UI application benchmark
 
 `ui-prepared|ui-prepared45|ui-prepared100|ui-prepared-smoke` selects the explicit experimental prepared

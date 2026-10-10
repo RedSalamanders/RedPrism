@@ -92,7 +92,8 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate,
             L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke|ui|ui45|ui100|ui-smoke|ui-sampler|"
             L"ui-sampler45|ui-sampler100|ui-sampler-smoke|ui-prepared|ui-prepared45|ui-prepared100|"
-            L"ui-prepared-smoke|layer-rows|layer-rows-smoke>",
+            L"ui-prepared-smoke|layer-rows|layer-rows-smoke|ui-cancel|ui-cancel45|ui-cancel100|ui-cancel-smoke|ui-"
+            L"cancel-prepared|ui-cancel-prepared45|ui-cancel-prepared100|ui-cancel-prepared-smoke>",
             L"Run the brush benchmark on the selected device, or the CPU kernel benchmark (kernels: 3840x2160, 10; "
             L"kernels45: 8192x5464, 10; kernels-smoke: 32x24, 2). The smoke mode is not a performance "
             L"measurement. buffers and buffers45 compare copy/adopt pairs at those same image sizes. UI benchmarks "
@@ -106,7 +107,13 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
             L"They do not enable that route for normal editing. layer-rows measures owner-thread publish/Prepare and "
             L"full offscreen UI Automation "
             L"(UIA) name reads with 10,000 rows and 1,024 UTF-16-unit names; layer-rows-smoke uses a small fixture. "
-            L"These modes report measurements without asserting performance success.",
+            L"These modes report measurements without asserting performance success."
+            L"\n\nOpt-in ui-cancel modes dispatch actual Escape and measure cancellation feedback and body return with "
+            L"original ownership. "
+            L"ui-cancel, ui-cancel45, and ui-cancel100 use the default, 45 MP, and 100 MP correctness fixtures; "
+            L"ui-cancel-smoke uses the small correctness fixture. The prepared variants use prepared display/rows, "
+            L"not ordinary activation, with corresponding fixtures. Smoke variants are correctness only, make no "
+            L"performance assertions, and do not activate the normal route.",
             L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::CrashProbe, L"--crash-probe", nullptr, RedPrismSwitchValue::Separate,
                                   L"<directory>",
@@ -420,7 +427,15 @@ struct RedPrismCommandLineScan final
                                                std::wstring_view{arguments[index + 1]} != L"ui-prepared100" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-prepared-smoke" &&
                                                std::wstring_view{arguments[index + 1]} != L"layer-rows" &&
-                                               std::wstring_view{arguments[index + 1]} != L"layer-rows-smoke"))
+                                               std::wstring_view{arguments[index + 1]} != L"layer-rows-smoke" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel100" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel-smoke" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel-prepared" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel-prepared45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel-prepared100" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-cancel-prepared-smoke"))
             {
                 if (errorToken)
                 {

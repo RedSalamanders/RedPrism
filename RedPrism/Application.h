@@ -62,6 +62,7 @@
 class ChromeHost;
 class PreparedLayerRows;
 struct UiBenchmarkState;
+class UiCancellationObservation;
 struct ApplicationShutdownTestProbe;
 struct ApplicationProcessingTestProbe;
 struct ColorWorkTestGate;
@@ -205,6 +206,31 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void ExecuteUiBenchmarkStep() noexcept;
     void PrepareUiBenchmarkStep() noexcept;
     void FailUiBenchmark(const char* reason) noexcept;
+    int RunUiCancellationDispatchSelfTest() noexcept;
+    const char* UiCancellationOperationName() const noexcept;
+    [[nodiscard]] HRESULT PrepareUiCancellationObservation() noexcept;
+    JobExecutionObserver UiCancellationObserver() noexcept;
+    HANDLE UiCancellationWakeHandle() const noexcept;
+    void DisarmUiCancellationTimer() noexcept;
+    bool UiCancellationOwnersSettled() const noexcept;
+    void PrepareUiCancellationStep() noexcept;
+    void ExecuteUiCancellationStep() noexcept;
+    void AdvanceUiCancellationBenchmark() noexcept;
+    void FinishUiCancellationTrial(const char* outcome, bool measured) noexcept;
+    [[nodiscard]] bool UiCancellationRefusalReady() const noexcept;
+    void FinishUiCancellationRefusal() noexcept;
+    void AdvanceUiCancellationTrial() noexcept;
+    void NoteUiCancellationApplyReceipt(std::uint64_t opening, ContinuationReceipt receipt) noexcept;
+    void NoteUiCancellationCommitAdmitted(JobTicket original, std::uint64_t opening) noexcept;
+    std::int64_t BeginUiCancellationStop(JobTicket original) noexcept;
+    void NoteUiCancellationToken(JobTicket original, bool accepted, std::int64_t begin) noexcept;
+    void NoteUiCancellationReceipt(std::uint64_t opening, ContinuationReceipt receipt) noexcept;
+    void BeginUiCancellationKey(UINT message, WPARAM key, LPARAM flags) noexcept;
+    void EndUiCancellationKey() noexcept;
+    void NoteUiCancellationKeyUp(UINT message, WPARAM key) noexcept;
+    bool OnUiCancellationTimer(std::uintptr_t timer) noexcept;
+    bool UiCancellationSourceSelected(RecordedDisplayGraph* graph, const CanvasDocument* direct) const noexcept;
+    void NoteUiCancellationPresentation(bool sourceSelected) noexcept;
     static constexpr UINT kUiBenchmarkMessage = WM_APP + 10;
     static constexpr UINT_PTR kUiBenchmarkTimerId = 9;
 
@@ -1493,6 +1519,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     Vec2 _overlaySelectionAnchor{};
     std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
     std::wstring _bench;
+    std::unique_ptr<UiCancellationObservation> _preUiCancellationObservation;
     std::unique_ptr<UiBenchmarkState> _uiBenchmark;
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;

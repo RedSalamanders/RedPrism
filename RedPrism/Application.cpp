@@ -192,9 +192,10 @@ HRESULT Application::InitializeProcessing() noexcept
     };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
-    RETURN_IF_FAILED(static_cast<HRESULT>(
-        _jobs.Initialize(_processingTestProbe ? _processingTestProbe->workerCount : 0, {JobNoticeThunk, this},
-                         _processingTestProbe ? _processingTestProbe->memory : MemorySource{})));
+    RETURN_IF_FAILED(PrepareUiCancellationObservation());
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(
+        _processingTestProbe ? _processingTestProbe->workerCount : 0, {JobNoticeThunk, this},
+        _processingTestProbe ? _processingTestProbe->memory : MemorySource{}, UiCancellationObserver())));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
@@ -502,15 +503,19 @@ void Application::RenderFrame() noexcept
 {
     const auto previousPresents = _renderer.PresentCount();
     BindCompositionDevice();
-    const auto render = [this]() noexcept
+    bool cancellationSourceSelected = false;
+    const auto render = [this, &cancellationSourceSelected]() noexcept
     {
         auto* pending = _pendingDisplayInitialized ? _pendingDisplay.GraphForFrameOwner() : nullptr;
-        return _committedDisplayInitialized
-                   ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr,
-                                      _acknowledgedStrokePreview ? _acknowledgedStrokePreview
-                                      : pending                  ? pending
-                                                                 : _acknowledgedCommittedDisplay)
-                   : _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        auto* graph = _acknowledgedStrokePreview ? _acknowledgedStrokePreview
+                      : pending                  ? pending
+                                                 : _acknowledgedCommittedDisplay;
+        const auto* direct = _committedDisplayInitialized ? nullptr : _session.DisplayDocument();
+        // Bind the actual source argument for THIS rendering attempt, including a device-rebuild retry.
+        cancellationSourceSelected =
+            _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
+        return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph)
+                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct);
     };
     HRESULT result = render();
     if (result == S_FALSE)
@@ -542,7 +547,11 @@ void Application::RenderFrame() noexcept
     }
     _frameInvalidated = false;
     if (_renderer.PresentCount() > previousPresents)
+    {
         NoteUiFramePresentation();
+        if (_uiBenchmark)
+            NoteUiCancellationPresentation(cancellationSourceSelected);
+    }
     else
         AbandonUiFrameLatency(); // An occluded Present is not a completed visible frame.
     HRESULT canvasFailure = _committedDisplayInitialized && FAILED(_committedDisplayFailure)
@@ -2730,6 +2739,9 @@ int Application::RunSelfTest() noexcept
     {
         return cancellation;
     }
+    std::printf("BEGIN self-test.RunUiCancellationDispatchSelfTest\n");
+    if (const int dispatch = RunUiCancellationDispatchSelfTest(); dispatch != 0)
+        return dispatch;
     std::printf("BEGIN self-test.RunAdjustmentOpeningSelfTest\n");
     if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
     {
@@ -3644,6 +3656,7 @@ void Application::CloseMainWindow() noexcept
 
 void Application::Shutdown() noexcept
 {
+    DisarmUiCancellationTimer(); // The diagnostic event/log remain owned until after the scheduler joins Close.
     if (_jobs.InUiCallback())
     {
         _shutdownDeferred = true;
@@ -3885,11 +3898,12 @@ void Application::Shutdown() noexcept
 bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
     // The job event and settings watch wait beside messages, including while hidden. No periodic job timer.
-    HANDLE handles[2]{};
+    HANDLE handles[3]{};
     DWORD count = 0;
     const DWORD noIndex = MAXDWORD;
     DWORD jobIndex = noIndex;
     DWORD watchIndex = noIndex;
+    DWORD observationIndex = noIndex;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
         jobIndex = count;
@@ -3900,12 +3914,19 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
         watchIndex = count;
         handles[count++] = watch;
     }
+    if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
+    {
+        observationIndex = count;
+        handles[count++] = observation;
+    }
     const DWORD waitResult =
         MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0 + count || waitResult == WAIT_TIMEOUT)
     {
         return true;
     }
+    if (observationIndex != noIndex && waitResult == WAIT_OBJECT_0 + observationIndex)
+        return true; // Read fixed samples only in the outer owner loop.
     if (jobIndex != noIndex && waitResult == WAIT_OBJECT_0 + jobIndex)
     {
         return true; // drain only after returning to the outer loop
@@ -3927,8 +3948,9 @@ bool Application::WaitForFrameLatency() noexcept
     {
         return true;
     }
-    HANDLE handles[3]{};
+    HANDLE handles[4]{};
     DWORD count = 0;
+    DWORD observationIndex = MAXDWORD;
     DWORD jobIndex = MAXDWORD;
     DWORD watchIndex = MAXDWORD;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
@@ -3943,11 +3965,18 @@ bool Application::WaitForFrameLatency() noexcept
         watchIndex = count;
         handles[count++] = watch;
     }
+    if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
+    {
+        observationIndex = count;
+        handles[count++] = observation;
+    }
     const DWORD waitResult = MsgWaitForMultipleObjectsEx(count, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0 + frameIndex)
     {
         return true;
     }
+    if (observationIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + observationIndex)
+        return false;
     if (jobIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + jobIndex)
     {
         return false;
@@ -3995,6 +4024,13 @@ void Application::ZoomBy(double factor) noexcept
 
 void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->cancellation && message != WM_MOUSEMOVE && message != WM_MOUSELEAVE)
+    {
+        _uiBenchmark->cancellation->ambientInput = true;
+        FailUiBenchmark("cancel-ambient-pointer-input");
+        return;
+    }
+
     if (!_chrome)
     {
         return;
@@ -5810,6 +5846,8 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         break;
     case WM_TIMER:
+        if (_uiBenchmark && OnUiCancellationTimer(wParam))
+            return 0;
         if (wParam == kUiBenchmarkTimerId && _uiBenchmark)
         {
             (void)KillTimer(window, kUiBenchmarkTimerId);
@@ -7523,7 +7561,7 @@ int Application::RunBenchmark() noexcept
     if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
         _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
         _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" || _bench == L"ui-prepared45" ||
-        _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke")
+        _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" || IsUiCancellationBenchmark(_bench))
     {
         return RunUiBenchmark();
     }

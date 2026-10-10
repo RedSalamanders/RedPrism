@@ -259,6 +259,8 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
             if (status >= 0)
             {
                 _colorCommitTicket = ticket;
+                if (_uiBenchmark)
+                    NoteUiCancellationCommitAdmitted(ticket, edit.value().openingSequence);
             }
         }
     }
@@ -296,7 +298,11 @@ void Application::CancelColorCommit() noexcept
         (void)_historyWork.RequestCancel();
         if (_colorCommitTicket)
         {
-            (void)_jobs.Cancel(_colorCommitTicket.value());
+            const auto original = _colorCommitTicket.value();
+            const auto begin = _uiBenchmark ? BeginUiCancellationStop(original) : -1;
+            const bool accepted = _jobs.Cancel(original);
+            if (_uiBenchmark)
+                NoteUiCancellationToken(original, accepted, begin);
         }
         // A late successful worker still drops. Keep the barrier until its UI completion acknowledges that drop.
     }

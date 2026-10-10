@@ -47,6 +47,10 @@ if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls fail
 if ($LASTEXITCODE -ne 0) { throw 'Hoisted R15 signed byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaSignedRdxRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Signed RDX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaSignedRdxDwordTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Signed RDX DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR14LoopTableTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Hoisted R14 loop-table parser controls failed.' }
 Write-Host 'BEGIN isa-r13-terminal-controls'
 & (Join-Path $PSScriptRoot 'IsaR13TerminalTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Terminal R13 DWORD parser controls failed.' }
