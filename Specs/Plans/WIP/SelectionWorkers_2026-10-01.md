@@ -15,6 +15,21 @@
   construction and other selection producers remain open. See [bound record](../../TestRuns/P1WandNumericOutline_2026-10-11.md).
 - [ ] Complete large-image admission, overlapping gestures/writers, original-ticket outline consumer
   admission and bounded display/coverage/resource construction. The full owner Direct2D path build remains.
+- [x] Privately qualify the Inverse CPU candidate in Debug/Release/real ASan: all 9,069 original Document
+  assertions and 43 predeclared additions pass, with the actual sanitizer detection probe. The original
+  Debug qualifier error is preserved before the narrow correction. [Record](../../TestRuns/P1InverseSelectionPrivate_2026-10-11.md).
+- [x] Privately qualify the original Debug r4 ordered Inverse host: all original 126 stages and semantic assertions
+  plus 190 named success/fault/order/stale/refresh/output-owner checks pass. Preserve compiler/API failures and the
+  private-desktop presentation refusal; unchanged presentation checks pass on the inherited desktop.
+- [ ] Expanded 219-control host r6–r12 remains unqualified. In r9–r12, joined Close and admission checks pass,
+  but the full runs fail at the large case. r9's 4,096-hole topology passes without establishing >16 MiB output accounting; r10/r11 65,536-hole and
+  r12 32,768-hole cases fail cleanly with `E_OUTOFMEMORY`. Exact cause and pre-engine refusal are not established.
+  See [private record](../../TestRuns/P1InverseSelectionPrivate_2026-10-11.md).
+- [x] Privately qualify expanded Debug r13 with all original assertions/stages and 219 additions. The exact
+  28,672-hole case charges 19,479,256 output bytes on its original ticket through copied and final weak owners;
+  joined Close, actual queue saturation and exact refund pass. The fixed 128 MiB arena is unchanged.
+- [ ] Complete Release/real ASan host qualification, then qualify native
+  integration. S5, ordinary activation and G1 remain open.
 - [ ] Qualify ordinary activation and the original G1 measurements; P1 remains WIP. ARM64 runtime is unavailable.
 
 The entries below retain earlier qualification scopes and failures; their older source identities do not
