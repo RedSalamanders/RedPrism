@@ -4,7 +4,117 @@
 
 P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
 
-Current step (2026-10-10): the utility ownership/shared recorder startup component passes full x64 Debug r788, Release r789, real ASan r787, Release analysis r790 and all three ARM64 r92 cross-builds on the same 2E5E86/1,156-input source. Main authenticates every original child/archive, all 124 Application stages, predecessor inventories, 195 ownership/recovery, 87 copy-retirement, 239 Application additions, 63 parser controls and all 15 ARM64 EXE/PDB identities. Original failed attempts remain preserved. [Ownership record](../../TestRuns/P1UtilityOwnership_2026-10-10.md). Next: integrate and qualify the recorded utility parent, then migrate seven production callers with complete admission/retirement and real cache-miss measurements. Six authorized visible runs are already recorded; prepared4K-WARP exceeds the unchanged 2 ms Apply gate. Ordinary activation=false, G1=false, P1 Done=false; all nine delivery areas remain open.
+- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
+- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
+- [ ] **Selection and transforms:** finish Wand booleans and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
+- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
+- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
+- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
+- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
+- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
+- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
+### Current implementation and qualification
+
+Latest step (2026-10-11): all seven recorded GPU readback/composition callers are integrated.
+Focused Debug r829/r830 passes on1301BC/1174 inputs and its exact saved binary: all126 ordered application
+stages,268 original clipboard checks/52 scenarios,24 reader and12 joined-Close controls; all22 sizing cases
+and2 real cleanup controls retain and refund the exact private baseline. Earlier r823/r826/r828 failures
+remain preserved. Focused CPU DocumentTests r831 and full Debug r832 now pass on that same source.
+Main authenticates the complete original suite inventories, all126 ordered application stages and all new
+ownership controls. Full Release r833 stops at the ISA gate before native runtime: linear disassembly reads
+a terminal compiler switch table as an EVEX instruction. The actual failed archive is preserved. Main has
+integrated the exact RBX/RDX dispatch/data proof after all132 independent parser controls pass, including
+a duplicate-terminal overlap repair. These controls never execute their bytes. Full Release r834 passes ISA
+and core suites but fails the original Clone All Layers stroke-retirement predicate at stage32. Its failed
+archive is authenticated. Diagnostic build r836 and focused Release application r837 pass on991213/1175
+inputs, including all126 stages, with the predicate unchanged. The failure has not reproduced or been
+explained. Full Release r838 now passes on991213/1175 with all126 stages and exact predecessor/addition
+inventories authenticated. Fresh Debug r839 also passes on that same source, with every archive copy,
+all126 stages and exact original/addition inventories independently authenticated.
+Release analysis r840 exits0 on the same991213/1175-input freeze. Real ASan Debug full-test r841 exits0
+and its `r841-ASan-full-profile.json` authenticates PASS: Host8796, Document8784, Composition6838,
+Io1823, application stdout7393/stderr6773,126 ordered stages, HostStress9194, DocumentStress1 and the
+actual ASan probe diagnostic SHA256
+`A7961E005AED1A6E68F59BFBFF9037A604DA3836E8185D9CAFA56E2A35DC69FF`. Archive completion is
+`1D4D159133290D448BF1745011F90E7C99B8C9BCFEA54ADB70C861D874AF9DB1` (1536 copies,1175 source inputs).
+The initial reader refusal for the dynamic old ASan probe filename is preserved. Main's narrow
+probe-filename projection authenticates the actual diagnostic first and otherwise matches the inventory;
+the corrected reader hash is
+`36B41D468F2CDA777C70D04C4590E56A7671AB252E371F41E112C11D3AB32949`.
+Main ran `validate-skills.ps1` successfully for all15 skills and `format.ps1 -Check` across1037 files.
+The current-source x64 Debug/Release/ASan/analysis matrix and all three ARM64 r94 cross-builds
+now pass and authenticate on the same1175-input source and20-contract binding. All15 archived ARM64
+PE/PDB identities and five real-ASan compiler/image controls verify. Native ARM64 runtime is unavailable.
+Ordinary activation, measured G1 and P1 Done remain open; r834 remains unresolved.
+Debug r832 is historical qualification of the earlier source.
+
+- [x] Integrate the shared recorded parent and all seven real callers; implementation and each focused prerequisite are recorded below.
+- [x] Full current-source Release r838, Debug r839 and ASan r841 preserve Copy Merged's9 primitive,24 copied/weak-reader and12 joined-Close controls, all268 original clipboard checks,22 sizing cases and2 cleanup controls. All three ARM64 cross-builds now pass; activation and costs remain open.
+- [x] Pass all268 original clipboard checks and the complete126-stage application run on the repaired source: focused Debug r830, exact1301BC/1174 source and saved build image authenticated.
+- [x] Preserve Release r833's ISA failure, corroborate the actual PE/PDB terminal table, and integrate the narrow data proof after132 parser controls pass. Keep both initial private corruption-control refusals in the record.
+- [x] Qualify the current full configuration matrix and analysis; ordinary activation and G1 stay separate.
+- [ ] Commit/push the qualified caller checkpoint before native selection/memory integration.
+
+Next selection implementation: the private, non-integrated bounded Clipper2 adapter passes workspace,
+archived behavioral reference geometry and30 exact pinned-engine compatibility controls, plus a1021-capacity sweep in
+Release and ASan. Its original compile failures and Debug termination at arena exhaustion are preserved;
+the constructor/move adapter now allows Debug STL proxy allocation refusal to reach the worker boundary.
+Complete allocation/cancellation coverage, output/admission and host lifetime proof remain due; native Wand Add/Subtract
+continues to refuse the unknown workspace. The adapter is separate from the frozen recorded-caller source.
+
+Main's later private fault sweep covers every engine allocation and checkpoint reached by30 fixed cases;
+larger literal cases cover262144 collinear points and16384 disjoint intersections. Release/real ASan pass,
+with the instrumented61.642ms cleanup diagnostic retained separately from Release G1. A private geometry
+factory also passes reviewed copied/moved/cancelled/null-alias/weak-control and real worker-node destruction
+controls. These drafts do not close actual original-ticket/history/Close admission or H3: a full temporary
+reservation must not remain attached to tiny geometry through history. Native integration and current-source
+runtime/owner costs remain due.
+
+Earlier focused checkpoints: Clone All Layers and the recorded parent pass focused Debug r797–r799 on one
+47EF06/1,166-input source. Main authenticates all copied inputs/products, all124 Application stages,
+81 unchanged Clone assertions and82 new real sampler-continuation assertions with6,729 preserved
+Composition predecessor records. Failed r791/r796 remain preserved. PNG/JPEG export passes focused
+Debug r800/r801 on7C3152/1,166 inputs, including all15 export scenarios and124 Application stages.
+Production sampler and New-mode All Layers Wand are integrated with reviewed direct stream restart
+controls. Corrected r803 compiles; r804 Composition passes all85 direct restart controls with6,812
+preserved predecessors. Application r805 fails12 sampler-memory controls and remains preserved. Restored
+ordinary event-driven waiting passes r806/r807, with all42 memory checks and literal colors unchanged:
+all124 original stages,408 sampler/Wand records,81 Clone checks and15 Export scenarios authenticate.
+Charged output adoption and14 real MTA/reader/weak-lifetime controls are now integrated. Clone/export/Wand
+also restore ordinary waiting, expressed with named JobOptions fields. Full Debug r808 fails the
+final charged-raster test: it checks refund before consuming the original release acknowledgement.
+The first13 controls pass. The failed run is preserved and independently verified; corrected r809/r810
+pass all14 lifetime controls with6897 preserved Composition predecessors. Focused r807 is not current-source wider qualification.
+Adjustment opening is integrated with all72 original scenarios and48 new copied-reader/weak-lifetime
+controls. Full Debug r811 preserves the native suites but fails an older adjustment-picker sampler check
+that requires zero memory while the charged panel remains live. The failed archive is preserved. The fixture
+now retains the panel's pre-sampler baseline, keeps exact99/75 pixel expectations and checks zero after
+actual Cancel. Focused r812/r813 now passes on1897B7/1170 inputs: all124 original stages,72 original
+adjustment scenarios,48 new lifetime controls and both exact positive sampler baselines authenticate.
+Merge is integrated next with retained probe/readback/crop owners,17 original scenarios,8 new reader/weak
+controls and10 actual joined-Close/owned-dependency refusal checks. Debug r814 builds and r815 preserves8758
+Document records plus17 new crop controls. Application r816 fails two lifetime checks because its test used
+undoable New Canvas to release history. The failed archive is preserved; the corrected fixture uses Close
+Document and verifies empty history before the original weak-reader/refund assertions. Corrected r817 builds;
+r818 passes all8 reader controls but terminates in an existing history allocation-failure scenario. The crash
+and dump are preserved. Main separates terminal output from the required empty ownership-transfer slot in
+Merge and the pending Copy Merged draft. Corrected r819 builds and r820 passes all125 Application stages,
+17 original Merge scenarios,8 reader/weak-lifetime controls and10 real joined-Close/admission controls.
+Main authenticates the original source/build/executable and all1550 archive copies. The reviewed19-file
+Copy Merged component is now integrated with9 primitive,24 actual reader and12 joined-Close controls;
+Debug r821 fails an existing positional CopyPixelsInput initializer; its failed archive is preserved.
+Main retains floating-pixel semantics with named fields and an explicitly empty lifetime owner; corrected
+r822 builds. Actual r823 passes12 joined-Close controls but fails an older sizing predicate after the real
+Copy Merged shortcut leaves charged private pixels alive. Its failed archive is preserved. Main keeps all22
+size/history/failure references and checks exact own-work refund to the unchanged clipboard baseline;
+r824 builds. Main integrates the reviewed actual private-Copy replacement/last-reader cleanup with2
+pre-authored controls to isolate later fixtures without resetting the session; r825 is building.
+Native Copy qualification, combined profiles and costs remain due.
+[Parent record](../../TestRuns/P1UtilityRecordedParent_2026-10-10.md).
+
+Historical foundation checkpoint (2026-10-10): the utility ownership/shared recorder startup component passes full x64 Debug r788, Release r789, real ASan r787, Release analysis r790 and all three ARM64 r92 cross-builds on the same 2E5E86/1,156-input source. Main authenticates every original child/archive, all 124 Application stages, predecessor inventories, 195 ownership/recovery, 87 copy-retirement, 239 Application additions, 63 parser controls and all 15 ARM64 EXE/PDB identities. Original failed attempts remain preserved. [Ownership record](../../TestRuns/P1UtilityOwnership_2026-10-10.md). The per-caller rows above/below record the later migration; their current combined matrix and real cache-miss costs remain due. Six authorized visible runs are already recorded; prepared4K-WARP Levels exceeds the unchanged 2 ms Apply gate. Ordinary activation=false, G1=false, P1 Done=false; all nine delivery areas remain open.
 
 Fresh actual visible cancellation rosters complete on the qualified r760 mirror. Main authenticates all six archives and every recorded Apply trial: hardware prepared45/100 maxima1.078/1.734ms, direct45/100 maxima0.255/0.285ms, direct4K-WARP0.985ms. Prepared4K-WARP Levels trial1 measures2.227ms and fails the unchanged2ms gate. Prepared action/frame costs and full activated G1 remain open. [Complete current costs](../../TestRuns/P1CancellationCosts_2026-10-10.md).
 
@@ -29,6 +139,16 @@ Current utility component:
 - [x] Integrate shared startup command recording, checkpoint10/full-router rollback and both real display-child attachment refusals; preserve failed analysis r782, repair four test-only comparisons and authenticate successful combined analysis r783.
 - [x] Qualify the corrected ownership component and every acquired startup prefix: full Debug r788, Release r789, real ASan r787, Release analysis r790 and ARM64 r92 share one 2E5E86/1,156-input source; archived child/source/product/control identities independently verify.
 - [ ] Migrate and qualify the real readback parent/callers with complete production admission, hidden/recovery/cancellation/shutdown ownership and measured cache-miss costs.
+- [x] Qualify the first recorded production caller, Clone All Layers, in focused Debug r797/r799, retaining all81 original assertions and exact124 Application-stage order. Original failed r796 remains failed; wider profiles remain due.
+- [x] Qualify actual recorded-parent serial1x1 sampler continuation and idle/gated cancellation on WARP in r797/r798:82 independent assertions, no source slot while idle, original-ticket accounting and worker retirement. Production Sampler migration remains due.
+- [x] Qualify recorded PNG/JPEG export in focused Debug r800/r801: original codec/output admission, graphics retirement before encoding, all15 original file-publication scenarios and forced later-tile Map failure. Wider profiles/lifetime and measurements remain due.
+- [x] Qualify production sampler and New-mode All Layers Wand in focused Debug r806/r807:408 fixed records, including42 memory admission controls, source-slot-free idle points and actual before-copy restarts. Wider configurations/lifetime and costs remain open.
+- [x] Qualify charged immutable output adoption and reader/weak lifetime in focused Debug r809/r810:14 fixed controls, literal bytes/pointer identity and6897 preserved predecessors. Failed r808 remains preserved.
+- [x] Qualify recorded adjustment opening in focused Debug r812/r813:72 original scenarios,48 new panel/copy/weak-lifetime controls and both exact live sampler baselines, with all124 prior stages and caller records preserved. Failed r811 remains failed; wider profiles remain due.
+- [x] Qualify recorded Merge in focused Debug r819/r820:17 original scenarios,8 crop reader/weak-lifetime controls,10 actual joined-Close/owned-dependency refusal controls and all125 Application stages. Preserve failed r816/r818. Wider profiles and costs remain due.
+- [x] Qualify integrated Copy Merged in focused Debug r830:9 primitive,24 copied/weak-reader and12 joined-Close controls; preserve all268 original clipboard records and all126 ordered application stages on the authenticated1301BC/1174-input source.
+- [ ] Complete the ARM64 r94 cross-build matrix and qualify actual caller latency/cache-miss costs before activation; the x64 Debug/Release/ASan/analysis matrix is authenticated.
+- [x] Qualify reviewed direct restart controls in focused Debug r803/r804:85 real WARP assertions against foreign origin, stale generation and wrong-source/outside callback authority. Production caller lifetime/G1 are separate.
 - [x] Qualify the component-only combined x64 matrix on DAB609/1,144 inputs: full Debug r759, Release r760, real ASan r761 and Release analysis r762 pass with authenticated archives and preserved predecessor/control inventories ([evidence](../../TestRuns/P1UtilityRecording_2026-10-10.md)). This does not qualify production callers or ordinary activation.
 - [x] Authenticate all three ARM64 r90 cross-build profiles against the same DAB609/1,144-input source; all 15 EXE/PDB pairs and five real-ASan instrumentation controls pass. Native ARM64 runtime remains unavailable.
 
@@ -44,16 +164,7 @@ Current Warp slice:
 
 P1 delivery areas:
 
-- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
-- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish Wand booleans and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
-- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
-- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
-- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
-- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
-- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
-- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
-- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
 
 Reconciled boundaries (2026-10-09): typed-opacity host ordering already has its 31 typed/36 context
 Debug/Release/real-ASan matrix; only its wider caller/lifetime/activation and cost requirements remain.

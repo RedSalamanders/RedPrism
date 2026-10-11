@@ -486,6 +486,8 @@
     <ClCompile Include="GpuResidencyBudget.cpp" />
     <ClCompile Include="GpuRasterTextureCreation.cpp" />
     <ClCompile Include="DocumentReadbackJob.cpp" />
+    <ClInclude Include="RecordedDocumentReadbackJob.h" />
+    <ClCompile Include="RecordedDocumentReadbackJob.cpp" />
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />

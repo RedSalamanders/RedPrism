@@ -82,6 +82,8 @@ std::uint64_t CopyPixelsMemoryBytes(const CopyPixelsInput& input) noexcept
         return 0;
     const auto canvasPixels = static_cast<std::size_t>(input.canvasWidth) * input.canvasHeight;
     const auto regionPixels = static_cast<std::size_t>(region->width) * region->height;
+    // sizeof(CopyPixelsInput) includes outputLifetime's 16-byte metadata; the existing 4096-byte allowance
+    // also covers Raster's additional 32-byte charged-storage metadata when outputLifetime is present.
     std::uint64_t bytes = 4096 + sizeof(CopyPixelsInput) + sizeof(CopyPixelsResult);
     if (!input.composite && (!Add(bytes, PixelBuffer::RequiredBytes(canvasPixels * (input.mask ? 1u : 4u))) ||
                              !Add(bytes, PixelBuffer::RequiredBytes(static_cast<std::size_t>(input.source.Stride()) *
@@ -121,6 +123,8 @@ std::uint64_t CopyMergedPixelsMemoryBytes(int width, int height,
         return 0;
     const auto canvasPixels = static_cast<std::size_t>(width) * height;
     const auto regionPixels = static_cast<std::size_t>(region->width) * region->height;
+    // sizeof(CopyPixelsInput) includes outputLifetime's 16-byte metadata; the existing 4096-byte allowance
+    // also covers Raster's additional 32-byte charged-storage metadata when outputLifetime is present.
     std::uint64_t bytes = 4096 + sizeof(CopyPixelsInput) + sizeof(CopyPixelsResult);
     if (!Add(bytes, PixelBuffer::RequiredBytes(regionPixels * 4u)) ||
         !Add(bytes, static_cast<std::uint64_t>(region->width) * 5u))
@@ -233,7 +237,8 @@ CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancell
     Checkpoint(observer, CopyPixelsStage::Publication);
     if (cancellation.IsCancelled())
         return Failed(cancellation);
-    Raster image = Raster::Adopt(region->width, region->height, RasterFormat::Bgra8888, std::move(bytes));
+    Raster image =
+        Raster::Adopt(region->width, region->height, RasterFormat::Bgra8888, std::move(bytes), input.outputLifetime);
     if (!image.HasStorage() || cancellation.IsCancelled())
         return Failed(cancellation);
     return {CopyPixelsStatus::Ready,

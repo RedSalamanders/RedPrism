@@ -1051,6 +1051,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
         const auto undo = _session.history.UndoCount();
         const auto generation = _session.Generation();
         const auto sourceRoot = _session.Document()->layers;
+        // The live adjustment owns its original charged readback beyond opening completion. This sampler
+        // must release only its own graph; closing the adjustment below releases the retained baseline.
+        const auto panelMemory = _jobs.ReservedMemoryBytes();
         OnAdjustAction(test.highlights ? AdjustAction::OpenHighlights : AdjustAction::OpenShadows, 0);
         wil::unique_handle acknowledged{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
         if (!acknowledged || _samplerAcknowledgedForTest)
@@ -1080,6 +1083,19 @@ int Application::RunSamplerCallerSelfTest() noexcept
             return 5;
         constexpr AdjustmentColor kOriginalBrownLuminance{75.0 / 255.0, 75.0 / 255.0, 75.0 / 255.0};
         const auto changed = _session.PendingColorEdit()->settings.gradientMap;
+        std::fprintf(
+            stderr,
+            "INFO sampler-caller.adjustment-baseline highlights=%u outcome=%u color=0x%08x "
+            "reserved=%llu baseline=%llu slots=%u generation=%u root=%u settings=%u\n",
+            test.highlights ? 1u : 0u, static_cast<unsigned int>(receipt.Read().outcome), _chrome->PickerColor(),
+            static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()), static_cast<unsigned long long>(panelMemory),
+            samplerSlotsClear() ? 1u : 0u, _session.Generation() == generation ? 1u : 0u,
+            _session.Document()->layers.Identity() == sourceRoot.Identity() ? 1u : 0u,
+            (test.highlights
+                 ? changed.highlights == kOriginalBrownLuminance && changed.shadows == openingSettings.shadows
+                 : changed.shadows == kOriginalBrownLuminance && changed.highlights == openingSettings.highlights)
+                ? 1u
+                : 0u);
         if (!check(receipt.Read().outcome == HostOutcome::Succeeded && _chrome->PickerColor() == 0xFF4B4B4Bu &&
                        (test.highlights ? changed.highlights == kOriginalBrownLuminance &&
                                               changed.shadows == openingSettings.shadows
@@ -1087,7 +1103,9 @@ int Application::RunSamplerCallerSelfTest() noexcept
                                               changed.highlights == openingSettings.highlights) &&
                        _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
                        _session.ForegroundColor() == 0xFF000000u && _session.BackgroundColor() == 0xFFFFFFFFu &&
-                       samplerSlotsClear() && _jobs.ReservedMemoryBytes() == 0 &&
+                       samplerSlotsClear() && panelMemory != 0 && _jobs.ReservedMemoryBytes() == panelMemory &&
+                       _session.Generation() == generation &&
+                       _session.Document()->layers.Identity() == sourceRoot.Identity() &&
                        _composition.UtilitySurfaceBytes() == 0,
                    L"The next live adjustment sample captured its mutated preview instead of the original root.\n",
                    test.preview))
@@ -1098,7 +1116,8 @@ int Application::RunSamplerCallerSelfTest() noexcept
         CancelColorEditForTest();
         if (!check(
                 restored && settle() && !_session.HasColorEdit() && !_chrome->ColorPickerOpen() &&
-                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo,
+                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
+                    _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0,
                 L"The sampled adjustment picker did not acknowledge cancellation and restore its original settings.\n",
                 test.cancelled))
             return 5;

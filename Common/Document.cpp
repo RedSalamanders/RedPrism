@@ -427,6 +427,62 @@ std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
     return std::shared_ptr<Storage>{std::move(storage)};
 }
 
+namespace
+{
+// A control-block allocator retains admission through the last weak reader. Resource deleter lifetime
+// alone is not an allocation-lifetime contract; the allocator explicitly outlives block deallocation.
+template <class T> struct ChargedRasterAllocator final
+{
+    using value_type = T;
+    std::shared_ptr<const void> lifetime;
+    explicit ChargedRasterAllocator(std::shared_ptr<const void> value) noexcept : lifetime(std::move(value)) {}
+    template <class U>
+    ChargedRasterAllocator(const ChargedRasterAllocator<U>& other) noexcept : lifetime(other.lifetime)
+    {
+    }
+    [[nodiscard]] T* allocate(std::size_t count)
+    {
+        return std::allocator<T>{}.allocate(count);
+    }
+    void deallocate(T* value, std::size_t count) noexcept
+    {
+        auto lifetimeGuard = lifetime;
+        std::allocator<T>{}.deallocate(value, count);
+    }
+    template <class U> [[nodiscard]] bool operator==(const ChargedRasterAllocator<U>& other) const noexcept
+    {
+        return !lifetime.owner_before(other.lifetime) && !other.lifetime.owner_before(lifetime);
+    }
+};
+} // namespace
+
+std::shared_ptr<Raster::Storage> Raster::AllocateChargedStorage(std::shared_ptr<const void> lifetime)
+{
+    auto allocated = std::make_unique<ChargedStorage>();
+    allocated->lifetime = lifetime;
+    // The shared_ptr constructor invokes the supplied deleter if control allocation fails. Ownership
+    // starts in make_unique and moves once; neither failure path can abandon or double-free the storage.
+    return std::shared_ptr<Storage>{allocated.release(), FreeChargedStorage{},
+                                    ChargedRasterAllocator<ChargedStorage>{std::move(lifetime)}};
+}
+
+void Raster::FreeChargedStorage::operator()(ChargedStorage* storage) const noexcept
+{
+    storage->DeferredReleaseNode::bytes = storage->bytes.capacity() + storage->adoptedBytes.AllocationBytes() +
+                                          storage->tiles.capacity() * sizeof(RasterTile);
+    storage->destroy = [](DeferredReleaseNode* node) noexcept
+    {
+        auto* charged = static_cast<ChargedStorage*>(node);
+        // Derived fields would otherwise die before base pixel fields. This local keeps admission alive
+        // until all base bytes actually die, including when the control block already has no weak readers.
+        auto lifetimeGuard = std::move(charged->lifetime);
+        const std::unique_ptr<ChargedStorage> owned(charged);
+        TracePipelineFree(owned->bytes.capacity());
+    };
+    if (!TryDeferRelease(*storage, DeferredReleasePolicy::AlwaysOnOwner))
+        storage->destroy(storage);
+}
+
 void Raster::CacheRetirementMemory(Storage& storage) noexcept
 {
     // This immutable producer already visits its children below. Admission later reads this scalar even
@@ -553,6 +609,12 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
 
 Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels)
 {
+    return Adopt(width, height, format, std::move(pixels), {});
+}
+
+Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels,
+                     const std::shared_ptr<const void>& lifetime)
+{
     if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
         (format != RasterFormat::Gray8 && format != RasterFormat::Bgra8888))
     {
@@ -564,7 +626,8 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     {
         return {};
     }
-    auto storage = AllocateStorage();
+    const bool charged = lifetime.use_count() != 0; // A null alias may still own a real lifetime control block.
+    auto storage = charged ? AllocateChargedStorage(lifetime) : AllocateStorage();
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -572,6 +635,17 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     storage->adoptedBytes = std::move(pixels);
     storage->assembled.store(storage->adoptedBytes.Data(), std::memory_order_release);
     CacheRetirementMemory(*storage);
+    if (charged)
+    {
+        constexpr auto extra = sizeof(ChargedStorage) - sizeof(Storage) + sizeof(std::shared_ptr<const void>);
+        const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        storage->retirementBytes = storage->retirementBytes && storage->retirementBytes <= maximum - extra
+                                       ? storage->retirementBytes + extra
+                                       : 0;
+        storage->selfRetirementBytes = storage->selfRetirementBytes && storage->selfRetirementBytes <= maximum - extra
+                                           ? storage->selfRetirementBytes + extra
+                                           : 0;
+    }
     return Raster(std::move(storage));
 }
 
@@ -2850,9 +2924,9 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(cons
     return PrepareMerge(plan, composite, {});
 }
 
-std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(const MergePlan& plan,
-                                                                            const Raster& composite,
-                                                                            const CancelToken& cancellation)
+std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(
+    const MergePlan& plan, const Raster& composite, const CancelToken& cancellation,
+    const std::shared_ptr<const void>& outputLifetime)
 {
     if (cancellation.IsCancelled() || !composite.HasStorage() || composite.Format() != RasterFormat::Bgra8888 ||
         plan.ids.empty())
@@ -2861,7 +2935,7 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(cons
     }
     LayerTransform canvas;
     canvas.size = Vec2{static_cast<double>(composite.Width()), static_cast<double>(composite.Height())};
-    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas, cancellation);
+    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas, cancellation, outputLifetime);
     if (!trimmed.image.HasStorage())
     {
         return std::nullopt;
@@ -2984,7 +3058,8 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
 std::optional<DocumentSession::PreparedMergePublication> DocumentSession::PrepareMergePublication(
     const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
     DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite, MergePublicationStatus& status,
-    CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+    CancelToken cancellation, DocumentHistory::PrepareObserver observer,
+    const std::shared_ptr<const void>& outputLifetime)
 {
     status = MergePublicationStatus::Invalid;
     const auto cancelled = [&]() noexcept
@@ -3019,7 +3094,7 @@ std::optional<DocumentSession::PreparedMergePublication> DocumentSession::Prepar
     if (!activeExists || planIds.empty() || plan.removed.size() != planIds.size() ||
         !plan.removed.contains(plan.anchor))
         return std::nullopt;
-    auto pixels = PrepareMerge(plan, composite, cancellation);
+    auto pixels = PrepareMerge(plan, composite, cancellation, outputLifetime);
     if (cancelled() || !pixels)
         return std::nullopt;
     const auto left = BudgetLeft(source, false, [&](const Guid& id) { return plan.removed.contains(id); });

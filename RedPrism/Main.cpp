@@ -262,6 +262,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
+        std::printf("BEGIN self-test.RunStandaloneClipboardMergedShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneClipboardMergedShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneMergeReadbackSelfTest\n");
+        if (const int failed = Application::RunStandaloneMergeReadbackSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneCanvasLifetimeShutdownSelfTest\n");
         if (const int failed = Application::RunStandaloneCanvasLifetimeShutdownSelfTest(instance); failed != 0)
             return failed;

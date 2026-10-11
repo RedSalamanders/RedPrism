@@ -107,8 +107,9 @@ int Application::RunCloneReadbackSelfTest() noexcept
         {
             const auto* draft = owner._session.PendingBrush();
             const auto openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
-            state.liveLease = owner._canvasCloneSample && owner._canvasCloneSample->lease &&
-                              owner._canvasCloneSample->lease.Bytes() == state.bytes && openingBytes != 0 &&
+            state.liveLease = owner._canvasCloneSample && owner._canvasCloneSample->memory &&
+                              !owner._canvasCloneSample->lease && owner._canvasCloneSample->HasReservation() &&
+                              owner._canvasCloneSample->ReservationBytes() == state.bytes && openingBytes != 0 &&
                               owner._jobs.ReservedMemoryBytes() == state.bytes + openingBytes &&
                               !owner._utilityTicket && receipt.outcome == HostOutcome::Pending && draft &&
                               owner._session.history.UndoCount() == 0;
@@ -133,7 +134,9 @@ int Application::RunCloneReadbackSelfTest() noexcept
         state.heldObserved = true;
         if (message.wParam == 0)
         {
-            state.held = state.held && owner._gpuWork.HasPending();
+            // A recovered attempt captures/admit its device before the next preparation body attaches a
+            // source. The original ticket/source/CPU charge and real GPU reservation already remain live.
+            state.held = state.held && owner._utilityReadback.HasPending() && owner._graphGpuBudget.ActiveOwner() != 0;
             state.rebindResult = owner._renderer.RecoverDeviceForTest();
             owner.BindCompositionDevice();
             ++state.rebinds;
@@ -276,6 +279,13 @@ int Application::RunCloneReadbackSelfTest() noexcept
                               : mode == Mode::Cancel || mode == Mode::PanCancel ? HostOutcome::Cancelled
                               : mode == Mode::Stale                             ? HostOutcome::Stale
                                                                                 : HostOutcome::Failed;
+        if (mode == Mode::RestartLimit)
+            std::fprintf(stderr,
+                         "INFO clone-readback.restart-limit outcome=%u expected=%u error=0x%08x captures=%u "
+                         "visited=%u held=%u rebinds=%u recoveries=%u preparations=%u\n",
+                         static_cast<unsigned int>(receipt.outcome), static_cast<unsigned int>(expected),
+                         static_cast<unsigned int>(receipt.error), gate->captures.load(), state.visited ? 1u : 0u,
+                         state.held ? 1u : 0u, state.rebinds, gate->recoveries.load(), gate->preparations.load());
         if (!expect(names[i], "exact-receipt-and-original-capture",
                     receipt.outcome == expected && gate->captures.load() == (mode == Mode::CaptureFailure ? 0u : 1u) &&
                         (mode == Mode::CaptureFailure ? !state.visited : state.visited && state.held) &&
@@ -353,7 +363,7 @@ int Application::RunCloneReadbackSelfTest() noexcept
             !expect(names[i], "device-recovery-keeps-ticket-and-two-restart-limit",
                     state.rebinds == gate->rebindsBeforeCopy && SUCCEEDED(state.rebindResult) &&
                         gate->recoveries.load() == (mode == Mode::Rebind ? 1u : 2u) &&
-                        gate->preparations.load() == (mode == Mode::Rebind ? 3u : 5u)))
+                        gate->preparations.load() == (mode == Mode::Rebind ? 2u : 3u)))
             return 5;
         if (mode == Mode::LiveLease &&
             !expect(names[i], "same-admission-survives-live-stroke-after-job-retirement", state.liveLease))
@@ -473,13 +483,13 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
         }
         if (live)
         {
-            state.sourceBytes = owner->_canvasCloneSample ? owner->_canvasCloneSample->lease.Bytes() : 0;
+            state.sourceBytes = owner->_canvasCloneSample ? owner->_canvasCloneSample->ReservationBytes() : 0;
             const auto* draft = owner->_session.PendingBrush();
             state.openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
         }
         expect(receipt.Read().outcome == HostOutcome::Pending && owner->_jobs.ReservedMemoryBytes() != 0 &&
                    gate->captures.load() == 1 &&
-                   (live ? owner->_canvasCloneSample && owner->_canvasCloneSample->lease &&
+                   (live ? owner->_canvasCloneSample && owner->_canvasCloneSample->HasReservation() &&
                                owner->_session.PendingBrush() && !owner->_utilityTicket && state.openingBytes != 0 &&
                                owner->_jobs.ReservedMemoryBytes() == state.sourceBytes + state.openingBytes
                          : owner->_utilityTicket && !owner->_session.PendingBrush() && !owner->_canvasCloneSample),
@@ -494,8 +504,8 @@ int Application::RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) 
                                               state.owner._session.history.CurrentRevision() == state.revision &&
                                               state.owner._session.history.UndoCount() == 0;
             state.sampleChargedAtDetach =
-                state.owner._canvasCloneSample && state.owner._canvasCloneSample->lease &&
-                state.owner._canvasCloneSample->lease.Bytes() == state.sourceBytes && state.openingBytes != 0 &&
+                state.owner._canvasCloneSample && state.owner._canvasCloneSample->HasReservation() &&
+                state.owner._canvasCloneSample->ReservationBytes() == state.sourceBytes && state.openingBytes != 0 &&
                 state.owner._jobs.ReservedMemoryBytes() == state.sourceBytes + state.openingBytes;
         };
         owner->_shutdownTestProbe = &probe;

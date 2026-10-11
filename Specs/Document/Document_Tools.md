@@ -934,8 +934,15 @@ escapes into the document, owner callback, retry wait or publication.
 
 Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
 and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or
-the OS writer. Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
-history and retirement. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
+the OS writer. Private preparation, encoding, OS offers and retry waits resume the same original
+record through its detached-readback helper. Private pixels explicitly retain its precreated opaque
+output lifetime while that record still reserves the full envelope; terminal completion or joined
+Close binds the original accounting before refund. A copied reader or last weak storage control
+continues to hold that charge after the private clipboard is replaced. Closing a document alone
+preserves the private clipboard. No early accounting transfer authorizes additional useful work.
+Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
+history, the previous private clipboard's complete cached ownership (even after document Close),
+and retirement. An unavailable/overflowing previous-copy bound refuses before capture. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
 work; functional migration alone establishes no Photoshop speed or bounded native-call cancellation claim.
 
 ### Other selection pixel edits
@@ -1196,6 +1203,14 @@ The worker creates the below-composite visibility snapshot, keeping all records 
 After final GPU row acknowledgement, worker preparation constructs the deferred panel, original settings and
 named Begin before the owner installs any of them. Opening preserves document pixels/visibility, generation,
 revision, global filter settings and retained redo. Failure installs no partial panel or transaction.
+
+The recorded utility opening allocates its capture aggregate on the original admitted Compute stage.
+It records the private below-composite through the shared recording lane and retires its graphics before
+CPU panel/history preparation. Real adapter headroom and the complete source, output, history and retirement
+overlap are admitted before capture. The panel's immutable original Raster retains that same original
+accounting after the job acknowledges; copied readers and its last weak storage control retain it too.
+Closing the panel does not refund live readers. Only actual final control destruction and the scheduler's
+owner acknowledgement refund the charge. Terminal device rebind cannot replay already copied bytes.
 
 OK is an admitted metadata job, including when Preview is off. It prepares the final record and End without a
 destructive pixel kernel. A selected OK receipt stays Pending until exact-authority publication or drop is

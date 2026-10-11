@@ -476,3 +476,42 @@ Cancellation and staleness retain the record, reservation and payload until ackn
 aggregate CPU owners retire off owner. This graph neither reads nor writes the private clipboard and makes no OS
 clipboard calls. Live producer settlement and H2/G1 qualification remain open; see `Document_Tools.md` and
 `Core_PerformanceAndResources.md`.
+
+## Recorded utility parent
+
+`RecordedDocumentReadbackJob` is a separate utility parent. Its construction descriptor contains the
+complete admission envelope and original GPU charge; it captures immutable source owners only after its
+original Compute opening acknowledges. One scheduler record, ticket, retained-slot preclaim and CPU
+reservation span private recording, serial region copies, CPU processing, terminal adoption and retirement.
+Clone All Layers uses this parent and transfers its original shared accounting into the live sample.
+PNG/JPEG export uses the same parent: descriptor-only admission precedes source capture, the actual
+private graph retires before detached encoding, and the original accounting covers encoding and aggregate
+retirement. The eligible canvas sampler keeps its private excluded graph between real 1×1 inputs, with no
+command-source slot or mapped row while idle, and resumes through the original parent acknowledgement.
+New-mode All Layers Wand prepares its selection/history on Compute after acknowledged graphics retirement.
+Both retain the original shared accounting through payload retirement. Adjustment opening retains its
+below-composite through the panel and all copied/weak readers. Merge retains its independently charged
+metadata probe through the separately admitted dependent readback; a newly allocated crop explicitly
+owns that readback charge. Copy Merged resumes private preparation, encoding, OS offers and waits under
+the same original ticket. Its private pixels carry a precreated opaque output lifetime while useful
+work remains reserved; terminal or joined Close binds it before original refund. No early accounting
+transfer authorizes further useful work. Complete configuration/lifetime and activated timing gates
+remain P1 work.
+
+The worker creates `SharedPublicationMemory` before the intrusive root. The root owns source/output bytes,
+the private graph, command stream and captured contexts; it is also the queue's receiver/producer. Thus
+actual joined shutdown may destroy the wrapper before the queue closes without invalidating borrowed
+receiver storage. Stop notifications and join producers before detaching the wrapper's root pointer;
+close queue/map owners before the final MTA destruction drain. Accounting is declared before payload owners
+and dies last, including every caller adoption aggregate and weak accounting owner.
+
+`InJoinedRetirementCallback(original)` grants authority only on the scheduler owner during that exact
+original job's actual joined Close callback. It refuses ordinary acknowledgements, another ticket/thread
+and post-Close queries. `AcknowledgeSourceJoinedShutdownOwner` additionally requires the stopped common
+pump and exact source lease. It excludes the borrowed source before wrapper destruction and grants no
+useful completion, new work, row/copy acknowledgement or reservation refund.
+
+An explicit CPU-only capture descriptor requires `S_FALSE` and no GPU charge; CPU output is produced on
+Compute. For detached CPU/event continuations, callers use `ResumeDetachedReadback(original)` or the
+sampler's `ContinuePixelReadback`, preserving suspended readiness on refusal. Owner cancellation never
+resumes an executing CPU body. Serial source-capacity waits and healthy GPU quarantine remain event driven.

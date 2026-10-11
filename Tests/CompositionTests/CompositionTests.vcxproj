@@ -197,6 +197,8 @@
     <ClCompile Include="..\..\RedPrism\GpuResidencyBudget.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuRasterTextureCreation.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />
+    <ClInclude Include="..\..\RedPrism\RecordedDocumentReadbackJob.h" />
+    <ClCompile Include="..\..\RedPrism\RecordedDocumentReadbackJob.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
@@ -314,6 +316,14 @@
     <ClCompile Include="..\..\Common\RasterResidencyManifestWork.cpp" />
     <ClCompile Include="Composition.Tests.RecordedBlit.cpp" />
     <ClCompile Include="Composition.Tests.RecordedDisplayParent.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedParentPixels.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedParentPixels.h" />
+    <ClCompile Include="Composition.Tests.RecordedParentCancellation.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedParentCancellation.h" />
+    <ClCompile Include="Composition.Tests.RecordedParentSampler.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedParentSampler.h" />
+    <ClCompile Include="Composition.Tests.RestartDeviceOwnerControls.cpp" />
+    <ClInclude Include="Composition.Tests.RestartDeviceOwnerControls.h" />
     <ClCompile Include="Composition.Tests.RecordedAdjustment.cpp" />
     <ClCompile Include="Composition.Tests.AdjustmentDisplayAdmission.cpp" />
     <ClCompile Include="Composition.Tests.CommittedDisplay.cpp" />
@@ -330,6 +340,8 @@
     <ClInclude Include="Composition.Tests.DisplayRebind.h" />
     <ClInclude Include="Composition.Tests.RecordedBrush.h" />
     <ClInclude Include="Composition.Tests.EmptyJoinedShutdown.h" />
+    <ClCompile Include="Composition.Tests.ChargedRaster.cpp" />
+    <ClInclude Include="Composition.Tests.ChargedRaster.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

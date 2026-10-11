@@ -110,6 +110,7 @@ class GpuCompletionContext final
   private:
     friend class GpuWorkQueue;
     friend class GpuCommandPump;
+    friend class GpuCommandStream;
     std::shared_ptr<const std::uint8_t> _origin;
     wil::com_ptr_nothrow<ID3D11Device> _device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> _context;

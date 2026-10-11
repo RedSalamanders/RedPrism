@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentSizeHistory.h"
 #include "SizingWorkTestGate.h"
@@ -329,6 +330,44 @@ HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOption
 
 int Application::RunSizingWorkSelfTest() noexcept
 {
+    // The prior fixture ends with document/history/display readers and asynchronous retirement.
+    // Join its work, release those readers, then consume their real acknowledgements before capture.
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The sizing self-test could not settle the preceding fixture.\n");
+        return 5;
+    }
+    _session.ClearDocument();
+    _composition.ReleaseDocumentSurfaces();
+    DocumentChanged();
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The sizing self-test could not retire the preceding document readers.\n");
+        return 5;
+    }
+    // The preceding real Copy Merged shortcut leaves its private pixels alive across New Canvas.
+    // Sizing must refund its own work while preserving that independent, legitimately charged reader.
+    const auto retainedBaseline = _jobs.ReservedMemoryBytes();
+    auto clipboardBaseline = _session.Clipboard();
+    const auto clipboardSerial = _session.ClipboardSerial();
+    const auto clipboardUnchanged = [&]() noexcept
+    {
+        const auto& current = _session.Clipboard();
+        return _session.ClipboardSerial() == clipboardSerial &&
+               (clipboardBaseline ? current && current->image == clipboardBaseline->image &&
+                                        current->origin == clipboardBaseline->origin
+                                  : !current);
+    };
+    if (!_jobs.IsIdle() || _jobs.ReleasingMemoryBytes() != 0 ||
+        (retainedBaseline != 0 && (!clipboardBaseline || !clipboardBaseline->image.HasStorage())))
+    {
+        std::fprintf(stderr, "INFO sizing-baseline-entry reserved=%llu releasing=%llu idle=%u clipboard=%u\n",
+                     static_cast<unsigned long long>(retainedBaseline),
+                     static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()), _jobs.IsIdle() ? 1U : 0U,
+                     clipboardBaseline && clipboardBaseline->image.HasStorage() ? 1U : 0U);
+        SelfTestFailure(L"The sizing self-test requires settled work and an owned retained clipboard baseline.\n");
+        return 5;
+    }
     enum class Mode
     {
         CopiedCanvas,
@@ -360,6 +399,7 @@ int Application::RunSizingWorkSelfTest() noexcept
         Mode mode;
         ContinuationReceipt receipt;
         Guid revision;
+        std::uint64_t retainedBaseline;
         bool held = false;
         bool visited = false;
         bool cancelPending = false;
@@ -375,9 +415,12 @@ int Application::RunSizingWorkSelfTest() noexcept
             return;
         }
         state.visited = true;
-        state.held = owner._session.Document() && owner._session.Document()->width == 8 &&
-                     owner._session.Document()->height == 4 && owner._historyWork.Busy() && owner._sizingTicket &&
-                     owner._jobs.ReservedMemoryBytes() != 0 && state.receipt.Read().outcome == HostOutcome::Pending;
+        state.held =
+            owner._session.Document() && owner._session.Document()->width == 8 &&
+            owner._session.Document()->height == 4 && owner._historyWork.Busy() && owner._sizingTicket &&
+            owner._jobs.ReservedMemoryBytes() >= state.retainedBaseline &&
+            owner._jobs.ReservedMemoryBytes() - state.retainedBaseline == owner._sizingWorkTestGate->reservationBytes &&
+            state.receipt.Read().outcome == HostOutcome::Pending;
         if (state.mode == Mode::PanelThenSizeThenUndo)
             state.held = state.held && owner._session.history.UndoName() == L"Levels";
         else
@@ -504,7 +547,8 @@ int Application::RunSizingWorkSelfTest() noexcept
                 return 5;
             OnAdjustAction(AdjustAction::SetInputGamma, 2);
         }
-        State state{*this, mode, QueueHostInput(HostSizeApplyInput{_sizeDialog, _sizeInvocation}), revision};
+        State state{*this, mode, QueueHostInput(HostSizeApplyInput{_sizeDialog, _sizeInvocation}), revision,
+                    retainedBaseline};
         std::optional<ContinuationReceipt> undo;
         if (mode == Mode::PanelThenSizeThenUndo)
             undo = QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
@@ -521,10 +565,11 @@ int Application::RunSizingWorkSelfTest() noexcept
                                   : HostOutcome::Succeeded;
         const auto gate = _sizingWorkTestGate;
         const bool reached = mode == Mode::CaptureAllocation ? !state.visited : state.visited && state.held;
-        bool correct = settled == SettleResult::Settled && reached && actual.outcome == expected &&
-                       !_historyWork.Busy() && !_sizingTicket && !_sizingStamp && _jobs.ReservedMemoryBytes() == 0 &&
-                       _renderer.PresentCount() == presents && gate->captureReservationHeld.load() &&
-                       gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load();
+        bool correct =
+            settled == SettleResult::Settled && reached && actual.outcome == expected && !_historyWork.Busy() &&
+            !_sizingTicket && !_sizingStamp && _jobs.ReservedMemoryBytes() == retainedBaseline &&
+            _jobs.ReleasingMemoryBytes() == 0 && clipboardUnchanged() && _renderer.PresentCount() == presents &&
+            gate->captureReservationHeld.load() && gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load();
         if (preservesRedo)
             correct = correct && _session.history.UndoCount() == historyCount && _session.history.CanRedo() &&
                       _session.history.RedoName() == L"Layer Opacity" && _session.ActiveLayer()->opacity == 1 &&
@@ -580,6 +625,15 @@ int Application::RunSizingWorkSelfTest() noexcept
         }
         _sizingWorkTestGate.reset();
         CancelSizeCard();
+        std::fprintf(stderr,
+                     "INFO sizing-memory-baseline mode=%u reserved=%llu baseline=%llu releasing=%llu clipboard=%u "
+                     "settled=%u reached=%u present=%u capture=%u retired=%u offOwner=%u\n",
+                     static_cast<unsigned int>(mode), static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                     static_cast<unsigned long long>(retainedBaseline),
+                     static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()), clipboardUnchanged() ? 1U : 0U,
+                     settled == SettleResult::Settled ? 1U : 0U, reached ? 1U : 0U,
+                     _renderer.PresentCount() == presents ? 1U : 0U, gate->captureReservationHeld.load() ? 1U : 0U,
+                     gate->payloadRetired.load() ? 1U : 0U, gate->payloadRetiredOffOwner.load() ? 1U : 0U);
         if (!correct)
         {
             std::fprintf(stderr, "Sizing mode=%u visited=%u held=%u outcome=%u expected=%u error=0x%08x\n",
@@ -592,5 +646,35 @@ int Application::RunSizingWorkSelfTest() noexcept
         }
         std::fprintf(stderr, "PASS sizing-history-host.mode=%u\n", static_cast<unsigned int>(mode));
     }
-    return 0;
+    // Isolate later fixtures with a real subsequent private Copy. Close alone preserves the old clipboard;
+    // the copied baseline remains a legitimate reader until we explicitly release it below.
+    _session.ClearDocument();
+    DocumentFixture replacement;
+    replacement.id = Guid::Generate();
+    replacement.width = replacement.height = 1;
+    constexpr std::array<std::uint8_t, 4> literal{7, 8, 9, 255};
+    ImageLayer layer = ImageLayer::Blank(L"Sizing clipboard retirement", {1, 1});
+    const Guid active = layer.id;
+    layer.asset =
+        RasterAsset{Raster::Make(1, 1, RasterFormat::Bgra8888, literal.data(), literal.size()), {}, layer.name};
+    replacement.layers.push_back(std::move(layer));
+    _session.ReplaceDocument(std::move(replacement).Seal(), active);
+    const bool copied = _session.CopySelection();
+    _session.ClearDocument();
+    const auto& current = _session.Clipboard();
+    const bool replaced = copied && current && current->image.Width() == 1 && current->image.Height() == 1 &&
+                          current->origin == Vec2{0, 0} && current->image.Data() &&
+                          std::equal(literal.begin(), literal.end(), current->image.Data()) &&
+                          _session.ClipboardSerial() == clipboardSerial + 1 &&
+                          (!clipboardBaseline || current->image != clipboardBaseline->image) && !_session.Document() &&
+                          _session.history.UndoCount() == 0 && !_session.history.CanRedo() &&
+                          _jobs.ReservedMemoryBytes() == retainedBaseline && _jobs.ReleasingMemoryBytes() == 0;
+    std::fprintf(stderr, "%s sizing-clipboard-retirement.actual-private-replacement-keeps-baseline-reader-charge\n",
+                 replaced ? "PASS" : "FAIL");
+    clipboardBaseline.reset();
+    const bool refunded = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                          _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0 && _jobs.IsIdle();
+    std::fprintf(stderr, "%s sizing-clipboard-retirement.last-baseline-reader-release-acknowledges-original-refund\n",
+                 refunded ? "PASS" : "FAIL");
+    return replaced && refunded ? 0 : 5;
 }

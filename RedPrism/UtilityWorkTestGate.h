@@ -28,5 +28,6 @@ struct UtilityWorkTestGate final
     std::atomic<unsigned int> retiredNodes{0}, retiredOwnerNodes{0};
     std::atomic<unsigned int> probePreparations{0}, readbackCaptures{0};
     std::uint64_t probeReservationBytes = 0;
+    std::uint64_t readbackReservationBytes = 0;
     bool probeReservationHeld = false;
 };

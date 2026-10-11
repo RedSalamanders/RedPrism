@@ -288,9 +288,17 @@ int Application::RunStandaloneStrokeSampleSelfTest(HINSTANCE instance) noexcept
                    owner->_preparedLayerRows && owner->_preparedLayerRows->FindVisibleRow(target) &&
                    !owner->_utilityTicket && !owner->_activeHostRequest && !owner->_canvasBrushInput.Busy(),
                mode.name, "terminal-publication-removes-live-preview-and-original-input-owner");
-        expect(gate->samplesAcknowledged.load() == 4 && gate->prepares.load() == 1 &&
-                   gate->retired.load(std::memory_order_acquire) && gate->retiredOffOwner.load(),
-               mode.name, "all-four-samples-and-final-coverage-join-before-off-owner-retirement");
+        const auto sampleAcknowledgements = gate->samplesAcknowledged.load();
+        const auto prepares = gate->prepares.load();
+        const bool retired = gate->retired.load(std::memory_order_acquire);
+        const bool retiredOffOwner = gate->retiredOffOwner.load();
+        if (sampleAcknowledgements != 4 || prepares != 1 || !retired || !retiredOffOwner)
+            std::fprintf(stderr,
+                         "stroke-sample retirement diagnostic: mode=%s acknowledged=%u prepares=%u retired=%d "
+                         "off-owner=%d scheduler-idle=%d\n",
+                         mode.name, sampleAcknowledgements, prepares, retired, retiredOffOwner, owner->_jobs.IsIdle());
+        expect(sampleAcknowledgements == 4 && prepares == 1 && retired && retiredOffOwner, mode.name,
+               "all-four-samples-and-final-coverage-join-before-off-owner-retirement");
         owner->_strokeFinishTestGate.reset();
     }
     std::printf("%s application-stroke-sample.summary checks=%u failed=%u scenarios=%zu\n", failures ? "FAIL" : "PASS",

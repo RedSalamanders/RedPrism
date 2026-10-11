@@ -9,6 +9,7 @@
 #include "Composition.Tests.BrushDensityClear.h"
 #include "Composition.Tests.BrushEpoch.h"
 #include "Composition.Tests.CapturedCompletion.h"
+#include "Composition.Tests.ChargedRaster.h"
 #include "Composition.Tests.CommandStreamRestart.h"
 #include "Composition.Tests.CommittedDisplay.h"
 #include "Composition.Tests.CopyCompletionRetirement.h"
@@ -26,8 +27,12 @@
 #include "Composition.Tests.RecordedAdjustment.h"
 #include "Composition.Tests.RecordedBrush.h"
 #include "Composition.Tests.RecordedDisplayParent.h"
+#include "Composition.Tests.RecordedParentCancellation.h"
+#include "Composition.Tests.RecordedParentPixels.h"
+#include "Composition.Tests.RecordedParentSampler.h"
 #include "Composition.Tests.RecordedUtilityRegions.h"
 #include "Composition.Tests.RecordedWarpPreview.h"
+#include "Composition.Tests.RestartDeviceOwnerControls.h"
 #include "Composition.Tests.UtilityAdmission.h"
 #include "Composition.Tests.UtilityCurrentContext.h"
 #include "Composition.Tests.UtilityJoinedClose.h"
@@ -2242,6 +2247,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunUtilitySourceCapacityTests();
     gFailures += RedPrism::CompositionTests::RunCopyCompletionRetirementTests();
     gFailures += RunRecordedDisplayParentTests();
+    gFailures += RedPrism::CompositionTests::RunRecordedParentPixelTests();
+    gFailures += RedPrism::CompositionTests::RunRecordedParentCancellationTests();
+    gFailures += RedPrism::CompositionTests::RunRecordedParentSamplerTests();
+    gFailures += RedPrism::CompositionTests::RunRestartDeviceOwnerControlsTests();
     gFailures += RunRecordedAdjustmentParentTests();
     gFailures += RedPrism::CompositionTests::RunAdjustmentDisplayAdmissionTests();
     gFailures += RunCommittedDisplayControllerTests();
@@ -2266,6 +2275,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGpuMipChainJobTests();
     gFailures += RunCompositionStageTimingTests();
     gFailures += RunDocumentReadbackTests();
+    gFailures += RedPrism::CompositionTests::RunChargedRasterTests();
     TestFrameLoop();
     Harness harness;
     if (harness.Ready())

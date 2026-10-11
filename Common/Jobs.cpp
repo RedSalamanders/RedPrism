@@ -124,9 +124,10 @@ struct JobScheduler::Impl final
     SRWLOCK lock = SRWLOCK_INIT;
     _Guarded_by_(lock) bool closing = false;
     _Guarded_by_(lock) std::array<Record, JobScheduler::kCapacity> records {};
-    std::uint64_t nextSequence = 0; // owner thread
-    std::size_t liveCount = 0;      // owner thread, counts queued/running/undrained
-    bool inCallback = false;        // owner thread, guards drain and actions across nested message loops
+    std::uint64_t nextSequence = 0;          // owner thread
+    std::size_t liveCount = 0;               // owner thread, counts queued/running/undrained
+    bool inCallback = false;                 // owner thread, guards drain and actions across nested message loops
+    bool inJoinedRetirementCallback = false; // exact actual joined Close hook; reuses retainedMemoryCallback ticket
     std::optional<JobTicket> retainedMemoryCallback;    // exact final apply only, never progress/pump/action
     std::optional<JobTicket> acknowledgedJobCallback;   // owner-only original joined success hook
     std::optional<JobTicket> publicationMemoryCallback; // exact acknowledged successful DeferCompletion only
@@ -1419,7 +1420,9 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
                                 if (!joined)
                                     continue;
                                 stopped.retainedMemoryCallback = original;
+                                stopped.inJoinedRetirementCallback = true;
                                 joined->RetainJoinedRetirement(state.owner, original);
+                                stopped.inJoinedRetirementCallback = false;
                                 stopped.retainedMemoryCallback.reset();
                             }
                             stopped.inCallback = false;
@@ -1529,6 +1532,14 @@ bool JobScheduler::InUiCallback() const noexcept
     }
     _impl->CheckOwner();
     return _impl->inCallback;
+}
+
+bool JobScheduler::InJoinedRetirementCallback(JobTicket original) const noexcept
+{
+    if (!_impl || _impl->ownerThread != GetCurrentThreadId() || _impl->closed)
+        return false;
+    return _impl->inCallback && _impl->inJoinedRetirementCallback && _impl->retainedMemoryCallback == original &&
+           !_impl->acknowledgedJobCallback && !_impl->publicationMemoryCallback;
 }
 
 bool JobScheduler::InAcknowledgedJobCallback(JobTicket original) const noexcept

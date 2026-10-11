@@ -21,6 +21,7 @@
 #include "Host.Tests.CompletedPreviewMemory.h"
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
+#include "Host.Tests.JoinedRetirementAuthority.h"
 #include "Host.Tests.PathClassificationRead.h"
 #include "Host.Tests.PathInputTransfer.h"
 #include "Host.Tests.PathReadWaitCycleExhaustion.h"
@@ -1938,6 +1939,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();
+    gFailures += RunJoinedRetirementAuthorityTests();
     gFailures += RunHostWorkerStageRetirementTests();
     gFailures += RunGpuRecordingLaneTests();
     gFailures += RunExecutionLaneStagesTests();

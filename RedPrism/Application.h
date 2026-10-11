@@ -42,6 +42,7 @@
 #include "StrokeOpeningWork.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
+#include "UtilityReadbackAdmission.h"
 #include "UtilityReadbackOwnerService.h"
 
 #include <array>
@@ -138,6 +139,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneClipboardMergedShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePreparedLayerRowsGroupSelectionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
@@ -728,6 +731,10 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void FinishMergeWork(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error,
                          bool budgetRefusal = false) noexcept;
     [[nodiscard]] HRESULT PrepareUtilityDevice(HRESULT reason) noexcept;
+    [[nodiscard]] HRESULT PrepareRecordedUtilityAdmission(const CanvasDocument& source,
+                                                          std::uint64_t additionalCpuBytes,
+                                                          UtilityReadbackAdmission::Envelope& envelope,
+                                                          GpuResidencyReservation& reservation) noexcept;
     int RunUtilityReadbackSelfTest() noexcept;
     void RefreshColorJobs() noexcept;
     void ConfigureColorLookupPreview(ColorEditJobInput& input) const;

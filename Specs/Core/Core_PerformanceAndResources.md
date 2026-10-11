@@ -437,14 +437,30 @@ allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 
-The eligible host Clone All Layers readback reserves the complete tiled output, immutable document retirement
-bound and bounded job/payload metadata before source capture or GPU recording. Copied bytes detach from the
-utility targets before worker completion. On current-only adoption, a `SharedRetainedMemoryLease` transfers
-that same reservation into the live clone sample graph, without a second admission. The lease is declared
+The eligible host Clone All Layers readback uses the original recorded utility parent. Cached-bound admission
+includes complete output, immutable source/control/scratch and job/payload ownership overlap, WARP CPU-backed
+graphics and a fresh actual adapter GPU reservation before capture or recording. Copied bytes detach from
+private utility targets before CPU handoff. On current-only adoption, `SharedPublicationMemory` transfers
+that same original reservation into the live clone sample graph, without a second admission. Accounting is declared
 before all pixel/document owners and released last, after aggregate worker retirement following stroke finish,
 cancel or stale drop. A finished readback job therefore does not expose uncharged live clone source bytes.
 No partial source is published; device recovery keeps the original capture/ticket and total two-restart limit.
 This source-readback slice does not establish bounded owner painting or first-display upload.
+
+PNG/JPEG export adds its complete codec/path/output/control overlap to the cached utility estimate and
+reserves the actual adapter budget before immutable capture. Serial regions use the smaller of 2048 and
+the composition's device texture limit. One original retained CPU ticket covers all regions, encoding,
+publication and joined retirement. Its shared accounting moves with the worker release aggregate without
+another retained lease. Encoding starts only after acknowledged graphics retirement; a later device change
+must not repeat encoding or publication. The existing exclusive staging and atomic file publication rules apply.
+
+The eligible canvas sampler uses one original complete CPU/GPU admission for all accepted points of its
+opening. Only real input or termination resumes an idle point graph; no source slot, mapped row or useful
+owner readiness is held between points. Pixel conversion runs on Compute. Cancellation acknowledges its
+original worker before aggregate destruction. New-mode All Layers Wand adds its conservative selection,
+history and complete output overlap to the utility envelope; GPU retirement precedes selection/history
+preparation. Both aggregates retain the original shared CPU accounting until worker destruction. A device
+recovery prepares once per actual graph attempt, at most two restarts, without recapturing live source.
 
 Eligible single-layer host Clone uses the same accepted pointer stream and original retained reservation.
 Its capture occurs only after whole admission, retaining the immutable document, active image and displayed
@@ -1340,3 +1356,49 @@ worker blocks on its existing pool event while idle; an unattached command pump 
 No timer, polling, extra GPU device, frame or useful image work follows registration. A refused acquired
 prefix joins the recording worker through the original scheduler Close. Startup cost and real caller
 owner/frame costs remain measurement obligations before ordinary responsive-route activation.
+
+### Recorded utility parent admission and retirement
+
+Admit the caller's whole source, full readback output, processing/encoding/history overlap and retirement
+aggregate before source capture. The utility estimate's additional CPU bytes include the full output
+(`RecordedDocumentReadbackJob::RequiredMemory`) and caller-owned overlap. Keep one original reservation;
+terminal or joined retirement binds the same preclaimed `SharedPublicationMemory`, never a second admission.
+GPU charges remain through actual command, copy, map and graph destruction acknowledgements.
+Recorded output adoption retains that same original accounting in the Raster storage and control-block allocator.
+Every copied reader and last weak storage owner therefore remains charged after the parent/payload retires.
+The two additional lifetime handles add32 bytes only to charged storage/control bounds; ordinary Storage layout,
+Raster handle size and pixel allocations/copies are unchanged. Include this metadata in the caller's admission;
+do not infer complete operation admission from the opaque lifetime or its existence. Actual weak-owner controls
+qualify lifetime/accounting; activated caller and G1 costs remain due.
+
+Before allocating a private graph, query the actual current adapter segment and validate headroom including
+overlapping declared GPU reservations. A hardware-to-WARP recovery grows the original CPU reservation by
+the GPU envelope before CPU-backed graphics allocation; refusal leaves original ownership intact. Recovery
+requires actual original transport/graph retirement and a fresh queue context, with at most two restarts.
+No device change replays a completed CPU/external-write handoff. A suspended sampler holds its admitted
+private graph but no recorder/source slot; input resumes its original ticket without idle polling.
+Sampler admission retains ordinary event-driven memory waiting: temporary shortage while another reservation
+or deferred release exists preserves the original opening/ticket without source capture. Real memory-change
+or release acknowledgement retries admission; cancellation and Escape acknowledge that same waiting ticket.
+With no prospective release, hard refusal completes once with `E_OUTOFMEMORY` and no captured source.
+
+Merge's metadata probe uses ordinary waiting and retains its original admitted source/plan allocation through
+handoff. Its dependent readback opts out of waiting: it already owns the probe allocation, which cannot retire
+while that phase retains it. A fresh owner snapshot that cannot admit the complete second phase returns
+`E_OUTOFMEMORY` once, before readback source capture or graphics/output allocation; it preserves document/history
+and releases the probe only through actual aggregate/control retirement. This exception creates no retry loop
+or second charge for the probe. Successful crop output explicitly retains the second phase's original charge
+through live/history/copied readers and the last weak storage control; no refund precedes its release acknowledgement.
+
+Copy Merged may publish its completed immutable private clipboard before detached encoding and OS
+offers finish. That private result retains the precreated opaque output lifetime; the still-live
+original CPU record continues to reserve the complete envelope during every useful stage/wait.
+No accounting transfer occurs early: terminal completion or original joined Close must bind that
+same lifetime before the original reservation can refund. Readers neither inspect nor mutate the
+accounting proxy. This permits no useful work after RetainPublicationMemory transfers authority.
+Private success survives later encoding failure, exhausted OS retries and cancellation; its copied
+and last weak-storage owners continue to carry the original charge through actual release acknowledgement.
+
+The owner offers one ready parent per bounded utility service pump. It performs no pixel copy or private
+composition; the dedicated recorder emits bounded command batches, the event pool waits for real completion,
+and Compute copies mapped rows. G1 and real cache-miss costs remain caller activation requirements.

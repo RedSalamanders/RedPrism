@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "CloneReadbackTestGate.h"
-#include "DocumentReadbackJob.h"
+#include "RecordedDocumentReadbackJob.h"
 
 #include <algorithm>
 #include <limits>
@@ -18,20 +18,23 @@ CloneReadbackState::~CloneReadbackState()
     }
 }
 
-class Application::CloneReadbackJob final : public DocumentReadbackJob
+class Application::CloneReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
     CloneReadbackJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, DocumentReadAuthority authority,
-                     D3D11_BOX region, std::uint64_t bytes) noexcept
-        : DocumentReadbackJob(owner._jobs, owner._gpuWork, owner._composition, region), _owner(owner), _stamp(stamp),
-          _opening(opening), _authority(authority), _bytes(bytes), _gate(owner._cloneReadbackTestGate),
-          _ownerThread(GetCurrentThreadId())
+                     D3D11_BOX region, UtilityReadbackAdmission::Envelope envelope,
+                     GpuResidencyReservation reservation) noexcept
+        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
+                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+                                      owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _opening(opening), _authority(authority), _bytes(envelope.cpuBytes),
+          _gate(owner._cloneReadbackTestGate), _ownerThread(GetCurrentThreadId())
     {
     }
     ~CloneReadbackJob() override
     {
-        if (_payload)
-            TransferReadbackOwners(_payload->document, _payload->pixels, _payload->image);
+        if (_payload && !_payload->memory)
+            TransferReadbackOwners(_payload->document, _payload->pixels, _payload->image, _payload->memory);
     }
 
   private:
@@ -75,7 +78,7 @@ class Application::CloneReadbackJob final : public DocumentReadbackJob
                 _gate->recoveries.fetch_add(1);
         }
         const HRESULT result = _owner.PrepareUtilityDevice(reason);
-        if (SUCCEEDED(result) && reason == S_OK && _gate && _gate->recoveries.load() < _gate->rebindsBeforeCopy)
+        if (SUCCEEDED(result) && _gate && _gate->recoveries.load() < _gate->rebindsBeforeCopy)
         {
             if (!PostThreadMessageW(_ownerThread, CloneReadbackTestGate::kMessage, 0, 0))
                 return HRESULT_FROM_WIN32(GetLastError());
@@ -127,12 +130,14 @@ class Application::CloneReadbackJob final : public DocumentReadbackJob
             _payload->composite = std::move(image);
         if (outcome == HostOutcome::Succeeded)
         {
-            error = _payload ? _owner._jobs.RetainMemory(_owner._utilityTicket.value(), _payload->lease) : E_UNEXPECTED;
-            if (FAILED(error))
+            if (!_payload)
+            {
+                error = E_UNEXPECTED;
                 outcome = HostOutcome::Failed;
+            }
             else
             {
-                TransferReadbackOwners(_payload->document, _payload->pixels, _payload->image);
+                TransferReadbackOwners(_payload->document, _payload->pixels, _payload->image, _payload->memory);
                 _owner._canvasCloneSample = std::move(_payload);
                 if (_gate && _gate->observeAdoption)
                     (void)PostThreadMessageW(_ownerThread, CloneReadbackTestGate::kMessage, 2, 0);
@@ -164,13 +169,16 @@ HRESULT Application::StartCloneReadback(std::uint64_t opening) noexcept
         return E_UNEXPECTED;
     const D3D11_BOX region{
         0, 0, 0, static_cast<unsigned int>(document->width), static_cast<unsigned int>(document->height), 1};
-    auto bytes = DocumentReadbackJob::RequiredMemory(region);
-    const auto source = document->RetirementMemoryBytes();
-    const auto metadata = sizeof(CloneReadbackJob) + sizeof(CloneReadbackState) + 8192ULL;
+    auto bytes = RecordedDocumentReadbackJob::RequiredMemory(region);
+    const auto metadata =
+        sizeof(CloneReadbackJob) + sizeof(CloneReadbackState) + 8192ULL + SharedPublicationMemory::OwnershipAllowance();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    if (!bytes || !source || source > maximum - bytes || metadata > maximum - bytes - source)
+    if (!bytes || metadata > maximum - bytes)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    bytes += source + metadata;
+    bytes += metadata;
+    UtilityReadbackAdmission::Envelope envelope;
+    GpuResidencyReservation reservation;
+    RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(document.value(), bytes, envelope, reservation));
     const auto ordinal = _activeHostRequest->ordinal;
     auto stamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Selection);
     if (!stamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
@@ -182,10 +190,17 @@ HRESULT Application::StartCloneReadback(std::uint64_t opening) noexcept
     HRESULT result = E_OUTOFMEMORY;
     try
     {
-        std::unique_ptr<Job> job =
-            std::make_unique<CloneReadbackJob>(*this, stamp.value(), opening, authority.value(), region, bytes);
+        std::unique_ptr<Job> job = std::make_unique<CloneReadbackJob>(*this, stamp.value(), opening, authority.value(),
+                                                                      region, envelope, std::move(reservation));
         JobTicket ticket;
-        result = _jobs.Submit(job, {JobClass::Stroke, _session.DocumentSerial(), bytes}, ticket);
+        result = _jobs.Submit(job,
+                              {.kind = JobClass::Stroke,
+                               .serialKey = _session.DocumentSerial(),
+                               .memoryBytes = envelope.cpuBytes,
+                               .deferredRetirement = true,
+                               .allowMemoryWaiting = true,
+                               .reserveRetainedMemory = true},
+                              ticket);
         if (SUCCEEDED(result))
             _utilityTicket = ticket;
     }

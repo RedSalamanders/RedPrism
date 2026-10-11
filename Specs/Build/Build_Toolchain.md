@@ -267,6 +267,22 @@ controls include corrupt bytes/targets/bounds/PDB records, duplicate/unknown/ove
 listing-versus-PE mismatches and real vector code outside the proved range. This is data proof, not a runtime
 allowlist entry.
 
+The Release adjustment-construction table uses an exact nonvolatile RBX index: `MOVSXD RBX,EDX`,
+`MOV RDI,RCX`, a zero DWORD stack initializer, an ordinary x64 ABI call, a one DWORD initializer,
+`MOV [RDI],EBX`, `CMP EBX,max`, unsigned `JA rel32`, then `LEA RDX,imagebase`,
+`MOV ECX,[RDX+4*RBX+table]`, `ADD RCX,RDX`, `JMP RCX`. All twelve contiguous decoded rows and
+57 bytes must match the PE; the full-width initializer and unsigned maximum 1–127 bound the RBX index.
+The exact same-owner anonymous untyped symbol starts an aligned DWORD table whose
+`tableStart + 4*(max+1)` equals the owning PDB procedure end inside its contribution. The preceding
+one-byte RET and INT3, all case targets and the separate JA default require decoded boundaries before
+the table in that procedure. A larger contribution is allowed; changed procedure extent, symbols,
+guards, row ownership or bytes withhold proof. This form has no fallback to another data proof.
+Reported vector-row bytes must also match the PE before being classified as table data; adjacent real
+vector code remains gated. Duplicate decoded rows retain their longest claimed extent and become
+unknown, so a short first row cannot hide a later overlapping row. `IsaRbxLongGuardTests.ps1` supplies
+132 parser controls (four accepted, 128 refused); their bytes are never executed and the runtime
+allowlist is unchanged.
+
 The observed terminal RDX DWORD table has a different exact guard: `MOVZX ECX,byte [RAX]`, `CMP CL,max`,
 `JA rel8`, followed contiguously by `LEA RDX,imagebase`, `MOV EAX,[RDX+4*RCX+table]`, `ADD RAX,RDX`, `JMP RAX`.
 The unsigned byte maximum is 1–127. The aligned table has an exact same-owner anonymous data symbol and

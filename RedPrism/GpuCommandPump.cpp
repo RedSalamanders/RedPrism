@@ -281,23 +281,36 @@ void GpuCommandPump::AcknowledgeJoinedShutdownOwner() noexcept
     if (!IsOwner() || !_stopped || _inCallback)
         std::terminate();
     for (auto& source : _sources)
-        if (source.stream)
-        {
-            HRESULT result = E_PENDING;
-            if (!source.stream->ProducerFinishedOwner(result) && !source.stream->AcknowledgeEmptyJoinedShutdownOwner())
-                std::terminate(); // The parent must actually join every started recording stage first.
-            if (source.executing.ordinal)
-            {
-                if (!source.stream->AcknowledgeOwner(source.executing))
-                    std::terminate();
-                source.executing = {};
-                source.waiting = false;
-                source.quarantined = false;
-                source.recoveryArmed = false;
-                // Shutdown has already dropped ordinary owner completions. The receiver may be a detached
-                // wrapper; never call it or publish useful results from this destruction-only acknowledgment.
-            }
-        }
+        if (source.stream && !AcknowledgeJoinedSourceOwner(source))
+            std::terminate(); // Every started recording stage must have actually joined.
+}
+
+bool GpuCommandPump::AcknowledgeSourceJoinedShutdownOwner(GpuCommandSourceLease original) noexcept
+{
+    if (!IsOwner() || !_stopped || _inCallback)
+        return false;
+    auto* source = FindOwner(original);
+    if (!source || !_scheduler->InJoinedRetirementCallback(source->ticket))
+        return false;
+    return AcknowledgeJoinedSourceOwner(*source);
+}
+
+bool GpuCommandPump::AcknowledgeJoinedSourceOwner(Source& source) noexcept
+{
+    HRESULT result = E_PENDING;
+    if (!source.stream->ProducerFinishedOwner(result) && !source.stream->AcknowledgeEmptyJoinedShutdownOwner())
+        return false;
+    if (source.executing.ordinal)
+    {
+        if (!source.stream->AcknowledgeOwner(source.executing))
+            return false;
+        source.executing = {};
+        source.waiting = false;
+        source.quarantined = false;
+        source.recoveryArmed = false;
+        // Destruction only. The receiver may be a detached wrapper; never call it or publish useful results.
+    }
+    return true;
 }
 
 bool GpuCommandPump::CloseOwner() noexcept

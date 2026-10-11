@@ -201,9 +201,10 @@ int Application::RunWandCompositeHostSelfTest() noexcept
                 state.readbackTicket = owner._wandLayerHostTicket;
                 state.readbackStamp = owner._wandLayerHostStamp;
             }
-            state.readbackPendingOnEveryRebind = state.readbackPendingOnEveryRebind && owner._gpuWork.HasPending() &&
-                                                 owner._gpuWork.LentCount() == 0 &&
-                                                 state.receipt.Read().outcome == HostOutcome::Pending;
+            state.readbackPendingOnEveryRebind =
+                state.readbackPendingOnEveryRebind && owner._utilityReadback.HasPending() &&
+                owner._graphGpuBudget.ActiveOwner() != 0 && owner._gpuWork.LentCount() == 0 &&
+                state.receipt.Read().outcome == HostOutcome::Pending;
             state.readbackAuthorityUnchanged = state.readbackAuthorityUnchanged &&
                                                owner._session.Document() == state.before &&
                                                owner._session.Generation() == state.generation &&
@@ -721,8 +722,7 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             (void)expect(
                 name(mode), "original-capture-ticket-stamp-and-reservation-survive-retries",
                 state.readbackIdentityHeld && state.readbackAuthorityUnchanged && gate->captures.load() == 1 &&
-                    gate->readbackPrepares.load() == 1u + 2u * recoveries &&
-                    gate->readbackRecoveries.load() == recoveries,
+                    gate->readbackPrepares.load() == 1u + recoveries && gate->readbackRecoveries.load() == recoveries,
                 "retries recaptured live state, changed job/history identity or exceeded the two-restart limit");
             if (mode == Mode::DeviceBeforeCopy)
             {

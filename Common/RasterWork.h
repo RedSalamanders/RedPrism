@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <span>
 
 // Worker-side reads never assemble or wait for a shared sparse cache. The explicit traversal stack bounds
@@ -20,8 +21,11 @@ inline constexpr std::size_t kRasterWorkDepthLimit = 64;
 // Shares an already published contiguous cache; otherwise builds privately without mutating the source cache.
 // Storage-header allocation may throw; the owning job boundary translates bad_alloc to a failed operation.
 [[nodiscard]] Raster ContiguousRasterForWork(const Raster& image, CancelToken cancellation = {});
+// A supplied lifetime belongs only to a newly allocated crop. The caller must include its 32-byte charged
+// metadata in the complete existing bound. An empty default uses the ordinary allocation path.
 [[nodiscard]] Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill,
-                                       CancelToken cancellation = {});
+                                       CancelToken cancellation = {},
+                                       const std::shared_ptr<const void>& outputLifetime = {});
 // Exact nearest grid stretch, as Raster::Stretched, with a private source row and adopted output.
 [[nodiscard]] Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation = {});
 // Worker equivalents of Raster::MakeThumbnail and CarriedMask. They check cancellation before returning even

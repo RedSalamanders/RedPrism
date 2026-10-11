@@ -109,7 +109,9 @@ int Application::RunSamplerHostSelfTest() noexcept
     {
         return !_samplerHostTicket && !_samplerHostStamp && _samplerHostJob == nullptr && !_utilityTicket &&
                !_utilityStamp && !_historyWork.Busy() && _gpuWork.LentCount() == 0 && _gpuWork.InFlightCount() == 0 &&
-               !_gpuWork.HasPending() && _composition.UtilitySurfaceBytes() == 0 && _jobs.ReservedMemoryBytes() == 0;
+               !_gpuWork.HasPending() && _composition.UtilitySurfaceBytes() == 0 && _jobs.ReservedMemoryBytes() == 0 &&
+               !_utilityReadback.HasPending() && !_recordedCommands.HasPending() &&
+               _recordedCommands.AttachedSourceCountOwnerForTest() == 0;
     };
 
     // One pointer gesture owns the first, middle and transparent endpoint pixels. The endpoint is not a
@@ -319,8 +321,10 @@ int Application::RunSamplerHostSelfTest() noexcept
     const auto liveReceipt = FindSamplerOpening(liveCancel.value())->receipt;
     if (!check(WaitForColorWorkTestEvent(_jobs, acknowledged.get(), DispatchMessageThunk, this) && _samplerHostTicket &&
                    _jobs.ReservedMemoryBytes() != 0 && _historyWork.Busy() && _gpuWork.LentCount() == 0 &&
-                   _composition.UtilitySurfaceBytes() == 0 && _session.ForegroundColor() == 0xFF3366CCu &&
-                   liveReceipt.Read().outcome == HostOutcome::Pending,
+                   _composition.UtilitySurfaceBytes() == 0 && !_gpuWork.HasPending() &&
+                   !_recordedCommands.HasPending() && _recordedCommands.AttachedSourceCountOwnerForTest() == 0 &&
+                   _utilityReadback.HasPending() && !_utilityReadback.HasReady() &&
+                   _session.ForegroundColor() == 0xFF3366CCu && liveReceipt.Read().outcome == HostOutcome::Pending,
                L"The acknowledged sampler prefix did not retain its exact live graph without GPU ownership.\n",
                "sampler-host.cancel.acknowledged-live-prefix-suspended"))
         return 5;

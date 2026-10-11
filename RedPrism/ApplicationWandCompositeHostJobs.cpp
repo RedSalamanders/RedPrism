@@ -1,12 +1,14 @@
 #include "Application.h"
 
-#include "DocumentReadbackJob.h"
+#include "RecordedDocumentReadbackJob.h"
+#include "SharedPublicationMemory.h"
 #include "WandLayerHostTestGate.h"
 #include "WandLayerSelectionWork.h"
 #include "resource.h"
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -18,6 +20,7 @@ namespace
 #pragma warning(disable : 4324)
 struct WandCompositePayload final : DeferredReleaseNode
 {
+    std::shared_ptr<SharedPublicationMemory> memory;
     std::optional<WandLayerSelectionInput> input;
     std::optional<PreparedWandLayerSelection> publication;
     CanvasDocument readbackDocument;
@@ -47,10 +50,8 @@ struct RetireWandCompositePayload final
 {
     void operator()(WandCompositePayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
-        {
-            const std::unique_ptr<WandCompositePayload> owned(payload);
-        }
+        if (payload && !TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+            std::terminate();
     }
 };
 bool AddWandBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
@@ -62,20 +63,25 @@ bool AddWandBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
 }
 } // namespace
 
-class Application::WandCompositeHostJob final : public DocumentReadbackJob
+class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJob
 {
   public:
     WandCompositeHostJob(Application& owner, HistoryWorkStamp stamp, HostWandCompositeNewInput request,
-                         D3D11_BOX region, std::uint64_t retirement) noexcept
-        : DocumentReadbackJob(owner._jobs, owner._gpuWork, owner._composition, region), _owner(owner), _stamp(stamp),
-          _request(request), _retirement(retirement), _authority(owner._session.CaptureHistoryRestoreAuthority()),
-          _gate(owner._wandLayerHostTestGate), _ownerThread(GetCurrentThreadId())
+                         D3D11_BOX region, UtilityReadbackAdmission::Envelope envelope,
+                         GpuResidencyReservation reservation) noexcept
+        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
+                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+                                      owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _request(request), _retirement(envelope.cpuBytes),
+          _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
     ~WandCompositeHostJob() override
     {
         if (_payload)
-            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage);
+            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage,
+                                   _payload->memory);
     }
 
   private:
@@ -90,7 +96,7 @@ class Application::WandCompositeHostJob final : public DocumentReadbackJob
             return E_ABORT;
         try
         {
-            _payload.reset(new WandCompositePayload);
+            _payload.reset(std::make_unique<WandCompositePayload>().release());
             _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
             _payload->gate = _gate;
             _payload->ownerThread = _ownerThread;
@@ -127,8 +133,7 @@ class Application::WandCompositeHostJob final : public DocumentReadbackJob
         const HRESULT ready = _owner.PrepareUtilityDevice(reason);
         // Test-only owner message: RequestTile enqueues the real readback after this callback. The shared
         // message pump dispatches the queued message before the next GPU pump, without timers or polling.
-        if (SUCCEEDED(ready) && reason == S_OK && _gate &&
-            _gate->readbackRecoveries.load() < _gate->requestedReadbackRebinds &&
+        if (SUCCEEDED(ready) && _gate && _gate->readbackRecoveries.load() < _gate->requestedReadbackRebinds &&
             !PostThreadMessageW(_ownerThread, WandLayerHostTestGate::kReadbackMessage, 0,
                                 reinterpret_cast<LPARAM>(_gate.get())))
             return HRESULT_FROM_WIN32(GetLastError());
@@ -235,22 +240,24 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
         return S_OK;
     const auto plan = _session.PlanWandCompositeSelectionMemory(input.point, input.settings);
     const D3D11_BOX region{0, 0, 0, static_cast<UINT>(document->width), static_cast<UINT>(document->height), 1};
-    const auto readback = DocumentReadbackJob::RequiredMemory(region);
+    const auto readback = RecordedDocumentReadbackJob::RequiredMemory(region);
     if (!plan || !readback)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     std::uint64_t memory = 0;
-    if (EvaluateWandLayerSelectionAdmission(*plan, SelectionMode::New, document->selection.has_value(), memory) !=
-        WandLayerSelectionAdmission::Ready)
+    if (EvaluateWandLayerSelectionAdmission(plan.value(), SelectionMode::New, document->selection.has_value(),
+                                            memory) != WandLayerSelectionAdmission::Ready)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    auto retirement = plan->retirementBytes;
-    const auto metadata = sizeof(WandCompositeHostJob) + sizeof(WandCompositePayload) + 8192ull;
+    const auto metadata = sizeof(WandCompositeHostJob) + sizeof(WandCompositePayload) +
+                          SharedPublicationMemory::OwnershipAllowance() + 8192ull;
     // Charge readback storage in addition to the conservative selection phases, including the retained GPU
     // source snapshot and complete CPU aggregate. Admission never assumes a live document keeps owners alive.
     const auto sourceBytes = _session.history.RetirementMemoryBytes(document);
     if (!sourceBytes || !AddWandBytes(memory, readback) || !AddWandBytes(memory, metadata) ||
-        !AddWandBytes(memory, sourceBytes) || !AddWandBytes(retirement, readback) ||
-        !AddWandBytes(retirement, metadata) || !AddWandBytes(retirement, sourceBytes))
+        !AddWandBytes(memory, sourceBytes))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    UtilityReadbackAdmission::Envelope envelope;
+    GpuResidencyReservation reservation;
+    RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(document.value(), memory, envelope, reservation));
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
     if (!ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
@@ -264,12 +271,18 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
     try
     {
         if (_wandLayerHostTestGate)
-            _wandLayerHostTestGate->reservationBytes = memory;
-        std::unique_ptr<Job> job =
-            std::make_unique<WandCompositeHostJob>(*this, _wandLayerHostStamp.value(), input, region, retirement);
+            _wandLayerHostTestGate->reservationBytes = envelope.cpuBytes;
+        std::unique_ptr<Job> job = std::make_unique<WandCompositeHostJob>(*this, _wandLayerHostStamp.value(), input,
+                                                                          region, envelope, std::move(reservation));
         JobTicket ticket;
-        result =
-            static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Selection, _session.DocumentSerial(), memory}, ticket));
+        result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                   {.kind = JobClass::Selection,
+                                                    .serialKey = _session.DocumentSerial(),
+                                                    .memoryBytes = envelope.cpuBytes,
+                                                    .deferredRetirement = true,
+                                                    .allowMemoryWaiting = true,
+                                                    .reserveRetainedMemory = true},
+                                                   ticket));
         if (SUCCEEDED(result))
             _wandLayerHostTicket = ticket;
     }

@@ -154,6 +154,8 @@
     <ClInclude Include="..\..\Common\OutputPathLimits.h" />
     <ClInclude Include="..\..\Common\ProjectSaveWork.h" />
     <ClInclude Include="RasterWorkTests.h" />
+    <ClInclude Include="Document.Tests.CropLifetime.h" />
+    <ClInclude Include="Document.Tests.CopyPixelsLifetime.h" />
     <ClInclude Include="RasterEditWorkTests.h" />
     <ClInclude Include="GradientWorkTests.h" />
     <ClInclude Include="GradientStateTests.h" />
@@ -249,6 +251,8 @@
     <ClCompile Include="ProjectSaveMemoryTests.cpp" />
     <ClCompile Include="ExportMemoryTests.cpp" />
     <ClCompile Include="RasterWorkTests.cpp" />
+    <ClCompile Include="Document.Tests.CropLifetime.cpp" />
+    <ClCompile Include="Document.Tests.CopyPixelsLifetime.cpp" />
     <ClCompile Include="RasterEditWorkTests.cpp" />
     <ClCompile Include="GradientWorkTests.cpp" />
     <ClCompile Include="GradientStateTests.cpp" />

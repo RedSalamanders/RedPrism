@@ -110,6 +110,8 @@
     <ClInclude Include="JobCloseHookTests.h" />
     <ClInclude Include="JobSuspendedRetirementTests.h" />
     <ClInclude Include="Host.Tests.WorkerStageRetirement.h" />
+    <ClInclude Include="Host.Tests.JoinedRetirementAuthority.h" />
+    <ClCompile Include="Host.Tests.JoinedRetirementAuthority.cpp" />
     <ClInclude Include="Host.Tests.RetainedSlotAdmission.h" />
     <ClInclude Include="Host.Tests.PreservedContinuation.h" />
     <ClInclude Include="JobRetirementTests.h" />

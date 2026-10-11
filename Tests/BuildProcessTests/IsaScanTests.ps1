@@ -56,6 +56,10 @@ Write-Host 'BEGIN isa-r13-terminal-controls'
 & (Join-Path $PSScriptRoot 'IsaR13TerminalTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Terminal R13 DWORD parser controls failed.' }
 Write-Host 'END isa-r13-terminal-controls'
+Write-Host 'BEGIN isa-rbx-long-guard-controls'
+& (Join-Path $PSScriptRoot 'IsaRbxLongGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'RBX constructor terminal DWORD parser controls failed.' }
+Write-Host 'END isa-rbx-long-guard-controls'
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

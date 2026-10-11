@@ -5,7 +5,8 @@
 
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
-#include "DocumentReadbackJob.h"
+#include "RecordedDocumentReadbackJob.h"
+#include "SharedPublicationMemory.h"
 #include "UtilityWorkTestGate.h"
 #include "resource.h"
 
@@ -13,6 +14,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -25,6 +27,7 @@ namespace
 #pragma warning(disable : 4324)
 struct AdjustmentOpeningPayload final : DeferredReleaseNode
 {
+    std::shared_ptr<SharedPublicationMemory> memory; // Dies after every input/publication/readback owner.
     std::optional<AdjustmentOpeningInput> input;
     std::optional<CanvasDocument> source;
     DocumentHistory::StateView history;
@@ -56,31 +59,33 @@ struct RetireAdjustmentOpening final
 {
     void operator()(AdjustmentOpeningPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
-        {
-            const std::unique_ptr<AdjustmentOpeningPayload> owned(payload);
-        }
+        if (payload && !TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+            std::terminate();
     }
 };
 } // namespace
 
-class Application::AdjustmentOpeningJob final : public DocumentReadbackJob
+class Application::AdjustmentOpeningJob final : public RecordedDocumentReadbackJob
 {
   public:
     AdjustmentOpeningJob(Application& owner, HistoryWorkStamp stamp, D3D11_BOX region,
-                         std::uint64_t retirement) noexcept
-        : DocumentReadbackJob(owner._jobs, owner._gpuWork, owner._composition, region), _owner(owner), _stamp(stamp),
-          _generation(owner._session.Generation()), _sequence(owner._session.ColorEditSequence()),
-          _retirement(retirement), _id(owner._session.AdjustmentEditingID().value()),
-          _active(owner._session.ActiveLayerID()), _mask(owner._session.IsMaskSelected()),
-          _crop(owner._session.CropFrame()), _gate(owner._utilityWorkTestGate), _ownerThread(GetCurrentThreadId())
+                         UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation) noexcept
+        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
+                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+                                      owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _generation(owner._session.Generation()),
+          _sequence(owner._session.ColorEditSequence()), _retirement(envelope.cpuBytes),
+          _id(owner._session.AdjustmentEditingID().value()), _active(owner._session.ActiveLayerID()),
+          _mask(owner._session.IsMaskSelected()), _crop(owner._session.CropFrame()), _gate(owner._utilityWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
     ~AdjustmentOpeningJob() override
     {
         if (_payload)
-            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage);
-        // GPU leases/targets finish on the owner in the base; all CPU owners move to this release aggregate.
+            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage,
+                                   _payload->memory);
+        // Original graphics acknowledgements precede terminal transfer; CPU owners retain that same charge.
     }
 
   private:
@@ -93,16 +98,20 @@ class Application::AdjustmentOpeningJob final : public DocumentReadbackJob
                !_owner._session.AdjustmentOriginal() && _owner._session.ActiveLayerID() == _active &&
                _owner._session.IsMaskSelected() == _mask && _owner._session.CropFrame() == _crop;
     }
+    JobResult PrepareReadbackOpening(JobContext&) override
+    {
+        _payload.reset(std::make_unique<AdjustmentOpeningPayload>().release());
+        _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+        _payload->gate = _gate;
+        _payload->ownerThread = _ownerThread;
+        return {}; // Actual original Compute admission; no owner allocation of the capture aggregate.
+    }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (!Current() || !_payload || _owner._historyWork.CancelRequested(_stamp))
             return E_ABORT;
         try
         {
-            _payload.reset(new AdjustmentOpeningPayload);
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
             if (_gate)
             {
                 _gate->probeReservationHeld = _gate->probeReservationBytes != 0 &&
@@ -266,10 +275,11 @@ HRESULT Application::StartAdjustmentOpening() noexcept
     {
         const D3D11_BOX region{
             0, 0, 0, static_cast<UINT>(_session.Document()->width), static_cast<UINT>(_session.Document()->height), 1};
-        const auto pixels = DocumentReadbackJob::RequiredMemory(region);
+        const auto pixels = RecordedDocumentReadbackJob::RequiredMemory(region);
         const auto history = _session.history.EditMemoryBytes(_session.Document());
         auto retirement = _session.ImageImportRetirementMemoryBytes();
-        std::uint64_t memory = sizeof(AdjustmentOpeningJob) + sizeof(AdjustmentOpeningPayload) + 64 * 1024;
+        std::uint64_t memory = sizeof(AdjustmentOpeningJob) + sizeof(AdjustmentOpeningPayload) +
+                               SharedPublicationMemory::OwnershipAllowance() + 64 * 1024;
         const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
         const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
         {
@@ -284,15 +294,27 @@ HRESULT Application::StartAdjustmentOpening() noexcept
             add(_session.Document()->layers.size(), 4 * sizeof(Guid) + 1024) && memory <= (maximum - retirement) / 2)
         {
             retirement += memory * 2;
-            if (_utilityWorkTestGate)
-                _utilityWorkTestGate->probeReservationBytes = memory;
-            std::unique_ptr<Job> job =
-                std::make_unique<AdjustmentOpeningJob>(*this, _utilityStamp.value(), region, retirement);
-            JobTicket ticket;
-            result =
-                static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+            UtilityReadbackAdmission::Envelope envelope;
+            GpuResidencyReservation reservation;
+            result = PrepareRecordedUtilityAdmission(_session.Document().value(), retirement, envelope, reservation);
             if (SUCCEEDED(result))
-                _utilityTicket = ticket;
+            {
+                if (_utilityWorkTestGate)
+                    _utilityWorkTestGate->probeReservationBytes = envelope.cpuBytes;
+                std::unique_ptr<Job> job = std::make_unique<AdjustmentOpeningJob>(*this, _utilityStamp.value(), region,
+                                                                                  envelope, std::move(reservation));
+                JobTicket ticket;
+                result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                           {.kind = JobClass::Commit,
+                                                            .serialKey = _session.DocumentSerial(),
+                                                            .memoryBytes = envelope.cpuBytes,
+                                                            .deferredRetirement = true,
+                                                            .allowMemoryWaiting = true,
+                                                            .reserveRetainedMemory = true},
+                                                           ticket));
+                if (SUCCEEDED(result))
+                    _utilityTicket = ticket;
+            }
         }
     }
     catch (const std::bad_alloc&)
@@ -316,6 +338,7 @@ HRESULT Application::StartAdjustmentOpening() noexcept
 
 int Application::RunAdjustmentOpeningSelfTest() noexcept
 {
+    std::fprintf(stderr, "EXPECTED adjustment-opening-lifetime records: 48\n");
     enum class Mode
     {
         Ordered,
@@ -462,11 +485,12 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
                                   : mode == Mode::Stale || mode == Mode::Epoch ? HostOutcome::Stale
                                                                                : HostOutcome::Failed;
             const auto outcome = state.opening.Read();
+            const auto retainedPanelBytes = success && mode != Mode::Younger ? gate->probeReservationBytes : 0;
             if (outcome.outcome != expected || (constructionFailure ? state.visited : !state.visited || !state.held) ||
                 !gate->probeReservationHeld || !gate->retiredOffOwner.load() || gate->retiredNodes.load() != 1 ||
                 gate->retiredOwnerNodes.load() != 0 || _historyWork.Busy() || _utilityTicket ||
                 _gpuWork.LentCount() != 0 || _gpuWork.InFlightCount() != 0 || _gpuWork.HasPending() ||
-                _composition.UtilitySurfaceBytes() != 0 || _jobs.ReservedMemoryBytes() != 0 ||
+                _composition.UtilitySurfaceBytes() != 0 || _jobs.ReservedMemoryBytes() != retainedPanelBytes ||
                 _renderer.PresentCount() != presents || _session.HasColorEdit() != (success && mode != Mode::Younger))
                 return fail(L"Adjustment opening violated terminal lineage, hidden rendering, GPU acknowledgement or "
                             L"retirement.\n");
@@ -497,6 +521,45 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
                     (mode == Mode::Rebind && (FAILED(state.rebound) || gate->visits.load() != 1)))
                     return fail(L"Adjustment opening changed live visibility, source bytes, baseline or named "
                                 L"transaction semantics.\n");
+
+                // This accepted opening owns one original readback charge. Closing its panel cannot refund
+                // storage still held by a copied immutable reader, or its last weak allocation control.
+                Raster reader = panel.original;
+                auto weakStorage = reader.WeakStorageForTest();
+                const auto expectLifetime = [kind, mode](bool condition, const char* stage) noexcept
+                {
+                    std::fprintf(stderr, "%s adjustment-opening-lifetime kind=%u mode=%u stage=%s\n",
+                                 condition ? "PASS" : "FAIL", static_cast<unsigned int>(kind),
+                                 static_cast<unsigned int>(mode), stage);
+                    return condition;
+                };
+                CancelColorEditForTest();
+                if (!expectLifetime(!_session.HasColorEdit() && !_session.AdjustmentEditingID() &&
+                                        _session.Document() == before && _session.Generation() == generation + 1 &&
+                                        _session.history.CurrentRevision() == revision &&
+                                        _session.history.CaptureState().Depth() == 0 &&
+                                        _session.history.CaptureState().FutureCount() == 1 &&
+                                        _session.history.RedoName() == L"Layer Opacity",
+                                    "cancel-preserves-document-and-redo"))
+                    return fail(L"Adjustment panel cancellation changed its committed document/history.\n");
+                actual.fill(0);
+                reader.ReadRegion(0, 0, 4, 1, actual.data(), 16, 0);
+                if (!expectLifetime(!weakStorage.expired() && actual == bytes &&
+                                        _jobs.ReservedMemoryBytes() == retainedPanelBytes &&
+                                        _jobs.ReleasingMemoryBytes() == 0,
+                                    "copied-reader-retains-original-charge-and-bytes"))
+                    return fail(L"Adjustment opening refunded a copied reader or changed its original pixels.\n");
+                reader = {};
+                if (!expectLifetime(settle() && weakStorage.expired() &&
+                                        _jobs.ReservedMemoryBytes() == retainedPanelBytes &&
+                                        _jobs.ReleasingMemoryBytes() == 0,
+                                    "last-weak-storage-retains-original-charge"))
+                    return fail(L"Adjustment opening refunded its retained weak allocation control.\n");
+                weakStorage.reset();
+                if (!expectLifetime(settle() && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0 &&
+                                        _jobs.IsIdle(),
+                                    "final-control-acknowledges-original-refund"))
+                    return fail(L"Adjustment opening did not acknowledge final original memory retirement.\n");
             }
             else if (_session.ColorEditSequence() != sequence || _session.history.CaptureState().Depth() != 0 ||
                      _session.AdjustmentOriginal() || _session.AdjustmentEditingID() ||

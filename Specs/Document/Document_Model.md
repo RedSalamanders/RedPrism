@@ -173,6 +173,25 @@ width × height × bytes-per-pixel bytes and transfers it without a pixel copy. 
 leave ownership with the caller. A successful adoption empties the caller's buffer; writers MUST discard borrowed
 mutable pointers before publication. `Raster::Make` retains its copying/zero-filling semantics for existing callers.
 
+An admitted producer may give `Raster::Adopt` an opaque shared publication lifetime. The storage and its
+control-block allocator retain that lifetime independently: actual pixel destruction on the release worker
+precedes storage lifetime release, and the allocator retains admission until its last weak control block is
+deallocated. A null alias with an owning control block retains the same lifetime. Copied Raster handles preserve
+both pixels and accounting; invalid adoption consumes neither the pixel buffer nor caller lifetime ownership.
+This creates no new byte reservation and grants no job, document or graphics publication authority. The caller
+must declare all output/control overlap before allocation and bind original accounting before refunding its job.
+The ordinary storage layout/factory remains unchanged. Charged storage adds two shared lifetime handles (32 bytes
+on supported 64-bit targets), included in its cached self/graph retirement bounds, with no pixel copy or extra
+pixel allocation. Its last owner-thread release always uses an installed deferred-release sink; workers release
+inline. `WeakStorageForTest` observes control-block expiry without owning or reading dead pixels.
+
+CopyPixelsInput may carry an explicitly supplied opaque output lifetime. Newly allocated Copy pixels
+retain it in their Raster storage and control-block allocator, never implicitly inheriting source
+accounting. The ordinary empty-lifetime path retains its numeric behavior and storage layout.
+Closing a document preserves its private clipboard for later Paste; a later successful private Copy
+replaces that clipboard. Those operations cannot refund pixels still owned by another copied Raster
+or weak storage control. Final application CPU retirement also releases the private clipboard.
+
 Large last-reference storage releases can be transferred through the owning thread's deferred-release sink.
 The intrusive node remains alive until its worker destroys it; workers with no sink release inline. Directly
 owned `PixelBuffer` results follow the same rule, including unpublished/cancelled results. Shutdown retains the
@@ -379,9 +398,15 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   Production merge first admits a metadata-only record, captures immutable source/active/selected owners and
   plans on its worker. A missing plan succeeds without canvas pixel allocation or GPU work. A ready plan retains
   that source and worker-built composition subset while a separate full readback/history record retains the same
-  history acquisition. History capture follows its complete reservation. `PrepareMergePublication` builds the
+  history acquisition. The probe aggregate is allocated on its original admitted Compute opening, before
+  owner capture; its original accounting survives the complete handoff and aggregate/control retirement.
+  The dependent readback refuses insufficient memory once: its owned probe cannot free while that phase
+  retains it. Ordinary independent admissions keep event-driven waiting. History capture follows the complete
+  readback reservation. `PrepareMergePublication` builds the
   survivor records, clipping rewrites, the trimmed layer, active/selected ids and detached history before
-  either live state changes. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
+  either live state changes. Newly allocated crop pixels explicitly retain the readback's original lifetime
+  owner, including its charged metadata in admission. Full-bounds/transparent trims preserve source identity;
+  crop never implicitly inherits another source job's accounting owner. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
   edit state and exact history epoch, then publishes and swaps replaced document/selection/display owners.
   Failure/cancellation/staleness preserves the existing document, revision and redo. The original direct methods
   remain numeric references. This integration is undergoing native qualification under P1.9 H1.

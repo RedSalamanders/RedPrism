@@ -32,7 +32,12 @@ std::int64_t ImageBudget(const CanvasDocument& document, Guid first, Guid second
 
 CopyPixelsInput CopyInput(const CanvasDocument& source, const ImageLayer& layer)
 {
-    return {layer.asset->image, layer.transform, source.selection, source.width, source.height};
+    return {.outputLifetime = {},
+            .source = layer.asset->image,
+            .placement = layer.transform,
+            .selection = source.selection,
+            .canvasWidth = source.width,
+            .canvasHeight = source.height};
 }
 
 RasterEditInput ClearInput(const CanvasDocument& source, const ImageLayer& layer)

@@ -6,12 +6,16 @@
 #include <atomic>
 #include <cstdint>
 #include <d3d11.h>
+#include <memory>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)
+
+class GpuWorkQueue;
+class GpuCompletionContext;
 
 struct GpuCommandLease final
 {
@@ -41,6 +45,10 @@ class GpuCommandStream final
     GpuCommandStream& operator=(const GpuCommandStream&) = delete;
     [[nodiscard]] HRESULT InitializeOwner(JobScheduler& scheduler, JobTicket source,
                                           std::uint64_t deviceGeneration) noexcept;
+    // Utility opening: bind the actual original queue identity before any worker or command.
+    // The numeric-only overload remains for existing callers and cannot authorize device recovery.
+    [[nodiscard]] HRESULT InitializeOwner(JobScheduler& scheduler, JobTicket source, const GpuWorkQueue& queue,
+                                          const GpuCompletionContext& current) noexcept;
     // One producer only. Capacity blocks this dedicated recorder on events, never the general compute pool.
     [[nodiscard]] bool CanRecordForWork() const noexcept;
     // Fresh private recording stage only; the original joined RestartOwner advances this epoch.
@@ -74,6 +82,11 @@ class GpuCommandStream final
     // existing events/slots for another recorder stage without resetting command ordinals. Failed/stopped,
     // unjoined, foreign or exhausted streams refuse; late previous leases never name a new command.
     [[nodiscard]] HRESULT RestartOwner() noexcept;
+    // Device recovery only after original transport retirement and a successful original joined stage.
+    // Validate an actual current captured queue context and a strictly newer generation. Keep source,
+    // command ordinals and both events; this acknowledges no copy/map, graph destruction or GPU charge.
+    // Parent separately proves those boundaries and never calls this after CPU/external-write handoff.
+    [[nodiscard]] HRESULT RestartDeviceOwner(const GpuWorkQueue& queue, const GpuCompletionContext& current) noexcept;
     [[nodiscard]] bool WasBackpressured() const noexcept
     {
         return _backpressured.load(std::memory_order_acquire);
@@ -94,11 +107,13 @@ class GpuCommandStream final
         GpuCommandLease lease;
     };
     [[nodiscard]] bool IsOwner() const noexcept;
+    [[nodiscard]] HRESULT RestartOwnerImpl(std::uint64_t nextGeneration, bool deviceReplacement) noexcept;
     [[nodiscard]] bool Matches(const Slot& slot, GpuCommandLease lease) const noexcept;
     [[nodiscard]] bool IsStopped() const noexcept;
     std::array<Slot, kCapacity> _slots;
     JobScheduler* _scheduler = nullptr; // Parent excludes scheduler Close until this producer finishes.
     JobTicket _source;
+    std::shared_ptr<const std::uint8_t> _queueOrigin; // Identity only; owns no GPU endpoint or command.
     std::uint64_t _deviceGeneration = 0;
     std::uint64_t _produced = 0; // Single producer only, read on owner after _finished acquire.
     std::uint64_t _consumed = 0; // Owner only; callbacks acknowledge the exact ordinal.

@@ -1608,7 +1608,8 @@ Raster Downscaled(const Raster& image, int maxSide, const CancelToken& cancellat
     return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(outWidth, outHeight, image.Format(), std::move(out));
 }
 
-Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed, const CancelToken& cancellation)
+Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed, const CancelToken& cancellation,
+                       const std::shared_ptr<const void>& outputLifetime)
 {
     const Raster prepared = ContiguousRasterForWork(image, cancellation);
     if (!prepared.HasStorage() || image.Format() != RasterFormat::Bgra8888)
@@ -1666,7 +1667,7 @@ Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed, const 
     {
         return result;
     }
-    result.image = CropRasterForWork(prepared, crop, 0, cancellation);
+    result.image = CropRasterForWork(prepared, crop, 0, cancellation, outputLifetime);
     if (!result.image.HasStorage())
     {
         return {};

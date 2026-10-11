@@ -235,7 +235,8 @@ Raster ContiguousRasterForWork(const Raster& image, CancelToken cancellation)
                : Raster{};
 }
 
-Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill, CancelToken cancellation)
+Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill, CancelToken cancellation,
+                         const std::shared_ptr<const void>& outputLifetime)
 {
     if (!image.HasStorage() || region.width <= 0 || region.height <= 0 || region.width > kMaxCanvasSide ||
         region.height > kMaxCanvasSide || cancellation.IsCancelled())
@@ -249,7 +250,7 @@ Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outs
     {
         return {};
     }
-    return Raster::Adopt(region.width, region.height, image.Format(), std::move(bytes));
+    return Raster::Adopt(region.width, region.height, image.Format(), std::move(bytes), outputLifetime);
 }
 
 Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation)

@@ -220,7 +220,7 @@ Synchronous callers take the `ComposeReadback(document, Raster&)` overload: stag
 `PixelBuffer` and adopted directly as BGRA8888, with no second full-image CPU copy. The vector overload remains for
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
 are never published. Merge, adjustment opening and PNG/JPEG export use the asynchronous utility path below. Settled
-New-mode All Layers wand uses the admitted `DocumentReadbackJob` graph below; Add/Subtract and live-context wand
+New-mode All Layers wand uses the admitted `RecordedDocumentReadbackJob` graph below; Add/Subtract and live-context wand
 requests retain their existing synchronous composition callers. Eligible Clone All Layers uses the admitted
 readback graph; eligible single-layer Clone uses a worker placement sample without GPU composition. The P1 canvas color sampler uses
 one admitted source and repeated 1×1 requests with no owner pixel copy; current qualification is scoped below. Clipboard
@@ -817,3 +817,39 @@ instead of reinitializing their stopped state. Repeat common initialization is a
 Actual device changes notify the common pump even when prepared display is disabled. Shutdown stops it
 independently, acknowledges only after actual producer join, closes display clients first, then detaches
 the empty common pump. Ordinary prepared display/tool/utility activation still requires its caller gates.
+
+### Recorded readback parent
+
+The separate `RecordedDocumentReadbackJob` records its private `RecordedUtilityGraph` on the common
+dedicated recording lane. After all original commands acknowledge, the original Compute retirement stage
+destroys transport references. The owner publishes only the already-recorded region, queues its exact
+readback and lends mapped rows to Compute; the owner releases that map only after the copying body joins.
+Only then may another serial region record. The actual queue receiver is an intrusive worker-retired root,
+not a wrapper destroyed before queue shutdown.
+
+Utility streams initialized with the actual captured queue context retain that queue identity.
+`RestartDeviceOwner` requires an exact successful original job acknowledgement, actual retired transport,
+the same queue origin, a current captured context and strictly newer device generation. Numeric-only
+streams cannot authorize recovery. Dropping retired unsubmitted commands advances discarded ordinals without
+claiming GPU completion; old command leases never name new work. Parent recovery separately acknowledges
+copies/maps and graph destruction, admits the replacement device, and refuses replay after CPU handoff.
+
+The explicit CPU-only route records no GPU commands and allocates its output on Compute. Detached stages
+use the parent's resume helper so cancellation cannot attempt a second resume of a running CPU body.
+Sampler continuation may retain its excluded private graph between acknowledged 1x1 outputs, with no
+source slot held while idle. Clone All Layers, PNG/JPEG export, the eligible canvas sampler and New-mode
+All Layers Wand, adjustment opening, Merge and Copy Merged use this route.
+Copy Merged allocates its private capture aggregate in the original admitted Compute opening,
+then retires graphics before private preparation/encoding. Its same original ticket survives
+detached CPU/OS stages and event-driven clipboard waits, without reacquiring a source slot or
+replaying the readback/encoder. Terminal completion or joined Close binds the precreated accounting
+proxy before the original job refunds; copied private readers and weak storage controls retain it.
+Merge's metadata probe retains its original charged source/plan aggregate through the separately admitted
+readback. A newly cropped result explicitly owns that readback's accounting handle; live document, history,
+copied readers and weak storage controls keep the charge until actual final retirement.
+Adjustment opening allocates its capture aggregate in the original admitted Compute opening and retains
+its charged immutable below-composite through the panel's final reader/control lifetime.
+Export's CPU encoding follows actual private-graph retirement; later device changes
+cannot restart an encoder or repeat file publication. Admission uses the real device's texture limit, bounded
+above by 2048; the small-tile fixture must still exercise a second actual mapping failure.
+This does not activate the wider prepared display/tool route or qualify utility owner latency.

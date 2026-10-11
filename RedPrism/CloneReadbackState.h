@@ -4,6 +4,7 @@
 #include "Document.h"
 #include "Jobs.h"
 #include "PixelBuffer.h"
+#include "SharedPublicationMemory.h"
 
 #include <memory>
 
@@ -14,7 +15,8 @@ struct CloneReadbackTestGate;
 #pragma warning(disable : 4324)
 struct CloneReadbackState final : DeferredReleaseNode
 {
-    SharedRetainedMemoryLease lease;
+    std::shared_ptr<SharedPublicationMemory> memory;
+    SharedRetainedMemoryLease lease; // The CPU layer-source route retains its existing original lease.
     CanvasDocument document;
     PixelBuffer pixels;
     Raster image;
@@ -31,6 +33,14 @@ struct CloneReadbackState final : DeferredReleaseNode
         { const std::unique_ptr<CloneReadbackState> owned(static_cast<CloneReadbackState*>(node)); };
     }
     ~CloneReadbackState();
+    [[nodiscard]] bool HasReservation() const noexcept
+    {
+        return memory ? memory->IsBound() : static_cast<bool>(lease);
+    }
+    [[nodiscard]] std::uint64_t ReservationBytes() const noexcept
+    {
+        return memory ? memory->Bytes() : lease.Bytes();
+    }
     struct Retire final
     {
         void operator()(CloneReadbackState* state) const noexcept

@@ -487,7 +487,9 @@ int Application::RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept
                                Case{"escape", Scenario::Escape}, Case{"escape-held", Scenario::EscapeHeld},
                                Case{"refusal", Scenario::Refusal}};
     constexpr std::uint64_t headroom = kMemoryAdmissionHeadroomBytes;
-    constexpr std::uint64_t ample = headroom + 32ull * 1024 * 1024;
+    // The recorded WARP route admits its complete software graphics envelope, including staging/driver
+    // allowances. This synthetic ample snapshot exercises recovery; it is not a product RAM requirement.
+    constexpr std::uint64_t ample = headroom + 256ull * 1024 * 1024;
     constexpr std::uint64_t blockerBytes = 4096;
     constexpr std::uint32_t blue = 0xFF3366CCu;
     constexpr std::uint32_t brown = 0xFF804020u;

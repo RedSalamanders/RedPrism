@@ -224,8 +224,8 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
             owner->_activeHostRequest->ordinal == ordinal && owner->_canvasBrushInput.Opening() == opening &&
             receipt.Read().outcome == HostOutcome::Pending && gate->captures.load() == 1 &&
             owner->_jobs.ReservedMemoryBytes() == state.reservation + state.openingBytes &&
-            (live ? state.adopted && owner->_canvasCloneSample && owner->_canvasCloneSample->lease &&
-                        owner->_canvasCloneSample->lease.Bytes() == state.reservation &&
+            (live ? state.adopted && owner->_canvasCloneSample && owner->_canvasCloneSample->HasReservation() &&
+                        owner->_canvasCloneSample->ReservationBytes() == state.reservation &&
                         owner->_session.PendingBrush() && state.openingBytes != 0
                   : owner->_utilityTicket == state.ticket && owner->_utilityStamp == state.stamp &&
                         owner->_historyWork.Busy() && !owner->_canvasCloneSample && !owner->_session.PendingBrush());
@@ -270,8 +270,8 @@ int Application::RunStandaloneCloneLayerSourceShutdownSelfTest(HINSTANCE instanc
                                               state.owner._session.history.UndoCount() == 0;
             state.chargeRetained =
                 state.owner._jobs.ReservedMemoryBytes() == state.reservation && state.reservation != 0 &&
-                (!state.live || (state.owner._canvasCloneSample && state.owner._canvasCloneSample->lease &&
-                                 state.owner._canvasCloneSample->lease.Bytes() == state.sourceReservation &&
+                (!state.live || (state.owner._canvasCloneSample && state.owner._canvasCloneSample->HasReservation() &&
+                                 state.owner._canvasCloneSample->ReservationBytes() == state.sourceReservation &&
                                  state.reservation > state.sourceReservation));
             state.liveDraftAlive = state.live && state.probe.draftAliveAtDetach && !state.probe.draft.expired();
         };

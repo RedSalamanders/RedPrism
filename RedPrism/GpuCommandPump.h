@@ -68,6 +68,10 @@ class GpuCommandPump final : public OwnerWorkPump
     // All command/wait producers joined and future GPU use excluded by the parent's shutdown sequence.
     // Acknowledges uncertain slots for destruction only; this never qualifies their pixels as completed.
     void AcknowledgeJoinedShutdownOwner() noexcept;
+    // Exact original RetainJoinedRetirement only, after actual scheduler producer join and StopOwner.
+    // Exclude this borrowed source before its wrapper dies. No receiver callback, copy/row acknowledgement,
+    // useful success, command recording or GPU refund. Parent retires captured references on the final worker.
+    [[nodiscard]] bool AcknowledgeSourceJoinedShutdownOwner(GpuCommandSourceLease original) noexcept;
     [[nodiscard]] bool CloseOwner() noexcept;
     // One-shot test refusals after actual Execute, and before a captured retirement barrier. They never
     // substitute a completion signal or acknowledge the original use. Production leaves both S_OK.
@@ -101,6 +105,7 @@ class GpuCommandPump final : public OwnerWorkPump
     [[nodiscard]] Source* FindOwner(GpuCommandSourceLease lease) noexcept;
     void FailOwner(Source& source, HRESULT error) noexcept;
     void AcknowledgeOwner(Source& source, HRESULT result) noexcept;
+    [[nodiscard]] bool AcknowledgeJoinedSourceOwner(Source& source) noexcept;
     std::array<Source, kCapacity> _sources;
     JobScheduler* _scheduler = nullptr;
     GpuWorkQueue* _queue = nullptr;

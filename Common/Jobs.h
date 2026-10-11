@@ -419,6 +419,10 @@ class JobScheduler final
     // Owner only. Exact successful joined job acknowledgement, during DeferRetirement/DeferCompletion.
     // Progress, final Completed, UI actions, another ticket and Close confer no source-capture authority.
     [[nodiscard]] bool InAcknowledgedJobCallback(JobTicket original) const noexcept;
+    // Destruction authority only: exact actual Close hook after original recorder/compute join.
+    // Refuse outside that owner hook, on another ticket/thread, during ordinary completion and after Close.
+    // This grants no useful work, GPU/copy/row completion, source capture or admission refund.
+    [[nodiscard]] bool InJoinedRetirementCallback(JobTicket original) const noexcept;
     [[nodiscard]] void* WakeHandle() const noexcept;
 
     using Apply = void (*)(void*, Job&, JobResult) noexcept;

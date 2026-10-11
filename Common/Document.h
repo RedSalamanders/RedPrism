@@ -189,6 +189,14 @@ class Raster
                                      std::size_t byteCount);
     // Publishes a completely initialized buffer without copying. Invalid input leaves ownership with the caller.
     [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels);
+    // Caller precreates lifetime under its complete admission. The immutable storage and its weak control
+    // block retain it through actual worker destruction; no pixel copy, mutation or new memory admission.
+    [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels,
+                                      const std::shared_ptr<const void>& lifetime);
+    [[nodiscard]] std::weak_ptr<const void> WeakStorageForTest() const noexcept
+    {
+        return _storage;
+    }
     [[nodiscard]] static Raster MakeThumbnail(const Raster& source, int maxSide = 96);
     // A sparse raster: `base` (contiguous; may be empty) with its top-left at (baseX, baseY) of the new grid, under
     // `tiles` (clipped to the grid, later tiles over earlier ones). Pixels no base or tile reaches read `fill`.
@@ -342,7 +350,19 @@ class Raster
     {
         void operator()(Storage* storage) const noexcept;
     };
+#pragma warning(push)
+#pragma warning(disable : 4324) // inherits the intrusive release node's alignment
+    struct ChargedStorage final : Storage
+    {
+        std::shared_ptr<const void> lifetime;
+    };
+#pragma warning(pop)
+    struct FreeChargedStorage final
+    {
+        void operator()(ChargedStorage* storage) const noexcept;
+    };
     [[nodiscard]] static std::shared_ptr<Storage> AllocateStorage();
+    [[nodiscard]] static std::shared_ptr<Storage> AllocateChargedStorage(std::shared_ptr<const void> lifetime);
     static void CacheRetirementMemory(Storage& storage) noexcept;
     explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage)) {}
     static void Materialize(const Storage& storage) noexcept;
@@ -2142,8 +2162,9 @@ class DocumentSession
     // PrepareMerge is worker-safe and owns all pixel trimming and thumbnail work. ApplyPreparedMerge is the
     // session-owned validation/history step; MergeLayers remains the synchronous compatibility wrapper.
     [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite);
-    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite,
-                                                                   const class CancelToken& cancellation);
+    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(
+        const MergePlan& plan, const Raster& composite, const class CancelToken& cancellation,
+        const std::shared_ptr<const void>& outputLifetime = {});
     [[nodiscard]] bool ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared);
     enum class MergePublicationStatus : std::uint8_t
     {
@@ -2181,7 +2202,8 @@ class DocumentSession
     [[nodiscard]] static std::optional<PreparedMergePublication> PrepareMergePublication(
         const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
         DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite,
-        MergePublicationStatus& status, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+        MergePublicationStatus& status, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        const std::shared_ptr<const void>& outputLifetime = {});
     [[nodiscard]] bool ApplyPreparedMergeIfCurrent(PreparedMergePublication& prepared) noexcept;
     [[nodiscard]] std::uint64_t MergeRetirementMemoryBytes() const noexcept;
     // `composite`: the plan's layers flattened as the canvas shows them (document-sized BGRA from the composition).
@@ -2782,8 +2804,8 @@ class DocumentSession
     // Sealed immutable Copy/Cut preparation. Callers reserve complete capture/pixels/history/encoding/transfer
     // before capture. Copy Merged requires the full-document token captured before utility composition.
     [[nodiscard]] std::optional<ClipboardCommandInput> PrepareClipboardCommandInput(
-        ClipboardCommandKind kind, const Raster& composite = {},
-        const std::optional<JobToken>& compositeAuthority = {}) const;
+        ClipboardCommandKind kind, const Raster& composite = {}, const std::optional<JobToken>& compositeAuthority = {},
+        const std::shared_ptr<const void>& outputLifetime = {}) const;
     [[nodiscard]] static std::optional<PreparedClipboardCommand> PrepareClipboardCommandPublication(
         ClipboardCommandInput input, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver historyObserver = {});

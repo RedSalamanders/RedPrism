@@ -18,6 +18,14 @@ unknown or overlapping rows, body gaps, changed loop operands, invalid symbols/t
 entries and adjacent genuine VEX/EVEX code MUST withhold data proof or remain ordinary ISA violations.
 Synthetic parser controls never execute their bytes and grant no native runtime or performance qualification.
 
+The x64 ISA gate runs `IsaRbxLongGuardTests.ps1` with 132 independent encoded controls: four accepted
+and 128 refused. Its exact RBX/RDX terminal constructor dispatch must agree with the linked PE,
+decoded row boundaries, PDB contribution, anonymous symbol, procedure extent, RET/INT3 and every
+case/default target. Controls cover twelve setup/dispatch rows, terminal and target rows, conflicting
+duplicate extents, unknown/overlapping rows, corrupt listing bytes, invalid ownership/extents and
+adjacent genuine vector code. These parser-only bytes are never executed and do not qualify runtime
+or performance. The exact supported dispatch is owned by `Build_Toolchain.md`.
+
 ### Responsive startup acquisition
 
 `RunStandaloneResponsiveStartupSelfTest` requires 14 actual hidden-Application cases and 217 independent
@@ -747,6 +755,17 @@ The actual WARP host checks complete admitted capture/reservation, retained sour
 late cancellation drop, precise terminal receipt and off-owner retirement for all six kinds. Opening checks literal
 below-composite bytes, unchanged live visibility and history baseline, GPU mapping/target release before detached
 Begin preparation, device recovery after copied pixels and a younger queued rename that waits for opening and OK.
+The recorded opening preserves all72 original kind/mode cases. Successful Ordered/Rebind panels retain the
+exact original CPU envelope; other terminal cases release it. Its48 additional lifetime controls use actual
+Cancel for all six kinds in both modes: unchanged document values/revision/redo with one generation advance,
+copied literal pixels retaining the original charge, an expired last weak storage control retaining that charge,
+and final control release followed by real owner acknowledgement producing zero charge/release and idle.
+Construction-failure cases MUST NOT reach the final processing gate. The opening aggregate and graphics owners
+retire off owner; these controls do not qualify timing, the remaining callers or wider configuration results.
+Sampler adjustment-picker checks retain the original panel's settled memory baseline while sampling;
+the sampler must add no retained terminal charge. Original99/75 luminance bytes, settings, root/generation,
+history and palette expectations remain exact. Actual panel Cancel must then acknowledge zero reserved
+and releasing bytes. Destructive panel/ordinary sampler zero-memory cases remain unchanged.
 An open transaction disables Undo/Redo commands; retention assertions therefore inspect its immutable redo stack,
 not `CanRedo()`. No production command pumps a nested wait. Final identities and configuration results live in the
 [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
@@ -1333,7 +1352,10 @@ and retires only after the session's final worker releases the draft. Joined shu
 document/history, cancelled receipts, MTA aggregate retirement, exact zero charge and no surviving sink.
 They retain literal source pixels and Undo/Redo expectations, verify view input while held, exact original
 capture/ticket/charge, no hidden Present, and full off-owner aggregate and reservation retirement. The live
-sample case checks that the original admission remains charged after the utility job retires. Timing and
+sample case checks bound SharedPublicationMemory with no second lease: the original admission remains charged
+after the utility job retires. Recorded recovery prepares once per actual graph attempt, so one rebind requires
+two preparations and exhausting two restarts requires three. Before-copy faults hold a real private source;
+pixel/history expectations and the original two-restart limit are unchanged. Timing and
 other live-context callers remain separate P1 requirements. Sampler transparent-tail failure diagnostics
 report actual receipt, slot/sequence/color and foreground values without changing its literal expectation.
 Three additional actual pointer cases start a separate physical Space pan after the original Clone producer
@@ -1471,7 +1493,18 @@ preparation; the separate tiled-graph tests still prove bounded restart before a
 five history-allocation faults, readback/probe capture refusal, worker probe allocation refusal, epoch-only
 invalidation and probe cancellation/staleness with seeded redo preserved. A 30,000-square blank canvas completes
 its no-plan command with a metadata-only reservation, no readback capture and no history change. Every owned probe
-and readback aggregate retires off the owner; each terminal case leaves no barrier, GPU work or reservation.
+and readback aggregate retires off the owner; each terminal case leaves no barrier or GPU work. Failed/dropped
+cases release every reservation. Successful Ordered/Rebind cases retain exactly the readback's original
+charge through the published crop/history. Eight added controls use independent literal red/blue BGRA bytes,
+actual document/history release, a copied reader, the last weak storage control and final owner refund.
+`RunStandaloneMergeReadbackSelfTest` adds ten fixed assertions at the actual held probe boundary: a fresh owner
+snapshot refuses the dependent readback with no source capture or history mutation, and actual joined Shutdown
+cancels without signalling the gate, publishing pixels or refunding before aggregate retirement. Each fixture
+clears its real WM_QUIT and owner sink before the next standalone owner. The existing 17 Merge scenarios and
+their pixel/history/error expectations remain unchanged.
+`Document.Tests.CropLifetime` checks explicit output-lifetime selection, exact literal pixels/placement,
+no-crop/transparent identity, refusal/cancellation, last weak controls and the fixed 32-byte metadata delta.
+Its opaque tokens are ownership references; only the actual host fixtures establish scheduler accounting.
 `MergeHistoryTests` and `MergePlanProbeTests` add 71 independent literal-pixel, trim/group/clip/budget, immutable
 planner, no-plan, exact-authority, moved/single-use, fault and cancellation assertions. Native qualification is
 tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
@@ -1731,7 +1764,10 @@ The latter requires no encode visit and no output file, exactly one failure rece
 Worker gates prove the request/barrier/reservation remain held with zero lent mappings/utility bytes; hidden
 completion makes no Present. Device-change cases require one encode attempt. Failure notices occur exactly once;
 terminal paths leave no barrier, reserved bytes, slot or utility target. PNG is exact opaque 191; JPEG RGB is within
-3/255 and opaque. Export leaves project path/saved revision unchanged. Full qualification is separate from these
+3/255 and opaque. Export leaves project path/saved revision unchanged. The recorded export route retains
+one original CPU admission through real region copies, graphics retirement, encoding and deferred aggregate
+destruction. Its forced 16-pixel tile case still reaches the later actual Map failure with no partial file.
+Full qualification is separate from these
 structural assertions; no event deadline is a performance threshold.
 
 ### File classification and banded codecs (P1.7 F1/F2)
@@ -1860,6 +1896,36 @@ For diagnostic children that are started and then waited with a deadline, `test.
 before waiting and reads the terminal exit code while it remains owned. A missing exit code never passes a gate,
 including a crash probe that left its dump. Timeout handling and product assertions are unchanged. Qualification
 records an unobserved process result as a failed run rather than inferring success from partial PASS output.
+
+### Recorded production sampler and All Layers Wand
+
+The eligible canvas sampler runs through the original recorded parent. Its existing acknowledged-prefix
+fixture additionally asserts no mapped/in-flight copy, no attached command source, a retained utility owner
+and no useful owner readiness while waiting for real input. Terminal graph-clear checks include the command
+pump and utility service. Literal colors, point order, palette/picker intent, original capture, cancellation,
+stale authority and FIFO-overflow expectations stay unchanged.
+
+The five `sampler-memory.*` scenarios preserve the same42 state/pixel checks. With an actual4096-byte
+event-held background reservation, a temporary shortage retains the original ticket/receipt and captures
+no source; real memory recovery publishes literal blue once, while Cancel/Escape acknowledge the same ticket
+and preserve literal brown/history. With no outstanding prospective release, zero headroom fails once with
+`E_OUTOFMEMORY`. The synthetic ample snapshot is headroom plus256MiB to admit the complete recorded WARP
+envelope, including staging/driver allowances; this fixture value is not a product minimum RAM requirement.
+
+New-mode All Layers Wand retains its complete selection/history overlap with the original utility admission.
+The before-copy recovery fixture observes the actual retained utility owner and GPU charge before each device
+change; a fresh recovered attempt may not yet have attached its next source or enqueued a copy. One device
+preparation occurs per graph attempt:1 initial plus1 per recovery, at most2 restarts. Exact original capture,
+ticket/history/receipt, no-row-before-ack, selection/history pixels and error expectations remain unchanged.
+
+`Composition.Tests.RestartDeviceOwnerControls` uses two actual WARP devices and two queue origins. The foreign
+queue initially has the same device/context/generation; its restart returns E_INVALIDARG. The original queue's
+old captured context after a real rebind returns E_ABORT. Calling from the owner pump outside the original
+callback or from another actual job callback returns E_INVALIDARG. All refusals preserve the original charge
+and actual acknowledgement count without command replay. A valid replacement records and acknowledges only a
+new monotonic command on the same original source. Stream retirement precedes each decision. Its external
+fixture root outlives the scheduler wrapper and all joined cleanup hooks. This direct API test does not prove
+the production parent excluded unrelated graph/copy/map users; parent/caller lifetime controls remain separate.
 
 ## Later gates (record now, implement with the feature)
 
@@ -2484,3 +2550,85 @@ before display: committed attaches, pending refuses, committed closes, and the c
 For both display-child failures, assert empty children, one live shared pump, unchanged free source capacity,
 no repeated partial display acquisition and joined final detach. These new controls require fresh full
 source/profile qualification; they do not activate the ordinary prepared route or qualify G1.
+
+### Recorded utility parent state and pixels
+
+The independent reference for `joined-retirement-authority.*` is the Close state contract: two actual
+distinct nonzero serial keys retain original tickets/reservations through joined hooks, which accept only
+their own owner-thread ticket after producer join. An actual foreign thread queries during each active
+hook and must refuse. Ordinary worker/defer acknowledgements, cross-ticket authority and repeated Close
+must not acquire that authority or deliver useful completion.
+
+The additional actual WARP `recording-pump-joined-source.*` scenario starts real recording and executed
+work, refuses both signal paths and retains a dormant healthy quarantine. Stopped pump/returned producer
+alone, stale source leases and foreign threads cannot acknowledge joined source retirement. Actual original
+Close excludes/transfers the source before wrapper destruction, delivers no useful completion/refund and
+retires the original stream/context on the final worker.
+
+`recorded-parent-pixels.*` uses independently specified literal premultiplied BGRA bytes for a 7x5 layer:
+dense and sparse replacement sources, six 3x3 regional copies including the 1x2 lower-right partial region,
+and a mandatory CPU-only `S_FALSE` route. Run each on WARP and available hardware; only an actual unsupported
+hardware creation result permits a skip. Assert actual Compute/MTA bodies, owner-only capture, one original
+ticket/complete retained reservation, exact bytes, no GPU work on CPU-only, terminal adoption of the same
+bound accounting owner and off-owner destruction after real infrastructure Close. The actual body observer
+is evidence of lane execution, not a standalone kernel cancellation-latency measurement.
+
+Before production migration, additionally qualify cancellation during a gated detached CPU body (no second
+owner resume), stopped-source/queued/map/recording/joined boundaries, original versus foreign queue recovery,
+fresh-device budget refusal, sampler continuation, hidden behavior and no replay after CPU/write handoff.
+Simple pixel controls alone do not qualify these state paths, production callers, G1 or P1 Done.
+
+`recorded-parent-cancellation.*` gates one real CPU-only detached Compute body on test events. Cancel the
+actual original ticket while its body is still running, then perform one owner drain: no ready utility
+resume or terminal callback is permitted and the full original reservation remains held. The test releases
+the worker, which observes its actual cancellation token; terminal cancellation occurs once on owner with
+no useful output. Require zero GPU sources/copies/maps/barriers, actual same-ticket Compute/MTA execution
+and the same bound memory owner through final aggregate destruction. The finite test barrier is a failure
+bound, not an application wait or a cancellation timing result.
+
+
+### Recorded parent pixel continuation
+
+`Composition.Tests.ChargedRaster.cpp` uses one actual original preclaimed CPU job and the real MTA release sink.
+Its14 fixed controls require literal2x2 BGRA bytes and the same allocation address after adoption; invalid input
+preserves both owners, and an owning null alias survives. An ordinary adoption has unchanged bytes/node count,
+while the two charged lifetime handles add exactly32 bytes to cached bounds on supported64-bit targets.
+A copied reader retains original pixels/accounting after publication/payload release. After the final Raster
+release and real worker drain, its expired weak storage control still retains original accounting; deleting that
+control leaves the expired shared-memory weak block charged until its final reset. Only then may the owner drain
+refund the original charge and settle idle. The fixture's1MiB charge and4GiB memory snapshot are synthetic policy
+inputs, not application memory minima. Its joined-hook fallback is not exercised and grants no shutdown claim.
+
+`Composition.Tests.RecordedParentSampler.cpp` uses one actual WARP parent and four independently specified
+opaque BGRA pixels11/22/33,44/55/66,77/88/99,AA/BB/CC (hexadecimal), in row-major order on a2x2 source.
+Each1x1 result requires actual queued copy/map and original Compute/MTA processing. Between results, no
+command source/copy work or owner readiness remains; source capture is once, ticket/accounting stay original,
+wrong-ticket/outside-coordinate refusals preserve that result, and the terminal resume performs no new sample.
+Idle and actual gated-worker cancellation drop useful results without replay. Actual release-sink and joined
+Close hooks require off-owner MTA aggregate destruction and complete CPU/GPU refund. Driver budget admission
+uses the real WARP DXGI snapshot. These are functional controls; they establish no timing or production sampler
+activation. Sampling metadata hooks accept only real output dimensions/format and never read pixels on the owner.
+
+
+### Recorded Copy Merged output and joined Close
+
+The original clipboard host scenarios retain their literal selected1x1 bytes20/40/80/255,
+origin1,0, private serial/history, source capture, OS publication/receipt and six-total-attempt
+expectations. Successful Merged paths retain exactly their original complete reservation; other
+terminal paths require zero. Six successful paths add24 fixed real copied/weak-reader controls.
+Close preserves private pixels; a real subsequent private Copy replaces them before testing an
+independent copied reader. Expired weak storage remains charged until its final reset and actual
+owner release acknowledgement. Tests may not replace the session to simulate that release.
+
+Two standalone hidden Application owners add12 actual joined-Close controls at the source snapshot
+and already-applied private copy before encoding. Never signal the held worker gate: the actual
+shutdown event joins it. Require original source/history and completed private truth at graphics
+detach, the original full CPU charge until actual retirement, no OS entry/offer/mutation and one
+off-owner aggregate destruction. Sink/quit cleanup precedes the next owner. Ten-second waits
+detect deadlock, not cancellation/frame performance.
+
+Document.Tests.CopyPixelsLifetime adds9 independent identity-nearest literal/token controls for
+explicit output ownership, copied/expired-weak readers, no source-owner inheritance, the ordinary
+empty-owner path and canceled/invalid source preservation. Synthetic tokens prove only the primitive
+storage contract; the host controls separately establish scheduler/Close accounting. Wider profiles,
+native clipboard contention/end-session and measured G1 remain independent gates.

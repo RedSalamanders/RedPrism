@@ -1,17 +1,19 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "DocumentReadbackJob.h"
 #include "ExportWork.h"
 #include "ExportWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "RecordedDocumentReadbackJob.h"
+#include "SharedPublicationMemory.h"
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -19,24 +21,67 @@
 #include <string>
 #include <utility>
 
-class Application::ExportReadbackJob final : public DocumentReadbackJob
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ExportReadbackOwners final : DeferredReleaseNode
+{
+    std::shared_ptr<SharedPublicationMemory> memory;
+    CanvasDocument document;
+    PixelBuffer pixels;
+    Raster image;
+    explicit ExportReadbackOwners(std::uint64_t admission) noexcept
+    {
+        bytes = admission;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ExportReadbackOwners> owned(static_cast<ExportReadbackOwners*>(node)); };
+    }
+};
+#pragma warning(pop)
+} // namespace
+
+class Application::ExportReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
-    ExportReadbackJob(Application& owner, HistoryWorkStamp stamp, JobToken token, CanvasDocument document,
+    ExportReadbackJob(Application& owner, HistoryWorkStamp stamp, DocumentReadAuthority authority,
+                      UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation,
                       HostWriteFormat format, JpegExportOptions options, std::wstring path,
                       std::shared_ptr<WorkerWriteCompletion> write)
-        : DocumentReadbackJob(
-              owner._jobs, owner._gpuWork, owner._composition, std::move(document),
-              {0, 0, 0, static_cast<UINT>(token.canvasWidth), static_cast<UINT>(token.canvasHeight), 1}),
-          _owner(owner), _stamp(stamp), _token(std::move(token)), _format(format), _options(options),
-          _path(std::move(path)), _write(std::move(write)), _gate(owner._exportWorkTestGate),
+        : RecordedDocumentReadbackJob(
+              owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback, owner._graphGpuBudget,
+              envelope, std::move(reservation),
+              {0, 0, 0, static_cast<UINT>(authority.canvasWidth), static_cast<UINT>(authority.canvasHeight), 1},
+              owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _authority(authority), _cpuAdmission(envelope.cpuBytes), _format(format),
+          _options(options), _path(std::move(path)), _write(std::move(write)), _gate(owner._exportWorkTestGate),
           _ownerThread(GetCurrentThreadId())
     {
     }
+    ~ExportReadbackJob() override
+    {
+        if (!_owners)
+            return;
+        TransferReadbackOwners(_owners->document, _owners->pixels, _owners->image, _owners->memory);
+        if (!TryDeferRelease(*_owners, DeferredReleasePolicy::AlwaysOnOwner))
+            std::terminate();
+        (void)_owners.release();
+    }
 
   private:
+    HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
+    {
+        if (_owner._shutdownStarted || _owner._exportStamp != _stamp || !_owner._historyWork.IsCurrent(_stamp) ||
+            !_owner._session.IsDocumentReadCurrent(_authority) || _owner._historyWork.CancelRequested(_stamp))
+            return E_ABORT;
+        document = _owner._session.Document().value();
+        document.selection.reset(); // No outline data is captured into the graphics source.
+        return S_OK;
+    }
     JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext& context) override
     {
+        if (!_owners)
+            _owners = std::make_unique<ExportReadbackOwners>(_cpuAdmission);
         if (_gate && _gate->holdReadback && _gate->visits.load() == 0)
             return PassGate(context, ExportWorkTestGate::kReadbackMessage);
         return {};
@@ -91,7 +136,7 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     {
         const bool current = _owner._exportStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
                              _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
-                             _owner._session.CanApplyJobResult(_token, _token.sequence);
+                             _owner._session.IsDocumentReadCurrent(_authority);
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -153,7 +198,8 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     }
     Application& _owner; // owner device/completion stages only
     const HistoryWorkStamp _stamp;
-    const JobToken _token;
+    const DocumentReadAuthority _authority;
+    const std::uint64_t _cpuAdmission;
     const HostWriteFormat _format;
     const JpegExportOptions _options;
     const std::wstring _path;
@@ -161,6 +207,7 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     const std::shared_ptr<ExportWorkTestGate> _gate;
     const DWORD _ownerThread;
     ImageCodecStatus _status = ImageCodecStatus::Encode;
+    std::unique_ptr<ExportReadbackOwners> _owners;
     bool _published = false; // published stage ownership synchronizes this worker write with owner reads
 };
 
@@ -199,26 +246,43 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
     {
         if (_exportWorkTestGate && _exportWorkTestGate->throwAdmissionFailure)
             throw std::bad_alloc{};
-        auto token = _session.CaptureJobToken();
+        auto authority = _session.CaptureDocumentReadAuthority();
         const auto memory = ExportReadbackMemoryBytes(_session.Document().value(), units);
         if (static_cast<std::int64_t>(_session.Document()->width) * _session.Document()->height > kMaxLayerPixels)
             result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-        constexpr auto bookkeeping = sizeof(ExportReadbackJob) + WorkerWriteCompletion::kReservationBytes;
-        if (token && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
+        const auto bookkeeping = sizeof(ExportReadbackJob) + sizeof(ExportReadbackOwners) +
+                                 WorkerWriteCompletion::kReservationBytes +
+                                 SharedPublicationMemory::OwnershipAllowance();
+        if (authority && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
         {
             auto write = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Readback);
             result = write->CreationError();
             if (SUCCEEDED(result))
             {
-                CanvasDocument snapshot = _session.Document().value();
-                snapshot.selection.reset(); // export never includes selection outline data
+                UtilityReadbackAdmission::Envelope envelope;
+                GpuResidencyReservation reservation;
+                result = PrepareRecordedUtilityAdmission(_session.Document().value(), memory + bookkeeping, envelope,
+                                                         reservation);
+                if (FAILED(result))
+                {
+                    (void)_historyWork.Finish(_exportStamp.value());
+                    _hostFinishedStamp = _exportStamp;
+                    _exportStamp.reset();
+                    return result;
+                }
                 std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(
-                    *this, _exportStamp.value(), std::move(token.value()), std::move(snapshot), format,
+                    *this, _exportStamp.value(), authority.value(), envelope, std::move(reservation), format,
                     JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
                     std::wstring(resolved.data(), units), write);
                 JobTicket ticket;
-                result = static_cast<HRESULT>(
-                    _jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + bookkeeping}, ticket));
+                result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                           {.kind = JobClass::Io,
+                                                            .serialKey = _session.DocumentSerial(),
+                                                            .memoryBytes = envelope.cpuBytes,
+                                                            .deferredRetirement = true,
+                                                            .allowMemoryWaiting = true,
+                                                            .reserveRetainedMemory = true},
+                                                           ticket));
                 if (SUCCEEDED(result))
                 {
                     _exportWrite = std::move(write);

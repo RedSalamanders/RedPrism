@@ -7,14 +7,19 @@
 #include <atomic>
 #include <cstdio>
 #include <memory>
+#include <thread>
 
 namespace
 {
 int gFailures = 0;
 bool recoveryCase = false;
+bool joinedSourceCase = false;
 void Expect(bool passed, const char* name) noexcept
 {
-    std::printf("%s %s.%s\n", passed ? "PASS" : "FAIL", recoveryCase ? "recording-pump-recovery" : "recording-pump",
+    std::printf("%s %s.%s\n", passed ? "PASS" : "FAIL",
+                joinedSourceCase ? "recording-pump-joined-source"
+                : recoveryCase   ? "recording-pump-recovery"
+                                 : "recording-pump",
                 name);
     std::fflush(stdout);
     gFailures += passed ? 0 : 1;
@@ -35,6 +40,7 @@ struct State final : GpuCommandSourceReceiver
     JobScheduler& scheduler;
     GpuCommandPump& pump;
     ID3D11Device& device;
+    const DWORD ownerThread = GetCurrentThreadId();
     std::uint64_t deviceGeneration;
     GpuCommandStream stream;
     GpuCompletionContext detached; // Transfer at owner detach, destroy only in the joined worker retirement.
@@ -53,6 +59,10 @@ struct State final : GpuCommandSourceReceiver
     bool attached = false;
     bool recorderJoined = false;
     bool terminal = false;
+    bool testJoinedSource = false;
+    bool exactJoinedSource = false;
+    bool wrapperDestroyed = false;
+    bool joinedHookReturned = false;
     JobResult result;
     std::atomic<bool> retired{false};
     void CommandAcknowledgedOwner(JobTicket ticket, GpuCommandLease command, HRESULT status) noexcept override
@@ -78,6 +88,16 @@ class Recorder final : public Job
 {
   public:
     explicit Recorder(State& state) noexcept : _state(state) {}
+    ~Recorder() override
+    {
+        if (_state.testJoinedSource)
+        {
+            Expect(_state.joinedHookReturned && _state.exactJoinedSource && !_state.attached && _state.detached &&
+                       !_state.pump.HasPending() && !_state.terminal,
+                   "original-source-detaches-before-actual-wrapper-destruction-without-useful-completion");
+            _state.wrapperDestroyed = true;
+        }
+    }
     JobResult Run(JobContext& context) override
     {
         if (_state.stage != State::Stage::Record)
@@ -152,6 +172,10 @@ class Recorder final : public Job
             Expect(_state.attached, "opening-ack-attaches-actual-admitted-source");
             if (!_state.attached)
                 return false;
+            if (_state.testJoinedSource)
+                Expect(!_state.scheduler.InJoinedRetirementCallback(ticket) &&
+                           !_state.pump.AcknowledgeSourceJoinedShutdownOwner(_state.source),
+                       "ordinary-successful-opening-cannot-acknowledge-a-joined-close-source");
             _state.stage = State::Stage::Record;
             Expect(_state.scheduler.Resume(ticket), "recording-resumes-same-original-ticket");
             return true;
@@ -174,6 +198,41 @@ class Recorder final : public Job
     {
         _state.result = result;
         _state.terminal = true;
+    }
+
+    void RetainJoinedRetirement(JobScheduler& jobs, JobTicket original) noexcept override
+    {
+        if (!_state.testJoinedSource)
+            return;
+        Expect(&jobs == &_state.scheduler && original == _state.original && jobs.InJoinedRetirementCallback(original) &&
+                   !jobs.InAcknowledgedJobCallback(original) && _state.recorderJoined &&
+                   jobs.ReservedMemoryBytes() == 65536,
+               "actual-original-joined-hook-keeps-exact-ticket-charge-and-distinct-destruction-authority");
+        auto stale = _state.source;
+        ++stale.generation;
+        Expect(!_state.pump.AcknowledgeSourceJoinedShutdownOwner(stale) && !_state.stream.CanRetireOwner() &&
+                   _state.pump.QuarantinedSourceCountOwnerForTest() == 1,
+               "stale-source-lease-cannot-resolve-the-original-executed-command");
+        std::atomic<bool> foreignRefused{false};
+        std::thread foreign(
+            [&]() noexcept
+            {
+                foreignRefused.store(!_state.pump.AcknowledgeSourceJoinedShutdownOwner(_state.source),
+                                     std::memory_order_release);
+            });
+        foreign.join();
+        Expect(foreignRefused.load(std::memory_order_acquire) && !_state.stream.CanRetireOwner(),
+               "foreign-thread-cannot-use-active-original-joined-authority");
+        _state.exactJoinedSource = _state.pump.AcknowledgeSourceJoinedShutdownOwner(_state.source);
+        Expect(_state.exactJoinedSource && _state.stream.CanRetireOwner() &&
+                   _state.pump.QuarantinedSourceCountOwnerForTest() == 0 && _state.acknowledgements == 0 &&
+                   _state.failures == 1 && !_state.terminal && jobs.ReservedMemoryBytes() == 65536,
+               "exact-source-shutdown-acknowledges-destruction-only-without-callback-or-refund");
+        const bool detached = _state.pump.DetachOwner(_state.source, _state.detached);
+        _state.attached = !detached;
+        Expect(detached && _state.detached && _state.stream.AuthorizeRetirementOwner(),
+               "joined-source-transfers-all-original-context-owners-before-wrapper-dies");
+        _state.joinedHookReturned = true;
     }
 
   private:
@@ -214,10 +273,16 @@ template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate read
 }
 
 void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool retainOriginal = false,
-         bool userCancellation = false)
+         bool userCancellation = false, bool joinedSource = false)
 {
     recoveryCase = retainOriginal;
-    const auto restoreCase = wil::scope_exit([]() noexcept { recoveryCase = false; });
+    joinedSourceCase = joinedSource;
+    const auto restoreCase = wil::scope_exit(
+        []() noexcept
+        {
+            recoveryCase = false;
+            joinedSourceCase = false;
+        });
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> immediate;
     const D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
@@ -267,6 +332,7 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
         return;
     }
     State state{scheduler, pump, *(foreignDevice ? recordedDevice.get() : device.get()), queue.DeviceGeneration()};
+    state.testJoinedSource = joinedSource;
     state.disposition = retainOriginal ? GpuCommandFailureDisposition::RetainOriginalForRecovery
                                        : GpuCommandFailureDisposition::CancelOriginal;
     struct Cleanup final
@@ -281,6 +347,10 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
             scheduler.Close({[](void* opaque) noexcept
                              {
                                  auto& active = static_cast<Cleanup*>(opaque)->state;
+                                 if (active.testJoinedSource)
+                                     Expect(active.wrapperDestroyed && active.exactJoinedSource && !active.attached &&
+                                                !active.pump.HasPending() && active.detached && !active.terminal,
+                                            "application-close-hook-follows-original-wrapper-detach-and-destruction");
                                  active.pump.AcknowledgeJoinedShutdownOwner();
                                  if (active.attached)
                                  {
@@ -290,6 +360,11 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
                                      Expect(active.stream.AuthorizeRetirementOwner(),
                                             "shutdown-authorizes-destruction-only");
                                  }
+                                 if (active.testJoinedSource)
+                                     Expect(!active.scheduler.InJoinedRetirementCallback(active.original) &&
+                                                !active.pump.AcknowledgeSourceJoinedShutdownOwner(active.source) &&
+                                                active.acknowledgements == 0 && !active.terminal,
+                                            "later-owner-close-hook-cannot-reuse-expired-original-authority");
                              },
                              [](void* opaque) noexcept
                              {
@@ -297,6 +372,10 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
                                  if (active.initialized && !active.retired.load(std::memory_order_acquire))
                                      active.retired.store(active.stream.RetireForWork(), std::memory_order_release);
                                  active.detached = {};
+                                 if (active.testJoinedSource)
+                                     Expect(active.retired.load(std::memory_order_acquire) && !active.detached &&
+                                                GetCurrentThreadId() != active.ownerThread,
+                                            "original-stream-and-transferred-contexts-retire-on-final-worker");
                              },
                              &cleanup});
             queue.CloseAfterWorkers();
@@ -337,6 +416,14 @@ void Run(bool failFirst, bool failRecovery, bool foreignDevice = false, bool ret
                "failed-signal-and-recovery-never-acknowledge-executed-command");
         Expect(!pump.HasReady() && pump.HasPending() && scheduler.ReservedMemoryBytes() == 65536,
                "healthy-quarantine-is-dormant-and-fully-charged");
+        if (joinedSource)
+        {
+            pump.StopOwner();
+            Expect(!scheduler.InJoinedRetirementCallback(original) &&
+                       !pump.AcknowledgeSourceJoinedShutdownOwner(state.source) && !state.stream.CanRetireOwner() &&
+                       state.acknowledgements == 0 && scheduler.ReservedMemoryBytes() == 65536,
+                   "stopped-pump-and-returned-producer-alone-cannot-claim-original-joined-close-authority");
+        }
         return; // The joined shutdown cleanup above resolves ownership without fabricating a useful callback.
     }
     Expect(Until(scheduler, [&]() { return state.stream.CanRetireOwner(); }),
@@ -387,5 +474,6 @@ int RunGpuCommandPumpTests()
     Run(true, false, false, true);
     Run(true, false, false, true, true);
     Run(true, true, false, true);
+    Run(true, true, false, true, false, true);
     return gFailures;
 }

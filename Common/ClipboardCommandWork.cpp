@@ -85,7 +85,8 @@ std::optional<CopyPixelsInput> DocumentSession::ClipboardPixelsInput(ClipboardCo
 }
 
 std::optional<ClipboardCommandInput> DocumentSession::PrepareClipboardCommandInput(
-    ClipboardCommandKind kind, const Raster& composite, const std::optional<JobToken>& compositeAuthority) const
+    ClipboardCommandKind kind, const Raster& composite, const std::optional<JobToken>& compositeAuthority,
+    const std::shared_ptr<const void>& outputLifetime) const
 {
     if (kind == ClipboardCommandKind::CopyMerged &&
         (!compositeAuthority || compositeAuthority->target ||
@@ -95,6 +96,7 @@ std::optional<ClipboardCommandInput> DocumentSession::PrepareClipboardCommandInp
     auto token = kind == ClipboardCommandKind::CopyMerged ? compositeAuthority : CaptureJobToken(_activeLayerID);
     if (!copy || !token)
         return std::nullopt;
+    copy->outputLifetime = outputLifetime; // Explicit caller admission; never inherit the source's lifetime.
     ClipboardCommandInput input(kind, std::move(token.value()), std::move(copy.value()), _activeLayerID, _cropRect,
                                 _clipboardSerial, _maskSelected);
     if (kind == ClipboardCommandKind::Cut)

@@ -1,5 +1,7 @@
 #include "GpuCommandStream.h"
 
+#include "GpuWork.h"
+
 #include <cassert>
 #include <exception>
 #include <limits>
@@ -34,6 +36,20 @@ HRESULT GpuCommandStream::InitializeOwner(JobScheduler& scheduler, JobTicket sou
     _scheduler = &scheduler;
     _productionEpoch.store(1, std::memory_order_release);
     return S_OK;
+}
+
+HRESULT GpuCommandStream::InitializeOwner(JobScheduler& scheduler, JobTicket source, const GpuWorkQueue& queue,
+                                          const GpuCompletionContext& current) noexcept
+{
+    ID3D11Device* device = nullptr;
+    ID3D11DeviceContext* immediate = nullptr;
+    const HRESULT borrowed = queue.BorrowCurrentContextOwner(current, device, immediate);
+    if (FAILED(borrowed))
+        return borrowed;
+    const HRESULT initialized = InitializeOwner(scheduler, source, current.DeviceGeneration());
+    if (SUCCEEDED(initialized))
+        _queueOrigin = current._origin;
+    return initialized;
 }
 
 bool GpuCommandStream::IsOwner() const noexcept
@@ -222,9 +238,37 @@ bool GpuCommandStream::AuthorizeRetirementOwner() noexcept
 
 HRESULT GpuCommandStream::RestartOwner() noexcept
 {
+    if (!IsOwner())
+        return E_INVALIDARG;
+    return RestartOwnerImpl(_deviceGeneration, false);
+}
+
+HRESULT GpuCommandStream::RestartDeviceOwner(const GpuWorkQueue& queue, const GpuCompletionContext& current) noexcept
+{
+    if (!IsOwner() || !_scheduler->InAcknowledgedJobCallback(_source) || !_queueOrigin ||
+        _queueOrigin != current._origin)
+        return E_INVALIDARG;
+    ID3D11Device* device = nullptr;
+    ID3D11DeviceContext* immediate = nullptr;
+    const HRESULT borrowed = queue.BorrowCurrentContextOwner(current, device, immediate);
+    if (FAILED(borrowed))
+        return borrowed;
+    // Borrow validates actual origin/device/context/generation without a query or AddRef. A new numeric
+    // value alone never authorizes a replacement or acknowledges any original work.
+    return RestartOwnerImpl(current.DeviceGeneration(), true);
+}
+
+HRESULT GpuCommandStream::RestartOwnerImpl(std::uint64_t nextGeneration, bool deviceReplacement) noexcept
+{
     if (!IsOwner() || !_scheduler->InAcknowledgedJobCallback(_source) || !_retired.load(std::memory_order_acquire) ||
         !_finished.load(std::memory_order_acquire) || !_retirementAuthorized.load(std::memory_order_acquire) ||
-        _result != S_OK || IsStopped() || _consumed != _produced)
+        (deviceReplacement ? _consumed > _produced : _consumed != _produced))
+        return E_INVALIDARG;
+    const bool retryable = _result == S_OK || _result == E_ABORT || _result == DXGI_ERROR_DEVICE_REMOVED ||
+                           _result == DXGI_ERROR_DEVICE_RESET || _result == DXGI_ERROR_DEVICE_HUNG ||
+                           _result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+    if (deviceReplacement ? (!retryable || nextGeneration <= _deviceGeneration)
+                          : (_result != S_OK || IsStopped() || nextGeneration != _deviceGeneration))
         return E_INVALIDARG;
     const auto epoch = _productionEpoch.load(std::memory_order_relaxed);
     if (_produced == (std::numeric_limits<std::uint64_t>::max)() ||
@@ -235,6 +279,12 @@ HRESULT GpuCommandStream::RestartOwner() noexcept
             return E_UNEXPECTED;
     if (!ResetEvent(_available.get()) || !ResetEvent(_stopped.get()))
         return HRESULT_FROM_WIN32(GetLastError());
+    // Actual worker retirement has destroyed every unsubmitted stopped slot. Skip those discarded
+    // ordinals without acknowledging a GPU use; previously executing slots had to acknowledge first.
+    // A late previous lease still fails its generation and ordinal checks.
+    if (deviceReplacement)
+        _consumed = _produced;
+    _deviceGeneration = nextGeneration;
     _producerThread.store(0, std::memory_order_relaxed);
     _productionEpoch.store(epoch + 1, std::memory_order_release);
     _result = E_PENDING;
@@ -242,7 +292,7 @@ HRESULT GpuCommandStream::RestartOwner() noexcept
     _retirementAuthorized.store(false, std::memory_order_relaxed);
     _finished.store(false, std::memory_order_relaxed);
     _retired.store(false, std::memory_order_release);
-    // Source, device generation and monotonically increasing produced/consumed ordinals are unchanged.
+    // Original source and monotonically increasing produced/consumed ordinals are unchanged.
     return S_OK;
 }
 

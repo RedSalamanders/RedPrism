@@ -7,13 +7,15 @@
 #include "ClipboardTransfer.h"
 #include "ClipboardWorkTestGate.h"
 #include "CopyPixelsWork.h"
-#include "DocumentReadbackJob.h"
 #include "ImageCodecs.h"
 #include "ImageImportHistory.h"
+#include "RecordedDocumentReadbackJob.h"
+#include "SharedPublicationMemory.h"
 #include "resource.h"
 
 #include <algorithm>
 #include <cstdio>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -135,6 +137,10 @@ bool AddClipboardBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
 #pragma warning(disable : 4324)
 struct ClipboardCopyPayload final : DeferredReleaseNode
 {
+    // Final transfer destination remains empty until the original parent actually terminates/joins.
+    std::shared_ptr<SharedPublicationMemory> memory;
+    // During useful detached stages, this opaque proxy is backed by the original still-reserved job.
+    std::shared_ptr<const void> outputLifetime;
     std::shared_ptr<ClipboardWorkTestGate> gate;
     DWORD ownerThread = 0;
     std::optional<ClipboardCommandInput> input;
@@ -149,6 +155,7 @@ struct ClipboardCopyPayload final : DeferredReleaseNode
     CanvasDocument readbackDocument;
     PixelBuffer readbackPixels;
     Raster readbackImage;
+    Raster completedImage; // Terminal output cannot populate the original ownership-transfer destination.
     std::optional<JobToken> mergedAuthority;
     ClipboardCopyPayload(std::uint64_t retirement) noexcept
     {
@@ -172,7 +179,14 @@ struct RetireClipboardCopy final
 {
     void operator()(ClipboardCopyPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (!payload)
+            return;
+        if (payload->outputLifetime.use_count() != 0)
+        {
+            if (!TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+                std::terminate();
+        }
+        else if (!TryDeferRelease(*payload))
         {
             const std::unique_ptr<ClipboardCopyPayload> owned(payload);
         }
@@ -184,17 +198,28 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
 {
   public:
     ClipboardCopyJob(Application& owner, HistoryWorkStamp stamp, ClipboardCommandKind kind, bool mirrorOnly,
-                     std::uint64_t retirement) noexcept
+                     std::uint64_t retirement, void* resumeContext = nullptr,
+                     bool (*resumeDetached)(void*, JobTicket) noexcept = nullptr) noexcept
         : _owner(owner), _stamp(stamp), _authority(owner._session.CaptureImageImportAuthority()), _kind(kind),
           _mirrorOnly(mirrorOnly), _retirement(retirement), _gate(owner._clipboardWorkTestGate),
-          _ownerThread(GetCurrentThreadId())
+          _ownerThread(GetCurrentThreadId()), _resumeContext(resumeContext), _resumeDetached(resumeDetached)
     {
+    }
+    JobResult PrepareMergedOpening(const std::shared_ptr<const void>& lifetime)
+    {
+        if (_kind != ClipboardCommandKind::CopyMerged || !lifetime.use_count() || _payload)
+            return {JobStatus::Failed, E_INVALIDARG};
+        _payload.reset(std::make_unique<ClipboardCopyPayload>(_retirement).release());
+        _payload->outputLifetime = lifetime;
+        _payload->gate = _gate;
+        _payload->ownerThread = _ownerThread;
+        return {};
     }
 
     // The enclosing Copy Merged readback owns the same admitted record, original snapshot and reservation.
     HRESULT CaptureMergedDocument(CanvasDocument& document) noexcept
     {
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (!Current() || !_payload || _owner._historyWork.CancelRequested(_stamp))
             return _error = E_ABORT;
         try
         {
@@ -205,9 +230,6 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            _payload.reset(new ClipboardCopyPayload(_retirement));
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
             _payload->mergedAuthority = _owner._session.CaptureJobToken();
             if (!_payload->mergedAuthority)
                 return _error = E_ABORT;
@@ -228,8 +250,8 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
             return _error = E_ABORT;
         try
         {
-            auto input = _owner._session.PrepareClipboardCommandInput(ClipboardCommandKind::CopyMerged, image,
-                                                                      _payload->mergedAuthority);
+            auto input = _owner._session.PrepareClipboardCommandInput(
+                ClipboardCommandKind::CopyMerged, image, _payload->mergedAuthority, _payload->outputLifetime);
             if (!input)
                 return _error = E_ABORT;
             _payload->input.emplace(std::move(input.value()));
@@ -459,7 +481,7 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
     }
     bool Resume(JobTicket ticket) noexcept
     {
-        if (_owner._jobs.Resume(ticket))
+        if (_resumeDetached ? _resumeDetached(_resumeContext, ticket) : _owner._jobs.Resume(ticket))
             return true;
         _error = E_UNEXPECTED;
         return false;
@@ -472,6 +494,8 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
     const std::uint64_t _retirement;
     const std::shared_ptr<ClipboardWorkTestGate> _gate;
     const DWORD _ownerThread;
+    void* const _resumeContext;
+    bool (*const _resumeDetached)(void*, JobTicket) noexcept;
     std::unique_ptr<ClipboardCopyPayload, RetireClipboardCopy> _payload;
     CancelToken _cancellation;
     ClipboardTransfer::Status _transferStatus = ClipboardTransfer::Status::Invalid;
@@ -481,21 +505,31 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
     bool _privateApplied = false, _privateOperationFinished = false;
 };
 
-class Application::ClipboardMergedJob final : public DocumentReadbackJob
+class Application::ClipboardMergedJob final : public RecordedDocumentReadbackJob
 {
   public:
-    ClipboardMergedJob(Application& owner, HistoryWorkStamp stamp, D3D11_BOX region, std::uint64_t retirement) noexcept
-        : DocumentReadbackJob(owner._jobs, owner._gpuWork, owner._composition, region), _owner(owner),
-          _copy(owner, stamp, ClipboardCommandKind::CopyMerged, false, retirement)
+    ClipboardMergedJob(Application& owner, HistoryWorkStamp stamp, D3D11_BOX region,
+                       UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation) noexcept
+        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
+                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+                                      owner._renderer.IsWarp()),
+          _owner(owner), _copy(owner, stamp, ClipboardCommandKind::CopyMerged, false, envelope.cpuBytes, this,
+                               [](void* opaque, JobTicket ticket) noexcept
+                               { return static_cast<ClipboardMergedJob*>(opaque)->ResumeDetachedReadback(ticket); })
     {
     }
     ~ClipboardMergedJob() override
     {
         if (auto* payload = _copy.ReadbackReleaseAggregate())
-            TransferReadbackOwners(payload->readbackDocument, payload->readbackPixels, payload->readbackImage);
+            TransferReadbackOwners(payload->readbackDocument, payload->readbackPixels, payload->readbackImage,
+                                   payload->memory);
     }
 
   private:
+    JobResult PrepareReadbackOpening(JobContext&) override
+    {
+        return _copy.PrepareMergedOpening(ReadbackOutputLifetime());
+    }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
         return _copy.CaptureMergedDocument(document);
@@ -517,8 +551,9 @@ class Application::ClipboardMergedJob final : public DocumentReadbackJob
         if (auto* payload = _copy.ReadbackReleaseAggregate(); payload && payload->gate)
         {
             ++payload->gate->detachedCaptures;
-            payload->gate->utilityReleasedBeforeEncoding =
-                _owner._gpuWork.LentCount() == 0 && _owner._composition.UtilitySurfaceBytes() == 0;
+            payload->gate->utilityReleasedBeforeEncoding = _owner._gpuWork.LentCount() == 0 &&
+                                                           _owner._composition.UtilitySurfaceBytes() == 0 &&
+                                                           ReadbackGraphicsRetiredOwner();
         }
         return _copy.CaptureMergedPixels(image);
     }
@@ -537,7 +572,7 @@ class Application::ClipboardMergedJob final : public DocumentReadbackJob
         if (image.HasStorage())
         {
             if (auto* payload = _copy.ReadbackReleaseAggregate())
-                std::swap(image, payload->readbackImage);
+                std::swap(image, payload->completedImage);
         }
         _copy.Completed(result); // acknowledge private/OS truth and the original selected ordinal once
     }
@@ -558,12 +593,21 @@ HRESULT Application::StartClipboardMerged() noexcept
         return S_FALSE;
     const D3D11_BOX full{0, 0, 0, static_cast<UINT>(document.width), static_cast<UINT>(document.height), 1};
     auto memory = sizeof(ClipboardMergedJob) + sizeof(ClipboardCopyPayload) + sizeof(ClipboardCommandInput) +
-                  sizeof(PreparedClipboardCommand) + 8192ull;
+                  sizeof(PreparedClipboardCommand) + SharedPublicationMemory::OwnershipAllowance() + 64 * 1024ull;
     auto held = _session.HistoryRestoreRetirementMemoryBytes();
     const auto copy = CopyMergedPixelsMemoryBytes(document.width, document.height, document.selection);
     const auto encoding = ClipboardEncodingBudget(region->width, region->height);
-    const auto readback = DocumentReadbackJob::RequiredMemory(full);
+    const auto readback = RecordedDocumentReadbackJob::RequiredMemory(full);
     const auto metadata = _session.history.EditMemoryBytes(_session.Document());
+    // Close preserves a previous private copy, potentially larger than this document. Capture/publication
+    // retain it independently of document/history; its complete cached bound must precede that capture.
+    if (const auto& previous = _session.Clipboard(); previous)
+    {
+        const auto previousBytes = previous->image.RetirementMemoryBytes();
+        if (!previousBytes || !AddClipboardBytes(memory, previousBytes) ||
+            !AddClipboardBytes(memory, sizeof(PixelClipboard)))
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
     if (!held || !copy || !encoding || !readback || !metadata || !AddClipboardBytes(memory, copy) ||
         !AddClipboardBytes(memory, encoding) || !AddClipboardBytes(memory, readback) ||
         !AddClipboardBytes(memory, metadata) ||
@@ -571,6 +615,9 @@ HRESULT Application::StartClipboardMerged() noexcept
         memory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     held += memory * 2;
+    UtilityReadbackAdmission::Envelope envelope;
+    GpuResidencyReservation reservation;
+    RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(document, held, envelope, reservation));
     const auto ordinal = _activeHostRequest->ordinal;
     _clipboardStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
     if (!_clipboardStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
@@ -583,13 +630,21 @@ HRESULT Application::StartClipboardMerged() noexcept
     {
         if (_clipboardWorkTestGate)
         {
-            _clipboardWorkTestGate->reservationBytes = memory;
+            _clipboardWorkTestGate->reservationBytes = envelope.cpuBytes;
             if (_clipboardWorkTestGate->throwAdmissionFailure)
                 throw std::bad_alloc{};
         }
-        std::unique_ptr<Job> job = std::make_unique<ClipboardMergedJob>(*this, *_clipboardStamp, full, held);
+        std::unique_ptr<Job> job =
+            std::make_unique<ClipboardMergedJob>(*this, *_clipboardStamp, full, envelope, std::move(reservation));
         JobTicket ticket;
-        error = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+        error = static_cast<HRESULT>(_jobs.Submit(job,
+                                                  {.kind = JobClass::Commit,
+                                                   .serialKey = _session.DocumentSerial(),
+                                                   .memoryBytes = envelope.cpuBytes,
+                                                   .deferredRetirement = true,
+                                                   .allowMemoryWaiting = true,
+                                                   .reserveRetainedMemory = true},
+                                                  ticket));
         if (SUCCEEDED(error))
             _clipboardTicket = ticket;
     }

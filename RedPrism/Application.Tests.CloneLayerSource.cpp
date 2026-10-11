@@ -259,8 +259,8 @@ int Application::RunCloneLayerSourceSelfTest() noexcept
                 const auto* draft = owner._session.PendingBrush();
                 const auto openingBytes = draft ? draft->OpeningRetainedMemoryBytes() : 0;
                 state.leaseAdopted =
-                    state.mode.liveLease && owner._canvasCloneSample && owner._canvasCloneSample->lease &&
-                    owner._canvasCloneSample->lease.Bytes() == state.reservation &&
+                    state.mode.liveLease && owner._canvasCloneSample && owner._canvasCloneSample->HasReservation() &&
+                    owner._canvasCloneSample->ReservationBytes() == state.reservation &&
                     owner._canvasCloneSample->opening == state.opening && openingBytes != 0 &&
                     owner._jobs.ReservedMemoryBytes() == state.reservation + openingBytes && !owner._utilityTicket &&
                     !owner._utilityStamp && draft && receipt.outcome == HostOutcome::Pending &&

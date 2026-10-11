@@ -8,8 +8,12 @@
 struct PublicationMemoryNode;
 
 // Worker-preallocated accounting owner shared by one immutable publication and all its retiring CPU wrappers.
-// It owns no pixels, UI or device. Bind once on the original owner after useful producers joined, before any
-// public reader. After binding its accounting is immutable until the last containing graph has been destroyed.
+// It owns no pixels, UI or device. Bind once on the original owner after useful producers joined and before
+// the original record can refund. Standard final publication binds before exposing readers. A detached Copy
+// Merged continuation may expose immutable private pixels backed by its still-reserved original job; its
+// precreated opaque proxy must bind at terminal completion or joined Close before that job retires. No reader
+// can inspect/mutate that proxy, no early transfer permits useful work, and no reservation is duplicated.
+// After binding its accounting is immutable until the last containing graph has been destroyed.
 // No caller can reset/grow the private lease while a row/display/history reader still retains this owner.
 class SharedPublicationMemory final
 {

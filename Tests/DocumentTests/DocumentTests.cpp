@@ -20,6 +20,8 @@
 #include "DistortWorkTests.h"
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
+#include "Document.Tests.CopyPixelsLifetime.h"
+#include "Document.Tests.CropLifetime.h"
 #include "Document.Tests.HealWork.h"
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
@@ -8239,6 +8241,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWarpRetirementCoreTests();
     gFailures += RunPlacedRasterWorkTests() ? 0 : 1;
     gFailures += RunRasterWorkTests();
+    gFailures += RunCropLifetimeTests();
+    gFailures += RunCopyPixelsLifetimeTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();
     gFailures += RunGradientStateTests();
