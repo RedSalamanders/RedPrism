@@ -756,7 +756,7 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
     _impl->observer = observer;
     _impl->executionObserver = execution;
     _impl->memorySource = memory;
-    HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
+    HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get(), true);
     if (SUCCEEDED(result) && !memory.sample)
     {
         _impl->lowMemory.reset(CreateMemoryResourceNotification(LowMemoryResourceNotification));
@@ -798,7 +798,7 @@ std::int32_t JobScheduler::EnableGpuRecordingLane() noexcept
     try
     {
         auto candidate = std::make_unique<WorkerPool>();
-        const HRESULT result = candidate->Initialize(1, Impl::DispatchRecorder, &self);
+        const HRESULT result = candidate->Initialize(1, Impl::DispatchRecorder, &self, true);
         if (SUCCEEDED(result))
             self.recorders = std::move(candidate);
         return result;

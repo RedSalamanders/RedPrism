@@ -192,6 +192,7 @@
     <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\..\Common\WorkerWake.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />

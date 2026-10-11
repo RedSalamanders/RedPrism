@@ -946,6 +946,13 @@ the call state. A failed helper allocation runs on the caller. The UI must never
 Pool close retains active inputs, joins callbacks and helpers, then releases its implicit MTA cookie. Background
 callbacks request EcoQoS; foreground callbacks request HighQoS, restoring system-managed policy on return.
 
+The scheduler's opted-in owner endpoint uses three inline counters, one checked startup event and one reusable
+wait on the same pool. Owner requests use at most two CAS operations and an event signal; SRW acquisition and
+native dispatch submission occur off owner. These are fixed startup resources, not per-job memory declarations:
+creation failure unwinds startup, and endpoint Close joins before releasing its borrowed context. Foreign producers
+and default pools keep the original synchronized dispatch route. This structural bound does not prove the
+2 ms owner target or excuse measurement; broker scheduling and extra callback submission must be measured.
+
 Output allocation, exact image operation order and the measured cancellation interval belong to each migrated
 kernel. The executor checks between tiles; bodies check between rows or smaller work units so their measured
 interval is at most 1 ms. The coordinate-kernel benchmark qualifies executor overhead only. `--bench-executor`

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Executor.h"
+#include "WorkerWake.h"
 
 #include <array>
 #include <combaseapi.h>
@@ -47,7 +48,8 @@ enum class WorkPriority : unsigned int
     Count
 };
 
-// Owner-thread Initialize/Close; Wake, RequestStop and parallel execution are thread-safe. Close must not be
+// Initialize precedes publication; Wake, RequestStop and parallel execution are thread-safe. Owner-wake
+// pools serialize Initialize/Close on their owner; default pools retain serialized foreign Close. Close must not be
 // called from a callback. Callbacks borrow the owner's context until Close returns and carry no queued payload.
 class WorkerPool final : public Executor
 {
@@ -63,8 +65,8 @@ class WorkerPool final : public Executor
     ~WorkerPool() override;
     WorkerPool(const WorkerPool&) = delete;
     WorkerPool& operator=(const WorkerPool&) = delete;
-    [[nodiscard]] HRESULT Initialize(unsigned int threads = 0, Dispatch dispatch = nullptr,
-                                     void* context = nullptr) noexcept;
+    [[nodiscard]] HRESULT Initialize(unsigned int threads = 0, Dispatch dispatch = nullptr, void* context = nullptr,
+                                     bool ownerWake = false) noexcept;
     [[nodiscard]] bool Wake(WorkPriority priority) noexcept;
     void RequestStop() noexcept;
     // Join all producers, run owner cleanup, then retire its CPU owners on a preallocated MTA callback.
@@ -87,11 +89,15 @@ class WorkerPool final : public Executor
         WorkPriority priority = WorkPriority::Normal;
         PTP_WORK work = nullptr; // owned by _cleanup; not a queued payload
     };
+    static void OwnerWakeDispatch(void*, WorkerResources::WakeLane, std::uint32_t) noexcept;
     static void CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
     static void CALLBACK ParallelCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
     static void CALLBACK CloseCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
     void FinishParallel() noexcept;
 
+    WorkerResources::WorkerWake _ownerBroker;
+    DWORD _ownerThread = 0;
+    bool _ownerWake = false; // immutable after Initialize; opt-in owner endpoint
     SRWLOCK _lock = SRWLOCK_INIT;
     CONDITION_VARIABLE _parallelDone = CONDITION_VARIABLE_INIT;
     _Guarded_by_(_lock) bool _closing = false;

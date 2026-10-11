@@ -291,6 +291,23 @@ preallocated final retirement work object outside that cleanup group. A
 dispatch callback carries only its owner/lane, never a job payload. Each lane coalesces outstanding wakeups at the
 thread count; `JobScheduler` drains its bounded records and owns job admission and state. No callbacks poll when idle.
 
+The scheduler opts its compute and optional recording pools into `WorkerWake`, a payload-free owner endpoint.
+Startup checks creation of one auto-reset event and one reusable one-shot wait per opted-in pool. Three inline,
+lock-free 32-bit counters coalesce hints at the pool's existing thread count (1–1,024); each owner request performs
+at most two strong CAS operations and signals the event, including at saturation. The owner publishes its real
+queue state with the queue's existing synchronization before the hint. The counters do not publish work. Request
+acquires no SRW lock, allocates no storage, submits no work callback and joins nothing. Its Win32 signal still
+requires measured owner-latency qualification.
+
+The wait borrows the existing compute/recording pool; it creates no second pool or thread. Its callback takes
+the bounded hint counts and submits through the existing priority lanes off owner. It installs the worker
+terminate handler before accessing state; actual dispatch retains the existing TLS, MTA and QoS scope. Rearm
+is serialized with Close. Opted-in Initialize/Close run on that endpoint's owner; foreign producers retain the
+original thread-safe Wake route, and default pools retain their existing serialized foreign-Close behavior.
+Startup failures propagate the original HRESULT and unwind before publication. A live signal failure after
+accepted work is published is an invariant failure: `std::terminate` invokes the installed crash handler rather
+than silently stranding that work. Closed/invalid-priority requests refuse before publishing a hint.
+
 Parallel execution dynamically claims disjoint tiles; the caller participates. A call owns at most one helper
 work object, whose destruction cancels unstarted callbacks and joins running callbacks. The work object is outside
 the dispatch cleanup group to prevent shutdown racing its local owner. No callback is disassociated. This join
@@ -305,6 +322,11 @@ on the existing MTA pool before releasing work ownership, cleanup group, private
 or new thread is needed during Close. Close is idempotent and runs on the owning teardown thread,
 never inside a callback. Initialization precedes publication; closed pools cannot restart. Cancellation does not
 forcibly interrupt a body: it checks its token per row or a measured smaller interval.
+
+For an opted-in endpoint, Close disarms and joins its wait before closing dispatch members or releasing the
+borrowed context. The event, counters and callback storage survive that join. This adds no job payload, ticket,
+queued release record or per-request allocation. Large source/private/cache phase admission and whole-editor
+activation remain separately tracked P1 obligations.
 
 Each pool owns a `CoIncrementMTAUsage` cookie through all of its callbacks. These cookies leave an initialized STA
 caller in its original apartment and make worker COM use independent of the UI apartment. Callbacks install the

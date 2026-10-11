@@ -41,6 +41,7 @@
 #include "Host.Tests.WarpFactoryLifetime.h"
 #include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerStageRetirement.h"
+#include "Host.Tests.WorkerWake.h"
 #include "Host.Tests.WorkerWriteCompletion.h"
 #include "HostPathReadTests.h"
 #include "JobActivityTests.h"
@@ -1917,6 +1918,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += static_cast<int>(!RunUiCancellationRefusalTests());
     gFailures += RunHostUiFrameLatencyTests();
     gFailures += RunWorkerPoolTests(stress);
+    gFailures += RunWorkerWakeTests();
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();
     gFailures += RunOwnerWorkMultiplexerTests();

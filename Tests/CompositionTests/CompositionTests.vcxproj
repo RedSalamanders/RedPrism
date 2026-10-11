@@ -202,6 +202,7 @@
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\..\Common\WorkerWake.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />

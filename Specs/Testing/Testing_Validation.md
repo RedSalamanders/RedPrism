@@ -254,6 +254,14 @@ ticket generation, provenance, duplicate/outside-callback refusal and exact whol
 It also runs 39 `prepared-raster-preview-lifetime.*` controls through the actual opted-in CPU raster-edit path.
 Joined workers destroy semantic nodes while separately retained stroke, metadata and lifted-opening weak controls
 keep the complete original 4 MiB admission charged. The final weak reset and owner drain must refund it exactly.
+
+`Host.Tests.WorkerWake` adds 17 `owner-wake-pool.*` records (including its summary), while the original
+`WorkerPoolTests` retain all default-route predicates, including foreign Close. Four literal counter controls
+cover zero/oversized capacity, all three lanes with saturation/reset/later requests, and the 1,024-hint cap.
+Actual opted-in pool cases cover 48 real bodies, a foreign producer on the original route, MTA/off-owner
+dispatch, invalid/closed requests and a single occupied worker with pending broker hints. Joined Close must
+precede owner cleanup and actual off-owner payload destruction must precede borrowed-context release.
+These functional controls do not establish owner latency, whole-operation phase admission or G1.
 A separate strong lifted-opening cache must retain the charge after stroke/metadata retirement and release its
 last semantic owner on a joined worker before the owner can refund. All existing predecessor controls remain
 required. These controls qualify CPU metadata/accounting only; display consumers, normal activation and G1 are

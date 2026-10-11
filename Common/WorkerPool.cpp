@@ -5,11 +5,18 @@
 
 #include <algorithm>
 #include <cassert>
+#include <exception>
 
 #pragma comment(lib, "ole32.lib")
 
 namespace
 {
+static_assert(static_cast<std::uint32_t>(WorkPriority::High) ==
+              static_cast<std::uint32_t>(WorkerResources::WakeLane::High));
+static_assert(static_cast<std::uint32_t>(WorkPriority::Normal) ==
+              static_cast<std::uint32_t>(WorkerResources::WakeLane::Normal));
+static_assert(static_cast<std::uint32_t>(WorkPriority::Background) ==
+              static_cast<std::uint32_t>(WorkerResources::WakeLane::Background));
 thread_local WorkerPool* g_currentPool = nullptr;
 thread_local WorkPriority g_currentPriority = WorkPriority::Normal;
 thread_local const wchar_t* g_threadName = nullptr;
@@ -100,7 +107,7 @@ WorkerPool::~WorkerPool()
     Close();
 }
 
-HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* context) noexcept
+HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* context, bool ownerWake) noexcept
 {
     if (_pool || _stop.stop_requested())
     {
@@ -114,6 +121,10 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
     {
         return E_INVALIDARG;
     }
+    if (ownerWake && !dispatch)
+        return E_INVALIDARG;
+    _ownerWake = ownerWake;
+    _ownerThread = GetCurrentThreadId();
     _threadCount = threads;
     _dispatch = dispatch;
     _context = context;
@@ -152,6 +163,8 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
         if (!_closeCallback)
             result = HRESULT_FROM_WIN32(error);
     }
+    if (SUCCEEDED(result) && _ownerWake)
+        result = _ownerBroker.Initialize(_pool.get(), threads, OwnerWakeDispatch, this);
     if (FAILED(result))
     {
         Close();
@@ -164,6 +177,19 @@ bool WorkerPool::Wake(WorkPriority priority) noexcept
     const ScopedUiTimingAttribution attribution{UiTimingKind::ResultApply, UiTimingAttributionPhase::WorkerWake,
                                                 static_cast<std::uint32_t>(priority)};
     const auto index = static_cast<std::size_t>(priority);
+    if (_ownerWake && _ownerThread == GetCurrentThreadId())
+    {
+        if (_stop.stop_requested() || index >= _lanes.size())
+            return false;
+        const HRESULT request = _ownerBroker.Request(static_cast<WorkerResources::WakeLane>(index));
+        if (request == HRESULT_FROM_WIN32(ERROR_INVALID_STATE))
+            return false;
+        // Accepted work is already published. Failure of a live owned endpoint is an invariant failure:
+        // the installed per-thread terminate handler records it; never silently strand that work.
+        if (FAILED(request))
+            std::terminate();
+        return true;
+    }
     WorkerResources::ExclusiveLock lock{_lock};
     if (_closing || _stop.stop_requested() || !_pool || !_dispatch || index >= _lanes.size())
     {
@@ -177,6 +203,16 @@ bool WorkerPool::Wake(WorkPriority priority) noexcept
         SubmitThreadpoolWork(_lanes[index].work);
     }
     return true;
+}
+
+void WorkerPool::OwnerWakeDispatch(void* context, WorkerResources::WakeLane channel, std::uint32_t count) noexcept
+{
+    auto& pool = *static_cast<WorkerPool*>(context);
+    CallbackScope scope{&pool, static_cast<WorkPriority>(channel), L"RedPrism.Workers"};
+    // Broker executes off-owner. Existing bounded native submission, priority, cancellation, COM and
+    // cleanup-group behavior stays with Wake/DispatchCallback; only owner submission moves here.
+    for (std::uint32_t index = 0; index < count; ++index)
+        (void)pool.Wake(static_cast<WorkPriority>(channel));
 }
 
 void CALLBACK WorkerPool::DispatchCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept
@@ -217,6 +253,8 @@ void WorkerPool::Close(CloseWork work) noexcept
         _closing = true;
     }
     RequestStop();
+    if (_ownerWake)
+        _ownerBroker.Close(); // join before dispatch cleanup or borrowed context destruction
     if (_cleanup)
     {
         // Dispatch work is owned by the cleanup group. Parallel helper work is owned by its calling frame,
