@@ -107,6 +107,9 @@ ARM64 r96 passes Debug, Release and ASan Debug on that exact source. The three a
 Main verifies all 15 ARM64 PE/PDB identities and five actual ASan compiler/image controls. Its runtime
 remains unavailable; cross-build success is not a runtime, ordinary activation or G1 claim.
 
+Native checkpoint committed and pushed as `940be51` on `codex/p1-opacity-host-proof`.
+The qualification remains functional; P1 activation and G1 closure are still due.
+
 ## Preserved failures and limits
 
 Native Debug r850 failed fixture registration: missing declarations and a warnings-as-errors shadowed local.
