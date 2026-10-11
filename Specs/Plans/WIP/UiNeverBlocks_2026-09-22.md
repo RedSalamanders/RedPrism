@@ -23,12 +23,13 @@ installs the worker terminate handler at callback entry, and preserves default p
 The fixed startup resources, joined Close and post-publication signal-failure policy are now specified in
 the owning architecture/performance/crash contracts. Focused native Release acceptance and three fresh
 cancellation rosters and full x64 Debug/Release/real-ASan/Release-analysis qualification are complete;
-all three current-source ARM64 cross-builds also pass. Main corrects the ledger's mistaken
+all three current-source ARM64 cross-builds also pass. The qualified source is committed/pushed as
+`0393d2b`; Main corrects the ledger's mistaken
 comparison of UI actions to the 2 ms Apply limit: the current recorded Apply and action samples meet their
 respective §1.2 budgets. Earlier actual Apply failures and complete G1 remain open. No causal repair is claimed.
 
 - [x] Review and integrate the owner-wake source and original actual-pool cases after private Debug/Release/real-ASan scheduler and failure-policy proof. Keep the helper's initial absolute-include preparation refusal before correcting its source-path rewrite; it is not a compiler/runtime failure.
-- [x] Qualify this new native owner-wake source, its complete original Host/application inventory, startup/Close behavior and unchanged dependency pin. The qualified step is ready for commit/push after recovery.
+- [x] Qualify this new native owner-wake source, its complete original Host/application inventory, startup/Close behavior and unchanged dependency pin. Commit/push the step as `0393d2b` after the read-back recovery; P1 remains WIP and main is not merged.
 - [x] Qualify focused native Release `r879` build / `r880` Host / `r881` WARP application on 1,216 inputs and 20 contracts. The pre-runtime binding preserves all 8,923 original Host records plus 17 additions and all 126 application stages with 7,399/6,902 original assertions. This is focused acceptance; full native profiles, ARM64 and measurements remain due.
 - [x] Measure the new owner/apply/cancellation costs without optional attribution in the three recorded rosters below, preserving earlier failure records and the original complete G1 gates.
 - [x] Run/preserve current-source 4K WARP, 45 MP and 100 MP uninstrumented cancellation rosters: Apply maxima 273/229/454 µs; deferred-action maxima 2,305/174/2,064 µs. Correct the earlier ledger classification of Lens1 and Exposure3: these are `UiAction` samples, governed by p99 ≤ 4 ms / max ≤ 16 ms; their p99 histogram bounds are 4,000/250/4,000 µs. All current recorded action and Apply samples meet their respective §1.2 limits. Raw records, refusals and earlier actual Apply failures stay intact; this is no causal repair or whole-G1 result. The separate instrumented repeat does not reproduce a slow phase. Preserve its parser's interleaved-line refusal and byte-identical projection. [Record](../../TestRuns/P1WorkerWakeNative_2026-10-11.md).

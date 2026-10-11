@@ -159,3 +159,6 @@ All 16,731 copied files across 102 draft folders read back. Manifest SHA256:
 patch SHA256 `B3182BD908F0F59A6C0FB96B3AF30EF35BB9BF4B0D86671F2E07B074BAB72444`.
 This saves the actual qualified source, new diagnostics and review scripts, retained failures and process
 receipts from base `e6b6bf8`; it is recovery evidence rather than an additional qualification claim.
+
+Qualified implementation commit: `0393d2b` (pushed to `origin/codex/p1-opacity-host-proof`). P1 remains WIP; no merge to main.
+
