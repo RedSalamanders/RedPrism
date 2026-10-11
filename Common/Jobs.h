@@ -123,6 +123,7 @@ class SharedRetainedMemoryLease final
     struct State;
     std::shared_ptr<State> _state;
     std::size_t _slot = 64;
+    std::size_t _part = 0;
     std::uint64_t _generation = 0;
     std::uint64_t _bytes = 0;
     friend class JobScheduler;
@@ -333,6 +334,17 @@ class JobScheduler final
     // Owner-only identity of the live shared endpoint. A closed or reconstructed scheduler cannot own
     // an older lease, even if its wrapper address and first job slot/generation have been reused.
     // This query performs no admission, transfer or publication authorization.
+    // Two immutable phase leases from one descriptor-reserved slot. Both must be empty and distinct;
+    // 0 < outputBytes < the whole original reservation. No allocation, query or extra admission.
+    [[nodiscard]] std::int32_t RetainPartitionedMemory(JobTicket original, std::uint64_t outputBytes,
+                                                       SharedRetainedMemoryLease& output,
+                                                       SharedRetainedMemoryLease& temporary) noexcept;
+    [[nodiscard]] std::int32_t RetainPartitionedPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                  SharedRetainedMemoryLease& output,
+                                                                  SharedRetainedMemoryLease& temporary) noexcept;
+    [[nodiscard]] std::int32_t RetainPartitionedRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                 SharedRetainedMemoryLease& output,
+                                                                 SharedRetainedMemoryLease& temporary) noexcept;
     [[nodiscard]] bool OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept;
     // Owner-only monotonic growth for a live unique lease, while its containing graph is exclusively idle.
     // Samples current physical/commit memory before new graph allocations. The original retained slot,
@@ -432,6 +444,10 @@ class JobScheduler final
                                                 bool retirement = false) noexcept;
     [[nodiscard]] std::int32_t RetainSharedMemoryImpl(JobTicket job, SharedRetainedMemoryLease& retained,
                                                       bool publication, bool retirement = false) noexcept;
+    [[nodiscard]] std::int32_t RetainPartitionedMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+                                                           SharedRetainedMemoryLease& output,
+                                                           SharedRetainedMemoryLease& temporary, bool publication,
+                                                           bool retirement) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
     friend std::size_t DrainCompletions(JobScheduler&, Apply, void*) noexcept;

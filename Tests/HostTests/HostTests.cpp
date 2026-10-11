@@ -22,6 +22,7 @@
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
 #include "Host.Tests.JoinedRetirementAuthority.h"
+#include "Host.Tests.PartitionedRetainedMemory.h"
 #include "Host.Tests.PathClassificationRead.h"
 #include "Host.Tests.PathInputTransfer.h"
 #include "Host.Tests.PathReadWaitCycleExhaustion.h"
@@ -1931,6 +1932,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobMemoryTests();
     gFailures += RunRetainedJobMemoryTests();
     gFailures += RunSharedRetainedJobMemoryTests();
+    gFailures += RunPartitionedRetainedMemoryTests();
     gFailures += RunCompletedPreviewMemoryTests();
     gFailures += RunRetirementMemoryTests();
     gFailures += RunPreparedRasterPreviewLifetimeTests();

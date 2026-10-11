@@ -14,8 +14,15 @@
 // Private endpoint shared by scheduler admission and standalone graph lifetime acknowledgements.
 struct SharedRetainedMemoryLease::State final
 {
-    std::array<std::atomic<std::uint64_t>, JobScheduler::kRetainedMemoryCapacity> acknowledged{};
-    std::atomic<std::uint64_t> pending{0};
+    std::array<std::atomic<std::uint64_t>, 2 * JobScheduler::kRetainedMemoryCapacity> acknowledged{};
+    std::array<std::atomic<std::uint64_t>, 2> pending{};
+    [[nodiscard]] bool HasPending() const noexcept
+    {
+        for (const auto& word : pending)
+            if (word.load(std::memory_order_acquire) != 0)
+                return true;
+        return false;
+    }
     std::atomic<std::uint64_t> residentBytes{0};
     wil::unique_handle wake; // Duplicate of the kernel event, never a borrowed scheduler handle.
 };

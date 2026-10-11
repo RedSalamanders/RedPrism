@@ -457,3 +457,20 @@ Compile-time assertions require const document/layer readers and non-throwing se
 .\test.ps1 -Platform x64 -Configuration Debug
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
 ```
+
+## Immutable worker geometry adoption
+
+`SelectionLoops::AdoptForWork` adopts worker-owned loop/point vector buffers without copying points. It
+computes cached point count, capacity bytes and finite-point bounds with cancellation checks every64 work
+units. Bounds ignore non-finite points, as the existing geometry reference does; point count still includes
+them. Cancellation returns no published handle. Empty geometry retains no allocation or opaque lifetime.
+The caller admits vector/control/ownership bounds before allocation and explicitly supplies a charged output
+lifetime when needed. `WorkOwnershipAllowance` covers the supported node, control block and per-vector
+bookkeeping in addition to cached vector capacity bytes; zero refuses overflow. It is an admission allowance,
+not a physical-residency measurement.
+
+Copied/moved readers share one immutable identity and cached metadata. On the scheduler owner, the final
+strong geometry release queues the complete node for worker destruction regardless of its size. Geometry
+buffers die before their opaque lifetime. A surviving weak storage control also retains that lifetime until
+its own control block dies. This does not change synchronous selection arithmetic or activate a worker
+boolean caller by itself. See the separate phase-retention contract in `Core_PerformanceAndResources.md`.

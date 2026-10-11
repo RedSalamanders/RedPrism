@@ -205,6 +205,7 @@
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
+    <ClCompile Include="..\..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />

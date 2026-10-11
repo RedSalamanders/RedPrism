@@ -1402,3 +1402,32 @@ and last weak-storage owners continue to carry the original charge through actua
 The owner offers one ready parent per bounded utility service pump. It performs no pixel copy or private
 composition; the dedicated recorder emits bounded command batches, the event pool waits for real completion,
 and Compute copies mapped rows. G1 and real cache-miss costs remain caller activation requirements.
+
+### Separate output and temporary retirement charges
+
+An operation whose temporary processing graph is much larger than its published output MAY partition its
+original reservation into two immutable `SharedRetainedMemoryLease` values. It MUST preclaim one retained
+slot at descriptor admission and opt into deferred retirement. Both destinations must be empty and distinct;
+the output charge must be positive and strictly smaller than the complete original reservation. The two
+charges sum exactly to that original reservation. Successful Completed, successful DeferCompletion and
+terminal/joined-Close retirement use their existing distinct callback authorities; partitioning supplies no
+new publication, useful-work or graphics-completion authority. No fresh query, allocation or admission occurs.
+
+The caller MUST give every temporary allocation and its readable/control owners the temporary lifetime,
+and every published allocation and its readable/control owners the output lifetime, before either escapes.
+Its declared output charge includes the output's actual capacities, immutable metadata, complete shared
+control ownership and any published history/container overlap. Input storage already charged by another
+live owner is not charged twice. Caller phase arithmetic and real host integration require their own proof;
+merely holding two opaque lifetimes does not establish a complete admission plan.
+
+Each part publishes its own generation and acknowledgement bit only after its actual final destruction.
+The owner refunds that part only after consuming its acknowledgement. The original slot cannot be reused
+until both parts have acknowledged. There is no shared decrement mailbox whose late producer could write
+into a reused generation. The64-slot pool stays fixed; two pending words support at most two event signals
+per empty-to-ready word transition, with no polling. Existing whole-reservation leases use the first word
+and retain their original semantics. Partitioned leases refuse growth without a memory query or mutation.
+Weak shared-control readers retain their part. After Close, foreign owners retain the independent endpoint
+and its owned wake handle through final destruction; they cannot affect a reconstructed scheduler.
+
+This primitive enables temporary processing memory to retire while a small result remains in history.
+Actual caller migration, global unique-resident accounting, constant-time capture and G1 remain required.

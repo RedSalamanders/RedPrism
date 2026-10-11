@@ -83,6 +83,8 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="Host.Tests.PartitionedRetainedMemory.h" />
+    <ClCompile Include="Host.Tests.PartitionedRetainedMemory.cpp" />
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\SharedPublicationMemory.h" />
     <ClInclude Include="Host.Tests.PublicationCallback.h" />
@@ -165,6 +167,7 @@
     <ClCompile Include="Host.Tests.UiFrameLatency.cpp" />
     <ClInclude Include="Host.Tests.UiFrameLatency.h" />
     <ClCompile Include="..\..\Common\Document.cpp" />
+    <ClCompile Include="..\..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />

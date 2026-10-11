@@ -2632,3 +2632,19 @@ explicit output ownership, copied/expired-weak readers, no source-owner inherita
 empty-owner path and canceled/invalid source preservation. Synthetic tokens prove only the primitive
 storage contract; the host controls separately establish scheduler/Close accounting. Wider profiles,
 native clipboard contention/end-session and measured G1 remain independent gates.
+
+## Partitioned retention and immutable geometry controls
+
+`Host.Tests.PartitionedRetainedMemory` runs against the actual JobScheduler/WorkerPool and immutable geometry
+factory. It verifies exact original-ticket authority, no memory query at transfer, both release orders,
+copied geometry and weak/control lifetime, simultaneous two-word acknowledgements, slot reuse, invalid/foreign
+ticket and callback refusals, descriptor/deferred-retirement requirements, failed terminal accounting,
+successful suspended publication, actual running cancellation, joined Close, endpoint lifetime after Close,
+and partition growth refusal without changing either charge. The unchanged whole-retained and retained-slot
+fixtures must continue to pass. These controls do not qualify a Wand admission formula or activated G1 cost.
+
+`Document.Tests.SelectionGeometryLifetime` verifies all eight literal input vertices and cached metadata,
+buffer adoption, copied/moved/self-moved handles, finite-bound compatibility, empty/cancelled/overflow
+refusal, actual foreign worker destruction, null alias lifetime ownership, weak storage control ownership
+and exact sink identity. Run the full required x64 Debug/Release/real-ASan configuration gates and ARM64
+cross-builds before declaring the combined component qualified. Native ARM64 runtime requires its own host.

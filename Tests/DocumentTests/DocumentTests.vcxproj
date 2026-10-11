@@ -75,6 +75,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Document.Tests.SelectionGeometryLifetime.h" />
+    <ClCompile Include="Document.Tests.SelectionGeometryLifetime.cpp" />
     <ClInclude Include="Document.Tests.StrokeFinishPublication.h" />
     <ClInclude Include="Document.Tests.StrokeFinalCoverage.h" />
     <ClInclude Include="Document.Tests.StrokeSample.h" />
@@ -313,6 +315,7 @@
     <ClCompile Include="PixelMoveOpeningWorkTests.cpp" />
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
+    <ClCompile Include="..\..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />

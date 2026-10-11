@@ -115,6 +115,8 @@ struct JobScheduler::Impl final
         std::uint64_t generation = 0;
         std::uint64_t bytes = 0;
         bool shared = false;
+        bool partitioned = false;
+        std::array<std::uint64_t, 2> parts{};
         std::uint64_t reservedFor = 0; // exact original record sequence; owner only
     };
     const std::uint64_t retainedMemoryOwner = NextRetainedMemoryOwner();
@@ -264,8 +266,10 @@ struct JobScheduler::Impl final
             !retained._generation || !retained._bytes)
             return E_INVALIDARG;
         const auto& slot = retainedMemory[retained._slot];
-        if (!slot.shared || slot.generation != retained._generation || slot.bytes != retained._bytes ||
-            (sharedMemory->pending.load(std::memory_order_acquire) & (std::uint64_t{1} << retained._slot)))
+        if (slot.partitioned || !slot.shared || slot.generation != retained._generation ||
+            slot.bytes != retained._bytes ||
+            (sharedMemory->pending[retained._part].load(std::memory_order_acquire) &
+             (std::uint64_t{1} << retained._slot)))
             return E_INVALIDARG;
         return totalBytes < slot.bytes ? E_INVALIDARG : S_OK;
     }
@@ -437,22 +441,32 @@ struct JobScheduler::Impl final
 
     bool DrainSharedMemoryAcknowledgements() noexcept
     {
-        auto mask = sharedMemory ? sharedMemory->pending.exchange(0, std::memory_order_acquire) : 0;
-        const bool changed = mask != 0;
-        while (mask != 0)
+        if (!sharedMemory)
+            return false;
+        bool changed = false;
+        for (std::size_t part = 0; part < 2; ++part)
         {
-            const auto index = static_cast<std::size_t>(std::countr_zero(mask));
-            mask &= mask - 1;
-            auto& cache = retainedMemory[index];
-            const auto generation = sharedMemory->acknowledged[index].load(std::memory_order_relaxed);
-            assert(cache.shared && cache.bytes != 0 && cache.generation == generation);
-            if (cache.shared && cache.bytes != 0 && cache.generation == generation)
+            auto mask = sharedMemory->pending[part].exchange(0, std::memory_order_acquire);
+            changed = changed || mask != 0;
+            while (mask != 0)
             {
-                const bool released = memory.Release(cache.bytes);
-                assert(released);
-                (void)released;
-                cache.bytes = 0;
-                cache.shared = false;
+                const auto index = static_cast<std::size_t>(std::countr_zero(mask));
+                mask &= mask - 1;
+                auto& cache = retainedMemory[index];
+                const auto generation =
+                    sharedMemory->acknowledged[part * kRetainedMemoryCapacity + index].load(std::memory_order_relaxed);
+                const auto bytes = cache.parts[part];
+                assert(cache.shared && bytes != 0 && cache.bytes >= bytes && cache.generation == generation);
+                if (cache.shared && bytes != 0 && cache.bytes >= bytes && cache.generation == generation)
+                {
+                    const bool released = memory.Release(bytes);
+                    assert(released);
+                    (void)released;
+                    cache.parts[part] = 0;
+                    cache.bytes -= bytes;
+                    if (!cache.bytes)
+                        cache.shared = false;
+                }
             }
         }
         return changed;
@@ -939,11 +953,68 @@ std::int32_t JobScheduler::RetainSharedMemoryImpl(JobTicket ticket, SharedRetain
         std::terminate();
     auto& cache = self.retainedMemory[transfer.slot];
     cache.shared = true;
+    cache.partitioned = false;
+    cache.parts = {cache.bytes, 0};
     self.sharedMemory->residentBytes.fetch_add(cache.bytes, std::memory_order_relaxed);
     retained._state = self.sharedMemory;
     retained._slot = transfer.slot;
+    retained._part = 0;
     retained._generation = transfer.generation;
     retained._bytes = cache.bytes;
+    return S_OK;
+}
+
+std::int32_t JobScheduler::RetainPartitionedMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                   SharedRetainedMemoryLease& output,
+                                                   SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, false, false);
+}
+std::int32_t JobScheduler::RetainPartitionedPublicationMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                              SharedRetainedMemoryLease& output,
+                                                              SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, true, false);
+}
+std::int32_t JobScheduler::RetainPartitionedRetirementMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                             SharedRetainedMemoryLease& output,
+                                                             SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, false, true);
+}
+std::int32_t JobScheduler::RetainPartitionedMemoryImpl(JobTicket ticket, std::uint64_t outputBytes,
+                                                       SharedRetainedMemoryLease& output,
+                                                       SharedRetainedMemoryLease& temporary, bool publication,
+                                                       bool retirement) noexcept
+{
+    if (!_impl || _impl->closed)
+        return E_UNEXPECTED;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (&output == &temporary || output || temporary || !outputBytes || ticket.slot >= kCapacity)
+        return E_INVALIDARG;
+    {
+        WorkerResources::ExclusiveLock guard{self.lock};
+        const auto& record = self.records[ticket.slot];
+        if (record.generation != ticket.generation || !record.options.deferredRetirement ||
+            !record.options.reserveRetainedMemory || record.retainedSlot >= kRetainedMemoryCapacity ||
+            outputBytes >= record.reserved)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    }
+    // The existing bridge authenticates exact callback/status/cancellation and consumes the original
+    // descriptor-reserved slot. Nothing after success can fail or allocate. Both leases are immutable.
+    const auto result = RetainSharedMemoryImpl(ticket, output, publication, retirement);
+    if (result != S_OK)
+        return result;
+    auto& cache = self.retainedMemory[output._slot];
+    cache.partitioned = true;
+    cache.parts = {outputBytes, cache.bytes - outputBytes};
+    output._bytes = outputBytes;
+    temporary._state = self.sharedMemory;
+    temporary._slot = output._slot;
+    temporary._part = 1;
+    temporary._generation = output._generation;
+    temporary._bytes = cache.parts[1];
     return S_OK;
 }
 
@@ -976,6 +1047,7 @@ std::int32_t JobScheduler::IncreaseRetainedReservation(SharedRetainedMemoryLease
     if (decision.admission != MemoryAdmission::Ready)
         return E_OUTOFMEMORY;
     self.retainedMemory[retained._slot].bytes = totalBytes;
+    self.retainedMemory[retained._slot].parts[0] = totalBytes;
     self.sharedMemory->residentBytes.fetch_add(delta, std::memory_order_relaxed);
     retained._bytes = totalBytes;
     return S_OK;
@@ -1521,7 +1593,7 @@ bool JobScheduler::HasUiWork() const noexcept
            _impl->resumesPending ||
            (!_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady()) ||
            _impl->memoryChanged.load(std::memory_order_acquire) ||
-           (_impl->sharedMemory && _impl->sharedMemory->pending.load(std::memory_order_acquire) != 0);
+           (_impl->sharedMemory && _impl->sharedMemory->HasPending());
 }
 
 bool JobScheduler::InUiCallback() const noexcept
@@ -1561,7 +1633,7 @@ JobScheduler::UiReadiness JobScheduler::UiReadinessForTest() const noexcept
             _impl->resumesPending,
             !_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady(),
             _impl->memoryChanged.load(std::memory_order_acquire) ||
-                (_impl->sharedMemory && _impl->sharedMemory->pending.load(std::memory_order_acquire) != 0)};
+                (_impl->sharedMemory && _impl->sharedMemory->HasPending())};
 }
 
 void* JobScheduler::WakeHandle() const noexcept

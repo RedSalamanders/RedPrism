@@ -38,6 +38,15 @@ class SharedPublicationMemory final
     // Destruction accounting only: exact terminal callback or original joined Close hook. Failure/cancel
     // never becomes a successful publication. Last weak control owner continues to carry the whole charge.
     [[nodiscard]] std::int32_t BindForRetirement(JobScheduler& scheduler, JobTicket original) noexcept;
+    [[nodiscard]] std::int32_t BindPartitionedAfterCompletedWork(JobScheduler& scheduler, JobTicket original,
+                                                                 std::uint64_t outputBytes,
+                                                                 SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] std::int32_t BindPartitionedForPublication(JobScheduler& scheduler, JobTicket original,
+                                                             std::uint64_t outputBytes,
+                                                             SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] std::int32_t BindPartitionedForRetirement(JobScheduler& scheduler, JobTicket original,
+                                                            std::uint64_t outputBytes,
+                                                            SharedPublicationMemory& temporary) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.

@@ -214,6 +214,7 @@
   <ItemGroup>
     <ClCompile Include="..\Common\WindowCapture.cpp" />
     <ClCompile Include="..\Common\Document.cpp" />
+    <ClCompile Include="..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\Common\SharedPublicationMemory.cpp" />

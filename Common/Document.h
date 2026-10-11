@@ -744,6 +744,18 @@ class SelectionLoops
 {
   public:
     SelectionLoops() noexcept = default;
+    // Worker-only immutable adoption: cancellable cached metadata, no point-buffer copy. The caller
+    // admits storage/control bounds and explicitly retains its output-phase lifetime when charged.
+    // Last owner-thread destruction of geometry is deferred; last weak control retains accounting.
+    [[nodiscard]] static std::optional<SelectionLoops> AdoptForWork(
+        std::vector<SelectionLoop> loops, CancelToken cancellation = {}, std::shared_ptr<const void> lifetime = {},
+        void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr, void* context = nullptr);
+    [[nodiscard]] static std::uint64_t WorkOwnershipAllowance(std::uint64_t loopCount) noexcept;
+    [[nodiscard]] std::weak_ptr<const void> WeakStorageForTest() const noexcept
+    {
+        return _loops;
+    }
+
     SelectionLoops(std::initializer_list<SelectionLoop> loops) : SelectionLoops(std::vector<SelectionLoop>(loops)) {}
     SelectionLoops(std::vector<SelectionLoop> loops)
         : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))

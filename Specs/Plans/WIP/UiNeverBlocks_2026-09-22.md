@@ -55,7 +55,23 @@ Debug r832 is historical qualification of the earlier source.
 - [x] Pass all268 original clipboard checks and the complete126-stage application run on the repaired source: focused Debug r830, exact1301BC/1174 source and saved build image authenticated.
 - [x] Preserve Release r833's ISA failure, corroborate the actual PE/PDB terminal table, and integrate the narrow data proof after132 parser controls pass. Keep both initial private corruption-control refusals in the record.
 - [x] Qualify the current full configuration matrix and analysis; ordinary activation and G1 stay separate.
-- [ ] Commit/push the qualified caller checkpoint before native selection/memory integration.
+- [x] Commit/push the qualified caller checkpoint before native selection/memory integration: `c8b572d` on `codex/p1-opacity-host-proof`.
+
+Current selection/memory foundation (2026-10-11): the integrated x64 Debug build r842 passes on the 1,180-input
+source freeze `91A50E…` (binding `35CE83…`). Focused Host r843 passes 8,838 records (8,795 predecessor,
+43 additions), including the retained-partition exact-charge/acknowledgement/weak-reader controls and actual
+scheduler ticket, worker-retirement and Close controls. Focused Document r844 passes 8,820 records (8,784
+predecessor, 36 additions), including private immutable-geometry adoption, cancellation, worker destruction
+and weak-control lifetime assertions. The initial private mixed-header ABI failure remains preserved. These
+are focused foundation proofs: they do not prove a native Wand boolean caller/admission or G1. Full Debug r845
+and serialized Release analysis r847 now pass; r846 remains the preserved dependency-lock failure. See [qualification record](../../TestRuns/P1PartitionedGeometryLifetime_2026-10-11.md).
+
+- [x] Implement separate immutable phase leases, independent generation acknowledgements and copied/weak geometry ownership; retain all existing whole-lease fixture assertions.
+- [x] Pass focused native Host partition/scheduler and Document immutable-geometry controls on the integrated source; keep the initial private mixed-header ABI failure in the record.
+- [x] Authenticate full Debug r845 on the same1180-input source: all126 application stages, exact predecessor inventories,43 Host and36 Document additions pass; archive completion `935C9DC6CFA50712D3FA62984A29B1AB3408F02AD762BE15428E3B4CFA04ED63`.
+- [x] Complete the foundation matrix on the exact1180-input source: full Debug r845, Release r849, real ASan r848 and serialized analysis r847 authenticate. All three ARM64 r95 cross-builds,15 PE/PDB pairs and five ASan compiler/image controls verify. Skills15 and formatting1042 pass. Preserve r846 restore-lock failure and the earlier private ABI failure; native ARM64 runtime, caller activation and G1 remain separate.
+- [ ] Integrate the bounded Clipper adapter with an admitted output/history phase and a separately retiring capture/scratch phase; test real Wand New/Add/Subtract, no-match, cancellation, staleness, Undo/Redo and Close.
+- [ ] Complete all H3 caller phase arithmetic, unique resident/source/cache accounting and owner costs; this primitive alone does not close H3.
 
 Next selection implementation: the private, non-integrated bounded Clipper2 adapter passes workspace,
 archived behavioral reference geometry and30 exact pinned-engine compatibility controls, plus a1021-capacity sweep in
@@ -63,6 +79,22 @@ Release and ASan. Its original compile failures and Debug termination at arena e
 the constructor/move adapter now allows Debug STL proxy allocation refusal to reach the worker boundary.
 Complete allocation/cancellation coverage, output/admission and host lifetime proof remain due; native Wand Add/Subtract
 continues to refuse the unknown workspace. The adapter is separate from the frozen recorded-caller source.
+
+Private history/Wand integration now retains the output accounting owner through newly allocated history
+topology, snapshot, entry, stack and index controls, with deferred owner destruction and last-weak retention.
+Its unchanged CPU Document suite passes all8820 original records in private Debug on2026-10-11. Initial
+private compile failures from the new scheduler include exposure are preserved; explicit declaration/includes
+repair that dependency. Main reviewed the cheaper agent's36 lifetime controls, corrected its pre-copy alias
+count and undefined weak identifier, and added two real history worker-retirement controls before execution.
+The revised Wand draft uses aligned RAII scratch, decimal8000000 output-point limits and worker geometry
+adoption. Its revised bounded path and all38 lifetime controls pass private Debug:8858 records, with unchanged source
+and executable checks. A later private revision adds mode-aware boolean admission and persistent output
+accounting independent of the64 temporary slots. The private Debug Document suite authenticates8878 records
+(8820 predecessors+38 lifetime+20 bounded-plan controls), and Host authenticates8880 records (8838
+predecessors+41 persistent-output assertions+summary), with unchanged source and executable identities.
+The isolated actual WARP application builds, but its original first run exits5 at the premature zero-reservation
+check while the published Wand selection/history remain live. That failure is preserved before adjusting
+fixture cleanup to the real graph lifetime. Native integration, complete host scenarios and G1 remain due.
 
 Main's later private fault sweep covers every engine allocation and checkpoint reached by30 fixed cases;
 larger literal cases cover262144 collinear points and16384 disjoint intersections. Release/real ASan pass,
