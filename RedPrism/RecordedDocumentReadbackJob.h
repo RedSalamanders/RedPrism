@@ -55,6 +55,8 @@ class RecordedDocumentReadbackJob : public Job,
     {
         return {};
     }
+    [[nodiscard]] virtual HRESULT BindReadbackMemoryForRetirement(JobTicket original,
+                                                                  SharedPublicationMemory& temporary) noexcept;
     [[nodiscard]] virtual HRESULT CaptureReadbackDocument(CanvasDocument&) noexcept = 0;
     [[nodiscard]] virtual JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext&)
     {

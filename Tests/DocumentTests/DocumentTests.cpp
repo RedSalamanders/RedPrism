@@ -23,6 +23,7 @@
 #include "Document.Tests.CopyPixelsLifetime.h"
 #include "Document.Tests.CropLifetime.h"
 #include "Document.Tests.HealWork.h"
+#include "Document.Tests.HistoryPublicationLifetime.h"
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.PendingDisplaySource.h"
@@ -41,6 +42,8 @@
 #include "Document.Tests.StrokeSample.h"
 #include "Document.Tests.StrokeSampleSession.h"
 #include "Document.Tests.WandBooleanAdmission.h"
+#include "Document.Tests.WandBooleanGeometry.h"
+#include "Document.Tests.WandBoundedPlan.h"
 #include "Document.Tests.WarpFinish.h"
 #include "Document.Tests.WarpFinishAdmission.h"
 #include "Document.Tests.WarpLazyTiles.h"
@@ -8245,6 +8248,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunCropLifetimeTests();
     gFailures += RunCopyPixelsLifetimeTests();
     gFailures += RunSelectionGeometryLifetimeTests();
+    gFailures += RunHistoryPublicationLifetimeTests();
+    gFailures += RunWandBoundedPlanTests();
+    gFailures += RunDocumentWandBooleanTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();
     gFailures += RunGradientStateTests();

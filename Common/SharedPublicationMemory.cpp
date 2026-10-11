@@ -142,3 +142,44 @@ std::int32_t SharedPublicationMemory::BindPartitionedForRetirement(JobScheduler&
     }
     return result;
 }
+
+std::int32_t SharedPublicationMemory::BindPersistentOutputAfterCompletedWork(
+    JobScheduler& scheduler, JobTicket original, std::uint64_t outputBytes, SharedPublicationMemory& temporary) noexcept
+{
+    const auto result =
+        scheduler.RetainPersistentOutputMemory(original, outputBytes, _node->lease, temporary._node->lease);
+    if (result >= 0)
+    {
+        _node->original = original;
+        temporary._node->original = original;
+    }
+    return result;
+}
+
+std::int32_t SharedPublicationMemory::BindPersistentOutputForPublication(JobScheduler& scheduler, JobTicket original,
+                                                                         std::uint64_t outputBytes,
+                                                                         SharedPublicationMemory& temporary) noexcept
+{
+    const auto result =
+        scheduler.RetainPersistentOutputPublicationMemory(original, outputBytes, _node->lease, temporary._node->lease);
+    if (result >= 0)
+    {
+        _node->original = original;
+        temporary._node->original = original;
+    }
+    return result;
+}
+
+std::int32_t SharedPublicationMemory::BindPersistentOutputForRetirement(JobScheduler& scheduler, JobTicket original,
+                                                                        std::uint64_t outputBytes,
+                                                                        SharedPublicationMemory& temporary) noexcept
+{
+    const auto result =
+        scheduler.RetainPersistentOutputRetirementMemory(original, outputBytes, _node->lease, temporary._node->lease);
+    if (result >= 0)
+    {
+        _node->original = original;
+        temporary._node->original = original;
+    }
+    return result;
+}

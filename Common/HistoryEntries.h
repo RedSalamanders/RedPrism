@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PublicationObject.h"
 #include "RecordRoot.h"
 
 #include <cstddef>
@@ -78,9 +79,9 @@ template <typename Handle> class HistoryEntries final
     {
         _root.swap(other._root);
     }
-    void push_back(Handle value)
+    void push_back(Handle value, std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
-        auto next = Clone();
+        auto next = Clone(std::move(memory));
         next->values.push_back(std::move(value));
         Publish(std::move(next));
     }
@@ -90,13 +91,13 @@ template <typename Handle> class HistoryEntries final
         next->values.pop_back();
         Publish(std::move(next));
     }
-    void erase(const_iterator first, const_iterator last)
+    void erase(const_iterator first, const_iterator last, std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
         if (first == last)
             return;
         const auto offset = first - begin();
         const auto count = last - first;
-        auto next = Clone();
+        auto next = Clone(std::move(memory));
         next->values.erase(next->values.begin() + offset, next->values.begin() + offset + count);
         Publish(std::move(next));
     }
@@ -113,11 +114,11 @@ template <typename Handle> class HistoryEntries final
         static const Container empty;
         return _root ? _root->values : empty;
     }
-    [[nodiscard]] std::shared_ptr<Storage> Clone() const
+    [[nodiscard]] std::shared_ptr<Storage> Clone(std::shared_ptr<const SharedPublicationMemory> memory = {}) const
     {
         // A relaxed shared_ptr use_count is not a synchronization proof that another reader has finished.
         // Never write a formerly shared root in place; publication exposes only the completed private clone.
-        return std::make_shared<Storage>(Read());
+        return MakePublicationObject<Storage>(std::move(memory), kDeferredReleaseThreshold, Read());
     }
     void Publish(std::shared_ptr<Storage> next) noexcept
     {

@@ -932,7 +932,7 @@ void RecordedDocumentReadbackJob::RetainJoinedRetirement(JobScheduler& scheduler
         (_ticket.generation && _ticket != original))
         std::terminate();
     _ticket = original;
-    if (_memory && !_memory->IsBound() && FAILED(_memory->BindForRetirement(_scheduler, original)))
+    if (_memory && !_memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(original, *_memory)))
         std::terminate();
     ReleaseRowsOwner(); // Actual compute join precedes this callback; no worker can still read the rows.
     if (_sourceAttached)
@@ -1006,7 +1006,13 @@ void RecordedDocumentReadbackJob::Completed(JobResult result) noexcept
         _rows.data || _graphPublished)
         std::terminate();
     const JobResult terminal = _terminal.status != JobStatus::Finished ? _terminal : result;
-    if (_memory && !_memory->IsBound() && FAILED(_memory->BindForRetirement(_scheduler, _ticket)))
+    if (_memory && !_memory->IsBound() && FAILED(BindReadbackMemoryForRetirement(_ticket, *_memory)))
         std::terminate();
     ReadbackCompleted(terminal, _root ? std::move(_root->image) : Raster{}, _deviceGeneration);
+}
+
+HRESULT RecordedDocumentReadbackJob::BindReadbackMemoryForRetirement(JobTicket original,
+                                                                     SharedPublicationMemory& temporary) noexcept
+{
+    return temporary.BindForRetirement(_scheduler, original);
 }

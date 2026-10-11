@@ -16,8 +16,11 @@ struct SharedRetainedMemoryLease::State final
 {
     std::array<std::atomic<std::uint64_t>, 2 * JobScheduler::kRetainedMemoryCapacity> acknowledged{};
     std::array<std::atomic<std::uint64_t>, 2> pending{};
+    std::atomic<std::uint64_t> persistentReleasedBytes{0};
     [[nodiscard]] bool HasPending() const noexcept
     {
+        if (persistentReleasedBytes.load(std::memory_order_acquire) != 0)
+            return true;
         for (const auto& word : pending)
             if (word.load(std::memory_order_acquire) != 0)
                 return true;

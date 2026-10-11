@@ -1,5 +1,7 @@
 #include "RasterEditWork.h"
 
+#include "SharedPublicationMemory.h"
+
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
 #include "PreparedRasterPreview.h"

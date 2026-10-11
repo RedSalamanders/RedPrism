@@ -47,6 +47,15 @@ class SharedPublicationMemory final
     [[nodiscard]] std::int32_t BindPartitionedForRetirement(JobScheduler& scheduler, JobTicket original,
                                                             std::uint64_t outputBytes,
                                                             SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] std::int32_t BindPersistentOutputAfterCompletedWork(JobScheduler& scheduler, JobTicket original,
+                                                                      std::uint64_t outputBytes,
+                                                                      SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] std::int32_t BindPersistentOutputForPublication(JobScheduler& scheduler, JobTicket original,
+                                                                  std::uint64_t outputBytes,
+                                                                  SharedPublicationMemory& temporary) noexcept;
+    [[nodiscard]] std::int32_t BindPersistentOutputForRetirement(JobScheduler& scheduler, JobTicket original,
+                                                                 std::uint64_t outputBytes,
+                                                                 SharedPublicationMemory& temporary) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.

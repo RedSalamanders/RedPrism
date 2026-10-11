@@ -121,6 +121,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Empty,
         Malformed,
         Retry,
+        UnavailableSequence,
         Exhaust,
         EncodeFailure,
         ReceiptFailure,
@@ -184,6 +185,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"paste-empty", paste, Mode::Empty, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
         Scenario{"paste-malformed", paste, Mode::Malformed, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-retry", paste, Mode::Retry, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
+        Scenario{"paste-unavailable-sequence", paste, Mode::UnavailableSequence, ClipboardWorkPhase::PasteProbe,
+                 HostOutcome::Succeeded},
         Scenario{"paste-exhaust", paste, Mode::Exhaust, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-owned-receipt", paste, Mode::ReceiptOrigin, ClipboardWorkPhase::PastePrepared,
                  HostOutcome::Succeeded},
@@ -306,9 +309,10 @@ int Application::RunClipboardWorkSelfTest() noexcept
         _session.history.Reset();
         _session.history.MarkSaved();
         _clipboardBinding.reset();
+        const bool retry = scenario.mode == Mode::Retry || scenario.mode == Mode::UnavailableSequence;
         const bool foreign =
             scenario.mode == Mode::Foreign || scenario.mode == Mode::ForeignNewCopy ||
-            (scenario.command == paste && (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust ||
+            (scenario.command == paste && (retry || scenario.mode == Mode::Exhaust ||
                                            scenario.mode == Mode::LateCancel || scenario.mode == Mode::Malformed));
         if (!(foreign ? InstallForeignClipboard(_window.get(), scenario.mode == Mode::Malformed)
                       : ClearClipboardFixture(_window.get())))
@@ -339,10 +343,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
         gate->throwMainAdmissionFailure = scenario.mode == Mode::MainAdmission;
         gate->throwCaptureFailure = scenario.mode == Mode::Capture;
         gate->throwWorkerFailure = scenario.mode == Mode::WorkerAllocation;
+        gate->forceUnavailableProbeSequence = scenario.mode == Mode::UnavailableSequence;
         if (scenario.mode == Mode::Failure)
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
-        if (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust)
-            gate->openFailures.store(scenario.mode == Mode::Retry ? 2u : 6u);
+        if (retry || scenario.mode == Mode::Exhaust)
+            gate->openFailures.store(retry ? 2u : 6u);
         if (scenario.mode == Mode::EncodeFailure)
             gate->fault = ClipboardTransfer::Fault::PngGlobal;
         if (scenario.mode == Mode::ReceiptFailure)
@@ -382,12 +387,10 @@ int Application::RunClipboardWorkSelfTest() noexcept
                 expect(_session.ActiveLayer() && _session.ActiveLayer()->asset &&
                            _session.ActiveLayer()->asset->image == source && _session.history.UndoCount() == 0,
                        scenario.name, "unchanged-source-history");
-            if (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust)
-                expect(gate->forcedBusyAttempts.load() == (scenario.mode == Mode::Retry ? 2u : 6u) &&
-                           gate->openAttempts.load() >= (scenario.mode == Mode::Retry ? 3u : 6u) &&
-                           gate->openAttempts.load() <= 6 &&
-                           gate->emptyAttempts.load() == (scenario.mode == Mode::Retry ? 1u : 0u) &&
-                           _clipboardWriteSucceeded == (scenario.mode == Mode::Retry),
+            if (retry || scenario.mode == Mode::Exhaust)
+                expect(gate->forcedBusyAttempts.load() == (retry ? 2u : 6u) &&
+                           gate->openAttempts.load() >= (retry ? 3u : 6u) && gate->openAttempts.load() <= 6 &&
+                           gate->emptyAttempts.load() == (retry ? 1u : 0u) && _clipboardWriteSucceeded == retry,
                        scenario.name, "bounded-write-attempts");
             if (scenario.mode == Mode::LateCancel || scenario.mode == Mode::EncodeFailure ||
                 scenario.mode == Mode::Exhaust)
@@ -411,6 +414,13 @@ int Application::RunClipboardWorkSelfTest() noexcept
             std::array<std::uint8_t, 4> pixel{};
             if (pasted && pasted->asset)
                 pasted->asset->image.ReadRegion(0, 0, 1, 1, pixel.data(), 4, 0);
+            if (scenario.mode == Mode::Retry)
+                std::printf("DIAG clipboard-paste retry forced=%u opens=%u layers=%zu selection=%d undo=%ls "
+                            "origin=%.3f,%.3f pixels=%u,%u,%u,%u\n",
+                            gate->forcedBusyAttempts.load(), gate->openAttempts.load(),
+                            _session.Document()->layers.size(), _session.Selection().has_value(),
+                            _session.history.UndoName().c_str(), pasted ? pasted->transform.origin.x : -1.0,
+                            pasted ? pasted->transform.origin.y : -1.0, pixel[0], pixel[1], pixel[2], pixel[3]);
             expect(pasted && pasted->asset && _session.Document()->layers.size() == 2 && !_session.Selection() &&
                        _session.history.UndoName() == L"Paste" &&
                        pasted->transform.origin == (foreign ? Vec2{4, 3} : Vec2{1, 0}) &&
@@ -425,10 +435,14 @@ int Application::RunClipboardWorkSelfTest() noexcept
                            (scenario.mode == Mode::Replacement ? state.replacementRevision : revision) &&
                        _session.history.UndoCount() == 0,
                    scenario.name, "refusal-preserves-source-history");
-        if (scenario.command == paste && (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust))
-            expect(gate->forcedBusyAttempts.load() == (scenario.mode == Mode::Retry ? 2u : 6u) &&
-                       gate->openAttempts.load() >= (scenario.mode == Mode::Retry ? 4u : 6u) &&
+        if (scenario.mode == Mode::UnavailableSequence)
+            expect(_clipboardSequence == 0 && gate->forceUnavailableProbeSequence &&
+                       gate->forcedBusyAttempts.load() == 2 && gate->openAttempts.load() >= 4 &&
                        gate->openAttempts.load() <= 6,
+                   scenario.name, "unavailable-query-inspects-foreign-pixels-under-original-retry-budget");
+        if (scenario.command == paste && (retry || scenario.mode == Mode::Exhaust))
+            expect(gate->forcedBusyAttempts.load() == (retry ? 2u : 6u) &&
+                       gate->openAttempts.load() >= (retry ? 4u : 6u) && gate->openAttempts.load() <= 6,
                    scenario.name, "six-total-inspect-copy-attempts");
         if (retainedMerged)
         {

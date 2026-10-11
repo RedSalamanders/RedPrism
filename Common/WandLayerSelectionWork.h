@@ -39,6 +39,11 @@ struct WandLayerSelectionMemoryPlan
     std::uint64_t preparationBytes = 0;
     std::uint64_t retirementBytes = 0;
     std::uint64_t reservationBytes = 0;
+    // Zero in a New-only plan. A complete boolean plan owns one fixed workspace and both conversion
+    // outputs concurrently with the original trace. Existing immutable input geometry stays in capture.
+    std::uint64_t booleanWorkspaceBytes = 0;
+    std::uint64_t booleanOutputBytes = 0;
+    std::uint64_t booleanPhaseBytes = 0;
     bool transparentShortcut = false;
 };
 
@@ -51,9 +56,8 @@ enum class WandLayerSelectionAdmission : std::uint8_t
     UnknownClipperWorkspace,
 };
 
-// Add/Subtract that invokes SelectionGeometry cannot be admitted from the New-mode plan: the pinned
-// Clipper2 call graph has no application-enforced workspace ceiling. Subtract with no current selection
-// is a trace-only no-op in PrepareWandSelectionPublication and needs no boolean workspace.
+// A New-only plan still refuses Add/Subtract before capture. A mode-aware plan includes the private
+// bounded adapter's complete workspace and output coexistence. Subtract without selection is trace-only.
 [[nodiscard]] WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerSelectionMemoryPlan& plan,
                                                                               SelectionMode mode,
                                                                               bool hasCurrentSelection,
@@ -70,10 +74,10 @@ class WandLayerSelectionInput final
     WandLayerSelectionInput& operator=(const WandLayerSelectionInput&) = delete;
     WandLayerSelectionInput(WandLayerSelectionInput&& source) noexcept
         : _point(source._point), _settings(source._settings), _antialiased(source._antialiased), _mode(source._mode),
-          _usesComposite(source._usesComposite), _authority(std::move(source._authority)),
-          _token(std::move(source._token)), _history(std::move(source._history)),
-          _document(std::move(source._document)), _active(std::move(source._active)),
-          _valid(std::exchange(source._valid, false))
+          _usesComposite(source._usesComposite), _outputHistoryBytes(source._outputHistoryBytes),
+          _authority(std::move(source._authority)), _token(std::move(source._token)),
+          _history(std::move(source._history)), _document(std::move(source._document)),
+          _active(std::move(source._active)), _valid(std::exchange(source._valid, false))
     {
     }
     WandLayerSelectionInput& operator=(WandLayerSelectionInput&& source) noexcept
@@ -85,6 +89,7 @@ class WandLayerSelectionInput final
             _antialiased = source._antialiased;
             _mode = source._mode;
             _usesComposite = source._usesComposite;
+            _outputHistoryBytes = source._outputHistoryBytes;
             _authority = std::move(source._authority);
             _token = std::move(source._token);
             _history = std::move(source._history);
@@ -105,10 +110,11 @@ class WandLayerSelectionInput final
     friend class PreparedWandLayerSelection;
     WandLayerSelectionInput(Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode,
                             HistoryRestoreAuthority authority, JobToken token, DocumentHistory::StateView history,
-                            CanvasDocument document, std::optional<Guid> active, bool usesComposite = false) noexcept
+                            CanvasDocument document, std::optional<Guid> active, bool usesComposite = false,
+                            std::uint64_t outputHistoryBytes = 0) noexcept
         : _point(point), _settings(settings), _antialiased(antialiased), _mode(mode), _usesComposite(usesComposite),
-          _authority(std::move(authority)), _token(std::move(token)), _history(std::move(history)),
-          _document(std::move(document)), _active(std::move(active))
+          _outputHistoryBytes(outputHistoryBytes), _authority(std::move(authority)), _token(std::move(token)),
+          _history(std::move(history)), _document(std::move(document)), _active(std::move(active))
     {
     }
     Vec2 _point;
@@ -116,6 +122,7 @@ class WandLayerSelectionInput final
     bool _antialiased;
     SelectionMode _mode = SelectionMode::New;
     bool _usesComposite = false;
+    std::uint64_t _outputHistoryBytes = 0;
     HistoryRestoreAuthority _authority;
     JobToken _token;
     DocumentHistory::StateView _history;
@@ -131,6 +138,11 @@ class PreparedWandLayerSelection final
     PreparedWandLayerSelection& operator=(const PreparedWandLayerSelection&) = delete;
     PreparedWandLayerSelection(PreparedWandLayerSelection&&) noexcept = default;
     PreparedWandLayerSelection& operator=(PreparedWandLayerSelection&&) noexcept = default;
+    // Worker-sealed output envelope only; the host partitions its original complete reservation.
+    [[nodiscard]] std::uint64_t OutputAllocationBytes() const noexcept
+    {
+        return _outputBytes;
+    }
     [[nodiscard]] bool ChangesSelection() const noexcept
     {
         return _history.has_value();
@@ -143,5 +155,6 @@ class PreparedWandLayerSelection final
     std::optional<CanvasDocument> _document;
     std::optional<DocumentHistory::Publication> _history;
     std::optional<CanvasDocument> _retiredDisplay;
+    std::uint64_t _outputBytes = 0;
     bool _applied = false;
 };

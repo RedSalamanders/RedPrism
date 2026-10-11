@@ -345,6 +345,18 @@ class JobScheduler final
     [[nodiscard]] std::int32_t RetainPartitionedRetirementMemory(JobTicket original, std::uint64_t outputBytes,
                                                                  SharedRetainedMemoryLease& output,
                                                                  SharedRetainedMemoryLease& temporary) noexcept;
+    // Persistent publication output does not consume a temporary slot after its sibling retires.
+    // Same original admission/callback/status authority and immutable byte partition. Worker reset publishes
+    // only an aggregate byte acknowledgement; it cannot address a reused slot. No allocation/query at transfer.
+    [[nodiscard]] std::int32_t RetainPersistentOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                            SharedRetainedMemoryLease& output,
+                                                            SharedRetainedMemoryLease& temporary) noexcept;
+    [[nodiscard]] std::int32_t RetainPersistentOutputPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                       SharedRetainedMemoryLease& output,
+                                                                       SharedRetainedMemoryLease& temporary) noexcept;
+    [[nodiscard]] std::int32_t RetainPersistentOutputRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                      SharedRetainedMemoryLease& output,
+                                                                      SharedRetainedMemoryLease& temporary) noexcept;
     [[nodiscard]] bool OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept;
     // Owner-only monotonic growth for a live unique lease, while its containing graph is exclusively idle.
     // Samples current physical/commit memory before new graph allocations. The original retained slot,
@@ -448,6 +460,10 @@ class JobScheduler final
                                                            SharedRetainedMemoryLease& output,
                                                            SharedRetainedMemoryLease& temporary, bool publication,
                                                            bool retirement) noexcept;
+    [[nodiscard]] std::int32_t RetainPersistentOutputMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+                                                                SharedRetainedMemoryLease& output,
+                                                                SharedRetainedMemoryLease& temporary, bool publication,
+                                                                bool retirement) noexcept;
     struct Impl;
     std::unique_ptr<Impl> _impl;
     friend std::size_t DrainCompletions(JobScheduler&, Apply, void*) noexcept;

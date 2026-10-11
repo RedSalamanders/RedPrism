@@ -443,7 +443,14 @@ struct JobScheduler::Impl final
     {
         if (!sharedMemory)
             return false;
-        bool changed = false;
+        const auto persistent = sharedMemory->persistentReleasedBytes.exchange(0, std::memory_order_acquire);
+        bool changed = persistent != 0;
+        if (persistent != 0)
+        {
+            const bool released = memory.Release(persistent);
+            assert(released);
+            (void)released;
+        }
         for (std::size_t part = 0; part < 2; ++part)
         {
             auto mask = sharedMemory->pending[part].exchange(0, std::memory_order_acquire);
@@ -1015,6 +1022,45 @@ std::int32_t JobScheduler::RetainPartitionedMemoryImpl(JobTicket ticket, std::ui
     temporary._part = 1;
     temporary._generation = output._generation;
     temporary._bytes = cache.parts[1];
+    return S_OK;
+}
+
+std::int32_t JobScheduler::RetainPersistentOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                        SharedRetainedMemoryLease& output,
+                                                        SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, false, false);
+}
+std::int32_t JobScheduler::RetainPersistentOutputPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                   SharedRetainedMemoryLease& output,
+                                                                   SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, true, false);
+}
+std::int32_t JobScheduler::RetainPersistentOutputRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                  SharedRetainedMemoryLease& output,
+                                                                  SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, false, true);
+}
+std::int32_t JobScheduler::RetainPersistentOutputMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+                                                            SharedRetainedMemoryLease& output,
+                                                            SharedRetainedMemoryLease& temporary, bool publication,
+                                                            bool retirement) noexcept
+{
+    // Reuse all existing admission/authority checks before consuming the preclaimed slot.
+    const auto result = RetainPartitionedMemoryImpl(original, outputBytes, output, temporary, publication, retirement);
+    if (result != S_OK)
+        return result;
+    auto& self = *_impl;
+    auto& cache = self.retainedMemory[temporary._slot];
+    // Both accounts already own this exact reservation. Conversion changes neither resident nor reserved
+    // totals, and cannot allocate/fail. The cache slot now belongs solely to the temporary phase.
+    cache.bytes = temporary._bytes;
+    cache.parts = {temporary._bytes, 0};
+    temporary._part = 0;
+    output._slot = kRetainedMemoryCapacity;
+    output._part = 2;
     return S_OK;
 }
 

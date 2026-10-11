@@ -6,7 +6,7 @@ P1 remains **WIP**. This checklist tracks the remaining delivery areas. The date
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
 - [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish Wand booleans and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
 - [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
 - [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
 - [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
@@ -17,7 +17,30 @@ P1 remains **WIP**. This checklist tracks the remaining delivery areas. The date
 
 ### Current implementation and qualification
 
-Latest step (2026-10-11): all seven recorded GPU readback/composition callers are integrated.
+Current candidate (2026-10-11): native Wand New/Add/Subtract and persistent selection/history output ownership
+are integrated on 1,207 inputs. Full Debug r855 passed before four analyzer-compatible fixture corrections;
+Release analysis r856 failed and is preserved. The corrected source freeze `3A6F4D…`, with the unchanged
+numeric/state predicates and 20-contract binding `2B4D65…`, passes Release analysis r857. Full Debug r858
+passes with its archive and complete inventory authenticated. Full Release r859 also passes;
+its checker initially refused Debug-only allocation counts and a post-card-cancel cleanup diagnostic.
+The corrected checker binds all 60 Release prefix diagnostics to the earlier successful private Release
+sweep, retains the observed cleanup value, and still requires every original settlement and final-refund
+predicate. Both checker refusals remain preserved; no production source or test predicate changes.
+Real ASan r860 passes on this same corrected source, including the actual detection probe, all core
+suites, stress scopes, 126 application stages and harness captures. Its complete inventory and archives
+authenticate. All three ARM64 r96 cross-builds pass on that same source, with 15 matching PE/PDB pairs
+and five real ASan compiler/image controls authenticated. Native ARM64 runtime is unavailable.
+This is the current checkpoint; the older source identities below are historical qualification.
+
+- [x] Preserve/authenticate r855's complete Debug success and r856's original four analyzer failures before changing their fixtures.
+- [x] Repair the exact error-code type, conditional throwing-constructor fixture and ordered three-Redo fixtures without suppressing production diagnostics or weakening their predicates; authenticate corrected Release analysis r857.
+- [x] Finish the corrected native x64/ARM64 matrix and update the qualification record: full x64 Debug/Release/real ASan, Release analysis and three ARM64 r96 cross-builds authenticate on the same 1,207 inputs and 20 contracts.
+- [ ] Commit and push the qualified Wand checkpoint.
+- [x] Prepare and privately test the numeric selection-outline transport: 32 assertions plus summary in Debug/Release/real ASan, with an actual sanitizer negative probe. Exact anchor subtraction, cancellation, copied buffers and worker/last-weak ownership pass. This is an isolated draft, not native host/consumer admission or owner path-construction closure.
+- [x] Privately qualify nested `ReadRegion` and sparse reference-warp reads in Debug: all 9,008 original Document records plus 22 literal pixel/padding/held-lease/cache assertions authenticate. Keep explicit `Data()` nested publication and its original history assertion. Preserve the initial missing-DLL run, the original history regression and the checker delimiter refusal. Native integration, complete source/private-copy/cache phase admission and broader profiles remain due.
+- [ ] Integrate original-ticket outline consumer admission and bounded resource construction; remove the full Direct2D path build from the owner before closing S5/H4.
+
+Earlier recorded-caller checkpoint (2026-10-11): all seven recorded GPU readback/composition callers are integrated.
 Focused Debug r829/r830 passes on1301BC/1174 inputs and its exact saved binary: all126 ordered application
 stages,268 original clipboard checks/52 scenarios,24 reader and12 joined-Close controls; all22 sizing cases
 and2 real cleanup controls retain and refund the exact private baseline. Earlier r823/r826/r828 failures
@@ -70,7 +93,9 @@ and serialized Release analysis r847 now pass; r846 remains the preserved depend
 - [x] Pass focused native Host partition/scheduler and Document immutable-geometry controls on the integrated source; keep the initial private mixed-header ABI failure in the record.
 - [x] Authenticate full Debug r845 on the same1180-input source: all126 application stages, exact predecessor inventories,43 Host and36 Document additions pass; archive completion `935C9DC6CFA50712D3FA62984A29B1AB3408F02AD762BE15428E3B4CFA04ED63`.
 - [x] Complete the foundation matrix on the exact1180-input source: full Debug r845, Release r849, real ASan r848 and serialized analysis r847 authenticate. All three ARM64 r95 cross-builds,15 PE/PDB pairs and five ASan compiler/image controls verify. Skills15 and formatting1042 pass. Preserve r846 restore-lock failure and the earlier private ABI failure; native ARM64 runtime, caller activation and G1 remain separate.
-- [ ] Integrate the bounded Clipper adapter with an admitted output/history phase and a separately retiring capture/scratch phase; test real Wand New/Add/Subtract, no-match, cancellation, staleness, Undo/Redo and Close.
+- [x] Commit and push that qualified foundation: `805bbcd` on `codex/p1-opacity-host-proof`; native Wand integration remains the next step.
+- [x] Integrate the bounded Clipper adapter and original-ticket persistent output/history phase with separately retiring capture/scratch. Focused native Debug r852 Host (8,880), r853 Document (9,008) and r854 WARP Application (7,399 stdout/6,902 stderr,126 ordered stages) authenticate on the same1,207-input freeze `8D19FF…` and20-contract pre-runtime binding `8BC9B7…`. Real New/Add/Subtract FIFO, no-match, cancellation/staleness, Undo/Redo, copied/weak readers and real Close pass. Preserve r850's failed fixture registration; its corrected native build r851 passes. Full current matrix and activation/G1 remain separate.
+- [x] Qualify that integrated Wand checkpoint across full Debug/Release/real ASan, analysis and ARM64 cross-builds on the corrected `3A6F4D…` source. All9 delivery areas remain open; checkpoint commit/push is tracked above.
 - [ ] Complete all H3 caller phase arithmetic, unique resident/source/cache accounting and owner costs; this primitive alone does not close H3.
 
 Next selection implementation: the private, non-integrated bounded Clipper2 adapter passes workspace,
@@ -92,9 +117,32 @@ and executable checks. A later private revision adds mode-aware boolean admissio
 accounting independent of the64 temporary slots. The private Debug Document suite authenticates8878 records
 (8820 predecessors+38 lifetime+20 bounded-plan controls), and Host authenticates8880 records (8838
 predecessors+41 persistent-output assertions+summary), with unchanged source and executable identities.
-The isolated actual WARP application builds, but its original first run exits5 at the premature zero-reservation
-check while the published Wand selection/history remain live. That failure is preserved before adjusting
-fixture cleanup to the real graph lifetime. Native integration, complete host scenarios and G1 remain due.
+The isolated actual WARP application builds. Its original first run exits5 at the premature zero-reservation
+check while the published Wand selection/history remain live; that failure is preserved before adjusting
+fixture cleanup to the real graph lifetime. Later private r2 preserves a new boolean fixture representation
+failure. The original pinned Clipper2 engine independently supplies the six-point union and four-point
+subtraction literals; only the new boolean fixtures change to those literals. Private r3 passes the actual
+Wand layer144-check/17-mode and composite199-check/21-mode suites but exits5 on two original clipboard
+paste-retry assertions. Its953 source files, six runtime artifacts and failed logs are preserved with manifest
+`70893756FAC01A12E2D69C433A9CA9403CF777D77BFA133C0DC1C41F7568B46E`.
+Diagnostic private r4 passes the complete original application inventory plus129 Wand assertions with the
+clipboard predicates unchanged. A zero/unavailable clipboard sequence must not prove private preference;
+Main adds that guard and a real foreign-paste/Inspect/Copy retry regression. Private r5 authenticates7399
+stdout and6902 stderr records (six new clipboard checks), with both Wand suites unchanged and all original
+predicates retained. This prevents the independently identified zero-sentinel bug; r3's cause remains
+unconfirmed because it did not record the actual sequence/pixel/counter values. Neither repeat success nor
+the guard explains away that preserved failure. Native integration, ordinary activation and G1 remain due.
+
+Main also authenticates the actual revised bounded-engine Debug/Release/real-ASan sweeps against their461
+source inputs and saved executables/runtime:130 PASS records per configuration,30 pinned compatibility
+cases,1021 capacity values,262144-point and16384-disjoint-intersection cases, and every reached engine
+allocation/cancellation prefix (Debug/ASan2188/168; Release1359/161). The actual ASan `--arena-overrun`
+child exits1 with `use-after-poison` in `probe.cpp`. The independent reader's first refusal for an invented
+historical filename is retained; Main corrects the file list and binds the recorded manifest digest explicitly.
+Reader `C93CD3…` reports PASS in `BoundedArenaRequalification-r1-Main/verified-arena-inventory-Main-r4.json`.
+These are private functional/fault proofs, not native runtime or G1 performance measurements. All four
+formatted engine files reproduce byte-for-byte from the exact pinned Clipper2 2.0.1 sources using Main's
+prospective regeneration tool; license, native registration and the integrated matrix are next.
 
 Main's later private fault sweep covers every engine allocation and checkpoint reached by30 fixed cases;
 larger literal cases cover262144 collinear points and16384 disjoint intersections. Release/real ASan pass,

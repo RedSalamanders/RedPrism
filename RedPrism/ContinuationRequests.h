@@ -67,6 +67,7 @@ struct HostWandLayerNewInput final
     Vec2 point;
     WandSettings settings;
     bool antialiased;
+    SelectionMode mode = SelectionMode::New;
 };
 // Same event fields and New coalescing family. The captured All Layers setting selects the distinct
 // composite graph at execution; avoid a duplicate variant alternative and its wider STL dispatch tables.

@@ -136,6 +136,16 @@ Direct reference methods retain their existing behavior; caller migration remain
 boundary does not qualify constant-time document capture, incremental storage accounting, other operation
 groups or the measured G1 bound. These remain explicit H2/H3/H4 work.
 
+`PrepareEdit` may receive an already admitted publication-memory owner. Newly constructed topology,
+snapshot, entry, stack and storage-index controls retain that owner; reusing an existing immutable control
+preserves its original owner. Trim clones new containers with the new publication owner. The value graph
+is destroyed before its accounting owner, and the shared allocator retains that owner until the last weak
+control has actually deallocated. Owner-side final strong release uses deferred worker destruction, including
+small graphs. An owned null-valued alias still has ownership; an empty shared handle keeps the direct
+reference allocation/destruction behavior. The factory performs no admission. The caller must declare all
+new capacities/control overlap and bind the original reservation before publication. This lifetime protocol
+does not close unique resident accounting, late residency, ordinary activation or G1.
+
 Destructive color/filter commits use this boundary. Their complete color result,
 candidate layer/history, captured generation and retired settings/panel form one private publication/release
 owner. Capturing their input follows full admission; no failure after mutation is caught. Other callers and

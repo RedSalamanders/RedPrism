@@ -26,6 +26,7 @@
 #include "Host.Tests.PathClassificationRead.h"
 #include "Host.Tests.PathInputTransfer.h"
 #include "Host.Tests.PathReadWaitCycleExhaustion.h"
+#include "Host.Tests.PersistentOutputMemory.h"
 #include "Host.Tests.PointerInputStreamPeek.h"
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
@@ -1933,6 +1934,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRetainedJobMemoryTests();
     gFailures += RunSharedRetainedJobMemoryTests();
     gFailures += RunPartitionedRetainedMemoryTests();
+    gFailures += RunPersistentOutputMemoryTests();
     gFailures += RunCompletedPreviewMemoryTests();
     gFailures += RunRetirementMemoryTests();
     gFailures += RunPreparedRasterPreviewLifetimeTests();

@@ -250,6 +250,9 @@ and Ctrl+V cut, copy, copy merged and paste (`ApplicationClipboardJobs` admits t
 `ClipboardTransfer` publishes PNG and a 32-bit DIB with straight alpha or reads another app's owned PNG/DIB on a
 worker. Foreign pixels are centered on the canvas; a sealed receipt binds the private copy to system content.
 A private copy that could not reach the system clipboard remains the newest until the system changes again.
+Only a nonzero matching clipboard sequence may prove that private preference. A zero/unavailable query
+must continue through the ordinary worker inspection and bounded retries, never substitute private pixels
+for an offered foreign image. Inspection's no-image fall-through and malformed-image refusal remain unchanged.
 Acquisition retries retain the original job and reservation, with at most six total Inspect/Copy acquisitions.
 Copy and Copy
 Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends

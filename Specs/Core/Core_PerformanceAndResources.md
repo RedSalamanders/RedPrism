@@ -316,6 +316,24 @@ Debug vector proxies, immutable selection/control roots and complete metadata/hi
 this implementation-based capacity proof when changing the toolset; it is not a portable `std::vector` guarantee.
 The eight-million-edge limit bounds accepted tracing, not canvas area or Clipper booleans.
 
+Settled Add/Subtract plans additionally declare the isolated bounded Clipper2 graph before source capture.
+Its arena is128 MiB plus the aligned `PixelBuffer` allocation record. Engine containers, raw nodes, Debug
+proxies and stable-sort scratch stay in that arena. The adapter accepts at most16,000,004 input points and
+8,000,000 output points with2,666,667 output loops. The declared ordinary output envelope includes every
+point/header capacity, cached geometry ownership, Debug proxies and shared controls. The trace graph, arena
+and two ordinary output envelopes may coexist; admission includes that phase and complete retirement, even
+for a small click. This deliberately conservative bound reserves accounting, not physical allocation of
+every possible output point. Insufficient physical/commit capacity refuses locally; large supported-image
+acceptance and measured owner/stop costs remain P1 gates. Subtract without a current selection needs no engine.
+Old New-only plans still refuse boolean admission with `UnknownClipperWorkspace`.
+
+The maintained engine fork preserves pinned Clipper2 2.0.1 numerical conversion, winding, topology and
+equal-key order. Explicit engine/conversion checkpoints count at most64 work units; allocation, OS and
+destruction latency are separate. No arena allocation escapes. Its final vectors are adopted on the worker
+with the output accounting owner, and worker-prepared history keeps that owner through its last readable
+and weak shared control. Compatibility, every reached allocation/cancellation prefix, capacity exhaustion,
+large input and actual host ownership tests are required; source provenance alone does not qualify execution.
+
 The settled selection-nudge producer translates vertices and constructs immutable cached geometry in one pass.
 Cancellation checkpoints count both loops and points, at most 1,024 explicit work steps apart, including empty
 loops. Allocation/OS stop latency is separate. A zero delta reuses geometry and prepares no after-document copy.
@@ -1431,3 +1449,13 @@ and its owned wake handle through final destruction; they cannot affect a recons
 
 This primitive enables temporary processing memory to retire while a small result remains in history.
 Actual caller migration, global unique-resident accounting, constant-time capture and G1 remain required.
+
+For long-lived immutable output, `RetainPersistentOutput*` MAY convert an authorized partition at the same
+original callback boundary. The output no longer occupies the temporary64-slot pool; the temporary phase
+alone keeps that preclaimed slot until its real acknowledgement. Conversion allocates nothing, queries no
+memory and preserves the exact reserved/resident sum. It grants no additional authority. Every output lease
+is immutable and releases exactly once into its held endpoint's atomic byte accumulator, never a reused
+slot. The owner refunds only the consumed release sum. A zero-to-positive accumulator transition signals
+the owned wake event; it adds no polling or per-output release record. Outstanding admitted charges bound
+the sum, including concurrent releases. Weak controls retain their original charge, and outputs surviving
+Close cannot release into a replacement scheduler. Persistent outputs also refuse growth without mutation.

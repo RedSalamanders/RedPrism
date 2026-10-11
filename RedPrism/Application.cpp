@@ -7085,12 +7085,13 @@ void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
                     pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,
                     _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()),
                     static_cast<unsigned long long>(_session.Generation()));
-    if (mode == SelectionMode::New && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (mode <= SelectionMode::Subtract && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
-        const auto receipt =
-            _session.wandSettings.sampleAllLayers
-                ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings, _session.selectionAntialiased})
-                : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased});
+        const auto receipt = _session.wandSettings.sampleAllLayers
+                                 ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings,
+                                                                            _session.selectionAntialiased, mode})
+                                 : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings,
+                                                                        _session.selectionAntialiased, mode});
         if (_traceWandForTest)
             std::printf("WAND ADMISSION outcome=%u\n", static_cast<unsigned int>(receipt.Read().outcome));
         ReportHostAdmission(receipt);

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "SharedPublicationMemory.h"
-
 #include <cstddef>
 #include <memory>
 #include <new>
 #include <utility>
+
+class SharedPublicationMemory;
 
 // Shared preview control blocks retain the original accounting owner through their last weak reader too.
 // This allocator owns no pixels and performs no admission. Allocate only on the admitted worker.

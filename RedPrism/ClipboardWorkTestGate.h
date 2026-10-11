@@ -40,6 +40,7 @@ struct ClipboardWorkTestGate final
     bool throwMainAdmissionFailure = false;
     bool throwCaptureFailure = false;
     bool throwWorkerFailure = false;
+    bool forceUnavailableProbeSequence = false; // negative query result; never fakes a transfer
     std::optional<ClipboardTransfer::Fault> fault;
     std::uint32_t nativeError = ERROR_ACCESS_DENIED;
     std::atomic<unsigned int> openFailures{0};

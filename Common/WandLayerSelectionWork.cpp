@@ -1,6 +1,8 @@
 #include "WandLayerSelectionWork.h"
 
+#include "BoundedClipper/BoundedSelectionBoolean.h"
 #include "Selection.h"
+#include "SharedPublicationMemory.h"
 
 #include <cmath>
 #include <limits>
@@ -76,11 +78,29 @@ WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerS
     if (completeReservation != plan.reservationBytes)
         return WandLayerSelectionAdmission::IncompletePlan;
 
-    // This plan accounts New-mode flood/trace, document/history capture and publication/retirement. A
-    // selection boolean can allocate Clipper intersections and output whose capacities are not bounded by
-    // the trace-edge ceiling. Refuse before the caller captures its document until Clipper has a proved cap.
+    // Preserve refusal for the old incomplete New-only plan. The bounded adapter uses a separately
+    // admitted fixed arena and exact-reserve output vectors; none may escape the worker arena.
     if (mode == SelectionMode::Add || (mode == SelectionMode::Subtract && hasCurrentSelection))
-        return WandLayerSelectionAdmission::UnknownClipperWorkspace;
+    {
+        if (!plan.booleanWorkspaceBytes || !plan.booleanOutputBytes || !plan.booleanPhaseBytes)
+            return WandLayerSelectionAdmission::UnknownClipperWorkspace;
+        WandByteSum boolean;
+        if (!boolean.Add(plan.tracePhaseBytes) || !boolean.Add(plan.booleanWorkspaceBytes) ||
+            !boolean.Add(2, plan.booleanOutputBytes))
+            return WandLayerSelectionAdmission::Overflow;
+        const BoundedSelectionBoolean::Limits limits;
+        WandByteSum output;
+        const auto ownership = SelectionLoops::WorkOwnershipAllowance(limits.outputLoops);
+        if (!ownership || !output.Add(limits.outputPoints, sizeof(Vec2)) ||
+            !output.Add(limits.outputLoops, sizeof(SelectionLoop)) || !output.Add(sizeof(std::vector<SelectionLoop>)) ||
+            !output.Add(ownership))
+            return WandLayerSelectionAdmission::Overflow;
+        if (boolean.value != plan.booleanPhaseBytes || plan.booleanOutputBytes != output.value ||
+            plan.booleanWorkspaceBytes !=
+                PixelBuffer::RequiredBytes(BoundedSelectionBoolean::Limits{}.workspaceBytes) ||
+            plan.booleanPhaseBytes > plan.preparationBytes - plan.captureHistoryBytes)
+            return WandLayerSelectionAdmission::IncompletePlan;
+    }
 
     requiredBytes = completeReservation;
     return WandLayerSelectionAdmission::Ready;
@@ -115,13 +135,18 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInpu
     auto token = CaptureJobToken();
     if (!token)
         return std::nullopt;
+    std::uint64_t outputHistoryBytes = 0;
+    if (!TryAddWandLayerSelectionBytes(history.EditMemoryBytes(_document), 8 * 4096, outputHistoryBytes))
+        return std::nullopt;
     return WandLayerSelectionInput(point, settings, antialiased, mode, std::move(authority), std::move(token.value()),
-                                   history.CaptureState(), _document.value(), _activeLayerID, composite);
+                                   history.CaptureState(), _document.value(), _activeLayerID, composite,
+                                   outputHistoryBytes);
 }
 
 std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelectionPublication(
     WandLayerSelectionInput input, WandFailure* failure, CancelToken cancellation,
-    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
+    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
+    std::shared_ptr<const SharedPublicationMemory> memory)
 {
     if (input._usesComposite)
     {
@@ -129,12 +154,14 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelec
             *failure = WandFailure::Memory;
         return std::nullopt;
     }
-    return PrepareWandSelectionPublication(std::move(input), {}, failure, cancellation, historyObserver, observer);
+    return PrepareWandSelectionPublication(std::move(input), {}, failure, cancellation, historyObserver, observer,
+                                           std::move(memory));
 }
 
 std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandCompositeSelectionPublication(
     WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
-    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
+    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
+    std::shared_ptr<const SharedPublicationMemory> memory)
 {
     if (!input._usesComposite)
     {
@@ -143,12 +170,13 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandCompositeS
         return std::nullopt;
     }
     return PrepareWandSelectionPublication(std::move(input), std::move(composite), failure, cancellation,
-                                           historyObserver, observer);
+                                           historyObserver, observer, std::move(memory));
 }
 
 std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionPublication(
     WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
-    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
+    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
+    std::shared_ptr<const SharedPublicationMemory> memory)
 {
     const auto refused = [&](WandFailure reason) -> std::optional<PreparedWandLayerSelection>
     {
@@ -207,37 +235,42 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     std::optional<DocumentSelection> selection = before.selection;
     if (matched)
     {
-        switch (input._mode)
+        std::optional<std::vector<SelectionLoop>> changed;
+        if (input._mode == SelectionMode::New)
+            changed = std::move(outline.value());
+        else if (input._mode == SelectionMode::Add || before.selection)
         {
-        case SelectionMode::New:
-            selection = DocumentSelection{input._antialiased, std::move(outline.value())};
-            break;
-        case SelectionMode::Add:
-        {
-            const auto clipped = SelectionGeometry::Intersect(
-                outline.value(), SelectionGeometry::Rect(0, 0, before.width, before.height));
-            auto loops =
-                before.selection.has_value() ? SelectionGeometry::Union(before.selection->loops, clipped) : clipped;
-            // legacy Selection.swift applySelection uses the captured current AA option for a matched result.
-            // No-match paths below retain the exact old selection and its AA instead.
-            selection = DocumentSelection{input._antialiased, std::move(loops)};
-            break;
-        }
-        case SelectionMode::Subtract:
-            if (before.selection.has_value())
+            auto clipped = BoundedSelectionBoolean::Run(outline.value(),
+                                                        SelectionGeometry::Rect(0, 0, before.width, before.height),
+                                                        BoundedSelectionBoolean::Operation::Intersect, cancellation);
+            if (!clipped)
+                return refused(cancellation.IsCancelled() ? WandFailure::Cancelled : WandFailure::Memory);
+            if (before.selection)
             {
-                const auto clipped = SelectionGeometry::Intersect(
-                    outline.value(), SelectionGeometry::Rect(0, 0, before.width, before.height));
-                selection = DocumentSelection{input._antialiased,
-                                              SelectionGeometry::Subtract(before.selection->loops, clipped)};
+                changed = BoundedSelectionBoolean::Run(before.selection->loops.Get(), clipped.value(),
+                                                       input._mode == SelectionMode::Add
+                                                           ? BoundedSelectionBoolean::Operation::Union
+                                                           : BoundedSelectionBoolean::Operation::Subtract,
+                                                       cancellation);
+                if (!changed)
+                    return refused(cancellation.IsCancelled() ? WandFailure::Cancelled : WandFailure::Memory);
             }
-            break;
+            else
+                changed = std::move(clipped.value());
         }
+        // Subtract with no selection remains the exact reference no-op, after tracing the original click.
+        if (changed)
+        {
+            auto geometry = SelectionLoops::AdoptForWork(std::move(changed.value()), cancellation, memory);
+            if (!geometry)
+                return refused(cancellation.IsCancelled() ? WandFailure::Cancelled : WandFailure::Memory);
+            selection = DocumentSelection{input._antialiased, std::move(geometry.value())};
+        }
+        else if (cancellation.IsCancelled())
+            return refused(WandFailure::Cancelled);
     }
     else if (input._mode == SelectionMode::New)
-    {
         selection.reset();
-    }
     if (!Checkpoint(observer, WandLayerSelectionStage::SelectionReady, cancellation))
         return refused(WandFailure::Cancelled);
     const bool unchanged = selection == before.selection;
@@ -265,11 +298,26 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     result._document = std::move(after);
     result._history = DocumentHistory::PrepareEdit(
         result._input._history, result._input._document, result._input._active, result._document, result._input._active,
-        matched ? L"Magic Wand" : L"Deselect", cancellation, historyObserver);
+        matched ? L"Magic Wand" : L"Deselect", cancellation, historyObserver, memory);
     if (cancellation.IsCancelled())
         return refused(WandFailure::Cancelled);
     if (!result._history)
         return refused(WandFailure::Memory);
+    if (memory.use_count() != 0)
+    {
+        WandByteSum output;
+        if (!result._input._outputHistoryBytes || !output.Add(result._input._outputHistoryBytes) ||
+            !output.Add(SharedPublicationMemory::OwnershipAllowance()))
+            return refused(WandFailure::Memory);
+        if (result._document->selection && result._document->selection->loops.Identity())
+        {
+            const auto& loops = result._document->selection->loops;
+            const auto allowance = SelectionLoops::WorkOwnershipAllowance(loops.size());
+            if (!allowance || !output.Add(loops.StorageBytes()) || !output.Add(allowance))
+                return refused(WandFailure::Memory);
+        }
+        result._outputBytes = output.value;
+    }
     return result;
 }
 
@@ -299,23 +347,24 @@ bool DocumentSession::ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayer
 }
 
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelectionMemory(
-    Vec2 point, WandSettings settings) const noexcept
+    Vec2 point, WandSettings settings, SelectionMode mode) const noexcept
 {
-    return PlanWandSelectionMemory(point, settings, false);
+    return PlanWandSelectionMemory(point, settings, false, mode);
 }
 
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandCompositeSelectionMemory(
-    Vec2 point, WandSettings settings) const noexcept
+    Vec2 point, WandSettings settings, SelectionMode mode) const noexcept
 {
-    return PlanWandSelectionMemory(point, settings, true);
+    return PlanWandSelectionMemory(point, settings, true, mode);
 }
 
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMemory(Vec2 point, WandSettings settings,
-                                                                                     bool composite) const noexcept
+                                                                                     bool composite,
+                                                                                     SelectionMode mode) const noexcept
 {
-    if (!_document || !ValidSettings(settings, composite) || !ValidPoint(point, _document->width, _document->height) ||
-        _document->width > kMaxCanvasSide || _document->height > kMaxCanvasSide ||
-        !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority()))
+    if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
+        !ValidPoint(point, _document->width, _document->height) || _document->width > kMaxCanvasSide ||
+        _document->height > kMaxCanvasSide || !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority()))
         return std::nullopt;
     WandLayerSelectionMemoryPlan plan;
     const auto historyBytes = history.EditMemoryBytes(_document);
@@ -335,7 +384,7 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
     // Existing history bound includes eight complete metadata copies plus shared stack/trim construction.
     // This graph creates four document copies; remaining allowance covers the retired copies after publish.
     if (!base.Add(historyBytes) || !base.Add(1, sizeof(WandLayerSelectionInput) + sizeof(PreparedWandLayerSelection)) ||
-        !base.Add(4096))
+        !base.Add(4096) || !base.Add(8, 4096))
         return std::nullopt;
     plan.captureHistoryBytes = base.value;
     const ImageLayer* target = composite ? nullptr : CapturedWandLayer(_document.value(), _activeLayerID);
@@ -393,12 +442,39 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
     // recycle pool. Carry that capacity through later phases instead of assuming the process has freed it.
     plan.maskPhaseBytes = maskPhase.value;
     plan.tracePhaseBytes = tracePhase.value;
-    if (!base.Add(std::max({plan.sourcePhaseBytes, plan.maskPhaseBytes, plan.tracePhaseBytes})))
+    const bool boolean = mode == SelectionMode::Add || (mode == SelectionMode::Subtract && _document->selection);
+    if (boolean)
+    {
+        const BoundedSelectionBoolean::Limits limits;
+        // The existing selection is already held/charged by capture. Refuse before copying a source when
+        // it cannot enter the adapter. The four canvas corners need the input bound's final four points.
+        if (_document->selection && _document->selection->loops.PointCount() > limits.outputPoints)
+            return std::nullopt;
+        WandByteSum output;
+        const auto ownership = SelectionLoops::WorkOwnershipAllowance(limits.outputLoops);
+        if (!ownership || !output.Add(limits.outputPoints, sizeof(Vec2)) ||
+            !output.Add(limits.outputLoops, sizeof(SelectionLoop)) || !output.Add(sizeof(std::vector<SelectionLoop>)) ||
+            !output.Add(ownership))
+            return std::nullopt;
+        plan.booleanOutputBytes = output.value;
+        plan.booleanWorkspaceBytes = PixelBuffer::RequiredBytes(limits.workspaceBytes);
+        // Include capacity rounding and the owned PixelAllocation record; the engine sees only the
+        // requested arena capacity. A zero aligned-allocation envelope refuses before source capture.
+        if (!plan.booleanWorkspaceBytes)
+            return std::nullopt;
+        WandByteSum phase;
+        if (!phase.Add(plan.tracePhaseBytes) || !phase.Add(plan.booleanWorkspaceBytes) ||
+            !phase.Add(2, plan.booleanOutputBytes))
+            return std::nullopt;
+        plan.booleanPhaseBytes = phase.value;
+    }
+    if (!base.Add(std::max({plan.sourcePhaseBytes, plan.maskPhaseBytes, plan.tracePhaseBytes, plan.booleanPhaseBytes})))
         return std::nullopt;
     plan.preparationBytes = base.value;
     // Existing source/document/history/display owners may be last references by acknowledgement. Charge their
     // entire graph, copied metadata and new geometry; no assumption that a current live document retains them.
     if (!retained.Add(plan.captureHistoryBytes) || !retained.Add(plan.geometryGrowthBytes) ||
+        !retained.Add(plan.booleanWorkspaceBytes) || !retained.Add(2, plan.booleanOutputBytes) ||
         (composite && !retained.Add(plan.sampledPixelsBytes)))
         return std::nullopt;
     plan.retirementBytes = retained.value;

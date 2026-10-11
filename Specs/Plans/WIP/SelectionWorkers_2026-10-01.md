@@ -1,5 +1,21 @@
 # Ordered selection workers (P1.6)
 
+## Current continuation checklist (2026-10-11)
+
+- [x] Native layer and composite Wand New/Add/Subtract, bounded original-engine Boolean geometry,
+  FIFO commands, no-match, cancellation/staleness, actual Undo/Redo and document/history Close qualify
+  on the corrected 1,207-input source in full x64 Debug/Release/real ASan, Release analysis and all three
+  ARM64 cross-builds. Persistent output survives copied/weak readers with its original exact charge.
+  See [current qualification](../../TestRuns/P1WandPersistentOutput_2026-10-11.md).
+- [x] Privately qualify numeric outline transport in Debug/Release/real ASan: exact anchor subtraction,
+  cancellation and copied/final-weak ownership. This draft is not native consumer/resource qualification.
+- [ ] Complete large-image admission, overlapping gestures/writers, original-ticket outline consumer
+  admission and bounded display/coverage/resource construction. The full owner Direct2D path build remains.
+- [ ] Qualify ordinary activation and the original G1 measurements; P1 remains WIP. ARM64 runtime is unavailable.
+
+The entries below retain earlier qualification scopes and failures; their older source identities do not
+replace this current checkpoint. `Intersect` is an internal canvas clip, not a user-facing Wand mode.
+
 Execution resumed by the user on 2026-10-03. The saved [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 retains the interruption. Close Project native r3 qualifies all six profiles, with actual exit 0 at
 `2026-10-03T14:07:35.1376140+00:00`. Independent verification and immutable archival pass against 630 inputs and

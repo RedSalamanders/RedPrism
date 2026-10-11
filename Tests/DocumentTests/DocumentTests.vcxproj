@@ -76,7 +76,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Document.Tests.SelectionGeometryLifetime.h" />
+    <ClInclude Include="Document.Tests.HistoryPublicationLifetime.h" />
+    <ClInclude Include="Document.Tests.WandBoundedPlan.h" />
+    <ClInclude Include="Document.Tests.WandBooleanGeometry.h" />
+    <ClInclude Include="Document.Tests.WandBooleanCompatibility.h" />
+    <ClInclude Include="Document.Tests.WandBooleanLoad.h" />
+    <ClInclude Include="Document.Tests.WandBooleanWorkspace.h" />
+    <ClInclude Include="Document.Tests.WandBooleanTestCases.h" />
     <ClCompile Include="Document.Tests.SelectionGeometryLifetime.cpp" />
+    <ClCompile Include="Document.Tests.HistoryPublicationLifetime.cpp" />
+    <ClCompile Include="Document.Tests.WandBoundedPlan.cpp" />
+    <ClCompile Include="Document.Tests.WandBooleanGeometry.cpp" />
+    <ClCompile Include="Document.Tests.WandBooleanCompatibility.cpp" />
+    <ClCompile Include="Document.Tests.WandBooleanLoad.cpp" />
+    <ClCompile Include="Document.Tests.WandBooleanWorkspace.cpp" />
     <ClInclude Include="Document.Tests.StrokeFinishPublication.h" />
     <ClInclude Include="Document.Tests.StrokeFinalCoverage.h" />
     <ClInclude Include="Document.Tests.StrokeSample.h" />
@@ -353,6 +366,8 @@
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionNudgeWork.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\clipper.engine.cpp" />
     <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
@@ -383,6 +398,12 @@
     <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
     <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
+    <ClInclude Include="..\..\Common\PublicationObject.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\Workspace.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.core.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.engine.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.version.h" />
     <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
     <ClCompile Include="Document.Tests.PreparedRasterPreview.cpp" />
     <ClInclude Include="Document.Tests.PreparedRasterPreview.h" />

@@ -1093,7 +1093,16 @@ class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitRe
             return result;
         // Preserve the current private preference on a pre-Empty mirror failure. This worker samples the
         // source before any transfer, never a later owner completion sequence.
-        if (_hasPrivate && GetClipboardSequenceNumber() == _preferredSequence)
+        const auto sampledSequence = _gate && _gate->forceUnavailableProbeSequence ? 0u : GetClipboardSequenceNumber();
+        if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)
+            std::printf(
+                "DIAG clipboard-probe before attempt=%u private=%d preferred=%lu sampled=%lu forced=%u opens=%u\n",
+                _attempts, _hasPrivate, static_cast<unsigned long>(_preferredSequence),
+                static_cast<unsigned long>(sampledSequence), _gate->forcedBusyAttempts.load(),
+                _gate->openAttempts.load());
+        // Zero is an unavailable sequence query, and also our "inspect the OS" sentinel. It cannot
+        // prove that private pixels match the OS clipboard. Continue through ordinary Inspect/retry.
+        if (_hasPrivate && _preferredSequence != 0 && sampledSequence == _preferredSequence)
         {
             _privatePreference = true;
             _status = ClipboardTransfer::Status::Ok;
@@ -1104,6 +1113,12 @@ class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitRe
                                              &_availability);
         if (_status == ClipboardTransfer::Status::Cancelled)
             return {JobStatus::Cancelled};
+        if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)
+            std::printf("DIAG clipboard-probe inspected attempt=%u status=%u observed=%d image=%d sequence=%lu "
+                        "forced=%u opens=%u\n",
+                        _attempts, static_cast<unsigned>(_status), _availability.observed,
+                        _availability.hasImageFormats, static_cast<unsigned long>(_availability.sequence),
+                        _gate->forcedBusyAttempts.load(), _gate->openAttempts.load());
         if (_availability.observed && !_availability.hasImageFormats)
         {
             _privatePreference = _hasPrivate; // legacy no-image fall-through; malformed images do not fall through

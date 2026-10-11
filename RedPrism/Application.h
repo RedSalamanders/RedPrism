@@ -1248,6 +1248,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     std::optional<HistoryWorkStamp> _wandLayerHostStamp;
     std::optional<JobTicket> _wandLayerHostTicket;
     std::shared_ptr<WandLayerHostTestGate> _wandLayerHostTestGate;
+    std::shared_ptr<WandLayerHostTestGate> _wandOutputLifetimeTestGate;
     bool _traceWandForTest = false;
     std::optional<HistoryWorkStamp> _historyRestoreStamp;
     std::optional<JobTicket> _historyRestoreTicket;

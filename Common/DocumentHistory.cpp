@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "PublicationObject.h"
 
 #include <algorithm>
 #include <array>
@@ -9,11 +10,13 @@
 #include <utility>
 
 std::shared_ptr<const HistoryStorageTopology> HistoryStorageTopology::Prepare(
-    const std::optional<CanvasDocument>& document, CancelToken cancellation)
+    const std::optional<CanvasDocument>& document, CancelToken cancellation,
+    std::shared_ptr<const SharedPublicationMemory> memory)
 {
     if (cancellation.IsCancelled())
         return {};
-    auto result = std::make_shared<HistoryStorageTopology>(ConstructionTag{});
+    auto result =
+        MakePublicationObject<HistoryStorageTopology>(std::move(memory), kDeferredReleaseThreshold, ConstructionTag{});
     result->_hasDocument = document.has_value();
     std::unordered_set<const void*> seen;
     std::vector<Raster> pending;
@@ -93,7 +96,7 @@ std::shared_ptr<const HistoryStorageTopology> DocumentHistory::PrepareTopology(
     for (const auto& candidate : candidates)
         if (candidate && candidate->storageTopology && candidate->storageTopology->Matches(document))
             return candidate->storageTopology;
-    return HistoryStorageTopology::Prepare(document, cancellation);
+    return HistoryStorageTopology::Prepare(document, cancellation, state.publicationMemory);
 }
 
 std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(Snapshot snapshot,
@@ -103,7 +106,8 @@ std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(S
     snapshot.storageTopology = PrepareTopology(snapshot.document, state, cancellation);
     if (!snapshot.storageTopology || cancellation.IsCancelled())
         return {};
-    return std::make_shared<const Snapshot>(std::move(snapshot));
+    return MakePublicationObject<const Snapshot>(state.publicationMemory, kDeferredReleaseThreshold,
+                                                 std::move(snapshot));
 }
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
@@ -282,8 +286,9 @@ namespace
 std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(
     StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& beforeActive,
     const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
-    CancelToken cancellation, PrepareObserver observer)
+    CancelToken cancellation, PrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory)
 {
+    view.publicationMemory = std::move(memory);
     if (!view.owner || cancellation.IsCancelled() || view.depth < 0 || (view.depth != 0 && !view.pending))
         return std::nullopt;
     Publication result;
@@ -314,10 +319,11 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(
         return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
         return std::nullopt;
-    auto entry = std::make_shared<const Entry>(std::move(name), std::move(openingOwner), std::move(finishedOwner));
+    auto entry = MakePublicationObject<const Entry>(result.state.publicationMemory, kDeferredReleaseThreshold,
+                                                    std::move(name), std::move(openingOwner), std::move(finishedOwner));
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
-    result.state.past.push_back(entry);
+    result.state.past.push_back(entry, result.state.publicationMemory);
     result.state.future.clear();
     result.state.revision = entry->after->revision;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
@@ -477,7 +483,7 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
     const auto entry = std::make_shared<const Entry>(pending->name, pending->before, std::move(finishedOwner));
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
-    result.state.past.push_back(entry);
+    result.state.past.push_back(entry, result.state.publicationMemory);
     result.state.future.clear();
     result.state.revision = entry->after->revision;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::TrimIndex, cancellation) ||
@@ -808,6 +814,7 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
         }
     };
 
+    std::shared_ptr<const SharedPublicationMemory> publicationMemory; // Destroy maps/owners before accounting.
     std::unordered_map<const void*, RasterRecord> rasters;
     std::unordered_map<const void*, SelectionRecord> selections;
     std::unordered_map<const Entry*, EntryRecord> entries;
@@ -1359,11 +1366,15 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
         !index->CacheBounds(cancellation))
         return false;
     const auto dropPast = (std::min)(drop, state.past.size());
-    state.past.erase(state.past.begin(), state.past.begin() + static_cast<std::ptrdiff_t>(dropPast));
+    state.past.erase(state.past.begin(), state.past.begin() + static_cast<std::ptrdiff_t>(dropPast),
+                     state.publicationMemory);
     drop -= dropPast;
-    state.future.erase(state.future.begin(), state.future.begin() + static_cast<std::ptrdiff_t>(drop));
-    std::unique_ptr<StorageIndex, StorageIndex::Retire> sealed{index.release()};
-    state.storageIndex = std::shared_ptr<const StorageIndex>{std::move(sealed)};
+    state.future.erase(state.future.begin(), state.future.begin() + static_cast<std::ptrdiff_t>(drop),
+                       state.publicationMemory);
+    index->publicationMemory = state.publicationMemory;
+    auto* raw = index.release();
+    state.storageIndex = std::shared_ptr<const StorageIndex>{
+        raw, StorageIndex::Retire{}, PublicationGraphAllocator<StorageIndex>{state.publicationMemory}};
     return !cancellation.IsCancelled();
 }
 

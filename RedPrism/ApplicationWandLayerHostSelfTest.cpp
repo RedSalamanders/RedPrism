@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <thread>
 #include <utility>
 
 namespace
@@ -55,6 +56,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
     enum class Mode
     {
         LiteralAndCapture,
+        BooleanOrdered,
         NoOpRedo,
         NoWorkInputs,
         NoMatch,
@@ -90,6 +92,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
         bool adjacentCoalescedAtGate = false;
         bool fullRingCoalescedAtGate = false;
         bool ordinalGapRetainedAtGate = false;
+        bool booleansQueuedWithoutMutation = false;
         std::optional<CanvasDocument> before;
         std::optional<DocumentSelection> selectionBefore;
         DocumentHistory::StateView historyBefore;
@@ -132,6 +135,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
             _session.selectionAntialiased = originalAntialiased;
             _viewport = originalViewport;
             _wandLayerHostTestGate.reset();
+            _wandOutputLifetimeTestGate.reset();
         });
 
     const auto prepare = [this]()
@@ -193,7 +197,22 @@ int Application::RunWandLayerHostSelfTest() noexcept
                                                     owner._session.history.CurrentRevision() == state.revision &&
                                                     owner._session.Generation() == state.generation;
 
-            if (state.mode == Mode::OrderedDeselectUndo)
+            if (state.mode == Mode::BooleanOrdered)
+            {
+                owner.RunMagicWand(Vec2{2.2, 1.2}, SelectionMode::Add);
+                if (const auto* first = owner._hostRequests.PendingAt(0))
+                    state.NextQueued() = first->input.Receipt();
+                owner.RunMagicWand(Vec2{2.2, 1.2}, SelectionMode::Subtract);
+                if (const auto* second = owner._hostRequests.PendingAt(1))
+                    state.NextQueued() = second->input.Receipt();
+                state.booleansQueuedWithoutMutation = owner._hostRequests.Size() == 2 && state.queuedCount == 2 &&
+                                                      state.queued[0].Read().outcome == HostOutcome::Pending &&
+                                                      state.queued[1].Read().outcome == HostOutcome::Pending &&
+                                                      owner._session.Document() == state.before &&
+                                                      owner._session.history.CurrentRevision() == state.revision;
+                owner._wandLayerHostTestGate.reset();
+            }
+            else if (state.mode == Mode::OrderedDeselectUndo)
             {
                 state.NextQueued() = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect});
                 state.NextQueued() = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
@@ -288,6 +307,8 @@ int Application::RunWandLayerHostSelfTest() noexcept
         {
         case Mode::LiteralAndCapture:
             return "literal-capture";
+        case Mode::BooleanOrdered:
+            return "boolean-ordered";
         case Mode::NoOpRedo:
             return "noop-redo";
         case Mode::NoWorkInputs:
@@ -327,22 +348,12 @@ int Application::RunWandLayerHostSelfTest() noexcept
     if (!settle())
         return 5;
 
-    constexpr std::array modes{Mode::LiteralAndCapture,
-                               Mode::NoOpRedo,
-                               Mode::NoWorkInputs,
-                               Mode::NoMatch,
-                               Mode::OrderedDeselectUndo,
-                               Mode::CoalesceAdjacent,
-                               Mode::CoalesceFullRing,
-                               Mode::OrdinalGap,
-                               Mode::StaleActive,
-                               Mode::StaleMask,
-                               Mode::Cancel,
-                               Mode::WorkerFailure,
-                               Mode::CaptureFailure,
-                               Mode::HistoryEntryFailure,
-                               Mode::ViewAndWindowPump,
-                               Mode::Admission};
+    constexpr std::array modes{Mode::LiteralAndCapture, Mode::BooleanOrdered,   Mode::NoOpRedo,
+                               Mode::NoWorkInputs,      Mode::NoMatch,          Mode::OrderedDeselectUndo,
+                               Mode::CoalesceAdjacent,  Mode::CoalesceFullRing, Mode::OrdinalGap,
+                               Mode::StaleActive,       Mode::StaleMask,        Mode::Cancel,
+                               Mode::WorkerFailure,     Mode::CaptureFailure,   Mode::HistoryEntryFailure,
+                               Mode::ViewAndWindowPump, Mode::Admission};
 
     for (const Mode mode : modes)
     {
@@ -359,6 +370,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
                 const auto gate = std::make_shared<WandLayerHostTestGate>();
                 gate->hold = false;
                 _wandLayerHostTestGate = gate;
+                _wandOutputLifetimeTestGate = gate;
                 const auto receipt = QueueHostInput(HostWandLayerNewInput{point, CapturedWandSettings(), false});
                 const bool pending = receipt.Read().outcome == HostOutcome::Pending;
                 const auto settled = SettleJobs(_jobs, 15000, DispatchMessageThunk, this);
@@ -392,6 +404,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
             const auto gate = std::make_shared<WandLayerHostTestGate>();
             gate->hold = false;
             _wandLayerHostTestGate = gate;
+            _wandOutputLifetimeTestGate = gate;
             // Worker completion alone does not recycle records: only an owner drain frees these slots.
             for (std::size_t index = 0; index < JobScheduler::kCapacity; ++index)
             {
@@ -420,10 +433,19 @@ int Application::RunWandLayerHostSelfTest() noexcept
                              _session.Selection() == std::optional<DocumentSelection>(ExpectedWandOutline()) &&
                              gate->captures.load() == 1 && gate->reservationHeld.load() && gate->retired.load() &&
                              gate->retiredOffOwner.load() && !_wandLayerHostTicket && !_wandLayerHostStamp &&
-                             !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _hostRequests.Size() == 0 &&
+                             !_historyWork.Busy() && gate->publishedOutputs == 1 && gate->publishedOutputBytes > 0 &&
+                             gate->allOutputsBoundToOriginal &&
+                             _jobs.ReservedMemoryBytes() == gate->publishedOutputBytes && _hostRequests.Size() == 0 &&
                              !_activeHostRequest,
                          "fresh wand request failed or retained ownership after actual submission refusal");
+            _session.ClearDocument();
+            DocumentChanged();
+            (void)expect(name(mode), "recovery-real-close-refunds-output",
+                         settle() && !_session.Document() && _session.history.UndoCount() == 0 &&
+                             _jobs.ReservedMemoryBytes() == 0,
+                         "closing the recovered document/history did not acknowledge its actual output release");
             _wandLayerHostTestGate.reset();
+            _wandOutputLifetimeTestGate.reset();
             if (failures != 0)
                 return 5;
             continue;
@@ -457,6 +479,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
         if (mode == Mode::HistoryEntryFailure)
             gate->throwHistoryStage = DocumentHistory::PrepareStage::Entry;
         _wandLayerHostTestGate = gate;
+        _wandOutputLifetimeTestGate = gate;
 
         State state{*this, mode};
         state.before = _session.Document();
@@ -542,6 +565,61 @@ int Application::RunWandLayerHostSelfTest() noexcept
             (void)expect(name(mode), "capture-used-event-time-settings-and-aa",
                          gate->captures.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
                          "owner capture or off-owner aggregate retirement did not occur exactly as expected");
+        }
+        else if (mode == Mode::BooleanOrdered)
+        {
+            // Exact coordinates and ordering from the independently compiled pinned Clipper2 2.0.1.
+            // PreserveCollinear keeps six union vertices; Subtract starts at the lower-right corner.
+            const DocumentSelection expectedSubtract{
+                false, SelectionLoops{SelectionLoop{Vec2{2, 2}, Vec2{1, 2}, Vec2{1, 1}, Vec2{2, 1}}}};
+            (void)expect(name(mode), "real-add-subtract-inputs-queue-fifo",
+                         state.booleansQueuedWithoutMutation && state.queuedCount == 2 &&
+                             state.receipt.Read().outcome == HostOutcome::Succeeded &&
+                             state.queued[0].Read().outcome == HostOutcome::Succeeded &&
+                             state.queued[1].Read().outcome == HostOutcome::Succeeded,
+                         "real Add/Subtract inputs mutated inline, coalesced, reordered or failed");
+            (void)expect(name(mode), "literal-final-subtraction-and-three-history-entries",
+                         _session.Selection() == std::optional<DocumentSelection>(expectedSubtract) &&
+                             _session.history.UndoCount() == 3 && _session.history.UndoName() == L"Magic Wand" &&
+                             _session.history.CurrentRevision() != state.revision,
+                         "New/Add/Subtract did not produce the independent final rectangle and three entries");
+            const auto undo = [&]()
+            {
+                const auto receipt = QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
+                return settle() && receipt.Read().outcome == HostOutcome::Succeeded;
+            };
+            const auto redo = [&]()
+            {
+                const auto receipt = QueueHostInput(HostCommandInput{ChromeHost::kCommandRedo});
+                return settle() && receipt.Read().outcome == HostOutcome::Succeeded;
+            };
+            const DocumentSelection expectedUnion{
+                false,
+                SelectionLoops{SelectionLoop{Vec2{2, 1}, Vec2{3, 1}, Vec2{3, 2}, Vec2{2, 2}, Vec2{1, 2}, Vec2{1, 1}}}};
+            const auto matchesUnion = [&]()
+            { return _session.Selection() == std::optional<DocumentSelection>(expectedUnion); };
+            (void)expect(name(mode), "undo-subtract-restores-literal-union",
+                         undo() && matchesUnion() && _session.history.UndoCount() == 2,
+                         "actual Undo did not restore the independent clockwise union rectangle");
+            (void)expect(name(mode), "undo-add-restores-original-new-selection",
+                         undo() && _session.Selection() == std::optional<DocumentSelection>(ExpectedWandOutline()) &&
+                             _session.history.UndoCount() == 1,
+                         "actual Undo Add did not restore the original New result");
+            (void)expect(name(mode), "undo-new-restores-saved-revision-and-empty-selection",
+                         undo() && !_session.Selection() && _session.history.CurrentRevision() == state.revision &&
+                             _session.history.UndoCount() == 0 && _session.history.CanRedo(),
+                         "actual Undo New did not restore the saved empty document revision");
+            const bool restoredThree = [&]()
+            {
+                for (int entry = 0; entry < 3; ++entry)
+                    if (!redo())
+                        return false;
+                return true;
+            }();
+            (void)expect(name(mode), "redo-three-restores-literal-subtract-result",
+                         restoredThree && _session.Selection() == std::optional<DocumentSelection>(expectedSubtract) &&
+                             _session.history.UndoCount() == 3 && !_session.history.CanRedo(),
+                         "actual ordered Redo did not restore all three bounded boolean publications");
         }
         else if (mode == Mode::OrderedDeselectUndo)
         {
@@ -645,8 +723,56 @@ int Application::RunWandLayerHostSelfTest() noexcept
 
         (void)expect(name(mode), "owner-work-released",
                      !_wandLayerHostTicket && !_wandLayerHostStamp && !_historyWork.Busy() &&
-                         _jobs.ReservedMemoryBytes() == 0 && _hostRequests.Size() == 0 && !_activeHostRequest,
+                         _jobs.ReservedMemoryBytes() == gate->publishedOutputBytes && _hostRequests.Size() == 0 &&
+                         !_activeHostRequest,
                      "wand ticket, history stamp, queue entry, active request, or reservation remained owned");
+        const bool publishes = !refusesPublication && mode != Mode::NoOpRedo;
+        const unsigned int expectedOutputs =
+            !publishes ? 0u
+            : mode == Mode::BooleanOrdered
+                ? 3u
+                : (mode == Mode::CoalesceAdjacent || mode == Mode::CoalesceFullRing || mode == Mode::OrdinalGap ? 2u
+                                                                                                                : 1u);
+        (void)expect(name(mode), "exact-live-output-charge-and-original-ticket",
+                     gate->publishedOutputs == expectedOutputs && gate->allOutputsBoundToOriginal &&
+                         (publishes ? gate->publishedOutputBytes > 0 : gate->publishedOutputBytes == 0) &&
+                         _jobs.ReservedMemoryBytes() == gate->publishedOutputBytes,
+                     "successful outputs were not charged to their original tickets, or a no-op/refusal leaked charge");
+
+        std::optional<SelectionLoops> reader;
+        std::weak_ptr<const void> weakGeometry;
+        if (mode == Mode::LiteralAndCapture && _session.Selection())
+        {
+            reader = _session.Selection()->loops;
+            weakGeometry = reader->WeakStorageForTest();
+        }
+        // Release actual session/history/display owners after every original outcome and numeric assertion.
+        state.before.reset();
+        state.selectionBefore.reset();
+        state.historyBefore = {};
+        _session.ClearDocument();
+        DocumentChanged();
+        (void)expect(name(mode), "actual-document-history-close",
+                     settle() && !_session.Document() && _session.history.UndoCount() == 0 &&
+                         !_session.history.CanRedo(),
+                     "real document/history teardown did not settle");
+        if (reader)
+        {
+            (void)expect(name(mode), "copied-geometry-reader-retains-original-output",
+                         reader.value() == ExpectedWandOutline().loops && !weakGeometry.expired() &&
+                             _jobs.ReservedMemoryBytes() == gate->publishedOutputBytes,
+                         "copied literal geometry lost its original charge or bytes after actual Close");
+            reader.reset();
+            (void)expect(name(mode), "last-strong-retired-but-weak-control-stays-charged",
+                         settle() && weakGeometry.expired() &&
+                             _jobs.ReservedMemoryBytes() == gate->publishedOutputBytes,
+                         "a surviving weak control lost the charge before actual allocator deallocation");
+            std::thread lastWeak([weak = std::move(weakGeometry)]() mutable { weak.reset(); });
+            lastWeak.join();
+        }
+        (void)expect(name(mode), "real-last-owner-and-ack-refund-output", settle() && _jobs.ReservedMemoryBytes() == 0,
+                     "real last-owner destruction and acknowledgement did not refund the exact output charge");
+        _wandOutputLifetimeTestGate.reset();
         _wandLayerHostTestGate.reset();
         if (failures != 0)
         {

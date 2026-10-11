@@ -1,5 +1,7 @@
 #include "WarpPreviewWork.h"
 
+#include "SharedPublicationMemory.h"
+
 #include "DeferredRelease.h"
 #include "PublicationGraphAllocator.h"
 #include "RasterWork.h"

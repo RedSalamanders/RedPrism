@@ -1071,7 +1071,7 @@ presentation and measured G1 remain separate gates.
 exact outline vertices/AA, transparent full-canvas selection, history/no-op behavior, invalid composites, crossed
 publication modes, cancellation, authority refusal and the composite-versus-sparse-source memory plans. These
 fixtures do not use the composition or `MagicWand` as their expected-pixel oracle. `RunWandCompositeHostSelfTest`
-contains 20 modes whose expected state and selected outline come from an independent literal visible-composite
+contains 21 modes whose expected state and selected outline come from an independent literal visible-composite
 fixture, not from the rendering helper that produces the GPU readback. Require original selected order, current-only
 publication, actual record-capacity refusal, map/utility release before CPU preparation, real device recovery after
 copy acknowledgement, fault atomicity and off-owner aggregate retirement. The two pre-copy device-change modes
@@ -1081,6 +1081,44 @@ Both require one source capture and unchanged job ticket, history stamp and rese
 Recorded passage belongs in `Specs/TestRuns/WandCompositeReadback_2026-10-04.md` and the later
 [pre-copy recovery qualification](../TestRuns/P1WandReadbackRebind_2026-10-06.md); these structural controls preserve the existing legacy numeric
 goldens and do not substitute for the required large supported fixtures or G1 performance measurements.
+
+### Native Wand Boolean admission, publication and lifetime (P1.6 S4b)
+
+`Document.Tests.HistoryPublicationLifetime.cpp` adds 38 publication and lifetime controls;
+`Document.Tests.WandBoundedPlan.cpp` adds 20 mode-aware admission and charged publication controls.
+`RunDocumentWandBooleanTests()` registers 130 workspace, geometry, compatibility, allocation-prefix,
+cancellation-prefix, load and smoke assertions from `Document.Tests.WandBoolean*`. All fixtures and runners
+are compiled and registered in the native DocumentTests project. Preserve the previous numeric controls.
+
+History controls require charged metadata/topology, exact Undo/Redo, copied selection readers, actual worker
+destruction, owning null aliases and final weak/control ownership. Plan controls require the literal 134217792
+byte workspace envelope, complete input/output/result coexistence, checked missing/short/overflow refusal,
+and original mode semantics. Arena controls use independent analytic/legacy geometry literals and the unchanged
+pinned Clipper2 2.0.1 engine as the compatibility reference. Walk every reached allocation/cancellation prefix,
+sweep 1,021 workspace capacities, and cover 262,144 collinear points and 16,384 disjoint intersections.
+The workspace capacity is not a measured peak or a proof of all allocator/destructor deadlines.
+
+`Host.Tests.PersistentOutputMemory.cpp` registers 41 controls plus its summary through HostTests. Require
+actual original-ticket transfer without a new budget query, more surviving output leases than the temporary
+slot capacity, independently retired temporaries, both release orders, foreign/stale endpoint isolation,
+growth refusal, real joined Close and charge retention until final strong and weak/control release.
+
+`ApplicationWandLayerHostSelfTest.cpp` has 17 modes and 144 checks; the composite host has 21 modes and
+199 checks. Each summary adds one PASS/FAIL record. Require original source/composite literals, New and FIFO
+Add/Subtract while the first request is held, actual Undo/Redo, copied geometry readers, real document/history
+Close and final strong/weak output retirement under the original charge. Composite cases require actual queued
+readback and original-ticket capture/rebind behavior. UI Wand modes are New, Add and Subtract; the arena's
+internal Intersect clips to the canvas and does not add a UI mode.
+
+The clipboard host preserves its previous 268 controls and adds six `paste-unavailable-sequence` controls,
+for 274 checks across 53 scenarios. Require real foreign DIB bytes and placement, one actual paste history entry,
+independent private clipboard ownership, unavailable sequence inspection, the original two initial busy attempts,
+six-total-attempt policy and actual output retirement. A zero sequence query cannot establish private preference.
+The test override changes only the queried sequence; actual Open/Inspect/Copy/Decode/Paste remain native.
+
+Actual run inventories and failure receipts belong in `Specs/TestRuns/`. Qualify the full required x64
+Debug/Release/real-ASan matrix and ARM64 cross-builds before declaring this component complete. Native ARM64
+runtime needs a native host. Functional fixtures and capacity bounds do not close ordinary activation or G1.
 
 ## Gates
 

@@ -1,5 +1,7 @@
 #include "PreparedRasterPreview.h"
 
+#include "SharedPublicationMemory.h"
+
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
 #include "PublicationGraphAllocator.h"

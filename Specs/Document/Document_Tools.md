@@ -430,8 +430,8 @@ order/winding and the eight-million-edge refusal are unchanged. Vertex-start sca
 
 `RenderLayerPixels` forwards cancellation to its placed rasterizer, including transparent blank/invalid-transform
 results. Its sampling and placement rules below remain unchanged. Kernel checkpoints do not bound allocator,
-OS call, vector growth, loop-vector compaction or Clipper latency. Direct session callers and the host's non-New or
-live-context wand routes remain synchronous. The settled New host graphs are specified below; these cancellable
+OS call, vector growth, loop-vector compaction or Clipper latency. Direct session callers and the host's
+live-context wand routes remain synchronous. The settled New/Add/Subtract host graphs are specified below; these cancellable
 kernels alone establish no UI/G1 time bound.
 
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
@@ -466,25 +466,36 @@ install no partial selection or history.
 Current apply is nonthrowing validation followed by history publication and document/display-owner swaps.
 Applied and rejected aggregates retain their owners for worker disposal; they must not be destroyed on the owner
 path by a production caller. This core does not route application input. S2/S3b ordering, gesture closure, complete
-scheduler admission and All Layers/Add/Subtract remain separate prerequisites; no UI/G1 bound follows from it.
+scheduler admission and live-gesture migration remain separate prerequisites; no UI/G1 bound follows from it.
 
-Application routes settled active-layer New wand input through the owned host request and shared ordinal. Point,
+Application routes settled active-layer New/Add/Subtract wand input through the owned host request and shared ordinal. Point,
 settings and AA are event-time values; complete phased memory admission precedes capture/resume. Worker source
 sampling/flood/trace and history preparation use only the captured graph. Current-only completion acknowledges
 success/refusal before younger work and retires its complete aggregate off owner. Outside/nonfinite clicks and
 empty documents acknowledge without a job or selection change; an in-canvas no-match publishes `Deselect`.
 Consecutive queued New requests obey the existing document/adjacent-ordinal coalescing rules and retire the
-superseded receipt. All Layers New follows the composite graph below. Add/Subtract/Intersect and live-context
-wand requests retain their existing synchronous path. Broader pointer replay/closure, metadata/accounting and G1
+superseded receipt. Add/Subtract requests preserve FIFO and never coalesce across an older request. All Layers
+uses the composite graph below. Live-context wand requests retain their existing synchronous path.
+Broader pointer replay/closure, metadata/accounting and G1
 qualification remain separate.
+
+For Add/Subtract, the worker first clips traced geometry to the canvas, then applies the original nonzero
+winding union/difference with the captured selection. Subtract without a selection is the original no-op.
+No match preserves the existing selection for these modes. The bounded engine is an isolated source fork
+of pinned Clipper2 2.0.1 and preserves its precision-2 binary scale128 and geometry ordering. Complete arena,
+conversion coexistence, output capacity/control and history ownership bounds precede capture; an incomplete
+New-only plan cannot authorize a boolean. Capacity, cancellation or construction refusal publishes nothing.
+Final geometry and all newly built history controls retain the original output charge through copied/weak
+readers and Undo/Redo, independently of retiring capture/scratch. Actual final destruction and owner release
+acknowledgement refund each phase. A job finishing does not imply zero memory while output/history remain live.
 
 ### Prepared All Layers New wand (core and host)
 
-Only a settled New-mode wand request with `sampleAllLayers` uses the composite worker graph. Event-time point,
+Only a settled New/Add/Subtract wand request with `sampleAllLayers` uses the composite worker graph. Event-time point,
 settings and AA are captured with a move-only input whose borrowed `ReadbackDocument()` pointer is valid only while
 that input remains valid. Capture retains the exact document, session/job and restore authority, and history view;
 publication also checks the captured history epoch. Missing active image pixels do not remove the composite source.
-The active-layer New graph above remains a separate source path. Add/Subtract/Intersect and New requests made while a
+The active-layer graph above remains a separate source path. Requests made while a
 live context prevents settled admission keep their existing synchronous route.
 
 The host reserves the composite planner, full readback, source snapshot, job metadata and aggregate retirement

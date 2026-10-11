@@ -1,9 +1,11 @@
 #include "WarpStroke.h"
+
 #include "DeferredRelease.h"
 #include "PixelBuffer.h"
 #include "PlacedRasterWork.h"
 #include "PublicationGraphAllocator.h"
 #include "RasterWork.h"
+#include "SharedPublicationMemory.h"
 
 #include <algorithm>
 #include <cmath>

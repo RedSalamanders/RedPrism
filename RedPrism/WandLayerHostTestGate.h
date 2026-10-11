@@ -20,6 +20,10 @@ struct WandLayerHostTestGate final
     bool hold = true, throwCaptureFailure = false;
     std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
     std::uint64_t reservationBytes = 0;
+    // Owner-only observation at actual successful Apply; owns no published graph or accounting lease.
+    std::uint64_t publishedOutputBytes = 0;
+    unsigned int publishedOutputs = 0;
+    bool allOutputsBoundToOriginal = true;
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> visits{0}, historyFaultHits{0}, captures{0};
     unsigned int requestedReadbackRebinds = 0;

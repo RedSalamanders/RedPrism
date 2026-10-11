@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "SharedPublicationMemory.h"
 #include "WandLayerHostTestGate.h"
 #include "WandLayerSelectionWork.h"
 #include "resource.h"
@@ -18,6 +19,9 @@ namespace
 #pragma warning(disable : 4324)
 struct WandLayerHostPayload final : DeferredReleaseNode
 {
+    // Fields precede every source/output graph: their actual/control destruction precedes the leases.
+    std::shared_ptr<SharedPublicationMemory> temporary;
+    std::shared_ptr<SharedPublicationMemory> output;
     std::optional<WandLayerSelectionInput> input;
     std::optional<PreparedWandLayerSelection> publication;
     WandFailure failure = WandFailure::None;
@@ -58,7 +62,8 @@ class Application::WandLayerHostJob final : public Job
                      std::uint64_t retirement) noexcept
         : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement),
           _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
-          _ownerThread(GetCurrentThreadId()), _trace(owner._traceWandForTest)
+          _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId()),
+          _trace(owner._traceWandForTest)
     {
     }
     JobResult Run(JobContext& context) override
@@ -66,7 +71,16 @@ class Application::WandLayerHostJob final : public Job
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_payload)
-            return {}; // Admission of the complete graph precedes owner capture and resume.
+        {
+            auto payload = std::make_unique<WandLayerHostPayload>();
+            payload->temporary = SharedPublicationMemory::CreateForWork();
+            payload->output = SharedPublicationMemory::CreateForWork();
+            payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            payload->gate = _gate;
+            payload->ownerThread = _ownerThread;
+            _payload.reset(payload.release());
+            return {}; // Complete admission and worker allocation precede immutable owner capture.
+        }
         if (!_payload->input)
             return {JobStatus::Failed, E_UNEXPECTED};
         DocumentHistory::PrepareObserver observer;
@@ -82,7 +96,8 @@ class Application::WandLayerHostJob final : public Job
                         },
                         _gate.get()};
         _payload->publication = DocumentSession::PrepareWandLayerSelectionPublication(
-            std::move(_payload->input.value()), &_payload->failure, context.cancellation, observer);
+            std::move(_payload->input.value()), &_payload->failure, context.cancellation, observer, nullptr,
+            _payload->output);
         if (_trace)
             std::printf("WAND WORKER publication=%d failure=%u cancelled=%d\n", _payload->publication.has_value(),
                         static_cast<unsigned int>(_payload->failure), context.cancellation.IsCancelled());
@@ -108,15 +123,12 @@ class Application::WandLayerHostJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || _payload || !Current() ||
+        if (result.status != JobStatus::Finished || !_payload || _captureAttempted || !Current() ||
             _owner._historyWork.CancelRequested(_stamp))
             return false;
         try
         {
-            _payload.reset(std::make_unique<WandLayerHostPayload>().release());
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
+            _captureAttempted = true;
             if (_gate)
             {
                 _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
@@ -124,8 +136,8 @@ class Application::WandLayerHostJob final : public Job
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            _payload->input =
-                _owner._session.PrepareWandLayerSelectionInput(_request.point, _request.settings, _request.antialiased);
+            _payload->input = _owner._session.PrepareWandLayerSelectionInput(_request.point, _request.settings,
+                                                                             _request.antialiased, _request.mode);
             if (_trace)
                 std::printf("WAND CAPTURE input=%d point=%.3f,%.3f generation=%llu\n", _payload->input.has_value(),
                             _request.point.x, _request.point.y,
@@ -147,8 +159,20 @@ class Application::WandLayerHostJob final : public Job
         }
         return false;
     }
+    bool DeferRetirement(JobResult, JobTicket original) noexcept override
+    {
+        _ticket = original;
+        return false;
+    }
+    void RetainJoinedRetirement(JobScheduler&, JobTicket original) noexcept override
+    {
+        _ticket = original;
+        BindRetirement(original);
+    }
     void Completed(JobResult result) noexcept override
     {
+        // Original terminal authority binds every retiring allocation before publishing any document.
+        BindRetirement(_ticket);
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -180,6 +204,16 @@ class Application::WandLayerHostJob final : public Job
             std::printf("WAND COMPLETE status=%u current=%d outcome=%u error=%08X capture_error=%08X\n",
                         static_cast<unsigned int>(result.status), current, static_cast<unsigned int>(outcome),
                         static_cast<std::uint32_t>(error), static_cast<std::uint32_t>(_captureError));
+        if (_outputGate && outcome == HostOutcome::Succeeded && _payload && _payload->publication &&
+            _payload->publication->OutputAllocationBytes() != 0)
+        {
+            const auto bytes = _payload->output->Bytes();
+            _outputGate->allOutputsBoundToOriginal = _outputGate->allOutputsBoundToOriginal &&
+                                                     _payload->output->BoundTo(_owner._jobs, _ticket) &&
+                                                     bytes == _payload->publication->OutputAllocationBytes();
+            _outputGate->publishedOutputBytes += bytes;
+            ++_outputGate->publishedOutputs;
+        }
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage,
                                         _payload && _payload->failure == WandFailure::TooDetailed
@@ -193,6 +227,17 @@ class Application::WandLayerHostJob final : public Job
     }
 
   private:
+    void BindRetirement(JobTicket original) noexcept
+    {
+        if (!_payload || _payload->temporary->IsBound())
+            return;
+        const auto output = _payload->publication ? _payload->publication->OutputAllocationBytes() : 0;
+        const auto result = output ? _payload->output->BindPersistentOutputForRetirement(_owner._jobs, original, output,
+                                                                                         *_payload->temporary)
+                                   : _payload->temporary->BindForRetirement(_owner._jobs, original);
+        if (result < 0)
+            std::terminate(); // Failure here would refund allocations still readable by a live graph.
+    }
     [[nodiscard]] bool Current() const noexcept
     {
         return !_owner._shutdownStarted && _owner._wandLayerHostStamp == _stamp &&
@@ -204,10 +249,13 @@ class Application::WandLayerHostJob final : public Job
     const std::uint64_t _retirement;
     const HistoryRestoreAuthority _authority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
+    const std::shared_ptr<WandLayerHostTestGate> _outputGate;
     const DWORD _ownerThread;
     const bool _trace;
     std::unique_ptr<WandLayerHostPayload, RetireWandLayerHostPayload> _payload;
+    JobTicket _ticket;
     std::int32_t _captureError = 0;
+    bool _captureAttempted = false;
 };
 
 HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept
@@ -221,15 +269,16 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
         return E_INVALIDARG;
     if (input.point.x < 0 || input.point.y < 0 || input.point.x >= document->width || input.point.y >= document->height)
         return S_OK; // The direct reference ignores outside clicks; a valid in-canvas no-match deselects.
-    const auto plan = _session.PlanWandLayerSelectionMemory(input.point, input.settings);
+    const auto plan = _session.PlanWandLayerSelectionMemory(input.point, input.settings, input.mode);
     if (!plan)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    constexpr std::uint64_t metadata = sizeof(WandLayerHostJob) + sizeof(WandLayerHostPayload);
+    const std::uint64_t metadata =
+        sizeof(WandLayerHostJob) + sizeof(WandLayerHostPayload) + 2 * SharedPublicationMemory::OwnershipAllowance();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     if (metadata > maximum - plan->reservationBytes || metadata > maximum - plan->retirementBytes)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     std::uint64_t declared = 0;
-    if (EvaluateWandLayerSelectionAdmission(*plan, SelectionMode::New, document->selection.has_value(), declared) !=
+    if (EvaluateWandLayerSelectionAdmission(*plan, input.mode, document->selection.has_value(), declared) !=
         WandLayerSelectionAdmission::Ready)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto memory = declared + metadata;
@@ -251,8 +300,13 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
         std::unique_ptr<Job> job =
             std::make_unique<WandLayerHostJob>(*this, _wandLayerHostStamp.value(), input, retirement);
         JobTicket ticket;
-        result =
-            static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Selection, _session.DocumentSerial(), memory}, ticket));
+        result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                   {.kind = JobClass::Selection,
+                                                    .serialKey = _session.DocumentSerial(),
+                                                    .memoryBytes = memory,
+                                                    .deferredRetirement = true,
+                                                    .reserveRetainedMemory = true},
+                                                   ticket));
         if (SUCCEEDED(result))
             _wandLayerHostTicket = ticket;
     }

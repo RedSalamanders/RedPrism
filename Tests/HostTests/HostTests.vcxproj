@@ -84,7 +84,9 @@
 
   <ItemGroup>
     <ClInclude Include="Host.Tests.PartitionedRetainedMemory.h" />
+    <ClInclude Include="Host.Tests.PersistentOutputMemory.h" />
     <ClCompile Include="Host.Tests.PartitionedRetainedMemory.cpp" />
+    <ClCompile Include="Host.Tests.PersistentOutputMemory.cpp" />
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\SharedPublicationMemory.h" />
     <ClInclude Include="Host.Tests.PublicationCallback.h" />
@@ -195,6 +197,8 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\clipper.engine.cpp" />
     <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
@@ -212,6 +216,12 @@
     <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
     <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
+    <ClInclude Include="..\..\Common\PublicationObject.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\Workspace.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.core.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.engine.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.version.h" />
     <ClCompile Include="Host.Tests.CompletedPreviewMemory.cpp" />
     <ClInclude Include="Host.Tests.CompletedPreviewMemory.h" />
     <ClCompile Include="Host.Tests.PreparedRasterPreviewLifetime.cpp" />

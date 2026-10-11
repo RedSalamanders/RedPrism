@@ -21,6 +21,7 @@ namespace
 struct WandCompositePayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory;
+    std::shared_ptr<SharedPublicationMemory> output;
     std::optional<WandLayerSelectionInput> input;
     std::optional<PreparedWandLayerSelection> publication;
     CanvasDocument readbackDocument;
@@ -74,7 +75,7 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
                                       owner._renderer.IsWarp()),
           _owner(owner), _stamp(stamp), _request(request), _retirement(envelope.cpuBytes),
           _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
-          _ownerThread(GetCurrentThreadId())
+          _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId())
     {
     }
     ~WandCompositeHostJob() override
@@ -90,16 +91,31 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
         return !_owner._shutdownStarted && _owner._wandLayerHostStamp == _stamp &&
                _owner._historyWork.IsCurrent(_stamp) && _owner._session.CanApplyHistoryRestore(_authority);
     }
+    JobResult PrepareReadbackOpening(JobContext&) override
+    {
+        auto payload = std::make_unique<WandCompositePayload>();
+        payload->output = SharedPublicationMemory::CreateForWork();
+        payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+        payload->gate = _gate;
+        payload->ownerThread = _ownerThread;
+        _payload.reset(payload.release());
+        return {};
+    }
+    HRESULT BindReadbackMemoryForRetirement(JobTicket original, SharedPublicationMemory& temporary) noexcept override
+    {
+        _originalOutputTicket = original;
+        const auto output = _payload && _payload->publication ? _payload->publication->OutputAllocationBytes() : 0;
+        return output ? _payload->output->BindPersistentOutputForRetirement(_owner._jobs, original, output, temporary)
+                      : temporary.BindForRetirement(_owner._jobs, original);
+    }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
         if (!Current() || _owner._historyWork.CancelRequested(_stamp))
             return E_ABORT;
         try
         {
-            _payload.reset(std::make_unique<WandCompositePayload>().release());
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
+            if (!_payload)
+                return E_UNEXPECTED;
             if (_gate)
             {
                 _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
@@ -108,7 +124,7 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
                     throw std::bad_alloc{};
             }
             _payload->input = _owner._session.PrepareWandCompositeSelectionInput(_request.point, _request.settings,
-                                                                                 _request.antialiased);
+                                                                                 _request.antialiased, _request.mode);
             const auto* source = _payload->input ? _payload->input->ReadbackDocument() : nullptr;
             if (!source)
                 return E_ABORT;
@@ -160,7 +176,8 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
                         },
                         _gate.get()};
         _payload->publication = DocumentSession::PrepareWandCompositeSelectionPublication(
-            std::move(_payload->input.value()), image, &_payload->failure, context.cancellation, observer);
+            std::move(_payload->input.value()), image, &_payload->failure, context.cancellation, observer, nullptr,
+            _payload->output);
         if (context.cancellation.IsCancelled() || _payload->failure == WandFailure::Cancelled)
             return {JobStatus::Cancelled};
         if (!_payload->publication)
@@ -206,6 +223,16 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        if (_outputGate && outcome == HostOutcome::Succeeded && _payload && _payload->publication &&
+            _payload->publication->OutputAllocationBytes() != 0)
+        {
+            const auto bytes = _payload->output->Bytes();
+            _outputGate->allOutputsBoundToOriginal = _outputGate->allOutputsBoundToOriginal &&
+                                                     _payload->output->BoundTo(_owner._jobs, _originalOutputTicket) &&
+                                                     bytes == _payload->publication->OutputAllocationBytes();
+            _outputGate->publishedOutputBytes += bytes;
+            ++_outputGate->publishedOutputs;
+        }
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage,
                                         _payload && _payload->failure == WandFailure::TooDetailed
@@ -223,7 +250,9 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     const std::uint64_t _retirement;
     const HistoryRestoreAuthority _authority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
+    const std::shared_ptr<WandLayerHostTestGate> _outputGate;
     const DWORD _ownerThread;
+    JobTicket _originalOutputTicket;
     std::unique_ptr<WandCompositePayload, RetireWandCompositePayload> _payload;
 };
 
@@ -238,17 +267,17 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
         return E_INVALIDARG;
     if (input.point.x < 0 || input.point.y < 0 || input.point.x >= document->width || input.point.y >= document->height)
         return S_OK;
-    const auto plan = _session.PlanWandCompositeSelectionMemory(input.point, input.settings);
+    const auto plan = _session.PlanWandCompositeSelectionMemory(input.point, input.settings, input.mode);
     const D3D11_BOX region{0, 0, 0, static_cast<UINT>(document->width), static_cast<UINT>(document->height), 1};
     const auto readback = RecordedDocumentReadbackJob::RequiredMemory(region);
     if (!plan || !readback)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     std::uint64_t memory = 0;
-    if (EvaluateWandLayerSelectionAdmission(plan.value(), SelectionMode::New, document->selection.has_value(),
-                                            memory) != WandLayerSelectionAdmission::Ready)
+    if (EvaluateWandLayerSelectionAdmission(plan.value(), input.mode, document->selection.has_value(), memory) !=
+        WandLayerSelectionAdmission::Ready)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto metadata = sizeof(WandCompositeHostJob) + sizeof(WandCompositePayload) +
-                          SharedPublicationMemory::OwnershipAllowance() + 8192ull;
+                          2 * SharedPublicationMemory::OwnershipAllowance() + 8192ull;
     // Charge readback storage in addition to the conservative selection phases, including the retained GPU
     // source snapshot and complete CPU aggregate. Admission never assumes a live document keeps owners alive.
     const auto sourceBytes = _session.history.RetirementMemoryBytes(document);

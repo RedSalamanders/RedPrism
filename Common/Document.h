@@ -1623,7 +1623,8 @@ class HistoryStorageTopology final
   public:
     explicit HistoryStorageTopology(ConstructionTag) noexcept {}
     [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> Prepare(
-        const std::optional<CanvasDocument>& document, CancelToken cancellation = {});
+        const std::optional<CanvasDocument>& document, CancelToken cancellation = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool Matches(const std::optional<CanvasDocument>& document) const noexcept;
     [[nodiscard]] const std::vector<Raster>& RasterOwners() const noexcept
     {
@@ -1688,9 +1689,10 @@ class DocumentHistory
         StateView& operator=(const StateView&) = default;
         StateView(StateView&& source) noexcept
             : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
-              storageIndex(std::move(source.storageIndex)), owner(std::exchange(source.owner, nullptr)),
-              revision(source.revision), epoch(source.epoch), depth(source.depth), entryLimit(source.entryLimit),
-              byteLimit(source.byteLimit), requirePredecessor(std::exchange(source.requirePredecessor, false)),
+              storageIndex(std::move(source.storageIndex)), publicationMemory(std::move(source.publicationMemory)),
+              owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
+              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit),
+              requirePredecessor(std::exchange(source.requirePredecessor, false)),
               precedingPast(std::move(source.precedingPast)), precedingFuture(std::move(source.precedingFuture)),
               precedingPending(std::move(source.precedingPending)), precedingDepth(source.precedingDepth)
         {
@@ -1703,6 +1705,7 @@ class DocumentHistory
                 future = std::move(source.future);
                 pending = std::move(source.pending);
                 storageIndex = std::move(source.storageIndex);
+                publicationMemory = std::move(source.publicationMemory);
                 owner = std::exchange(source.owner, nullptr);
                 revision = source.revision;
                 epoch = source.epoch;
@@ -1742,6 +1745,8 @@ class DocumentHistory
         HistoryEntries<EntryHandle> future;
         std::shared_ptr<const Pending> pending;
         std::shared_ptr<const StorageIndex> storageIndex;
+        // Explicit worker construction scope; newly allocated roots retain this owner independently.
+        std::shared_ptr<const SharedPublicationMemory> publicationMemory;
         const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
         Guid revision;
         std::uint64_t epoch = 0;
@@ -1891,7 +1896,8 @@ class DocumentHistory
     [[nodiscard]] static std::optional<Publication> PrepareEdit(
         StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& beforeActive,
         const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
-        CancelToken cancellation = {}, PrepareObserver observer = {});
+        CancelToken cancellation = {}, PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo,
                                                                    CancelToken cancellation = {},
                                                                    PrepareObserver observer = {});
@@ -2520,16 +2526,18 @@ class DocumentSession
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
         WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
+        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr,
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandCompositeSelectionPublication(
         WandLayerSelectionInput input, Raster composite, WandFailure* failure = nullptr, CancelToken cancellation = {},
-        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
+        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr,
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
-        Vec2 point, WandSettings settings) const noexcept;
+        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandCompositeSelectionMemory(
-        Vec2 point, WandSettings settings) const noexcept;
+        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
     [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
         bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
@@ -3215,9 +3223,10 @@ class DocumentSession
                                                                                    bool composite) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
         WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
-        DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer);
-    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(Vec2 point, WandSettings settings,
-                                                                                      bool composite) const noexcept;
+        DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
+        std::shared_ptr<const SharedPublicationMemory> memory);
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(
+        Vec2 point, WandSettings settings, bool composite, SelectionMode mode) const noexcept;
     [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;
     [[nodiscard]] bool CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept;
     [[nodiscard]] bool HasDeferredTransform() const noexcept

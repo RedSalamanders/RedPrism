@@ -37,12 +37,23 @@ void SharedRetainedMemoryLease::Reset() noexcept
     const auto part = std::exchange(_part, 0);
     const auto generation = std::exchange(_generation, 0);
     const auto bytes = std::exchange(_bytes, 0);
-    assert(slot < JobScheduler::kRetainedMemoryCapacity && part < 2 && generation != 0 && bytes != 0);
+    assert(((slot < JobScheduler::kRetainedMemoryCapacity && part < 2) ||
+            (slot == JobScheduler::kRetainedMemoryCapacity && part == 2)) &&
+           generation != 0 && bytes != 0);
     // Destruction of the enclosing graph precedes publication. A slot cannot be reused until the owner has
     // consumed its bit; the old producer performs no further slot writes after that publication.
     const auto previous = state->residentBytes.fetch_sub(bytes, std::memory_order_acq_rel);
     assert(previous >= bytes);
     (void)previous;
+    if (part == 2)
+    {
+        // Each unique immutable lease resets exactly once. Live reservation totals bound this sum; no
+        // outstanding record can release more than its original admitted bytes. No reused-slot write.
+        const auto pending = state->persistentReleasedBytes.fetch_add(bytes, std::memory_order_release);
+        if (pending == 0)
+            (void)SetEvent(state->wake.get());
+        return;
+    }
     state->acknowledged[part * JobScheduler::kRetainedMemoryCapacity + slot].store(generation,
                                                                                    std::memory_order_relaxed);
     const auto pending = state->pending[part].fetch_or(std::uint64_t{1} << slot, std::memory_order_release);
