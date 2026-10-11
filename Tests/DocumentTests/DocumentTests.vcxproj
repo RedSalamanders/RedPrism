@@ -78,6 +78,7 @@
     <ClInclude Include="Document.Tests.SelectionGeometryLifetime.h" />
     <ClInclude Include="Document.Tests.HistoryPublicationLifetime.h" />
     <ClInclude Include="Document.Tests.WandBoundedPlan.h" />
+    <ClInclude Include="Document.Tests.SparseRegionReads.h" />
     <ClInclude Include="Document.Tests.WandBooleanGeometry.h" />
     <ClInclude Include="Document.Tests.WandBooleanCompatibility.h" />
     <ClInclude Include="Document.Tests.WandBooleanLoad.h" />
@@ -86,6 +87,7 @@
     <ClCompile Include="Document.Tests.SelectionGeometryLifetime.cpp" />
     <ClCompile Include="Document.Tests.HistoryPublicationLifetime.cpp" />
     <ClCompile Include="Document.Tests.WandBoundedPlan.cpp" />
+    <ClCompile Include="Document.Tests.SparseRegionReads.cpp" />
     <ClCompile Include="Document.Tests.WandBooleanGeometry.cpp" />
     <ClCompile Include="Document.Tests.WandBooleanCompatibility.cpp" />
     <ClCompile Include="Document.Tests.WandBooleanLoad.cpp" />

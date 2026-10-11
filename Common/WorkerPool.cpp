@@ -1,4 +1,5 @@
 #include "WorkerPool.h"
+#include "UiTiming.h"
 
 #include "CrashDumps.h"
 
@@ -160,6 +161,8 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
 
 bool WorkerPool::Wake(WorkPriority priority) noexcept
 {
+    const ScopedUiTimingAttribution attribution{UiTimingKind::ResultApply, UiTimingAttributionPhase::WorkerWake,
+                                                static_cast<std::uint32_t>(priority)};
     const auto index = static_cast<std::size_t>(priority);
     WorkerResources::ExclusiveLock lock{_lock};
     if (_closing || _stop.stop_requested() || !_pool || !_dispatch || index >= _lanes.size())

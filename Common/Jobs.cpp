@@ -1774,7 +1774,9 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             }
             continue;
         }
-        const ScopedUiTiming applyTiming{UiTimingKind::ResultApply, static_cast<std::uint32_t>(record.options.kind)};
+        const UiTimingAttributionIdentity identity{ticket.slot, ticket.generation};
+        const auto detail = static_cast<std::uint32_t>(record.options.kind);
+        const ScopedUiTiming applyTiming{UiTimingKind::ResultApply, detail, identity};
         JobResult result = record.result;
         if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
         {
@@ -1783,6 +1785,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         if (record.options.deferredRetirement)
         {
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Suspended;
             }
@@ -1792,6 +1796,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
                     self.acknowledgedJobCallback = ticket;
                 const auto clearAcknowledged =
                     wil::scope_exit([&]() noexcept { self.acknowledgedJobCallback.reset(); });
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::DeferRetirement, detail, identity};
                 retirementDeferred = record.job->DeferRetirement(result, ticket);
             }
             if (retirementDeferred)
@@ -1799,6 +1805,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             // Promotion is below this drain. A false acknowledgement hook cannot dispatch a resumed worker
             // before final apply/destruction, exactly as the successful-stage continuation contract requires.
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Completed;
             }
@@ -1808,6 +1816,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         if (result.status == JobStatus::Finished)
         {
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Suspended;
             }
@@ -1819,6 +1829,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
                 self.publicationMemoryCallback = ticket;
                 const auto clearPublication =
                     wil::scope_exit([&]() noexcept { self.publicationMemoryCallback.reset(); });
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::DeferCompletion, detail, identity};
                 deferred = record.job->DeferCompletion(result, ticket);
             }
             if (deferred)
@@ -1826,6 +1838,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             // A hook returning false retires even if it requested Resume. Resuming is not runnable until
             // promotion below, so payload destruction cannot race a worker stage.
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Completed;
             }
@@ -1833,6 +1847,8 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
                 result = {JobStatus::Cancelled};
         }
         {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::CompletedCallback, detail, identity};
             self.retainedMemoryCallback = ticket;
             const auto endTransfer = wil::scope_exit([&]() noexcept { self.retainedMemoryCallback.reset(); });
             if (apply)
@@ -1844,27 +1860,45 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
                 record.job->Completed(result);
             }
         }
-        record.job.reset();
-        record.cancel.reset();
-        const bool released = self.memory.Release(record.reserved);
-        assert(released);
-        (void)released;
-        record.reserved = 0;
-        if (record.retainedSlot < JobScheduler::kRetainedMemoryCapacity)
         {
-            auto& cache = self.retainedMemory[record.retainedSlot];
-            if (cache.reservedFor != record.sequence || cache.bytes)
-                std::terminate();
-            cache.reservedFor = 0;
-            record.retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::PayloadDestruction, detail, identity};
+            record.job.reset();
         }
         {
+            const ScopedUiTimingAttribution phaseTiming{
+                UiTimingKind::ResultApply, UiTimingAttributionPhase::CancellationSourceDestruction, detail, identity};
+            record.cancel.reset();
+        }
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::MemoryRefund, detail, identity};
+            const bool released = self.memory.Release(record.reserved);
+            assert(released);
+            (void)released;
+            record.reserved = 0;
+            if (record.retainedSlot < JobScheduler::kRetainedMemoryCapacity)
+            {
+                auto& cache = self.retainedMemory[record.retainedSlot];
+                if (cache.reservedFor != record.sequence || cache.bytes)
+                    std::terminate();
+                cache.reservedFor = 0;
+                record.retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+            }
+        }
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::StateTransition, detail, identity};
             WorkerResources::ExclusiveLock guard{self.lock};
             record.state = JobScheduler::Impl::State::Empty;
         }
         --self.liveCount;
         ++completed;
-        self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::RetirementNotice, detail, identity};
+            self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
+        }
     }
     if (completed != 0)
     {
@@ -1888,6 +1922,8 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     }
     const ScopedUiTiming timing{UiTimingKind::UiAction};
     const bool runSource = self.sourceReady && (self.actionCount == 0 || self.preferSource);
+    // Declared before owned: when engaged below, destruction includes the original leave guard and payload.
+    std::optional<ScopedUiTimingAttribution> destruction;
     std::unique_ptr<UiAction> owned;
     UiAction* action = nullptr;
     if (runSource)
@@ -1906,7 +1942,12 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     }
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
-    action->Run();
+    {
+        const ScopedUiTimingAttribution attribution{UiTimingKind::UiAction, UiTimingAttributionPhase::ActionRun};
+        action->Run();
+    }
+    destruction.emplace(UiTimingKind::UiAction, UiTimingAttributionPhase::ActionDestruction, 0,
+                        UiTimingAttributionIdentity{}, std::source_location::current());
     return true;
 }
 

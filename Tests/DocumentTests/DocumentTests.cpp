@@ -33,6 +33,7 @@
 #include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SelectionDisplayValue.h"
 #include "Document.Tests.SelectionGeometryLifetime.h"
+#include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
 #include "Document.Tests.StrokeFinishPlan.h"
@@ -8162,6 +8163,7 @@ int wmain(int argc, wchar_t** argv)
     TestWandKernel();
     TestWandSession();
     TestSparseRaster();
+    gFailures += RunSparseRegionReadsTests();
     TestPixelBuffer();
     gFailures += RunHealWorkChecks();
     gFailures += RunBrushRetirementBoundsTests();

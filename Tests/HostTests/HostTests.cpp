@@ -37,6 +37,7 @@
 #include "Host.Tests.RetainedSlotAdmission.h"
 #include "Host.Tests.RetirementMemory.h"
 #include "Host.Tests.UiFrameLatency.h"
+#include "Host.Tests.UiTimingAttribution.h"
 #include "Host.Tests.WarpFactoryLifetime.h"
 #include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerStageRetirement.h"
@@ -1904,6 +1905,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunBenchmarkMachineTests();
     gFailures += RunUiTimingHistogramTests();
     gFailures += RunUiTimingTests();
+    gFailures += RunUiTimingAttributionTests();
     gFailures += RunKeyboardStateScopeTests();
     gFailures += RunJobExecutionObservationTests();
     gFailures += RunUiCancellationCaptureTests();

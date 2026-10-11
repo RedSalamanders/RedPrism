@@ -39,6 +39,19 @@ std::int64_t CancelClock() noexcept
     return QueryPerformanceCounter(&counter) && counter.QuadPart >= 0 ? counter.QuadPart : -1;
 }
 
+// Diagnostic strings are emitted outside measured work, with JSON quoting for Windows paths/signatures.
+void PrintAttributionString(const char* value) noexcept
+{
+    std::fputc('"', stdout);
+    for (; *value; ++value)
+    {
+        if (*value == '\\' || *value == '"')
+            std::fputc('\\', stdout);
+        std::fputc(*value, stdout);
+    }
+    std::fputc('"', stdout);
+}
+
 HRESULT ArmCancellationDeadline(HWND window, UiCancellationBenchmark& trial, std::int64_t now,
                                 std::uint64_t frequency) noexcept
 {
@@ -487,7 +500,9 @@ void Application::AdvanceUiCancellationBenchmark() noexcept
         state.previousImage = layer->asset->image;
         state.previousRevision = _session.history.CurrentRevision();
         state.previousUndoCount = _session.history.UndoCount();
+        const bool attribution = state.timing.attributionEnabled;
         state.timing = {};
+        state.timing.attributionEnabled = attribution;
         trial.phase = UiCancellationBenchmark::Phase::ApplyPosted;
         if (!PostMessageW(_window.get(), kUiBenchmarkMessage, 0, 0))
             FailUiBenchmark("cancel-apply-message-post");
@@ -678,6 +693,35 @@ void Application::FinishUiCancellationTrial(const char* outcome, bool measured) 
         acceptedToCheck.has_value(), static_cast<unsigned long long>(trial.acceptancePresentOrdinal),
         static_cast<unsigned long long>(trial.firstFrame.QualifiedOrdinal()),
         trial.firstFrame.Current() == UiCancellationFrame::State::Qualified);
+    if (state.timing.attributionEnabled)
+    {
+        for (std::uint32_t index = 0; index < state.timing.attributionCursor; ++index)
+        {
+            const auto& record = state.timing.attributionRecords[index];
+            std::printf("UI ATTRIBUTION name=%s trial=%u warmup=%d index=%u kind=%u phase=%u detail=%u "
+                        "slot=%zu generation=%llu wallUs=%llu qpcBegin=%lld qpcEnd=%lld qpcFrequency=%lld "
+                        "cyclesKnown=%d threadCycles=%llu sourceLine=%u source=",
+                        UiCancellationOperationName(), state.trial, state.trial == 0, index,
+                        static_cast<unsigned int>(record.kind), static_cast<unsigned int>(record.phase), record.detail,
+                        record.identity.slot, static_cast<unsigned long long>(record.identity.generation),
+                        static_cast<unsigned long long>(record.wallMicroseconds),
+                        static_cast<long long>(record.qpcBegin), static_cast<long long>(record.qpcEnd),
+                        static_cast<long long>(record.qpcFrequency), record.threadCycleKnown,
+                        static_cast<unsigned long long>(record.threadCycleDelta),
+                        static_cast<unsigned int>(record.line));
+            PrintAttributionString(record.file);
+            std::printf(" function=");
+            PrintAttributionString(record.function);
+            std::fputc('\n', stdout);
+        }
+        std::printf("UI ATTRIBUTION SUMMARY name=%s trial=%u warmup=%d enabled=1 count=%u overflow=%llu "
+                    "clockFailures=%llu capacity=%zu minimumUs=%llu\n",
+                    UiCancellationOperationName(), state.trial, state.trial == 0, state.timing.attributionCursor,
+                    static_cast<unsigned long long>(state.timing.attributionOverflowCount),
+                    static_cast<unsigned long long>(state.timing.attributionClockFailures),
+                    kUiTimingAttributionCapacity,
+                    static_cast<unsigned long long>(kUiTimingAttributionMinimumMicroseconds));
+    }
     std::fflush(stdout);
     AdvanceUiCancellationTrial();
 }

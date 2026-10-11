@@ -740,18 +740,35 @@ void BlitRegion(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWid
 
 // A tile's window blitted onto a destination rectangle of the grid.
 void BlitTile(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWidth, int dstHeight, const RasterTile& tile,
-              int channels) noexcept
+              int channels, bool materializeSource) noexcept
 {
-    const std::uint8_t* pixels = tile.pixels.Data();
-    if (pixels == nullptr)
+    if (materializeSource)
     {
+        // Explicit Data() keeps its existing publication contract for the nested graph.
+        // This branch is used only by Materialize; ordinary region readers use the private branch below.
+        const std::uint8_t* pixels = tile.pixels.Data();
+        if (pixels == nullptr)
+            return;
+        const int stride = tile.pixels.Stride();
+        const std::uint8_t* origin = pixels +
+                                     static_cast<std::size_t>(tile.sourceY) * static_cast<std::size_t>(stride) +
+                                     static_cast<std::size_t>(tile.sourceX) * static_cast<std::size_t>(channels);
+        BlitRegion(dst, dstStride, dstX, dstY, dstWidth, dstHeight, origin, stride, tile.x, tile.y, tile.Width(),
+                   tile.Height(), channels);
         return;
     }
-    const int stride = tile.pixels.Stride();
-    const std::uint8_t* origin = pixels + static_cast<std::size_t>(tile.sourceY) * static_cast<std::size_t>(stride) +
-                                 static_cast<std::size_t>(tile.sourceX) * static_cast<std::size_t>(channels);
-    BlitRegion(dst, dstStride, dstX, dstY, dstWidth, dstHeight, origin, stride, tile.x, tile.y, tile.Width(),
-               tile.Height(), channels);
+    // Copy only the visible tile window. Nested sparse tiles must not build a shared cache,
+    // including when the caller already holds a resident sampling/publication lease.
+    const int left = std::max(dstX, tile.x);
+    const int top = std::max(dstY, tile.y);
+    const int right = std::min(dstX + dstWidth, tile.x + tile.Width());
+    const int bottom = std::min(dstY + dstHeight, tile.y + tile.Height());
+    if (right <= left || bottom <= top)
+        return;
+    auto* output = dst + static_cast<std::size_t>(top - dstY) * static_cast<std::size_t>(dstStride) +
+                   static_cast<std::size_t>(left - dstX) * static_cast<std::size_t>(channels);
+    tile.pixels.ReadRegion(tile.sourceX + left - tile.x, tile.sourceY + top - tile.y, right - left, bottom - top,
+                           output, dstStride, tile.pixels.Fill());
 }
 
 struct IntRect
@@ -846,7 +863,7 @@ void Raster::Materialize(const Storage& storage) noexcept
     }
     for (const RasterTile& tile : storage.tiles)
     {
-        BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
+        BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels, true);
     }
     // Build privately before this brief publication gate. History samples resident charges under the same
     // gate; an owner can try it to validate a prepared sample and swap history without racing this growth.
@@ -927,7 +944,7 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
     }
     for (const RasterTile& tile : storage.tiles)
     {
-        BlitTile(out, outStride, x, y, width, height, tile, channels);
+        BlitTile(out, outStride, x, y, width, height, tile, channels, false);
     }
 }
 

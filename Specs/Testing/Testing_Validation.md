@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-10
+Last reviewed: 2026-10-11
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -58,6 +58,38 @@ Prepared cancellation readers require all async tool flags enabled; direct reade
 The exact 47-field cancellation rows and all earlier numeric goldens remain unchanged.
 
 ### Opt-in Escape cancellation diagnostics
+
+`REDPRISM_UI_TIMING_ATTRIBUTION=1` explicitly enables bounded attribution in cancellation benchmarks only.
+Ordinary application runs and ordinary benchmark runs leave it disabled. Each trial retains the first 32
+intervals of at least 1,000 microseconds, including nested scheduler phases. It reports overflow and optional
+clock failures. It never replaces the original inclusive QPC histogram, changes the 2 ms Apply limit or grants
+G1 qualification. Thread cycles are raw counts with a separate known flag; they are not elapsed microseconds
+and cannot excuse a wall-clock failure.
+
+`UI ATTRIBUTION` rows include raw QPC endpoints/frequency, rounded-up wall duration, thread-cycle delta,
+lexical source location, kind, phase and the original scheduler slot/generation when available. Phase values
+are Operation=0, DeferRetirement=1, DeferCompletion=2, CompletedCallback=3, PayloadDestruction=4,
+MemoryRefund=5, StateTransition=6, RetirementNotice=7, ActionRun=8, ActionDestruction=9, WorkerWake=10 and
+CancellationSourceDestruction=11. In the extended recorder, phase 4 covers job-wrapper destruction and phase 11
+covers the cancellation source separately. Earlier `r862` phase-4 records covered both; their frozen source
+and original interpretation remain preserved. WorkerWake inherits the surrounding original Apply ticket on
+the same thread; its detail is the work priority, while the scheduler's Apply phases use the job class.
+Nested intervals
+are appended when they finish, so a parent's start can precede the previously reported child's start.
+`UI ATTRIBUTION SUMMARY` retains the count, overflow and optional clock failures even when no interval meets
+the threshold. Reporting happens after the original cancellation row; its namespace and fields stay unchanged.
+The unchanged cancellation reader requires its namespace block to be contiguous and therefore refuses raw
+interleaved attribution output. Diagnostic shape review first validates every attribution row, preserves the
+complete raw file, then removes only those validated rows into a separate hashed projection; every original
+cancellation row must remain byte-identical. This projection never qualifies a timing gate.
+Disabled phase scopes read no clock, allocate no storage and create no timer/event. Enabled storage is a fixed
+array inside the existing capture; source strings have static lifetime. Pure synthetic controls cover the
+threshold, capacity/order, saturated overflow, unknown cycles, invalid clocks/kinds/phases, original-ticket
+identity and exact source propagation. Phase scopes do not write legacy histograms or their clock-failure counter.
+Identity ancestry is thread-local, installed only by enabled identified scopes and restored in nesting order;
+workers cannot inherit it. The optional action-destruction scope passes its lexical origin explicitly through
+`optional::emplace`. Raw cycle counts follow the
+[QueryThreadCycleTime contract](https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-querythreadcycletime).
 
 HostTests adds 14 immutable capture, 28 original-body/clock partition, 25 real event transport and 35 CLI
 controls. Selected useful Run ordinal is explicitly 2; admission stubs, other ticket generations, malformed

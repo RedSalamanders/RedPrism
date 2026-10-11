@@ -225,6 +225,11 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         if (cancellation)
         {
             next->cancellation = std::make_unique<UiCancellationBenchmark>();
+            // Explicit diagnostic opt-in. Ordinary runs and timing gates use the unchanged wall histogram.
+            wchar_t attribution[2]{};
+            next->timing.attributionEnabled =
+                GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 &&
+                attribution[0] == L'1';
         }
         const bool samplerOnly =
             mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";

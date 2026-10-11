@@ -162,7 +162,11 @@ Concurrent readers of separate `Raster` handles sharing the same storage MUST se
 The assembled byte pointer is published once with release ordering and read with acquire ordering. `Data()`
 serializes first assembly with a per-storage mutex and checks the pointer again after acquiring it; failed
 allocation leaves it unpublished and retryable. `ReadRegion`, `ByteSize`, `IsMaterialized` and thumbnails inspect
-only the published pointer and immutable metadata, never the vector being built. Publication does not change
+only the published pointer and immutable metadata, never the vector being built. Region reads of nested sparse
+tile windows recursively copy only the requested pixels into the caller's existing rows; they do not call `Data()`,
+allocate or acquire an assembly/residency gate. Tile source offsets, fills, later-window overrides and destination
+padding keep their existing meanings. Explicit `Data()` still publishes the nested caches before its outer cache,
+with unchanged pixels and identity. Publication does not change
 identity or invalidate a previously returned pixel pointer. A caller retains its `Raster` for the lifetime of
 any borrowed pointer. Concurrent assignment to the same handle or mutation of a document/session is not supported.
 
