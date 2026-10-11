@@ -82,3 +82,5 @@ Formatting checks all 1,078 C++ files and all 15 repository skills validate. Thi
 ## Recovery
 
 After all current producers finish, recovery `D:\RedPrismQualificationArchives\P1-recorded-callers-source-recovery-20261011T153936Z` saves and reads back 17,831 files from 114 draft folders. Manifest SHA256 is `683628AFE29C6AFC947EEF1B94DB8A1CCEC65D49E36CE8AF81F56D4F919DE8E3`; working-patch SHA256 is `FC52732FF836BF039F7A39B366B9BB416C91518930C07506025C9BFC38DEC30E`. It preserves all earlier refusals, current receipts and private Inverse preparation. This is recovery evidence, separate from the native qualification above.
+
+Qualified code and tests are committed and pushed as `29245bd` on `codex/p1-opacity-host-proof`. P1 remains WIP; main is not merged.
