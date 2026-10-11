@@ -3531,6 +3531,24 @@ void Application::SyncTransformOverlay() noexcept
     _chrome->SetTransformOverlay(_overlayGeometry, _guideXs, _guideYs);
 }
 
+bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
+                                                     std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
+{
+    if (!_chrome || !_session.Document() || !outline.HasStorage())
+        return false;
+    const auto shown = _session.DisplayedSelectionValue();
+    const auto identity = shown.selection ? shown.selection->loops.Identity() : nullptr;
+    if (outline.SourceIdentity() != identity)
+        return false; // Another displayed edit cannot adopt a different source's points.
+    const auto anchor = outline.Anchor();
+    if (!_chrome->SetPreparedSelectionOutline(std::move(outline), retired))
+        return false;
+    _overlaySelection = shown.selection;
+    _overlaySelectionAnchor = anchor;
+    _overlayScale = 0; // Force the existing scalar mapping update at the ensuing SelectionChanged sync.
+    return true;
+}
+
 void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept
 {
     const bool hasDocument = _session.Document().has_value();

@@ -9,6 +9,10 @@
   See [current qualification](../../TestRuns/P1WandPersistentOutput_2026-10-11.md).
 - [x] Privately qualify numeric outline transport in Debug/Release/real ASan: exact anchor subtraction,
   cancellation and copied/final-weak ownership. This draft is not native consumer/resource qualification.
+- [x] Integrate numeric transport into the two original Wand jobs with output and replaced reference-point
+  admission before capture, source-checked owner adoption and original-ticket retirement. Full current-source
+  x64 Debug/Release/real ASan, Release analysis and all three ARM64 r99 cross-builds pass. Direct2D path
+  construction and other selection producers remain open. See [bound record](../../TestRuns/P1WandNumericOutline_2026-10-11.md).
 - [ ] Complete large-image admission, overlapping gestures/writers, original-ticket outline consumer
   admission and bounded display/coverage/resource construction. The full owner Direct2D path build remains.
 - [ ] Qualify ordinary activation and the original G1 measurements; P1 remains WIP. ARM64 runtime is unavailable.
@@ -102,6 +106,22 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
   off owner; immutable authority and nonthrowing apply/retirement. Preserve nullopt versus explicit empty and AA.
   - [x] S1a — Sealed Select All/Deselect input/publication and 127 independent preparation checks qualify in all configurations.
   - [ ] S1b — Inverse/Expand/Contract only after S0b; reuse complete publication, preserve legacy geometry.
+    - [ ] Inverse: prepare a command-specific sealed capture and bounded rectangle-minus-selection worker
+      using the qualified boolean engine. Retain the existing selection's AA flag and `Inverse` history title;
+      absent selection remains a true no-op, while a full-canvas inverse remains an explicit empty selection.
+      Admit the engine arena, converted geometry, complete history and retiring source/display owners before
+      capture; carry publication accounting through live/history/copied/weak readers. Main's
+      `.build/P1Drafts/InverseSelection-r1-Main` contains an unintegrated core candidate with cancellable
+      tuple comparison and overflow checks. No compilation, host activation or qualification is claimed.
+      Its isolated full DocumentTests project retains the original 212 compile/166 include items, adds
+      two compile/two include items, and rebuilds every translation unit against consistent private
+      declarations. Main reviews 43 named candidate controls, including reached bounded-engine cancellation
+      and an actual original-ticket persistent-output charge through history/copied/weak owners. The initial
+      path-case preparation refusal is preserved; no runtime or refund result is claimed before execution.
+    - [ ] Prove the legacy `(25,25)=0`, `(75,75)=255` coverage example, empty/null distinction, no-op redo,
+      consumed capture, stale authority, reached cancellation/allocation/capacity faults and exact Undo/Redo.
+      Then wire the original ordered command, numeric outline/output admission and terminal retirement under
+      its own original ticket. Expand/Contract retain their separate offset-engine bounds.
   - [x] S1c — Selection nudge owns event-time whole-pixel delta/Shift state and prepares translated loops and
     complete `Move Selection` history off owner. The session's current NudgeSelection starts its own move
     only when no outline move is already live; keep that live-outline no-op policy. Qualify translation output

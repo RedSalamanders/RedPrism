@@ -33,6 +33,7 @@
 #include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SelectionDisplayValue.h"
 #include "Document.Tests.SelectionGeometryLifetime.h"
+#include "Document.Tests.SelectionOutline.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
@@ -8234,6 +8235,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreparedRasterPreviewTests();
     gFailures += RunPreviewMetadataAdmissionTests();
     gFailures += RunSelectionDisplayValueTests();
+    gFailures += RunSelectionOutlineTests();
     gFailures += RunWarpWorkerCancellationTests();
     gFailures += RunWarpWorkerSnapshotsTests();
     gFailures += RunWarpOpeningTests();

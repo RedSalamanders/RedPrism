@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "ChromeHost.h"
 
 #include "SharedPublicationMemory.h"
 #include "WandLayerHostTestGate.h"
@@ -24,6 +25,9 @@ struct WandLayerHostPayload final : DeferredReleaseNode
     std::shared_ptr<SharedPublicationMemory> output;
     std::optional<WandLayerSelectionInput> input;
     std::optional<PreparedWandLayerSelection> publication;
+    PreparedSelectionOutline outline;
+    std::uint64_t outlineBytes = 0;
+    std::vector<CanvasOverlay::OutlineLoop> retiredReferenceOutline;
     WandFailure failure = WandFailure::None;
     std::shared_ptr<WandLayerHostTestGate> gate;
     DWORD ownerThread = 0;
@@ -59,8 +63,8 @@ class Application::WandLayerHostJob final : public Job
 {
   public:
     WandLayerHostJob(Application& owner, HistoryWorkStamp stamp, HostWandLayerNewInput request,
-                     std::uint64_t retirement) noexcept
-        : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement),
+                     std::uint64_t retirement, std::uint64_t outlineLimit) noexcept
+        : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement), _outlineLimit(outlineLimit),
           _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
           _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId()),
           _trace(owner._traceWandForTest)
@@ -107,6 +111,26 @@ class Application::WandLayerHostJob final : public Job
             return {JobStatus::Failed, _payload->failure == WandFailure::TooDetailed
                                            ? HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW)
                                            : E_OUTOFMEMORY};
+        if (_payload->publication->ChangesSelection())
+        {
+            const auto* selected = _payload->publication->SelectionForDisplayForWork();
+            SelectionLoops source = selected ? selected->loops : SelectionLoops{};
+            const auto declared = PreparedSelectionOutline::OutputMemory(source);
+            if (!declared || declared.value() > _outlineLimit)
+                return {JobStatus::Failed, E_OUTOFMEMORY}; // Refuse before allocating outside original admission.
+            auto outline = PreparedSelectionOutline::Prepare(std::move(source), _payload->output, context.cancellation);
+            if (!outline)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_OUTOFMEMORY};
+            if (_gate)
+            {
+                _gate->outlinePreparedOffOwner.store(GetCurrentThreadId() != _ownerThread);
+                const auto& points = outline->Points();
+                _gate->preparedPointBuffer.store(!points.empty() && !points[0].empty() ? points[0].data() : nullptr);
+            }
+            _payload->outlineBytes = outline->DeclaredOutputBytes();
+            _payload->outline = std::move(outline.value());
+        }
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
@@ -200,6 +224,9 @@ class Application::WandLayerHostJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        if (outcome == HostOutcome::Succeeded && _payload && _payload->outline.HasStorage())
+            (void)_owner.AdoptPreparedSelectionOutlineOwner(std::move(_payload->outline),
+                                                            _payload->retiredReferenceOutline);
         if (_trace)
             std::printf("WAND COMPLETE status=%u current=%d outcome=%u error=%08X capture_error=%08X\n",
                         static_cast<unsigned int>(result.status), current, static_cast<unsigned int>(outcome),
@@ -208,9 +235,9 @@ class Application::WandLayerHostJob final : public Job
             _payload->publication->OutputAllocationBytes() != 0)
         {
             const auto bytes = _payload->output->Bytes();
-            _outputGate->allOutputsBoundToOriginal = _outputGate->allOutputsBoundToOriginal &&
-                                                     _payload->output->BoundTo(_owner._jobs, _ticket) &&
-                                                     bytes == _payload->publication->OutputAllocationBytes();
+            _outputGate->allOutputsBoundToOriginal =
+                _outputGate->allOutputsBoundToOriginal && _payload->output->BoundTo(_owner._jobs, _ticket) &&
+                bytes == _payload->publication->OutputAllocationBytes() + _payload->outlineBytes;
             _outputGate->publishedOutputBytes += bytes;
             ++_outputGate->publishedOutputs;
         }
@@ -231,7 +258,8 @@ class Application::WandLayerHostJob final : public Job
     {
         if (!_payload || _payload->temporary->IsBound())
             return;
-        const auto output = _payload->publication ? _payload->publication->OutputAllocationBytes() : 0;
+        const auto output =
+            _payload->publication ? _payload->publication->OutputAllocationBytes() + _payload->outlineBytes : 0;
         const auto result = output ? _payload->output->BindPersistentOutputForRetirement(_owner._jobs, original, output,
                                                                                          *_payload->temporary)
                                    : _payload->temporary->BindForRetirement(_owner._jobs, original);
@@ -247,6 +275,7 @@ class Application::WandLayerHostJob final : public Job
     const HistoryWorkStamp _stamp;
     const HostWandLayerNewInput _request;
     const std::uint64_t _retirement;
+    const std::uint64_t _outlineLimit;
     const HistoryRestoreAuthority _authority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
     const std::shared_ptr<WandLayerHostTestGate> _outputGate;
@@ -281,8 +310,15 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
     if (EvaluateWandLayerSelectionAdmission(*plan, input.mode, document->selection.has_value(), declared) !=
         WandLayerSelectionAdmission::Ready)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto memory = declared + metadata;
-    const auto retirement = plan->retirementBytes + metadata;
+    const auto outline = PreparedSelectionOutline::AdmissionMemory(plan.value());
+    const auto legacy = _chrome ? _chrome->LegacySelectionOutlineMemoryOwner() : std::optional<std::uint64_t>{0};
+    if (!outline || !legacy || outline.value() > maximum - legacy.value())
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto additional = outline.value() + legacy.value();
+    if (additional > maximum - (declared + metadata) || additional > maximum - (plan->retirementBytes + metadata))
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto memory = declared + metadata + additional;
+    const auto retirement = plan->retirementBytes + metadata + additional;
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
     if (!ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
@@ -298,7 +334,7 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
         if (_wandLayerHostTestGate)
             _wandLayerHostTestGate->reservationBytes = memory;
         std::unique_ptr<Job> job =
-            std::make_unique<WandLayerHostJob>(*this, _wandLayerHostStamp.value(), input, retirement);
+            std::make_unique<WandLayerHostJob>(*this, _wandLayerHostStamp.value(), input, retirement, outline.value());
         JobTicket ticket;
         result = static_cast<HRESULT>(_jobs.Submit(job,
                                                    {.kind = JobClass::Selection,

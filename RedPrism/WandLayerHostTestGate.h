@@ -24,6 +24,8 @@ struct WandLayerHostTestGate final
     std::uint64_t publishedOutputBytes = 0;
     unsigned int publishedOutputs = 0;
     bool allOutputsBoundToOriginal = true;
+    std::atomic<bool> outlinePreparedOffOwner{false};
+    std::atomic<const void*> preparedPointBuffer{nullptr};
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<unsigned int> visits{0}, historyFaultHits{0}, captures{0};
     unsigned int requestedReadbackRebinds = 0;

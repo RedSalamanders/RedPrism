@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "SelectionOutlineWork.h"
 
 #include <DxUi/DxUi.h>
 
@@ -44,7 +45,14 @@ class CanvasOverlay final : public DxUi::Control
     // move, and a DxUi invalidation repaints the whole chrome surface (RF-1001).
     bool SetGeometry(const std::optional<Geometry>& geometry) noexcept;
     bool SetGuides(const std::vector<float>& xs, const std::vector<float>& ys);
-    void SetSelectionOutline(std::vector<OutlineLoop> loops);
+    void SetSelectionOutline(std::vector<OutlineLoop> loops, std::optional<std::uint64_t> memoryBytes = std::nullopt);
+    // The old reference buffers move into the original admitted worker payload; no owner-side free/copy.
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                   std::vector<OutlineLoop>& retired) noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept
+    {
+        return _outline.empty() ? std::optional<std::uint64_t>{0} : _legacyOutlineBytes;
+    }
     bool SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept;
     [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept
     {
@@ -62,7 +70,7 @@ class CanvasOverlay final : public DxUi::Control
     [[nodiscard]] SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
     [[nodiscard]] const std::vector<OutlineLoop>& SelectionOutlineForTest() const noexcept
     {
-        return _outline;
+        return SelectionPoints();
     }
     // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
     // is made once and kept.
@@ -133,7 +141,13 @@ class CanvasOverlay final : public DxUi::Control
     std::optional<Geometry> _geometry;
     std::vector<float> _guideXs;
     std::vector<float> _guideYs;
+    [[nodiscard]] const std::vector<OutlineLoop>& SelectionPoints() const noexcept
+    {
+        return _preparedOutline.HasStorage() ? _preparedOutline.Points() : _outline;
+    }
     std::vector<OutlineLoop> _outline;
+    std::optional<std::uint64_t> _legacyOutlineBytes;
+    PreparedSelectionOutline _preparedOutline;
     std::optional<Draft> _draft;
     std::optional<BrushCursor> _brushCursor;
     std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> _gradientLine;

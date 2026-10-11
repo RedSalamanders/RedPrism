@@ -426,6 +426,9 @@ class ChromeHost final : public CommandIds
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
     // Selection vertices are document coordinates relative to the retained anchor. Mapping is independent.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                   std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept;
     void SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept;
     [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept;
     [[nodiscard]] CanvasOverlay::SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cwctype>
 #include <iterator>
+#include <limits>
 #include <new>
 #include <string_view>
 
@@ -3790,9 +3791,45 @@ void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loo
         return;
     ++_syncCounters.overlays;
     ++_syncCounters.selectionOutlines;
+    std::optional<std::uint64_t> memory = sizeof(loops);
+    const auto add = [&](std::uint64_t count, std::uint64_t width) noexcept
+    {
+        if (!memory)
+            return;
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (count > maximum / width || count * width > maximum - memory.value())
+            memory.reset(); // Unknown ownership refuses the next prepared admission.
+        else
+            memory.value() += count * width;
+    };
+    add(loops.capacity(), sizeof(CanvasOverlay::OutlineLoop));
+    // Reuse the existing counters traversal; no extra outline pass on the reference route.
     for (const auto& loop : loops)
+    {
         _syncCounters.selectionVertices += loop.size();
-    _overlay->SetSelectionOutline(std::move(loops));
+        add(loop.capacity(), sizeof(D2D1_POINT_2F));
+        add(1, 256); // Supported allocator/Debug iterator bookkeeping.
+    }
+    _overlay->SetSelectionOutline(std::move(loops), memory);
+}
+
+bool ChromeHost::SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                             std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
+{
+    if (!_overlay || !outline.HasStorage())
+        return false;
+    const auto points = outline.PointCount();
+    if (!_overlay->SetPreparedSelectionOutline(std::move(outline), retired))
+        return false;
+    ++_syncCounters.overlays;
+    ++_syncCounters.selectionOutlines;
+    _syncCounters.selectionVertices += points;
+    return true;
+}
+
+std::optional<std::uint64_t> ChromeHost::LegacySelectionOutlineMemoryOwner() const noexcept
+{
+    return _overlay ? _overlay->LegacySelectionOutlineMemoryOwner() : std::optional<std::uint64_t>{0};
 }
 
 void ChromeHost::SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept

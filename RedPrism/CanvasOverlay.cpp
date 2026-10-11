@@ -99,13 +99,32 @@ bool CanvasOverlay::SetGuides(const std::vector<float>& xs, const std::vector<fl
     return true;
 }
 
-void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops)
+void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops, std::optional<std::uint64_t> memoryBytes)
 {
+    _preparedOutline = {}; // Publication nodes defer last owner-thread buffer release.
+    _legacyOutlineBytes = memoryBytes;
     _outline = std::move(loops);
-    if (_outline.empty())
+    if (SelectionPoints().empty())
         _outlineGeometry.reset();
     _outlineDirty = true;
     RequestInvalidate();
+}
+
+bool CanvasOverlay::SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                std::vector<OutlineLoop>& retired) noexcept
+{
+    if (!outline.HasStorage() || !retired.empty())
+        return false;
+    retired = std::move(_outline);
+    _legacyOutlineBytes = 0;
+    // No point buffers are needed for an empty outline. Drop its node through deferred retirement now,
+    // so an absent selection cannot pin output accounting until a later selection or chrome shutdown.
+    _preparedOutline = outline.PointCount() == 0 ? PreparedSelectionOutline{} : std::move(outline);
+    if (SelectionPoints().empty())
+        _outlineGeometry.reset(); // Direct2D resource retirement remains the separate S5 rendering gap.
+    _outlineDirty = true;
+    RequestInvalidate();
+    return true;
 }
 
 bool CanvasOverlay::SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept
@@ -116,7 +135,7 @@ bool CanvasOverlay::SetSelectionMapping(D2D1_POINT_2F originDip, float scale) no
     _selectionOrigin = originDip;
     _selectionScale = scale;
     // Keep the current mapping for a later source, without repainting an absent outline.
-    if (_outline.empty())
+    if (SelectionPoints().empty())
         return false;
     RequestInvalidate();
     return true;
@@ -333,7 +352,7 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
         {
             return false;
         }
-        for (const OutlineLoop& loop : _outline)
+        for (const OutlineLoop& loop : SelectionPoints())
         {
             if (loop.size() < 2)
             {
@@ -371,7 +390,7 @@ CanvasOverlay::SelectionResourcesForTest CanvasOverlay::SelectionResourcesStateF
 
 void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
 {
-    if (_outline.empty() || !EnsureSelectionResources(dc))
+    if (SelectionPoints().empty() || !EnsureSelectionResources(dc))
     {
         return;
     }

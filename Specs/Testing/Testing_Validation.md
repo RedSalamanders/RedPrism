@@ -2726,3 +2726,16 @@ buffer adoption, copied/moved/self-moved handles, finite-bound compatibility, em
 refusal, actual foreign worker destruction, null alias lifetime ownership, weak storage control ownership
 and exact sink identity. Run the full required x64 Debug/Release/real-ASan configuration gates and ARM64
 cross-builds before declaring the combined component qualified. Native ARM64 runtime requires its own host.
+
+### Numeric Wand display transport
+
+`Document.Tests.SelectionOutline` preserves independent fractional and large-coordinate double-anchor
+expectations, input buffer identity, exact loop/point counts, owning-null/empty-owner behavior, cancellation
+checkpoints/recovery, actual deferred off-owner destruction and final-weak accounting-control lifetime.
+Count and numeric-admission overflow cases refuse before allocation. These component controls establish
+numeric/lifetime behavior; they do not authorize a complete host reservation.
+
+The actual layer and All Layers Wand literal host cases additionally compare the worker point-buffer
+address with the adopted chrome buffer and verify its independent zero-relative first corner. Preserve
+all existing no-op, mode, cancellation/staleness, refusal, source/output accounting, Undo/Redo and Close
+predicates. Native matrix and measured S5/G1 qualification remain distinct requirements.

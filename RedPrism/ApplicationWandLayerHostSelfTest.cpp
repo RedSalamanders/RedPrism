@@ -555,6 +555,12 @@ int Application::RunWandLayerHostSelfTest() noexcept
         }
         else if (mode == Mode::LiteralAndCapture)
         {
+            const auto* points = _chrome->SelectionOutlineForTest();
+            (void)expect(name(mode), "prepared-point-buffers-adopted-without-owner-copy",
+                         gate->outlinePreparedOffOwner.load() && points && points->size() == 1 &&
+                             (*points)[0].size() == 4 && (*points)[0].data() == gate->preparedPointBuffer.load() &&
+                             (*points)[0][0].x == 0 && (*points)[0][0].y == 0,
+                         "worker numeric output was rebuilt, copied or lost at actual owner publication");
             const auto document = _session.Document();
             (void)expect(name(mode), "literal-clockwise-outline-and-one-entry",
                          state.receipt.Read().outcome == HostOutcome::Succeeded &&

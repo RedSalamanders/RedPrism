@@ -216,7 +216,15 @@ The white stroke and black 4/4 dash use fixed stroke transforms: their width and
 the geometry follows the view. The path is rebuilt when its source identity or Direct2D factory changes; the
 cache retains both owners to prevent address reuse. Explicit empty selection remains distinct from no selection;
 either stops animation and releases the preceding path. The pinned single-threaded factory remains owner-only.
-Initial point conversion/path construction and large last-owner retirement remain P1/S5 work. A settled
+The two admitted Wand jobs prepare numeric outline points on a worker, subtracting the double anchor before
+float narrowing. Their original descriptor admits the output node/control and exact-reserve point/header
+bound plus replaced reference buffers; an actual output exceeding that bound fails before allocation.
+Successful publication adopts those same buffers only when their held source identity matches the displayed
+selection. Cached point counts update chrome statistics; replaced reference buffers move into the original
+worker payload, and prepared nodes defer their final owner-thread release. Empty point output is retired
+immediately so an absent selection cannot pin its accounting until another edit. No-op, failed, cancelled
+or stale Wand results publish no numeric outline. Other producers still use the reference conversion route.
+Direct2D path construction, factory/path retirement and the other producers remain P1/S5 work. A settled
 document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
 polylines, the polygonal rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle
 or ellipse) is a white line over a dark one. Outline and draft changes re-composite chrome only, never the document.

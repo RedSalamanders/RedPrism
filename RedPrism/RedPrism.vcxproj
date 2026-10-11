@@ -191,6 +191,7 @@
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
+    <ClInclude Include="SelectionOutlineWork.h" />
     <ClInclude Include="AdjustControls.h" />
     <ClInclude Include="ChromeEvents.h" />
     <ClInclude Include="ChromeHost.h" />
@@ -501,6 +502,7 @@
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
+    <ClCompile Include="SelectionOutlineWork.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />
     <ClCompile Include="ClipboardTransfer.cpp" />
     <ClCompile Include="ChromeHost.cpp" />

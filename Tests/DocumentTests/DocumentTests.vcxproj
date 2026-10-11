@@ -76,6 +76,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Document.Tests.SelectionGeometryLifetime.h" />
+    <ClInclude Include="Document.Tests.SelectionOutline.h" />
     <ClInclude Include="Document.Tests.HistoryPublicationLifetime.h" />
     <ClInclude Include="Document.Tests.WandBoundedPlan.h" />
     <ClInclude Include="Document.Tests.SparseRegionReads.h" />
@@ -85,6 +86,7 @@
     <ClInclude Include="Document.Tests.WandBooleanWorkspace.h" />
     <ClInclude Include="Document.Tests.WandBooleanTestCases.h" />
     <ClCompile Include="Document.Tests.SelectionGeometryLifetime.cpp" />
+    <ClCompile Include="Document.Tests.SelectionOutline.cpp" />
     <ClCompile Include="Document.Tests.HistoryPublicationLifetime.cpp" />
     <ClCompile Include="Document.Tests.WandBoundedPlan.cpp" />
     <ClCompile Include="Document.Tests.SparseRegionReads.cpp" />
@@ -408,6 +410,8 @@
     <ClInclude Include="..\..\Common\BoundedClipper\clipper.engine.h" />
     <ClInclude Include="..\..\Common\BoundedClipper\clipper.version.h" />
     <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
+    <ClCompile Include="..\..\RedPrism\SelectionOutlineWork.cpp" />
+    <ClInclude Include="..\..\RedPrism\SelectionOutlineWork.h" />
     <ClCompile Include="Document.Tests.PreparedRasterPreview.cpp" />
     <ClInclude Include="Document.Tests.PreparedRasterPreview.h" />
     <ClCompile Include="Document.Tests.PreviewMetadataAdmission.cpp" />

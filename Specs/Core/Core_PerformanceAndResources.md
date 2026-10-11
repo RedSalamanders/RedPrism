@@ -1466,3 +1466,21 @@ slot. The owner refunds only the consumed release sum. A zero-to-positive accumu
 the owned wake event; it adds no polling or per-output release record. Outstanding admitted charges bound
 the sum, including concurrent releases. Weak controls retain their original charge, and outputs surviving
 Close cannot release into a replacement scheduler. Persistent outputs also refuse growth without mutation.
+
+## Prepared Wand outline points
+
+Layer and All Layers Wand include numeric outline preparation in the original admitted job. The numeric
+output envelope is the larger of the existing trace geometry-growth and boolean-output bounds, plus the
+publication node/control allowance. The trace bound covers exact-reserve float points and per-loop headers
+with allocator/Debug bookkeeping; the bounded boolean output includes its per-loop ownership allowance.
+This envelope is additional to the complete original source, history, trace, boolean and readback phases.
+It does not authorize those phases by itself. Unknown/overflowing numeric or replaced-reference ownership
+refuses before capture; the worker checks its actual cached-count output declaration before allocating.
+
+Reference outline capacity is cached during the existing chrome counters traversal. Its old buffers move
+into the original aggregate at publication and stay charged until real worker destruction. The numeric
+node keeps its original persistent output owner through final strong/weak lifetime; no copied points or
+new owner allocation are needed to adopt a matching source. Empty points retain no chrome node. The
+same source identity is held strongly by the numeric transport, preventing address reuse. Selection math,
+fixed-DIP stroke/dashes, scalar view mapping and the single-threaded Direct2D factory contract are unchanged.
+Direct2D path construction/retirement, other selection producers and complete S5/G1 remain separate gaps.

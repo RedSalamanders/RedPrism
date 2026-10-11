@@ -37,6 +37,7 @@
 #include "Renderer.h"
 #include "RetryWaitQueue.h"
 #include "SamplerState.h"
+#include "SelectionOutlineWork.h"
 #include "SettingsStore.h"
 #include "ShapeEditWork.h"
 #include "StrokeOpeningWork.h"
@@ -273,6 +274,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void SyncTransformOverlay() noexcept;
     // The selection outline and the lasso draft over the canvas; `shown` null keeps the selection shown last.
     void SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept;
+    [[nodiscard]] bool AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
+                                                          PreparedSelectionOutline::Loops& retired) noexcept;
     [[nodiscard]] float ChromeDpi() const noexcept;
     [[nodiscard]] bool InitializePreparedDisplayOwner(bool allowHidden) noexcept;
     [[nodiscard]] bool InitializeResponsiveSourcesOwner(bool allowHidden) noexcept;

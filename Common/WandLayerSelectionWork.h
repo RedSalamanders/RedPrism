@@ -147,6 +147,11 @@ class PreparedWandLayerSelection final
     {
         return _history.has_value();
     }
+    // Borrow only after worker sealing, before Apply swaps the after-document into the session.
+    [[nodiscard]] const DocumentSelection* SelectionForDisplayForWork() const noexcept
+    {
+        return _document && _document->selection ? &_document->selection.value() : nullptr;
+    }
 
   private:
     friend class DocumentSession;

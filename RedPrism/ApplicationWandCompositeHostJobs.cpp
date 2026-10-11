@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "ChromeHost.h"
 
 #include "RecordedDocumentReadbackJob.h"
 #include "SharedPublicationMemory.h"
@@ -24,6 +25,9 @@ struct WandCompositePayload final : DeferredReleaseNode
     std::shared_ptr<SharedPublicationMemory> output;
     std::optional<WandLayerSelectionInput> input;
     std::optional<PreparedWandLayerSelection> publication;
+    PreparedSelectionOutline outline;
+    std::uint64_t outlineBytes = 0;
+    std::vector<CanvasOverlay::OutlineLoop> retiredReferenceOutline;
     CanvasDocument readbackDocument;
     PixelBuffer readbackPixels;
     Raster readbackImage;
@@ -69,11 +73,11 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
   public:
     WandCompositeHostJob(Application& owner, HistoryWorkStamp stamp, HostWandCompositeNewInput request,
                          D3D11_BOX region, UtilityReadbackAdmission::Envelope envelope,
-                         GpuResidencyReservation reservation) noexcept
+                         GpuResidencyReservation reservation, std::uint64_t outlineLimit) noexcept
         : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
                                       owner._graphGpuBudget, envelope, std::move(reservation), region,
                                       owner._renderer.IsWarp()),
-          _owner(owner), _stamp(stamp), _request(request), _retirement(envelope.cpuBytes),
+          _owner(owner), _stamp(stamp), _request(request), _retirement(envelope.cpuBytes), _outlineLimit(outlineLimit),
           _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
           _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId())
     {
@@ -104,7 +108,9 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     HRESULT BindReadbackMemoryForRetirement(JobTicket original, SharedPublicationMemory& temporary) noexcept override
     {
         _originalOutputTicket = original;
-        const auto output = _payload && _payload->publication ? _payload->publication->OutputAllocationBytes() : 0;
+        const auto output = _payload && _payload->publication
+                                ? _payload->publication->OutputAllocationBytes() + _payload->outlineBytes
+                                : 0;
         return output ? _payload->output->BindPersistentOutputForRetirement(_owner._jobs, original, output, temporary)
                       : temporary.BindForRetirement(_owner._jobs, original);
     }
@@ -184,6 +190,26 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
             return {JobStatus::Failed, _payload->failure == WandFailure::TooDetailed
                                            ? HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW)
                                            : E_OUTOFMEMORY};
+        if (_payload->publication->ChangesSelection())
+        {
+            const auto* selected = _payload->publication->SelectionForDisplayForWork();
+            SelectionLoops source = selected ? selected->loops : SelectionLoops{};
+            const auto declared = PreparedSelectionOutline::OutputMemory(source);
+            if (!declared || declared.value() > _outlineLimit)
+                return {JobStatus::Failed, E_OUTOFMEMORY}; // Refuse before allocating outside original admission.
+            auto outline = PreparedSelectionOutline::Prepare(std::move(source), _payload->output, context.cancellation);
+            if (!outline)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_OUTOFMEMORY};
+            if (_gate)
+            {
+                _gate->outlinePreparedOffOwner.store(GetCurrentThreadId() != _ownerThread);
+                const auto& points = outline->Points();
+                _gate->preparedPointBuffer.store(!points.empty() && !points[0].empty() ? points[0].data() : nullptr);
+            }
+            _payload->outlineBytes = outline->DeclaredOutputBytes();
+            _payload->outline = std::move(outline.value());
+        }
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
@@ -223,13 +249,17 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        if (outcome == HostOutcome::Succeeded && _payload && _payload->outline.HasStorage())
+            (void)_owner.AdoptPreparedSelectionOutlineOwner(std::move(_payload->outline),
+                                                            _payload->retiredReferenceOutline);
         if (_outputGate && outcome == HostOutcome::Succeeded && _payload && _payload->publication &&
             _payload->publication->OutputAllocationBytes() != 0)
         {
             const auto bytes = _payload->output->Bytes();
-            _outputGate->allOutputsBoundToOriginal = _outputGate->allOutputsBoundToOriginal &&
-                                                     _payload->output->BoundTo(_owner._jobs, _originalOutputTicket) &&
-                                                     bytes == _payload->publication->OutputAllocationBytes();
+            _outputGate->allOutputsBoundToOriginal =
+                _outputGate->allOutputsBoundToOriginal &&
+                _payload->output->BoundTo(_owner._jobs, _originalOutputTicket) &&
+                bytes == _payload->publication->OutputAllocationBytes() + _payload->outlineBytes;
             _outputGate->publishedOutputBytes += bytes;
             ++_outputGate->publishedOutputs;
         }
@@ -248,6 +278,7 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     const HistoryWorkStamp _stamp;
     const HostWandCompositeNewInput _request;
     const std::uint64_t _retirement;
+    const std::uint64_t _outlineLimit;
     const HistoryRestoreAuthority _authority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
     const std::shared_ptr<WandLayerHostTestGate> _outputGate;
@@ -284,6 +315,10 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
     if (!sourceBytes || !AddWandBytes(memory, readback) || !AddWandBytes(memory, metadata) ||
         !AddWandBytes(memory, sourceBytes))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto outline = PreparedSelectionOutline::AdmissionMemory(plan.value());
+    const auto legacy = _chrome ? _chrome->LegacySelectionOutlineMemoryOwner() : std::optional<std::uint64_t>{0};
+    if (!outline || !legacy || !AddWandBytes(memory, outline.value()) || !AddWandBytes(memory, legacy.value()))
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     UtilityReadbackAdmission::Envelope envelope;
     GpuResidencyReservation reservation;
     RETURN_IF_FAILED(PrepareRecordedUtilityAdmission(document.value(), memory, envelope, reservation));
@@ -301,8 +336,8 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
     {
         if (_wandLayerHostTestGate)
             _wandLayerHostTestGate->reservationBytes = envelope.cpuBytes;
-        std::unique_ptr<Job> job = std::make_unique<WandCompositeHostJob>(*this, _wandLayerHostStamp.value(), input,
-                                                                          region, envelope, std::move(reservation));
+        std::unique_ptr<Job> job = std::make_unique<WandCompositeHostJob>(
+            *this, _wandLayerHostStamp.value(), input, region, envelope, std::move(reservation), outline.value());
         JobTicket ticket;
         result = static_cast<HRESULT>(_jobs.Submit(job,
                                                    {.kind = JobClass::Selection,
