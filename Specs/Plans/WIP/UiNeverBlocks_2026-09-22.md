@@ -2,6 +2,19 @@
 
 ## Current delivery checklist
 
+Current private checkpoint (03:12 UTC, 2026-10-12): Release r4 compiles/ISA passes and actual WARP child
+63304 exits 0. The independent reader preserves all 7,399 stdout/7,556 stderr predecessor assertions,
+131 original stages and the 52 additions/two standalone stages (`C81BF500…`). Checked opacity prerequisites
+refuse before dependent mutation, preserving original document/history/preview, and actual read-only pan
+remains usable. Default startup is exercised only in its private actual-Run fixtures; ordinary native
+activation and the full consumer/G1 requirements remain due. The real outline diagnostic exposes 7.06 ms
+path append and 51–142 ms inclusive large-grid frames, with negligible draw-call intervals; a replacement
+must address later rendering cost as well as numeric conversion. Reviewed private r5 adds ten exact
+post-close OS clipboard replacement/later literal-Paste assertions. Its build/ISA pass, but actual
+child 71688 exits 5 with two new receipt/pixel predicate failures. Source/products/logs remain preserved;
+private r6 keeps every expected value and adds actual native-error and failure-component diagnostics.
+The cause is unestablished and the clipboard gap remains open.
+
 Qualified selection checkpoint committed and pushed as
 `a70a2f21179babc719723caecf3edb2e6949ef0a` on `codex/p1-opacity-host-proof`;
 the remote branch identity matches. This closes the native Inverse/Expand/Contract checkpoint,

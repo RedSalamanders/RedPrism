@@ -751,6 +751,11 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
 
 ### S5 next engineering checks
 
+Private actual application Release r4 now preserves all predecessor assertions/stages plus 34 diagnostic
+checks and 15 observations (`C81BF500…`). The fixed grid's path append is 7.06 ms and inclusive frames
+are 51–142 ms; both draw calls return within 0.006 ms combined. Complete integrated/configuration proof,
+long contours and G1 documents remain due. [Exact record](../../TestRuns/P1SelectionOutlineRendering_2026-10-12.md).
+
 The qualified point transport removes numeric conversion from Apply. `CanvasOverlay::EnsureSelectionResources`
 still creates a path, walks every loop, appends all points and closes the sink on the owner; the two
 `DrawGeometry` calls remain another possible first-use cost. These are separate costs to measure and remove.
