@@ -2,6 +2,11 @@
 
 ## Current delivery checklist
 
+Qualified selection checkpoint committed and pushed as
+`a70a2f21179babc719723caecf3edb2e6949ef0a` on `codex/p1-opacity-host-proof`;
+the remote branch identity matches. This closes the native Inverse/Expand/Contract checkpoint,
+with the exact source and profile evidence below. Main remains unmerged until P1 is complete.
+
 Latest checkpoint (2026-10-12): full Debug r923, Release r922 and real ASan r924
 qualify the same 1,253-input/20-contract source (`D69F9A3E…`), with all predecessor assertions
 and 131 application stages preserved. ASan child 13480 exits 0 at 02:10:15 UTC; report

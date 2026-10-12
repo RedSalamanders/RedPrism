@@ -20,7 +20,8 @@
   selected the old r6 folder rather than actual archived r7. Main corroborates the exact path and corrects
   only that selector while retaining the original archived reader/review pins and every artifact predicate.
   Failed reader receipt `0DDE989A…` and stderr `366F42BB…` remain separate failed evidence.
-- [ ] Commit/push the qualified native step. Ordinary startup, outline, G1 and overall P1 qualification
+- [x] Commit/push the qualified native step as `a70a2f21179babc719723caecf3edb2e6949ef0a` on
+  `codex/p1-opacity-host-proof`; the remote branch matches. Ordinary startup, outline, G1 and overall P1 qualification
   remain open; this evidence does not mark P1 Done. Earlier failures and history below remain part of the record.
 
 ## Current checklist

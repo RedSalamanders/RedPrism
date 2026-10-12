@@ -13,6 +13,13 @@ bounded uploads and deferred CPU/GPU retirement. S5 and all nine delivery areas 
 
 ## Current continuation checklist (2026-10-11)
 
+The qualified native Inverse/Expand/Contract checkpoint is committed and pushed as
+`a70a2f21179babc719723caecf3edb2e6949ef0a` on `codex/p1-opacity-host-proof`, with matching
+remote identity. Selection outline construction, remaining selection consumers and G1 stay open.
+Private startup/opacity/timing r2 compiles and passes ISA, then fails actual owner initialization
+(child 92040, exit 5). Main moves the independently owning new fixtures into the standalone phase
+before the main owner's TLS sink and window-class registration; private r3 is running and unqualified.
+
 Latest checkpoint (2026-10-12): current-source full Debug r923, Release r922,
 real ASan r924 and Release analysis r925 qualify on 1,253 inputs and 20 contracts (`D69F9A3E…`).
 ASan child 13480 exits 0 at 02:10:15 UTC; report `0DAA99FC…` preserves all original assertions,

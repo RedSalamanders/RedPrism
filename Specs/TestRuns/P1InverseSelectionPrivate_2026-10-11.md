@@ -21,7 +21,9 @@
   ARM64 readback report `F1E5E23D9CEEFFBC2F934745545C0328F518C6E8462B3AE315A1AA1464DDDD08`
   verifies 15 PE/PDB identity pairs and five real sanitizer compile/link controls. Runner/reader refusals
   remain preserved. [Current native record](P1SelectionOffsetPrivate_2026-10-11.md).
-- [ ] Commit/push this qualified step. The remaining P1 delivery areas require their own completion.
+- [x] Commit/push this qualified step as `a70a2f21179babc719723caecf3edb2e6949ef0a` on
+  `codex/p1-opacity-host-proof`; remote branch identity matches. The remaining P1 delivery areas
+  require their own completion; main is not merged.
 
 P1 remains WIP. Current native qualification supersedes the historical private scope below; it does
 not activate the complete ordinary display route or close S5/H4/G1. Native ARM64 runtime is unavailable.
