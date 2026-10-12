@@ -464,6 +464,8 @@
     <ClCompile Include="ApplicationShutdownTests.cpp" />
     <ClCompile Include="ApplicationProcessingTests.cpp" />
     <ClCompile Include="Application.Tests.ResponsiveStartup.cpp" />
+    <ClCompile Include="Application.Tests.OpacityClosureGuard.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineTiming.cpp" />
     <ClCompile Include="ApplicationResponsiveSources.cpp" />
     <ClCompile Include="Application.Tests.HistoryResidencyStartup.cpp" />
     <ClCompile Include="ApplicationLiveShutdownTests.cpp" />

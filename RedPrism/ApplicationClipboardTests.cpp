@@ -68,6 +68,75 @@ bool InstallForeignClipboard(HWND owner, bool malformed = false) noexcept
     (void)block.release();
     return true;
 }
+
+bool InstallIndependentForeignDib(HWND owner, DWORD& error, unsigned int& stage) noexcept
+{
+    error = ERROR_SUCCESS;
+    stage = 1;
+    constexpr std::array<std::uint8_t, 48> literal{
+        40, 0,  0,  0, // BITMAPINFOHEADER size
+        2,  0,  0,  0, // width
+        1,  0,  0,  0, // bottom-up height
+        1,  0,         // planes
+        32, 0,         // bit count
+        0,  0,  0,  0, // BI_RGB
+        8,  0,  0,  0, // image bytes
+        0,  0,  0,  0, // x pixels per meter
+        0,  0,  0,  0, // y pixels per meter
+        0,  0,  0,  0, // colors used
+        0,  0,  0,  0, // important colors
+        13, 27, 41, 0, // pixel 0: BGR; BI_RGB reserved byte ignored
+        59, 73, 89, 0, // pixel 1
+    };
+    wil::unique_hglobal block(GlobalAlloc(GMEM_MOVEABLE, literal.size()));
+    if (!block)
+    {
+        error = GetLastError();
+        return false;
+    }
+    {
+        const wil::unique_hglobal_locked locked(block.get());
+        if (!locked.get())
+        {
+            error = GetLastError();
+            return false;
+        }
+        std::memcpy(locked.get(), literal.data(), literal.size());
+    }
+    stage = 2;
+    if (!OpenClipboardFixture(owner))
+    {
+        error = GetLastError();
+        return false;
+    }
+    bool closed = false;
+    const auto close = wil::scope_exit(
+        [&]() noexcept
+        {
+            if (!closed)
+                (void)CloseClipboard();
+        });
+    stage = 3;
+    if (!EmptyClipboard())
+    {
+        error = GetLastError();
+        return false;
+    }
+    stage = 4;
+    if (!SetClipboardData(CF_DIB, block.get()))
+    {
+        error = GetLastError();
+        return false;
+    }
+    (void)block.release();
+    stage = 5;
+    closed = CloseClipboard() != FALSE;
+    if (!closed)
+        error = GetLastError();
+    if (closed)
+        stage = 6;
+    return closed;
+}
 } // namespace
 
 int Application::RunClipboardWorkSelfTest() noexcept
@@ -127,6 +196,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
         ReceiptFailure,
         YoungerUndo,
         ReceiptOrigin,
+        ForeignReplacement,
         Rebind,
         Replacement,
     };
@@ -190,6 +260,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"paste-exhaust", paste, Mode::Exhaust, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-owned-receipt", paste, Mode::ReceiptOrigin, ClipboardWorkPhase::PastePrepared,
                  HostOutcome::Succeeded},
+        Scenario{"copy-foreign-replacement-after-close", copy, Mode::ForeignReplacement,
+                 ClipboardWorkPhase::CopyPublished, HostOutcome::Succeeded},
         Scenario{"merged", merged, Mode::Success, ClipboardWorkPhase::CopyPrepared, HostOutcome::Succeeded},
         Scenario{"merged-cancel", merged, Mode::Cancel, ClipboardWorkPhase::MergedSnapshot, HostOutcome::Cancelled},
         Scenario{"merged-late-cancel", merged, Mode::LateCancel, ClipboardWorkPhase::CopyPrivateApplied,
@@ -222,6 +294,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
         ContinuationReceipt receipt, younger;
         Guid replacementRevision;
         bool visited = false, held = false, cancelAcknowledged = false;
+        bool replacementWhilePendingAfterClose = false;
+        bool foreignReplacementInstalled = false;
+        DWORD foreignReplacementError = ERROR_SUCCESS;
+        unsigned int foreignReplacementStage = 0;
+        HWND foreignWindow = nullptr;
     };
     const auto dispatch = [](void* raw, void* native) noexcept
     {
@@ -267,6 +344,12 @@ int Application::RunClipboardWorkSelfTest() noexcept
         case Mode::Replacement:
             owner._session.ReplaceDocument(owner._session.Document().value(), owner._session.ActiveLayerID());
             state.replacementRevision = owner._session.history.CurrentRevision();
+            break;
+        case Mode::ForeignReplacement:
+            state.replacementWhilePendingAfterClose = state.held && state.gate->publications.load() == 1 &&
+                                                      state.receipt.Read().outcome == HostOutcome::Pending;
+            state.foreignReplacementInstalled = InstallIndependentForeignDib(
+                state.foreignWindow, state.foreignReplacementError, state.foreignReplacementStage);
             break;
         case Mode::YoungerUndo:
             state.younger = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
@@ -352,7 +435,18 @@ int Application::RunClipboardWorkSelfTest() noexcept
             gate->fault = ClipboardTransfer::Fault::PngGlobal;
         if (scenario.mode == Mode::ReceiptFailure)
             gate->fault = ClipboardTransfer::Fault::ReceiptPlace;
+        wil::unique_hwnd foreignWindow;
+        if (scenario.mode == Mode::ForeignReplacement)
+        {
+            foreignWindow.reset(
+                CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, _instance, nullptr));
+            expect(foreignWindow && IsWindow(foreignWindow.get()) && foreignWindow.get() != _window.get(),
+                   scenario.name, "actual-distinct-foreign-clipboard-owner-window");
+            if (!foreignWindow)
+                return 5;
+        }
         State state{*this, scenario, gate, QueueHostInput(HostCommandInput{scenario.command})};
+        state.foreignWindow = foreignWindow.get();
         const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
         if (settled != SettleResult::Settled)
         {
@@ -496,6 +590,55 @@ int Application::RunClipboardWorkSelfTest() noexcept
             lifetime(acknowledged && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0 &&
                          _jobs.IsIdle(),
                      "final-control-acknowledges-original-refund");
+        }
+        if (scenario.mode == Mode::ForeignReplacement)
+        {
+            std::printf("DIAG clipboard-post-close held=%d afterClose=%d installed=%d error=%lu nativeStage=%u "
+                        "windowValid=%d closed=%u receipts=%u "
+                        "writeSucceeded=%d preferred=%u live=%u\n",
+                        state.held, state.replacementWhilePendingAfterClose, state.foreignReplacementInstalled,
+                        state.foreignReplacementError, state.foreignReplacementStage, IsWindow(state.foreignWindow),
+                        gate->publications.load(), gate->receiptPlacements.load(), _clipboardWriteSucceeded,
+                        _clipboardSequence, SystemClipboard::SequenceNumber());
+            expect(state.replacementWhilePendingAfterClose && state.foreignReplacementInstalled &&
+                       gate->receiptPlacements.load() == 1 && _clipboardWriteSucceeded && _clipboardSequence != 0 &&
+                       _clipboardSequence != SystemClipboard::SequenceNumber(),
+                   scenario.name, "replacement-after-close-leaves-stale-private-receipt-preference");
+            const auto privateCopySerial = _session.ClipboardSerial();
+            const auto pasteReceipt = QueueHostInput(HostCommandInput{paste});
+            const auto pasteSettled = SettleJobs(_jobs, 15000, DispatchMessageThunk, this);
+            expect(pasteSettled == SettleResult::Settled && pasteReceipt.Read().outcome == HostOutcome::Succeeded,
+                   scenario.name, "later-actual-paste-completes");
+            const auto* pasted = _session.ActiveLayer();
+            std::array<std::uint8_t, 4> first{};
+            std::array<std::uint8_t, 4> second{};
+            if (pasted && pasted->asset)
+            {
+                pasted->asset->image.ReadRegion(0, 0, 1, 1, first.data(), 4, 0);
+                pasted->asset->image.ReadRegion(1, 0, 1, 1, second.data(), 4, 0);
+            }
+            std::printf("DIAG clipboard-post-close-paste width=%d height=%d origin=%.3f,%.3f first=%u,%u,%u,%u "
+                        "second=%u,%u,%u,%u\n",
+                        pasted && pasted->asset ? pasted->asset->image.Width() : -1,
+                        pasted && pasted->asset ? pasted->asset->image.Height() : -1,
+                        pasted ? pasted->transform.origin.x : -1.0, pasted ? pasted->transform.origin.y : -1.0,
+                        first[0], first[1], first[2], first[3], second[0], second[1], second[2], second[3]);
+            expect(pasted && pasted->asset && pasted->asset->image.Width() == 2 && pasted->asset->image.Height() == 1 &&
+                       pasted->transform.origin == Vec2{3, 3} &&
+                       first == std::array<std::uint8_t, 4>{13, 27, 41, 255} &&
+                       second == std::array<std::uint8_t, 4>{59, 73, 89, 255},
+                   scenario.name, "paste-uses-independent-foreign-dib-literal-pixels");
+            expect(_session.Document()->layers.size() == 2 && !_session.Selection() &&
+                       _session.history.UndoName() == L"Paste" && _session.history.UndoCount() == 1 &&
+                       _session.history.CanUndo() && !_session.history.CanRedo() &&
+                       _session.ClipboardSerial() == privateCopySerial,
+                   scenario.name, "document-selection-history-and-private-serial-consistent");
+            expect(!_clipboardTicket && !_clipboardStamp && !_historyWork.Busy() && !_activeHostRequest &&
+                       _hostRequests.Size() == 0 && !_hostInputBudget.Used() && _jobs.ReservedMemoryBytes() == 0 &&
+                       _jobs.ReleasingMemoryBytes() == 0 && gate->retiredOwnerNodes.load() == 0 &&
+                       gate->retiredNodes.load() >= 2 && gate->openAttempts.load() >= 3 &&
+                       gate->openedScopes.load() >= 3,
+                   scenario.name, "original-ticket-refunded-and-worker-retirement-acknowledged");
         }
     }
     std::printf("clipboard-host summary: %u checks, %d failures\n", checks, failures);

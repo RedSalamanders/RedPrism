@@ -432,6 +432,8 @@ class ChromeHost final : public CommandIds
     void SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept;
     [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept;
     [[nodiscard]] CanvasOverlay::SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
+    void EnableSelectionTimingForTest(bool enabled) noexcept;
+    [[nodiscard]] CanvasOverlay::SelectionTimingForTest SelectionTimingStateForTest() const noexcept;
     [[nodiscard]] const std::vector<CanvasOverlay::OutlineLoop>* SelectionOutlineForTest() const noexcept;
     // Lasso draft remains in canvas-hole pixels.
     void SetSelectionAntPhase(float phase) noexcept;

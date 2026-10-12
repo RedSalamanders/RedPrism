@@ -378,6 +378,14 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
             return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
             return failed;
+        // These fixtures own processing and an HWND. Run before the main owner installs its TLS sink
+        // and registers the shared window class; each fixture joins before the next owner starts.
+        std::printf("BEGIN self-test.RunSelectionOutlineTimingSelfTest\n");
+        if (const int failed = Application::RunSelectionOutlineTimingSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunOpacityClosureGuardSelfTest\n");
+        if (const int failed = Application::RunOpacityClosureGuardSelfTest(instance); failed != 0)
+            return failed;
     }
     const std::unique_ptr<Application> application{new (std::nothrow) Application(
         instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};

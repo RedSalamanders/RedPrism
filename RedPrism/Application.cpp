@@ -3056,7 +3056,8 @@ void Application::OnLayerSelected(Guid id) noexcept
         return;
     }
     // A typed opacity belongs to the layer it started on: it records its entry before another is active.
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     _session.SelectLayer(id);
     SyncChrome();
     InvalidateFrame();
@@ -3078,7 +3079,8 @@ void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
     }
     // As a command does: a typed opacity records its entry and a pending transform applies (legacy clickedLayer);
     // the session applies a pending gradient on a target switch (Decision D3).
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     _session.SelectLayerTarget(id, mask);
     if (toggleMask && _session.IsMaskSelected())
@@ -3114,7 +3116,8 @@ void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid>
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
     }
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     bool moved = false;
     if (place == DxUi::TreeDropPlace::Inside)
     {
@@ -4263,8 +4266,15 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         {
             if (message == WM_LBUTTONDOWN && !_spacePan && QueueCanvasBrush(event, view))
                 return;
-            // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
-            CloseOpacityEdit();
+            // Read-only pan/sampling input remains available while a typed edit is settling.
+            // A mutation press must obtain the acknowledged prerequisite or explicitly refuse admission.
+            const bool viewPress = _spacePan || _tool == EditorTool::Hand || SamplesColor();
+            if (!viewPress && !CloseOpacityEdit())
+            {
+                if (!_hostExecuting)
+                    ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
+                return;
+            }
             if (!PointerBusy())
             {
                 PressCanvas(event, message, view, point);
@@ -4847,7 +4857,8 @@ void Application::OnCommand(int command) noexcept
     // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
     if (!view)
     {
-        CloseOpacityEdit();
+        if (!CloseOpacityEdit())
+            return;
     }
     // Commands that change layers or files settle a pending transform first, as Enter would; view, history and About
     // do not.
@@ -5340,14 +5351,16 @@ void Application::OnCommand(int command) noexcept
     }
 }
 
-void Application::SettleInteractions(bool applyPanels) noexcept
+bool Application::SettleInteractions(bool applyPanels) noexcept
 {
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return false;
     CloseRenameCard();
     EndCanvasEdits(applyPanels ? EditEnd::ToolSwitch : EditEnd::DocumentGoes);
     _session.ClearSnapGuides();
     // What is left in flight views or samples the canvas (a pan, a zoom drag, the eyedropper): it ends where it is.
     EndPointerDrag(PointerEnd::Left);
+    return true;
 }
 
 bool Application::EditUnderWay(CanvasEdit edit) const noexcept
@@ -5600,7 +5613,8 @@ void Application::OnTool(EditorTool tool) noexcept
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
-        SettleInteractions(true);
+        if (!SettleInteractions(true))
+            return;
         _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
         if (tool == EditorTool::Crop)
         {
@@ -8069,7 +8083,7 @@ int Application::RunRenderingSelfTest() noexcept
     }
     const auto fresh = [&](int width, int height)
     {
-        SettleInteractions(false);
+        (void)SettleInteractions(false); // Reference rendering fixture replaces the document immediately.
         _session.CreateDocument(width, height, false);
         _session.history.MarkSaved();
         _viewport.followsFit = true;

@@ -766,6 +766,14 @@ layer opacity waits for its OK or Cancel, as legacy `canEditAppearance`: the ste
 digits change nothing and `DocumentSession::SetOpacity` refuses, so no opacity folds into the panel's entry and its
 Cancel leaves the opacity as it was.
 
+A changed typed opacity closes through its admitted worker acknowledgement. Synchronous closure callers MUST
+NOT construct a history entry as a fallback. Closure reports whether the prerequisite is satisfied; layer
+selection/target/reorder/invocation, a mutating command, tool switch, write, replacement, Image Size and a canvas
+mutation stop before their dependent action when it is not. A selected continuation reports the unexpected
+unacknowledged prerequisite through its retained failure result. Read-only pan and sampling remain available.
+An absent, unchanged or expired scalar invocation needs no history construction. Target validation retains the
+immutable layer root and uses its Guid index, checking layer kind, displayed opacity and document serial.
+
 ## Palette and color picker
 
 The palette (opaque ARGB foreground and background) is session state outside history

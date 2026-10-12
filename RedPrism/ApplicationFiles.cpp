@@ -318,7 +318,8 @@ bool Application::SettleForWrite() noexcept
     // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo. A
     // live stroke or warp, a pending gradient and a pending transform record their entries (EditEnd::Write).
     const auto generation = _session.Generation();
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return false;
     EndCanvasEdits(EditEnd::Write);
     _session.ClearSnapGuides();
     if (_session.Generation() != generation)
@@ -715,7 +716,8 @@ void Application::FinishPreparedDocumentReplacement() noexcept
 void Application::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active,
                                   std::wstring path) noexcept
 {
-    SettleInteractions(false);
+    if (!SettleInteractions(false))
+        return;
     _canvasPanLast.reset();
     _session.ReplaceDocument(std::move(document), active);
     _documentPath = std::move(path);

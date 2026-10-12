@@ -2728,6 +2728,30 @@ empty-owner path and canceled/invalid source preservation. Synthetic tokens prov
 storage contract; the host controls separately establish scheduler/Close accounting. Wider profiles,
 native clipboard contention/end-session and measured G1 remain independent gates.
 
+## P1 checked opacity prerequisite and post-close clipboard replacement
+
+The standalone `Application.Tests.OpacityClosureGuard` fixture owns and joins its own hidden Application before
+the main owner installs its thread release sink. Eighteen independent controls require unchanged layer/selection
+roots, active target, generation, history epoch/revision/saved state and typed preview when an unacknowledged
+changed opacity refuses closure. Actual dependent layer, tool, command, write, interaction and canvas pointer
+callers stop before mutation. A real Space pan remains usable. Absent/unchanged/expired scalar state does not
+create history. Existing typed worker success and legacy opacity goldens remain unchanged.
+
+`ApplicationClipboardTests` adds eleven `copy-foreign-replacement-after-close` controls. Hold the real worker
+after OS clipboard close and before receipt application; replace the offered contents using a distinct held
+message-only owner and an independent two-pixel BI_RGB DIB. The later actual queued Paste MUST read BGRA
+`13,27,41,255` and `59,73,89,255`, dimensions 2x1, at `(3,3)` on the 9x7 canvas. Require one Paste undo, no redo,
+cleared selection, unchanged private-copy serial, exact receipt outcome and acknowledged original-ticket refund.
+Installation failure reports its immediate native error and stage and still fails the literal assertions;
+fixture acquisition uses the existing bounded test policy, without changing production retry authority.
+
+`Application.Tests.SelectionOutlineTiming` observes the actual hidden WARP owner with a rectangle, a hole and
+32,768 four-vertex contours. Its 34 structural assertions preserve fixed one-DIP strokes, 4/4 dashes, original
+view mapping and one cached path across phase/pan/zoom. Fifteen observations separate path Create/Open, append,
+Close, solid/dash calls and inclusive RenderFrame. Counters are opt-in and disabled in ordinary painting.
+Neither these hidden CPU intervals nor draw-return time establish GPU completion, visible presentation or G1.
+Require fresh native configuration gates after integration; the private Release record remains separate.
+
 ## Partitioned retention and immutable geometry controls
 
 `Host.Tests.PartitionedRetainedMemory` runs against the actual JobScheduler/WorkerPool and immutable geometry

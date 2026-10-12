@@ -42,7 +42,8 @@ void Application::OnLayerInvoked(Guid id) noexcept
         return;
     }
     // A double-click on a row renames that layer (legacy: the inline editor of the layer list).
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     _session.SelectLayer(id);
     SyncChrome();
     RenameActiveLayer();
@@ -91,53 +92,35 @@ const ImageLayer* Application::OpacityEditLayer() noexcept
         _opacityEdit.reset();
         return nullptr;
     }
-    for (const ImageLayer& layer : _session.Document().value().layers)
+    const ImageLayer* layer = _session.Document()->layers.FindKey(_opacityEdit->layer);
+    if (layer != nullptr && !layer->isGroup && layer->opacity == _opacityEdit->shown &&
+        _opacityEdit->documentSerial == _session.DocumentSerial())
     {
-        if (layer.id == _opacityEdit->layer)
-        {
-            if (layer.isGroup || layer.opacity != _opacityEdit->shown ||
-                _opacityEdit->documentSerial != _session.DocumentSerial())
-            {
-                break;
-            }
-            return &layer;
-        }
+        return layer;
     }
     _opacityEdit.reset();
     return nullptr;
 }
 
-void Application::CloseOpacityEdit() noexcept
+bool Application::CloseOpacityEdit() noexcept
 {
+    if (!_opacityEdit)
+        return true;
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
-    {
-        return; // the selected continuation settles it after the admitted predecessor finishes
-    }
+        return false; // The selected continuation owns the acknowledged settlement.
     const ImageLayer* layer = OpacityEditLayer();
     if (layer == nullptr)
-    {
-        return;
-    }
-    const OpacityEdit edit = _opacityEdit.value();
-    if (edit.shown == edit.start)
+        return true; // Only expired scalar invocation state was discarded.
+    if (_opacityEdit->shown == _opacityEdit->start)
     {
         _opacityEdit.reset();
-        return;
+        return true;
     }
-    if (!_hostExecuting)
-        return; // Changed edits require the selected continuation's acknowledged worker closure.
-    _opacityEdit.reset();
-    // History still holds the start value: the previewed one becomes its own entry before anything else records.
-    // The field keeps its text, so its Enter or focus loss may still commit this value.
-    if (!_session.PreviewLayerOpacity(edit.layer, edit.start))
-    {
-        return;
-    }
-    _session.BeginEdit(L"Layer Opacity");
-    (void)_session.PreviewLayerOpacity(edit.layer, edit.shown);
-    _session.EndEdit();
-    _opacityRecorded = edit.shown;
-    DocumentChanged();
+    // A changed edit is closed only by the typed worker acknowledgement. Never
+    // construct or publish a history entry from a synchronous caller fallback.
+    if (_hostExecuting)
+        _hostExecutionError = E_UNEXPECTED;
+    return false;
 }
 
 bool Application::NewerOpacityInputPending(Guid target, OpacityInputOrder::Stamp order) const noexcept

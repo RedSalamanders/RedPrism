@@ -3851,6 +3851,17 @@ D2D1_MATRIX_3X2_F ChromeHost::SelectionMappingForTest() const noexcept
     return _overlay ? _overlay->SelectionMappingForTest() : D2D1::Matrix3x2F::Identity();
 }
 
+void ChromeHost::EnableSelectionTimingForTest(bool enabled) noexcept
+{
+    if (_overlay)
+        _overlay->EnableSelectionTimingForTest(enabled);
+}
+
+CanvasOverlay::SelectionTimingForTest ChromeHost::SelectionTimingStateForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionTimingStateForTest() : CanvasOverlay::SelectionTimingForTest{};
+}
+
 CanvasOverlay::SelectionResourcesForTest ChromeHost::SelectionResourcesStateForTest() const noexcept
 {
     return _overlay ? _overlay->SelectionResourcesStateForTest() : CanvasOverlay::SelectionResourcesForTest{};

@@ -59,6 +59,26 @@ class CanvasOverlay final : public DxUi::Control
         return D2D1::Matrix3x2F::Scale(_selectionScale, _selectionScale) *
                D2D1::Matrix3x2F::Translation(_selectionOrigin.x, _selectionOrigin.y);
     }
+    // Diagnostic counters only. No callback can reenter/destroy the overlay during a timed interval.
+    struct SelectionTimingForTest final
+    {
+        std::uint64_t createTicks = 0;
+        std::uint64_t appendTicks = 0;
+        std::uint64_t closeTicks = 0;
+        std::uint64_t solidDrawTicks = 0;
+        std::uint64_t dashDrawTicks = 0;
+        std::uint64_t builds = 0;
+        std::uint64_t drawPairs = 0;
+    };
+    void EnableSelectionTimingForTest(bool enabled) noexcept
+    {
+        _selectionTimingEnabledForTest = enabled;
+        _selectionTimingForTest = {};
+    }
+    [[nodiscard]] SelectionTimingForTest SelectionTimingStateForTest() const noexcept
+    {
+        return _selectionTimingForTest;
+    }
     struct SelectionResourcesForTest
     {
         std::uint64_t pathsBuilt = 0;
@@ -165,6 +185,8 @@ class CanvasOverlay final : public DxUi::Control
     // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
     mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle1>, 8> _antStyles;
     mutable std::uint64_t _selectionPathsBuilt = 0;
+    bool _selectionTimingEnabledForTest = false;
+    mutable SelectionTimingForTest _selectionTimingForTest;
     mutable bool _outlineDirty = false;
     float _antPhase = 0.0f;
 };

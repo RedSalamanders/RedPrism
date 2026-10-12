@@ -141,7 +141,8 @@ void Application::ApplySizeCard(std::optional<std::uint32_t> extensionArgb) noex
     }
     // A pending gradient or transform commits first, so the resize starts from the document that holds it (the
     // settle closes the card; the draft stays in _sizeDialog).
-    SettleInteractions(false);
+    if (!SettleInteractions(false))
+        return;
     if (!_session.Document().has_value())
     {
         return;

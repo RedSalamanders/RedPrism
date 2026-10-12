@@ -131,6 +131,8 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
 
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
+    static int RunSelectionOutlineTimingSelfTest(HINSTANCE instance) noexcept;
+    static int RunOpacityClosureGuardSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance) noexcept;
@@ -1028,7 +1030,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     // The layers panel's opacity stepper: a typed edit previews on the layer it started on and records one entry
     // when it commits, or when anything else (a command, a tool, a canvas press, another layer, a save) closes it.
     void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept override;
-    void CloseOpacityEdit() noexcept;
+    [[nodiscard]] bool CloseOpacityEdit() noexcept;
     [[nodiscard]] const ImageLayer* OpacityEditLayer() noexcept;
     int RunLayerEditsSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
@@ -1107,7 +1109,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void ImportImages() noexcept;
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
-    void SettleInteractions(bool applyPanels) noexcept;
+    [[nodiscard]] bool SettleInteractions(bool applyPanels) noexcept;
     // The edits under way, in the one order Escape, Enter, Undo and a settle consult them (RF-904): the size card and
     // an open panel first (a card comes before the canvas), then the canvas's drags, then what stays pending between
     // drags. Outside the cards at most one of them is under way at a time.

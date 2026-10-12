@@ -190,7 +190,7 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
             _sizingWorkTestGate.reset();
             _hostAdmissionAllocationFailureForTest = false;
             _session.CancelColorEdit();
-            CloseOpacityEdit();
+            (void)CloseOpacityEdit(); // Fault cleanup discards only scalar state before fixture replacement.
             if (_session.IsMovingSelection())
             {
                 DropDrag<OutlineDrag>();
@@ -654,7 +654,7 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
         _projectSaveTestGate.reset();
         _sizingWorkTestGate.reset();
         _session.CancelColorEdit();
-        CloseOpacityEdit();
+        (void)CloseOpacityEdit(); // Fault cleanup discards only scalar state before fixture replacement.
         if (_session.IsMovingSelection())
         {
             DropDrag<OutlineDrag>();

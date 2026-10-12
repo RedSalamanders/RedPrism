@@ -2,6 +2,58 @@
 
 ## Current delivery checklist
 
+P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
+
+- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
+- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
+- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
+- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
+- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
+- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
+- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
+- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
+Current continuation (2026-10-12): private clipboard r7 passes the complete hidden WARP Release suite with
+all 7,399/7,556 predecessor records, eleven new post-close foreign replacement/literal Paste controls and the
+52 guard/timing controls; reader `0912E0D8…`. Main retains r5/r6 as failed evidence and verifies the distinct held
+native clipboard owner and exact 2x1 bytes/placement. The checked opacity guard, actual outline diagnostic and
+clipboard controls are integrated in the native worktree (17 files), with ordinary startup still test-gated.
+The fresh 1,255-input/20-contract freeze is `5D84694D…`; formatting checks 1,108 files and all 15 skills pass.
+Native Release analysis r926 and full Release r927 qualify this freeze; reports `D9919747…` and `2BEEE515…`.
+Full Debug r928 qualifies (`87ADC6A8…`); real ASan r929 also qualifies (`3A058741…`), including the
+real detection probe. ARM64 r105 verifies all three successful cross-builds, 15 PE/PDB pairs and five sanitizer
+controls (`6802766D…`); native ARM64 runtime remains unavailable. Exact evidence is in the
+[native qualification receipt](../../TestRuns/P1OpacityClipboardNativeQualification_2026-10-12.md). F5, S5, G1 and P1 remain open. A cheaper agent's private 131,072-point contour diagnostic is reviewed;
+Main restores the predecessor per-contour size assertion before its future private run.
+
+The isolated raster core r3 compiles without warnings/errors and its actual DocumentTests child exits 0.
+Main's independent readback (`24BAE854…`) preserves all 9,204 original records and verifies 36 new assertions
+plus their summary. The original reader/count refusal remains preserved: its pre-runtime label extractor
+missed the existing single-letter `x-ten` component. No test predicate, pixel value or product source changes
+to obtain readback. This is CPU raster preparation evidence; opaque D2D memory/cancellation, view authority,
+GPU admission, actual host activation and S5 remain due. Main authors a private persistent identity index
+with path copying and cached retirement bounds; a cheaper agent supplies independently modeled tests.
+The private foundation now qualifies full DocumentTests and 9,055 independently modeled assertion occurrences
+plus summary (`8AC83369…`); all predecessors remain in order. The actual private history adapter qualifies
+435 additional reference controls plus summary (`602E83FC…`), with all 18,297 predecessors preserved; see
+[its receipt](../../TestRuns/P1PersistentHistoryAdapter_2026-10-12.md). A fresh private actual Raster/history
+journal candidate is compiling with literal event, cancellation, stale-witness and overflow-fallback controls. It removes full map copies and global sampling
+on an unchanged residency epoch, and caches unique self-storage contributions. Topology traversal, journal
+deltas, complete admission/retirement performance and native H3 integration remain due. Native inputs and
+owning contracts stay frozen through the completed native/ARM checkpoint; the current journal candidate is isolated.
+
+Next bounded work:
+
+- [x] Integrate checked opacity prerequisites, literal foreign clipboard Paste and outline cost diagnostics.
+- [x] Qualify changed-source Release analysis and full Release, preserving original assertions.
+- [x] Qualify changed-source full Debug and real ASan, then all three ARM64 cross-builds.
+- [x] Independently compile/run the private persistent-index tests, including cancellation, partial allocation
+  failure, original accounting-owner and weak-control lifetime. Actual H3 integration remains open; sequence in
+  [incremental history storage](IncrementalHistoryStorage_2026-10-12.md).
+- [ ] Select and qualify the S5 rendering route with exact view/DPI behavior and complete admission.
+
 Current private checkpoint (03:12 UTC, 2026-10-12): Release r4 compiles/ISA passes and actual WARP child
 63304 exits 0. The independent reader preserves all 7,399 stdout/7,556 stderr predecessor assertions,
 131 original stages and the 52 additions/two standalone stages (`C81BF500…`). Checked opacity prerequisites
@@ -57,20 +109,7 @@ before preparation and authors a checked opacity prerequisite that removes synch
 fallback. These private candidates have not compiled or run. All delivery areas below remain open;
 the ordinary startup route remains unintegrated and P1 remains WIP.
 
-P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
-
-- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
-- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
-- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
-- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
-- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
-- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
-- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
-- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
-- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
-
-### Current implementation and qualification
+### Historical qualification ledger
 
 Current continuation (00:53 UTC, 2026-10-12): the integrated RSI64 source remains frozen at
 1,253 inputs/20 contracts (`D69F9A3E…`). Analysis r921 fails during compilation with C1090 PDB API
