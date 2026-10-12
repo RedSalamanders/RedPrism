@@ -336,6 +336,43 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
     history joins its original outer entry and saved-marker changes during preparation survive publication.
     Existing live brush/warp/shape, lasso, outline-move and selection-header routes remain separate migrations.
     This settled route does not authorize synchronous gesture closure or establish the measured G1 exit.
+- `InverseSelectionWork` supplies the settled Inverse command. The owned host request and exact history ordinal
+  admit complete capture, fixed scratch, final output, replaced outline and retirement bounds before capture.
+  Preparation resumes the original job and computes the canvas rectangle minus the captured selection using
+  ClipperD precision 2 and NonZero filling, within the production 128 MiB scratch ceiling. Cancellation is checked
+  at bounded engine checkpoints; capacity or construction refusal publishes no partial geometry or history.
+  - Absent selection is a no-op preserving redo, revision, generation and outline. Explicit empty remains present
+    and becomes the full canvas. The original antialiasing state and `Inverse` history title are preserved.
+  - Exact settled session, document/generation, active target/mask, crop, history and opening authority precede
+    nonthrowing publication. Changed raster residency refreshes on the same admitted job before apply; its permit
+    remains valid through publication. Younger writes wait for acknowledgement; view input and messages continue.
+  - Worker-prepared numeric outline buffers retain their immutable source and are adopted without an owner copy.
+    Complete declared document/history/outline output stays charged to the original ticket through copied and
+    final weak controls. Failed/cancelled/stale graphs retain their charge until actual retirement too.
+  - Joined shutdown joins all producers before finishing the Inverse stamp and clearing its ticket. It grants no
+    successful-work authority; final copied/weak output owners can outlive the scheduler wrapper.
+  - Live/coexisting gesture closure retains the separate reference route. Owner Direct2D path construction,
+    complete selection migration, ordinary activation and measured G1 remain separate requirements.
+
+- `SelectionOffsetWork` supplies settled Expand/Contract commands. Their signed amount is captured
+  at the input event (positive Expand, negative Contract), remains in the original ordered request and is
+  validated within 1–500. Complete capture/history, 128 MiB scratch, geometry, replaced numeric outline
+  and retirement bounds are admitted before immutable capture. Normalization retains binary-scale128
+  ClipperD precision2/NonZero; round offset retains decimal-scale100 and original cleanup winding;
+  only Expand intersects the canvas afterward. No numerical reference or antialiasing rule changes.
+  - Offset scratch opts into same-arena power-of-two reuse after complete destruction. Slots, ownership
+    headers and ASan guards remain inside the unchanged cap; Boolean/Inverse retain their monotonic policy.
+    Allocation-count refusal and 64-unit cancellation remain global across every phase. Capacity, cancellation
+    and construction failure publish no partial geometry or history and reach the original job boundary.
+  - Absent/explicit-empty input is a successful no-op preserving revision/redo/generation; Contract past
+    the center publishes explicit empty. Named history, Undo/Redo and source AA retain legacy semantics.
+  - Exact session/document/generation/target/mask/crop/history authority precedes publication. Residency
+    refresh resumes the same admitted job. Numeric outline buffers and complete persistent output retain
+    original-ticket charge through copied and final weak controls. Joined Close joins producers before
+    clearing the ticket and host barrier; escaped readers retain their exact charge afterward.
+  - View input remains available while younger writes await acknowledgement. Existing live/coexisting
+    gesture settlement, owner Direct2D path construction, complete ordinary activation and G1 stay separate.
+
 - `PreparePreservingSelectionCommandInput` is a separate Select All/Deselect boundary for an existing brush,
   warp or shape opening. It preserves mutable gesture owners and captured stroke coverage. Opaque authority
   binds weak brush/warp control-block identities and the shape opening counter, plus the same document/history/

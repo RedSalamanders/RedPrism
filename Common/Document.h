@@ -1381,6 +1381,14 @@ struct LayerMetadataPrepareObserver;
 class SelectionNudgeInput;
 class PreparedSelectionNudge;
 struct SelectionNudgeObserver;
+class InverseSelectionInput;
+class PreparedInverseSelection;
+class SelectionOffsetInput;
+class PreparedSelectionOffset;
+struct SelectionOffsetMemoryPlan;
+struct SelectionOffsetObserver;
+struct InverseSelectionMemoryPlan;
+struct InverseSelectionObserver;
 class WandLayerSelectionInput;
 class PreparedWandLayerSelection;
 struct WandLayerSelectionObserver;
@@ -2520,6 +2528,24 @@ class DocumentSession
                                                          std::size_t nameUnits = 0) const noexcept;
     [[nodiscard]] std::uint64_t PreservedLayerMetadataMemoryBytes(LayerMetadataKind kind,
                                                                   std::size_t nameUnits = 0) const noexcept;
+    [[nodiscard]] std::optional<SelectionOffsetMemoryPlan> PlanSelectionOffsetMemory(int amount) const noexcept;
+    [[nodiscard]] std::optional<SelectionOffsetInput> PrepareSelectionOffsetInput(int amount) const;
+    [[nodiscard]] static std::optional<PreparedSelectionOffset> PrepareSelectionOffsetPublication(
+        SelectionOffsetInput captured, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {},
+        const SelectionOffsetObserver* diagnostic = nullptr);
+    [[nodiscard]] bool IsPreparedSelectionOffsetCurrent(const PreparedSelectionOffset& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedSelectionOffsetIfCurrent(PreparedSelectionOffset& prepared) noexcept;
+
+    [[nodiscard]] std::optional<InverseSelectionMemoryPlan> PlanInverseSelectionMemory() const noexcept;
+    [[nodiscard]] std::optional<InverseSelectionInput> PrepareInverseSelectionInput() const;
+    [[nodiscard]] static std::optional<PreparedInverseSelection> PrepareInverseSelectionPublication(
+        InverseSelectionInput captured, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver historyObserver = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {}, const InverseSelectionObserver* observer = nullptr);
+    [[nodiscard]] bool IsPreparedInverseSelectionCurrent(const PreparedInverseSelection& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedInverseSelectionIfCurrent(PreparedInverseSelection& prepared) noexcept;
+
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(

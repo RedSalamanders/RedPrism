@@ -469,6 +469,12 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return !_session.PendingTransformEdit();
             }
+            else if constexpr (std::is_same_v<Input, HostSelectionOffsetInput>)
+            {
+                _hostExecutionError = StartSelectionOffset(value.amount);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
             else if constexpr (std::is_same_v<Input, HostSelectionNudgeInput>)
             {
                 _hostExecutionError = StartSelectionNudge(value.dx, value.dy);

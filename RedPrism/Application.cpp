@@ -1576,6 +1576,8 @@ int Application::RunSelfTest() noexcept
         }
         OnSelectionAction(SelectionAction::SetExpandAmount, 5.0);
         OnSelectionAction(SelectionAction::Expand, 0.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (_session.history.UndoName() != L"Expand Selection" || !box.has_value() || !closeTo(box->minX, 295.0))
         {
@@ -2541,6 +2543,21 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
+    std::printf("BEGIN self-test.RunInverseSelectionHostSelfTest\n");
+    if (const int inverse = RunInverseSelectionHostSelfTest(); inverse != 0)
+        return inverse;
+    std::printf("BEGIN self-test.RunInverseSelectionFailureSelfTest\n");
+    if (const int failures = RunInverseSelectionFailureSelfTest(); failures != 0)
+        return failures;
+    std::printf("BEGIN self-test.RunSelectionOffsetHostSelfTest\n");
+    if (const int offset = RunSelectionOffsetHostSelfTest(); offset != 0)
+        return offset;
+    std::printf("BEGIN self-test.RunSelectionOffsetFailureSelfTest\n");
+    if (const int offset = RunSelectionOffsetFailureSelfTest(); offset != 0)
+        return offset;
+    std::printf("BEGIN self-test.RunSelectionOffsetLargeOutputSelfTest\n");
+    if (const int large = RunSelectionOffsetLargeOutputSelfTest(); large != 0)
+        return large;
     std::printf("BEGIN self-test.RunLayerMetadataSelfTest\n");
     if (const int metadata = RunLayerMetadataSelfTest(); metadata != 0)
         return metadata;
@@ -3883,6 +3900,16 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Close suppresses Inverse completions. Its joined retirement acknowledges the original selection
+    // record; finish its exact stamp and clear the ticket only after all producers and payloads join.
+    if (_inverseSelectionStamp)
+        (void)_historyWork.Finish(_inverseSelectionStamp.value());
+    _inverseSelectionStamp.reset();
+    _inverseSelectionTicket.reset();
+    if (_selectionOffsetStamp)
+        (void)_historyWork.Finish(*_selectionOffsetStamp);
+    _selectionOffsetStamp.reset();
+    _selectionOffsetTicket.reset();
     // Utility completions are suppressed by Close too. Its join is the acknowledgement for retained
     // readback/export/merge/clone tickets; retire their exact history stamp only after producers/maps join.
     if (_utilityStamp)
@@ -4713,9 +4740,9 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    const bool settledSelection =
-        (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect) &&
-        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    const bool settledSelection = (command == ChromeHost::kCommandSelectAll ||
+                                   command == ChromeHost::kCommandDeselect || command == ChromeHost::kCommandInverse) &&
+                                  _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
     const auto selectedTool = ChromeHost::ToolForSelectCommand(command);
     const bool closesOutline =
         _session.IsMovingSelection() &&
@@ -5276,9 +5303,19 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandInverse:
-        EndSelectionInteraction(false);
-        _session.InvertSelection();
-        SelectionChanged();
+        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+        {
+            _hostExecutionError = StartInverseSelection();
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+        }
+        else
+        {
+            // Live selection/stroke closure retains the reference route until ordered replay qualifies.
+            EndSelectionInteraction(false);
+            _session.InvertSelection();
+            SelectionChanged();
+        }
         break;
     case ChromeHost::kCommandLoadLayerSelection:
     case ChromeHost::kCommandLoadMaskSelection:
@@ -6785,6 +6822,13 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
+    if (!_hostExecuting && (action == SelectionAction::Expand || action == SelectionAction::Contract) &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    {
+        const int amount = action == SelectionAction::Expand ? _selectionExpandAmount : -_selectionContractAmount;
+        ReportHostAdmission(QueueHostInput(HostSelectionOffsetInput{amount}));
+        return;
+    }
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);

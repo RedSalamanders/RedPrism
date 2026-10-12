@@ -181,6 +181,10 @@ struct HostPixelNudgeInput final
 {
     Vec2 offset; // event-time Shift step; a queued press must not read newer keyboard state
 };
+struct HostSelectionOffsetInput final
+{
+    int amount; // Signed event-time header amount; positive expands, negative contracts.
+};
 struct HostSelectionNudgeInput final
 {
     int dx;
@@ -234,7 +238,7 @@ using HostRequestInput =
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
                  HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput,
-                 HostCanvasBrushInput>;
+                 HostSelectionOffsetInput, HostCanvasBrushInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

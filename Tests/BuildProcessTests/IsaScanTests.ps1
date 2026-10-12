@@ -9,11 +9,19 @@ $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
 & (Join-Path $PSScriptRoot 'IsaRsiDwordTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RSI terminal DWORD parser controls failed.' }
+Write-Host 'BEGIN isa-rsi64-terminal-controls'
+& (Join-Path $PSScriptRoot 'IsaRsi64TerminalTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Full-width RSI terminal DWORD parser controls failed.' }
+Write-Host 'END isa-rsi64-terminal-controls'
 & (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
+Write-Host 'BEGIN isa-rbx-disp8-remap-controls'
+& (Join-Path $PSScriptRoot 'IsaRbxDisp8RemapTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Guarded RBX disp8 byte-remap parser controls failed.' }
+Write-Host 'END isa-rbx-disp8-remap-controls'
 & (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaCompactSignedRcxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Compact signed RCX byte-remap parser controls failed.' }

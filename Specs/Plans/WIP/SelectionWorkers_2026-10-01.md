@@ -1,6 +1,153 @@
 # Ordered selection workers (P1.6)
 
+Current continuation (00:39 UTC, 2026-10-12): Main integrates the exact full-width RSI terminal-table
+recognizer after all original controls and 93 new controls pass; the tracked-location fixture passes with
+actual child 57268, exit 0. The runtime allowlist is unchanged. The new genuine pre-runtime freeze binds
+1,253 inputs and 20 contracts (`D69F9A3E…`); independent full-reader expectations retain every original
+product assertion and add the exact new parser roster. Formatting and all 15 skills pass. Fresh Release
+analysis r921 is running before full Release r922, Debug r923 and real ASan r924; ARM64 remains gated.
+The original r917 failure and all private fixture failures remain preserved. A reviewed S5 integration
+checklist identifies every remaining producer, source/view/DPI authority, original-ticket admission,
+bounded uploads and deferred CPU/GPU retirement. S5 and all nine delivery areas remain open.
+
+
 ## Current continuation checklist (2026-10-11)
+
+Latest checkpoint (2026-10-12): current-source full Debug r923, Release r922,
+real ASan r924 and Release analysis r925 qualify on 1,253 inputs and 20 contracts (`D69F9A3E…`).
+ASan child 13480 exits 0 at 02:10:15 UTC; report `0DAA99FC…` preserves all original assertions,
+131 application stages and real sanitizer/stress controls. Preserve the ARM64 controller's
+ASan-count refusal and r103's duplicate-log creation refusal before any compiler launch.
+Main corrects only runner bookkeeping; all three serial ARM64 r104 cross-builds pass. After the
+preserved stale-folder reader refusal, exact archived-path correction retains every predicate
+and verifies 15 PE/PDB pairs plus five real sanitizer controls (`F1E5E23D…`). Native ARM64 runtime
+remains unavailable. Private startup/opacity/timing Release r1 fails compilation with C1090 PDB
+API error 23 (child 46380, exit 1); no runtime starts. Preserve original source/products/logs
+before a fresh unchanged-source attempt. Ordinary activation remains unqualified.
+S5, the remaining selection consumers and G1 stay open.
+
+Previous checkpoint (01:44 UTC, 2026-10-12): full Release r922 qualifies the exact 1,253-input,
+20-contract `D69F9A3E…` source, actual child 68012 exits 0 at 01:15:45 UTC; report `310784E3…`
+preserves all original assertions and 131 stages. The failed predecessor reader remains preserved;
+the corrected reader checks the complete 791-record parser section, including one intentional
+additional original-helper invocation. Analysis r925 also qualifies (`7688FC0E…`); r921 C1090
+remains a failed run. Full Debug r923 is in its final application tests, then real ASan r924;
+current-source ARM64 remains gated. Main corrects the agent's startup/timing composition before
+preparing the private project. The raster utility, timing diagnostic and ordinary startup candidate
+remain uncompiled. Admission, opaque API intervals, scalar view mapping, retirement and G1 stay open.
+
+Current continuation (00:53 UTC, 2026-10-12): the integrated RSI64 source remains frozen at
+1,253 inputs/20 contracts (`D69F9A3E…`). Analysis r921 fails during compilation with C1090 PDB API
+error 23/invalid handle (actual child 78184, exit 1); its original archive and Document/IO compiler PDBs
+are preserved. Main verifies every archived copy after a narrow extended-path reader correction;
+completion `61643E87…`. The failed reader's 263-character path is real and present with the Windows
+extended prefix; containment, missing-file, size, hash and duplicate-source refusals still pass. Fresh
+unchanged-source analysis r925 has no C1090 and is running its original ISA controls before full
+Release r922, Debug r923 and real ASan r924. No source/flag/pin/test-threshold change or failed-run pass.
+Main reviews the cheaper worker raster draft, retains legacy anchor-relative point conversion, uses
+one uninitialized nine-plane allocation and authors independent phase/DPI tests before integration.
+Opaque Direct2D memory and cancellation intervals remain unqualified, alongside application admission,
+bounded upload, view authority, retirement and ordinary/G1 gates. P1 stays WIP.
+
+Current continuation (00:10 UTC, 2026-10-12): repaired fixture binding `DDEF8180…` retains 1,252 inputs
+and all 20 contracts. Actual analysis r917 compiles/SAL-controls pass but linked ISA refuses an anonymous
+20-entry DWORD table after `RunHostFlowSelfTest`'s return (child 43476, exit 1). Preserve its 1,651-copy
+archive, completion `08C8C7D3…`; full r918–r920 and ARM64 have not launched. Main's narrow private RSI64
+recognizer is undergoing original and new refusal controls before integration; no allowlist change.
+S5 raster and nine-plane A8 probes now pass isolated Release, including all eight phases and independent
+numeric values. They remove no native owner work yet. Admission, view/DPI/cancellation/retirement,
+ordinary activation and G1 remain due.
+
+Current continuation (23:49 UTC): native real ASan r916 qualifies the unchanged 1,252 inputs and 20
+contracts (`AF22B204…`): actual child 85828 exits 0 at 23:39:13 UTC after starting 23:13:21. Original
+assertions, 92 Document/433 application additions, 131 stages and the real negative sanitizer probe pass;
+archive completion `E43692BC…`, report `767AF14C…`. Debug/Release remain qualified. Release analysis r914
+fails at 23:44:34 (child 52552, exit 1), C6262's 18,428-byte frame at
+`Application.Tests.SelectionOffset.cpp:29`; its 1,641-copy archive verifies. ARM64 did not launch and its
+queued gate stopped. Main repairs only the fixture's `DocumentSession` allocation to heap, retaining semantic
+assertions; changed source needs fresh validation. Corrected S5 Release geometry probe passes (compile 88864,
+runtime 28284, source `9F73BC26`); separate-factory draw returns `D2DERR_WRONG_FACTORY`. WARP 2048x1024
+first/warm ~68.9/~72.4 ms is diagnostic only, with no G1. WIC compile 88632 fails exit 2 on a Win32 macro
+conflict; helper rename is in progress and runtime is unrun. S5/H4/G1 and all nine parent delivery areas
+remain open; this plan remains WIP.
+
+Current continuation (23:36 UTC): ASan r916 has passed compilation/ISA/suite/crash stages and is
+running the application suite on the unchanged candidate. The original process handle gates analysis
+qualification, three ARM64 r102 cross-builds and independent artifact verification. Main authors an
+isolated CPU WIC raster snapshot transfer experiment with independent white/dash pixel expectations,
+exact uploaded-byte verification and separately observed WARP differences. It is uncompiled; the
+native candidate, dependency pin and all S5/G1 requirements stay unchanged.
+
+Current continuation (23:15 UTC): native Release r911 and Debug r912 qualify on the same frozen
+candidate. Actual ASan r913 fails during compilation with C1090; its failed archive and compiler PDB
+are preserved, with no established cause and no runtime qualification. Fresh full ASan r916 is running
+before analysis r914 and the reviewed ARM64 r102 protocol. The isolated S5 probe compiles but fails
+its inappropriate hollow-figure bounds predicate. Same-factory draws succeed; separate single-threaded
+and multithreaded worker factories both return `D2DERR_WRONG_FACTORY` from owner EndDraw. Preserve
+that attempt, correct the diagnostic and qualify a supported outline route before ordinary activation.
+
+Current continuation (23:02 UTC): native full Debug r912 now qualifies alongside Release on the exact
+1,252-input/20-contract binding. Actual child 10676 exits 0 at 23:00:39 UTC; all original assertions,
+92 Document/433 application additions and 131 stages verify, report `D3F1DE33…`. Real ASan r913 is
+running, followed by analysis r914 and dedicated ARM64 r102. The reviewed S5 probe is still unexecuted;
+its fixed 32,768-square case separates construction, sink close and first/warm draw observations.
+
+Current continuation (22:44 UTC): native full Release r911 qualifies every original assertion and the
+92 Document/433 application additions in 131 stages. Preserve the controller's LF/CRLF snapshot refusal;
+Main proves the exact byte projection against the genuine earlier origin and all unchanged source hashes.
+Projection `CC428781…`, exact reader r2 and archived report `A40E03E7…` qualify that actual run without a
+rebuild or changed predicates. Debug r912 is running; real ASan, analysis and dedicated ARM64 gates remain
+open. S5 factory/first-draw checks are detailed below; the isolated cheaper-agent probe remains uncompiled.
+
+Current continuation (22:22 UTC): the repaired offset CPU/publication and actual host pass all three
+private profiles. Main integrates the 39-file settled offset change and explicit int32 Inverse fixture
+comparison only after every exact gate passes. Formatting/skills pass; the new native 1,252-input,
+20-contract binding is `AF22B204…`. Forced full Release r911, Debug r912, real ASan r913 and analysis
+r914 are sequenced; dedicated ARM64 r102 is prepared and gated on those reports. Native qualification,
+commit/push, S5/H4/G1 and P1 completion remain due.
+
+Current continuation (22:02 UTC): Release artifact repair r915 qualifies only the rebuilt artifact
+identity on the same 1,228 native inputs, 20 contracts and unchanged DxUi pin/source. Debug private
+closure remains exact. Fresh repaired host Release r24 and real ASan r25 are sequenced before the
+prepared native activation. The prior r22 refusal is retained; no S5/H4/G1 or P1 gate is closed.
+
+Current continuation (21:50 UTC): repaired CPU/publication Debug r18, Release r19 and real ASan r20
+qualify 9,204 records each. Repaired actual host Debug r21 qualifies all original assertions and 433
+additions in 131 stages, including the fixed large geometry and complete copied/final-weak output charge.
+Release r22 refuses before compilation on a pinned library/provenance hash mismatch; its previous
+artifacts are copied/read back before artifact-only native Release repair r915. Fresh Release/ASan
+host proof and native source integration remain due; no S5/H4/G1 or P1 closure follows.
+
+Current continuation (21:17 UTC): private host Debug r12 passes all 424 small controls, including
+40 joined-Close records, but fails five of nine large Contract assertions. Release r13/ASan r14
+remain unstarted. Diagnostics r15/r16 identify normalization scratch exhaustion inside the unchanged
+128 MiB cap. Main prepares opt-in same-arena slot reuse for offset operations, preserving default
+Boolean allocation and all original predicates; five fixed integer-grid CPU assertions are added.
+The isolated project include-root failure r17 is retained before a fresh corrected candidate.
+This is preparation and diagnosis, with no offset native activation, S5/H4/G1 or P1 closure.
+
+Current continuation (20:49 UTC): preserve actual analysis r910 failure (child28436, exit1): C6221 flags
+one Inverse fault fixture's HRESULT/int32 comparison atline343; the failed archive read-back completes.
+ARM64 r101 has not run. Private offset Debug r9 builds successfully but actual app87972 exits5 at the
+original header Expand check, which still expects synchronous completion. The caller must settle through
+the real pump before checking its unchanged five-pixel golden; the private corrected source will also use
+explicit int32 error comparisons. No failed attempt qualifies. Combine these corrections with the next
+qualified offset integration before a fresh native matrix, avoiding a redundant intermediate full matrix.
+
+
+Latest status (20:40 UTC): fresh native Release r907, Debug r908 and real ASan r909 are qualified on the
+same1,228-input/20-contract binding. Preserve the old ASan reader's randomized log-path refusal; Main's
+narrow corrected reader authenticates both archived diagnostics before projecting only those exact rows.
+Release analysis r910 is running; ARM64 r101 awaits its audit. Private offset engine and publication core
+qualify Debug/Release/real ASan with55/87 additions. The1,236-input,424-record host candidate is building
+Debug r9; no native offset activation follows from private core qualification.
+
+- [x] Authenticate native real ASan r909 and private offset engine r5/core r8 against exact same-profile predecessors.
+- [x] Authenticate private offset core Debug r6 and Release r7 with all9,112 previous assertions and87 additions.
+- [ ] Finish current-source analysis/ARM64, then commit/push the Inverse/scanner checkpoint.
+- [x] Qualify the repaired offset host's 433 records/three stages, large output/capacity and native integration.
+  Current-source native Debug/Release/real ASan, Release analysis and three ARM64 r104 cross-builds pass;
+  [exact report](../../TestRuns/P1SelectionOffsetPrivate_2026-10-11.md). Ordinary activation, S5 and G1 remain separate.
 
 - [x] Native layer and composite Wand New/Add/Subtract, bounded original-engine Boolean geometry,
   FIFO commands, no-match, cancellation/staleness, actual Undo/Redo and document/history Close qualify
@@ -21,15 +168,39 @@
 - [x] Privately qualify the original Debug r4 ordered Inverse host: all original 126 stages and semantic assertions
   plus 190 named success/fault/order/stale/refresh/output-owner checks pass. Preserve compiler/API failures and the
   private-desktop presentation refusal; unchanged presentation checks pass on the inherited desktop.
-- [ ] Expanded 219-control host r6–r12 remains unqualified. In r9–r12, joined Close and admission checks pass,
+- [x] Preserve expanded 219-control host r6–r12's unqualified attempts. In r9–r12, joined Close and admission checks pass,
   but the full runs fail at the large case. r9's 4,096-hole topology passes without establishing >16 MiB output accounting; r10/r11 65,536-hole and
   r12 32,768-hole cases fail cleanly with `E_OUTOFMEMORY`. Exact cause and pre-engine refusal are not established.
   See [private record](../../TestRuns/P1InverseSelectionPrivate_2026-10-11.md).
 - [x] Privately qualify expanded Debug r13 with all original assertions/stages and 219 additions. The exact
   28,672-hole case charges 19,479,256 output bytes on its original ticket through copied and final weak owners;
   joined Close, actual queue saturation and exact refund pass. The fixed 128 MiB arena is unchanged.
-- [ ] Complete Release/real ASan host qualification, then qualify native
-  integration. S5, ordinary activation and G1 remain open.
+- [x] Privately qualify the expanded 219-control host in Release r14 and real ASan r16. Together with Debug r13,
+  all three private profiles preserve the original assertions/stages and pass 219 additions, including complete
+  >16 MiB original-ticket output ownership; ASan r16 also passes the canonical HostTests detection probe.
+  [Private record](../../TestRuns/P1InverseSelectionPrivate_2026-10-11.md).
+- [x] Qualify native Debug r903 after preserving r902's missing-include build failure. The correction changes
+  only the fixture include path; all earlier assertions plus 43 document/219 host additions, 128 stages and
+  original parser/sizing/cleanup controls pass on the corrected 1,227-input source.
+- [x] Finish native qualification on the current 1,253-input binding through r922–r925 and ARM64 r104.
+  Release r904 compiles but its ISA gate refuses compiler-generated
+  `OnCommand` jump-table data using a new RBX disp8 guard; its failed attempt is archived. Privately prove the
+  exact new parser form and refusal controls before integration and fresh qualification; that work now passes
+  with the original failure preserved. S5/H4/G1 remain open.
+- [x] Integrate the exact RBX disp8 compiler-table proof after the independent linked-byte audit and actual
+  59 new / 39 original encoded controls pass. Native r907–r910 run against the new 1,228-input binding;
+  no runtime qualification is inferred from the static audit. The original failed r904 archive is retained.
+- [x] Qualify fresh full native Release r907 and Debug r908 against the 1,228-input Inverse/scanner binding,
+  preserving all predecessor assertions, 43 document/219 host additions, 128 stages and original controls.
+  Real ASan r909 now qualifies; analysis r910 and ARM64 r101 remain due.
+- [x] Qualify the isolated bounded Expand/Contract engine and its 55 reviewed controls in Debug r3 and
+  Release r4. Preserve the failed compile, wrong cleanup branch and mismatched-profile reader attempts;
+  original scale/winding/round-join semantics and exact legacy literals pass without test changes.
+  [Record](../../TestRuns/P1SelectionOffsetPrivate_2026-10-11.md).
+- [ ] Complete original-ticket host
+  history/outline retention, ordered event-time header amounts, cancellation and joined Close before
+  native activation. The isolated publication candidate freezes 32 further controls before Debug r6;
+  its uncompiled host routing draft is separate from the currently frozen native source.
 - [ ] Qualify ordinary activation and the original G1 measurements; P1 remains WIP. ARM64 runtime is unavailable.
 
 The entries below retain earlier qualification scopes and failures; their older source identities do not
@@ -570,6 +741,42 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     This completes only S4c's settled host boundary ([record](../../TestRuns/WandLayerHost_2026-10-03.md)).
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
+
+### S5 next engineering checks
+
+The qualified point transport removes numeric conversion from Apply. `CanvasOverlay::EnsureSelectionResources`
+still creates a path, walks every loop, appends all points and closes the sink on the owner; the two
+`DrawGeometry` calls remain another possible first-use cost. These are separate costs to measure and remove.
+
+- [x] Freeze and run an independent 64x64 Direct2D compatibility probe: same-factory control, worker
+  geometry from separate single-threaded/multithreaded factories, owner/peer stroke styles and exact `EndDraw`
+  HRESULTs. Observe the actual `ID2D1DeviceContext` method instead of inferring compatibility from the generic
+  error name. Corrected Release probe passes; separate worker factories return `D2DERR_WRONG_FACTORY`.
+  The original hollow-bounds failure remains preserved. The isolated probe does not qualify an application route or latency.
+- [ ] Measure path creation, point append, sink Close and first/subsequent draws separately with the application
+  harness, retaining original inclusive owner/frame measurements. Include the fixed 32,768-region selection,
+  long contours, holes, view changes and the G1 documents. Do not attribute the whole first frame to one API.
+- [ ] Select and privately prove an admitted rendering route after those observations. It must prepare expensive
+  geometry/tessellation/uploads off owner, use bounded owner submissions, retain exact source/view authority and
+  transfer replaced CPU/GPU owners through the original ticket. Merely changing factory type does not prove
+  non-blocking execution; Direct2D serializes access to resources from a multithreaded factory.
+- [ ] Preserve closed contours, miter join/limit 10, fixed DIP stroke width, four DIP on/off dashes, the eight-step
+  phase, white underlay/black dash, anchor precision, clipping and pan/zoom semantics. Add independent numeric
+  references and real WARP parity/resource-lifetime cases before production activation.
+- [ ] Qualify refusal, cancellation, stale source/view, device/factory replacement, hidden completion and joined
+  Close; then measure the complete application path against G1. Coverage construction and the other selection
+  producers retain their own required admission and parity gates.
+
+The main-owned raster and nine-plane mask experiments also pass in isolated Release: all eight phases of line,
+triangle and the fixed large grid match the independent source-over reference with zero maximum byte delta.
+Nine A8 planes use nine bytes per viewport pixel instead of thirty-two for eight composed BGRA frames.
+Large worker preparation remains about 0.8–0.9 seconds; admission, cancellation, view/DPI keys, upload windows,
+retirement and inclusive application measurements remain required. These diagnostics do not close S5 or G1.
+Private experiments live under `.build/P1Drafts/SelectionGeometryInterop-r1-Main`,
+`SelectionOutlineRasterInterop-r1-Main` and `SelectionOutlineMaskInterop-r1-Main`. They do not change the pin.
+Factory/threading constraints are documented in Microsoft's
+[Direct2D threading guidance](https://learn.microsoft.com/en-us/windows/win32/direct2d/multi-threaded-direct2d-apps)
+and [error-code reference](https://learn.microsoft.com/en-us/windows/win32/direct2d/direct2d-error-codes).
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration
   matrix, active-desktop G1 measurements, owning specs/evidence update and commit/push each qualified slice.
 

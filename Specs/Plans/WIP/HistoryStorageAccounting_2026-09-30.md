@@ -2,6 +2,14 @@
 
 ## Implementation checklist
 
+Current source reconciliation (2026-10-12): `CanvasDocument::layers` already uses
+`RecordRoot<ImageLayer>`, and `CanvasDocumentDraft` owns private writer buffers and seals
+replacement roots. Native immutable layer storage is present. Historical private-candidate
+notes below retain their original scope; they do not describe today's storage type. The
+remaining H2 closure is the unclosed opacity/adjustment/display and ordinary caller paths,
+their complete admission/retirement, and exact current-source qualification. H3 incremental
+accounting and late-residency synchronization, H4 and measured G1 remain separate open gates.
+
 - [x] Back up the qualified private immutable layer/typed opacity candidate: `7dd28d7`, `codex/p1-opacity-host-proof`.
 - [x] D13 explicit uint64 application limit, class default and machine-query fallback; 45 MP sizing retains undo.
 - [x] Cache retained selection container capacity at geometry construction; constant-time immutable reads.
@@ -15,7 +23,7 @@
     Debug/Release/ASan. Producer opacity ordering, adjacent previews and bounded pending views pass 96 native
     controls and all six profiles. Another 47 private preserved-opacity core controls and 67 complete typed host
     checks pass all x64 profiles. Finish pointer/lifetime closure
-    and adjustment/display worker construction before native root activation. Admission/accounting and measured
+    and adjustment/display worker construction before closing ordinary caller qualification. Admission/accounting and measured
     G1 remain open ([current evidence](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.
     - [x] New/default canvas, New Canvas card and Close Project: optional-document preparation, saved New
@@ -135,7 +143,10 @@
         preceding document controls. The original Release clipboard/text interference and complete failure are
         preserved; four already passed profiles are retained and Release/Debug rerun without source changes.
         All 220 final evidence copies are independently verified ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
-      - [ ] Full layer-root integration: a separate 528-input seed now has private drafts for structural,
+      - [x] Native immutable layer storage exists: `Common/Document.h` holds a `RecordRoot<ImageLayer>`;
+        `Common/DocumentDraft.h` clones into an exclusive writer and seals a replacement. This source
+        fact closes neither the remaining caller migration nor current-source runtime, H3/H4 or G1 gates.
+      - [ ] Remaining layer-root caller integration: the original separate 528-input seed had private drafts for structural,
         brush/transform/resize/mask and prepared raster/color publication. Primary reviews four cheaper-agent
         fixture groups and preserves the original retired-layer accessor contract. The complete private Debug
         suites pass all 5,768 preceding assertions plus eight draft/six fixture controls in Debug, Release and

@@ -107,6 +107,8 @@ class WandLayerSelectionInput final
 
   private:
     friend class DocumentSession;
+    friend class PreparedInverseSelection;
+    friend class PreparedSelectionOffset;
     friend class PreparedWandLayerSelection;
     WandLayerSelectionInput(Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode,
                             HistoryRestoreAuthority authority, JobToken token, DocumentHistory::StateView history,
@@ -155,6 +157,8 @@ class PreparedWandLayerSelection final
 
   private:
     friend class DocumentSession;
+    friend class PreparedInverseSelection;
+    friend class PreparedSelectionOffset;
     explicit PreparedWandLayerSelection(WandLayerSelectionInput input) noexcept : _input(std::move(input)) {}
     WandLayerSelectionInput _input;
     std::optional<CanvasDocument> _document;

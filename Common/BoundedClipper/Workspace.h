@@ -5,6 +5,8 @@
 #include "PixelBuffer.h"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +33,11 @@ class Workspace final
     static constexpr std::size_t Alignment = 64;
     static constexpr std::size_t GuardBytes = 64;
     static constexpr std::uint64_t Quantum = 64;
+    enum class AllocationPolicy : std::uint8_t
+    {
+        Monotonic,
+        ReuseFreed
+    };
     using Destructor = void (*)(void*) noexcept;
     struct Statistics
     {
@@ -43,10 +50,11 @@ class Workspace final
 
     explicit Workspace(std::size_t capacity, CancelToken cancellation,
                        void (*checkpoint)(void*, std::uint64_t) noexcept = nullptr, void* context = nullptr,
-                       std::size_t allocationLimit = (std::numeric_limits<std::size_t>::max)())
+                       std::size_t allocationLimit = (std::numeric_limits<std::size_t>::max)(),
+                       AllocationPolicy policy = AllocationPolicy::Monotonic)
         : _storage(AllocateStorage(capacity, cancellation)), _capacity(capacity), _cancellation(cancellation),
           _checkpoint(checkpoint), _context(context), _entryExceptions(std::uncaught_exceptions()),
-          _allocationLimit(allocationLimit)
+          _allocationLimit(allocationLimit), _reuseFreed(policy == AllocationPolicy::ReuseFreed)
     {
         // This engine is serial within one worker operation. No arena-owned object may escape the scope.
         assert(!_current);
@@ -88,13 +96,36 @@ class Workspace final
         bytes = std::max<std::size_t>(bytes, 1);
         if (alignment > Alignment || !alignment || (alignment & (alignment - 1)) != 0)
             Refuse();
+        // Offset normalization creates and retires many independent temporary paths. Its opt-in
+        // size classes reuse only fully destroyed allocations within this same admitted buffer.
+        // Header ownership remains in _head; reusing a slot never links it twice or allocates a free list.
+        std::size_t capacity = bytes;
+        std::size_t sizeClass = 0;
+        if (workspace._reuseFreed)
+        {
+            const auto width = std::bit_width(std::max(bytes, sizeof(void*)) - 1);
+            if (width >= std::numeric_limits<std::size_t>::digits)
+                Refuse();
+            sizeClass = static_cast<std::size_t>(width);
+            capacity = std::size_t{1} << sizeClass;
+            if (Header* reused = workspace._free[sizeClass])
+            {
+                workspace._free[sizeClass] = reused->freeNext;
+                reused->destroy = destroy;
+                reused->live = true;
+                ++workspace._allocations;
+                Unpoison(reused->object, capacity);
+                Poison(static_cast<std::byte*>(reused->object) + bytes, capacity - bytes + GuardBytes);
+                return reused->object;
+            }
+        }
         constexpr auto maximum = (std::numeric_limits<std::size_t>::max)();
         const auto prefix = sizeof(Header) + sizeof(Header*);
         if (workspace._consumed > maximum - prefix - (Alignment - 1))
             Refuse();
         const auto objectOffset = (workspace._consumed + prefix + Alignment - 1) & ~(Alignment - 1);
         if (objectOffset > workspace._capacity || GuardBytes > workspace._capacity - objectOffset ||
-            bytes > workspace._capacity - objectOffset - GuardBytes)
+            capacity > workspace._capacity - objectOffset - GuardBytes)
             Refuse();
         auto* header = std::construct_at(
             reinterpret_cast<Header*>(reinterpret_cast<std::byte*>(workspace._storage.Data()) + workspace._consumed));
@@ -103,13 +134,13 @@ class Workspace final
         *(static_cast<Header**>(object) - 1) = header;
         header->next = workspace._head;
         header->object = object;
-        header->size = bytes;
+        header->size = capacity;
         header->destroy = destroy;
         header->live = true;
         workspace._head = header;
         ++workspace._allocations;
-        Poison(static_cast<std::byte*>(object) + bytes, GuardBytes);
-        workspace._consumed = objectOffset + bytes + GuardBytes;
+        Poison(static_cast<std::byte*>(object) + bytes, capacity - bytes + GuardBytes);
+        workspace._consumed = objectOffset + capacity + GuardBytes;
         // The next header needs its own alignment after an odd-sized allocation.
         if (workspace._consumed <= workspace._capacity - std::min(workspace._capacity, alignof(Header) - 1))
             workspace._consumed = (workspace._consumed + alignof(Header) - 1) & ~(alignof(Header) - 1);
@@ -121,11 +152,19 @@ class Workspace final
         if (object)
         {
             auto* header = HeaderFor(object);
+            assert(header->live);
             header->live = false;
             Poison(object, header->size);
+            if (_current->_reuseFreed)
+            {
+                assert(std::has_single_bit(header->size));
+                const auto sizeClass = static_cast<std::size_t>(std::bit_width(header->size) - 1);
+                header->freeNext = _current->_free[sizeClass];
+                _current->_free[sizeClass] = header;
+            }
         }
-        // A bounded bump arena does not promise reuse. All capacity, including dead growth overlap,
-        // stays inside the admitted ceiling until the complete engine and output conversion retire.
+        // Monotonic callers retain their existing non-reusing policy and exact arena layout.
+        // Reusing callers still keep every slot and its guards inside the admitted ceiling.
     }
     [[nodiscard]] static bool IsLive(const void* object) noexcept
     {
@@ -191,7 +230,12 @@ class Workspace final
         Header* next = nullptr;
         void* object = nullptr;
         std::size_t size = 0;
-        Destructor destroy = nullptr;
+        // Only live objects have a destructor; only retired objects have a free-list link.
+        union
+        {
+            Destructor destroy = nullptr;
+            Header* freeNext;
+        };
         bool live = false;
     };
     static void Poison(void* bytes, std::size_t count) noexcept
@@ -234,6 +278,8 @@ class Workspace final
     bool _suppress = false;
     std::uint64_t _workUnits = 0;
     std::size_t _allocationLimit;
+    bool _reuseFreed = false;
+    std::array<Header*, std::numeric_limits<std::size_t>::digits> _free{};
 };
 
 template <class T> class ArenaObject

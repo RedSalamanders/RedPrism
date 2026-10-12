@@ -26,6 +26,14 @@ duplicate extents, unknown/overlapping rows, corrupt listing bytes, invalid owne
 adjacent genuine vector code. These parser-only bytes are never executed and do not qualify runtime
 or performance. The exact supported dispatch is owned by `Build_Toolchain.md`.
 
+The x64 ISA gate also runs `IsaRbxDisp8RemapTests.ps1`: 59 independent encoded controls,
+one accepted and 58 refused. The 39 existing remap scenarios are ported to the exact RBX disp8
+guard; 20 additional controls corrupt its operands or each of its four guard rows (unknown,
+duplicate, overlap and PE mismatch). Complete table/target, procedure/contribution and dispatch
+proof remains required. The unchanged 39-control RDX fixture runs separately. These parser bytes
+are never executed and provide no native runtime or performance qualification. The supported
+encoding is owned by `Build_Toolchain.md`; the runtime allowlist is unchanged.
+
 ### Responsive startup acquisition
 
 `RunStandaloneResponsiveStartupSelfTest` requires 14 actual hidden-Application cases and 217 independent
@@ -1352,6 +1360,15 @@ guards, registers, stack slots, returns, metadata, bounds and targets refuse; a 
 cannot prove the range. Adjacent real VEX remains a violation. Reparse the exact retained failed image before
 rebuilding; only its six proved table DWORDs change classification. The runtime allowlist and DxUi pin stay
 unchanged. Parser proof is separate from native ASan qualification ([record](../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md)).
+
+The full-width RSI host-flow terminal table additionally has 93 independent parser controls (seven accepted,
+86 refused). The exact six-row guard/dispatch, maximum 1–127, image base, same-owner anonymous data, complete
+PE-matched body (at most 16 KiB), RET/three-byte NOP and exact terminal PDB extent must agree. Case/default
+targets must be decoded boundaries after the dispatch and before the NOP. Unknown, omitted, duplicated,
+overlapping or changed rows, guards, targets and invalid PDB proof refuse. A valid table alongside a genuine
+VEX instruction still fails for that instruction. The existing encoded control assertion multisets and runtime
+allowlist stay intact. Parser tests do not execute their synthetic bytes; the original failed native analysis
+artifact is preserved and a fresh native analysis run is required after integration.
 
 The ASan `std::variant` visit switch additionally has 73 QWORD-stack/RAX-base controls: four valid tables and
 69 refusals. The seven contiguous CMP/JA/LEA/MOV/load/ADD/JMP rows require exact PE/listing agreement, equal
@@ -2739,3 +2756,38 @@ The actual layer and All Layers Wand literal host cases additionally compare the
 address with the adopted chrome buffer and verify its independent zero-relative first corner. Preserve
 all existing no-op, mode, cancellation/staleness, refusal, source/output accounting, Undo/Redo and Close
 predicates. Native matrix and measured S5/G1 qualification remain distinct requirements.
+
+### Settled Inverse selection
+
+`Document.Tests.InverseSelection` requires all original Document assertions plus 43 named controls: absent
+selection with seeded redo, explicit empty/full, independent coverage and antialiasing, the `Inverse` title,
+Undo/Redo, stale authority, reduced-workspace refusal, reached engine cancellation and original-ticket output
+accounting through copied/final weak readers and exact refund.
+
+The actual ordered Application caller requires all predecessor assertions/stages plus 219 named controls:
+literal success, Deselect/Undo order, cancellation, worker/capture/history faults, every captured authority,
+view/message pumping, same-job residency refresh/failure/cancellation, joined Close and actual 128-record
+saturation with atomic refusal and successful recovery. Borrowed fixture handles outlive joined producers.
+
+The independent large case subtracts 28,672 disjoint unit squares from a 1,024×448 rectangle: exactly 28,673
+loops, 114,692 points and area 430,080. It requires a complete declared original-ticket output charge above
+16 MiB, worker-buffer identity at adoption, copied and final weak readers, and one final refund. The charge is
+computed from the supported configuration's ownership sizes; Debug's value is not imposed on other profiles.
+The production scratch limit stays 128 MiB. Preserve genuine larger-input refusals without inferring their
+branch from success-only statistics. These correctness controls do not qualify owner D2D latency or G1.
+
+## Settled Expand/Contract worker validation
+
+Document offset tests add 92 independently declared records: legacy numerical tuples and original
+pinned-engine ordered references, every reached allocation/cancellation/capacity refusal, sealed input,
+source/history/no-op/Undo/Redo publication, and a fixed 32,768-square Contract reference. The latter
+requires 131,072 vertices, signed twice-area 6,553,600 and bounds {13,13,8183,4087}, immutable input and
+successful completion within the unchanged 128 MiB arena. No implementation output generates its expected values.
+
+Actual application stages preserve every predecessor assertion and add exactly 433 controls across
+numeric/event-time input, both-sign fault/order/stale/residency/admission cases, joined Close and large
+original-ticket output ownership. They require worker-prepared point-buffer identity, a persistent
+charge above 16 MiB through document/history release and final copied/weak readers, exact final refund,
+and no leaked host barrier. The original header Expand golden settles through the real pump before
+its unchanged five-pixel/title check. Debug, Release and real ASan (with the genuine detection probe),
+latest-source analysis/ARM64 and the separate G1/ordinary consumer gates remain required for completion.

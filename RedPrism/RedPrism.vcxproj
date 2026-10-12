@@ -602,6 +602,26 @@
     <ClInclude Include="RecordedDisplayGraph.h" />
     <ClInclude Include="CommittedDisplayController.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\InverseSelectionWork.cpp" />
+    <ClInclude Include="..\Common\InverseSelectionWork.h" />
+    <ClCompile Include="ApplicationInverseSelectionJobs.cpp" />
+    <ClCompile Include="Application.Tests.InverseSelection.cpp" />
+    <ClCompile Include="Application.Tests.InverseSelectionFailures.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionOffsetWork.cpp" />
+    <ClInclude Include="..\Common\SelectionOffsetWork.h" />
+    <ClCompile Include="..\Common\BoundedClipper\BoundedSelectionOffset.cpp" />
+    <ClInclude Include="..\Common\BoundedClipper\BoundedSelectionOffset.h" />
+    <ClCompile Include="..\Common\BoundedClipper\clipper.offset.cpp" />
+    <ClInclude Include="..\Common\BoundedClipper\clipper.offset.h" />
+    <ClCompile Include="ApplicationSelectionOffsetJobs.cpp" />
+    <ClInclude Include="SelectionOffsetTestGate.h" />
+    <ClCompile Include="Application.Tests.SelectionOffset.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOffsetFailures.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOffsetLarge.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="..\Build\RedPrism.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets" />

@@ -722,6 +722,23 @@ void Application::RunHostContinuation() noexcept
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
             }
+
+            if (const auto* offset = std::get_if<HostSelectionOffsetInput>(&input))
+            {
+                if (offset->amount == 0 || offset->amount < -DocumentSession::kSelectionModifyLimit ||
+                    offset->amount > DocumentSession::kSelectionModifyLimit)
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                if (!_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // A settled header input must not implicitly commit a newly opened unrelated edit.
+            }
             if (std::holds_alternative<HostSelectionNudgeInput>(input))
             {
                 if (_session.IsMovingSelection() || !CanQueueSelectionMoveClick())
@@ -1642,6 +1659,16 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_wandLayerHostTicket.value());
+        }
+        else if (_selectionOffsetTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(*_selectionOffsetTicket);
+        }
+        else if (_inverseSelectionTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_inverseSelectionTicket.value());
         }
         else if (_rasterEditTicket)
         {

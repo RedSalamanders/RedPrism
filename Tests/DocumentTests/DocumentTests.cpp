@@ -1,3 +1,4 @@
+#include "../../Common/AddressSanitizerProbe.h"
 #include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "Adjust.h"
@@ -24,6 +25,7 @@
 #include "Document.Tests.CropLifetime.h"
 #include "Document.Tests.HealWork.h"
 #include "Document.Tests.HistoryPublicationLifetime.h"
+#include "Document.Tests.InverseSelection.h"
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.PendingDisplaySource.h"
@@ -33,6 +35,11 @@
 #include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SelectionDisplayValue.h"
 #include "Document.Tests.SelectionGeometryLifetime.h"
+#include "Document.Tests.SelectionOffsetCoreFaults.h"
+#include "Document.Tests.SelectionOffsetCoreNumeric.h"
+#include "Document.Tests.SelectionOffsetFaults.h"
+#include "Document.Tests.SelectionOffsetLarge.h"
+#include "Document.Tests.SelectionOffsetNumeric.h"
 #include "Document.Tests.SelectionOutline.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
@@ -8111,6 +8118,10 @@ int wmain(int argc, wchar_t** argv)
     {
         return RedPrismTestFailureReports::RunSelfTest();
     }
+    if (argc == 2 && std::wstring_view(argv[1]) == L"--asan-probe")
+    {
+        return RunAddressSanitizerProbe();
+    }
     if (argc == 2 && std::wstring_view(argv[1]) == L"--bench-record-roots")
         return RunRecordRootBench();
     if (argc > 1)
@@ -8236,6 +8247,12 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreviewMetadataAdmissionTests();
     gFailures += RunSelectionDisplayValueTests();
     gFailures += RunSelectionOutlineTests();
+    gFailures += RunInverseSelectionTests();
+    gFailures += RunSelectionOffsetNumericTests();
+    gFailures += RunSelectionOffsetFaultTests();
+    gFailures += RunSelectionOffsetLargeTests();
+    gFailures += RunSelectionOffsetCoreNumericTests();
+    gFailures += RunSelectionOffsetCoreFaultTests();
     gFailures += RunWarpWorkerCancellationTests();
     gFailures += RunWarpWorkerSnapshotsTests();
     gFailures += RunWarpOpeningTests();

@@ -76,6 +76,7 @@ struct HistoryRestoreTestGate;
 struct HistoryResidencyTestGate;
 struct LayerRowsTestGate;
 struct SelectionCommandTestGate;
+struct SelectionOffsetTestGate;
 struct LayerMetadataTestGate;
 struct SelectionNudgeTestGate;
 struct SelectionMoveCloseTestGate;
@@ -790,6 +791,12 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     int RunDocumentLifecycleRefusalSelfTest() noexcept;
     int RunDocumentLifecycleCloseSelfTest() noexcept;
     class SelectionCommandJob;
+    class InverseSelectionJob;
+    class SelectionOffsetJob;
+    int RunSelectionOffsetHostSelfTest() noexcept;
+    int RunSelectionOffsetFailureSelfTest() noexcept;
+    int RunSelectionOffsetFailureForAmountSelfTest(int amount) noexcept;
+    int RunSelectionOffsetLargeOutputSelfTest() noexcept;
     class LayerMetadataJob;
     enum class OpacityAcknowledgement : std::uint8_t
     {
@@ -837,6 +844,10 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     int RunSelectionLifecycleOutlineFaultSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
     int RunSelectionCommandSelfTest() noexcept;
+    [[nodiscard]] HRESULT StartInverseSelection() noexcept;
+    [[nodiscard]] HRESULT StartSelectionOffset(int amount) noexcept;
+    int RunInverseSelectionHostSelfTest() noexcept;
+    int RunInverseSelectionFailureSelfTest() noexcept;
     class SelectionMoveCloseJob;
     [[nodiscard]] HRESULT StartSelectionMoveClose(std::uint64_t opening, bool cancel) noexcept;
     int RunSelectionMoveCloseSelfTest() noexcept;
@@ -1238,6 +1249,12 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     std::optional<JobTicket> _layerMetadataTicket;
     std::shared_ptr<LayerMetadataTestGate> _layerMetadataTestGate;
     std::shared_ptr<SelectionCommandTestGate> _selectionCommandTestGate;
+    std::shared_ptr<SelectionCommandTestGate> _inverseSelectionTestGate;
+    std::optional<HistoryWorkStamp> _inverseSelectionStamp;
+    std::optional<JobTicket> _inverseSelectionTicket;
+    std::shared_ptr<SelectionOffsetTestGate> _selectionOffsetTestGate;
+    std::optional<HistoryWorkStamp> _selectionOffsetStamp;
+    std::optional<JobTicket> _selectionOffsetTicket;
     std::optional<HistoryWorkStamp> _selectionNudgeStamp;
     std::optional<JobTicket> _selectionNudgeTicket;
     std::shared_ptr<SelectionNudgeTestGate> _selectionNudgeTestGate;

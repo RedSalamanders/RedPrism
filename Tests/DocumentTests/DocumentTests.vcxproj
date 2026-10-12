@@ -458,6 +458,30 @@
     <ClCompile Include="Document.Tests.WandBooleanAdmission.cpp" />
     <ClInclude Include="Document.Tests.WandBooleanAdmission.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\InverseSelectionWork.cpp" />
+    <ClInclude Include="..\..\Common\InverseSelectionWork.h" />
+    <ClCompile Include="Document.Tests.InverseSelection.cpp" />
+    <ClInclude Include="Document.Tests.InverseSelection.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\SelectionOffsetWork.cpp" />
+    <ClInclude Include="..\..\Common\SelectionOffsetWork.h" />
+    <ClCompile Include="..\..\Common\BoundedClipper\BoundedSelectionOffset.cpp" />
+    <ClInclude Include="..\..\Common\BoundedClipper\BoundedSelectionOffset.h" />
+    <ClCompile Include="..\..\Common\BoundedClipper\clipper.offset.cpp" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.offset.h" />
+    <ClCompile Include="Document.Tests.SelectionOffsetNumeric.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOffsetNumeric.h" />
+    <ClCompile Include="Document.Tests.SelectionOffsetFaults.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOffsetFaults.h" />
+    <ClCompile Include="Document.Tests.SelectionOffsetCoreNumeric.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOffsetCoreNumeric.h" />
+    <ClCompile Include="Document.Tests.SelectionOffsetCoreFaults.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOffsetCoreFaults.h" />
+    <ClCompile Include="Document.Tests.SelectionOffsetLarge.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOffsetLarge.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

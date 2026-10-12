@@ -8,6 +8,9 @@
 #include "DeferredRelease.h"
 #include "DocumentLifecycleTestGate.h"
 #include "KeyboardState.h"
+#include "Selection.h"
+#include "SelectionCommandTestGate.h"
+#include "SelectionOffsetTestGate.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 
@@ -216,6 +219,473 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
     std::printf("application-shutdown summary: %u checks, %d failures\n", checks, failures);
     if (failures)
         return 5;
+    // Insert inside RunStandaloneShutdownSelfTest, after its existing summary/failure check.
+    // Include Selection.h and SelectionCommandTestGate.h in that translation unit.
+    // This draft is not compiled. Preserve the existing summary and every existing assertion.
+    {
+        unsigned inverseCloseFailures = 0;
+        for (const bool published : std::array{false, true})
+        {
+            const char* phase = published ? "published-output" : "held-before-publication";
+            const auto inverseExpect = [&inverseCloseFailures, phase](bool condition, const char* label) noexcept
+            {
+                inverseCloseFailures += condition ? 0u : 1u;
+                std::fprintf(stderr, "%s inverse-selection-joined-close.%s.%s\n", condition ? "PASS" : "FAIL", phase,
+                             label);
+            };
+            inverseExpect(!DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
+            auto gate = std::make_shared<SelectionCommandTestGate>();
+            gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            gate->hold = !published;
+            gate->observeInverseOutputLifetime = published;
+            // An unrelated actual 64-byte lease observes the endpoint without owning any Inverse graph.
+            // The scheduler diagnostic itself is intentionally zero after Close.
+            constexpr std::uint64_t kProbeBytes = 64;
+            SharedRetainedMemoryLease endpointProbe;
+            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+            const auto cleanup = wil::scope_exit(
+                [&]() noexcept
+                {
+                    if (owner)
+                        owner->Shutdown();
+                });
+            owner->_quietUi = true;
+            owner->_prompts = &QuietPrompts();
+            if (!gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+                FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
+                FAILED(owner->InitializeChrome()))
+                return 5;
+            owner->BindCompositionDevice();
+            class EndpointProbeJob final : public Job
+            {
+              public:
+                EndpointProbeJob(JobScheduler& scheduler, SharedRetainedMemoryLease& lease, bool& retained) noexcept
+                    : _scheduler(scheduler), _lease(lease), _retained(retained)
+                {
+                }
+                JobResult Run(JobContext&) override
+                {
+                    return {};
+                }
+                bool DeferRetirement(JobResult, JobTicket ticket) noexcept override
+                {
+                    _ticket = ticket;
+                    return false;
+                }
+                void Completed(JobResult result) noexcept override
+                {
+                    _retained =
+                        result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
+                }
+
+              private:
+                JobScheduler& _scheduler;
+                SharedRetainedMemoryLease& _lease;
+                bool& _retained;
+                JobTicket _ticket;
+            };
+            bool diagnosticRetained = false;
+            std::unique_ptr<Job> diagnosticJob =
+                std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
+            JobTicket diagnosticTicket;
+            const auto diagnosticAdmission = owner->_jobs.Submit(diagnosticJob,
+                                                                 {.kind = JobClass::Background,
+                                                                  .memoryBytes = kProbeBytes,
+                                                                  .deferredRetirement = true,
+                                                                  .reserveRetainedMemory = true},
+                                                                 diagnosticTicket);
+            const bool diagnosticReady =
+                diagnosticAdmission == S_OK &&
+                SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled &&
+                diagnosticRetained && endpointProbe.Bytes() == kProbeBytes &&
+                endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
+            inverseExpect(diagnosticReady, "independent-closed-endpoint-probe-retained");
+            if (!diagnosticReady)
+                return 5;
+
+            owner->_session.CreateDocument(100, 100, true);
+            owner->_session.SetSelection(DocumentSelection{false, SelectionGeometry::Rect(0, 0, 50, 50)}, L"Fixture");
+            owner->_session.history.Reset();
+            owner->_session.history.MarkSaved();
+            owner->DocumentChanged();
+            const auto root = owner->_session.Document()->layers.Identity();
+            const auto generation = owner->_session.Generation();
+            const auto revision = owner->_session.history.CurrentRevision();
+            const auto geometry = owner->_session.Selection()->loops.Identity();
+            owner->_inverseSelectionTestGate = gate;
+            const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandInverse});
+            struct Held final
+            {
+                Application& owner;
+                bool reached = false;
+            } held{*owner};
+            const auto dispatch = [](void* opaque, void* native) noexcept
+            {
+                auto& value = *static_cast<Held*>(opaque);
+                auto& message = *static_cast<MSG*>(native);
+                if (message.message == SelectionCommandTestGate::kMessage)
+                    value.reached = true;
+                else
+                    value.owner.DispatchQueuedMessage(message);
+            };
+            std::shared_ptr<const void> copiedOutline;
+            if (published)
+            {
+                inverseExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled &&
+                                  receipt.Read().outcome == HostOutcome::Succeeded &&
+                                  gate->inversePublishedOutputs == 1 && gate->inverseOutputBoundToOriginal &&
+                                  gate->inversePublishedBytes != 0 &&
+                                  owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->inversePublishedBytes,
+                              "published-original-ticket-charge");
+                copiedOutline = gate->inverseOutlineOwner.lock();
+                inverseExpect(copiedOutline != nullptr, "copied-published-outline-alive");
+            }
+            else
+            {
+                const auto deadline = GetTickCount64() + 10000;
+                while (!held.reached)
+                {
+                    if (PumpMessages(dispatch, &held).quit)
+                        std::_Exit(5);
+                    (void)DrainCompletions(owner->_jobs);
+                    (void)RunUiActions(owner->_jobs);
+                    if (held.reached)
+                        break;
+                    const auto now = GetTickCount64();
+                    if (now >= deadline)
+                        std::_Exit(5);
+                    if (owner->_jobs.HasUiWork())
+                        continue;
+                    const HANDLE wake = owner->_jobs.WakeHandle();
+                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
+                                                    MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                        std::_Exit(5);
+                }
+                inverseExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_inverseSelectionTicket &&
+                                  owner->_inverseSelectionStamp && owner->_historyWork.Busy() &&
+                                  gate->reservationHeld.load() &&
+                                  owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes &&
+                                  gate->visits.load() == 1,
+                              "pending-original-ticket-full-reservation");
+            }
+            struct Observation final
+            {
+                Application& owner;
+                const void* root;
+                const void* geometry;
+                Guid revision;
+                std::uint64_t generation;
+                bool published;
+                bool sourceIntact = false;
+                SharedRetainedMemoryLease& endpointProbe;
+                std::uint64_t expectedCharge;
+                bool chargeAliveAtDetach = false;
+            } observed{*owner,
+                       root,
+                       geometry,
+                       revision,
+                       generation,
+                       published,
+                       false,
+                       endpointProbe,
+                       kProbeBytes + (published ? gate->inversePublishedBytes : gate->reservationBytes)};
+            ApplicationShutdownTestProbe probe;
+            probe.checkContext = &observed;
+            probe.checkOwner = [](void* opaque) noexcept
+            {
+                auto& value = *static_cast<Observation*>(opaque);
+                value.chargeAliveAtDetach = value.endpointProbe.ResidentBytes() == value.expectedCharge &&
+                                            value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
+                value.sourceIntact =
+                    value.owner._session.Document() && value.owner._session.Selection() &&
+                    value.owner._session.Document()->layers.Identity() == value.root &&
+                    (value.published ? value.owner._session.history.UndoName() == L"Inverse"
+                                     : value.owner._session.Selection()->loops.Identity() == value.geometry &&
+                                           value.owner._session.Generation() == value.generation &&
+                                           value.owner._session.history.CurrentRevision() == value.revision &&
+                                           value.owner._session.history.UndoCount() == 0);
+            };
+            owner->_shutdownTestProbe = &probe;
+            owner->Shutdown(); // Real joined Close; do not signal the held gate.
+            inverseExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) &&
+                              observed.sourceIntact && observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner &&
+                              probe.reservationAndWakeAlive,
+                          "joined-close-preserves-acknowledged-source-and-graphics-order");
+            inverseExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() &&
+                              probe.hostCpuRootsRetired.load() && !owner->_inverseSelectionTicket &&
+                              !owner->_inverseSelectionStamp && !owner->_historyWork.Busy() &&
+                              !owner->_activeHostRequest && owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 &&
+                              !owner->_jobs.WakeHandle(),
+                          "joined-close-clears-ticket-and-host-barrier");
+            if (published)
+            {
+                inverseExpect(copiedOutline &&
+                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
+                              "copied-reader-keeps-output-charge-after-close");
+                copiedOutline.reset();
+                inverseExpect(gate->inverseOutlineOwner.expired() && !gate->inverseMemoryOwner.expired() &&
+                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
+                              "outline-weak-keeps-charge-after-close");
+                gate->inverseOutlineOwner.reset();
+                inverseExpect(gate->inverseMemoryOwner.expired() &&
+                                  endpointProbe.ResidentBytes() == kProbeBytes + gate->inversePublishedBytes,
+                              "memory-weak-keeps-charge-after-close");
+                gate->inverseMemoryOwner.reset();
+            }
+            inverseExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0,
+                          "final-original-charge-refunded-once");
+            owner->Shutdown();
+            inverseExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 &&
+                              endpointProbe.ResidentBytes() == kProbeBytes,
+                          "second-close-cannot-repeat-retirement-or-refund");
+            endpointProbe.Reset();
+            owner->_shutdownTestProbe = nullptr;
+            owner.reset();
+            bool consumedQuit = false;
+            for (;;)
+            {
+                const auto drained = PumpMessages();
+                consumedQuit = consumedQuit || drained.quit;
+                if (!drained.quit)
+                    break;
+            }
+            inverseExpect(consumedQuit && !DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
+        }
+        if (inverseCloseFailures)
+            return 5;
+    }
+
+    for (const int amount : std::array{5, -5})
+    {
+        unsigned offsetCloseFailures = 0;
+        for (const bool published : std::array{false, true})
+        {
+            const char* phase = published ? "published-output" : "held-before-publication";
+            const auto offsetExpect = [&offsetCloseFailures, phase, amount](bool condition, const char* label) noexcept
+            {
+                offsetCloseFailures += condition ? 0u : 1u;
+                std::fprintf(stderr, "%s selection-offset-joined-close.%s.%s.%s\n", condition ? "PASS" : "FAIL",
+                             amount > 0 ? "expand" : "contract", phase, label);
+            };
+            offsetExpect(!DeferredReleaseDetail::sink.enqueue, "no-outer-owner-sink");
+            auto gate = std::make_shared<SelectionOffsetTestGate>();
+            gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            gate->hold = !published;
+            gate->observeOffsetOutputLifetime = published;
+            // An unrelated actual 64-byte lease observes the endpoint without owning any offset graph.
+            // The scheduler diagnostic itself is intentionally zero after Close.
+            constexpr std::uint64_t kProbeBytes = 64;
+            SharedRetainedMemoryLease endpointProbe;
+            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+            const auto cleanup = wil::scope_exit(
+                [&]() noexcept
+                {
+                    if (owner)
+                        owner->Shutdown();
+                });
+            owner->_quietUi = true;
+            owner->_prompts = &QuietPrompts();
+            if (!gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+                FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
+                FAILED(owner->InitializeChrome()))
+                return 5;
+            owner->BindCompositionDevice();
+            class EndpointProbeJob final : public Job
+            {
+              public:
+                EndpointProbeJob(JobScheduler& scheduler, SharedRetainedMemoryLease& lease, bool& retained) noexcept
+                    : _scheduler(scheduler), _lease(lease), _retained(retained)
+                {
+                }
+                JobResult Run(JobContext&) override
+                {
+                    return {};
+                }
+                bool DeferRetirement(JobResult, JobTicket ticket) noexcept override
+                {
+                    _ticket = ticket;
+                    return false;
+                }
+                void Completed(JobResult result) noexcept override
+                {
+                    _retained =
+                        result.status == JobStatus::Finished && _scheduler.RetainMemory(_ticket, _lease) == S_OK;
+                }
+
+              private:
+                JobScheduler& _scheduler;
+                SharedRetainedMemoryLease& _lease;
+                bool& _retained;
+                JobTicket _ticket;
+            };
+            bool diagnosticRetained = false;
+            std::unique_ptr<Job> diagnosticJob =
+                std::make_unique<EndpointProbeJob>(owner->_jobs, endpointProbe, diagnosticRetained);
+            JobTicket diagnosticTicket;
+            const auto diagnosticAdmission = owner->_jobs.Submit(diagnosticJob,
+                                                                 {.kind = JobClass::Background,
+                                                                  .memoryBytes = kProbeBytes,
+                                                                  .deferredRetirement = true,
+                                                                  .reserveRetainedMemory = true},
+                                                                 diagnosticTicket);
+            const bool diagnosticReady =
+                diagnosticAdmission == S_OK &&
+                SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled &&
+                diagnosticRetained && endpointProbe.Bytes() == kProbeBytes &&
+                endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReservedMemoryBytes() == kProbeBytes;
+            offsetExpect(diagnosticReady, "independent-closed-endpoint-probe-retained");
+            if (!diagnosticReady)
+                return 5;
+
+            owner->_session.CreateDocument(100, 100, true);
+            owner->_session.SetSelection(DocumentSelection{false, SelectionGeometry::Rect(0, 0, 50, 50)}, L"Fixture");
+            owner->_session.history.Reset();
+            owner->_session.history.MarkSaved();
+            owner->DocumentChanged();
+            const auto root = owner->_session.Document()->layers.Identity();
+            const auto generation = owner->_session.Generation();
+            const auto revision = owner->_session.history.CurrentRevision();
+            const auto geometry = owner->_session.Selection()->loops.Identity();
+            owner->_selectionOffsetTestGate = gate;
+            const auto receipt = owner->QueueHostInput(HostSelectionOffsetInput{amount});
+            struct Held final
+            {
+                Application& owner;
+                bool reached = false;
+            } held{*owner};
+            const auto dispatch = [](void* opaque, void* native) noexcept
+            {
+                auto& value = *static_cast<Held*>(opaque);
+                auto& message = *static_cast<MSG*>(native);
+                if (message.message == SelectionOffsetTestGate::kMessage)
+                    value.reached = true;
+                else
+                    value.owner.DispatchQueuedMessage(message);
+            };
+            std::shared_ptr<const void> copiedOutline;
+            if (published)
+            {
+                offsetExpect(SettleJobs(owner->_jobs, 15000, dispatch, &held) == SettleResult::Settled &&
+                                 receipt.Read().outcome == HostOutcome::Succeeded &&
+                                 gate->offsetPublishedOutputs == 1 && gate->offsetOutputBoundToOriginal &&
+                                 gate->offsetPublishedBytes != 0 &&
+                                 owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->offsetPublishedBytes,
+                             "published-original-ticket-charge");
+                copiedOutline = gate->offsetOutlineOwner.lock();
+                offsetExpect(copiedOutline != nullptr, "copied-published-outline-alive");
+            }
+            else
+            {
+                const auto deadline = GetTickCount64() + 10000;
+                while (!held.reached)
+                {
+                    if (PumpMessages(dispatch, &held).quit)
+                        std::_Exit(5);
+                    (void)DrainCompletions(owner->_jobs);
+                    (void)RunUiActions(owner->_jobs);
+                    if (held.reached)
+                        break;
+                    const auto now = GetTickCount64();
+                    if (now >= deadline)
+                        std::_Exit(5);
+                    if (owner->_jobs.HasUiWork())
+                        continue;
+                    const HANDLE wake = owner->_jobs.WakeHandle();
+                    if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
+                                                    MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                        std::_Exit(5);
+                }
+                offsetExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_selectionOffsetTicket &&
+                                 owner->_selectionOffsetStamp && owner->_historyWork.Busy() &&
+                                 gate->reservationHeld.load() &&
+                                 owner->_jobs.ReservedMemoryBytes() == kProbeBytes + gate->reservationBytes &&
+                                 gate->visits.load() == 1,
+                             "pending-original-ticket-full-reservation");
+            }
+            struct Observation final
+            {
+                Application& owner;
+                const void* root;
+                const void* geometry;
+                Guid revision;
+                std::uint64_t generation;
+                bool published;
+                bool expanding;
+                bool sourceIntact = false;
+                SharedRetainedMemoryLease& endpointProbe;
+                std::uint64_t expectedCharge;
+                bool chargeAliveAtDetach = false;
+            } observed{*owner,        root,
+                       geometry,      revision,
+                       generation,    published,
+                       amount > 0,    false,
+                       endpointProbe, kProbeBytes + (published ? gate->offsetPublishedBytes : gate->reservationBytes)};
+            ApplicationShutdownTestProbe probe;
+            probe.checkContext = &observed;
+            probe.checkOwner = [](void* opaque) noexcept
+            {
+                auto& value = *static_cast<Observation*>(opaque);
+                value.chargeAliveAtDetach = value.endpointProbe.ResidentBytes() == value.expectedCharge &&
+                                            value.owner._jobs.ReservedMemoryBytes() >= value.expectedCharge;
+                value.sourceIntact =
+                    value.owner._session.Document() && value.owner._session.Selection() &&
+                    value.owner._session.Document()->layers.Identity() == value.root &&
+                    (value.published ? value.owner._session.history.UndoName() ==
+                                           (value.expanding ? L"Expand Selection" : L"Contract Selection")
+                                     : value.owner._session.Selection()->loops.Identity() == value.geometry &&
+                                           value.owner._session.Generation() == value.generation &&
+                                           value.owner._session.history.CurrentRevision() == value.revision &&
+                                           value.owner._session.history.UndoCount() == 0);
+            };
+            owner->_shutdownTestProbe = &probe;
+            owner->Shutdown(); // Real joined Close; do not signal the held gate.
+            offsetExpect(receipt.Read().outcome == (published ? HostOutcome::Succeeded : HostOutcome::Cancelled) &&
+                             observed.sourceIntact && observed.chargeAliveAtDetach && probe.graphicsDetachedOnOwner &&
+                             probe.reservationAndWakeAlive,
+                         "joined-close-preserves-acknowledged-source-and-graphics-order");
+            offsetExpect(owner->_shutdownComplete && gate->retired.load() && gate->retiredOffOwner.load() &&
+                             probe.hostCpuRootsRetired.load() && !owner->_selectionOffsetTicket &&
+                             !owner->_selectionOffsetStamp && !owner->_historyWork.Busy() &&
+                             !owner->_activeHostRequest && owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 &&
+                             !owner->_jobs.WakeHandle(),
+                         "joined-close-clears-ticket-and-host-barrier");
+            if (published)
+            {
+                offsetExpect(copiedOutline && endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
+                             "copied-reader-keeps-output-charge-after-close");
+                copiedOutline.reset();
+                offsetExpect(gate->offsetOutlineOwner.expired() && !gate->offsetMemoryOwner.expired() &&
+                                 endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
+                             "outline-weak-keeps-charge-after-close");
+                gate->offsetOutlineOwner.reset();
+                offsetExpect(gate->offsetMemoryOwner.expired() &&
+                                 endpointProbe.ResidentBytes() == kProbeBytes + gate->offsetPublishedBytes,
+                             "memory-weak-keeps-charge-after-close");
+                gate->offsetMemoryOwner.reset();
+            }
+            offsetExpect(endpointProbe.ResidentBytes() == kProbeBytes && owner->_jobs.ReleasingMemoryBytes() == 0,
+                         "final-original-charge-refunded-once");
+            owner->Shutdown();
+            offsetExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 &&
+                             endpointProbe.ResidentBytes() == kProbeBytes,
+                         "second-close-cannot-repeat-retirement-or-refund");
+            endpointProbe.Reset();
+            owner->_shutdownTestProbe = nullptr;
+            owner.reset();
+            bool consumedQuit = false;
+            for (;;)
+            {
+                const auto drained = PumpMessages();
+                consumedQuit = consumedQuit || drained.quit;
+                if (!drained.quit)
+                    break;
+            }
+            offsetExpect(consumedQuit && !DeferredReleaseDetail::sink.enqueue, "fixture-quit-and-sink-cleared");
+        }
+        if (offsetCloseFailures)
+            return 5;
+    }
+
     const int residencyResult = RunStandaloneHistoryResidencyShutdownSelfTest(instance);
     if (residencyResult)
         return residencyResult;

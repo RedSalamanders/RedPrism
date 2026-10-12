@@ -267,6 +267,29 @@ controls include corrupt bytes/targets/bounds/PDB records, duplicate/unknown/ove
 listing-versus-PE mismatches and real vector code outside the proved range. This is data proof, not a runtime
 allowlist entry.
 
+The observed Release RBX-index variant uses the same RDX image-base dispatch, with exactly
+`LEA EAX,[RBX+disp8]; CMP EAX,imm32; JA rel32; CDQE` immediately before the image-base LEA.
+Its guard is 16 bytes; the original RDX disp32 guard remains 19 bytes. All four known guard rows
+must match their PE bytes, decoded lengths and nonoverlapping boundaries. Both forms require
+the same procedure/contribution ownership, complete DWORD-target proof, proved JA default and
+`maximum + 1` byte-table bound (maximum below 4,096). A missing or malformed guard grants no
+fallback extent. `IsaRbxDisp8RemapTests.ps1` ports the original 39 remap controls to the RBX form
+and adds 20 guard/operand refusals: one accepted, 58 refused. The original RDX fixture remains
+unchanged. These encoded fixtures do not execute their bytes; the runtime allowlist is unchanged.
+
+The observed Release host-flow switch uses a full-width unsigned RSI guard followed by the exact contiguous
+`CMP RSI,imm8; JA rel32; LEA RCX,imagebase; MOV EAX,[RCX+4*RSI+table]; ADD RAX,RCX; JMP RAX`.
+Its 29 bytes and six decoded rows must match the PE; the maximum is 1–127. The anonymous untyped same-owner
+PDB table starts on a DWORD boundary and ends at exactly `tableStart + 4*(maximum+1)`, the procedure end.
+The complete procedure body before the table is capped at 16 KiB and must be known, contiguous, nonoverlapping
+and PE-matching, including the final one-byte RET and exact three-byte NOP. Every case/default target is a
+body boundary after the dispatch and before the NOP; the RET itself is valid. Direct branches bypassing the
+guard or entering the table refuse. Reported vector bytes must match the PE before data classification.
+`IsaRsi64TerminalTests.ps1` supplies 93 controls (seven accepted, 86 refused), including a genuine adjacent VEX
+instruction that remains rejected. Identical owner records and irrelevant foreign records leave valid proof
+intact; a missing or solely foreign owner does not prove the table. Existing recognizers and the runtime
+allowlist remain unchanged. Synthetic fixture bytes are never executed.
+
 The Release adjustment-construction table uses an exact nonvolatile RBX index: `MOVSXD RBX,EDX`,
 `MOV RDI,RCX`, a zero DWORD stack initializer, an ordinary x64 ABI call, a one DWORD initializer,
 `MOV [RDI],EBX`, `CMP EBX,max`, unsigned `JA rel32`, then `LEA RDX,imagebase`,
@@ -582,6 +605,16 @@ placed tier code MUST pass, with a separately counted EVEX instruction in the AV
 object from an unapproved library and a same-named function in an unapproved object MUST fail. Missing and
 mismatched PDB controls MUST fail. Reports, binary/PDB/allowlist hashes, disassembly, full
 PDB records and control logs live under `.build/IsaScan/`. `-Clean` and ARM64 builds do not invoke this x64 gate.
+
+## Bounded selection offset source authoring
+
+`Build/GenerateBoundedSelectionOffset.py` reproduces the isolated pinned Clipper2 2.0.1 offset fork.
+It requires explicit `--source`, fresh `--output`, `--clang-format`, `--format-style`, `--base-engine`
+and `--boolean-generator` paths. Exact upstream hashes, the existing base generation manifest and
+the shared lexical loop rewriter are verified. The base workspace/license are copied verbatim; the
+offset source retains normalization/offset/cleanup precision and ordering, scoped arena allocation,
+explicit Debug container initialization and cancellation checkpoints. The output provenance manifest
+records authoring only. Reproduction does not establish runtime, admission, lifetime or G1 qualification.
 
 ## Solution shape
 
