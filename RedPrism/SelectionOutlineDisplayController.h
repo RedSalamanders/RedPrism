@@ -3,6 +3,7 @@
 #include "DeferredRelease.h"
 #include "Document.h"
 #include "GpuWork.h"
+#include "LassoDraftDisplayController.h"
 #include "OwnerWorkMultiplexer.h"
 #include "PreparedSelectionOutlineGpu.h"
 
@@ -57,6 +58,10 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
     SelectionOutlineDisplayController& operator=(const SelectionOutlineDisplayController&) = delete;
     [[nodiscard]] HRESULT InitializeOwner(JobScheduler&, GpuWorkQueue&, OwnerWorkMultiplexer&, GpuResidencyBudget&,
                                           SelectionOutlineDisplayClient&) noexcept;
+    // Optional draft child shares this route; no twelfth multiplexer member is attached.
+    [[nodiscard]] HRESULT EnableLassoDraftOwner(LassoDraftDisplayClient&) noexcept;
+    void RequestLassoDraftOwner() noexcept;
+    [[nodiscard]] PreparedLassoDraftGpu::Views BorrowLassoDraftFrameOwner() const noexcept;
     void RequestOwner() noexcept;
     void RetryOwner() noexcept;
     void SetSuspendedOwner(bool suspended) noexcept;
@@ -107,6 +112,8 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
     };
 #pragma warning(pop)
     [[nodiscard]] bool IsOwner() const noexcept;
+    [[nodiscard]] bool HasSelectionReady() const noexcept;
+    void PumpSelectionOwner() noexcept;
     [[nodiscard]] bool DescribeOwner(SelectionOutlineDisplayDescriptor&) const noexcept;
     [[nodiscard]] bool CurrentOwner(const Cell&, SelectionOutlineDisplayDescriptor* = nullptr) const noexcept;
     void WakeOwner() noexcept;
@@ -116,6 +123,9 @@ class SelectionOutlineDisplayController final : public OwnerWorkPump
     void FinishOwner(Cell&, bool closed = false) noexcept;
     static void RetireCellForWork(DeferredReleaseNode*) noexcept;
     void RetireForWork(Cell&) noexcept;
+    LassoDraftDisplayController _draft;
+    bool _draftEnabled = false;
+    bool _selectionTurn = true;
     std::array<Cell, 2> _cells;
     JobScheduler* _jobs = nullptr;
     GpuWorkQueue* _queue = nullptr;

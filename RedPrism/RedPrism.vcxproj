@@ -657,8 +657,22 @@
     <ClCompile Include="..\Common\LassoFinishGeometry.cpp" />
     <ClInclude Include="..\Common\LassoFinishGeometry.h" />
     <ClCompile Include="..\Common\LassoFinishWork.cpp" />
+    <ClCompile Include="..\Common\LassoDraftRasterWork.cpp" />
+    <ClCompile Include="PreparedLassoDraftGpu.cpp" />
+    <ClCompile Include="LassoDraftDisplayController.cpp" />
+    <ClCompile Include="ApplicationLassoDraftDisplay.cpp" />
+    <ClCompile Include="Application.Tests.LassoDraftDisplay.cpp" />
+    <ClCompile Include="ApplicationLassoOpeningJobs.cpp" />
+    <ClCompile Include="ApplicationLassoFinishJobs.cpp" />
+    <ClCompile Include="ApplicationLassoInput.cpp" />
+    <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />
     <ClInclude Include="..\Common\BoundedLassoGesture.h" />
     <ClInclude Include="HostLassoInput.h" />
+    <ClInclude Include="..\Common\LassoDraftRasterWork.h" />
+    <ClInclude Include="PreparedLassoDraftGpu.h" />
+    <ClInclude Include="LassoDraftDisplayController.h" />
+    <ClInclude Include="LassoWorkTestGate.h" />
+    <ClInclude Include="..\Tests\Support\HistoryWorkFixture.h" />
   </ItemGroup>
 </Project>

@@ -545,6 +545,12 @@
     <ClCompile Include="Document.Tests.LassoSessionBridge.cpp" />
     <ClInclude Include="Document.Tests.LassoSessionBridge.h" />
     <ClCompile Include="Document.Tests.HostLassoInput.cpp" />
+    <ClCompile Include="Document.Tests.LassoConditionalInput.cpp" />
+    <ClCompile Include="..\..\Common\LassoDraftRasterWork.cpp" />
+    <ClCompile Include="Document.Tests.LassoDraftRaster.cpp" />
     <ClInclude Include="Document.Tests.HostLassoInput.h" />
+    <ClInclude Include="Document.Tests.LassoConditionalInput.h" />
+    <ClInclude Include="..\..\Common\LassoDraftRasterWork.h" />
+    <ClInclude Include="Document.Tests.LassoDraftRaster.h" />
   </ItemGroup>
 </Project>

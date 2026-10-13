@@ -61,12 +61,28 @@ class Renderer final
         bool clipped = false;
         std::array<float, 4> clip{};
     };
+    struct LassoDraftFrame final
+    {
+        CanvasRenderer* composition = nullptr;
+        ID3D11ShaderResourceView* color = nullptr;
+        unsigned int width = 0;
+        unsigned int height = 0;
+        float pixelLeft = 0.0f;
+        float pixelTop = 0.0f;
+        bool clipped = false;
+        std::array<float, 4> clip{};
+    };
     class SelectionOutlineFrameSource
     {
       public:
         virtual ~SelectionOutlineFrameSource() = default;
         [[nodiscard]] virtual SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float left, float top, float width,
                                                                                      float height) noexcept = 0;
+        // Both current graph borrows occur after chrome preparation; an absent draft records no pass.
+        [[nodiscard]] virtual LassoDraftFrame BorrowLassoDraftFrameOwner(float, float, float, float) noexcept
+        {
+            return {};
+        }
     };
     [[nodiscard]] std::uint64_t SelectionOutlineDrawCount() const noexcept
     {
@@ -75,6 +91,15 @@ class Renderer final
     [[nodiscard]] HRESULT SelectionOutlineFailure() const noexcept
     {
         return _selectionOutlineFailure;
+    }
+
+    [[nodiscard]] std::uint64_t LassoDraftDrawCount() const noexcept
+    {
+        return _lassoDraftDraws;
+    }
+    [[nodiscard]] HRESULT LassoDraftFailure() const noexcept
+    {
+        return _lassoDraftFailure;
     }
 
     struct DeviceIdentity final
@@ -211,6 +236,8 @@ class Renderer final
     void RegisterOcclusionStatus() noexcept;
 
     std::uint64_t _selectionOutlineDraws = 0;
+    std::uint64_t _lassoDraftDraws = 0;
+    HRESULT _lassoDraftFailure = S_OK;
     HRESULT _selectionOutlineFailure = S_OK;
     HWND _window = nullptr;
     ChromeHost* _chrome = nullptr;

@@ -1525,3 +1525,20 @@ whole-operation charge remains retained until actual arena destruction and owner
 `Document.Tests.BoundedLassoPoints` uses an independent vector/bounds model; the ticket tests use the
 actual scheduler through success, cancellation and deferred retirement. This component does not change
 the current lasso point vector, activate a host limit, migrate display/finish/history callers or qualify G1.
+
+
+### Lasso host and display ownership (P1)
+
+The explicitly acquired lasso harness uses fixed 512-event storage plus a separate terminal and the existing
+continuation/selection-outline owner routes. Each dispatch applies at most one accepted input operation;
+an idle live gesture disarms until input. Close descriptors acquire their shared ordinal at physical input,
+and counter exhaustion refuses before mutation. Opening, geometry/history and display each require their
+complete original reservation before useful capture or allocation. The point arena keeps its distinct
+original charge through writer/snapshot/terminal readers; later phases cannot charge it as newly owned
+output or refund it at useful-work completion. Publication output and temporary/retirement partitions
+remain bound to their respective original ticket until actual final retirement/acknowledgement.
+
+Draft owner capture/borrow copies bounded metadata/tail only; workers traverse and rasterize. The display
+child shares the existing eleven-slot route and its last-use event ownership. Failure or unsupported
+acquisition provides no synchronous owner fallback. Private Direct2D headroom remains an unproven policy
+allowance. Native correctness does not establish complete operation bounds, ordinary activation or G1.

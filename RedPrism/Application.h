@@ -1,5 +1,7 @@
 #pragma once
 
+#include "HostLassoInput.h"
+
 #include "BrushCompute.h"
 #include "CanvasRenderer.h"
 #include "CanvasSize.h"
@@ -121,6 +123,7 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
 class Application final : public ChromeEvents,
                           private CommittedDisplayClient,
                           private SelectionOutlineDisplayClient,
+                          private LassoDraftDisplayClient,
                           private Renderer::SelectionOutlineFrameSource
 {
   public:
@@ -158,6 +161,8 @@ class Application final : public ChromeEvents,
     static int RunStandalonePathReadContinuationSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneLassoDraftDisplaySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneLassoHostInputSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;
@@ -202,6 +207,28 @@ class Application final : public ChromeEvents,
                                                                                    float) noexcept override;
     void SyncPreparedSelectionOutlineOwner(const SelectionDisplayValue*) noexcept;
     void SyncLassoOverlay() noexcept;
+    class LassoOpeningJob;
+    class LassoFinishJob;
+    [[nodiscard]] bool LassoInputCurrentOwner(std::uint64_t opening) const noexcept;
+    void CancelLassoInputOwner(std::uint64_t opening, ContinuationOutcome outcome) noexcept;
+    [[nodiscard]] bool ReplayLassoInputOwner() noexcept;
+    [[nodiscard]] bool QueueLassoOpeningOwner(Vec2 pixel, SelectionMode mode, bool marquee) noexcept;
+    [[nodiscard]] bool QueueLassoFinishOwner(bool antialiased) noexcept;
+    [[nodiscard]] std::uint64_t NextLassoSampleOrdinalOwner() noexcept;
+    void RecordLassoInputOwner(HostLassoInput::Admission admission) noexcept;
+    void RecordLassoPolygonPressOwner(Vec2 point, bool nearFirst, bool doubleClick, bool antialiased) noexcept;
+
+    [[nodiscard]] HRESULT StartLassoOpening(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartLassoFinish(std::uint64_t opening) noexcept;
+
+    class LassoDisplayTestOpeningJob;
+    [[nodiscard]] bool EnableLassoDraftDisplayForTest() noexcept;
+    void SyncPreparedLassoDraftOwner() noexcept;
+    [[nodiscard]] bool DescribeLassoDraftOwner(LassoDraftDisplayDescriptor&) noexcept override;
+    void LassoDraftChangedOwner() noexcept override;
+    void LassoDraftFailedOwner(LassoDraftDisplayKey, HRESULT) noexcept override;
+    [[nodiscard]] Renderer::LassoDraftFrame BorrowLassoDraftFrameOwner(float, float, float, float) noexcept override;
+
     [[nodiscard]] bool EnableCommittedDisplayForTest(bool allowHidden = true) noexcept;
     [[nodiscard]] bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
     void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
@@ -1221,6 +1248,16 @@ class Application final : public ChromeEvents,
     std::optional<DocumentReadAuthority> _selectionOutlineDocument;
     std::uint64_t _selectionOutlineViewEpoch = 0;
     bool _selectionOutlineInitialized = false;
+    bool _lassoDraftDisplayEnabled = false;
+    bool _lassoDraftViewValid = false;
+    bool _lassoDraftEpochExhausted = false;
+    std::uint64_t _lassoDraftViewEpoch = 0;
+    std::optional<BoundedLassoGesture::Display> _overlayLassoDraft;
+    PreparedLassoDraftRaster::GridKey _lassoDraftGrid;
+    std::array<float, 4> _lassoDraftHole{};
+    std::optional<DocumentReadAuthority> _lassoDraftDocument;
+    HRESULT _lassoDraftDisplayFailure = S_OK;
+
     bool _selectionOutlineAllowHiddenForTest = false;
     bool _selectionOutlineViewValid = false;
     bool _selectionOutlineEpochExhausted = false;
@@ -1258,6 +1295,18 @@ class Application final : public ChromeEvents,
     std::optional<JobTicket> _historyResidencyTicket;
     std::optional<HistoryWorkStamp> _historyResidencyStamp;
     std::shared_ptr<HistoryResidencyTestGate> _historyResidencyTestGate;
+
+    HostLassoInput _lassoInput;
+    std::uint64_t _lassoInputOpening = 0, _lassoAcquiredOpening = 0, _lassoSessionOpening = 0;
+    std::uint64_t _lassoCancelledOpening = 0;
+    Vec2 _lassoInputFirstPoint{};
+    std::uint64_t _lassoClosingIntent = 0, _lassoReplayedClosingIntent = 0;
+    bool _lassoReplayedCloseChosen = false;
+
+    bool _lassoFinishQueued = false;
+    ContinuationReceipt _lassoOpeningReceipt, _lassoFinishReceipt;
+    std::optional<JobTicket> _lassoOpeningTicket, _lassoFinishTicket;
+    std::optional<HistoryWorkStamp> _lassoOpeningStamp, _lassoFinishStamp;
     ContinuationAction _continuationAction{*this}; // stable borrowed source; unregister before joining jobs
     HostInputBudget _hostInputBudget;              // outlives queued and active request reservations
     std::optional<HostRequest> _startupPaths;      // owned until Run initializes the document and can bind its serial

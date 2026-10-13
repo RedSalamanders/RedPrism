@@ -23,6 +23,7 @@
 #include "Document.Tests.BoundedLassoPoints.h"
 #include "Document.Tests.BoundedLassoTicket.h"
 #include "Document.Tests.HostLassoInput.h"
+#include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
 #include "Document.Tests.LassoSessionBridge.h"
 
@@ -172,6 +173,7 @@
 #include "WandLayerSelectionTests.h"
 #include "WarpStroke.h"
 
+#include "Document.Tests.LassoDraftRaster.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -8411,6 +8413,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunLassoFinishGeometryTests();
     gFailures += RunLassoSessionBridgeTests();
     gFailures += RunHostLassoInputTests();
+    gFailures += RunLassoConditionalInputTests();
+    gFailures += RunLassoDraftRasterTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

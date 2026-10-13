@@ -107,6 +107,12 @@ class CanvasRenderer final
                                          ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
                                          unsigned int maskHeight, float pixelLeft, float pixelTop,
                                          const std::array<float, 4>* clip = nullptr) noexcept;
+    // One same-device premultiplied BGRA draft view. The original admitted parent owns the graph
+    // through recording and actual context acknowledgement; the optional fractional clip applies once.
+    HRESULT DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth, unsigned int targetHeight,
+                                   ID3D11ShaderResourceView* color, unsigned int width, unsigned int height,
+                                   float pixelLeft, float pixelTop,
+                                   const std::array<float, 4>* clip = nullptr) noexcept;
     // The last display composite at document resolution. Fails while the display draws a reduced proxy: a document
     // readback goes through ComposeReadback.
     HRESULT Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept;
@@ -214,6 +220,11 @@ class CanvasRenderer final
     }
 
   private:
+    HRESULT DrawViewOverlayToTarget(ID3D11RenderTargetView*, unsigned int targetWidth, unsigned int targetHeight,
+                                    ID3D11ShaderResourceView*, ID3D11ShaderResourceView*, unsigned int width,
+                                    unsigned int height, float pixelLeft, float pixelTop,
+                                    const std::array<float, 4>* clip, bool colorDraft) noexcept;
+
     struct GpuTexture
     {
         wil::com_ptr_nothrow<ID3D11Texture2D> texture;

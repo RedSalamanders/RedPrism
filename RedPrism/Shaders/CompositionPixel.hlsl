@@ -465,7 +465,7 @@ float4 PixelMain(PixelInput input) : SV_TARGET
     int2 destPixel = int2(input.position.xy);
     float2 document = viewOrigin + input.position.xy * viewScale;
 
-    if (passMode == kCompositionPassSelectionOutline)
+    if (passMode == kCompositionPassSelectionOutline || passMode == kCompositionPassLassoDraft)
     {
         // This overlay is already rasterized on its exact device-pixel grid. The owner only selects a
         // complete phase; no document geometry, reduction, derivatives or texture upload happens here.
@@ -474,11 +474,18 @@ float4 PixelMain(PixelInput input) : SV_TARGET
         if (local.x >= 0 && local.y >= 0 && local.x < layerSize.x && local.y < layerSize.y)
         {
             int2 maskPixel = int2(local);
-            float solid = saturate(g_source.Load(int3(maskPixel, 0)).r);
-            float dash = saturate(g_mask.Load(int3(maskPixel, 0)));
-            // White underlay, then black dash: premultiplied source-over, composed once over the target.
-            float white = solid * (1.0 - dash);
-            outline = float4(white, white, white, dash + white);
+            if (passMode == kCompositionPassLassoDraft)
+            {
+                // The worker already composed the complete legacy shadow/white/handle draw order.
+                outline = g_source.Load(int3(maskPixel, 0));
+            }
+            else
+            {
+                float solid = saturate(g_source.Load(int3(maskPixel, 0)).r);
+                float dash = saturate(g_mask.Load(int3(maskPixel, 0)));
+                float white = solid * (1.0 - dash);
+                outline = float4(white, white, white, dash + white);
+            }
             if ((flags & kCompositionFlagSelectionClip) != 0)
             {
                 // Clip the combined result once. Independent plane clips change fractional edge colors.

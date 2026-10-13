@@ -1,15 +1,15 @@
 # P1.9 H3 — Incremental history storage accounting
 
-Latest continuation (2026-10-12): native layer-row accounting integration is complete; fresh r962 analysis / r963 Release / r964 Debug / r965 ASan qualification is active on binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3` (1,289 inputs / 20 contracts). The standard PS5.1/PS7 bridge passed 18 controls plus summary. Preserve r959 native Release failure, r958 analysis PASS and historical ISA refusal. See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md); full profiles, callers, activation and G1 remain due.
+Latest continuation (2026-10-13): Native history-index integration passed Release analysis r1005, full Release r1006, Debug r1007 and real ASan Debug r1008; ARM64 Debug, Release and instrumented-ASan cross-builds r1009-r1011 also passed. The strict native roster reports 21,673 DocumentTests records and 136 Application stages. See the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md) and [native gate repairs](../../TestRuns/P1NativeGateRepairs_2026-10-13.md). The separate 1,356-input lasso host has Release analysis r1026 and full x64 Release r1028, Debug r1029 and real ASan r1030 receipts; its exact scope is summarized in the linked integration receipt. ARM64 cross-builds r1031-r1033 remain pending; native ARM64 runtime is unavailable.
 
-Status: **WIP; private producer/scheduler/reference r7, save-admission cache, paired ISA proof, and Accounting-r2 strict original-output sum smoke are scoped PASS. Native layer-row accounting integration is complete; fresh native r962–r965 qualification is active on 1,289 inputs / 20 contracts, binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3`. The standard PS5.1/PS7 bridge passed 18 controls plus summary. Native profile results, callers, activation, latency, G1 and P1 remain open.** See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md) and [owned-metadata evidence](../../TestRuns/P1OwnedMetadataRoots_2026-10-12.md).
+Status: **WIP; private producer/scheduler/reference r7, save-admission cache, paired ISA proof, and Accounting-r2 strict original-output sum smoke remain scoped PASS. The native layer-row/history-index foundation qualifies in Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 cross-builds r1009-r1011. The 38-control original-ticket fixture is covered by r1006. These results do not close production caller admission/retirement bounds, ordinary activation, latency, S5/G1 or P1.** See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md) and [owned-metadata evidence](../../TestRuns/P1OwnedMetadataRoots_2026-10-12.md).
 Parent: [P1 milestone](UiNeverBlocks_2026-09-22.md)
 Contract: [Document history](../../Document/Document_History.md)
 Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, publication owners and the existing scheduler.
 
 ## Current checklist
 
-Current native qualification: integrated layer-row accounting binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3` (1,289 inputs / 20 contracts); r962 analysis, r963 Release, r964 Debug and r965 ASan matrix active. PS5.1/PS7 standard bridge passes 18 controls plus summary. Preserve r954 analysis failure, r958 analysis PASS, r959 full Release failure, and the historical Accounting-r1 partial-link ISA refusal. r960/r961 and ARM111 remain NEVER LAUNCHED; ARM111 held. Full profiles, callers, activation, latency, G1 and P1 remain open; see [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md).
+Current native qualification: Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 Debug/Release/ASan cross-builds r1009-r1011. The r1006 source freeze contains 1,334 inputs; the strict full roster is 21,673 DocumentTests records and 136 Application stages. Preserve predecessor failures and non-launches as historical receipts (including r954, r958-r961 and ARM111); they are not the current matrix. The separate lasso-host analysis/runtime receipts are complete for x64 r1026 and r1028-r1030; ARM64 r1031-r1033 remain pending. This does not close H3 or broaden the native history-index foundation result. Full production callers, complete admission/retirement bounds, ordinary activation, latency, G1 and P1 remain open; see the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
 
 - [x] Inspect the current index and its callers: complete map clones, current-topology traversal, charge sampling,
   bounds scans and diagnostic `RetainedBytes` traversal still occur.
@@ -26,10 +26,7 @@ Current native qualification: integrated layer-row accounting binding `83AEC5FF3
 - [x] Selectively integrate the persistent indexes, actual Raster journal, direct-root topology and six
   focused test pairs into native sources; preserve the reference API and original goldens.
 - [ ] Prove complete operation admission, original-ticket ownership and bounded retirement on actual production callers.
-- [ ] Qualify the integrated original-ticket fixture: retain its 33 controls and add five admission controls (38 total). Main fixes the cheaper
-  draft's pre-admission capture, retained diagnostic strong lock and expired-object/weak-control confusion
-  before its first run. Release r943 then correctly refuses its below-headroom success snapshot; Main repairs
-  the snapshot and adds real refusal controls before a fresh run. Native caller migration and measured retirement remain separate.
+- [x] Qualify the integrated original-ticket fixture: retain its 33 predecessor controls and five added admission controls (38 total). The earlier draft's pre-admission capture, retained diagnostic strong lock and expired-object/weak-control confusion were repaired; the r943 below-headroom refusal remains preserved. Native r1006 stdout contains exactly 38 non-summary PASS history-original-ticket.* records and one passing summary (passed=38 failed=0 controls=38 expected=38). The r1006 source-freeze entry for Tests/DocumentTests/Document.Tests.HistoryOriginalTicket.cpp matches the frozen r1019 source copy (SHA-256 06A2C18C5CF4A2AE07721E35B5568B6696696231313DFDCC1C2DD83131E86A7E). This is fixture-level evidence only; production caller migration and measured retirement remain separate.
 - [x] In the private adapter, update unique self-storage contributions incrementally and skip charge sampling
   when the residency epoch is unchanged.
 - [x] Qualify the private actual history topology delta adapter: direct layer roots, scalar root-group sharing,
@@ -45,11 +42,11 @@ Current native qualification: integrated layer-row accounting binding `83AEC5FF3
   integration summary reports 18 assertions and zero failures
   ([receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md)). This completes private bounded-journal
   controls only.
-- [x] Implement native changed-epoch bounded residency deltas with an explicit worker overflow fallback; runtime qualification remains pending.
-- [x] Implement native changed-owner direct-root topology and parent-edge updates, avoiding full DAG walks for scalar edits; runtime qualification remains pending.
+- [x] Implement native changed-epoch bounded residency deltas with an explicit worker overflow fallback; included in the r1005-r1008 native matrix. Suite qualification does not establish complete production caller admission/retirement bounds or G1.
+- [x] Implement native changed-owner direct-root topology and parent-edge updates, avoiding full DAG walks for scalar edits; included in the r1005-r1008 native matrix. Production caller bounds, ordinary activation and G1 remain open.
 - [ ] Qualify original-ticket publication/retirement, real host consumers, cancellation and all G1 phases.
-- [ ] Integrate and qualify exact-source native Debug, Release, real ASan, analysis and ARM64 cross-builds;
-  reconcile the domain contract and close H3 only when every requirement below is met.
+- [x] Qualify exact-source native Release analysis, Release, Debug, real ASan Debug, and ARM64 Debug/Release/ASan cross-builds (r1005-r1011; see the native qualification receipt).
+- [ ] Reconcile the owning domain contract and close H3 only after every remaining requirement below is met; full production caller coverage, complete admission/retirement bounds and G1 remain open.
 
 Foundation evidence: [qualified private reference tests](../../TestRuns/P1PersistentHistoryFoundation_2026-10-12.md),
 `.build/P1Drafts/HistoryPersistentIndexCore-r2-Main/qualified.json`, `8AC83369…`. Actual Release MSBuild child

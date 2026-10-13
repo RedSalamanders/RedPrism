@@ -2,28 +2,39 @@
 
 ## Current delivery checklist
 
+Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 independently pass the
+integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
+records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
+Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile
+commands are instrumented and the actual heap-use-after-free probe passes. ARM64 r1031 now cross-builds
+with one project at a time; Release/ASan cross-builds follow. Complete admission/retirement, ordinary
+activation and measured S5/G1 remain open; original failures/readers remain retained.
+[Current native evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
+
+Next code checkpoints (2026-10-14):
+
+- [ ] Finish the exact current ARM64 cross-build matrix, review its artifacts, and commit/push the native lasso host/display step.
+- [ ] Qualify the next long-path I/O candidate in ordinary C: and a 311-code-unit Z: TEMP root, retaining every existing I/O assertion. The unrun candidate has 57 new source-defined controls (1,880 total per process); Main moves its 64 KiB TEMP buffer to heap storage without changing predicates or lifetimes before qualification.
+- [ ] Qualify complete responsive cold-start acquisition with 282 new controls; then complete production caller admission and retirement before ordinary activation.
+- [ ] Add a draft-specific refused retirement-signal and explicit retry test using the existing GPU queue, preserving the current lasso assertions.
+
 Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
-assertions and all 138 application stages, with complete unchanged source/product bookends and archives.
-[Receipt](../../TestRuns/P1LassoKindOrdering_2026-10-13.md). Main fixes the observed lost continuation wake
-without relaxing its predicate. Native analysis r1012 on the preceding source remains running; the new
-repair will be selectively adopted after that freeze closes. Every whole P1 delivery gate below stays open.
+assertions and all 138 application stages, with unchanged source/product bookends and complete archives.
+[Receipt](../../TestRuns/P1LassoKindOrdering_2026-10-13.md). Main repairs the observed lost continuation wake
+without relaxing its predicate and selectively adopts the qualified caller sources into the native worktree.
 
-Preceding private checkpoint (2026-10-13): the actual private lasso host passes all 138 application stages and
-96 physical/FIFO/keyboard/reached-allocation/cancellation/memory-refusal assertions. Main independently
-checks the full ordered roster, source/dependency/product bookends and complete archive.
-[Evidence](../../TestRuns/P1LassoKeyboardFaults_2026-10-13.md). The completed native scanner/core checkpoint
-is pushed as `5897379`; physical/FIFO proof is pushed as `10d510b`. Main integrates the checked
-host/display path and independent CPU/WARP tests. A verified nonterminal sample-versus-command ordering
-gap is repaired with shared event ordinals and 32 additional actual-host references (136 expected facts).
-Fresh native analysis and all configuration gates follow; the private 96-fact receipt remains unchanged. Ordinary activation,
-complete admission/lifetime proof, measured S5/G1 and all delivery rows below remain open.
+Native Release analysis r1012 exits 1: C6262 reports a 147,388-byte test fixture frame; C6221 reports an
+exact HRESULT equality using two different integer types. Its complete failed source/product archive is
+retained (`92316A1F...`); no r1013-r1018 runtime/cross-build follows it. Main moves 20 fixture-owned input
+adapters to the heap and explicitly converts the expected HRESULT to the terminal's int32 type. An independent
+whole-file comparison proves both repairs preserve every assertion and lifetime. Fresh canonical analysis
+and native profiles must qualify this source; standalone compiler diagnostics are not native acceptance.
 
-Current native gate: Release analysis r1012 is running on 1,356 frozen inputs. Formatting checks 1,204 files
-and all 15 skills pass. The full r1013–r1018 chain is held before launch because a source audit confirms
-kind-toggle commands can drop the bounded session draft while leaving its input descriptor busy. Main
-prepares the narrow paired cancellation repair and 24 actual-host references (next expected total 160),
-without changing the active analysis snapshot. The current 136-fact native fixture has not run; its private
-96-fact predecessor remains the latest scoped runtime proof. Native code/remaining delivery are not Done.
+The native host fixture now expects 160 facts, including 32 sample/command ordering, eight actual uint64-max
+and 24 paired kind-toggle controls. Independent CPU draft/conditional tests and WARP draft/controller tests
+are integrated. Ordinary activation, complete admission/lifetime proof, measured S5/G1 and every whole P1
+delivery gate below remain open. The native scanner/core checkpoint is pushed as `5897379`; the most recent
+scoped private evidence is pushed as `7fd8a56`. No whole delivery row is closed by that private evidence.
 
 ### Earlier foundation checkpoints
 

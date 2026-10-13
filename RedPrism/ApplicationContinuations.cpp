@@ -479,7 +479,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     {
         if (canvas->kind == HostCanvasInputKind::Brush)
             RetireCanvasBrush(result.outcome, canvas->opening);
-        else
+        else if (canvas->kind == HostCanvasInputKind::Sampler)
             RetireSamplerOpening(canvas->opening);
     }
     if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
@@ -520,7 +520,9 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     }
     _pathClassifications = {};
     _historyResidencySource.RetryDeferred();
-    if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime))
+    if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime ||
+                              (_lassoInput.Busy() && _lassoAcquiredOpening == _lassoInput.Opening() &&
+                               _lassoInput.Peek(_lassoInput.Opening()))))
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
     }
@@ -538,6 +540,13 @@ void Application::RunHostContinuation() noexcept
     if (_shutdownStarted)
         return;
     SweepSamplerOpenings();
+    if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
+    {
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
+        SelectionChanged();
+    }
+    if (!_activeHostRequest && !_historyWork.Busy() && ReplayLassoInputOwner())
+        return; // One accepted input operation on the existing source; no twelfth owner or extra UI source.
     if (_activeHostRequest)
     {
         const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input());
@@ -1457,6 +1466,43 @@ void Application::RunHostContinuation() noexcept
                     ReplaySamplerOpening(canvas->opening);
                     return;
                 }
+                if (canvas->kind == HostCanvasInputKind::LassoOpening ||
+                    canvas->kind == HostCanvasInputKind::LassoFinish)
+                {
+                    if (_lassoCancelledOpening == canvas->opening)
+                    {
+                        FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
+                        return; // Exact selected cancellation precedes original creator admission/capture.
+                    }
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && canvas->lassoClosingIntent)
+                    {
+                        if (_lassoReplayedClosingIntent != canvas->lassoClosingIntent)
+                        {
+                            FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                            return;
+                        }
+                        const bool chosen = _lassoReplayedCloseChosen;
+                        _lassoReplayedClosingIntent = 0;
+                        _lassoReplayedCloseChosen = false;
+                        if (!chosen)
+                        {
+                            FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                            return; // Original click is acknowledged in order; the bounded gesture stays live.
+                        }
+                        _lassoFinishQueued = true;
+                        _lassoFinishReceipt = _activeHostRequest->input.Receipt();
+                    }
+                    const auto result = canvas->kind == HostCanvasInputKind::LassoOpening
+                                            ? StartLassoOpening(canvas->opening)
+                                            : StartLassoFinish(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        CancelLassoInputOwner(canvas->opening, HostOutcome::Failed);
+                        SelectionChanged();
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return; // Original worker acknowledgement selects Complete; acquisition does not finish input.
+                }
                 _hostStage = HostStage::CanvasBrush;
                 ReplayCanvasBrush();
                 return;
@@ -1665,6 +1711,14 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(*_selectionOffsetTicket);
         }
+        else if (_lassoOpeningTicket || _lassoFinishTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            else
+                (void)_jobs.Cancel((_lassoOpeningTicket ? _lassoOpeningTicket : _lassoFinishTicket).value());
+        }
         else if (_inverseSelectionTicket)
         {
             (void)_historyWork.RequestCancel();
@@ -1726,6 +1780,9 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 
 void Application::StopHostContinuations() noexcept
 {
+    if (_lassoInput.Busy())
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+
     _canvasPanLast.reset();
     CancelSamplerReadback();
     FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});

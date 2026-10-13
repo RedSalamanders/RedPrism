@@ -499,6 +499,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
 {
     _canvasFailure = S_OK;
     _selectionOutlineFailure = S_OK;
+    _lassoDraftFailure = S_OK;
     _canvasDrawn = false;
     if (_suspended)
     {
@@ -594,6 +595,28 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
                 return RecoverFromStage();
             if (drawn == S_OK)
                 ++_selectionOutlineDraws;
+            _context->OMSetRenderTargets(1, renderTargets, nullptr);
+        }
+    }
+
+    if (selectionOutline && chrome && !_suppressSelectionOutlineForTest)
+    {
+        const CanvasHole hole = chrome->HolePixels();
+        const LassoDraftFrame draft =
+            selectionOutline->BorrowLassoDraftFrameOwner(hole.left, hole.top, hole.width, hole.height);
+        if (draft.composition && draft.color)
+        {
+            const HRESULT drawn =
+                draft.composition->Device() == _device.get()
+                    ? draft.composition->DrawLassoDraftToTarget(_renderTarget.get(), _width, _height, draft.color,
+                                                               draft.width, draft.height, draft.pixelLeft,
+                                                               draft.pixelTop, draft.clipped ? &draft.clip : nullptr)
+                    : E_ABORT;
+            _lassoDraftFailure = drawn;
+            if (FAILED(drawn) && DeviceLostAfter(drawn))
+                return RecoverFromStage();
+            if (drawn == S_OK)
+                ++_lassoDraftDraws;
             _context->OMSetRenderTargets(1, renderTargets, nullptr);
         }
     }

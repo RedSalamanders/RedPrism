@@ -3640,6 +3640,11 @@ void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexc
 
 void Application::SyncLassoOverlay() noexcept
 {
+    if (_lassoDraftDisplayEnabled)
+    {
+        SyncPreparedLassoDraftOwner();
+        return;
+    }
     const bool hasDocument = _session.Document().has_value();
     const Vec2 origin = _viewport.DocumentRectOrigin(DocumentSize());
     const double scale = _viewport.ViewScale();
@@ -3841,6 +3846,7 @@ void Application::Shutdown() noexcept
              // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
              owner._drag.emplace<std::monostate>();
              owner._overlaySelection.reset();
+             owner._overlayLassoDraft.reset();
              if (owner._uiBenchmark)
              {
                  // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
@@ -3885,6 +3891,8 @@ void Application::Shutdown() noexcept
             std::terminate();
         _selectionOutlineInitialized = false;
         _selectionOutlineViewValid = false;
+        _lassoDraftDisplayEnabled = false;
+        _lassoDraftViewValid = false;
     }
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
@@ -3943,6 +3951,19 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_inverseSelectionStamp.value());
     _inverseSelectionStamp.reset();
     _inverseSelectionTicket.reset();
+    if (_lassoOpeningStamp)
+        (void)_historyWork.Finish(_lassoOpeningStamp.value());
+    if (_lassoFinishStamp)
+        (void)_historyWork.Finish(_lassoFinishStamp.value());
+    _lassoOpeningStamp.reset();
+    _lassoFinishStamp.reset();
+    _lassoOpeningTicket.reset();
+    _lassoFinishTicket.reset();
+    if (_lassoInput.Busy())
+        (void)_lassoInput.Drop(_lassoInput.Opening());
+    _lassoAcquiredOpening = 0;
+    _lassoSessionOpening = 0;
+    _lassoFinishQueued = false;
     if (_selectionOffsetStamp)
         (void)_historyWork.Finish(*_selectionOffsetStamp);
     _selectionOffsetStamp.reset();
@@ -5156,10 +5177,14 @@ void Application::OnCommand(int command) noexcept
         DocumentChanged();
         break;
     case ChromeHost::kCommandToggleMarqueeKind:
+        if (_lassoInput.Busy())
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
         _session.ToggleMarqueeKind();
         SyncChrome();
         break;
     case ChromeHost::kCommandToggleLassoKind:
+        if (_lassoInput.Busy())
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
         _session.ToggleLassoKind();
         SyncChrome();
         break;
@@ -5416,7 +5441,7 @@ bool Application::EditUnderWay(CanvasEdit edit) const noexcept
     case CanvasEdit::OutlineMove:
         return _session.IsMovingSelection();
     case CanvasEdit::Lasso:
-        return _session.PendingLasso().has_value();
+        return _session.PendingLasso().has_value() || _lassoInput.Busy();
     case CanvasEdit::Gradient:
         return _session.PendingGradient() != nullptr;
     case CanvasEdit::Transform:
@@ -5538,11 +5563,15 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         }
         if (end == EditEnd::Enter)
         {
-            _session.FinishLasso();
+            if (!QueueLassoFinishOwner(_session.selectionAntialiased))
+                _session.FinishLasso();
         }
         else
         {
-            _session.CancelLasso();
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            else
+                _session.CancelLasso();
         }
         DropDrag<DraftDrag>();
         SelectionChanged();
@@ -6955,6 +6984,21 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
+    if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind == LassoKind::Polygonal)
+        {
+            const Vec2 first = _viewport.ViewFromDocument(_lassoInputFirstPoint, documentSize);
+            const bool nearFirst = std::hypot(view.x - first.x, view.y - first.y) <= _viewport.DipToView(8.0);
+            RecordLassoPolygonPressOwner(pixel, nearFirst, doubleClick, _session.selectionAntialiased);
+        }
+        else
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
+        return;
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && draft->kind == LassoKind::Polygonal && draft->PointCount() != 0)
     {
@@ -6991,6 +7035,13 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     if (_tool == EditorTool::Wand)
     {
         RunMagicWand(pixel, mode);
+        return;
+    }
+    if (QueueLassoOpeningOwner(pixel, mode, _tool == EditorTool::Marquee))
+    {
+        if (_lassoInput.Busy())
+            _drag = DraftDrag{std::nullopt, !shift};
+        SelectionChanged();
         return;
     }
     if (_tool == EditorTool::Marquee)
@@ -7044,6 +7095,28 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
         outline->offset = Vec2{std::round(dx), std::round(dy)};
         _session.MoveSelection(dx, dy);
         SelectionChanged();
+        return true;
+    }
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        auto* drawing = std::get_if<DraftDrag>(&_drag);
+        if (!captured)
+            return true;
+        if (captured->kind == LassoKind::Freehand && drawing)
+            RecordLassoInputOwner(_lassoInput.Point(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
+        else if (captured->kind == LassoKind::Polygonal)
+            RecordLassoInputOwner(_lassoInput.Cursor(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
+        else if (drawing)
+        {
+            if (!shift)
+                drawing->constrainArmed = true;
+            drawing->marqueePixel = pixel;
+            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), pixel, drawing->constrainArmed && shift,
+                                                      false, NextLassoSampleOrdinalOwner()));
+        }
+        if (changed)
+            SelectionChanged();
         return true;
     }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
@@ -7124,6 +7197,15 @@ void Application::SelectionRelease(Vec2 view) noexcept
         }
         return;
     }
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind != LassoKind::Polygonal)
+            (void)QueueLassoFinishOwner(_session.selectionAntialiased);
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return;
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && draft->kind != LassoKind::Polygonal)
     {
@@ -7136,6 +7218,12 @@ void Application::SelectionRelease(Vec2 view) noexcept
 void Application::EndSelectionInteraction(bool keepDraft) noexcept
 {
     // Capture lost or a tool change: a polygonal outline survives a pointer leave, a drag does not.
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (!captured || !keepDraft || captured->kind != LassoKind::Polygonal)
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && (!keepDraft || draft->kind != LassoKind::Polygonal))
     {
@@ -7173,7 +7261,12 @@ void Application::UpdateSelectionModifiers() noexcept
         {
             drawing->constrainArmed = true;
         }
-        _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
+        if (_lassoInput.Busy())
+            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), drawing->marqueePixel.value(),
+                                                      drawing->constrainArmed && shift, false,
+                                                      NextLassoSampleOrdinalOwner()));
+        else
+            _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
         changed = true;
     }
     if (changed)

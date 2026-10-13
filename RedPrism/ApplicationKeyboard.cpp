@@ -397,7 +397,7 @@ KeyState Application::CurrentKeyState() const noexcept
                                                                  : KeyFocus::Chrome;
     state.tool = _tool;
     state.selection = _session.Selection().has_value() && !_session.Selection()->IsEmpty();
-    state.lassoDraft = _session.PendingLasso().has_value();
+    state.lassoDraft = _session.PendingLasso().has_value() || _lassoInput.Busy();
     return state;
 }
 
@@ -479,6 +479,14 @@ bool Application::HandleEditGesture(const KeyPress& press) noexcept
         // Enter applies and Escape cancels the first edit under way that takes the key, in the one order Undo and a
         // settle use (RF-904): the size card's and the panel's OK and Cancel first, then the canvas's edits.
         return EndFirstCanvasEdit(key == VK_RETURN ? EditEnd::Enter : EditEnd::Escape);
+    }
+    if ((key == VK_BACK || key == VK_DELETE) && _lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind == LassoKind::Polygonal)
+            RecordLassoInputOwner(_lassoInput.Backspace(_lassoInput.Opening(), NextLassoSampleOrdinalOwner()));
+        DropDrag<DraftDrag>();
+        return true;
     }
     if ((key == VK_BACK || key == VK_DELETE) && _session.PendingLasso().has_value())
     {

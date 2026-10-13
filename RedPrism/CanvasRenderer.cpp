@@ -2612,10 +2612,28 @@ HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* tar
                                                        unsigned int maskHeight, float pixelLeft, float pixelTop,
                                                        const std::array<float, 4>* clip) noexcept
 {
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, solid, dashes, maskWidth, maskHeight, pixelLeft,
+                                   pixelTop, clip, false);
+}
+HRESULT CanvasRenderer::DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                 unsigned int targetHeight, ID3D11ShaderResourceView* color,
+                                                 unsigned int width, unsigned int height, float pixelLeft,
+                                                 float pixelTop, const std::array<float, 4>* clip) noexcept
+{
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, color, nullptr, width, height, pixelLeft,
+                                   pixelTop, clip, true);
+}
+HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                  unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                  ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                  unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                  const std::array<float, 4>* clip, bool colorDraft) noexcept
+{
     if (_recordingCommands || (_context && _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE) ||
         (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
         return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
-    if (!_context || !target || !solid || !dashes || !_selectionOutlineBlend || !targetWidth || !targetHeight)
+    if (!_context || !target || !solid || (!colorDraft && !dashes) || !_selectionOutlineBlend || !targetWidth ||
+        !targetHeight)
         return S_FALSE;
     constexpr unsigned int sideLimit = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
     constexpr std::uint64_t pixelLimit = 64ull * 1024ull * 1024ull;
@@ -2639,7 +2657,7 @@ HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* tar
     constants.layerSize[1] = static_cast<float>(maskHeight);
     constants.viewOrigin[0] = pixelLeft;
     constants.viewOrigin[1] = pixelTop;
-    constants.passMode = kCompositionPassSelectionOutline;
+    constants.passMode = colorDraft ? kCompositionPassLassoDraft : kCompositionPassSelectionOutline;
     D3D11_MAPPED_SUBRESOURCE mapped{};
     const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     if (FAILED(result))

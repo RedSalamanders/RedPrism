@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -96,7 +97,8 @@ bool TakeExpectedSequence(HostLassoInput& input, std::uint64_t opening, const st
 
 void CheckCapturedDescriptorAndPointSequence()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Freehand, SelectionMode::Add);
     constexpr std::uint64_t opening = 41;
     const bool began = input.Begin(opening, context, {2.25, -3.5});
@@ -137,7 +139,8 @@ void CheckCapturedDescriptorAndPointSequence()
 
 void CheckPolygonCursorClearingAndBackspace()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Polygonal, SelectionMode::Subtract);
     constexpr std::uint64_t opening = 52;
     const bool began = input.Begin(opening, context, {10, 20});
@@ -167,7 +170,8 @@ void CheckPolygonCursorClearingAndBackspace()
 
 void CheckMarqueeSquareAndCenterDescriptors()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Rectangle, SelectionMode::Subtract);
     constexpr std::uint64_t opening = 63;
     const bool began = input.Begin(opening, context, {17, 19});
@@ -194,7 +198,8 @@ void CheckMarqueeSquareAndCenterDescriptors()
 
 void CheckFullRingPhysicalUp()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
     constexpr std::uint64_t opening = 73;
     constexpr std::size_t ringSlots = 512;
@@ -239,7 +244,8 @@ void CheckFullRingPhysicalUp()
 
 void CheckSeparateTerminalAndFullRingOverflow()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
     constexpr std::uint64_t opening = 74;
     const bool began = input.Begin(opening, context, {-12.0, 7.0});
@@ -296,14 +302,16 @@ void CheckSeparateTerminalAndFullRingOverflow()
 
 void CheckStaleMissingAndOpeningAuthority()
 {
-    HostLassoInput missing;
+    auto missingOwner = std::make_unique<HostLassoInput>();
+    auto& missing = *missingOwner;
     Expect(missing.Point(1, {1, 2}) == HostLassoInput::Admission::Stale &&
                missing.Cursor(1, std::nullopt) == HostLassoInput::Admission::Stale &&
                missing.Finish(1, true) == HostLassoInput::Admission::Stale && !missing.Peek(1).has_value() &&
                !missing.Take(1).has_value() && !missing.Acknowledge(1) && !missing.Drop(1) && !missing.Busy(),
            "missing-opening-refuses-all-reads-writes-and-terminal-controls");
 
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
     const bool began = input.Begin(85, context, {3, 4});
     Expect(began, "stale.fixture-begins-on-original-opening");
@@ -317,13 +325,15 @@ void CheckStaleMissingAndOpeningAuthority()
     Expect(input.Drop(85) && !input.Busy() && input.Point(85, {7, 8}) == HostLassoInput::Admission::Stale,
            "drop-clears-current-opening-and-turns-late-samples-stale");
 
-    HostLassoInput zeroOpening;
+    auto zeroOpeningOwner = std::make_unique<HostLassoInput>();
+    auto& zeroOpening = *zeroOpeningOwner;
     Expect(!zeroOpening.Begin(0, context, {1, 1}) && !zeroOpening.Busy() && zeroOpening.Begin(1, context, {1, 1}) &&
                zeroOpening.Opening() == 1,
            "zero-opening-refusal-does-not-consume-first-valid-opening");
     Expect(zeroOpening.Drop(1), "zero-opening-fixture-drops-valid-follow-up");
 
-    HostLassoInput maximumOpening;
+    auto maximumOpeningOwner = std::make_unique<HostLassoInput>();
+    auto& maximumOpening = *maximumOpeningOwner;
     constexpr std::uint64_t maximum = std::numeric_limits<std::uint64_t>::max();
     const bool maximumBegan = maximumOpening.Begin(maximum, context, {9, 10});
     Expect(maximumBegan, "maximum-opening-is-admitted-once");
@@ -336,21 +346,24 @@ void CheckStaleMissingAndOpeningAuthority()
 void CheckRefusalDoesNotConsumeOpeningAndReuseIsRejected()
 {
     const auto valid = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
-    HostLassoInput invalidMode;
+    auto invalidModeOwner = std::make_unique<HostLassoInput>();
+    auto& invalidMode = *invalidModeOwner;
     auto badMode = valid;
     badMode.mode = static_cast<SelectionMode>(255);
     Expect(!invalidMode.Begin(1, badMode, {1, 2}) && !invalidMode.Busy() && invalidMode.Begin(1, valid, {3, 4}),
            "invalid-mode-refusal-does-not-consume-opening");
     Expect(invalidMode.Drop(1), "invalid-mode-valid-follow-up-cleans-up");
 
-    HostLassoInput invalidKind;
+    auto invalidKindOwner = std::make_unique<HostLassoInput>();
+    auto& invalidKind = *invalidKindOwner;
     auto badKind = valid;
     badKind.kind = static_cast<LassoKind>(255);
     Expect(!invalidKind.Begin(1, badKind, {1, 2}) && !invalidKind.Busy() && invalidKind.Begin(1, valid, {3, 4}),
            "invalid-kind-refusal-does-not-consume-opening");
     Expect(invalidKind.Drop(1), "invalid-kind-valid-follow-up-cleans-up");
 
-    HostLassoInput invalidDescriptors;
+    auto invalidDescriptorsOwner = std::make_unique<HostLassoInput>();
+    auto& invalidDescriptors = *invalidDescriptorsOwner;
     auto noOrdinal = valid;
     noOrdinal.ordinal = 0;
     auto noDocument = valid;
@@ -368,7 +381,8 @@ void CheckRefusalDoesNotConsumeOpeningAndReuseIsRejected()
            "missing-document-view-or-ordinal-refusals-do-not-consume-opening");
     Expect(invalidDescriptors.Drop(1), "descriptor-valid-follow-up-cleans-up");
 
-    HostLassoInput nonfiniteDown;
+    auto nonfiniteDownOwner = std::make_unique<HostLassoInput>();
+    auto& nonfiniteDown = *nonfiniteDownOwner;
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const double infinity = std::numeric_limits<double>::infinity();
     Expect(!nonfiniteDown.Begin(1, valid, {nan, 0}) && !nonfiniteDown.Begin(1, valid, {0, infinity}) &&
@@ -376,7 +390,8 @@ void CheckRefusalDoesNotConsumeOpeningAndReuseIsRejected()
            "nonfinite-opening-points-refuse-without-consuming-opening");
     Expect(nonfiniteDown.Drop(1), "finite-opening-after-nonfinite-refusals-cleans-up");
 
-    HostLassoInput reused;
+    auto reusedOwner = std::make_unique<HostLassoInput>();
+    auto& reused = *reusedOwner;
     const bool began = reused.Begin(9, valid, {10, 11});
     Expect(began, "reuse.fixture-begins-first-opening");
     if (!began)
@@ -397,7 +412,8 @@ void CheckNonfiniteAndWrongOperationRefusals()
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const double infinity = std::numeric_limits<double>::infinity();
 
-    HostLassoInput freehand;
+    auto freehandOwner = std::make_unique<HostLassoInput>();
+    auto& freehand = *freehandOwner;
     const auto freehandContext = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
     const bool freehandBegan = freehand.Begin(21, freehandContext, {1, 2});
     Expect(freehandBegan, "wrong-operation.freehand-fixture-begins");
@@ -412,7 +428,8 @@ void CheckNonfiniteAndWrongOperationRefusals()
         Expect(freehand.Drop(21), "freehand-refusal-fixture-drops");
     }
 
-    HostLassoInput polygon;
+    auto polygonOwner = std::make_unique<HostLassoInput>();
+    auto& polygon = *polygonOwner;
     const auto polygonContext = ReferenceContext(LassoKind::Polygonal, SelectionMode::Add);
     const bool polygonBegan = polygon.Begin(22, polygonContext, {1, 2});
     Expect(polygonBegan, "wrong-operation.polygon-fixture-begins");
@@ -425,7 +442,8 @@ void CheckNonfiniteAndWrongOperationRefusals()
         Expect(polygon.Drop(22), "polygon-refusal-fixture-drops");
     }
 
-    HostLassoInput rectangle;
+    auto rectangleOwner = std::make_unique<HostLassoInput>();
+    auto& rectangle = *rectangleOwner;
     const auto rectangleContext = ReferenceContext(LassoKind::Rectangle, SelectionMode::Subtract);
     const bool rectangleBegan = rectangle.Begin(23, rectangleContext, {1, 2});
     Expect(rectangleBegan, "wrong-operation.rectangle-fixture-begins");
@@ -440,7 +458,8 @@ void CheckNonfiniteAndWrongOperationRefusals()
         Expect(rectangle.Drop(23), "rectangle-refusal-fixture-drops");
     }
 
-    HostLassoInput ellipse;
+    auto ellipseOwner = std::make_unique<HostLassoInput>();
+    auto& ellipse = *ellipseOwner;
     const auto ellipseContext = ReferenceContext(LassoKind::Ellipse, SelectionMode::New);
     const bool ellipseBegan = ellipse.Begin(24, ellipseContext, {2, 3});
     Expect(ellipseBegan, "wrong-operation.ellipse-fixture-begins");
@@ -455,7 +474,8 @@ void CheckNonfiniteAndWrongOperationRefusals()
 
 void CheckBoundedTakePeekAcknowledgeDropAndBusy()
 {
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Polygonal, SelectionMode::New);
     const bool began = input.Begin(31, context, {8, 9});
     Expect(began, "lifetime.fixture-begins-before-terminal");
@@ -508,7 +528,8 @@ void CheckNothrowOwnerSurface()
     static_assert(noexcept(std::declval<HostLassoInput&>().Acknowledge(std::declval<std::uint64_t>())));
     static_assert(noexcept(std::declval<HostLassoInput&>().Drop(std::declval<std::uint64_t>())));
 
-    HostLassoInput input;
+    auto inputOwner = std::make_unique<HostLassoInput>();
+    auto& input = *inputOwner;
     const auto context = ReferenceContext(LassoKind::Freehand, SelectionMode::New);
     const bool began = input.Begin(111, context, {5, 7});
     const bool moved = began && input.Point(111, {9, 13}) == HostLassoInput::Admission::Recorded;

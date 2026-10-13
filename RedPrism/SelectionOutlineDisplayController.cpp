@@ -182,6 +182,24 @@ HRESULT SelectionOutlineDisplayController::InitializeOwner(JobScheduler& jobs, G
     _client = &client;
     return S_OK;
 }
+HRESULT SelectionOutlineDisplayController::EnableLassoDraftOwner(LassoDraftDisplayClient& client) noexcept
+{
+    if (!IsOwner() || !_jobs || _stopped || _draftEnabled)
+        return E_INVALIDARG;
+    const HRESULT result = _draft.InitializeOwner(*_jobs, *_queue, *_budget, client);
+    if (SUCCEEDED(result))
+        _draftEnabled = true;
+    return result;
+}
+void SelectionOutlineDisplayController::RequestLassoDraftOwner() noexcept
+{
+    if (IsOwner() && _draftEnabled)
+        _draft.RequestOwner();
+}
+PreparedLassoDraftGpu::Views SelectionOutlineDisplayController::BorrowLassoDraftFrameOwner() const noexcept
+{
+    return IsOwner() && _draftEnabled ? _draft.BorrowFrameOwner() : PreparedLassoDraftGpu::Views{};
+}
 bool SelectionOutlineDisplayController::DescribeOwner(SelectionOutlineDisplayDescriptor& descriptor) const noexcept
 {
     return _jobs && !_stopped && !_suspended && _client->DescribeSelectionOutlineOwner(descriptor) &&
@@ -222,6 +240,8 @@ void SelectionOutlineDisplayController::RequestOwner() noexcept
 }
 void SelectionOutlineDisplayController::RetryOwner() noexcept
 {
+    if (IsOwner() && _draftEnabled)
+        _draft.RetryOwner();
     if (!IsOwner() || !_jobs || _stopped)
         return;
     _failed.reset();
@@ -232,6 +252,8 @@ void SelectionOutlineDisplayController::RetryOwner() noexcept
 }
 void SelectionOutlineDisplayController::SetSuspendedOwner(bool suspended) noexcept
 {
+    if (IsOwner() && _draftEnabled)
+        _draft.SetSuspendedOwner(suspended);
     if (!IsOwner() || !_jobs || _stopped || suspended == _suspended)
         return;
     _suspended = suspended;
@@ -392,12 +414,14 @@ void SelectionOutlineDisplayController::FinishOwner(Cell& cell, bool closed) noe
 }
 bool SelectionOutlineDisplayController::HasPending() const noexcept
 {
+    if (_draftEnabled && _draft.HasPending())
+        return true;
     for (const auto& cell : _cells)
         if (cell.phase != Phase::Empty && cell.phase != Phase::Cached)
             return true;
     return false;
 }
-bool SelectionOutlineDisplayController::HasReady() const noexcept
+bool SelectionOutlineDisplayController::HasSelectionReady() const noexcept
 {
     if (!IsOwner() || !_jobs || _stopped)
         return false;
@@ -413,9 +437,26 @@ bool SelectionOutlineDisplayController::HasReady() const noexcept
     }
     return false;
 }
+bool SelectionOutlineDisplayController::HasReady() const noexcept
+{
+    return HasSelectionReady() || (_draftEnabled && _draft.HasReady());
+}
 void SelectionOutlineDisplayController::Pump() noexcept
 {
-    if (!HasReady())
+    if (!IsOwner() || !_jobs || _stopped)
+        return;
+    if (_draftEnabled && _draft.HasReady() && (!_selectionTurn || !HasSelectionReady()))
+    {
+        _selectionTurn = true;
+        _draft.Pump();
+        return;
+    }
+    _selectionTurn = false;
+    PumpSelectionOwner();
+}
+void SelectionOutlineDisplayController::PumpSelectionOwner() noexcept
+{
+    if (!HasSelectionReady())
         return;
     _ready = false;
     for (auto& cell : _cells)
@@ -454,13 +495,18 @@ void SelectionOutlineDisplayController::Pump() noexcept
         active = active || cell.phase == Phase::Active;
     // An admitted replacement or retiring cell reawakens on its real completion. Repeated unchanged
     // settled frames perform no pump, admission, source capture or GPU creation.
-    if (!active && !HasPending())
+    bool selectionPending = false;
+    for (const auto& cell : _cells)
+        selectionPending = selectionPending || (cell.phase != Phase::Empty && cell.phase != Phase::Cached);
+    if (!active && !selectionPending)
         _requested = false;
 }
 void SelectionOutlineDisplayController::StopOwner() noexcept
 {
     if (!IsOwner() || !_jobs || _stopped)
         return;
+    if (_draftEnabled)
+        _draft.StopOwner();
     _stopped = true;
     _ready = _requested = false;
     _published = nullptr;
@@ -485,6 +531,8 @@ void SelectionOutlineDisplayController::JoinedShutdownOwner() noexcept
         }
         cell.job = nullptr;
     }
+    if (_draftEnabled)
+        _draft.JoinedShutdownOwner();
     _joined = true;
 }
 void SelectionOutlineDisplayController::RetireShutdownForWork() noexcept
@@ -494,6 +542,8 @@ void SelectionOutlineDisplayController::RetireShutdownForWork() noexcept
     for (auto& cell : _cells)
         if (cell.phase != Phase::Empty && !cell.deferredWorker && !cell.workerRetired.load(std::memory_order_acquire))
             RetireForWork(cell);
+    if (_draftEnabled)
+        _draft.RetireShutdownForWork();
 }
 bool SelectionOutlineDisplayController::CloseAfterWorkersOwner() noexcept
 {
@@ -506,6 +556,9 @@ bool SelectionOutlineDisplayController::CloseAfterWorkersOwner() noexcept
         if (cell.phase != Phase::Empty)
             FinishOwner(cell, true); // Closed scheduler returned its fixed cache-ticket accounting at teardown.
     }
+    if (_draftEnabled && !_draft.CloseAfterWorkersOwner())
+        return false;
+    _draftEnabled = false;
     if (!_routes->Detach(*this))
         return false;
     _routes = nullptr;

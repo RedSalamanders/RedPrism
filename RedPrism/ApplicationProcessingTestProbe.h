@@ -5,6 +5,9 @@
 #include "RetryWaitQueue.h"
 
 #include <cstdint>
+#include <memory>
+
+struct LassoWorkTestGate;
 
 enum class ApplicationProcessingStage : std::uint8_t
 {
@@ -46,6 +49,9 @@ struct ApplicationProcessingTestProbe final
     // Explicit actual-Run startup fixture only. Borrowed context survives Run and joined Shutdown.
     bool responsiveSourcesForTest = false;
     std::int32_t (*afterResponsiveSourceStage)(void*, ApplicationResponsiveSourceStage) noexcept = nullptr;
-    unsigned int workerCount = 0;      // Startup-only; zero preserves the production automatic count.
+    unsigned int workerCount = 0; // Startup-only; zero preserves the production automatic count.
+    // Reached lasso fixture controls, configured before each admitted operation. The borrowed probe and
+    // this shared owner survive joined Close; absent in production and no Application layout cost.
+    std::shared_ptr<LassoWorkTestGate> lassoWork;
     PathReadWaitObserver pathReadWait; // Reached-resource faults, alive through partial-startup Close.
 };

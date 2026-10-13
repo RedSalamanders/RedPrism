@@ -377,7 +377,17 @@
     <ClCompile Include="..\..\Common\LassoFinishGeometry.cpp" />
     <ClInclude Include="..\..\Common\LassoFinishGeometry.h" />
     <ClCompile Include="..\..\Common\LassoFinishWork.cpp" />
+    <ClCompile Include="..\..\Common\LassoDraftRasterWork.cpp" />
+    <ClCompile Include="..\..\RedPrism\PreparedLassoDraftGpu.cpp" />
+    <ClCompile Include="..\..\RedPrism\LassoDraftDisplayController.cpp" />
+    <ClCompile Include="Composition.Tests.LassoDraftController.cpp" />
+    <ClCompile Include="Composition.Tests.LassoDraftPixels.cpp" />
     <ClInclude Include="..\..\Common\LassoFinishWork.h" />
     <ClInclude Include="..\..\Common\BoundedLassoGesture.h" />
+    <ClInclude Include="..\..\Common\LassoDraftRasterWork.h" />
+    <ClInclude Include="..\..\RedPrism\PreparedLassoDraftGpu.h" />
+    <ClInclude Include="..\..\RedPrism\LassoDraftDisplayController.h" />
+    <ClInclude Include="Composition.Tests.LassoDraftController.h" />
+    <ClInclude Include="Composition.Tests.LassoDraftPixels.h" />
   </ItemGroup>
 </Project>

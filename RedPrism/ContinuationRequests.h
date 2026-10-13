@@ -134,12 +134,15 @@ struct HostLayerOpacityInput final
 enum class HostCanvasInputKind
 {
     Brush,
-    Sampler
+    Sampler,
+    LassoOpening,
+    LassoFinish
 };
 struct HostCanvasBrushInput final
 {
     std::uint64_t opening; // owner-only fixed stream; no borrowed pointer or later view interpretation
     HostCanvasInputKind kind = HostCanvasInputKind::Brush;
+    std::uint64_t lassoClosingIntent = 0; // event-time conditional polygon close; zero is a terminal request
 };
 using HostSamplerInput = HostCanvasBrushInput;
 struct HostWriteInput final

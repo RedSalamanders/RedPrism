@@ -293,10 +293,24 @@ The reference FinishLasso refuses a bounded draft; an eligible worker refusal ha
 
 HostLassoInput reuses the fixed 512-slot PointerInputStream. Its source/active/crop/kind/mode/view/ordinal and
 physical document coordinates are descriptors; later headers/views MUST NOT reinterpret accepted values.
+Physical nonterminal samples use the same nonwrapping HistoryWork event ordinal as queued commands; replay
+MUST select an older command/canvas lifetime before a later point/cursor/Backspace/marquee sample.
+A kind-toggle command MUST cancel the exact paired input descriptor and session opening/writer before
+switching its kind. An already accepted successor sample, command or canvas lifetime MUST retain an
+event-driven continuation after a consumed, stale or rejected sample. An empty settled input requests no wake.
 Point/cursor/Backspace/marquee events remain ordered, and terminal AA has a separate slot. Overflow retains the
-accepted prefix plus Lost, rejects later Up and stays owned until acknowledgement. Actual Application opening/
-replay/finish, draft drawing, complete operation admission and ordinary activation remain separate P1 work;
-these available APIs and modeled tests alone do not activate the window route or qualify G1.
+accepted prefix plus Lost, rejects later Up and stays owned until acknowledgement. Physical terminal and
+conditional polygon-close descriptors reserve the actual shared host ordinal at input time. Older accepted
+corners/Backspaces replay before the close decision; a near-first press closes only after three corners,
+while double-click/Enter preserve the reference short-outline behavior. A rejected early proximity press
+acknowledges without history and keeps the gesture live. Captured event AA belongs to the selected terminal.
+
+The explicitly cold-acquired harness route connects Application opening/replay/Finish to these APIs on the
+existing continuation source. Original whole-operation admission precedes worker allocation and owner input
+capture; joined acknowledgement/current-only validation precede publication and younger input. Eligible
+admission/allocation/cancellation failure has no synchronous fallback. The reference route remains the ordinary
+startup path until complete caller/lifetime/admission and S5/G1 gates qualify activation. Native tests and
+private actual-host PASS alone do not establish those gates.
 
 
 Selection state on `DocumentSession`: `lassoKind` (Freehand default, Polygonal), `marqueeKind` (Rectangle default,

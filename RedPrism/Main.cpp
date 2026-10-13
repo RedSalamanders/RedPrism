@@ -265,6 +265,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneSelectionOutlineGpuHostSelfTest\n");
         if (const int failed = Application::RunStandaloneSelectionOutlineGpuHostSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneLassoDraftDisplaySelfTest\n");
+        if (const int failed = Application::RunStandaloneLassoDraftDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneLassoHostInputSelfTest\n");
+        if (const int failed = Application::RunStandaloneLassoHostInputSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneSelectionOutlineParitySelfTest\n");
         const int parity = Application::RunStandaloneSelectionOutlineParitySelfTest(instance);
         if (parity != 0)

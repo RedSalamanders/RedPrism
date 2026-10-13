@@ -2,6 +2,15 @@
 
 ## Delivery checklist
 
+Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 independently pass the
+integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
+records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
+Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile
+commands are instrumented and the actual heap-use-after-free probe passes. ARM64 r1031 now cross-builds
+with one project at a time; Release/ASan cross-builds follow. Complete admission/retirement, ordinary
+activation and measured S5/G1 remain open; original failures/readers remain retained.
+[Current native evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
+
 - [x] Qualify the isolated point arena/ticket against an independent vector model, retained snapshots, boundary/refusal/cancellation and original lifetime accounting.
 - [x] Qualify private bounded completion geometry/history against 43 independent assertions, preserving all 21,480 predecessor records (21,524 total). See [the private finish proof](../../TestRuns/P1LassoFinish_2026-10-13.md).
 - [x] Qualify private worker-created/current-only bounded session bridge against 67 independent assertions (21,592 total records).
@@ -20,26 +29,19 @@
 
 Latest private actual host step passes 160 assertions/all 138 stages after the unchanged queued-kind-toggle
 predicate exposes and Main fixes a lost continuation wake. Exact source/product/archive readback passes;
-r1/r2/r3 failures remain retained. Native analysis r1012 continues on its preceding freeze; adoption and
-fresh native/ordinary/complete S5/G1 qualification are due.
+r1/r2/r3 failures remain retained. The qualified caller sources are selectively adopted into native code.
 
-Current native integration: the caller audit identifies a second cross-stream gap: nonterminal samples
-could replay ahead of an older queued command. Main confirms it and adds fixed scalar shared event ordinals,
-oldest-input arbitration and 32 independent actual-host assertions across four sample kinds/both admission
-orders. A closed-stream guard also preserves accepted terminals at shared-counter exhaustion, with eight actual
-uint64-max controls. Native host expectation is now 136 facts. The archived private 96-fact receipt stays unchanged;
-this new native source requires fresh analysis and every required profile before qualification/commit.
+Native analysis r1012 finishes with two fixture diagnostics: a 147,388-byte HostLassoInput stack frame and
+an exact HRESULT comparison across different integer types. The complete failed archive is retained
+(`92316A1F...`). Main moves 20 fixture-owned adapters to the heap and casts only the expected HRESULT to
+int32. Independent whole-file normalization proves that all assertions and fixture lifetimes stay unchanged.
+No later native profile follows the failed analysis. Fresh canonical analysis, native profiles, ordinary
+activation and complete S5/G1 qualification remain due.
 
-Current step (2026-10-13): native bounded core/scanner repairs are committed/pushed and pass all required
-profiles. The private full application now independently passes the 96-fact host keyboard/failure/cancel
-fixture. Main selectively integrates its checked host/display sources and independent CPU/WARP tests; fresh native
-qualification, ordinary activation, complete lifetime/admission and large-lasso S5/G1 remain due.
-
-Release analysis r1012 runs on the frozen integrated source. Main holds the subsequent full matrix before
-launch: an independently confirmed command-kind-toggle gap leaves an acquired input busy after its session
-draft is cancelled. The minimal repair and 24 two-kind/three-state host references are prepared in generated
-next-source files, not applied over the active freeze. Next expected host count is 160; current native136
-and the pending24 are unqualified. All original private receipts remain unchanged.
+Current native host expectation is 160 facts: physical terminal/conditional close, keyboard/fault/cancel,
+32 shared-order sample-versus-command facts, eight actual uint64-max controls and 24 paired kind-toggle
+controls. Its archived private predecessors stay unchanged. Actual native qualification must retain all
+predecessor rosters, source/dependency/product identities and real sanitizer detection before code is committed.
 
 ### Earlier scoped evidence
 

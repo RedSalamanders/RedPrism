@@ -74,6 +74,8 @@
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
+#include "Composition.Tests.LassoDraftController.h"
+#include "Composition.Tests.LassoDraftPixels.h"
 #include <wil/com.h>
 #pragma warning(pop)
 
@@ -2308,6 +2310,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSelectionOutlineResidencyTests();
 
     gFailures += RunSelectionOutlineControllerTests();
+    gFailures += RunLassoDraftControllerTests();
+    gFailures += RunLassoDraftPixelTests();
 
     if (gFailures != 0)
     {

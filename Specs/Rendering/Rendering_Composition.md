@@ -880,3 +880,27 @@ original raster, residency, controller and clipping references. Actual frame tes
 route with the original Direct2D paint at 96/144/192 DPI and all eight phases, including fractional hole
 edges, within the existing one-byte rounding tolerance. Harness readback occurs after chrome composition
 and before Present; it does not qualify visible frame latency.
+
+
+### Prepared lasso draft extension (P1)
+
+The cold-acquired harness lasso display is a child of the existing selection-outline owner route, sharing
+its GPU event/barrier pump and alternating bounded service. It adds no twelfth owner or separate UI source.
+The owner captures a strong immutable arena snapshot plus at most one 64-point inline tail and scalar
+kind/cursor/anchor/view metadata. It creates no point vector, geometry path, coverage or texture.
+
+A worker prepares one immutable premultiplied BGRA view raster with the reference black-shadow/white line,
+rectangle/ellipse and polygon first-handle draw order. Fractional canvas-hole clipping occurs once in the
+composition. Pass 10 draws that color texture after chrome preparation and the selection outline, before
+chrome composition/one Present. Destructive document pixels/history are unaffected by draft display.
+
+Two fixed controller cells admit declared source/output/scratch and original GPU residency before capture.
+Resource creation requires the actual concurrent-capable device and occurs on the worker. Borrow validates
+exact document, arena/draft/cursor, grid/origin/scale/DPI/hole, nonwrapping view epoch and current device
+queue authority. Hidden/stale/replaced/stopped results cannot draw. The actual original context's last-use
+barrier precedes worker resource retirement and refund; joined shutdown includes the child before detach.
+
+CPU and WARP numeric/lifetime tests plus actual harness draw/replacement/cancel/close tests are required.
+The 64 MiB private Direct2D headroom is planning policy, not a proved opaque allocation/cancellation bound.
+Complete caller bounds, unsupported/failing driver acquisition, ordinary activation and visible S5/G1 remain
+P1 qualification requirements; the test acquisition entrypoint is not ordinary startup authorization.
