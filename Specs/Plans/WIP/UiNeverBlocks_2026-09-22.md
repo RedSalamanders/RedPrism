@@ -2,13 +2,28 @@
 
 ## Current delivery checklist
 
-Latest scoped proof (2026-10-13): the actual private lasso host passes all 138 application stages and
+Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
+assertions and all 138 application stages, with complete unchanged source/product bookends and archives.
+[Receipt](../../TestRuns/P1LassoKindOrdering_2026-10-13.md). Main fixes the observed lost continuation wake
+without relaxing its predicate. Native analysis r1012 on the preceding source remains running; the new
+repair will be selectively adopted after that freeze closes. Every whole P1 delivery gate below stays open.
+
+Preceding private checkpoint (2026-10-13): the actual private lasso host passes all 138 application stages and
 96 physical/FIFO/keyboard/reached-allocation/cancellation/memory-refusal assertions. Main independently
 checks the full ordered roster, source/dependency/product bookends and complete archive.
 [Evidence](../../TestRuns/P1LassoKeyboardFaults_2026-10-13.md). The completed native scanner/core checkpoint
-is pushed as `5897379`; physical/FIFO proof is pushed as `10d510b`. The next step integrates the checked
-host/display path and independent CPU/WARP tests, then runs a fresh native matrix. Ordinary activation,
+is pushed as `5897379`; physical/FIFO proof is pushed as `10d510b`. Main integrates the checked
+host/display path and independent CPU/WARP tests. A verified nonterminal sample-versus-command ordering
+gap is repaired with shared event ordinals and 32 additional actual-host references (136 expected facts).
+Fresh native analysis and all configuration gates follow; the private 96-fact receipt remains unchanged. Ordinary activation,
 complete admission/lifetime proof, measured S5/G1 and all delivery rows below remain open.
+
+Current native gate: Release analysis r1012 is running on 1,356 frozen inputs. Formatting checks 1,204 files
+and all 15 skills pass. The full r1013–r1018 chain is held before launch because a source audit confirms
+kind-toggle commands can drop the bounded session draft while leaving its input descriptor busy. Main
+prepares the narrow paired cancellation repair and 24 actual-host references (next expected total 160),
+without changing the active analysis snapshot. The current 136-fact native fixture has not run; its private
+96-fact predecessor remains the latest scoped runtime proof. Native code/remaining delivery are not Done.
 
 ### Earlier foundation checkpoints
 
@@ -1052,7 +1067,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     engine. They run as off-screen GPU composes: whole in P1, sliced from P3.1.
 - **Tiled residency and canvas mips (P3.3)**. These keep the AGENTS rule that the composition composites only when
   the document changed.
-  - **Layer textures** become 2048² tiles: 16 MiB as BGRA8, 32 MiB as RGBA16F. That is under the 128 MB guarantee,
+  - **Layer textures** become 2048² tiles: 16 MiB as BGRA8, 32 MiB as RGBA16F. That is under the 136 MB guarantee,
     and it lifts the 16384 px limit to the 30 000 px model limit.
   - **The display canvas** is composed in document space into 2048² canvas tiles, and only for the tiles a document
     change touched: the union of the old and new bounds of the changed layers, or everything when that is unknown.

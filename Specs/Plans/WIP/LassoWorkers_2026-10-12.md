@@ -11,16 +11,35 @@
 - [x] Qualify private original-ticket opening/replay/Finish nominal scenarios against 35 actual host assertions; [limited receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) retains the competing-input gap.
 - [x] Qualify private event-time terminal/conditional-close ordering and actual freehand/polygon handlers against 50 host assertions; [scoped receipt](../../TestRuns/P1LassoPhysicalHost_2026-10-13.md).
 - [x] Qualify private actual keyboard/short-outline, reached allocation faults, held-original cancellation and whole-memory refusal: 96 host assertions/all 138 stages; [receipt](../../TestRuns/P1LassoKeyboardFaults_2026-10-13.md).
+- [x] Qualify private shared-order sample/command arbitration, actual uint64 exhaustion, paired kind-toggle cancellation/reopen and observed wake-up repair: 160 host assertions/all 138 stages; [receipt](../../TestRuns/P1LassoKindOrdering_2026-10-13.md).
 - [ ] Connect actual admitted opening and ordered host replay, with terminal/cancellation storage and non-wrapping authority.
 - [ ] Replace owner vector copies and conversions with a bounded immutable display capture; prepare draft geometry/coverage on workers and draw it through the shared device route.
 - [ ] Prepare complete lasso/marquee selection and history on the original admitted worker job; publish current-only with deferred old-owner retirement.
 - [ ] Migrate every draft reader, cancellation/tool-switch/document-replacement and shutdown path; prove actual host ordering and failure semantics.
 - [ ] Qualify native configurations and measure large lasso owner/apply/cancel/frame costs before closing S5.
 
+Latest private actual host step passes 160 assertions/all 138 stages after the unchanged queued-kind-toggle
+predicate exposes and Main fixes a lost continuation wake. Exact source/product/archive readback passes;
+r1/r2/r3 failures remain retained. Native analysis r1012 continues on its preceding freeze; adoption and
+fresh native/ordinary/complete S5/G1 qualification are due.
+
+Current native integration: the caller audit identifies a second cross-stream gap: nonterminal samples
+could replay ahead of an older queued command. Main confirms it and adds fixed scalar shared event ordinals,
+oldest-input arbitration and 32 independent actual-host assertions across four sample kinds/both admission
+orders. A closed-stream guard also preserves accepted terminals at shared-counter exhaustion, with eight actual
+uint64-max controls. Native host expectation is now 136 facts. The archived private 96-fact receipt stays unchanged;
+this new native source requires fresh analysis and every required profile before qualification/commit.
+
 Current step (2026-10-13): native bounded core/scanner repairs are committed/pushed and pass all required
 profiles. The private full application now independently passes the 96-fact host keyboard/failure/cancel
-fixture. Main next integrates its checked host/display sources and independent CPU/WARP tests; fresh native
+fixture. Main selectively integrates its checked host/display sources and independent CPU/WARP tests; fresh native
 qualification, ordinary activation, complete lifetime/admission and large-lasso S5/G1 remain due.
+
+Release analysis r1012 runs on the frozen integrated source. Main holds the subsequent full matrix before
+launch: an independently confirmed command-kind-toggle gap leaves an acquired input busy after its session
+draft is cancelled. The minimal repair and 24 two-kind/three-state host references are prepared in generated
+next-source files, not applied over the active freeze. Next expected host count is 160; current native136
+and the pending24 are unqualified. All original private receipts remain unchanged.
 
 ### Earlier scoped evidence
 
@@ -120,7 +139,7 @@ held producer cancellation, allocation/admission refusal, device rebuild and joi
 
 ## Required proof
 
-Independent vector/bounds references cover 63/64/65 and 127/128/129, snapshot reuse after clear/pop/re-extension,
+Independent vector/bounds references cover 63/64/65 and 127/136/129, snapshot reuse after clear/pop/re-extension,
 exact capacity refusal, nonfinite input, visitor failure/cancellation and moved writers. Account original leases
 through retained snapshots, weak controls and owner/worker retirement. Actual frame references use the original
 Direct2D draft paint order at fractional edges and 96/144/192 DPI; no screenshot rebaseline or relaxed tolerance.
