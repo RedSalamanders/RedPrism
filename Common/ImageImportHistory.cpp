@@ -299,6 +299,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             auto& drafts = *prepared._retiredDrafts;
             std::swap(_transformEdit, drafts.transform);
             std::swap(_lassoDraft, drafts.lasso);
+            InvalidateLassoPendingIntents();
             std::swap(_selectionMoveOrigin, drafts.selectionMove);
             std::swap(_brush, drafts.brush);
             _brushFinishingOpening.reset();
@@ -368,7 +369,7 @@ std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
         return amount && add(1, amount) && add(1, 64); // the shared document's own control allocation
     };
     if (!bytes || !add(1, sizeof(PreparedImageImport::RetiredDrafts) + 64) ||
-        (_lassoDraft && !add(_lassoDraft->points.capacity(), sizeof(Vec2))) ||
+        (_lassoDraft && !add(1, _lassoDraft->RetirementMemoryBytes())) ||
         (_selectionMoveOrigin && !add(1, _selectionMoveOrigin->loops.StorageBytes())) || !strokeBytes(_brush) ||
         (_gradient && !strokeBytes(_gradient->raster)) ||
         (_pixelMove && (!strokeBytes(_pixelMove->raster) || !add(1, _pixelMove->origin.loops.StorageBytes()))))

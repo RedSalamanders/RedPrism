@@ -1,4 +1,5 @@
 #include "Selection.h"
+#include "BoundedLassoGesture.h"
 
 #include "CanvasSize.h"
 #include "RasterWork.h"
@@ -1383,27 +1384,37 @@ bool DocumentSession::UpdateHeldSelectionKeys(bool shift, bool option) noexcept
 
 void DocumentSession::BeginMarquee(Vec2 point, SelectionMode mode)
 {
-    if (!CanEditSelection() || _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    if (_lassoOpening == (std::numeric_limits<std::uint64_t>::max)() || !CanEditSelection() ||
+        _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
+    InvalidateLassoPendingIntents();
     ++_lassoOpening;
     _lassoDraft = LassoDraft{{anchor}, std::nullopt, mode, marqueeKind, anchor};
 }
 
 void DocumentSession::BeginLasso(Vec2 point, SelectionMode mode)
 {
-    if (!CanEditSelection() || _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    if (_lassoOpening == (std::numeric_limits<std::uint64_t>::max)() || !CanEditSelection() ||
+        _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
+    InvalidateLassoPendingIntents();
     ++_lassoOpening;
     _lassoDraft = LassoDraft{{point}, std::nullopt, mode, lassoKind, std::nullopt};
 }
 
 void DocumentSession::DragMarquee(Vec2 point, bool square, bool fromCenter)
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!DragBoundedMarquee(point, square, fromCenter))
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value() || !_lassoDraft->anchor.has_value() ||
         (_lassoDraft->kind != LassoKind::Rectangle && _lassoDraft->kind != LassoKind::Ellipse) ||
         !std::isfinite(point.x) || !std::isfinite(point.y))
@@ -1417,6 +1428,12 @@ void DocumentSession::DragMarquee(Vec2 point, bool square, bool fromCenter)
 
 void DocumentSession::ExtendLasso(Vec2 point)
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!ExtendBoundedLasso(point))
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
@@ -1434,6 +1451,12 @@ void DocumentSession::ExtendLasso(Vec2 point)
 
 void DocumentSession::MoveLassoCursor(std::optional<Vec2> point) noexcept
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!MoveBoundedLassoCursor(point))
+            CancelLasso();
+        return;
+    }
     if (_lassoDraft.has_value())
     {
         _lassoDraft->cursor = point;
@@ -1442,6 +1465,12 @@ void DocumentSession::MoveLassoCursor(std::optional<Vec2> point) noexcept
 
 void DocumentSession::RemoveLastLassoPoint()
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!RemoveLastBoundedLassoPoint())
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value())
     {
         return;
@@ -1458,11 +1487,17 @@ void DocumentSession::RemoveLastLassoPoint()
 
 void DocumentSession::CancelLasso() noexcept
 {
+    InvalidateLassoPendingIntents();
+    if (_lassoDraft && _lassoDraft->_bounded)
+        (void)_lassoDraft->_bounded->CancelOwner(_lassoDraft->_bounded->CurrentOwner());
+    _lassoFinishPendingSerial = 0;
     _lassoDraft.reset();
 }
 
 void DocumentSession::FinishLasso()
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+        return; // An admitted draft finishes only through the selected worker intent.
     if (!_lassoDraft.has_value())
     {
         return;

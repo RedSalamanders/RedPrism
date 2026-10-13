@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <utility>
 
 int Application::RunTransformShapeRedrawSelfTest() noexcept
@@ -45,7 +46,7 @@ int Application::RunTransformShapeRedrawSelfTest() noexcept
 
     // Move the entire session, including its history stacks and settings, so this isolated fixture can restore it
     // exactly after all host continuations and worker ownership have retired.
-    DocumentSession originalSession(std::move(_session));
+    auto originalSession = std::make_unique<DocumentSession>(std::move(_session));
     _session = DocumentSession{};
     const CanvasViewport originalViewport = _viewport;
     const bool originalAcceleratorShift = _acceleratorShift;
@@ -66,7 +67,7 @@ int Application::RunTransformShapeRedrawSelfTest() noexcept
                 SelfTestFailure(L"Transform shape redraw cleanup could not cancel host continuations.\n");
                 std::_Exit(5);
             }
-            _session = std::move(originalSession);
+            _session = std::move(*originalSession);
             _viewport = originalViewport;
             _acceleratorShift = originalAcceleratorShift;
             DocumentChanged();

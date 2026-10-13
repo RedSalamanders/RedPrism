@@ -10,7 +10,10 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Platform = 'x64',
 
-    [switch] $Rebuild
+    [switch] $Rebuild,
+
+    [ValidateRange(0, 256)]
+    [int] $MaxCpuCount = 0
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +28,7 @@ if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
 $buildArguments = @{
     Configuration = $Configuration
     Platform = $Platform
+    MaxCpuCount = $MaxCpuCount
 }
 if ($Rebuild) {
     $buildArguments.Rebuild = $true

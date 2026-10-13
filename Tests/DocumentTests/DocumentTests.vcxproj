@@ -530,4 +530,21 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\LassoOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\LassoOpeningWork.h" />
+    <ClCompile Include="..\..\Common\LassoFinishGeometry.cpp" />
+    <ClInclude Include="..\..\Common\LassoFinishGeometry.h" />
+    <ClCompile Include="..\..\Common\LassoFinishWork.cpp" />
+    <ClInclude Include="..\..\Common\LassoFinishWork.h" />
+    <ClInclude Include="..\..\Common\BoundedLassoGesture.h" />
+    <ClCompile Include="Document.Tests.BoundedLassoGesture.cpp" />
+    <ClInclude Include="Document.Tests.BoundedLassoGesture.h" />
+    <ClCompile Include="Document.Tests.LassoFinishGeometry.cpp" />
+    <ClInclude Include="Document.Tests.LassoFinishGeometry.h" />
+    <ClCompile Include="Document.Tests.LassoSessionBridge.cpp" />
+    <ClInclude Include="Document.Tests.LassoSessionBridge.h" />
+    <ClCompile Include="Document.Tests.HostLassoInput.cpp" />
+    <ClInclude Include="Document.Tests.HostLassoInput.h" />
+  </ItemGroup>
 </Project>

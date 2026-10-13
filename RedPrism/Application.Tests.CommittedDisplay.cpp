@@ -80,10 +80,43 @@ int Application::RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexc
                        owner->_jobs.ReservedMemoryBytes() != 0 && !owner->_committedDisplay.HasPending(),
                    "exact-display-publishes-with-retained-original-charge");
             const auto presents = owner->_renderer.PresentCount();
+            const auto attempts = owner->_renderer.PresentAttemptCount();
             owner->RenderFrame();
-            expect(owner->_renderer.PresentCount() == presents + 1 && SUCCEEDED(owner->_renderer.CanvasFailure()) &&
+            const HRESULT presentOutcome = owner->_renderer.LastPresentResult();
+            const bool completedAttempt = owner->_renderer.PresentAttemptCount() == attempts + 1 &&
+                                          (presentOutcome == S_OK || presentOutcome == DXGI_STATUS_OCCLUDED);
+            const bool visibleCountMatches =
+                owner->_renderer.PresentCount() == presents + (presentOutcome == S_OK ? 1u : 0u);
+            const bool blittedWithoutCompose = owner->_renderer.CanvasDrawn() &&
+                                               SUCCEEDED(owner->_renderer.CanvasFailure()) &&
+                                               owner->_composition.CompositeCount() == legacyComposites;
+            if (!completedAttempt || !visibleCountMatches || !blittedWithoutCompose)
+                std::printf("committed-display frame diagnostic: attempts=%llu->%llu presents=%llu->%llu "
+                            "present-result=0x%08lx canvas=0x%08lx drawn=%u suspended=%u occluded=%u "
+                            "composites=%llu->%llu frame-failure=0x%08lx failed-frames=%u\n",
+                            static_cast<unsigned long long>(attempts),
+                            static_cast<unsigned long long>(owner->_renderer.PresentAttemptCount()),
+                            static_cast<unsigned long long>(presents),
+                            static_cast<unsigned long long>(owner->_renderer.PresentCount()),
+                            static_cast<unsigned long>(presentOutcome),
+                            static_cast<unsigned long>(owner->_renderer.CanvasFailure()),
+                            owner->_renderer.CanvasDrawn() ? 1u : 0u, owner->_renderer.IsSuspended() ? 1u : 0u,
+                            owner->_renderer.IsOccluded() ? 1u : 0u, static_cast<unsigned long long>(legacyComposites),
+                            static_cast<unsigned long long>(owner->_composition.CompositeCount()),
+                            static_cast<unsigned long>(owner->_lastFrameFailure),
+                            static_cast<unsigned int>(owner->_failedFrames));
+            expect(completedAttempt && visibleCountMatches && blittedWithoutCompose,
+                   "actual-renderer-blits-and-attempts-present-without-owner-composition");
+            const auto occludedPresents = owner->_renderer.PresentCount();
+            const auto occludedAttempts = owner->_renderer.PresentAttemptCount();
+            owner->_renderer.FailNextStageForTest(Renderer::Stage::Present, DXGI_STATUS_OCCLUDED);
+            owner->RenderFrame();
+            expect(owner->_renderer.PresentAttemptCount() == occludedAttempts + 1 &&
+                       owner->_renderer.LastPresentResult() == DXGI_STATUS_OCCLUDED &&
+                       owner->_renderer.PresentCount() == occludedPresents && owner->_renderer.IsOccluded() &&
+                       owner->_renderer.CanvasDrawn() && SUCCEEDED(owner->_renderer.CanvasFailure()) &&
                        owner->_composition.CompositeCount() == legacyComposites,
-                   "actual-renderer-blits-and-presents-without-owner-composition");
+                   "explicit-occlusion-still-blits-and-attempts-present-without-counting-visible-frame");
             const auto generation = owner->_session.Generation();
             owner->_session.SetOpacity(0.5);
             owner->DocumentChanged();

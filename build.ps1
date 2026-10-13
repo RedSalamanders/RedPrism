@@ -92,6 +92,10 @@ $arguments = @(
     '/verbosity:minimal',
     "/flp:LogFile=$logPath;Verbosity=minimal"
 )
+if ($MaxCpuCount -gt 0) {
+    # Bound each C++ compiler batch as well as MSBuild projects; /m alone leaves /MP unbounded.
+    $arguments += "/p:CL_MPCount=$MaxCpuCount"
+}
 if ($Analyze) {
     # The root targets scope /analyze and its concurrency plugin to RedPrism projects. Rebuild ensures no stale
     # objects bypass analysis; a distinct log preserves these diagnostics beside ordinary build logs.

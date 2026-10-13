@@ -1571,7 +1571,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 400.0, 300.0);
         pointer(WM_LBUTTONDOWN, 0, 400.0, 400.0);
         pointer(WM_LBUTTONUP, 0, 400.0, 400.0);
-        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->points.size() != 3 ||
+        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->PointCount() != 3 ||
             !hostKey(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
             _session.history.UndoName() != L"Polygonal Lasso")
         {
@@ -6956,13 +6956,13 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
-    if (draft.has_value() && draft->kind == LassoKind::Polygonal && !draft->points.empty())
+    if (draft.has_value() && draft->kind == LassoKind::Polygonal && draft->PointCount() != 0)
     {
         // Polygonal adds a corner per click and closes on a click near the first corner or a double-click.
-        const Vec2 first = _viewport.ViewFromDocument(draft->points.front(), documentSize);
+        const Vec2 first = _viewport.ViewFromDocument(draft->FirstPoint().value(), documentSize);
         const double closeDistance = _viewport.DipToView(8.0);
         if (doubleClick ||
-            (draft->points.size() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
+            (draft->PointCount() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
         {
             _session.FinishLasso();
         }

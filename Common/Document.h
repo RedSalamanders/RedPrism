@@ -911,13 +911,36 @@ enum class SelectionMode : std::uint8_t
 
 // A lasso outline being drawn, in document pixels. `cursor` is the polygonal lasso's rubber-band end point;
 // `anchor` the Marquee's starting corner, in whole pixels.
+class BoundedLassoGesture;
+class LassoOpeningInput;
+class PreparedLassoOpening;
+
 struct LassoDraft
 {
+    LassoDraft() = default;
+    LassoDraft(std::vector<Vec2> value, std::optional<Vec2> at, SelectionMode selectionMode, LassoKind lasso,
+               std::optional<Vec2> start)
+        : points(std::move(value)), cursor(at), mode(selectionMode), kind(lasso), anchor(start)
+    {
+    }
+    [[nodiscard]] std::size_t PointCount() const noexcept;
+    [[nodiscard]] std::optional<Vec2> FirstPoint() const noexcept;
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
+    [[nodiscard]] bool IsBounded() const noexcept
+    {
+        return static_cast<bool>(_bounded);
+    }
+    // Reference-only geometry. An admitted draft leaves this vector empty; owner readers use scalar accessors.
     std::vector<Vec2> points;
     std::optional<Vec2> cursor;
     SelectionMode mode = SelectionMode::New;
     LassoKind kind = LassoKind::Freehand;
     std::optional<Vec2> anchor;
+
+  private:
+    friend class DocumentSession;
+    std::shared_ptr<BoundedLassoGesture> _bounded;
+    std::uint64_t _boundedRetirementBytes = 0;
 };
 
 enum class WandSampleSize : std::uint8_t
@@ -1410,6 +1433,10 @@ struct SelectionOffsetMemoryPlan;
 struct SelectionOffsetObserver;
 struct InverseSelectionMemoryPlan;
 struct InverseSelectionObserver;
+class LassoFinishInput;
+class PreparedLassoFinish;
+struct LassoFinishTerminal;
+struct LassoFinishObserver;
 class WandLayerSelectionInput;
 class PreparedWandLayerSelection;
 struct WandLayerSelectionObserver;
@@ -2484,6 +2511,23 @@ class DocumentSession
         return _lassoDraft;
     }
     // The Marquee starts at a whole-pixel anchor in the current marquee kind; the Lasso in the current lasso kind.
+    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                            bool marquee);
+    [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(
+        LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
+        std::shared_ptr<const SharedPublicationMemory> memory);
+    [[nodiscard]] bool IsPreparedLassoOpeningCurrent(const PreparedLassoOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    // Display capture follows complete display admission; close follows complete finish admission.
+    [[nodiscard]] std::optional<LassoFinishTerminal> CaptureBoundedLassoDisplayForWork() const noexcept;
+    [[nodiscard]] std::optional<LassoFinishTerminal> CloseBoundedLassoForWork(
+        std::optional<bool> finishAntialiased = std::nullopt) noexcept;
+    [[nodiscard]] std::optional<LassoFinishInput> PrepareClosedBoundedLassoFinishInput(LassoFinishTerminal terminal);
+    [[nodiscard]] bool ExtendBoundedLasso(Vec2 point) noexcept;
+    [[nodiscard]] bool MoveBoundedLassoCursor(std::optional<Vec2> point) noexcept;
+    [[nodiscard]] bool DragBoundedMarquee(Vec2 point, bool square, bool fromCenter) noexcept;
+    [[nodiscard]] bool RemoveLastBoundedLassoPoint() noexcept;
+    [[nodiscard]] bool SetLassoOpeningCountersForTest(std::uint64_t opening, std::uint64_t intent) noexcept;
     void BeginMarquee(Vec2 point, SelectionMode mode);
     void BeginLasso(Vec2 point, SelectionMode mode);
     // Marquee drag snapped to whole pixels: `square` evens the sides, `fromCenter` grows around the anchor.
@@ -2584,6 +2628,16 @@ class DocumentSession
     [[nodiscard]] bool IsPreparedInverseSelectionCurrent(const PreparedInverseSelection& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedInverseSelectionIfCurrent(PreparedInverseSelection& prepared) noexcept;
 
+    [[nodiscard]] std::uint64_t LassoOpeningForWork() const noexcept
+    {
+        return _lassoOpening;
+    }
+    [[nodiscard]] std::optional<LassoFinishInput> PrepareLassoFinishInput(LassoFinishTerminal terminal);
+    [[nodiscard]] static std::optional<PreparedLassoFinish> PrepareLassoFinishPublication(
+        LassoFinishInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver historyObserver = {},
+        const LassoFinishObserver* observer = nullptr, std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] bool IsPreparedLassoFinishCurrent(const PreparedLassoFinish& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedLassoFinishIfCurrent(PreparedLassoFinish& prepared) noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(
@@ -3383,6 +3437,19 @@ class DocumentSession
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::uint64_t _lassoOpening = 0;
+    std::uint64_t _lassoOpeningIntentSerial = 0;
+    std::uint64_t _lassoOpeningPendingSerial = 0;
+    std::uint64_t _lassoClosedOpening = 0, _lassoClosedRevision = 0;
+    const void* _lassoClosedArenaIdentity = nullptr;
+    std::shared_ptr<const BoundedLassoGesture> _lassoClosedWriter;
+    std::optional<DocumentReadAuthority> _lassoClosedSource;
+    std::optional<Guid> _lassoClosedActive;
+    std::optional<CropRect> _lassoClosedCrop;
+    bool _lassoClosedMask = false;
+    std::optional<DocumentHistory::StateView> _lassoClosedHistory;
+    void InvalidateLassoPendingIntents() noexcept;
+    std::uint64_t _lassoFinishSerial = 0;
+    std::uint64_t _lassoFinishPendingSerial = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;
     std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;

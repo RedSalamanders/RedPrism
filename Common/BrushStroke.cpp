@@ -1158,7 +1158,7 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _displayCopy.reset();
     history.Reset();
     _transformEdit.reset();
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
     _brush.reset();
     _brushFinishingOpening.reset();

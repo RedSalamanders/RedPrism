@@ -19,8 +19,13 @@
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
 #include "DistortWorkTests.h"
+#include "Document.Tests.BoundedLassoGesture.h"
 #include "Document.Tests.BoundedLassoPoints.h"
 #include "Document.Tests.BoundedLassoTicket.h"
+#include "Document.Tests.HostLassoInput.h"
+#include "Document.Tests.LassoFinishGeometry.h"
+#include "Document.Tests.LassoSessionBridge.h"
+
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
 #include "Document.Tests.CopyPixelsLifetime.h"
@@ -8402,6 +8407,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSelectionOutlineRasterViewsTests();
     gFailures += RunBoundedLassoPointTests();
     gFailures += RunBoundedLassoTicketTests();
+    gFailures += RunBoundedLassoGestureTests();
+    gFailures += RunLassoFinishGeometryTests();
+    gFailures += RunLassoSessionBridgeTests();
+    gFailures += RunHostLassoInputTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

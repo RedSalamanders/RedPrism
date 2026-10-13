@@ -1980,7 +1980,7 @@ bool DocumentSession::CancelPendingEdit()
     if (HasDeferredTransform())
         return true;
 
-    _lassoDraft.reset();
+    CancelLasso();
     // The open panel owns the document until OK or Cancel. The key must not restore history under it.
     if (HasColorEdit())
     {
@@ -2082,7 +2082,7 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     }
     if (!ResolveGradient())
         return;
-    _lassoDraft.reset();
+    CancelLasso();
     CanvasDocument document;
     document.id = Guid::Generate();
     document.width = width;
@@ -2733,7 +2733,7 @@ void DocumentSession::ClearDocument()
     _maskSelected = false;
     NoteDocumentMutation();
     _displayCopy.reset();
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
     _brush.reset();
     _brushFinishingOpening.reset();
@@ -2783,7 +2783,7 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     {
         return;
     }
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);
@@ -2800,7 +2800,7 @@ bool DocumentSession::ApplyDocumentSizeIfCurrent(CanvasDocument document, std::w
     {
         return false;
     }
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);

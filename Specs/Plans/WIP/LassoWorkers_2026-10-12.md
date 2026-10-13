@@ -5,6 +5,7 @@
 - [x] Qualify the isolated point arena/ticket against an independent vector model, retained snapshots, boundary/refusal/cancellation and original lifetime accounting.
 - [x] Qualify private bounded completion geometry/history against 43 independent assertions, preserving all 21,480 predecessor records (21,524 total). See [the private finish proof](../../TestRuns/P1LassoFinish_2026-10-13.md).
 - [x] Qualify private worker-created/current-only bounded session bridge against 67 independent assertions (21,592 total records).
+- [x] Qualify the private actual renderer/display caller against 29 new assertions and all 137 application stages; [receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md).
 - [ ] Integrate and qualify actual host/display callers.
 - [x] Qualify private lasso input descriptors/FIFO/terminal adapter against 80 independent facts (21,673 document records total), retaining all predecessors.
 - [ ] Connect actual admitted opening and ordered host replay, with terminal/cancellation storage and non-wrapping authority.
@@ -19,6 +20,11 @@ Status (2026-10-12): **isolated CPU arena and original-ticket lifetime qualifica
 This PASS covers only the isolated arena and original-ticket owner lifetime. Lasso host/display/finish, event acquisition, native integration, ordinary activation, and G1 remain open; it does not close the parent P1 checklist.
 
 ### Current execution (2026-10-13)
+
+Main selectively integrates the qualified components and scalar Application readers into all five native
+targets (30 paths). Native analysis r986 refuses two fixture stack frames; its complete failed archive is retained. Main moves
+fixture-owned sessions to the heap without changing assertions. Repaired Release analysis r988 passes. Full Release r989 and all three ARM64 cross-builds r992–r994 pass. Debug r990 retains a stage-24 committed-display frame refusal; ASan r991 does not launch. Main diagnoses that frame with unchanged predicates before replacement qualification; the actual job and draft-display
+route remains a separate next step. The prior foundation repair is committed/pushed as `e69757f`.
 
 Private completion geometry/history passes 21,524 document records, including the 43 new independent facts.
 The new session bridge passes private actual Release compilation, linked ISA and all 21,592 document records. Three earlier fixture compiler refusals (private constant access/StateView misuse/local shadowing) remain preserved, and no predicate was weakened. It allocates an accounted gesture writer on the
@@ -122,3 +128,83 @@ terminal event AA. Overflow preserves the accepted prefix and a separate Lost te
 turn it into successful history. Main corrected the independent fixture's integration include path and its
 roster reader's separate summary field. Actual Release build/ISA/DocumentTests exit 0 (21,673 records), including
 all 80 input facts. This remains an isolated adapter; Application event routing and draft rendering are due.
+
+
+### Draft display implementation (private, 2026-10-13)
+
+Main writes a worker-only immutable premultiplied BGRA draft raster and a one-texture GPU owner. Both pass
+strict syntax checks only. CPU drawing preserves the reference shadow-then-white line/rectangle/ellipse and
+polygonal first-handle order, walks immutable chunks on workers, checks cancellation between chunks/rows,
+flushes bounded command batches, and validates mapped-row extents. The GPU owner follows the verified original
+Capture/Create/Publish/Detach/worker-retire/owner-refund lifecycle and compares exact bounded source snapshots.
+It supplies no parent fence acknowledgement. Actual pixels, runtime lifetime/driver failure, complete graph
+admission, opaque D2D allocation/cancellation, host integration and G1 remain unqualified.
+
+Independent tests are being reviewed. Main rejects a shadowed lifetime predicate, a reference that reused actual
+snapshot bounds rather than literal input, inconsistent integer/half-pixel goldens, and source/output sealing on
+one continuing reservation. Source creation has a distinct original bound owner; raster admission precedes its
+own immutable capture and resumes that same raster job. These are test corrections, not passing receipts.
+
+
+### Actual host sequence to implement after component qualification
+
+1. Use the existing `_continuationAction` stable UI source; JobScheduler admits one registered source, so a
+   second source is not an option. Replay a fixed batch and self-rearm only when acquired input remains ready;
+   blocked creation/finish/display waits rearm from their actual completion rather than polling.
+2. Own physical document coordinates, kind/mode, active/crop/mask and terminal AA in HostLassoInput. Admission
+   precedes opening capture. The selected opening job creates/binds the original arena/writer before current-only
+   acquisition. Acknowledge opening separately from the live gesture so compatible metadata actions can retain
+   their existing ordinal policy while the draft remains live.
+3. Replay bounded point/cursor/marquee/Backspace operations, report capacity refusal and preserve the accepted
+   prefix. The separate terminal remains held through complete finish admission. Capture the exact closed writer
+   only after admitted older samples have replayed; queue the worker geometry/history publication with its owned
+   terminal AA and exact opening/revision. Refused/stale work has no reference-path fallback.
+4. Extend the existing selection-overlay owner with independent selection/draft replacement pairs and bounded
+   fair pumping. Keep one registered owner leaf and the audited eleven-owner membership; do not add an unreviewed
+   twelfth pump. Draft CPU/GPU preparation owns original charges through successful creator/final-use retirement.
+5. Add a premultiplied BGRA overlay pass using the existing composition pixel-shader selector. Borrow after chrome
+   preparation and exclude stale document/source/view/device keys. Pan/zoom remains blit-only for the document;
+   draft view refresh is separate admitted work. Suppress the reference draft painter only after its acquired
+   route is ready and qualified.
+6. Migrate physical press/move/release, Enter/Escape/Backspace/near-first/double-click, pointer loss, tool/header
+   changes, metadata coexistence, document/size/import replacement, hidden/resume/device loss and joined shutdown.
+   Test actual window ordering, distinct source/output original owners, refused acquisition, out-of-order joins,
+   retained readers, repeated cancellation, complete admission and frame parity before ordinary activation.
+
+These are remaining implementation steps, not completion claims. The APIs, syntax checks and component tests
+above do not establish that this actual host sequence is already connected.
+
+### Draft display implementation checkpoint (2026-10-13)
+
+Main's isolated CPU draft raster passes actual Release compilation/ISA and all 21,696 document records,
+including 23 literal pixel, independent D2D/DPI, immutable source, original-ticket refusal, cancellation and
+retirement facts. The compiler refusal (polymorphic Submit reference and format count types) and two runtime
+refusal-reference mistakes are retained with full source/logs. Local allocation refusal throws `bad_alloc`;
+the scheduler translates it to exact `Failed/E_OUTOFMEMORY` before the Prepare-result sentinel changes.
+No pixel or cancellation golden changes. The 64 MiB opaque D2D allowance remains planning headroom.
+
+Main writes a two-cell lasso draft display child and fair aggregation beneath the existing selection owner.
+Private full WARP Release now qualifies both with all 7,328 predecessor composition records and 38 new facts (7,366 total); they do not attach a twelfth route. The new BGRA composition pass shares bounded
+pipeline setup and applies fractional view clipping once to the complete premultiplied draft. Private GPU event, joined retirement and numeric composition parity now pass; actual host input/finish, renderer borrowing, native integration and G1 qualification remain due.
+Private artifacts: `.build/P1Drafts/LassoDraftRasterRuntime-r1-Main/actual-release-r3` and
+`.build/P1Drafts/LassoDraftRaster-r1-Main`; no ordinary application activation is enabled.
+
+Private receipts: [CPU draft raster](../../TestRuns/P1LassoDraftRaster_2026-10-13.md) and
+[GPU/display child](../../TestRuns/P1LassoDraftGpu_2026-10-13.md). Their PASS does not close actual host/display or P1 delivery rows.
+
+### Actual renderer and next host candidate (2026-10-13)
+
+Private actual renderer r2 passes the complete Release/WARP application roster with 29 new assertions,
+137 stages and independently verified source/dependency/product bookends. The draft uses the existing
+selection owner, borrows after chrome preparation, rejects changed view/hole/device authority, and retires
+original readers/resources on real cancellation, device replacement and joined shutdown. The earlier missing
+fixture/dependency-bookend refusal remains preserved. See the [actual renderer receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md).
+
+The next isolated host candidate has actual `/Zs` compilation of its opening, replay and Finish sources.
+It reuses the existing ordered canvas descriptor and continuation source. Opening and Finish acknowledge
+separately; fixed samples retain their physical coordinates, order and terminal AA. Complete Finish admission
+precedes closure, worker geometry/history/outline preparation, residency refresh and current-only publication.
+This candidate has no runtime qualification yet. Physical pointer/keyboard/tool/lifetime caller migration,
+polygonal close semantics while acquisition is pending, memory/cancellation bounds, native integration,
+ordinary activation and measured S5/G1 remain open. Native Release/Debug replacements r1006/r1007 pass all
+21,673 exact document records and 136 application stages; replacement real ASan r1008 passes the complete canonical suite and exact roster. All latest-wrapper ARM64 cross-builds also pass; [native receipt](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).

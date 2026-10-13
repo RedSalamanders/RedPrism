@@ -124,6 +124,17 @@ class Renderer final
     {
         return _presentCount;
     }
+    // Calls to the real frame Present (excludes occlusion probes). A hidden harness may legitimately
+    // get DXGI_STATUS_OCCLUDED: that is an attempted frame, never a visible presentation.
+    [[nodiscard]] std::uint64_t PresentAttemptCount() const noexcept
+    {
+        return _presentAttemptCount;
+    }
+    // The outcome handled by the last frame Present, including an explicitly injected self-test stage.
+    [[nodiscard]] HRESULT LastPresentResult() const noexcept
+    {
+        return _lastPresentResult;
+    }
     // Bumped by every device rebuild, so a borrower can tell a new device from an old one at the same address.
     [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept
     {
@@ -228,6 +239,8 @@ class Renderer final
     HRESULT _canvasFailure = S_OK;
     bool _canvasDrawn = false;
     std::uint64_t _presentCount = 0;
+    std::uint64_t _presentAttemptCount = 0;
+    HRESULT _lastPresentResult = E_PENDING;
     std::uint64_t _deviceGeneration = 0;
     Stage _injectedStage = Stage::Present;
     HRESULT _injectedResult = S_OK;

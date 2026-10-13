@@ -615,7 +615,9 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         if (FAILED(captured))
             return captured;
     }
+    ++_presentAttemptCount;
     const HRESULT presentResult = StageResult(Stage::Present, _swapChain->Present(1, 0));
+    _lastPresentResult = presentResult;
     if (FAILED(presentResult) && DeviceLostAfter(presentResult))
     {
         return RecoverFromStage();

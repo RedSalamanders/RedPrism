@@ -2,17 +2,27 @@
 
 ## Current delivery checklist
 
-Current step (2026-10-13): repaired native foundations pass Release analysis r976, all three ARM64
-cross-builds r977–r979, full x64 Release r980, Debug r981 and real ASan r984. The runtime profiles retain all
-21,447 document records and 136 application stages; ASan includes the real detection probe and concurrent
-stress. Complete successful and failed archives are retained in the [gate repair record](../../TestRuns/P1NativeGateRepairs_2026-10-13.md).
-The final scanner refinement and 63 independent controls are integrated. Native r985 build/ISA and exact
-runtime-product equivalence pass. This foundation/scanner repair step is ready for commit/push. C++/HLSL runtime sources are unchanged.
+Current step (2026-10-13): committed/pushed the qualified native foundations and scanner repair as
+`e69757fd5555e007d455845cd6c00b49f8d93aec`. Release/Debug/real ASan pass with 21,447 document records,
+136 application stages, the real detection probe, analysis and three ARM64 cross-builds. Final scanner r985
+qualifies all five images, 63 new controls and exact runtime-product equivalence. Full evidence and retained
+failures are in the [gate repair record](../../TestRuns/P1NativeGateRepairs_2026-10-13.md).
 
-The bounded lasso completion/session bridge passes 43/67 independent private facts, and the host-input adapter
-passes 80 more, retaining all predecessors (21,673 records). Actual Application acquisition/replay/finish,
-draft display, complete admission and G1 remain open. See [the lasso child](LassoWorkers_2026-10-12.md).
-All nine delivery areas and Done remain unchecked.
+Latest continuation: bounded native Release analysis r1005 and full Release r1006/Debug r1007 pass;
+Main's exact roster reader preserves all 21,447 predecessors plus 226 new lasso records (21,673 total),
+with 136 application stages. Replacement real ASan r1008 passes the complete canonical suite and exact roster; all latest-script
+ARM64 cross-builds also pass. [Native checkpoint evidence](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md). The private actual lasso renderer independently passes 137 stages and 29 new assertions;
+[its receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md) records the original-ticket, view/device,
+cancellation and joined-close evidence. The next isolated opening/replay/Finish sources compile; their actual
+host runtime, physical callers, ordinary activation and measured S5/G1 remain due. All delivery areas below
+remain open.
+
+Main now integrates the independently qualified lasso geometry/history, bounded current-only session and
+ordered input adapter into all five native targets (30 paths), with scalar Application reader migration.
+Expected DocumentTests count is 21,673, retaining every predecessor and 32/43/67/80 new component facts.
+Native analysis r986 refuses two test stack frames (175,152 and 16,440 bytes); its complete archive is retained. Main moves only fixture-owned sessions to the heap, preserving all predicates/lifetimes. Follow-up analysis r987 exposes another 263,300-byte fixture frame; its full archive is retained. Main applies the same storage repair to the remaining new lasso fixture sessions, preserving scope/order and all assertions. Repaired native Release analysis r988 passes, including all linked ISA/compiler controls. Full Release r989 passes with all 21,673 document records and 136 application stages; its full archive is retained. Debug r990 stops at stage 24 on the existing committed-display frame assertion after every lasso document record passes. Its complete failure archive is retained; ASan r991 never launches. Main instruments the unchanged frame predicates; focused runtime r996 passes all 136 stages, so its repeat establishes no cause. The revised hidden contract requires one real Present attempt, a completed canvas blit, correct visible counting for S_OK/occlusion, and zero owner composition. An explicit occlusion control makes the policy observable. Analysis r997 refuses only a signed printf diagnostic argument (C6340); its full failed archive is retained. Main casts that nonnegative counter explicitly, then runs fresh analysis and full profiles. Repaired hidden-frame analysis r998 and updated ARM64 r1002–r1004 pass with complete archives. Full Release r999 refuses MSBuild/CLR allocation with paging-file/commit-capacity errors before runtime; its full archive is retained and r1000/r1001 do not launch. Main relocates verified closed generated proof products to Z: and adds explicit test-entrypoint project/compiler caps before replacement qualification. Diagnostic build r995 is explicitly unqualified: Main changed its fixture while its source reader was finishing; its correctly refused bookend is archived. All three ARM64 cross-builds r992–r994 pass with complete archives; native ARM64 runtime remains unavailable. actual host/display and every P1 delivery gate remain open. Actual Application job acquisition/replay/
+finish, draft display, complete admission, ordinary activation and G1 remain open. See the
+[lasso child](LassoWorkers_2026-10-12.md). All nine delivery areas and Done remain unchecked.
 
 Next S5 (2026-10-12): private actual eleven-owner application r7 qualifies all 40 membership/joined-close
 facts, 47 host facts and 75 fractional/DPI frame-parity facts, preserving 133 predecessor stages. The lasso

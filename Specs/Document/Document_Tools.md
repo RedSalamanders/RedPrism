@@ -273,6 +273,32 @@ the pointer rounds, `square` evens the sides toward the drag direction, `fromCen
 
 ## Selection session
 
+### Bounded lasso worker APIs
+
+The separate bounded route captures a sealed LassoOpeningInput only after original complete admission.
+Its worker creates the point arena and accounted gesture writer; current-only acquisition requires joined
+creation and memory bound to that same original ticket. Cancellation before acquisition, changed session/
+document/history/active/crop/mask/kind, consumed input and exhausted opening/intent counters MUST refuse.
+LassoDraft exposes cached PointCount, FirstPoint and RetirementMemoryBytes; a bounded draft keeps its reference
+vector empty. Point/cursor/marquee/Backspace changes and snapshot capture visit at most one 64-point chunk.
+Capacity refusal MUST preserve accepted points and retained snapshots. Arena blocks are never reused while
+readers exist; original accounting survives writer/display/terminal owners and off-owner final retirement.
+
+Closure owns the exact writer and terminal key, arena/prefix/tail, kind/mode, cursor/anchor and physical-event AA.
+PrepareClosedBoundedLassoFinishInput MUST reject older, foreign, altered or repeated terminals and source changes.
+The admitted worker builds the original freehand/polygonal, whole-pixel rectangle or Ramanujan ellipse, clips,
+applies New/Add/Subtract and prepares complete history. It MUST preserve absent versus present-empty selection,
+one named entry, no-op/redo/saved-marker behavior and current-only source/history/residency publication.
+The reference FinishLasso refuses a bounded draft; an eligible worker refusal has no synchronous fallback.
+
+HostLassoInput reuses the fixed 512-slot PointerInputStream. Its source/active/crop/kind/mode/view/ordinal and
+physical document coordinates are descriptors; later headers/views MUST NOT reinterpret accepted values.
+Point/cursor/Backspace/marquee events remain ordered, and terminal AA has a separate slot. Overflow retains the
+accepted prefix plus Lost, rejects later Up and stays owned until acknowledgement. Actual Application opening/
+replay/finish, draft drawing, complete operation admission and ordinary activation remain separate P1 work;
+these available APIs and modeled tests alone do not activate the window route or qualify G1.
+
+
 Selection state on `DocumentSession`: `lassoKind` (Freehand default, Polygonal), `marqueeKind` (Rectangle default,
 Ellipse), `selectionModeChoice` (New default, Add, Subtract), `heldSelectionMode`, `selectionAntialiased` (default
 on) and `wandSettings`; the Expand and Contract amounts (1–500, `kSelectionModifyLimit`, default 1) are the host's

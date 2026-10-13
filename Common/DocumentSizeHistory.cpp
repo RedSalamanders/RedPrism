@@ -36,6 +36,7 @@ bool DocumentSession::ApplyPreparedDocumentSizeIfCurrent(PreparedDocumentSize& p
         return false;
     std::swap(_document, prepared._document);
     std::swap(_lassoDraft, prepared._retiredLasso);
+    InvalidateLassoPendingIntents();
     std::swap(_selectionMoveOrigin, prepared._retiredSelectionMove);
     NoteDocumentMutation();
     return true;
@@ -54,7 +55,7 @@ std::uint64_t DocumentSession::DocumentSizeRetirementMemoryBytes() const noexcep
         bytes += count * size;
         return true;
     };
-    if ((_lassoDraft && !add(_lassoDraft->points.capacity(), sizeof(Vec2))) ||
+    if ((_lassoDraft && !add(1, _lassoDraft->RetirementMemoryBytes())) ||
         (_selectionMoveOrigin && !add(1, _selectionMoveOrigin->loops.StorageBytes())))
         return 0;
     return bytes;

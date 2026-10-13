@@ -651,4 +651,14 @@
     <ClCompile Include="..\Common\PathReadWait.cpp" />
     <ClCompile Include="Application.Tests.PathReadContinuation.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\LassoOpeningWork.cpp" />
+    <ClInclude Include="..\Common\LassoOpeningWork.h" />
+    <ClCompile Include="..\Common\LassoFinishGeometry.cpp" />
+    <ClInclude Include="..\Common\LassoFinishGeometry.h" />
+    <ClCompile Include="..\Common\LassoFinishWork.cpp" />
+    <ClInclude Include="..\Common\LassoFinishWork.h" />
+    <ClInclude Include="..\Common\BoundedLassoGesture.h" />
+    <ClInclude Include="HostLassoInput.h" />
+  </ItemGroup>
 </Project>

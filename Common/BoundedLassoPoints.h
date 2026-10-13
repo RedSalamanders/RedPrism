@@ -115,6 +115,16 @@ class BoundedLassoPoints final
         {
             return _arena.get();
         }
+        [[nodiscard]] bool SameCapture(const Snapshot& other) const noexcept
+        {
+            if (_arena != other._arena || _prefix != other._prefix || _tailCount != other._tailCount ||
+                _count != other._count || _bounds != other._bounds)
+                return false;
+            for (std::uint32_t index = 0; index < _tailCount; ++index)
+                if (_tail[index] != other._tail[index])
+                    return false;
+            return true;
+        }
         [[nodiscard]] std::uint64_t RetainedArenaBytes() const noexcept
         {
             return _arena ? MemoryBytes(_arena->capacity) : 0;
@@ -256,6 +266,13 @@ class BoundedLassoPoints final
         for (std::uint32_t index = 0; index < _tailCount; ++index)
             Include(_bounds, _tail[index]);
         return true;
+    }
+    [[nodiscard]] std::optional<Vec2> LastOwner() const noexcept
+    {
+        if (!_count)
+            return std::nullopt;
+        return _tailCount ? std::optional(_tail[_tailCount - 1])
+                          : std::optional(_arena->blocks[_prefix].points[kChunkPoints - 1]);
     }
     [[nodiscard]] std::uint32_t CountOwner() const noexcept
     {

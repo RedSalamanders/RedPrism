@@ -2874,3 +2874,28 @@ not substitute for ordinary host activation, complete operation admission, sanit
 Wide unsigned inline-table controls retain the earlier parser controls and assert three exact accepts
 and 27 malformed/real-vector refusals. The corrected scanner must pass the same previously failed
 ASan binary/PDB/listings without an allowlist change before fresh native ASan qualification.
+
+
+## Bounded lasso component validation
+
+DocumentTests registers 32 bounded-gesture, 43 finish/history, 67 current-only session bridge and 80 ordered-input
+facts, retaining all predecessor assertions. Independent vector, literal polygon/rectangle/ellipse membership
+and history/state references cover chunk/capacity boundaries, old snapshots, exact terminal mismatch, original
+ticket admission/retirement, cancellation/replacement/source changes, no-op/redo/saved markers, physical AA,
+nonwrapping counters, 512-slot FIFO plus separate Up/Lost and overflow refusal. Native compilation/runtime,
+actual window event ordering, GPU draft parity and large owner/apply/cancel/frame measurements are separately
+required; private component PASS does not close lasso host migration, S5 or P1.
+
+### Hidden committed-display frame qualification
+
+The actual hidden WARP committed-display fixture requires a completed canvas blit, successful canvas status,
+zero owner composition, exactly one real frame Present attempt and a handled result of `S_OK` or
+`DXGI_STATUS_OCCLUDED`. `PresentCount` advances only for the former. An explicit occlusion-stage control
+requires the real call and canvas blit while preserving visible count. Neither a hidden successful call nor
+an occluded attempt qualifies visible latency/G1. Failure diagnostics record attempts, presentations, handled
+result, canvas/suspension/occlusion, composition count and frame failure. The intermittent r990 failure and
+passing diagnostic-only r996 remain evidence; a passing rerun does not establish its cause.
+
+Full native qualification accepts `test.ps1 -MaxCpuCount N` to forward explicit project/compiler concurrency.
+All tests, scanner controls, probes, screenshots and failure gates remain required. Record the chosen cap and
+actual compiler/task settings; a build refused by system commit capacity provides no runtime qualification.

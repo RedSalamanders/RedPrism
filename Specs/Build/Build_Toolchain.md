@@ -77,6 +77,17 @@ application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes
 Parallel compilation requires isolated dependency outputs or an already-built immutable dependency; preserve
 failed source/object/link evidence before retrying a candidate affected by shared-output rebuilds.
 
+## Explicit build concurrency
+
+`build.ps1 -MaxCpuCount N` and `test.ps1 -MaxCpuCount N` accept 0–256. Zero preserves the automatic
+MSBuild/compiler choice. A positive value caps MSBuild project concurrency (`/m:N`) and forwards
+`CL_MPCount=N` for toolsets that use the compiler multi-tool scheduler. The test entrypoint forwards the
+same value without omitting any gate. The installed toolset may disable compiler `/MP` or use a separate
+task scheduler; qualification MUST inspect actual evaluated settings and MUST NOT infer an emitted `/MPN`
+switch from this property alone. Memory-constrained qualification SHOULD use an explicit small project cap
+and record the compiler/task settings. A single compiler batch can contain multiple translation units.
+No system pagefile setting or independently running application is changed by this option.
+
 ## Build presentation
 
 `build.ps1` MUST begin with the framed RedPrism pixel-art banner before any target, preflight, or MSBuild line. The
