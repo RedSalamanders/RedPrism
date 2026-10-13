@@ -262,6 +262,16 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineGpuHostSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionOutlineGpuHostSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineParitySelfTest\n");
+        const int parity = Application::RunStandaloneSelectionOutlineParitySelfTest(instance);
+        if (parity != 0)
+            return parity;
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineOwnerCapacitySelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionOutlineOwnerCapacitySelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneClipboardMergedShutdownSelfTest\n");
         if (const int failed = Application::RunStandaloneClipboardMergedShutdownSelfTest(instance); failed != 0)
             return failed;

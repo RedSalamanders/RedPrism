@@ -36,6 +36,47 @@ class Renderer final
         Present,
     };
 
+    // Harness-only numeric capture of the actual completed frame before Present. No ordinary readback.
+    using FrameReadbackForTest = HRESULT (*)(void*, ID3D11Device*, ID3D11DeviceContext*,
+                                             ID3D11RenderTargetView*) noexcept;
+    void SetFrameReadbackForTest(FrameReadbackForTest callback, void* context) noexcept
+    {
+        _frameReadbackForTest = callback;
+        _frameReadbackContextForTest = context;
+    }
+    void SuppressSelectionOutlineForTest(bool suppress) noexcept
+    {
+        _suppressSelectionOutlineForTest = suppress;
+    }
+
+    struct SelectionOutlineFrame final
+    {
+        CanvasRenderer* composition = nullptr;
+        ID3D11ShaderResourceView* solid = nullptr;
+        ID3D11ShaderResourceView* dashes = nullptr;
+        unsigned int width = 0;
+        unsigned int height = 0;
+        float pixelLeft = 0.0f;
+        float pixelTop = 0.0f;
+        bool clipped = false;
+        std::array<float, 4> clip{};
+    };
+    class SelectionOutlineFrameSource
+    {
+      public:
+        virtual ~SelectionOutlineFrameSource() = default;
+        [[nodiscard]] virtual SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float left, float top, float width,
+                                                                                     float height) noexcept = 0;
+    };
+    [[nodiscard]] std::uint64_t SelectionOutlineDrawCount() const noexcept
+    {
+        return _selectionOutlineDraws;
+    }
+    [[nodiscard]] HRESULT SelectionOutlineFailure() const noexcept
+    {
+        return _selectionOutlineFailure;
+    }
+
     struct DeviceIdentity final
     {
         LUID adapterLuid{};
@@ -61,7 +102,8 @@ class Renderer final
     // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
     // (CanvasFailure reports it), so the window keeps working (Decision D1).
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                   const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay = nullptr) noexcept;
+                   const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay = nullptr,
+                   SelectionOutlineFrameSource* selectionOutline = nullptr) noexcept;
     // The canvas stage's failure in the last Render, S_OK when the canvas drew.
     [[nodiscard]] HRESULT CanvasFailure() const noexcept
     {
@@ -157,12 +199,17 @@ class Renderer final
     [[nodiscard]] HRESULT StageResult(Stage stage, HRESULT result) noexcept;
     void RegisterOcclusionStatus() noexcept;
 
+    std::uint64_t _selectionOutlineDraws = 0;
+    HRESULT _selectionOutlineFailure = S_OK;
     HWND _window = nullptr;
     ChromeHost* _chrome = nullptr;
     bool _forceWarp = false;
     bool _suspended = true;
     bool _occluded = false;
     std::optional<bool> _occludedForTest;
+    FrameReadbackForTest _frameReadbackForTest = nullptr;
+    void* _frameReadbackContextForTest = nullptr;
+    bool _suppressSelectionOutlineForTest = false;
     UINT _width = 0;
     UINT _height = 0;
     D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_11_0;

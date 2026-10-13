@@ -98,6 +98,15 @@ class CanvasRenderer final
     HRESULT BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
                          const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                          float holeHeight) noexcept;
+    // Private S5 route proof only: complete same-device R8 mip-0 masks on a pixel-aligned view grid.
+    // Parent retains the original admitted CPU/GPU epoch and both SRVs through actual drawing/retirement.
+    // This records one overlay pass; it never composes, traverses points, creates resources or copies pixels.
+    // Calls borrow the actual immediate owner context; no recorder or ordinary activation is authorized here.
+    HRESULT DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                         unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                         ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                         unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                         const std::array<float, 4>* clip = nullptr) noexcept;
     // The last display composite at document resolution. Fails while the display draws a reduced proxy: a document
     // readback goes through ComposeReadback.
     HRESULT Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept;
@@ -412,6 +421,7 @@ class CanvasRenderer final
     wil::com_ptr_nothrow<ID3D11RasterizerState> _rasterizer;
     wil::com_ptr_nothrow<ID3D11Buffer> _layerConstants;
     wil::com_ptr_nothrow<ID3D11Buffer> _blitConstants;
+    wil::com_ptr_nothrow<ID3D11BlendState> _selectionOutlineBlend;
     Surface _canvas[2];
     Surface _stack[2];
     std::vector<Surface> _coverage;

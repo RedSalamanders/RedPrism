@@ -184,6 +184,19 @@
     <ClInclude Include="PixelMoveWorkTests.h" />
     <ClInclude Include="PreparedHistoryTests.h" />
     <ClInclude Include="PreparedRasterHistoryTests.h" />
+    <ClInclude Include="Document.Tests.PersistentOwnerIndex.h" />
+    <ClInclude Include="Document.Tests.PersistentHistory.h" />
+    <ClInclude Include="Document.Tests.RasterResidencyJournal.h" />
+    <ClInclude Include="Document.Tests.RasterJournalIntegration.h" />
+    <ClInclude Include="Document.Tests.HistoryResidencyDelta.h" />
+    <ClInclude Include="Document.Tests.HistoryTopologyDelta.h" />
+    <ClInclude Include="Document.Tests.HistoryOriginalTicket.h" />
+    <ClInclude Include="Document.Tests.ProjectSaveCachedPlan.h" />
+    <ClInclude Include="Document.Tests.OwnedRecordRoot.h" />
+    <ClInclude Include="Document.Tests.PublicationAllocation.h" />
+    <ClInclude Include="Document.Tests.PublicationBudget.h" />
+    <ClInclude Include="Document.Tests.OwnedMetadataJobsR4.h" />
+    <ClInclude Include="Document.Tests.HistoryReferenceTopology.h" />
     <ClInclude Include="AdjustmentClosureTests.h" />
     <ClInclude Include="AdjustmentOpeningTests.h" />
     <ClInclude Include="SelectionCommandTests.h" />
@@ -311,6 +324,19 @@
     <ClCompile Include="HistoryPreparationFaultTests.cpp" />
     <ClCompile Include="HistoryRetirementBoundTests.cpp" />
     <ClCompile Include="PreparedRasterHistoryTests.cpp" />
+    <ClCompile Include="Document.Tests.PersistentOwnerIndex.cpp" />
+    <ClCompile Include="Document.Tests.PersistentHistory.cpp" />
+    <ClCompile Include="Document.Tests.RasterResidencyJournal.cpp" />
+    <ClCompile Include="Document.Tests.RasterJournalIntegration.cpp" />
+    <ClCompile Include="Document.Tests.HistoryResidencyDelta.cpp" />
+    <ClCompile Include="Document.Tests.HistoryTopologyDelta.cpp" />
+    <ClCompile Include="Document.Tests.HistoryOriginalTicket.cpp" />
+    <ClCompile Include="Document.Tests.ProjectSaveCachedPlan.cpp" />
+    <ClCompile Include="Document.Tests.OwnedRecordRoot.cpp" />
+    <ClCompile Include="Document.Tests.PublicationAllocation.cpp" />
+    <ClCompile Include="Document.Tests.PublicationBudget.cpp" />
+    <ClCompile Include="Document.Tests.OwnedMetadataJobsR4.cpp" />
+    <ClCompile Include="Document.Tests.HistoryReferenceTopology.cpp" />
     <ClCompile Include="AdjustmentClosureTests.cpp" />
     <ClCompile Include="AdjustmentOpeningTests.cpp" />
     <ClCompile Include="SelectionCommandTests.cpp" />
@@ -404,6 +430,11 @@
     <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
     <ClInclude Include="..\..\Common\PublicationObject.h" />
+    <ClInclude Include="..\..\Common\AccountedPublicationObject.h" />
+    <ClInclude Include="..\..\Common\LocallyOwnedPublication.h" />
+    <ClInclude Include="..\..\Common\PublicationAllocationLedger.h" />
+    <ClInclude Include="..\..\Common\PersistentOwnerIndex.h" />
+    <ClInclude Include="..\..\Common\ResidencyChangeJournal.h" />
     <ClInclude Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
     <ClInclude Include="..\..\Common\BoundedClipper\Workspace.h" />
     <ClInclude Include="..\..\Common\BoundedClipper\clipper.core.h" />
@@ -481,6 +512,21 @@
     <ClInclude Include="Document.Tests.SelectionOffsetCoreFaults.h" />
     <ClCompile Include="Document.Tests.SelectionOffsetLarge.cpp" />
     <ClInclude Include="Document.Tests.SelectionOffsetLarge.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\SelectionOutlineRasterWork.cpp" />
+    <ClInclude Include="..\..\Common\SelectionOutlineRasterWork.h" />
+    <ClInclude Include="..\..\Common\BoundedLassoPoints.h" />
+    <ClCompile Include="Document.Tests.SelectionOutlineAllocation.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOutlineAllocation.h" />
+    <ClCompile Include="Document.Tests.SelectionOutlineRaster.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOutlineRaster.h" />
+    <ClCompile Include="Document.Tests.SelectionOutlineRasterViews.cpp" />
+    <ClInclude Include="Document.Tests.SelectionOutlineRasterViews.h" />
+    <ClCompile Include="Document.Tests.BoundedLassoPoints.cpp" />
+    <ClInclude Include="Document.Tests.BoundedLassoPoints.h" />
+    <ClCompile Include="Document.Tests.BoundedLassoTicket.cpp" />
+    <ClInclude Include="Document.Tests.BoundedLassoTicket.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

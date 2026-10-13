@@ -135,7 +135,7 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                         _session.ActiveLayer()->opacity == 0.25 && _session.history.CaptureState().Depth() == depth &&
                         _session.history.UndoCount() == 0 && gate->captures.load() == 1 &&
                         gate->reservationHeld.load() && gate->retired.load() && gate->retiredOffOwner.load() &&
-                        _jobs.ReservedMemoryBytes() == 0))
+                        MetadataAccountingSettledForTest()))
             return 5;
         const auto opening = _opacityEdit->opening;
         const auto previewRevision = _session.history.CurrentRevision();
@@ -185,7 +185,7 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                         _session.ActiveLayerID() == std::optional(active) &&
                         _session.history.CaptureState().Depth() == depth && gate->captures.load() == 2 &&
                         gate->reservationHeld.load() && gate->retired.load() && gate->retiredOffOwner.load() &&
-                        _jobs.ReservedMemoryBytes() == 0 && !_layerMetadataTicket && !_historyWork.Busy()))
+                        MetadataAccountingSettledForTest() && !_layerMetadataTicket && !_historyWork.Busy()))
             return 5;
 
         if (!expect(
@@ -330,7 +330,7 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                         _session.ActiveLayer()->opacity == .25 && _session.Generation() == generation &&
                         _session.history.CurrentRevision() == revision && _session.history.UndoCount() == 0 &&
                         gate->captures.load() == 2 && gate->retired.load() && gate->retiredOffOwner.load() &&
-                        _jobs.ReservedMemoryBytes() == 0))
+                        MetadataAccountingSettledForTest()))
             return 5;
         const auto brush = _session.PendingBrush();
         const auto warp = _session.PendingWarp();
@@ -354,7 +354,7 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                         _session.history.UndoName() == L"Layer Opacity" && _session.PendingBrush() == brush &&
                         _session.PendingWarp() == warp && _session.PendingShape() == shape && sameLasso &&
                         gate->captures.load() == 3 && gate->reservationHeld.load() && gate->retired.load() &&
-                        gate->retiredOffOwner.load() && _jobs.ReservedMemoryBytes() == 0))
+                        gate->retiredOffOwner.load() && MetadataAccountingSettledForTest()))
             return 5;
     }
 
@@ -372,7 +372,7 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                 preview.Read().outcome == HostOutcome::Succeeded && _opacityEdit && _opacityEdit->start == 1.0 &&
                     _opacityEdit->shown == 0.25 && _layerMetadataTestGate->captures.load() == 1 &&
                     _layerMetadataTestGate->reservationHeld.load() && _layerMetadataTestGate->retired.load() &&
-                    _layerMetadataTestGate->retiredOffOwner.load() && _jobs.ReservedMemoryBytes() == 0))
+                    _layerMetadataTestGate->retiredOffOwner.load() && MetadataAccountingSettledForTest()))
         return 5;
     _layerMetadataTestGate->retired.store(false);
     _layerMetadataTestGate->retiredOffOwner.store(false);
@@ -386,19 +386,19 @@ int Application::RunLayerOpacityContextsSelfTest() noexcept
                     _session.PendingLasso().has_value() == lasso.has_value() &&
                     _layerMetadataTestGate->captures.load() == 2 && _layerMetadataTestGate->reservationHeld.load() &&
                     _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load() &&
-                    _jobs.ReservedMemoryBytes() == 0))
+                    MetadataAccountingSettledForTest()))
         return 5;
     _session.CancelBrush();
     _session.CancelWarp();
     _session.CancelShape();
     _session.CancelLasso();
-    _layerMetadataTestGate.reset();
     if (!expect("cleanup", "no-opacity-edit-gesture-transaction-or-reservation",
                 !_opacityEdit && !_session.PendingBrush() && !_session.PendingWarp() && !_session.PendingShape() &&
                     !_session.PendingLasso() && _session.history.CaptureState().Depth() == 0 && !_layerMetadataTicket &&
-                    !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0))
+                    !_historyWork.Busy() && MetadataAccountingSettledForTest()))
         return 5;
 
+    _layerMetadataTestGate.reset();
     std::fprintf(stderr, "PASS opacity-context.summary checks=%d contexts=%zu\n", checks, cases.size() + 5);
     return 0;
 }

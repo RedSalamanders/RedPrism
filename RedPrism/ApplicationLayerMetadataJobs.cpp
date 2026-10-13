@@ -1,11 +1,14 @@
 #include "Application.h"
 
+#include "AccountedPublicationObject.h"
+
 #include "LayerMetadataTestGate.h"
 #include "LayerMetadataWork.h"
 #include "resource.h"
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -17,6 +20,10 @@ namespace
 #pragma warning(disable : 4324)
 struct MetadataPayload final : DeferredReleaseNode
 {
+    // The node/control allocator also retains temporary through actual destruction. These fields keep
+    // the original owners readable throughout worker, owner apply/drop and joined shutdown.
+    std::shared_ptr<SharedPublicationMemory> temporary;
+    std::shared_ptr<SharedPublicationMemory> output;
     std::optional<LayerMetadataInput> input;
     std::optional<PreparedLayerMetadata> publication;
     std::shared_ptr<LayerMetadataTestGate> gate;
@@ -37,16 +44,6 @@ struct MetadataPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
-struct RetireMetadataPayload final
-{
-    void operator()(MetadataPayload* payload) const noexcept
-    {
-        if (payload && !TryDeferRelease(*payload))
-        {
-            const std::unique_ptr<MetadataPayload> owned(payload);
-        }
-    }
-};
 } // namespace
 
 class Application::LayerMetadataJob final : public Job
@@ -54,10 +51,10 @@ class Application::LayerMetadataJob final : public Job
   public:
     LayerMetadataJob(Application& owner, HistoryWorkStamp stamp, LayerMetadataKind kind, Guid target,
                      std::wstring_view name, double opacity, LayerBlendMode blendMode, std::uint64_t retirement,
-                     OpacityMetadataIntent intent, std::optional<double> opening,
+                     std::uint64_t admission, OpacityMetadataIntent intent, std::optional<double> opening,
                      std::optional<OpacityMetadataContext> opacityContext) noexcept
         : _owner(owner), _stamp(stamp), _kind(kind), _target(target), _name(name), _opacity(opacity),
-          _blendMode(blendMode), _retirement(retirement), _intent(intent), _opening(opening),
+          _blendMode(blendMode), _retirement(retirement), _admission(admission), _intent(intent), _opening(opening),
           _opacityContext(opacityContext), _authority(owner._session.CaptureLayerMetadataAuthority(true)),
           _gate(owner._layerMetadataTestGate), _ownerThread(GetCurrentThreadId())
     {
@@ -67,7 +64,33 @@ class Application::LayerMetadataJob final : public Job
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_payload)
-            return {}; // successful admission precedes owner capture on the resumable boundary
+        {
+            const auto fixed = 2 * SharedPublicationMemory::OwnershipAllowance() +
+                               AccountedPublicationObjectAllowance<MetadataPayload>();
+            if (_admission <= fixed)
+                return {JobStatus::Failed, E_OUTOFMEMORY};
+            auto temporary = SharedPublicationMemory::CreateForWork();
+            // Every selected new output allocation refuses before it can exceed this original envelope.
+            // Useful work remains covered by the complete descriptor, including borrowed source overlap.
+            auto output = SharedPublicationMemory::CreateForWork(_admission - fixed);
+            auto payload = MakeAccountedPublicationObject<MetadataPayload>(
+                temporary, (std::max)(_retirement, kDeferredReleaseThreshold), 0);
+            payload->temporary = std::move(temporary);
+            payload->output = std::move(output);
+            payload->gate = _gate;
+            payload->ownerThread = _ownerThread;
+            _payload = std::move(payload);
+            if (_gate)
+            {
+                _gate->accountingOutput = _payload->output;
+                _gate->accountingTemporary = _payload->temporary;
+                _gate->originalAccountingBound = false;
+                _gate->accountingObserved = false;
+            }
+            return {}; // Original admission covers this worker preparation before owner capture.
+        }
+        if (!_captureAttempted)
+            return {JobStatus::Failed, E_UNEXPECTED};
         if (!_payload->input)
             return {JobStatus::Failed, E_UNEXPECTED};
         if (_refreshResidency)
@@ -104,8 +127,8 @@ class Application::LayerMetadataJob final : public Job
                             }
                         },
                         _gate.get()};
-        auto publication = PrepareLayerMetadataPublication(std::move(_payload->input.value()), context.cancellation,
-                                                           historyObserver, observer);
+        auto publication = DocumentSession::PrepareLayerMetadataPublication(
+            std::move(_payload->input.value()), context.cancellation, historyObserver, observer, _payload->output);
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!publication)
@@ -133,11 +156,23 @@ class Application::LayerMetadataJob final : public Job
         }
         return {};
     }
+    bool DeferRetirement(JobResult, JobTicket original) noexcept override
+    {
+        _ticket = original;
+        return false;
+    }
+    void RetainJoinedRetirement(JobScheduler&, JobTicket original) noexcept override
+    {
+        _ticket = original;
+        BindOriginalAccounting(original);
+    }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
         if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
-        if (_payload)
+        if (!_payload)
+            return false;
+        if (_captureAttempted)
         {
             if (!_payload->publication)
                 return false;
@@ -167,10 +202,7 @@ class Application::LayerMetadataJob final : public Job
         }
         try
         {
-            _payload.reset(std::make_unique<MetadataPayload>().release());
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
+            _captureAttempted = true;
             if (_gate)
             {
                 _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
@@ -207,6 +239,8 @@ class Application::LayerMetadataJob final : public Job
     void Completed(JobResult result) noexcept override
     {
         const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
+        // Useful producers have joined; no newly allocated root can escape before its original ticket binds.
+        BindOriginalAccounting(_ticket);
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -254,6 +288,35 @@ class Application::LayerMetadataJob final : public Job
     }
 
   private:
+    void BindOriginalAccounting(JobTicket original) noexcept
+    {
+        if (!_payload || _payload->temporary->IsBound())
+            return;
+        if (!_payload->output->SealLocalAllocations())
+            std::terminate(); // No useful producer may allocate after the original graph is partitioned.
+        const auto local = _payload->output->LocalAllocationBytes();
+        const auto allowance = SharedPublicationMemory::OwnershipAllowance();
+        const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (local > maximum - allowance)
+            std::terminate();
+        const auto output = local ? local + allowance : 0;
+        if (_admission <= allowance || output > _admission - allowance)
+            std::terminate(); // A producer outside the complete admitted envelope must never refund live data.
+        const auto result = output ? _payload->output->BindPersistentOutputForRetirement(_owner._jobs, original, output,
+                                                                                         *_payload->temporary)
+                                   : _payload->temporary->BindForRetirement(_owner._jobs, original);
+        if (result < 0)
+            std::terminate(); // Preserve the original reservation through every actual graph/control lifetime.
+        if (_gate)
+        {
+            _gate->accountingTicket = original;
+            _gate->accountingOutputBytes = output;
+            _gate->originalAccountingBound =
+                _payload->temporary->BoundTo(_owner._jobs, original) &&
+                _payload->temporary->Bytes() == _admission - output &&
+                (!output || (_payload->output->BoundTo(_owner._jobs, original) && _payload->output->Bytes() == output));
+        }
+    }
     [[nodiscard]] bool Current() const noexcept
     {
         return !_owner._shutdownStarted && _owner._layerMetadataStamp == _stamp &&
@@ -272,6 +335,7 @@ class Application::LayerMetadataJob final : public Job
     const double _opacity;
     const LayerBlendMode _blendMode;
     const std::uint64_t _retirement;
+    const std::uint64_t _admission;
     const OpacityMetadataIntent _intent;
     // Admission validates this original value. Capture happens only on the owner after reservation, then
     // the worker receives a sealed input; no worker follows the host's live typed-edit state.
@@ -280,11 +344,48 @@ class Application::LayerMetadataJob final : public Job
     const LayerMetadataAuthority _authority;
     const std::shared_ptr<LayerMetadataTestGate> _gate;
     const DWORD _ownerThread;
-    std::unique_ptr<MetadataPayload, RetireMetadataPayload> _payload;
+    std::shared_ptr<MetadataPayload> _payload;
+    JobTicket _ticket;
+    bool _captureAttempted = false;
     DocumentHistory::ResidencyPermit _residencyPermit;
     bool _refreshResidency = false; // scheduler stage fences protect the same-record worker/owner handoff
     std::int32_t _captureError = 0;
 };
+
+bool Application::MetadataAccountingSettledForTest() noexcept
+{
+    // A completed job retires its temporary/input phase. Its live document/history/weak graph still
+    // owns the output charge. Zero total reservations is therefore not a successful-retirement oracle.
+    const auto gate = _layerMetadataTestGate;
+    if (_jobs.InUiCallback() || !_jobs.IsIdle())
+        return false;
+    if (!gate || !gate->originalAccountingBound)
+        return _jobs.ReservedMemoryBytes() == 0;
+    if (gate->accountingObserved)
+        return true;
+    if (!gate->accountingTemporary.expired())
+        return false;
+    auto output = gate->accountingOutput.lock();
+    const auto bytes = gate->accountingOutputBytes;
+    if (output && bytes &&
+        (!output->BoundTo(_jobs, gate->accountingTicket) || output->Bytes() != bytes ||
+         bytes < SharedPublicationMemory::OwnershipAllowance() ||
+         output->LocalAllocationBytes() > bytes - SharedPublicationMemory::OwnershipAllowance()))
+        return false;
+    if (output && !bytes && (output->IsBound() || output->LocalAllocationBytes() != 0))
+        return false;
+    gate->accountingTemporary.reset();
+    gate->accountingOutput.reset();
+    (void)DrainCompletions(_jobs); // Consume only actual destruction acknowledgements; no useful work remains.
+    if (!_jobs.IsIdle() ||
+        (output && bytes &&
+         (output->ResidentBytes() < bytes || output->ResidentBytes() != _jobs.ReservedMemoryBytes())))
+        return false;
+    output.reset();
+    (void)DrainCompletions(_jobs);
+    gate->accountingObserved = true;
+    return _jobs.IsIdle();
+}
 
 HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name, double opacity,
                                         LayerBlendMode blendMode, OpacityMetadataIntent intent,
@@ -336,13 +437,15 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
                     _layerMetadataTestGate->reservationBytes = memory;
                 std::unique_ptr<Job> job =
                     std::make_unique<LayerMetadataJob>(*this, _layerMetadataStamp.value(), kind, target, name, opacity,
-                                                       blendMode, retirement, intent, opening, opacityContext);
+                                                       blendMode, retirement, memory, intent, opening, opacityContext);
                 JobTicket ticket;
-                result = static_cast<HRESULT>(_jobs.Submit(
-                    job,
-                    {intent == OpacityMetadataIntent::Preview ? JobClass::InteractivePreview : JobClass::Commit,
-                     _session.DocumentSerial(), memory},
-                    ticket));
+                JobOptions options{intent == OpacityMetadataIntent::Preview ? JobClass::InteractivePreview
+                                                                            : JobClass::Commit,
+                                   _session.DocumentSerial(), memory};
+                options.deferredRetirement = true;
+                options.reserveRetainedMemory = true;
+                options.allowMemoryWaiting = false; // Replacement cannot wait forever on its retained predecessor.
+                result = static_cast<HRESULT>(_jobs.Submit(job, options, ticket));
                 if (SUCCEEDED(result))
                     _layerMetadataTicket = ticket;
             }

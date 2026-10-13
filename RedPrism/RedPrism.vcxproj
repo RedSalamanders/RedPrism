@@ -288,6 +288,11 @@
     <ClInclude Include="..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\Common\PublicationGraphAllocator.h" />
     <ClInclude Include="..\Common\PublicationObject.h" />
+    <ClInclude Include="..\Common\AccountedPublicationObject.h" />
+    <ClInclude Include="..\Common\LocallyOwnedPublication.h" />
+    <ClInclude Include="..\Common\PublicationAllocationLedger.h" />
+    <ClInclude Include="..\Common\PersistentOwnerIndex.h" />
+    <ClInclude Include="..\Common\ResidencyChangeJournal.h" />
     <ClInclude Include="..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
     <ClInclude Include="..\Common\BoundedClipper\Workspace.h" />
     <ClInclude Include="..\Common\BoundedClipper\clipper.core.h" />
@@ -623,6 +628,18 @@
     <ClCompile Include="Application.Tests.SelectionOffset.cpp" />
     <ClCompile Include="Application.Tests.SelectionOffsetFailures.cpp" />
     <ClCompile Include="Application.Tests.SelectionOffsetLarge.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionOutlineRasterWork.cpp" />
+    <ClCompile Include="PreparedSelectionOutlineGpu.cpp" />
+    <ClCompile Include="SelectionOutlineDisplayController.cpp" />
+    <ClCompile Include="ApplicationSelectionOutlineDisplay.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuHost.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuParity.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineOwnerCapacity.cpp" />
+    <ClInclude Include="..\Common\SelectionOutlineRasterWork.h" />
+    <ClInclude Include="PreparedSelectionOutlineGpu.h" />
+    <ClInclude Include="SelectionOutlineDisplayController.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="..\Build\RedPrism.DxUi.targets" />

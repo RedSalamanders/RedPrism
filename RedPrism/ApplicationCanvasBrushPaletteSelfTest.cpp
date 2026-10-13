@@ -302,12 +302,12 @@ int Application::RunCanvasBrushPaletteSelfTest() noexcept
             continue;
         }
 
-        if (!expect(name, "closure-and-stroke-commit-as-separate-history-entries",
-                    _session.history.UndoCount() == 2 &&
-                        _session.history.UndoName() == (mask ? L"Paint Mask" : L"Erase") &&
-                        _session.ActiveLayer()->opacity == .25 && !_opacityEdit && !_canvasBrushInput.Busy() &&
-                        !_session.PendingBrush() && _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
-                        _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load()))
+        if (!expect(
+                name, "closure-and-stroke-commit-as-separate-history-entries",
+                _session.history.UndoCount() == 2 && _session.history.UndoName() == (mask ? L"Paint Mask" : L"Erase") &&
+                    _session.ActiveLayer()->opacity == .25 && !_opacityEdit && !_canvasBrushInput.Busy() &&
+                    !_session.PendingBrush() && MetadataAccountingSettledForTest() && _hostInputBudget.Used() == 0 &&
+                    _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load()))
             return 5;
 
         std::array<std::uint8_t, 4> center{};

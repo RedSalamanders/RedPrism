@@ -105,7 +105,7 @@
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
     <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
-    <ClInclude Include="OwnerWorkMultiplexerTests.h" />
+    <ClInclude Include="Host.Tests.OwnerWorkMultiplexer.h" />
     <ClInclude Include="RetryWaitQueueTests.h" />
     <ClInclude Include="RetryWaitCancellationTests.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
@@ -149,7 +149,7 @@
     <ClInclude Include="Host.Tests.WorkerWriteCompletion.h" />
     <ClCompile Include="Host.Tests.WorkerWriteCompletion.cpp" />
     <ClCompile Include="HostTests.cpp" />
-    <ClCompile Include="OwnerWorkMultiplexerTests.cpp" />
+    <ClCompile Include="Host.Tests.OwnerWorkMultiplexer.cpp" />
     <ClCompile Include="RetryWaitQueueTests.cpp" />
     <ClCompile Include="RetryWaitCancellationTests.cpp" />
     <ClCompile Include="KernelDispatchTests.cpp" />

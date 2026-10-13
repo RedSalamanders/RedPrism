@@ -9,6 +9,26 @@ Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
+### Persistent history and raster residency controls
+
+DocumentTests runs the persistent identity-index, actual history adapter, raster serial/journal, late-residency
+delta and direct-root topology controls in every x64 configuration. The identity-index reference is an
+independent `std::map` corpus with retained old versions, allocation faults, cancellation and original-owner
+lifetime checks. Actual history edits compare retained-byte charges, trim and Undo/Redo against the unchanged
+reference history implementation, including shared nested sparse storage and late materialization.
+Journal tests cover serial/epoch exhaustion without wrap, contiguous suffixes, overwrite and cancellation.
+Actual Raster tests require its existing lease and exact literal bytes. Topology controls require shared scalar
+root groups, first/last active parent edges and cancellation preserving the published history. These state
+controls do not establish production phase peaks, owner timing, ordinary activation or G1.
+
+The original-ticket history fixture uses the actual scheduler and a resumable owner capture after descriptor
+admission. Its literal reservation covers cached preparation, retirement and accounting-control allowances.
+Successful completion binds the original ticket before publication. Captured old roots retain their original
+owner across scalar history changes and live-history reset, without a diagnostic strong lock masking release.
+Cancellation preserves revision and Redo; joined Close drops unpublished prepared history while strong and
+weak controls keep the original charge until their final release. These fixtures do not migrate production
+callers or qualify measured retirement cost.
+
 ## Entrypoint
 
 The x64 ISA gate includes independent `IsaR14LoopTableTests.ps1` parser controls for the exact hoisted
@@ -2339,7 +2359,7 @@ preview/stroke/utility migrations, all injected controller faults, peak bounds a
 
 `RedPrism.exe --bench layer-rows` runs the prepared layer-row diagnostic with 10,000 layers; `--bench layer-rows-smoke` runs the same correctness path with 128 layers and is not a performance measurement. Both use a hidden 2×1 canvas, independent literal assets at the first/last storage records, the active/rename target at the final storage record (the longest active-layer lookup path), and the deterministic stress fixture: 1,024-code-unit names consisting of `N` characters followed by storage-order suffixes `#00000` through `#09999` (smoke retains `#00000` through `#00127`). Trial 0 is the initial publication; the full mode then records ten rename trials (1–10), and smoke records two (1–2). No initial or rename trial is discarded as warmup.
 
-For every trial, report the request, `ChromeHost::Prepare`, raw embedded-STA provider `Navigate` calls, and raw embedded-STA `UIA_NamePropertyId` reads, plus the existing dispatch, window-message, completion-drain, result-apply, and chrome-sync scopes. Report `elapsedWithWorkerWaitUs` separately; it includes settling the worker and is not an owner-work scope or a substitute for those measurements. At each settled publication, require the prepared graph to carry its retained memory lease. Report its scheduler reservation after provider release, require that value to equal the current graph's declared MemoryBytes, and require zero releasing bytes. The separate original-ticket/admission lifetime suite remains mandatory; these scalar observations alone do not prove admission before capture or account for every intermediate owner.
+For every trial, report the request, `ChromeHost::Prepare`, raw embedded-STA provider `Navigate` calls, and raw embedded-STA `UIA_NamePropertyId` reads, plus the existing dispatch, window-message, completion-drain, result-apply, and chrome-sync scopes. Report `elapsedWithWorkerWaitUs` separately; it includes settling the worker and is not an owner-work scope or a substitute for those measurements. At each settled publication, require the prepared graph to carry its retained memory lease. Report the scheduler reservation after provider release and require it to equal the current row graph's declared MemoryBytes plus each distinct original metadata output admission retained by the literal untrimmed document/history sequence. Observe each output through its original bound ticket, validate its declared/local allocation bounds and actual worker retirement, then drop diagnostic strong/weak controls and settle their real retirement before comparing the checked sum. Require all temporary owners expired, one original output per rename and zero releasing bytes; unexplained charges still fail. Emit one separate `LAYER ROWS ACCOUNTING` row per trial without changing the measured cost rows. The standard smoke runner validates its exact initial-plus-two-rename sequence, checked UInt64 sum, correspondence with BENCH reservations and increasing original output retention; independent positive and malformed/missing/duplicate/overflow/stale-charge controls must pass first. The separate original-ticket/admission lifetime suite remains mandatory; these observations do not prove admission before capture or account for every intermediate owner.
 
 Correctness checks must preserve the final storage layer's active Guid and its stable item ID (`FirstItemIdentity + layerCount - 1`), order, and full expected names (including every offscreen row). Both modes retain independent first/last BGRA bytes `10 20 30 ff 40 50 60 ff` / `70 80 90 ff a0 b0 c0 ff` and first Gray8 mask bytes `3f d1`; every trial verifies those literals outside the measured provider calls. Initial publication adds no history entry; each rename adds exactly one entry while preserving pixels and active identity.
 
@@ -2815,3 +2835,42 @@ charge above 16 MiB through document/history release and final copied/weak reade
 and no leaked host barrier. The original header Expand golden settles through the real pump before
 its unchanged five-pixel/title check. Debug, Release and real ASan (with the genuine detection probe),
 latest-source analysis/ARM64 and the separate G1/ordinary consumer gates remain required for completion.
+
+## Immutable metadata allocation and mixed-reference history controls
+
+DocumentTests registers Document.Tests.OwnedRecordRoot, PublicationAllocation, PublicationBudget, OwnedMetadataJobsR4 and HistoryReferenceTopology. Independent controls cover checked local limits, sealed refusal, unchanged reference layout, original-owner sharing, actual data destruction, copied/final weak control lifetime and exact original-ticket partition/refund. The actual scheduler corpus exercises 110 edits and readers, stale refusal, cancellation, capture refusal, retained-slot pressure and joined Close. Preserve all predecessor numeric expectations and ordered records.
+
+Mixed-reference controls require complete dense/nested sparse/shared closure accounting, lazy storage, literal End/Undo/Redo and Reset, late-cache diagnostic charge and oldest-first trim. No reference byte query may materialize sparse pixels. Actual hidden Application controls additionally require the original metadata ticket, expired temporary ownership, live persistent endpoint balance and exact last-weak refund.
+
+A brush or close acknowledgement with retained opacity history must verify input/temporary retirement separately from the published metadata charge. Cancelled modal lifecycles require the exact sum of the live original brush-opening charge and retained metadata; after original Up only the retained metadata charge remains. Lifecycle authority faults separately observe source-preview and typed-closure tickets: document replacement can retain the preview source even when closure is stale. Exact source/output/input sums must hold before and after original acknowledgement. Final destroyed-graph/shutdown cases keep their explicit zero-memory expectations. Test weak observers are released after the original observation so they cannot create artificial retention. These lifetime expectations do not change literal pixels, history, input ordering, file contents or receipt outcomes.
+
+The integrated source must pass the required x64 Debug/Release/real ASan (including detection probe), Release analysis, ISA/provenance and ARM64 cross-build gates. Native ARM64 runtime, ordinary responsive activation, complete caller phase costs and G1 remain separately qualified; private component passes do not close P1.
+
+A cancelled panel OK followed by a younger rename, or an adjustment opening followed by a younger rename, preserves the exact Cancel/opening/close receipt order and literal source/history expectations. The rename remains charged to its own original ticket while its live document or undo entry owns the publication. Test panel/source charges and metadata contributions separately; never infer global zero from completed temporary work. Reference fixture commits can enqueue real memory acknowledgements after their last previous settlement; consume those owner events before observing IsIdle/accounting. Final destroyed-graph zeros and other modes exact charges stay explicit.
+
+A reference clipboard Copy followed by document/history Clear can defer real metadata destruction. Keep the copied original baseline reader alive and consume the real retirement acknowledgements before asserting its exact remaining charge. Only explicit final reader release and consumed acknowledgement may refund that original baseline. Preserve literal clipboard bytes, origin, serial, distinct source identity and empty document/history expectations.
+
+Independent save-fixture cases first clear the previous document/history, refresh real consumers and consume real retirement before a fresh CreateDocument. CreateDocument is a history edit and alone cannot prove an empty original-owner baseline. Preserve each mode's original zero or intentionally retained-reader expectation.
+
+Document.Tests.ProjectSaveCachedPlan compares the immutable save-admission summary with the preserved old scalar formula. Boundary cases include 10,000 layers, Unicode/long names and paths, 32/33 curve points, invalid assets, BGRA/Gray and lazy sparse masks, repeated shared assets, copied/changed roots and cancelled Seal. Original scalar outcomes and all identities/unmaterialized state remain exact.
+
+IsaR9R15PairTests preserves the exact guarded paired R9/R15 dispatch, PDB-owned anonymous relative-DWORD/byte tables and terminal transfer proof. Its 113 encoded controls include genuine surrounding vectors and mismatching/unknown/overlapping rows, ownership/bounds, branch targets, padding and unaligned tables. Generated PE files are parser inputs and are never executed. The runtime allowlist and DxUi pin remain unchanged.
+
+
+### P1 selection ownership and arena coverage
+
+The native suites register the independently referenced prepared outline raster, fractional DPI/view,
+local allocation, GPU residency, controller and clipping tests. The application harness additionally
+checks 47 host lifecycle facts, 75 actual-frame parity facts and 40 actual eleven-owner acquisition/
+joined-shutdown facts in both startup orders. The contextual multiplexer test pair retains its previous
+fairness/refusal tests with literal eleven-slot admission and twelfth-slot refusal.
+
+DocumentTests adds 536 bounded-point model assertions and 39 actual original-ticket assertions, with
+both summaries and every predecessor test retained. The arena reference covers chunk boundaries,
+retained snapshots, clear/pop/re-extension, capacity refusal, moves, cancellation, original admission and
+worker/owner retirement. These foundations require the mandatory native matrix after integration and do
+not substitute for ordinary host activation, complete operation admission, sanitizer detection or G1.
+
+Wide unsigned inline-table controls retain the earlier parser controls and assert three exact accepts
+and 27 malformed/real-vector refusals. The corrected scanner must pass the same previously failed
+ASan binary/PDB/listings without an allowlist change before fresh native ASan qualification.

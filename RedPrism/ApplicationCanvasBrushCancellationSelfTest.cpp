@@ -173,7 +173,7 @@ int Application::RunCanvasBrushCancellationSelfTest() noexcept
             return 5;
         if (!expect(scenario.name, "ack-releases-input-and-worker-reservations",
                     !_activeHostRequest && _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
-                        _jobs.ReservedMemoryBytes() == 0 && _layerMetadataTestGate->retired.load() &&
+                        MetadataAccountingSettledForTest() && _layerMetadataTestGate->retired.load() &&
                         _layerMetadataTestGate->retiredOffOwner.load()))
             return 5;
         OnPointer(WM_MOUSEMOVE, MK_LBUTTON, clientAt({20, 8}));
@@ -255,7 +255,8 @@ int Application::RunCanvasBrushCancellationSelfTest() noexcept
             !expect(name, "old-input-retires-once-without-owned-budget",
                     receipt.Read().outcome == (variant == 0 ? HostOutcome::Cancelled : HostOutcome::Stale) &&
                         receipt.Read().error == E_ABORT && !_canvasBrushInput.Busy() && !_activeHostRequest &&
-                        _hostInputBudget.Used() == 0 && _jobs.ReservedMemoryBytes() == 0))
+                        _hostInputBudget.Used() == 0 && MetadataAccountingSettledForTest() &&
+                        (variant != 2 || _jobs.ReservedMemoryBytes() == 0)))
             return 5;
         if (!expect(name, "old-retirement-preserves-new-core-stroke",
                     _session.PendingBrushOpening() == newOpening && _session.PendingBrush() == newStroke &&

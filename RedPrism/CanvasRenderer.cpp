@@ -224,6 +224,7 @@ void CanvasRenderer::ReleaseDeviceResources() noexcept
     ReleaseUtilitySurfaces();
     _layerConstants.reset();
     _blitConstants.reset();
+    _selectionOutlineBlend.reset();
     _rasterizer.reset();
     _pointSampler.reset();
     _linearSampler.reset();
@@ -428,6 +429,19 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
     {
         return result;
     }
+    D3D11_BLEND_DESC outlineBlend{};
+    auto& outlineTarget = outlineBlend.RenderTarget[0];
+    outlineTarget.BlendEnable = TRUE;
+    outlineTarget.SrcBlend = D3D11_BLEND_ONE;
+    outlineTarget.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOp = D3D11_BLEND_OP_ADD;
+    outlineTarget.SrcBlendAlpha = D3D11_BLEND_ONE;
+    outlineTarget.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    outlineTarget.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    result = device->CreateBlendState(&outlineBlend, _selectionOutlineBlend.put());
+    if (FAILED(result))
+        return result;
     _documentDirty = true;
     return S_OK;
 }
@@ -2589,6 +2603,80 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     _context->Draw(3, 0);
     ID3D11ShaderResourceView* none[] = {nullptr};
     _context->PSSetShaderResources(0, 1, none);
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                       unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                       ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                       unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                       const std::array<float, 4>* clip) noexcept
+{
+    if (_recordingCommands || (_context && _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE) ||
+        (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    if (!_context || !target || !solid || !dashes || !_selectionOutlineBlend || !targetWidth || !targetHeight)
+        return S_FALSE;
+    constexpr unsigned int sideLimit = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    constexpr std::uint64_t pixelLimit = 64ull * 1024ull * 1024ull;
+    if (targetWidth > sideLimit || targetHeight > sideLimit || !maskWidth || !maskHeight || maskWidth > sideLimit ||
+        maskHeight > sideLimit || maskWidth > pixelLimit / maskHeight || !std::isfinite(pixelLeft) ||
+        !std::isfinite(pixelTop) || std::floor(pixelLeft) != pixelLeft || std::floor(pixelTop) != pixelTop)
+        return E_INVALIDARG;
+    if (clip && (!std::isfinite((*clip)[0]) || !std::isfinite((*clip)[1]) || !std::isfinite((*clip)[2]) ||
+                 !std::isfinite((*clip)[3]) || (*clip)[0] < 0 || (*clip)[1] < 0 || (*clip)[2] > maskWidth ||
+                 (*clip)[3] > maskHeight || (*clip)[2] <= (*clip)[0] || (*clip)[3] <= (*clip)[1]))
+        return E_INVALIDARG;
+    LayerConstants constants{};
+    if (clip)
+    {
+        constants.flags = kCompositionFlagSelectionClip;
+        std::copy(clip->begin(), clip->end(), std::begin(constants.sourceRect));
+    }
+    constants.canvasSize[0] = static_cast<float>(targetWidth);
+    constants.canvasSize[1] = static_cast<float>(targetHeight);
+    constants.layerSize[0] = static_cast<float>(maskWidth);
+    constants.layerSize[1] = static_cast<float>(maskHeight);
+    constants.viewOrigin[0] = pixelLeft;
+    constants.viewOrigin[1] = pixelTop;
+    constants.passMode = kCompositionPassSelectionOutline;
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(result))
+        return result;
+    std::memcpy(mapped.pData, &constants, sizeof(constants));
+    _context->Unmap(_layerConstants.get(), 0);
+    // Consumers explicitly bind their own pipeline, like the existing blit. Remove both borrowed inputs and
+    // restore the ordinary disabled blend state before a later composition, readback or chrome consumer.
+    const auto reset = wil::scope_exit(
+        [this]() noexcept
+        {
+            ID3D11ShaderResourceView* none[3]{};
+            _context->PSSetShaderResources(0, 3, none);
+            _context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
+        });
+    ID3D11RenderTargetView* targets[] = {target};
+    _context->OMSetRenderTargets(1, targets, nullptr);
+    _context->OMSetDepthStencilState(nullptr, 0);
+    _context->OMSetBlendState(_selectionOutlineBlend.get(), nullptr, 0xFFFFFFFFu);
+    const auto viewport = MakeViewport(targetWidth, targetHeight);
+    _context->RSSetViewports(1, &viewport);
+    _context->RSSetState(_rasterizer.get());
+    if (_recordedDisplaySealed)
+    {
+        const D3D11_RECT full{0, 0, static_cast<LONG>(targetWidth), static_cast<LONG>(targetHeight)};
+        _context->RSSetScissorRects(1, &full);
+    }
+    _context->IASetInputLayout(nullptr);
+    _context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    _context->VSSetShader(_vertexShader.get(), nullptr, 0);
+    _context->PSSetShader(_pixelShader.get(), nullptr, 0);
+    ID3D11Buffer* buffers[] = {_layerConstants.get()};
+    _context->VSSetConstantBuffers(0, 1, buffers);
+    _context->PSSetConstantBuffers(0, 1, buffers);
+    ID3D11ShaderResourceView* inputs[] = {solid, nullptr, dashes};
+    _context->PSSetShaderResources(0, 3, inputs);
+    _context->Draw(3, 0);
     return S_OK;
 }
 

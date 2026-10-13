@@ -324,6 +324,11 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
         state.replayedCoreOpening = _session.PendingBrushOpening();
         while (PeekMessageW(&closeMessage, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE))
             state.closeMessageConsumed = true;
+        // The acknowledged typed opacity remains in history while this original opening is live.
+        // Inspect without acquiring another graph/control owner; the settling helper drops its test weak refs.
+        const auto metadataBytes =
+            _layerMetadataTestGate->accountingOutput.expired() ? 0 : _layerMetadataTestGate->accountingOutputBytes;
+        const bool metadataSettled = MetadataAccountingSettledForTest();
         const auto lifecycleResult = state.lifecycleReceipt.Read();
         const auto* unchangedLayer = _session.Document() ? findLayer(_session.Document().value(), target) : nullptr;
         const auto* captured = _canvasBrushInput.CapturedContext(streamOpening);
@@ -341,8 +346,10 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
                         originalStreamSurvived && !state.closeMessageConsumed) ||
             !expect(scenario.name, "original-request-retains-budget-after-opacity-worker-retires",
                     _hostInputBudget.Used() != 0 && _session.PendingBrush() &&
-                        _session.PendingBrush()->OpeningRetainedMemoryBytes() != 0 &&
-                        _jobs.ReservedMemoryBytes() == _session.PendingBrush()->OpeningRetainedMemoryBytes() &&
+                        _session.PendingBrush()->OpeningRetainedMemoryBytes() != 0 && metadataSettled &&
+                        metadataBytes > 0 && _jobs.ReservedMemoryBytes() >= metadataBytes &&
+                        _jobs.ReservedMemoryBytes() - metadataBytes ==
+                            _session.PendingBrush()->OpeningRetainedMemoryBytes() &&
                         !_utilityTicket && !_utilityStamp && !_historyWork.Busy() && !_layerMetadataTicket &&
                         _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load() &&
                         !_canvasLifetime) ||
@@ -364,7 +371,8 @@ int Application::RunCanvasBrushLifetimeCancelSelfTest() noexcept
                         pixelAt(8, 11) == sourcePixel && brushReceipt.Read().outcome == HostOutcome::Succeeded &&
                         _canvasBrushReceipt.Read() == brushReceipt.Read() && !_canvasBrushInput.Busy() &&
                         !_activeHostRequest && _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
-                        _jobs.ReservedMemoryBytes() == 0 && !_canvasLifetime))
+                        MetadataAccountingSettledForTest() && _jobs.ReservedMemoryBytes() == metadataBytes &&
+                        !_canvasLifetime))
             return 5;
     }
     std::fprintf(stderr, "PASS canvas-brush-lifetime-cancel.summary checks=%d cases=%zu expected=160\n", checks,

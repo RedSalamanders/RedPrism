@@ -123,7 +123,8 @@ class PreparedLayerMetadata final
 
 [[nodiscard]] inline std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(
     LayerMetadataInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver historyObserver = {},
-    LayerMetadataPrepareObserver observer = {})
+    LayerMetadataPrepareObserver observer = {}, std::shared_ptr<const SharedPublicationMemory> memory = {})
 {
-    return DocumentSession::PrepareLayerMetadataPublication(std::move(input), cancellation, historyObserver, observer);
+    return DocumentSession::PrepareLayerMetadataPublication(std::move(input), cancellation, historyObserver, observer,
+                                                            std::move(memory));
 }

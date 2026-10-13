@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PublicationObject.h"
+#include "LocallyOwnedPublication.h"
 #include "RecordRoot.h"
 
 #include <cstddef>
@@ -65,10 +65,15 @@ template <typename Handle> class HistoryEntries final
     {
         if (!_root)
             return std::uint64_t{};
+        // The original reference storage layout remains unchanged. The immutable shared control's
+        // deleter identifies the selected owned factory in constant time, without another header field.
+        const bool owned = std::get_deleter<AccountedPublicationDetail::Retire<Storage>>(_root) != nullptr;
+        const auto allowance = owned ? LocallyOwnedPublicationAllowance<Storage>() : sizeof(Storage) + 64;
+        const auto padding = owned ? std::uint64_t{128} : std::uint64_t{};
         constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-        if (_root->values.capacity() > (maximum - sizeof(Storage) - 64) / sizeof(Handle))
+        if (_root->values.capacity() > (maximum - allowance - padding) / sizeof(Handle))
             return std::nullopt;
-        return sizeof(Storage) + 64 + _root->values.capacity() * sizeof(Handle);
+        return allowance + padding + _root->values.capacity() * sizeof(Handle);
     }
 
     void clear() noexcept
@@ -81,9 +86,9 @@ template <typename Handle> class HistoryEntries final
     }
     void push_back(Handle value, std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
-        auto next = Clone(std::move(memory));
+        auto next = Clone();
         next->values.push_back(std::move(value));
-        Publish(std::move(next));
+        Publish(std::move(next), std::move(memory));
     }
     void pop_back()
     {
@@ -97,9 +102,9 @@ template <typename Handle> class HistoryEntries final
             return;
         const auto offset = first - begin();
         const auto count = last - first;
-        auto next = Clone(std::move(memory));
+        auto next = Clone();
         next->values.erase(next->values.begin() + offset, next->values.begin() + offset + count);
-        Publish(std::move(next));
+        Publish(std::move(next), std::move(memory));
     }
 
   private:
@@ -120,12 +125,15 @@ template <typename Handle> class HistoryEntries final
         // Never write a formerly shared root in place; publication exposes only the completed private clone.
         return MakePublicationObject<Storage>(std::move(memory), kDeferredReleaseThreshold, Read());
     }
-    void Publish(std::shared_ptr<Storage> next) noexcept
+    void Publish(std::shared_ptr<Storage> next, std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
         constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-        if (next->values.capacity() <= (maximum - sizeof(Storage) - 64) / sizeof(Handle))
+        const auto allowance = memory ? LocallyOwnedPublicationAllowance<Storage>() : sizeof(Storage) + 64;
+        const auto padding = memory ? std::uint64_t{128} : std::uint64_t{};
+        if (next->values.capacity() <= (maximum - allowance - padding) / sizeof(Handle))
         {
-            const auto rootBytes = sizeof(Storage) + 64 + next->values.capacity() * sizeof(Handle);
+            const auto dynamicBytes = next->values.capacity() * sizeof(Handle) + padding;
+            const auto rootBytes = allowance + dynamicBytes;
             RecordOwnershipBounds total{rootBytes, rootBytes, 0};
             bool measurable = true;
             if constexpr (requires(const Handle& entry) { entry->OwnershipBounds(); })
@@ -156,7 +164,19 @@ template <typename Handle> class HistoryEntries final
             if (measurable)
                 next->bounds = total;
         }
-        _root = std::move(next);
+        if (memory)
+        {
+            // Only the completed private vector is exposed. Constructor failure keeps the old stack intact.
+            // Borrowed entry/snapshot roots are already charged by their own controls, not this stack.
+            if (!next->bounds)
+                throw std::bad_alloc{};
+            const auto dynamicBytes = next->values.capacity() * sizeof(Handle) + 128;
+            const auto retiredBytes = next->bounds->ownershipBytes;
+            _root = MakeLocallyOwnedPublicationObject<Storage>(std::move(memory), retiredBytes, dynamicBytes,
+                                                               std::move(*next));
+        }
+        else
+            _root = std::move(next);
     }
     std::shared_ptr<const Storage> _root;
 };

@@ -165,7 +165,7 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
         // A run that closes before its capture has failed it (exit 9), whatever else happened.
         _screenshotResult = E_PENDING;
     }
-    if (screenshotDpi == 96 || screenshotDpi == 144)
+    if (screenshotDpi == 96 || screenshotDpi == 144 || screenshotDpi == 192)
     {
         _screenshotDpi = screenshotDpi;
     }
@@ -530,8 +530,10 @@ void Application::RenderFrame() noexcept
         // Bind the actual source argument for THIS rendering attempt, including a device-rebuild retry.
         cancellationSourceSelected =
             _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
-        return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph)
-                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct);
+        return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph,
+                                                               _selectionOutlineInitialized ? this : nullptr)
+                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct, nullptr,
+                                                               _selectionOutlineInitialized ? this : nullptr);
     };
     HRESULT result = render();
     if (result == S_FALSE)
@@ -632,6 +634,8 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
         _committedDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
         _pendingDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
     }
+    if (_selectionOutlineInitialized)
+        _selectionOutlineDisplay.SetSuspendedOwner(unseen && !_selectionOutlineAllowHiddenForTest);
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -3554,8 +3558,8 @@ void Application::SyncTransformOverlay() noexcept
 bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
                                                      std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
 {
-    if (!_chrome || !_session.Document() || !outline.HasStorage())
-        return false;
+    if (!_chrome || !_session.Document() || !outline.HasStorage() || _selectionOutlineInitialized)
+        return false; // The original numeric result retires in its original worker; no unused owner cache.
     const auto shown = _session.DisplayedSelectionValue();
     const auto identity = shown.selection ? shown.selection->loops.Identity() : nullptr;
     if (outline.SourceIdentity() != identity)
@@ -3571,6 +3575,11 @@ bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline ou
 
 void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept
 {
+    if (_selectionOutlineInitialized)
+    {
+        SyncPreparedSelectionOutlineOwner(shown);
+        return;
+    }
     const bool hasDocument = _session.Document().has_value();
     const auto& current = shown ? shown->selection : _overlaySelection;
     const Vec2 translation = shown ? shown->translation : _overlaySelectionTranslation;
@@ -3626,6 +3635,14 @@ void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexc
         _overlayBacking = _viewport.backingScale;
         _overlaySelectionTranslation = translation;
     }
+    SyncLassoOverlay();
+}
+
+void Application::SyncLassoOverlay() noexcept
+{
+    const bool hasDocument = _session.Document().has_value();
+    const Vec2 origin = _viewport.DocumentRectOrigin(DocumentSize());
+    const double scale = _viewport.ViewScale();
     std::optional<CanvasOverlay::Draft> draft;
     if (hasDocument && _session.PendingLasso().has_value())
     {
@@ -3667,6 +3684,8 @@ void Application::BindCompositionDevice() noexcept
             _committedDisplay.DeviceChangedOwner();
             _pendingDisplay.DeviceChangedOwner();
         }
+        if (_selectionOutlineInitialized)
+            _selectionOutlineDisplay.RetryOwner();
         _strokeFinishSource.DeviceChangedOwner();
         return;
     }
@@ -3694,6 +3713,8 @@ void Application::BindCompositionDevice() noexcept
             _committedDisplay.DeviceChangedOwner();
             _pendingDisplay.DeviceChangedOwner();
         }
+        if (_selectionOutlineInitialized)
+            _selectionOutlineDisplay.RetryOwner();
         _strokeFinishSource.DeviceChangedOwner();
     }
 }
@@ -3724,6 +3745,8 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    if (_selectionOutlineInitialized)
+        _selectionOutlineDisplay.StopOwner();
     if (_utilityReadbackInitialized)
         _utilityReadback.StopOwner();
     if (_committedDisplayInitialized)
@@ -3780,6 +3803,8 @@ void Application::Shutdown() noexcept
                  owner._pendingDisplay.JoinedShutdownOwner();
                  owner._committedDisplay.JoinedShutdownOwner();
              }
+             if (owner._selectionOutlineInitialized)
+                 owner._selectionOutlineDisplay.JoinedShutdownOwner();
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;
              owner._shapeCommitPreview.reset();
@@ -3806,6 +3831,8 @@ void Application::Shutdown() noexcept
                  owner._pendingDisplay.RetireShutdownForWork();
                  owner._committedDisplay.RetireShutdownForWork();
              }
+             if (owner._selectionOutlineInitialized)
+                 owner._selectionOutlineDisplay.RetireShutdownForWork();
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
@@ -3851,6 +3878,13 @@ void Application::Shutdown() noexcept
         if (!_utilityReadback.ReleaseJoinedChargesOwner() || !_utilityReadback.CloseOwner())
             std::terminate();
         _utilityReadbackInitialized = false;
+    }
+    if (_selectionOutlineInitialized)
+    {
+        if (!_selectionOutlineDisplay.CloseAfterWorkersOwner())
+            std::terminate();
+        _selectionOutlineInitialized = false;
+        _selectionOutlineViewValid = false;
     }
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();

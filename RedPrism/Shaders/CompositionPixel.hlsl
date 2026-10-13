@@ -465,6 +465,30 @@ float4 PixelMain(PixelInput input) : SV_TARGET
     int2 destPixel = int2(input.position.xy);
     float2 document = viewOrigin + input.position.xy * viewScale;
 
+    if (passMode == kCompositionPassSelectionOutline)
+    {
+        // This overlay is already rasterized on its exact device-pixel grid. The owner only selects a
+        // complete phase; no document geometry, reduction, derivatives or texture upload happens here.
+        float2 local = input.position.xy - viewOrigin;
+        float4 outline = float4(0, 0, 0, 0);
+        if (local.x >= 0 && local.y >= 0 && local.x < layerSize.x && local.y < layerSize.y)
+        {
+            int2 maskPixel = int2(local);
+            float solid = saturate(g_source.Load(int3(maskPixel, 0)).r);
+            float dash = saturate(g_mask.Load(int3(maskPixel, 0)));
+            // White underlay, then black dash: premultiplied source-over, composed once over the target.
+            float white = solid * (1.0 - dash);
+            outline = float4(white, white, white, dash + white);
+            if ((flags & kCompositionFlagSelectionClip) != 0)
+            {
+                // Clip the combined result once. Independent plane clips change fractional edge colors.
+                float2 cell = float2(maskPixel);
+                float2 coverage = saturate(min(cell + 1.0, sourceRect.zw) - max(cell, sourceRect.xy));
+                outline *= coverage.x * coverage.y;
+            }
+        }
+        return outline;
+    }
     if (passMode == kCompositionPassLayerAdjust)
     {
         // The transient target is on the layer's pixel grid, before its transform, opacity and real mask.

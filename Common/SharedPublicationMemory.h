@@ -2,7 +2,9 @@
 
 #include "Jobs.h"
 
+#include <atomic>
 #include <cstdint>
+#include <limits>
 #include <memory>
 
 struct PublicationMemoryNode;
@@ -22,14 +24,18 @@ class SharedPublicationMemory final
     };
 
   public:
-    explicit SharedPublicationMemory(ConstructionTag, PublicationMemoryNode* node) noexcept : _node(node) {}
+    explicit SharedPublicationMemory(ConstructionTag, PublicationMemoryNode* node, std::uint64_t localLimit) noexcept
+        : _node(node), _localAllocationLimit(localLimit)
+    {
+    }
     SharedPublicationMemory(const SharedPublicationMemory&) = delete;
     SharedPublicationMemory& operator=(const SharedPublicationMemory&) = delete;
     SharedPublicationMemory(SharedPublicationMemory&&) = delete;
     SharedPublicationMemory& operator=(SharedPublicationMemory&&) = delete;
     [[nodiscard]] static std::uint64_t OwnershipAllowance() noexcept;
     // Worker only, under the original complete admission. Allocation failure reaches the Job runner.
-    [[nodiscard]] static std::shared_ptr<SharedPublicationMemory> CreateForWork();
+    [[nodiscard]] static std::shared_ptr<SharedPublicationMemory> CreateForWork(
+        std::uint64_t localLimit = (std::numeric_limits<std::uint64_t>::max)());
     [[nodiscard]] std::int32_t BindForPublication(JobScheduler& scheduler, JobTicket original) noexcept;
     // Exact successful Completed callback, after this original job's useful producers have joined. Transfers
     // the entire descriptor-reserved admission before exposing immutable preview metadata. No fresh admission,
@@ -62,9 +68,20 @@ class SharedPublicationMemory final
     [[nodiscard]] bool BoundTo(const JobScheduler& scheduler, JobTicket original) const noexcept;
     [[nodiscard]] std::uint64_t Bytes() const noexcept;
     [[nodiscard]] std::uint64_t ResidentBytes() const noexcept;
+    // Local newly allocated metadata/control blocks only. These diagnostics do not admit memory or
+    // change a bound lease. The producer must opt in for EVERY new object in the selected output graph.
+    [[nodiscard]] std::uint64_t LocalAllocationBytes() const noexcept;
+    // Called after useful producers join. Binding seals new allocations automatically; retired object/control
+    // releases remain permitted. Repeated sealing returns false and never unseals an old accounting owner.
+    [[nodiscard]] bool SealLocalAllocations() const noexcept;
+    [[nodiscard]] bool TryAccountLocalAllocation(std::uint64_t bytes) const noexcept;
+    void ReleaseLocalAllocation(std::uint64_t bytes) const noexcept;
 
   private:
     // The allocator releases this accounting node after the shared control block itself is freed.
     // A surviving weak reference still owns charged control-block memory after all graph data dies.
     PublicationMemoryNode* _node;
+    const std::uint64_t _localAllocationLimit; // Original admitted envelope; never grows after construction.
+    mutable std::atomic<std::uint64_t> _localAllocationBytes{0};
+    mutable std::atomic<bool> _localAllocationSealed{false};
 };

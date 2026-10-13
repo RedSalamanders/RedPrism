@@ -260,7 +260,9 @@ int Application::RunCanvasBrushBoundarySelfTest() noexcept
                     strokeReceipt.Read().outcome == HostOutcome::Succeeded &&
                         state.dependent.Read().outcome == (refused ? HostOutcome::Failed : HostOutcome::Succeeded) &&
                         !_canvasBrushInput.Busy() && !_session.PendingBrushOpening() && !_activeHostRequest &&
-                        _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 && _jobs.ReservedMemoryBytes() == 0 &&
+                        _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
+                        _layerMetadataTestGate->originalAccountingBound &&
+                        _layerMetadataTestGate->accountingOutputBytes > 0 && MetadataAccountingSettledForTest() &&
                         !_opacityEdit && _session.history.UndoCount() == 2))
             return 5;
         const auto* layer = findLayer(_session.Document().value(), sourceId);

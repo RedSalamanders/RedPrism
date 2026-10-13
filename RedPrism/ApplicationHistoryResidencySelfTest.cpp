@@ -4,6 +4,7 @@
 
 #include "ChromeHost.h"
 #include "HistoryResidencyTestGate.h"
+#include "LayerMetadataTestGate.h"
 
 #include <algorithm>
 #include <array>
@@ -77,6 +78,14 @@ int Application::RunHistoryResidencySelfTest() noexcept
         if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled || _historyWork.Busy())
             return 5;
         _historyResidencySource.CloseAfterWorkers();
+        // Only Ordered admits a metadata producer. Observe its original durable output separately from
+        // the maintenance/cache jobs; a live published graph must remain charged after those jobs retire.
+        _layerMetadataTestGate.reset();
+        if (mode == Mode::Ordered)
+        {
+            _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+            _layerMetadataTestGate->hold = false;
+        }
         DocumentFixture fixture;
         fixture.width = 2;
         fixture.height = 1;
@@ -175,7 +184,11 @@ int Application::RunHistoryResidencySelfTest() noexcept
         const bool settled = SettleJobs(_jobs, 15000, dispatch, &state) == SettleResult::Settled;
         if (!expect(name, "actual-source-and-worker-settle",
                     settled && cacheCompleted && sparse.ByteSize() == 8 && !_historyResidencyTicket &&
-                        !_historyResidencyStamp && !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0))
+                        !_historyResidencyStamp && !_historyWork.Busy() &&
+                        (mode == Mode::Ordered ? _layerMetadataTestGate->originalAccountingBound &&
+                                                     _layerMetadataTestGate->accountingOutputBytes > 0 &&
+                                                     MetadataAccountingSettledForTest()
+                                               : _jobs.ReservedMemoryBytes() == 0)))
             return 5;
         if (!expect(name, "admitted-capture-and-off-owner-retirement",
                     gate->captures.load() == 1 && gate->reservationHeld.load() && gate->retired.load() &&
@@ -222,6 +235,7 @@ int Application::RunHistoryResidencySelfTest() noexcept
             return 5;
     }
 
+    _layerMetadataTestGate.reset();
     const auto installFixture = [this, &live, &leaf](Raster& sparse) noexcept
     {
         DocumentFixture fixture;

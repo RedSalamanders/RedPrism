@@ -1211,15 +1211,26 @@ cannot close F5b.2b, F5d or G1 by itself.
 
 ### Prepared history storage topology
 
-History preparation owns complete immutable storage indexes before publication. Cached keys hold their raster,
-layer and selection owners. Fixed recent-root matching reuses a compatible index without layer/point traversal.
-Index vector capacity and object/control allowances are covered by cached snapshot bounds; worker construction
-and temporary pending/dedup storage stay inside admitted history preparation peaks. No index producer runs during
-owner publication. Reference methods keep a single document scan and iterative nested closure without constructing
-an index object; their final caller migration and comparative cost measurements remain P1 work. The index retains a sampled resident total with a coherent residency-epoch witness; diagnostic queries read fresh
-resident bytes. Opted-in owner completion makes one nonblocking permit attempt and resumes the existing ticket on
-a worker when busy or stale. An unchanged witness avoids cloning/rebuilding the index. Declared admission includes
-one extra refresh candidate/index/container overlap before capture and remains held through apply/drop and retirement.
+History preparation owns immutable persistent indexes before publication. Cached keys hold their raster,
+layer and selection owners. A copied AVL index shares one root; changed membership copies bounded search paths
+and rotations. Exact direct-source equality reuses scalar-edit raster root groups. Sparse descendants change
+membership only on first/last active parent edges. Unique metadata deduplicates shared root groups; conservative
+retirement still covers everything each owner can release. Node/control allowances, temporary pending/dedup
+storage and private candidate/refresh overlap stay inside admitted preparation peaks. No index producer runs
+during owner publication. Reference methods keep their complete diagnostic traversal; final caller migration
+and comparative cost measurements remain P1 work. The index retains a sampled resident total with a coherent
+residency-epoch witness; diagnostic queries read fresh resident bytes.
+
+The process residency journal retains exactly 4,096 value records of 24 bytes (96 KiB), plus its epoch and
+the atomic serial allocator. It retains no raster or publication control. Reads and writes use the existing
+exclusive residency lease. Changed-epoch sampling uses a separately admitted fixed 96 KiB worker heap scratch
+buffer, allocated before acquiring the lease. Its allocation failure reaches the worker runner and publishes nothing.
+Unchanged epochs avoid owner scans. A complete suffix updates matching records; overwritten/unavailable suffixes
+fall back to a cancellable worker scan. Serial/epoch exhaustion refuses without wrapping.
+Owner completion makes one nonblocking permit attempt and resumes the existing ticket on a worker when busy
+or stale. Admission uses cached source-occurrence and existing-index metadata bounds for path/rotation peaks,
+including one extra refresh candidate/index/container overlap before capture. It remains held through
+apply/drop and retirement. These declarations still require actual production phase/cost qualification.
 Bounded growth subscriptions publish readiness only and join notices before scheduler teardown. The history-only
 source remains self-test scoped; migration of every caller, activation, comparative peak/cost measurement and G1
 qualification remain required H3 work. See `Document_History.md` for the staged publication contract.
@@ -1484,3 +1495,33 @@ new owner allocation are needed to adopt a matching source. Empty points retain 
 same source identity is held strongly by the numeric transport, preventing address reuse. Selection math,
 fixed-DIP stroke/dashes, scalar view mapping and the single-threaded Direct2D factory contract are unchanged.
 Direct2D path construction/retirement, other selection producers and complete S5/G1 remain separate gaps.
+
+### Sealed local allocation accounting for immutable metadata
+
+A selected metadata job must reserve its complete construction/input/retirement envelope before source capture. Its immutable local output limit additionally constrains every newly owned publication allocation. The local ledger is not a second admission budget and does not authorize useful work, source capture, publication or GPU work. Counter updates use checked arithmetic; allocation and sealing failures fail the selected operation with the live state unchanged.
+
+Before original terminal or joined-retirement accounting transfer, all useful producers must join and the output ledger must be sealed. The persistent output charge includes the actual newly owned data/control capacities and its accounting allowance. The temporary part is the exact remaining original reservation, including input and retirement overlap. No later output allocation is permitted. Older shared nodes retain their original charge. Both parts survive every readable or weak/control owner until actual destruction and consumed acknowledgement; idle useful work is not permission to refund a live graph. Complete caller costs and G1 qualification remain required.
+
+
+### Bounded selection ownership components (P1)
+
+The shared owner-work multiplexer has eleven fixed leaf slots. Its complete acquired set is GPU work,
+retry wait, path-read wait, utility readback, recorded commands, history residency, layer rows, committed
+display, pending display, stroke finish and selection outline. A twelfth leaf refuses; duplicate/self
+attachment and mutation during a pump refuse. Each outer pump services one ready leaf with rotating
+fairness. Waiting leaves create no polling wake. Both selection-first and display-first cold acquisition
+must preserve exact membership; joined shutdown empties and detaches every leaf before refund.
+
+`BoundedLassoPoints` is the CPU storage foundation for future admitted lasso callers. The opening worker
+allocates and touches one bounded arena under the original whole-operation reservation. A sole writer
+seals immutable 64-point blocks; snapshots retain the shared arena and copy at most one inline 64-point
+tail plus cached bounds/count. Push, Pop, Clear and capture perform no prefix traversal or allocation.
+Slots visible to old snapshots are never reused. Exhaustion refuses before mutation. Workers traverse
+input order with an admitted index stack and cancellation per block. Moved writers leave no active state.
+
+The arena's local allocation owner and its original scheduler reservation are distinct. Dropping a
+strong snapshot may free its shared control while queuing the arena for worker destruction. The original
+whole-operation charge remains retained until actual arena destruction and owner acknowledgement.
+`Document.Tests.BoundedLassoPoints` uses an independent vector/bounds model; the ticket tests use the
+actual scheduler through success, cancellation and deferred retirement. This component does not change
+the current lasso point vector, activate a host limit, migrate display/finish/history callers or qualify G1.

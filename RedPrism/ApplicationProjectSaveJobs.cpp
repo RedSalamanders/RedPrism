@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "LayerMetadataTestGate.h"
 #include "ProjectSaveTestGate.h"
 #include "ProjectSaveWork.h"
 #include "ProjectStore.h"
@@ -454,6 +455,7 @@ int Application::RunProjectSaveSelfTest() noexcept
             if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
                 std::_Exit(5); // no borrowed test state survives a failed join
             _projectSaveTestGate.reset();
+            _layerMetadataTestGate.reset();
             _forcedDiscardAnswer = oldForcedAnswer;
             std::error_code error;
             const auto target = std::filesystem::weakly_canonical(root, error);
@@ -466,6 +468,26 @@ int Application::RunProjectSaveSelfTest() noexcept
           Mode::Failure, Mode::Allocation, Mode::Stale, Mode::EditedPublished, Mode::PendingTransform,
           Mode::PendingOpacity, Mode::Admission, Mode::PathBudget})
     {
+        // CreateDocument records the previous document in Undo. Explicitly close this independent fixture
+        // first: its metadata output remains correctly charged while document/history/display readers exist.
+        // Join actual deferred destruction before admitting the next fixture; never relax its zero baseline.
+        _layerMetadataTestGate.reset();
+        _session.ClearDocument();
+        DocumentChanged();
+        const auto priorRetired = SettleJobs(_jobs, 15000, DispatchMessageThunk, this);
+        if (priorRetired != SettleResult::Settled || _session.Document() || _session.history.UndoCount() != 0 ||
+            _session.history.CanRedo() || _jobs.ReservedMemoryBytes() != 0)
+        {
+            std::fprintf(stderr,
+                         "DIAGNOSTIC project-save-host.prior-fixture case=%u settled=%u document=%u "
+                         "undo=%llu redo=%llu reserved=%llu\n",
+                         static_cast<unsigned int>(mode), priorRetired == SettleResult::Settled ? 1u : 0u,
+                         _session.Document() ? 1u : 0u, static_cast<unsigned long long>(_session.history.UndoCount()),
+                         _session.history.CanRedo() ? 1ull : 0ull,
+                         static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()));
+            std::fflush(stderr);
+            return 5;
+        }
         _session.CreateDocument(2, 1);
         const auto id = InsertPaintedLayer(_session, L"Save snapshot", 2, 1, {}, 0, 0xFF404040);
         _session.history.MarkSaved();
@@ -480,7 +502,13 @@ int Application::RunProjectSaveSelfTest() noexcept
             _session.PreviewTransform(draft);
         }
         else if (mode == Mode::PendingOpacity)
+        {
+            // Save closes this edit and retains its document/history output. Observe the current original
+            // metadata ticket without holding the worker or adding a source/control owner.
+            _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+            _layerMetadataTestGate->hold = false;
             OnLayerOpacity(0.5, ChromeEditPhase::Preview);
+        }
         const auto errors = _errorsShown;
         _projectSaveTestGate = std::make_shared<ProjectSaveTestGate>();
         if (!_projectSaveTestGate->release || id == Guid{})
@@ -515,14 +543,18 @@ int Application::RunProjectSaveSelfTest() noexcept
             : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget
                 ? HostOutcome::Failed
                 : HostOutcome::Succeeded;
+        const bool accountingSettled = mode == Mode::PendingOpacity
+                                           ? _layerMetadataTestGate->originalAccountingBound &&
+                                                 _layerMetadataTestGate->accountingOutputBytes > 0 &&
+                                                 MetadataAccountingSettledForTest()
+                                           : _jobs.ReservedMemoryBytes() == 0;
         bool correct = settled == SettleResult::Settled &&
                        (mode == Mode::Admission || mode == Mode::PathBudget
                             ? !state.visited && _projectSaveTestGate->visits.load() == 0
                             : state.visited && state.held) &&
                        actual.outcome == expected && !_activeHostRequest && !_hostWriteInFlight &&
-                       !_projectSaveTicket && !_projectSaveStamp && !_historyWork.Busy() &&
-                       _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
-                       _session.Document().has_value();
+                       !_projectSaveTicket && !_projectSaveStamp && !_historyWork.Busy() && accountingSettled &&
+                       _hostInputBudget.Used() == 0 && _session.Document().has_value();
         if (cancelled)
             correct = correct && state.cancelPending;
         const bool published = mode != Mode::CancelBefore && mode != Mode::Failure && mode != Mode::Allocation &&
@@ -570,6 +602,37 @@ int Application::RunProjectSaveSelfTest() noexcept
                                                                     : E_OUTOFMEMORY);
         else
             correct = correct && _errorsShown == errors;
+        if (!correct)
+        {
+            const auto metadata = _layerMetadataTestGate;
+            std::fprintf(
+                stderr,
+                "DIAGNOSTIC project-save-host.case=%u settled=%u visited=%u visits=%u held=%u outcome=%u "
+                "expected=%u error=%08X active=%u write=%u ticket=%u stamp=%u historyBusy=%u accounting=%u "
+                "reserved=%llu releasing=%llu idle=%u input=%llu document=%u published=%u exists=%u "
+                "pathBefore=%u revisionSame=%u modified=%u errors=%u originalErrors=%u errorId=%u "
+                "metaBound=%u metaObserved=%u metaOutput=%llu metaTemporaryExpired=%u metaOutputExpired=%u "
+                "preparedRows=%u committedDisplay=%u pendingDisplay=%u\n",
+                static_cast<unsigned int>(mode), settled == SettleResult::Settled ? 1u : 0u, state.visited ? 1u : 0u,
+                _projectSaveTestGate->visits.load(), state.held ? 1u : 0u, static_cast<unsigned int>(actual.outcome),
+                static_cast<unsigned int>(expected), static_cast<unsigned int>(actual.error),
+                _activeHostRequest ? 1u : 0u, _hostWriteInFlight ? 1u : 0u, _projectSaveTicket ? 1u : 0u,
+                _projectSaveStamp ? 1u : 0u, _historyWork.Busy() ? 1u : 0u, accountingSettled ? 1u : 0u,
+                static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()), _jobs.IsIdle() ? 1u : 0u,
+                static_cast<unsigned long long>(_hostInputBudget.Used()), _session.Document() ? 1u : 0u,
+                published ? 1u : 0u, GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES ? 1u : 0u,
+                _documentPath == L"before-save.prism" ? 1u : 0u,
+                _session.history.CurrentRevision() == revision ? 1u : 0u, _session.history.IsModified() ? 1u : 0u,
+                static_cast<unsigned int>(_errorsShown), static_cast<unsigned int>(errors),
+                static_cast<unsigned int>(_lastErrorId), metadata && metadata->originalAccountingBound ? 1u : 0u,
+                metadata && metadata->accountingObserved ? 1u : 0u,
+                metadata ? static_cast<unsigned long long>(metadata->accountingOutputBytes) : 0ull,
+                !metadata || metadata->accountingTemporary.expired() ? 1u : 0u,
+                !metadata || metadata->accountingOutput.expired() ? 1u : 0u, _preparedLayerRowsEnabled ? 1u : 0u,
+                _committedDisplayInitialized ? 1u : 0u, _pendingDisplayInitialized ? 1u : 0u);
+            std::fflush(stderr);
+        }
         std::fprintf(stderr, "%s project-save-host.case=%u\n", correct ? "PASS" : "FAIL",
                      static_cast<unsigned int>(mode));
         if (!correct)

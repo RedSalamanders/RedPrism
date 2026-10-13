@@ -108,7 +108,8 @@ class CanvasDocumentDraft final
         _records.erase(_records.begin() + static_cast<std::ptrdiff_t>(index));
         return true;
     }
-    [[nodiscard]] std::optional<CanvasDocument> Seal(CancelToken cancellation = {})
+    [[nodiscard]] std::optional<CanvasDocument> Seal(CancelToken cancellation = {},
+                                                     std::shared_ptr<const SharedPublicationMemory> memory = {})
     {
         if (_state == State::Consumed || cancellation.IsCancelled())
             return std::nullopt;
@@ -120,7 +121,8 @@ class CanvasDocumentDraft final
             _sealer = std::move(owned);
             _state = State::Sealing;
         }
-        auto root = _sealer.value().Seal(cancellation);
+        auto root = memory.use_count() ? _sealer.value().SealOwned(std::move(memory), cancellation)
+                                       : _sealer.value().Seal(cancellation);
         if (!root)
             return std::nullopt;
         _state = State::Consumed;

@@ -2,6 +2,7 @@
 
 #include "Jobs.h"
 #include "LayerMetadataWork.h"
+#include "SharedPublicationMemory.h"
 
 #include <atomic>
 #include <optional>
@@ -14,6 +15,12 @@
 
 struct LayerMetadataTestGate final
 {
+    // Harness-only original owner observations. Weak controls are deliberately reset after retirement;
+    // production has no gate and creates no extra readers. Access only after worker/owner stage fences.
+    std::weak_ptr<SharedPublicationMemory> accountingOutput, accountingTemporary;
+    JobTicket accountingTicket{};
+    std::uint64_t accountingOutputBytes = 0;
+    bool originalAccountingBound = false, accountingObserved = false;
     static constexpr UINT kMessage = WM_APP + 0x5c0;
     wil::unique_handle release;
     JobResult result;

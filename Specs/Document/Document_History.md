@@ -25,14 +25,29 @@ document's selection identity. Its cached charge includes the outer vector objec
 and each loop's retained point capacity; spare capacity counts. Opaque allocator/control-block overhead is
 covered by global headroom. The byte query never traverses selection points. Empty geometry owns no storage.
 
-## Managed P1.9 H3 storage-index candidate
+## Managed P1.9 H3 storage index
 
-The managed candidate uses a sealed `DocumentHistory::StorageIndex` whose identity keys own their entries,
-rasters and selections. Workers clone index containers and update membership for changed entries; transferring
-an entry between Undo and Redo leaves membership unchanged. Complete live raster/selection identities are excluded.
-`RetainedBytes` resamples unique resident storage on query; its diagnostic does not authorize a cached trim decision.
-Worker sampling and bounds construction still scan distinct owners, so changed-entry membership alone does not
-qualify H3's delta cost. Reference methods and unmatched documents retain the complete traversal fallback.
+The prepared path uses sealed immutable AVL indexes for entries, rasters and selections. Keys retain their
+owning values. Raster records use nonwrapping storage serials; selection and entry keys retain the object whose
+address identifies them. A copied index shares one root. Changes copy search paths and rotations, preserving
+unchanged subtrees and their original publication-memory owners. No previous-version chain is retained.
+Transferring an entry between Undo and Redo leaves membership unchanged. Complete live raster/selection
+identities are excluded. Checked reference counts and cached unique contributions preserve exact retained-byte
+limits. Cancellation, allocation failure and arithmetic refusal discard the private candidate.
+
+Prepared topology retains deduplicated direct image, thumbnail, mask and shape roots. Exact equality of those
+source fields reuses the root group for scalar or selection edits. Children of a sparse raster change membership
+only when that parent's history or live reference count becomes active or inactive. New parents are activated
+before old parents are removed, preserving shared descendants. Scalar edits visit direct roots, without walking
+the unchanged sparse DAG. The reference topology API and reference history methods retain complete traversal
+for diagnostics; `RetainedBytes` reads fresh resident bytes and does not authorize a cached trim decision.
+
+Sparse cache publication appends one value-only serial/epoch/self-byte record under the existing exclusive
+residency lease before publishing pixels and the matching epoch. The process journal has 4,096 records and no
+pixel, weak-control or accounting-owner references. Serial and epoch exhaustion refuse without wrapping.
+An unchanged epoch needs no owner scan. A complete contiguous journal suffix updates only matching retained
+records. Overwrite or unavailable witnesses require a cancellable worker rescan; partial suffixes never authorize
+publication. The existing owner permit still validates the exact sampled epoch without waiting.
 
 Cached retirement charges unique raster self-storage capacity (including future sparse assembly), selection
 capacity and layer/index/entry metadata. History-stack own metadata is an O(1) sealed-capacity calculation.
@@ -40,9 +55,14 @@ Pending, unmatched and additional-source bounds remain conservative. Partially c
 producer-owned; only successful checked bounds permit shared immutable publication. Owner publication swaps the
 old index into the worker-retired result. Sealed indexes use `AlwaysOnOwner` with their true byte bound, including
 small graphs; other release policies and the release-node layout remain unchanged. Workers without an owner TLS
-sink destroy inline. This candidate passes full managed x64 Debug r74, Release r75 and ASan Debug r76; native activation,
-current analysis/ARM64, late materialization and publication/reprepare synchronization, remaining reference
-cost and G1 are open ([evidence](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+sink destroy inline. Root groups and topology wrappers are sealed while uniquely producer-owned before shared
+publication. Unique metadata deduplicates shared root groups separately from conservative retirement bounds.
+Admission uses cached occurrence/metadata bounds for node and refresh overlap plus 96 KiB of fixed journal
+worker heap scratch, allocated before acquiring the lease. Source capture and construction remain behind complete operation admission.
+The previous map candidate's [historical matrix](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md) does not
+qualify these changed sources. Private foundation, journal and topology controls pass; native configuration,
+production admission/retirement cost, ordinary activation, remaining reference callers and G1 are still required
+by the [H3 plan](../Plans/WIP/IncrementalHistoryStorage_2026-10-12.md).
 
 ## Transactions
 
@@ -361,3 +381,13 @@ clean document whose Cancel leaves the stroke live for its release to record.
 The WARP self-test also verifies that the application session receives the machine-derived limit. Debug and
 ASan Debug `test.ps1` MUST run `DocumentTests.exe`. Immutable selection capacities are included as specified above;
 incremental raster/history accounting remains tracked by P1.9.
+
+## Original allocation ownership for metadata publications
+
+An admitted metadata producer records every newly allocated record root, topology/root group, history snapshot, entry, stack and persistent-index node against its original publication-memory owner. Object, retained child capacity and shared-control allowances are separate from the complete operation admission. Reused immutable nodes retain their existing original owners; they are not reassigned to the younger edit. Reference allocations without an accounting owner retain their established layout and release policy.
+
+The producer's local allocation limit is immutable before construction. Checked overflow, insufficient budget and an attempted allocation after sealing refuse before a publication can escape. Once useful producers have joined, seal the ledger and partition the original complete reservation into its persistent output and temporary retirement charges. Publication, stale refusal, failure, cancellation and joined Close keep their distinct existing authority. No new reservation, admission query or early refund is permitted at partitioning.
+
+Worker destruction releases data contributions only after those bytes have actually been destroyed. A copied or weak shared control retains its original accounting owner through actual control deallocation. Therefore an idle scheduler may have a nonzero charge while the live document or history still owns metadata. A completed edit does not imply zero reserved memory. Final graph/control destruction and owner acknowledgement return the original charge exactly once.
+
+Reference history callers must enumerate the complete storage closure from the held direct raster roots, even when a managed topology has no preflattened RasterOwners vector. Nested sparse bases/tiles and shared children participate in the existing dedup set. A reference byte query never materializes a sparse cache; oldest-first trim and legacy saved/revision/Undo/Redo semantics remain unchanged. Native qualification and measured phase costs remain separate requirements.

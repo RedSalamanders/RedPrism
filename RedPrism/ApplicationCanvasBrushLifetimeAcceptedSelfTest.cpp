@@ -226,7 +226,7 @@ int Application::RunCanvasBrushLifetimeAcceptedSelfTest() noexcept
         if (!expect(scenario.name, "all-owners-and-reservations-retire",
                     !_canvasLifetime && !_canvasBrushInput.Busy() && !_session.PendingBrushOpening() &&
                         !_activeHostRequest && _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
-                        _jobs.ReservedMemoryBytes() == 0 &&
+                        MetadataAccountingSettledForTest() &&
                         stroke.Read().outcome == (scenario.save ? HostOutcome::Succeeded : HostOutcome::Cancelled)))
             return 5;
         bool exactSaved = GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES;

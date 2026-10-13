@@ -1,5 +1,7 @@
 #include "Document.h"
-#include "PublicationObject.h"
+#include "LocallyOwnedPublication.h"
+#include "PersistentOwnerIndex.h"
+#include "SharedPublicationMemory.h"
 
 #include <algorithm>
 #include <array>
@@ -75,6 +77,157 @@ std::shared_ptr<const HistoryStorageTopology> HistoryStorageTopology::Prepare(
     return cancellation.IsCancelled() ? nullptr : result;
 }
 
+namespace
+{
+struct HistoryRasterRootPolicy final
+{
+    std::uint64_t operator()(const Raster& value) const noexcept
+    {
+        return value.StorageSerial();
+    }
+    static std::uint64_t RetirementBytes(const Raster& value) noexcept
+    {
+        return value.RetirementMemoryBytes();
+    }
+};
+} // namespace
+struct HistoryRasterRootGroup final
+{
+    using Index = PersistentOwnerIndex<Raster, HistoryRasterRootPolicy>;
+    std::vector<Raster> owners;
+    Index index;
+    std::uint64_t metadataBytes = 0;
+};
+
+std::span<const Raster> HistoryStorageTopology::RasterRoots() const noexcept
+{
+    return _managedRoots ? std::span<const Raster>{_managedRoots->owners} : std::span<const Raster>{_rasters};
+}
+const void* HistoryStorageTopology::RasterRootIdentity() const noexcept
+{
+    return _managedRoots ? static_cast<const void*>(_managedRoots.get()) : static_cast<const void*>(_rasters.data());
+}
+bool HistoryStorageTopology::HasRasterRoot(std::uint64_t serial) const noexcept
+{
+    if (!serial)
+        return false;
+    if (_managedRoots)
+        return _managedRoots->index.Find(serial) != nullptr;
+    return std::any_of(_rasters.begin(), _rasters.end(),
+                       [serial](const Raster& owner) noexcept { return owner.StorageSerial() == serial; });
+}
+std::uint64_t HistoryStorageTopology::SharedRootMetadataBytes() const noexcept
+{
+    return _managedRoots ? _managedRoots->metadataBytes : 0;
+}
+std::shared_ptr<const HistoryStorageTopology> HistoryStorageTopology::PrepareIncremental(
+    const std::optional<CanvasDocument>& document, std::shared_ptr<const HistoryStorageTopology> previous,
+    CancelToken cancellation, std::shared_ptr<const SharedPublicationMemory> memory)
+{
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (cancellation.IsCancelled())
+        return {};
+    const auto add = [](std::uint64_t& bytes, std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    const auto sourceBytes = document ? document->RetirementMemoryBytes() : 0;
+    const auto layerCount = document ? document->layers.size() : 0;
+    const auto perRoot = sizeof(Raster) + HistoryRasterRootGroup::Index::NodeAllocationAllowance();
+    if ((document && !sourceBytes) || layerCount > maximum / 5 ||
+        layerCount * 5 > (maximum - LocallyOwnedPublicationAllowance<HistoryRasterRootGroup>()) / perRoot)
+        return {};
+    const auto capacity = layerCount * 5;
+    auto rootMetadataBound = LocallyOwnedPublicationAllowance<HistoryRasterRootGroup>() + capacity * perRoot;
+    if (!add(rootMetadataBound, 128))
+        return {};
+    auto retirement = sourceBytes;
+    if (!add(retirement, rootMetadataBound) ||
+        !add(retirement, LocallyOwnedPublicationAllowance<HistoryStorageTopology>()))
+        return {};
+    if (!memory.use_count())
+        memory = SharedPublicationMemory::CreateForWork();
+    auto result = std::make_unique<HistoryStorageTopology>(ConstructionTag{});
+    result->_hasDocument = document.has_value();
+    if (document)
+    {
+        result->_layers = document->layers;
+        if (document->selection)
+            result->_selection = document->selection->loops;
+    }
+    bool unchanged = previous && previous->_managedRoots && previous->_hasDocument == document.has_value() &&
+                     previous->_layers.size() == layerCount;
+    // Exact source fields, strongly held by both record roots. Scalar metadata may differ; no pointer-only
+    // change notification or hash collision can authorize source equivalence. No raster DAG is walked here.
+    for (std::size_t index = 0; unchanged && index < layerCount; ++index)
+    {
+        if (cancellation.IsCancelled())
+            return {};
+        const auto& before = previous->_layers[index];
+        const auto& after = document->layers[index];
+        unchanged = before.shapeImage == after.shapeImage && before.asset.has_value() == after.asset.has_value() &&
+                    before.mask.has_value() == after.mask.has_value();
+        if (unchanged && before.asset)
+            unchanged = before.asset->image == after.asset->image && before.asset->thumbnail == after.asset->thumbnail;
+        if (unchanged && before.mask)
+            unchanged = before.mask->asset.image == after.mask->asset.image &&
+                        before.mask->asset.thumbnail == after.mask->asset.thumbnail;
+    }
+    if (unchanged)
+        result->_managedRoots = previous->_managedRoots;
+    else
+    {
+        auto roots = std::make_unique<HistoryRasterRootGroup>();
+        roots->owners.reserve(static_cast<std::size_t>(capacity));
+        const auto queue = [&](const Raster& owner)
+        {
+            if (cancellation.IsCancelled())
+                return false;
+            if (!owner.HasStorage() || roots->index.Find(owner.StorageSerial()))
+                return true;
+            if (!roots->index.TrySet(owner, memory, cancellation, roots->index))
+                return false;
+            roots->owners.push_back(owner);
+            return true;
+        };
+        for (const auto& layer : result->_layers)
+        {
+            if (!queue(layer.shapeImage) ||
+                (layer.asset && (!queue(layer.asset->image) || !queue(layer.asset->thumbnail))) ||
+                (layer.mask && (!queue(layer.mask->asset.image) || !queue(layer.mask->asset.thumbnail))))
+                return {};
+        }
+        auto bytes = LocallyOwnedPublicationAllowance<HistoryRasterRootGroup>();
+        if (roots->owners.capacity() > (maximum - bytes) / sizeof(Raster))
+            return {};
+        bytes += roots->owners.capacity() * sizeof(Raster);
+        if (!add(bytes, 128))
+            return {};
+        if (roots->index.size() > (maximum - bytes) / HistoryRasterRootGroup::Index::NodeAllocationAllowance())
+            return {};
+        roots->metadataBytes = bytes + roots->index.size() * HistoryRasterRootGroup::Index::NodeAllocationAllowance();
+        auto rootRetirement = sourceBytes;
+        if (!add(rootRetirement, roots->metadataBytes))
+            return {};
+        result->_managedRoots = MakeLocallyOwnedPublicationObject<HistoryRasterRootGroup>(
+            memory, rootRetirement, roots->owners.capacity() * sizeof(Raster) + 128, std::move(*roots));
+    }
+    result->_metadataBytes = LocallyOwnedPublicationAllowance<HistoryStorageTopology>();
+    if (!add(result->_metadataBytes, result->_managedRoots->metadataBytes))
+        return {};
+    result->_retirementBytes = sourceBytes;
+    if (!add(result->_retirementBytes, result->_metadataBytes))
+        return {};
+    if (cancellation.IsCancelled())
+        return {};
+    const auto finalRetirement = result->_retirementBytes;
+    return MakeLocallyOwnedPublicationObject<HistoryStorageTopology>(std::move(memory), finalRetirement, 0,
+                                                                     std::move(*result));
+}
+
 bool HistoryStorageTopology::Matches(const std::optional<CanvasDocument>& document) const noexcept
 {
     return _hasDocument == document.has_value() &&
@@ -96,7 +249,13 @@ std::shared_ptr<const HistoryStorageTopology> DocumentHistory::PrepareTopology(
     for (const auto& candidate : candidates)
         if (candidate && candidate->storageTopology && candidate->storageTopology->Matches(document))
             return candidate->storageTopology;
-    return HistoryStorageTopology::Prepare(document, cancellation, state.publicationMemory);
+    auto previous = CurrentStorageTopology(state);
+    // StorageIndex is defined below; select a strongly owning recent snapshot here instead.
+    for (const auto& candidate : candidates)
+        if (!previous && candidate && candidate->storageTopology)
+            previous = candidate->storageTopology;
+    return HistoryStorageTopology::PrepareIncremental(document, std::move(previous), cancellation,
+                                                      state.publicationMemory);
 }
 
 std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(Snapshot snapshot,
@@ -106,8 +265,11 @@ std::shared_ptr<const DocumentHistory::Snapshot> DocumentHistory::SealSnapshot(S
     snapshot.storageTopology = PrepareTopology(snapshot.document, state, cancellation);
     if (!snapshot.storageTopology || cancellation.IsCancelled())
         return {};
-    return MakePublicationObject<const Snapshot>(state.publicationMemory, kDeferredReleaseThreshold,
-                                                 std::move(snapshot));
+    const auto bounds = snapshot.OwnershipBounds();
+    if (!bounds)
+        return {};
+    return MakeLocallyOwnedPublicationObject<const Snapshot>(state.publicationMemory, bounds->ownershipBytes, 0,
+                                                             std::move(snapshot));
 }
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
@@ -319,8 +481,16 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEdit(
         return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
         return std::nullopt;
-    auto entry = MakePublicationObject<const Entry>(result.state.publicationMemory, kDeferredReleaseThreshold,
-                                                    std::move(name), std::move(openingOwner), std::move(finishedOwner));
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
+        return std::nullopt;
+    const auto nameBytes = (name.capacity() + 1) * sizeof(wchar_t) + 64;
+    Entry draftEntry{std::move(name), std::move(openingOwner), std::move(finishedOwner)};
+    const auto entryBounds = draftEntry.OwnershipBounds();
+    if (!entryBounds)
+        return std::nullopt;
+    auto entry = MakeLocallyOwnedPublicationObject<const Entry>(
+        result.state.publicationMemory, entryBounds->ownershipBytes, nameBytes, std::move(draftEntry));
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
     result.state.past.push_back(entry, result.state.publicationMemory);
@@ -661,19 +831,45 @@ bool AddTopologyBytes(const HistoryStorageTopology& topology, std::unordered_set
         bytes += static_cast<std::size_t>(amount);
         return true;
     };
-    for (const auto& raster : topology.RasterOwners())
-        if (cancellation.IsCancelled() || !add(raster.Identity(), raster.ByteSize()))
+    // Managed topologies retain direct roots; the reference adapter must traverse their complete
+    // sparse closure too. Share the caller's identity set so aliased descendants count only once.
+    std::vector<Raster> pending;
+    const auto queue = [&](const Raster& raster)
+    {
+        if (raster.HasStorage() && seen.insert(raster.Identity()).second)
+            pending.push_back(raster);
+    };
+    for (const auto& raster : topology.RasterRoots())
+    {
+        if (cancellation.IsCancelled())
             return false;
+        queue(raster);
+    }
+    while (!pending.empty())
+    {
+        if (cancellation.IsCancelled())
+            return false;
+        Raster raster = std::move(pending.back());
+        pending.pop_back();
+        const auto amount = raster.ByteSize();
+        if (amount > (std::numeric_limits<std::size_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        queue(raster.Base());
+        for (const auto& tile : raster.Tiles())
+            queue(tile.pixels);
+    }
     const auto& selection = topology.SelectionOwner();
     return !cancellation.IsCancelled() && add(selection.Identity(), selection.StorageBytes());
 }
 
-std::shared_ptr<const HistoryStorageTopology> SnapshotTopology(const DocumentHistory::Snapshot& snapshot,
-                                                               CancelToken cancellation = {})
+std::shared_ptr<const HistoryStorageTopology> SnapshotTopology(
+    const DocumentHistory::Snapshot& snapshot, CancelToken cancellation = {},
+    std::shared_ptr<const SharedPublicationMemory> memory = {})
 {
     if (snapshot.storageTopology && snapshot.storageTopology->Matches(snapshot.document))
         return snapshot.storageTopology;
-    return HistoryStorageTopology::Prepare(snapshot.document, cancellation);
+    return HistoryStorageTopology::PrepareIncremental(snapshot.document, {}, cancellation, std::move(memory));
 }
 
 void AddDocumentBytes(const std::optional<CanvasDocument>& document, std::unordered_set<const void*>& seen,
@@ -788,6 +984,7 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
         std::uint64_t references = 0;
         std::uint64_t charge = 0;
         bool live = false;
+        std::uint64_t liveReferences = 0;
     };
     struct SelectionRecord final
     {
@@ -802,6 +999,51 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
         std::shared_ptr<const HistoryStorageTopology> before;
         std::shared_ptr<const HistoryStorageTopology> after;
     };
+    struct RasterPolicy final
+    {
+        std::uint64_t operator()(const RasterRecord& record) const noexcept
+        {
+            return record.owner.StorageSerial();
+        }
+        static std::uint64_t RetirementBytes(const RasterRecord& record) noexcept
+        {
+            return record.owner.RetirementMemoryBytes();
+        }
+    };
+    struct SelectionPolicy final
+    {
+        const void* operator()(const SelectionRecord& record) const noexcept
+        {
+            return record.owner.Identity();
+        }
+        static std::uint64_t RetirementBytes(const SelectionRecord& record) noexcept
+        {
+            auto bytes = record.owner.StorageBytes();
+            if (!Add(bytes, 64) || !MultiplyAdd(bytes, record.owner.size(), 64))
+                return 0;
+            return bytes;
+        }
+    };
+    struct EntryPolicy final
+    {
+        const void* operator()(const EntryRecord& record) const noexcept
+        {
+            return record.owner.get();
+        }
+        static std::uint64_t RetirementBytes(const EntryRecord& record) noexcept
+        {
+            const auto bounds = record.owner ? record.owner->OwnershipBounds() : std::nullopt;
+            if (!bounds || !record.before || !record.after)
+                return 0;
+            auto bytes = bounds->ownershipBytes;
+            if (!Add(bytes, record.before->MetadataBytes()) || !Add(bytes, record.after->MetadataBytes()))
+                return 0;
+            return bytes;
+        }
+    };
+    using RasterIndex = PersistentOwnerIndex<RasterRecord, RasterPolicy>;
+    using SelectionIndex = PersistentOwnerIndex<SelectionRecord, SelectionPolicy>;
+    using EntryIndex = PersistentOwnerIndex<EntryRecord, EntryPolicy>;
     struct Retire final
     {
         void operator()(StorageIndex* index) const noexcept
@@ -814,298 +1056,410 @@ struct DocumentHistory::StorageIndex final : DeferredReleaseNode
         }
     };
 
-    std::shared_ptr<const SharedPublicationMemory> publicationMemory; // Destroy maps/owners before accounting.
-    std::unordered_map<const void*, RasterRecord> rasters;
-    std::unordered_map<const void*, SelectionRecord> selections;
-    std::unordered_map<const Entry*, EntryRecord> entries;
+    std::shared_ptr<const SharedPublicationMemory> publicationMemory;
+    RasterIndex rasters;
+    SelectionIndex selections;
+    EntryIndex entries;
     std::shared_ptr<const HistoryStorageTopology> current;
     std::uint64_t metadataBytes = 0;
     std::uint64_t ownershipBytes = 0;
     std::uint64_t retainedBytes = 0;
     std::uint64_t residencyEpoch = 0;
+    // Immutable self-storage contributions counted once per identity. Node destruction bounds are separate.
+    std::uint64_t rasterSelfBytes = 0;
+    std::uint64_t selectionSelfBytes = 0;
+    std::uint64_t selectionMetadataBytes = 0;
 
-    [[nodiscard]] static std::unique_ptr<StorageIndex> Update(
-        const std::shared_ptr<const StorageIndex>& previous, std::span<const EntryHandle> desired,
-        std::shared_ptr<const HistoryStorageTopology> currentTopology, CancelToken cancellation,
-        PrepareObserver observer)
+    static std::uint64_t Key(const Raster& owner) noexcept
+    {
+        return owner.StorageSerial();
+    }
+    static const void* Key(const SelectionLoops& owner) noexcept
+    {
+        return owner.Identity();
+    }
+    static bool Add(std::uint64_t& total, std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - total)
+            return false;
+        total += amount;
+        return true;
+    }
+    static bool MultiplyAdd(std::uint64_t& total, std::uint64_t count, std::uint64_t size) noexcept
+    {
+        if (size && count > (std::numeric_limits<std::uint64_t>::max)() / size)
+            return false;
+        return Add(total, count * size);
+    }
+    static bool ReplaceContribution(std::uint64_t& total, std::uint64_t oldValue, std::uint64_t newValue) noexcept
+    {
+        if (oldValue > total)
+            return false;
+        auto candidate = total - oldValue;
+        if (!Add(candidate, newValue))
+            return false;
+        total = candidate;
+        return true;
+    }
+    bool Set(const RasterRecord& record, CancelToken cancellation)
+    {
+        const auto* old = rasters.Find(record.owner.StorageSerial());
+        const auto oldCharge = old ? old->charge : 0;
+        const auto oldBytes = old ? old->owner.StorageRetirementMemoryBytes() : 0;
+        const auto newBytes = record.owner.StorageRetirementMemoryBytes();
+        if (!newBytes || !ReplaceContribution(retainedBytes, oldCharge, record.charge) ||
+            !ReplaceContribution(rasterSelfBytes, oldBytes, newBytes))
+            return false;
+        return rasters.TrySet(record, publicationMemory, cancellation, rasters);
+    }
+    bool Set(const SelectionRecord& record, CancelToken cancellation)
+    {
+        const auto* old = selections.Find(record.owner.Identity());
+        std::uint64_t oldMetadata = 0;
+        std::uint64_t newMetadata = 64;
+        if (old)
+        {
+            oldMetadata = 64;
+            if (!MultiplyAdd(oldMetadata, old->owner.size(), 64))
+                return false;
+        }
+        if (!MultiplyAdd(newMetadata, record.owner.size(), 64) ||
+            !ReplaceContribution(retainedBytes, old ? old->charge : 0, record.charge) ||
+            !ReplaceContribution(selectionSelfBytes, old ? old->owner.StorageBytes() : 0,
+                                 record.owner.StorageBytes()) ||
+            !ReplaceContribution(selectionMetadataBytes, oldMetadata, newMetadata))
+            return false;
+        return selections.TrySet(record, publicationMemory, cancellation, selections);
+    }
+    bool Erase(RasterIndex& records, const RasterRecord& record, CancelToken cancellation)
+    {
+        if (!ReplaceContribution(retainedBytes, record.charge, 0) ||
+            !ReplaceContribution(rasterSelfBytes, record.owner.StorageRetirementMemoryBytes(), 0))
+            return false;
+        return records.TryErase(Key(record.owner), publicationMemory, cancellation, records);
+    }
+    bool Erase(SelectionIndex& records, const SelectionRecord& record, CancelToken cancellation)
+    {
+        auto metadata = std::uint64_t{64};
+        if (!MultiplyAdd(metadata, record.owner.size(), 64) || !ReplaceContribution(retainedBytes, record.charge, 0) ||
+            !ReplaceContribution(selectionSelfBytes, record.owner.StorageBytes(), 0) ||
+            !ReplaceContribution(selectionMetadataBytes, metadata, 0))
+            return false;
+        return records.TryErase(Key(record.owner), publicationMemory, cancellation, records);
+    }
+    static std::unique_ptr<StorageIndex> Update(const std::shared_ptr<const StorageIndex>& previous,
+                                                std::span<const EntryHandle> desired,
+                                                std::shared_ptr<const HistoryStorageTopology> currentTopology,
+                                                std::shared_ptr<const SharedPublicationMemory> memory,
+                                                CancelToken cancellation, PrepareObserver observer)
     {
         if (!currentTopology || !HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexClone, cancellation))
             return {};
-        // Only the producer clones these maps. Published indexes have no mutable reader API and every key
-        // owns its entry/raster/selection. Moving an entry between Undo and Redo does not change membership.
-        // A partial producer never escapes this worker preparation or uses a copied retirement bound.
-        // Install shared ownership/the deferred deleter only after final capacities have been sealed.
         auto result = previous ? std::make_unique<StorageIndex>(*previous) : std::make_unique<StorageIndex>();
+        // Reference preparation may be unbound. Production supplies its pre-admitted original owner.
+        result->publicationMemory = memory.use_count() ? std::move(memory) : SharedPublicationMemory::CreateForWork();
         std::unordered_set<const Entry*> wanted;
         wanted.reserve(desired.size());
         for (const auto& entry : desired)
-        {
             if (cancellation.IsCancelled() || !entry || !wanted.insert(entry.get()).second)
                 return {};
-        }
-        for (auto it = result->entries.begin(); it != result->entries.end();)
-        {
-            if (cancellation.IsCancelled())
-                return {};
-            if (wanted.contains(it->first))
-                ++it;
-            else
-            {
-                if (!result->ChangeTopology(*it->second.before, false, cancellation) ||
-                    !result->ChangeTopology(*it->second.after, false, cancellation))
-                    return {};
-                it = result->entries.erase(it);
-                if (!HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexMembership, cancellation))
-                    return {};
-            }
-        }
+        const auto previousEntries = result->entries;
         for (const auto& entry : desired)
         {
             if (cancellation.IsCancelled())
                 return {};
-            if (result->entries.contains(entry.get()))
+            if (result->entries.Find(entry.get()))
                 continue;
-            auto before = SnapshotTopology(*entry->before, cancellation);
-            auto after = SnapshotTopology(*entry->after, cancellation);
-            if (!before || !after || !result->ChangeTopology(*before, true, cancellation) ||
-                !result->ChangeTopology(*after, true, cancellation))
-                return {};
-            result->entries.emplace(entry.get(), EntryRecord{entry, std::move(before), std::move(after)});
-            if (!HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexMembership, cancellation))
+            auto before = SnapshotTopology(*entry->before, cancellation, result->publicationMemory);
+            auto after = SnapshotTopology(*entry->after, cancellation, result->publicationMemory);
+            if (!before || !after || !result->ChangeTopology(*before, true, cancellation, observer) ||
+                !result->ChangeTopology(*after, true, cancellation, observer) ||
+                !result->entries.TrySet(EntryRecord{entry, std::move(before), std::move(after)},
+                                        result->publicationMemory, cancellation, result->entries) ||
+                !HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexMembership, cancellation))
                 return {};
         }
-        if (!result->SetCurrent(std::move(currentTopology), cancellation) || !result->SampleCharges(cancellation))
+        if (!previousEntries.Visit(
+                [&](const void*, const EntryRecord& entry)
+                {
+                    if (wanted.contains(entry.owner.get()))
+                        return true;
+                    return result->RemoveEntry(entry.owner.get(), cancellation, observer) &&
+                           HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexMembership, cancellation);
+                },
+                cancellation))
+            return {};
+        if (!result->SetCurrent(std::move(currentTopology), cancellation, observer) ||
+            !result->SampleCharges(cancellation, observer))
             return {};
         return result;
     }
-
-    [[nodiscard]] bool ChangeTopology(const HistoryStorageTopology& topology, bool add, CancelToken cancellation)
+    // Direct source roots drive active parent-edge counts. A parent's children change membership only
+    // on its first/last active reference in each history/live category; shared DAG children remain owned.
+    bool ChangeRaster(const Raster& owner, bool add, bool live, CancelToken cancellation, PrepareObserver observer,
+                      unsigned int depth = 0)
     {
-        const auto change = [this, add](auto& records, const auto& owner) -> bool
+        if (!owner.HasStorage())
+            return !cancellation.IsCancelled();
+        if (!HistoryPrepareCheckpoint(observer,
+                                      live ? PrepareStage::StorageIndexLiveEdge : PrepareStage::StorageIndexHistoryEdge,
+                                      cancellation) ||
+            depth > 128)
+            return false;
+        const auto* previous = rasters.Find(owner.StorageSerial());
+        auto value = previous ? *previous : RasterRecord{owner, 0, 0, false, 0};
+        auto& references = live ? value.liveReferences : value.references;
+        const bool previouslyActive = references != 0;
+        if (add)
         {
-            const auto identity = owner.Identity();
-            if (!identity)
-                return true;
-            auto it = records.find(identity);
-            if (add)
-            {
-                if (it == records.end())
-                    it = records
-                             .try_emplace(
-                                 identity,
-                                 typename std::remove_reference_t<decltype(records)>::mapped_type{owner, 0, 0, false})
-                             .first;
-                if (it->second.references == (std::numeric_limits<std::uint64_t>::max)())
+            if (references == (std::numeric_limits<std::uint64_t>::max)())
+                return false;
+            ++references;
+        }
+        else
+        {
+            if (!previous || !references)
+                return false;
+            --references;
+        }
+        const bool active = references != 0;
+        value.live = value.liveReferences != 0;
+        value.charge = value.live ? 0 : owner.ByteSize();
+        if (!value.references && !value.liveReferences)
+        {
+            if (!previous || !Erase(rasters, *previous, cancellation))
+                return false;
+        }
+        else if (!Set(value, cancellation))
+            return false;
+        if (previouslyActive == active)
+            return !cancellation.IsCancelled();
+        if (!ChangeRaster(owner.Base(), add, live, cancellation, observer, depth + 1))
+            return false;
+        for (const auto& tile : owner.Tiles())
+            if (!ChangeRaster(tile.pixels, add, live, cancellation, observer, depth + 1))
+                return false;
+        return !cancellation.IsCancelled();
+    }
+    bool ChangeSelection(const SelectionLoops& owner, bool add, bool live, CancelToken cancellation)
+    {
+        if (!owner.Identity())
+            return !cancellation.IsCancelled();
+        const auto* previous = selections.Find(owner.Identity());
+        auto value = previous ? *previous : SelectionRecord{owner, 0, 0, false};
+        if (live)
+            value.live = add;
+        else if (add)
+        {
+            if (value.references == (std::numeric_limits<std::uint64_t>::max)())
+                return false;
+            ++value.references;
+        }
+        else
+        {
+            if (!previous || !value.references)
+                return false;
+            --value.references;
+        }
+        value.charge = value.live ? 0 : owner.StorageBytes();
+        return !value.references && !value.live && previous ? Erase(selections, *previous, cancellation)
+                                                            : Set(value, cancellation);
+    }
+    bool ChangeTopology(const HistoryStorageTopology& topology, bool add, CancelToken cancellation,
+                        PrepareObserver observer)
+    {
+        for (const auto& raster : topology.RasterRoots())
+            if (!ChangeRaster(raster, add, false, cancellation, observer))
+                return false;
+        return ChangeSelection(topology.SelectionOwner(), add, false, cancellation);
+    }
+    bool SetCurrent(std::shared_ptr<const HistoryStorageTopology> topology, CancelToken cancellation,
+                    PrepareObserver observer)
+    {
+        if (!topology || cancellation.IsCancelled())
+            return false;
+        if (current == topology)
+            return true;
+        if (!current || current->RasterRootIdentity() != topology->RasterRootIdentity())
+        {
+            // Activate new parents first so unchanged shared descendants never temporarily become inactive.
+            for (const auto& raster : topology->RasterRoots())
+                if ((!current || !current->HasRasterRoot(raster.StorageSerial())) &&
+                    !ChangeRaster(raster, true, true, cancellation, observer))
                     return false;
-                ++it->second.references;
+            if (current)
+                for (const auto& raster : current->RasterRoots())
+                    if (!topology->HasRasterRoot(raster.StorageSerial()) &&
+                        !ChangeRaster(raster, false, true, cancellation, observer))
+                        return false;
+        }
+        if (!current || current->SelectionOwner().Identity() != topology->SelectionOwner().Identity())
+        {
+            if (current && !ChangeSelection(current->SelectionOwner(), false, true, cancellation))
+                return false;
+            if (!ChangeSelection(topology->SelectionOwner(), true, true, cancellation))
+                return false;
+        }
+        current = std::move(topology);
+        return !cancellation.IsCancelled();
+    }
+    bool SampleCharges(CancelToken cancellation, PrepareObserver observer)
+    {
+        // Bootstrap needs the independent full traversal. Later samples consume fixed maximum worker
+        // scratch for a changed epoch; no heap scratch allocation runs under the lease.
+        // The fixed 96 KiB scratch is included in EditMemoryBytes and allocated before acquiring the lease.
+        const auto sample = [&](std::span<RasterResidencyChange> changes)
+        {
+            auto lease = Raster::AcquireResidencyLease(cancellation);
+            if (!lease.Held())
+                return false;
+            const auto epoch = Raster::ResidencyEpoch();
+            if (residencyEpoch && residencyEpoch == epoch)
+                return !cancellation.IsCancelled();
+            std::size_t count = 0;
+            const auto copied = residencyEpoch
+                                    ? Raster::CopyResidencyChanges(residencyEpoch, changes, count, cancellation)
+                                    : Raster::ResidencyJournal::CopyResult::InvalidWitness;
+            if (copied == Raster::ResidencyJournal::CopyResult::Cancelled)
+                return false;
+            if (copied == Raster::ResidencyJournal::CopyResult::Complete)
+            {
+                for (std::size_t index = 0; index < count; ++index)
+                {
+                    if (!HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexResidencyRecord, cancellation))
+                        return false;
+                    const auto& change = changes[index];
+                    const auto* old = rasters.Find(change.storageSerial);
+                    if (!old || old->live)
+                        continue; // Journal owns no raster; unrelated/freed serials cost lookup only.
+                    auto value = *old;
+                    if (value.owner.ByteSize() != change.residentSelfBytes)
+                        return false;
+                    value.charge = change.residentSelfBytes;
+                    if (value.charge != old->charge && !Set(value, cancellation))
+                        return false;
+                }
             }
             else
             {
-                if (it == records.end() || !it->second.references)
+                // Bootstrap, overwritten window, or unavailable witness: retain the independent cancellable
+                // full-worker rescan. Owner TryAcquire still checks the resulting exact epoch before publish.
+                const auto previous = rasters;
+                if (!previous.Visit(
+                        [&](std::uint64_t, const RasterRecord& old)
+                        {
+                            if (!HistoryPrepareCheckpoint(observer, PrepareStage::StorageIndexResidencyFullScan,
+                                                          cancellation))
+                                return false;
+                            auto value = old;
+                            value.charge = value.live ? 0 : value.owner.ByteSize();
+                            return value.charge == old.charge || Set(value, cancellation);
+                        },
+                        cancellation))
                     return false;
-                --it->second.references;
-                if (!it->second.references && !it->second.live)
-                {
-                    if (it->second.charge > retainedBytes)
-                        return false;
-                    retainedBytes -= it->second.charge;
-                    records.erase(it);
-                }
             }
-            return true;
-        };
-        for (const auto& raster : topology.RasterOwners())
-            if (cancellation.IsCancelled() || !change(rasters, raster))
-                return false;
-        return !cancellation.IsCancelled() && change(selections, topology.SelectionOwner());
-    }
-
-    [[nodiscard]] bool SetCurrent(std::shared_ptr<const HistoryStorageTopology> topology, CancelToken cancellation)
-    {
-        if (current == topology)
+            residencyEpoch = epoch;
             return !cancellation.IsCancelled();
-        const auto mark = [](auto& records, const auto& owner, bool live)
-        {
-            const auto identity = owner.Identity();
-            if (!identity)
-                return;
-            auto it = records.find(identity);
-            if (live && it == records.end())
-                it = records
-                         .try_emplace(
-                             identity,
-                             typename std::remove_reference_t<decltype(records)>::mapped_type{owner, 0, 0, false})
-                         .first;
-            if (it != records.end())
-            {
-                it->second.live = live;
-                if (!live && !it->second.references)
-                    records.erase(it);
-            }
         };
-        if (current)
-        {
-            for (const auto& raster : current->RasterOwners())
-            {
-                if (cancellation.IsCancelled())
-                    return false;
-                mark(rasters, raster, false);
-            }
-            mark(selections, current->SelectionOwner(), false);
-        }
-        current = std::move(topology);
-        for (const auto& raster : current->RasterOwners())
-        {
-            if (cancellation.IsCancelled())
-                return false;
-            mark(rasters, raster, true);
-        }
-        mark(selections, current->SelectionOwner(), true);
-        return !cancellation.IsCancelled();
+        if (!residencyEpoch)
+            return sample({});
+        if (residencyEpoch == Raster::ResidencyEpoch())
+            return sample({});
+        // Bounded worker heap scratch avoids a 96 KiB stack frame. The original operation reservation
+        // remains held; allocation failure reaches the worker runner before any live publication.
+        using Changes = std::array<RasterResidencyChange, Raster::kResidencyJournalCapacity>;
+        auto changes = std::make_unique<Changes>();
+        return sample(*changes);
     }
-
-    [[nodiscard]] bool SampleCharges(CancelToken cancellation)
+    bool RemoveEntry(const Entry* entry, CancelToken cancellation, PrepareObserver observer)
     {
-        if (cancellation.IsCancelled())
+        const auto* record = entries.Find(entry);
+        if (!record || !ChangeTopology(*record->before, false, cancellation, observer) ||
+            !ChangeTopology(*record->after, false, cancellation, observer))
             return false;
-        auto residency = Raster::AcquireResidencyLease(cancellation);
-        if (!residency.Held())
-            return false;
-        retainedBytes = 0;
-        const auto sample = [&](auto& records, const auto& bytes) -> bool
-        {
-            for (auto& [identity, record] : records)
-            {
-                (void)identity;
-                if (cancellation.IsCancelled())
-                    return false;
-                record.charge = record.live ? 0 : bytes(record.owner);
-                if (record.charge > (std::numeric_limits<std::uint64_t>::max)() - retainedBytes)
-                    return false;
-                retainedBytes += record.charge;
-            }
-            return true;
-        };
-        if (!sample(rasters, [](const Raster& raster) { return raster.ByteSize(); }) ||
-            !sample(selections, [](const SelectionLoops& selection) { return selection.StorageBytes(); }))
-            return false;
-        residencyEpoch = Raster::ResidencyEpoch();
-        return !cancellation.IsCancelled();
+        return entries.TryErase(entry, publicationMemory, cancellation, entries);
     }
-
-    [[nodiscard]] bool RemoveEntry(const Entry* entry, CancelToken cancellation)
-    {
-        const auto it = entries.find(entry);
-        if (it == entries.end() || !ChangeTopology(*it->second.before, false, cancellation) ||
-            !ChangeTopology(*it->second.after, false, cancellation))
-            return false;
-        entries.erase(it);
-        return true;
-    }
-
-    [[nodiscard]] bool CacheBounds(CancelToken cancellation)
+    bool CacheBounds(CancelToken cancellation)
     {
         constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-        metadataBytes = sizeof(StorageIndex) + 64;
-        ownershipBytes = 0;
-        const auto add = [](std::uint64_t& total, std::uint64_t count, std::uint64_t size) noexcept
-        {
-            constexpr auto limit = (std::numeric_limits<std::uint64_t>::max)();
-            if ((size && count > limit / size) || count * size > limit - total)
-                return false;
-            total += count * size;
-            return true;
-        };
-        const auto map = [&](const auto& records) -> bool
-        {
-            using Map = std::remove_cvref_t<decltype(records)>;
-            return add(metadataBytes, records.bucket_count(), sizeof(void*)) &&
-                   add(metadataBytes, records.size(), sizeof(typename Map::value_type) + 64) &&
-                   add(metadataBytes, 1, 64);
-        };
-        if (!map(rasters) || !map(selections) || !map(entries))
+        metadataBytes = LocallyOwnedPublicationAllowance<StorageIndex>() + 3 * 64;
+        if (!MultiplyAdd(metadataBytes, rasters.size(), RasterIndex::NodeAllocationAllowance()) ||
+            !MultiplyAdd(metadataBytes, selections.size(), SelectionIndex::NodeAllocationAllowance()) ||
+            !MultiplyAdd(metadataBytes, entries.size(), EntryIndex::NodeAllocationAllowance()) ||
+            !Add(metadataBytes, selectionMetadataBytes))
             return false;
         std::unordered_set<const void*> roots;
         std::unordered_set<const HistoryStorageTopology*> topologies;
-        const auto topology = [&](const std::shared_ptr<const HistoryStorageTopology>& value) -> bool
+        std::unordered_set<const void*> rasterRoots;
+        const auto topology = [&](const std::shared_ptr<const HistoryStorageTopology>& value)
         {
             if (!value || cancellation.IsCancelled())
                 return false;
             if (!topologies.insert(value.get()).second)
                 return true;
-            if (!add(metadataBytes, 1, value->MetadataBytes()))
+            auto uniqueMetadata = value->MetadataBytes();
+            const auto shared = value->SharedRootMetadataBytes();
+            if (shared && !rasterRoots.insert(value->RasterRootIdentity()).second)
+            {
+                if (shared > uniqueMetadata)
+                    return false;
+                uniqueMetadata -= shared;
+            }
+            if (!Add(metadataBytes, uniqueMetadata))
                 return false;
             const auto& records = value->RecordOwner();
             if (!records.Identity() || !roots.insert(records.Identity()).second)
                 return true;
             const auto bounds = records.OwnershipBounds();
-            return bounds && add(metadataBytes, 1, bounds->metadataBytes);
+            return bounds && Add(metadataBytes, bounds->metadataBytes);
         };
-        if (!topology(current))
+        if (!topology(current) ||
+            !entries.Visit(
+                [&](const void*, const EntryRecord& entry)
+                {
+                    if (!topology(entry.before) || !topology(entry.after) ||
+                        entry.owner->name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
+                        return false;
+                    return Add(metadataBytes, LocallyOwnedPublicationAllowance<Entry>() +
+                                                  2 * LocallyOwnedPublicationAllowance<Snapshot>()) &&
+                           MultiplyAdd(metadataBytes, entry.owner->name.capacity() + 1, sizeof(wchar_t)) &&
+                           Add(metadataBytes, 64);
+                },
+                cancellation))
             return false;
-        for (const auto& [identity, entry] : entries)
-        {
-            (void)identity;
-            if (cancellation.IsCancelled() || !topology(entry.before) || !topology(entry.after) ||
-                entry.owner->name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1 ||
-                !add(metadataBytes, 1, sizeof(Entry) + 64 + 2 * (sizeof(Snapshot) + 64)) ||
-                !add(metadataBytes, entry.owner->name.capacity() + 1, sizeof(wchar_t)) || !add(metadataBytes, 1, 64))
-                return false;
-        }
-        for (const auto& [identity, selection] : selections)
-        {
-            (void)identity;
-            if (cancellation.IsCancelled() || !add(metadataBytes, 1, 64) ||
-                !add(metadataBytes, selection.owner.size(), 64))
-                return false;
-        }
         ownershipBytes = metadataBytes;
-        for (const auto& [identity, raster] : rasters)
-        {
-            (void)identity;
-            const auto storageBytes = raster.owner.StorageRetirementMemoryBytes();
-            if (cancellation.IsCancelled() || !storageBytes || !add(ownershipBytes, 1, storageBytes))
-                return false;
-        }
-        for (const auto& [identity, selection] : selections)
-        {
-            (void)identity;
-            if (cancellation.IsCancelled() || !add(ownershipBytes, 1, selection.owner.StorageBytes()))
-                return false;
-        }
-        return !cancellation.IsCancelled();
+        return Add(ownershipBytes, rasterSelfBytes) && Add(ownershipBytes, selectionSelfBytes) &&
+               !cancellation.IsCancelled();
     }
-
-    [[nodiscard]] std::size_t CurrentRetainedBytes() const noexcept
+    std::size_t CurrentRetainedBytes() const noexcept
     {
+        // Diagnostic reference remains independent and resamples actual resident bytes. Owner admission/trim
+        // uses a witnessed cached charge, never this traversal. Journal-backed query remains a later slice.
         std::size_t total = 0;
-        const auto add = [&](std::uint64_t amount) noexcept
+        const auto add = [&](std::uint64_t amount)
         {
             if (amount > (std::numeric_limits<std::size_t>::max)() - total)
                 return false;
             total += static_cast<std::size_t>(amount);
             return true;
         };
-        for (const auto& [identity, raster] : rasters)
-        {
-            (void)identity;
-            if (!raster.live && !add(raster.owner.ByteSize()))
-                return (std::numeric_limits<std::size_t>::max)();
-        }
-        for (const auto& [identity, selection] : selections)
-        {
-            (void)identity;
-            if (!selection.live && !add(selection.owner.StorageBytes()))
-                return (std::numeric_limits<std::size_t>::max)();
-        }
-        return total;
+        const bool complete = rasters.Visit([&](std::uint64_t, const RasterRecord& record)
+                                            { return record.live || add(record.owner.ByteSize()); }) &&
+                              selections.Visit([&](const void*, const SelectionRecord& record)
+                                               { return record.live || add(record.owner.StorageBytes()); });
+        return complete ? total : (std::numeric_limits<std::size_t>::max)();
     }
 };
+
 #pragma warning(pop)
+std::shared_ptr<const HistoryStorageTopology> DocumentHistory::CurrentStorageTopology(const StateView& state) noexcept
+{
+    return state.storageIndex ? state.storageIndex->current : nullptr;
+}
 
 std::optional<RecordOwnershipBounds> DocumentHistory::Snapshot::OwnershipBounds() const noexcept
 {
-    HistoryBoundSum sum(sizeof(Snapshot) + 64);
+    HistoryBoundSum sum(LocallyOwnedPublicationAllowance<Snapshot>());
     if (document)
     {
         const auto sourceBytes = document->RetirementMemoryBytes();
@@ -1130,7 +1484,7 @@ std::optional<RecordOwnershipBounds> DocumentHistory::Snapshot::OwnershipBounds(
 
 std::optional<RecordOwnershipBounds> DocumentHistory::Entry::OwnershipBounds() const noexcept
 {
-    HistoryBoundSum sum(sizeof(Entry) + 64);
+    HistoryBoundSum sum(LocallyOwnedPublicationAllowance<Entry>());
     if (!sum.Text(name) || !before || !after || !sum.Child(before->OwnershipBounds()) ||
         !sum.Child(after->OwnershipBounds()))
         return std::nullopt;
@@ -1147,7 +1501,13 @@ std::optional<RecordOwnershipBounds> DocumentHistory::Pending::OwnershipBounds()
 
 std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept
 {
-    std::uint64_t bytes = 64 * 1024;
+    std::uint64_t bytes = 64 * 1024 + Raster::kResidencyJournalCapacity * sizeof(RasterResidencyChange);
+    constexpr auto nodeAllowance = (std::max)({StorageIndex::RasterIndex::NodeAllocationAllowance(),
+                                               StorageIndex::SelectionIndex::NodeAllocationAllowance(),
+                                               StorageIndex::EntryIndex::NodeAllocationAllowance(),
+                                               HistoryRasterRootGroup::Index::NodeAllocationAllowance()});
+    static_assert(nodeAllowance <= ((std::numeric_limits<std::uint64_t>::max)() - 128) / 4);
+    constexpr auto occurrenceWorkspace = 4 * nodeAllowance + 128;
     const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
     {
         if ((size && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
@@ -1156,8 +1516,9 @@ std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocumen
         bytes += count * size;
         return true;
     };
-    // Detached map cloning, changed memberships and bounded producer dedup/scratch. The index's cached
-    // metadata includes its retained bucket/node capacities; reading this bound does not visit its owners.
+    // Four cached metadata envelopes cover overlapping immutable candidates and refresh. New source
+    // occurrences reserve complete publication-node/control allowance, path-copy/rotation overlap and
+    // direct-root indexes; the journal has a fixed 96 KiB worker scratch peak. No owner traversal occurs.
     if (_storageIndex)
     {
         if (!_storageIndex->metadataBytes || !add(4, _storageIndex->metadataBytes) ||
@@ -1168,21 +1529,22 @@ std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocumen
     {
         const auto past = _past.OwnershipBounds();
         const auto future = _future.OwnershipBounds();
-        if (!past || !future || !add(past->rasterNodes, 128) || !add(future->rasterNodes, 128))
+        if (!past || !future || !add(past->rasterNodes, occurrenceWorkspace) ||
+            !add(future->rasterNodes, occurrenceWorkspace))
             return 0;
     }
     if (_pending)
     {
         const auto pending = _pending->OwnershipBounds();
-        if (!pending || !add(pending->rasterNodes, 128))
+        if (!pending || !add(pending->rasterNodes, occurrenceWorkspace))
             return 0;
     }
     if (current)
     {
         const auto layers = current->layers.OwnershipBounds();
         if ((!layers && current->layers.Identity()) ||
-            (layers && (!add(layers->rasterNodes, 128) || !add(8, layers->metadataBytes))) ||
-            !add(current->layers.size(), 8 * 256) || (current->selection && !add(1, 128)))
+            (layers && (!add(layers->rasterNodes, occurrenceWorkspace) || !add(8, layers->metadataBytes))) ||
+            !add(current->layers.size(), 8 * 256) || (current->selection && !add(1, occurrenceWorkspace)))
             return 0;
     }
     // Buffer growth and trim bookkeeping retain the same conservative per-entry allowance. Metadata and
@@ -1216,7 +1578,11 @@ std::uint64_t DocumentHistory::RestoreMemoryBytes(const std::optional<CanvasDocu
     // The selected snapshot may contain far more metadata than the live document. Its sealed root retains
     // complete names/curve/capacity bounds, including unedited record ownership, without a per-layer walk.
     const auto layers = restore->layers.OwnershipBounds();
-    if ((!layers && restore->layers.Identity()) || (layers && !add(8, layers->metadataBytes)) ||
+    if ((!layers && restore->layers.Identity()) ||
+        (layers && (!add(8, layers->metadataBytes) ||
+                    !add(layers->rasterNodes, 4 * (std::max)(StorageIndex::RasterIndex::NodeAllocationAllowance(),
+                                                             HistoryRasterRootGroup::Index::NodeAllocationAllowance()) +
+                                                  128))) ||
         !add(restore->layers.size(), 8 * 256))
         return 0;
     return bytes;
@@ -1350,7 +1716,8 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
         removalOrder.push_back(entry);
     for (const auto& entry : state.future)
         removalOrder.push_back(entry);
-    auto index = StorageIndex::Update(state.storageIndex, removalOrder, currentTopology, cancellation, observer);
+    auto index = StorageIndex::Update(state.storageIndex, removalOrder, currentTopology, state.publicationMemory,
+                                      cancellation, observer);
     if (!index)
         return false;
     std::size_t drop = 0;
@@ -1358,7 +1725,7 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
            index->retainedBytes > state.byteLimit)
     {
         if (cancellation.IsCancelled() || drop == removalOrder.size() ||
-            !index->RemoveEntry(removalOrder[drop].get(), cancellation))
+            !index->RemoveEntry(removalOrder[drop].get(), cancellation, observer))
             return false;
         ++drop;
     }
@@ -1372,9 +1739,20 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
     state.future.erase(state.future.begin(), state.future.begin() + static_cast<std::ptrdiff_t>(drop),
                        state.publicationMemory);
     index->publicationMemory = state.publicationMemory;
-    auto* raw = index.release();
-    state.storageIndex = std::shared_ptr<const StorageIndex>{
-        raw, StorageIndex::Retire{}, PublicationGraphAllocator<StorageIndex>{state.publicationMemory}};
+    if (state.publicationMemory)
+    {
+        const auto retiredBytes = index->ownershipBytes;
+        state.storageIndex = MakeLocallyOwnedPublicationObject<const StorageIndex>(state.publicationMemory,
+                                                                                   retiredBytes, 0, std::move(*index));
+    }
+    else
+    {
+        // The archived behavioral reference adapter already owns an intrusive retirement node. Preserve its exact
+        // whole-index deferred destruction and cached bound rather than allocating a different wrapper.
+        auto* raw = index.release();
+        state.storageIndex = std::shared_ptr<const StorageIndex>{raw, StorageIndex::Retire{},
+                                                                 PublicationGraphAllocator<StorageIndex>{{}}};
+    }
     return !cancellation.IsCancelled();
 }
 

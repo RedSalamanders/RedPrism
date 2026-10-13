@@ -4,6 +4,7 @@
 #include "Executor.h"
 #include "HistoryEntries.h"
 #include "InputRevision.h"
+#include "ResidencyChangeJournal.h"
 
 #include "PixelBuffer.h"
 #include "RecordRoot.h"
@@ -161,6 +162,13 @@ class Raster
     [[nodiscard]] static ResidencyLease AcquireResidencyLease(CancelToken cancellation = {}) noexcept;
     [[nodiscard]] static ResidencyLease TryResidencyLease() noexcept; // owner, one attempt only
     [[nodiscard]] static std::uint64_t ResidencyEpoch() noexcept;
+    static constexpr std::size_t kResidencyJournalCapacity = 4096;
+    using ResidencyJournal = RasterResidencyJournal<kResidencyJournalCapacity>;
+    // Copies numeric cache-growth events only while this same thread owns the exclusive residency lease.
+    [[nodiscard]] static ResidencyJournal::CopyResult CopyResidencyChanges(std::uint64_t afterEpoch,
+                                                                           std::span<RasterResidencyChange> output,
+                                                                           std::size_t& count,
+                                                                           CancelToken cancellation = {}) noexcept;
 
     // Bounded, allocation-free cache-growth notices. Start/Stop belong to startup/teardown, outside leases and
     // callbacks. Stop joins any in-flight notice before the borrowed context can die. A notice runs after both
@@ -254,6 +262,10 @@ class Raster
     {
         return _storage.get();
     }
+    [[nodiscard]] std::uint64_t StorageSerial() const noexcept
+    {
+        return _storage ? _storage->serial : 0;
+    }
     [[nodiscard]] int PixelCount() const noexcept
     {
         return Width() * Height();
@@ -324,6 +336,8 @@ class Raster
 #pragma warning(disable : 4324) // the intrusive release node requires 16-byte storage alignment
     struct Storage : DeferredReleaseNode
     {
+        explicit Storage(std::uint64_t identity) noexcept : serial(identity) {}
+        const std::uint64_t serial;
         int width = 0;
         int height = 0;
         int stride = 0;
@@ -354,6 +368,7 @@ class Raster
 #pragma warning(disable : 4324) // inherits the intrusive release node's alignment
     struct ChargedStorage final : Storage
     {
+        explicit ChargedStorage(std::uint64_t identity) noexcept : Storage(identity) {}
         std::shared_ptr<const void> lifetime;
     };
 #pragma warning(pop)
@@ -959,6 +974,12 @@ struct ImageLayer
 
     [[nodiscard]] bool operator==(const ImageLayer& other) const noexcept;
     static ImageLayer Blank(std::wstring name, Vec2 size);
+};
+
+template <> struct RecordSavePolicy<ImageLayer> final
+{
+    static constexpr bool enabled = true;
+    [[nodiscard]] static bool Accumulate(RecordSavePlan& plan, const ImageLayer& layer) noexcept;
 };
 
 template <> struct RecordOwnershipPolicy<ImageLayer> final
@@ -1621,6 +1642,7 @@ struct HierarchyEntry
 // Immutable owning closure of one document's storage graph. Prepared on a worker; copies retain one handle.
 // Raster charges are read at use time so a sparse cache published later is not represented by a stale total.
 // This is storage topology, not the resident-charge/publication synchronization protocol.
+struct HistoryRasterRootGroup;
 class HistoryStorageTopology final
 {
   private:
@@ -1634,6 +1656,15 @@ class HistoryStorageTopology final
         const std::optional<CanvasDocument>& document, CancelToken cancellation = {},
         std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool Matches(const std::optional<CanvasDocument>& document) const noexcept;
+    // Managed preparation captures direct source roots only, sharing exact scalar-equivalent owners.
+    // The reference Prepare/RasterOwners API keeps its complete closure semantics and independent goldens.
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareIncremental(
+        const std::optional<CanvasDocument>& document, std::shared_ptr<const HistoryStorageTopology> previous = {},
+        CancelToken cancellation = {}, std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] std::span<const Raster> RasterRoots() const noexcept;
+    [[nodiscard]] const void* RasterRootIdentity() const noexcept;
+    [[nodiscard]] bool HasRasterRoot(std::uint64_t serial) const noexcept;
+    [[nodiscard]] std::uint64_t SharedRootMetadataBytes() const noexcept;
     [[nodiscard]] const std::vector<Raster>& RasterOwners() const noexcept
     {
         return _rasters;
@@ -1659,6 +1690,7 @@ class HistoryStorageTopology final
     RecordRoot<ImageLayer> _layers;
     SelectionLoops _selection;
     std::vector<Raster> _rasters;
+    std::shared_ptr<const HistoryRasterRootGroup> _managedRoots;
     std::uint64_t _metadataBytes = 0;
     std::uint64_t _retirementBytes = 0;
     bool _hasDocument = false;
@@ -1805,6 +1837,10 @@ class DocumentHistory
         StorageIndexClone,
         StorageIndexMembership,
         StorageIndexBounds,
+        StorageIndexResidencyRecord,
+        StorageIndexResidencyFullScan,
+        StorageIndexHistoryEdge,
+        StorageIndexLiveEdge,
     };
     // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
     // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
@@ -2026,6 +2062,8 @@ class DocumentHistory
     };
 
     void Trim(const std::optional<CanvasDocument>& current);
+    [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> CurrentStorageTopology(
+        const StateView& state) noexcept;
     [[nodiscard]] static std::shared_ptr<const HistoryStorageTopology> PrepareTopology(
         const std::optional<CanvasDocument>& document, const StateView& state, CancelToken cancellation);
     [[nodiscard]] static std::shared_ptr<const Snapshot> SealSnapshot(Snapshot snapshot, const StateView& state,
@@ -2521,7 +2559,7 @@ class DocumentSession
                                                                                   double value) const;
     [[nodiscard]] static std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(
         LayerMetadataInput input, CancelToken cancellation, DocumentHistory::PrepareObserver historyObserver,
-        LayerMetadataPrepareObserver observer);
+        LayerMetadataPrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedLayerMetadataCurrent(const PreparedLayerMetadata& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLayerMetadataIfCurrent(PreparedLayerMetadata& prepared) noexcept;
     [[nodiscard]] std::uint64_t LayerMetadataMemoryBytes(LayerMetadataKind kind,

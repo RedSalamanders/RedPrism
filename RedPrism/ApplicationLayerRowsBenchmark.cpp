@@ -4,6 +4,7 @@
 #include "BenchmarkMachine.h"
 #include "ChromeHost.h"
 #include "Kernels.h"
+#include "LayerMetadataTestGate.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "UiTiming.h"
@@ -13,6 +14,7 @@
 #include <array>
 #include <cstdio>
 #include <format>
+#include <limits>
 #include <new>
 #include <string>
 #include <utility>
@@ -246,11 +248,23 @@ int Application::RunLayerRowsBenchmark() noexcept
         const auto prepare = [&]() noexcept
         { return _chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi ? static_cast<float>(dpi) : 96.0f); };
         std::wstring renamed = PreparedLayerRowsStressFixtureDetail::LayerName(layers - 1);
+        std::uint64_t ownedMetadataBytes = 0;
+        std::uint64_t originalMetadataCount = 0;
         for (unsigned int trial = 0; trial <= renames; ++trial)
         {
             measuredTrial = trial;
             step = "request";
             LayerRowsMeasurement measurement;
+            // Harness-only weak provenance observations; no hold, failure injection or useful work.
+            // Original admission is still measured. Weak controls are reset before the retirement oracle.
+            std::shared_ptr<LayerMetadataTestGate> accounting;
+            if (trial != 0)
+            {
+                accounting = std::make_shared<LayerMetadataTestGate>();
+                accounting->hold = false;
+                _layerMetadataTestGate = accounting;
+            }
+            const auto clearAccounting = wil::scope_exit([&]() noexcept { _layerMetadataTestGate.reset(); });
             const auto beforePublication = _chrome->Statistics();
             const UiTimingCapture capture{measurement.owner};
             std::int64_t start = 0;
@@ -344,9 +358,52 @@ int Application::RunLayerRowsBenchmark() noexcept
             step = "retirement";
             if (SettleJobs(_jobs, 30000, DispatchMessageThunk, this) != SettleResult::Settled)
                 return 5;
-            measurement.charge = _jobs.ReservedMemoryBytes();
-            if (measurement.charge != _preparedLayerRows->MemoryBytes() || _jobs.ReleasingMemoryBytes() != 0)
+            if (accounting)
+            {
+                if (!accounting->originalAccountingBound || !accounting->retired.load() ||
+                    !accounting->retiredOffOwner.load() || accounting->captures.load() != 1 ||
+                    !accounting->accountingTemporary.expired())
+                    return 5;
+                auto output = accounting->accountingOutput.lock();
+                const auto bytes = accounting->accountingOutputBytes;
+                if (!output || !bytes || !output->BoundTo(_jobs, accounting->accountingTicket) ||
+                    output->Bytes() != bytes || bytes < SharedPublicationMemory::OwnershipAllowance() ||
+                    output->LocalAllocationBytes() > bytes - SharedPublicationMemory::OwnershipAllowance() ||
+                    bytes > (std::numeric_limits<std::uint64_t>::max)() - ownedMetadataBytes)
+                    return 5;
+                ownedMetadataBytes += bytes;
+                ++originalMetadataCount;
+                accounting->accountingTemporary.reset();
+                accounting->accountingOutput.reset();
+                output.reset();
+                // Consume only actual shared-control retirement. This never cancels live history/document output.
+                if (SettleJobs(_jobs, 30000, DispatchMessageThunk, this) != SettleResult::Settled)
+                    return 5;
+            }
+            const auto rowBytes = _preparedLayerRows->MemoryBytes();
+            if (rowBytes > (std::numeric_limits<std::uint64_t>::max)() - ownedMetadataBytes)
                 return 5;
+            measurement.charge = _jobs.ReservedMemoryBytes();
+            // The independent history count above proves every prior metadata epoch remains in this untrimmed
+            // literal sequence. Count each observed original output admission once; old row caches and metadata
+            // temporary phases must retire. Any unexplained charge, missing output or releasing work still fails.
+            if (measurement.charge != rowBytes + ownedMetadataBytes || _jobs.ReleasingMemoryBytes() != 0 ||
+                originalMetadataCount != trial)
+            {
+                std::printf("LAYER ROWS RETIRE DIAG trial=%u reservedBytes=%llu rowBytes=%llu metadataBytes=%llu "
+                            "releasingBytes=%llu originals=%llu\n",
+                            trial, static_cast<unsigned long long>(measurement.charge),
+                            static_cast<unsigned long long>(rowBytes),
+                            static_cast<unsigned long long>(ownedMetadataBytes),
+                            static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()),
+                            static_cast<unsigned long long>(originalMetadataCount));
+                return 5;
+            }
+            std::printf("LAYER ROWS ACCOUNTING trial=%u reservedBytes=%llu rowBytes=%llu metadataBytes=%llu "
+                        "releasingBytes=0 originals=%llu\n",
+                        trial, static_cast<unsigned long long>(measurement.charge),
+                        static_cast<unsigned long long>(rowBytes), static_cast<unsigned long long>(ownedMetadataBytes),
+                        static_cast<unsigned long long>(originalMetadataCount));
             RowsReport(measurement, trial, layers);
         }
         std::printf("LAYER ROWS BENCH REPORT status=ok layers=%zu renames=%u smoke=%d performanceGate=unmeasured\n",

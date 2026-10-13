@@ -281,6 +281,11 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
         _prompts = &presenter;
         const auto restorePrompts = wil::scope_exit([this, previous]() noexcept { _prompts = previous; });
         DocumentChanged();
+        // Retain separate original-ticket observations for the preview source and typed closure.
+        // Document replacement may keep that preview root even when the later closure becomes stale.
+        _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+        _layerMetadataTestGate->hold = false;
+        const auto previewGate = _layerMetadataTestGate;
         OnLayerOpacity(.25, ChromeEditPhase::Preview);
         if (!settle() ||
             !expect(scenario.name, "preview-before-closure",
@@ -323,10 +328,20 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
                                                                : !_session.PendingBrushOpening();
         const auto* liveStroke = _session.PendingBrush();
         const auto liveCharge = liveStroke ? liveStroke->OpeningRetainedMemoryBytes() : 0;
+        // Non-owning observations distinguish real surviving roots from test-only expired weak controls.
+        const auto metadataGate = _layerMetadataTestGate;
+        const auto metadataBytes = metadataGate->accountingOutput.expired() ? 0 : metadataGate->accountingOutputBytes;
+        const auto previewBytes = previewGate->accountingOutput.expired() ? 0 : previewGate->accountingOutputBytes;
+        const bool metadataSettled = MetadataAccountingSettledForTest();
+        _layerMetadataTestGate = previewGate;
+        const bool previewSettled = MetadataAccountingSettledForTest();
+        _layerMetadataTestGate = metadataGate;
         if (!expect(scenario.name, "retirement-preserves-current-authority", authority) ||
             !expect(scenario.name, "only-original-owner-retains-input-budget",
-                    _jobs.ReservedMemoryBytes() == liveCharge && !_utilityTicket && !_utilityStamp &&
-                        !_historyWork.Busy() &&
+                    metadataSettled && previewSettled && _jobs.ReservedMemoryBytes() >= metadataBytes &&
+                        _jobs.ReservedMemoryBytes() - metadataBytes >= previewBytes &&
+                        _jobs.ReservedMemoryBytes() - metadataBytes - previewBytes == liveCharge && !_utilityTicket &&
+                        !_utilityStamp && !_historyWork.Busy() &&
                         (original
                              ? liveStroke && liveCharge != 0 && _hostInputBudget.Used() != 0
                              : liveCharge == 0 && _hostInputBudget.Used() == 0 && !_canvasBrushInput.Busy() &&
@@ -354,6 +369,10 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
             _composition.EndStroke();
             _previewSource.reset();
             _drag = PointerDrag{};
+            // Reference FinishBrush can destroy accounted ancestors and enqueue memory acknowledgements.
+            // Observe retirement only after the same owner pump has consumed those real destruction events.
+            if (!settle())
+                return 5;
         }
         const bool literal = original    ? stroke.Read().outcome == HostOutcome::Succeeded &&
                                                _session.history.UndoCount() == before + 1 && sample(8, 8) == redPixel &&
@@ -364,11 +383,24 @@ int Application::RunCanvasBrushLifetimeAuthoritySelfTest() noexcept
                                          : _session.history.UndoCount() == before + 1 && sample(24, 18) == greenPixel &&
                                                sample(8, 8) == sourcePixel && sample(12, 8) == sourcePixel &&
                                                sample(20, 8) == sourcePixel;
+        const bool accountingSettled = MetadataAccountingSettledForTest();
+        const bool allRetired = !_canvasLifetime && !_canvasBrushInput.Busy() && !_session.PendingBrushOpening() &&
+                                !_activeHostRequest && _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
+                                accountingSettled && _jobs.ReservedMemoryBytes() >= metadataBytes &&
+                                _jobs.ReservedMemoryBytes() - metadataBytes == previewBytes;
+        if (!allRetired)
+            std::fprintf(stderr,
+                         "DIAGNOSTIC canvas-brush-lifetime-authority.%s reserved=%llu releasing=%llu metadata=%llu "
+                         "preview=%llu idle=%u accounting=%u input=%llu host=%zu core=%u stream=%u\n",
+                         scenario.name, static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                         static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()),
+                         static_cast<unsigned long long>(metadataBytes), static_cast<unsigned long long>(previewBytes),
+                         static_cast<unsigned int>(_jobs.IsIdle()), static_cast<unsigned int>(accountingSettled),
+                         static_cast<unsigned long long>(_hostInputBudget.Used()), _hostRequests.Size(),
+                         static_cast<unsigned int>(_session.PendingBrushOpening().has_value()),
+                         static_cast<unsigned int>(_canvasBrushInput.Busy()));
         if (!expect(scenario.name, "only-current-authority-commits-literal-pixels", literal) ||
-            !expect(scenario.name, "all-input-and-worker-reservations-retire",
-                    !_canvasLifetime && !_canvasBrushInput.Busy() && !_session.PendingBrushOpening() &&
-                        !_activeHostRequest && _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 &&
-                        _jobs.ReservedMemoryBytes() == 0))
+            !expect(scenario.name, "all-input-and-worker-reservations-retire", allRetired))
             return 5;
         OnEndSession(false);
     }

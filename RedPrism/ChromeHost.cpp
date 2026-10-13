@@ -3872,6 +3872,12 @@ const std::vector<CanvasOverlay::OutlineLoop>* ChromeHost::SelectionOutlineForTe
     return _overlay ? &_overlay->SelectionOutlineForTest() : nullptr;
 }
 
+void ChromeHost::SetSelectionPaintExternal(bool external) noexcept
+{
+    if (_overlay)
+        _overlay->SetSelectionPaintExternal(external);
+}
+
 void ChromeHost::SetSelectionAntPhase(float phase) noexcept
 {
     if (_overlay)

@@ -3,6 +3,7 @@
 #include "ApplicationShutdownTestProbe.h"
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
+#include "KeyboardState.h"
 #include "LayerMetadataTestGate.h"
 #include "ModalProbePrompts.h"
 
@@ -14,6 +15,9 @@
 
 int Application::RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept
 {
+    // This independently owning fixture runs before RunSelfTest installs its own keyboard.
+    // Preserve named input semantics even when Windows updates physical modifier state during a held job.
+    const KeyboardState::ScopedSynthetic syntheticKeyboard;
     enum class Phase : std::uint8_t
     {
         Stream,
@@ -221,7 +225,32 @@ int Application::RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance)
                 (void)RunUiActions(owner->_jobs);
                 const ULONGLONG now = GetTickCount64();
                 if (now >= deadline)
+                {
+                    const auto gate = owner->_layerMetadataTestGate;
+                    const auto hole = owner->_chrome->HolePixels();
+                    const auto receipt = owner->_canvasBrushReceipt.Read();
+                    std::fprintf(stderr,
+                                 "DIAGNOSTIC canvas-brush-lifetime-shutdown.%s gate-timeout outcome=%u error=%08X "
+                                 "busy=%u sampling=%u pointer=%u samplesColor=%u alt=%u captures=%u visits=%u "
+                                 "held=%u metadata=%u history=%u reserved=%llu input=%llu hole=%.3f,%.3f,%.3f,%.3f\n",
+                                 scenario.name, static_cast<unsigned int>(receipt.outcome),
+                                 static_cast<unsigned int>(receipt.error),
+                                 static_cast<unsigned int>(owner->_canvasBrushInput.Busy()),
+                                 static_cast<unsigned int>(owner->_canvasBrushInput.Sampling()),
+                                 static_cast<unsigned int>(owner->PointerBusy()),
+                                 static_cast<unsigned int>(owner->SamplesColor()),
+                                 static_cast<unsigned int>(KeyboardState::Held(VK_MENU)),
+                                 gate ? gate->captures.load() : 0u, gate ? gate->visits.load() : 0u,
+                                 gate ? static_cast<unsigned int>(gate->reservationHeld.load()) : 0u,
+                                 static_cast<unsigned int>(owner->_layerMetadataTicket.has_value()),
+                                 static_cast<unsigned int>(owner->_historyWork.Busy()),
+                                 static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
+                                 static_cast<unsigned long long>(owner->_hostInputBudget.Used()),
+                                 static_cast<double>(hole.left), static_cast<double>(hole.top),
+                                 static_cast<double>(hole.width), static_cast<double>(hole.height));
+                    std::fflush(stderr);
                     std::_Exit(5);
+                }
                 const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
                 if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
                                                 MWMO_INPUTAVAILABLE) == WAIT_FAILED)

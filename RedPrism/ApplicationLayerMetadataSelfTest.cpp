@@ -260,6 +260,10 @@ int Application::RunLayerMetadataSelfTest() noexcept
         if (!expect(test.name, "admitted-pending", state.receipt.Read().outcome == HostOutcome::Pending) ||
             SettleJobs(_jobs, 15000, pump, &state) != SettleResult::Settled)
             return 5;
+        // Ordered input clears the gate before younger operations run. Restore only its observation
+        // after every producer has settled: the original output remains charged through live history.
+        if (test.mode == Mode::Ordered)
+            _layerMetadataTestGate = gate;
         const bool fault = test.mode == Mode::CaptureFault || test.mode == Mode::StageFault;
         const bool stale = test.mode == Mode::Generation || test.mode == Mode::Epoch || test.mode == Mode::Active;
         const auto outcome = state.receipt.Read();
@@ -271,7 +275,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
                                                                           : HostOutcome::Succeeded;
         if (!expect(test.name, "acknowledged-outcome", outcome.outcome == expected) ||
             !expect(test.name, "complete-retirement",
-                    gate->retired.load() && gate->retiredOffOwner.load() && _jobs.ReservedMemoryBytes() == 0 &&
+                    gate->retired.load() && gate->retiredOffOwner.load() && MetadataAccountingSettledForTest() &&
                         !_historyWork.Busy() && !_layerMetadataTicket && !_layerMetadataStamp && !_activeHostRequest))
             return 5;
         if (!fault && !expect(test.name, "held-source-and-reservation", state.visited && state.held))
@@ -370,11 +374,15 @@ int Application::RunLayerMetadataSelfTest() noexcept
                    !_historyWork.Busy() && !_layerMetadataTicket && !_layerMetadataStamp);
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled || !safeRefusal)
         return 5;
+    // Observe the recovery producer without holding it. Its successful immutable output remains
+    // charged through document/history owners after temporary work retires.
+    _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+    _layerMetadataTestGate->hold = false;
     const auto recovery = QueueHostInput(HostCommandInput{ChromeHost::kCommandToggleLayerVisibility});
     if (!expect("admission", "fresh-input-recovers",
                 SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled &&
                     recovery.Read().outcome == HostOutcome::Succeeded && !_session.ActiveLayer()->visible &&
-                    _jobs.ReservedMemoryBytes() == 0 && !_historyWork.Busy()))
+                    MetadataAccountingSettledForTest() && !_historyWork.Busy()))
         return 5;
     // The worker slice must preserve commands that were legal during an existing gesture or transaction.
     // Each context must capture under admission and retire its complete worker publication.
@@ -459,7 +467,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
                             _session.Document() == std::optional<CanvasDocument>{std::move(expectedDocument).Seal()} &&
                             _session.ActiveLayerID() == active && unchangedGesture &&
                             _session.history.CaptureState().Depth() == depth && !_layerMetadataTicket &&
-                            !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && gate->captures.load() == 1 &&
+                            !_historyWork.Busy() && MetadataAccountingSettledForTest() && gate->captures.load() == 1 &&
                             gate->reservationHeld.load() && gate->retired.load() && gate->retiredOffOwner.load() &&
                             _session.history.UndoCount() == (context == 4 ? 0 : 1) &&
                             (context == 4 || _session.history.UndoName() == title)))
@@ -476,6 +484,44 @@ int Application::RunLayerMetadataSelfTest() noexcept
     }
     std::fprintf(stderr, "PASS metadata-host.summary checks=%d cases=%zu\n", checks,
                  cases.size() + 1 + contexts.size() * kinds.size());
+    // Separate original-ticket ownership expectations, after the unchanged predecessor summary.
+    prepare();
+    _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+    _layerMetadataTestGate->hold = false;
+    _layerMetadataTestGate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    const auto ownedGate = _layerMetadataTestGate;
+    const auto ownedReceipt = QueueHostInput(HostCommandInput{ChromeHost::kCommandToggleLayerVisibility});
+    if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        return 5;
+    auto publishedWeak = ownedGate->accountingOutput;
+    auto publishedOwner = publishedWeak.lock();
+    const auto ownedBytes = ownedGate->accountingOutputBytes;
+    if (!expect("owned-original-ticket", "published-owner-retains-original-charge",
+                ownedReceipt.Read().outcome == HostOutcome::Succeeded && ownedGate->originalAccountingBound &&
+                    publishedOwner && ownedBytes > 0 && publishedOwner->BoundTo(_jobs, ownedGate->accountingTicket) &&
+                    publishedOwner->Bytes() == ownedBytes && publishedOwner->ResidentBytes() >= ownedBytes))
+        return 5;
+    if (!expect("owned-original-ticket", "temporary-retires-while-published-graph-remains-charged",
+                MetadataAccountingSettledForTest() && ownedGate->retired.load() && ownedGate->retiredOffOwner.load() &&
+                    publishedOwner->ResidentBytes() >= ownedBytes &&
+                    publishedOwner->ResidentBytes() == _jobs.ReservedMemoryBytes()))
+        return 5;
+    _session.ClearDocument();
+    DocumentChanged();
+    if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        return 5;
+    const bool graphDestroyed = publishedOwner->LocalAllocationBytes() == 0;
+    publishedOwner.reset();
+    (void)DrainCompletions(_jobs);
+    if (!expect("owned-original-ticket", "expired-weak-owner-keeps-exact-charge-after-graph-destruction",
+                graphDestroyed && publishedWeak.expired() && _jobs.ReservedMemoryBytes() == ownedBytes))
+        return 5;
+    publishedWeak.reset();
+    if (!expect("owned-original-ticket", "last-weak-reader-releases-all-original-charge",
+                SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                    _jobs.ReservedMemoryBytes() == 0 && _jobs.IsIdle()))
+        return 5;
+    std::fprintf(stderr, "PASS metadata-owned-accounting.summary checks=4 failures=0\n");
     if (const int residency = RunHistoryResidencySelfTest(); residency != 0)
         return residency;
     return 0;

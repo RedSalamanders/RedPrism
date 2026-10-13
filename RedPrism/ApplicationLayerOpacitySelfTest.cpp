@@ -65,7 +65,7 @@ int Application::RunLayerOpacityHostSelfTest() noexcept
     const auto drained = [this]() noexcept
     {
         return !_activeHostRequest && !_layerMetadataTicket && !_historyWork.Busy() && _hostRequests.Size() == 0 &&
-               _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
+               MetadataAccountingSettledForTest() && _hostInputBudget.Used() == 0 &&
                _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load();
     };
 

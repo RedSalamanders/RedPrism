@@ -494,9 +494,11 @@ HRESULT Renderer::RecoverDeviceForUtility(HRESULT result) noexcept
 }
 
 HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                         const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay) noexcept
+                         const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay,
+                         SelectionOutlineFrameSource* selectionOutline) noexcept
 {
     _canvasFailure = S_OK;
+    _selectionOutlineFailure = S_OK;
     _canvasDrawn = false;
     if (_suspended)
     {
@@ -573,6 +575,29 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         _context->OMSetRenderTargets(1, renderTargets, nullptr);
     }
 
+    if (selectionOutline && chrome && !_suppressSelectionOutlineForTest)
+    {
+        // Preparation can publish UIA callbacks. Re-borrow exact source/view/device authority AFTER it.
+        const CanvasHole hole = chrome->HolePixels();
+        const SelectionOutlineFrame outline =
+            selectionOutline->BorrowSelectionOutlineFrameOwner(hole.left, hole.top, hole.width, hole.height);
+        if (outline.composition && outline.solid && outline.dashes)
+        {
+            const HRESULT drawn = outline.composition->Device() == _device.get()
+                                      ? outline.composition->DrawSelectionOutlineToTarget(
+                                            _renderTarget.get(), _width, _height, outline.solid, outline.dashes,
+                                            outline.width, outline.height, outline.pixelLeft, outline.pixelTop,
+                                            outline.clipped ? &outline.clip : nullptr)
+                                      : E_ABORT;
+            _selectionOutlineFailure = drawn;
+            if (FAILED(drawn) && DeviceLostAfter(drawn))
+                return RecoverFromStage();
+            if (drawn == S_OK)
+                ++_selectionOutlineDraws;
+            _context->OMSetRenderTargets(1, renderTargets, nullptr);
+        }
+    }
+
     if (chrome)
     {
         const HRESULT chromeResult = StageResult(Stage::ChromeComposite, chrome->Composite(_context.get(), viewportDx));
@@ -583,6 +608,13 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         }
     }
 
+    if (_frameReadbackForTest)
+    {
+        const HRESULT captured =
+            _frameReadbackForTest(_frameReadbackContextForTest, _device.get(), _context.get(), _renderTarget.get());
+        if (FAILED(captured))
+            return captured;
+    }
     const HRESULT presentResult = StageResult(Stage::Present, _swapChain->Present(1, 0));
     if (FAILED(presentResult) && DeviceLostAfter(presentResult))
     {

@@ -1,11 +1,15 @@
 # P1.9 H3 — Incremental history storage accounting
 
-Status: **WIP; private persistent-index foundation and bounded private actual-adapter Release controls qualify; native integration and ordinary activation remain open**
+Latest continuation (2026-10-12): native layer-row accounting integration is complete; fresh r962 analysis / r963 Release / r964 Debug / r965 ASan qualification is active on binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3` (1,289 inputs / 20 contracts). The standard PS5.1/PS7 bridge passed 18 controls plus summary. Preserve r959 native Release failure, r958 analysis PASS and historical ISA refusal. See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md); full profiles, callers, activation and G1 remain due.
+
+Status: **WIP; private producer/scheduler/reference r7, save-admission cache, paired ISA proof, and Accounting-r2 strict original-output sum smoke are scoped PASS. Native layer-row accounting integration is complete; fresh native r962–r965 qualification is active on 1,289 inputs / 20 contracts, binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3`. The standard PS5.1/PS7 bridge passed 18 controls plus summary. Native profile results, callers, activation, latency, G1 and P1 remain open.** See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md) and [owned-metadata evidence](../../TestRuns/P1OwnedMetadataRoots_2026-10-12.md).
 Parent: [P1 milestone](UiNeverBlocks_2026-09-22.md)
 Contract: [Document history](../../Document/Document_History.md)
 Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, publication owners and the existing scheduler.
 
 ## Current checklist
+
+Current native qualification: integrated layer-row accounting binding `83AEC5FF3CF381779D2F3BAC5F49EDD5D7531045A1B53C925E62733F38AF30A3` (1,289 inputs / 20 contracts); r962 analysis, r963 Release, r964 Debug and r965 ASan matrix active. PS5.1/PS7 standard bridge passes 18 controls plus summary. Preserve r954 analysis failure, r958 analysis PASS, r959 full Release failure, and the historical Accounting-r1 partial-link ISA refusal. r960/r961 and ARM111 remain NEVER LAUNCHED; ARM111 held. Full profiles, callers, activation, latency, G1 and P1 remain open; see [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md).
 
 - [x] Inspect the current index and its callers: complete map clones, current-topology traversal, charge sampling,
   bounds scans and diagnostic `RetainedBytes` traversal still occur.
@@ -19,12 +23,30 @@ Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, p
   DocumentTests suite and independent reference controls. The bounded result covers O(1) root copies, incremental
   unique self-storage bounds, and unchanged-epoch sampling skip only; see the [adapter receipt](../../TestRuns/P1PersistentHistoryAdapter_2026-10-12.md).
 
-- [ ] Integrate the adapter into native sources and prove operation admission, original-ticket ownership, and
-  bounded retirement on actual production callers.
+- [x] Selectively integrate the persistent indexes, actual Raster journal, direct-root topology and six
+  focused test pairs into native sources; preserve the reference API and original goldens.
+- [ ] Prove complete operation admission, original-ticket ownership and bounded retirement on actual production callers.
+- [ ] Qualify the integrated original-ticket fixture: retain its 33 controls and add five admission controls (38 total). Main fixes the cheaper
+  draft's pre-admission capture, retained diagnostic strong lock and expired-object/weak-control confusion
+  before its first run. Release r943 then correctly refuses its below-headroom success snapshot; Main repairs
+  the snapshot and adds real refusal controls before a fresh run. Native caller migration and measured retirement remain separate.
 - [x] In the private adapter, update unique self-storage contributions incrementally and skip charge sampling
   when the residency epoch is unchanged.
-- [ ] Replace changed-epoch global charge resampling with bounded residency deltas and an explicit overflow fallback.
-- [ ] Prepare changed live topology from changed layer/storage owners; avoid full DAG walks for scalar edits.
+- [x] Qualify the private actual history topology delta adapter: direct layer roots, scalar root-group sharing,
+  active parent-edge membership, cancellation, original-owner fallback and sealed producer bounds. Preserve all
+  18,785 predecessor records in order and verify 212 new controls plus summary in the actual x64 Release run;
+  see [topology evidence](../../TestRuns/P1HistoryTopologyDelta_2026-10-12.md). Native host/admission/retirement
+  and G1 integration remain open.
+- [x] Private actual-Raster serial/journal and history-delta adapter: fixed 4,096-event journal, checked
+  nonwrapping storage serials/epochs, cache/event publication under the existing exclusive residency lease,
+  bounded one-event lookup, stale-witness refresh refusal, cancellation preservation and a
+  33-record worker-rescan fallback after overwrite. Fresh x64 Release r3 preserves all 18,733 predecessor
+  records in order and verifies 50 new controls plus two roster summaries; a separately checked Raster
+  integration summary reports 18 assertions and zero failures
+  ([receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md)). This completes private bounded-journal
+  controls only.
+- [x] Implement native changed-epoch bounded residency deltas with an explicit worker overflow fallback; runtime qualification remains pending.
+- [x] Implement native changed-owner direct-root topology and parent-edge updates, avoiding full DAG walks for scalar edits; runtime qualification remains pending.
 - [ ] Qualify original-ticket publication/retirement, real host consumers, cancellation and all G1 phases.
 - [ ] Integrate and qualify exact-source native Debug, Release, real ASan, analysis and ARM64 cross-builds;
   reconcile the domain contract and close H3 only when every requirement below is met.
@@ -38,6 +60,10 @@ pre-runtime multiplicities. Those controls intentionally repeat over the 1,024-k
 preparation's incorrect unique-label count refuses before any build/runtime; its source, runner and receipt
 remain preserved. Main corrects only the pre-runtime metadata count (98 to 96), with no changed product/test
 predicate. The scope remains private CPU index foundation.
+
+The private actual-Raster serial/journal and history-delta adapter qualifies in fresh x64 Release r3. Its 50 rostered controls and separately checked 18-assertion integration summary cover nonwrapping serial/epoch exhaustion, fixed-capacity suffix ordering and overwrite refusal, publication under the existing exclusive residency lease, exact late sparse charge, one-event lookup, stale-witness refusal, cancellation preservation, unrelated/freed events and worker fallback after journal overflow. This is private adapter evidence only: native admission (including the 96 KiB worker scratch reservation), full original-ticket ownership and retirement bounds, changed-owner topology, production host consumers, ordinary activation, H3, G1 and P1 remain open. See [P1HistoryResidencyJournal](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md).
+
+The private actual history topology delta adapter qualifies in x64 Release r2. It preserves 18,785 predecessor records in order and adds 212 rostered controls plus summary. Direct layer roots, scalar root-group sharing, active parent-edge membership, cancellation preservation, original-owner fallback and sealed producer bounds are covered. This remains private evidence: native production host/admission/retirement, G1 and P1 integration remain open. See [P1HistoryTopologyDelta](../../TestRuns/P1HistoryTopologyDelta_2026-10-12.md).
 
 The private actual history adapter r1 was retained after its fixture failed compilation on eight fixture-only API
 errors (`RedoCount` and the missing sparse-raster fill argument); no runtime started. Main r2 corrected those fixture
@@ -108,7 +134,9 @@ The current global residency epoch and owner try-acquire permit stay authoritati
 bytes under the existing lease; a history candidate samples under that same lease. A stale publication requires
 a worker refresh before an owner swap. Querying history must never trigger sparse materialization.
 
-A bounded change journal is a proposed next implementation, not current code. Its record key must resist
+A bounded change journal now qualifies in the private actual Raster/history Release candidate; the native
+code remains unchanged. See the [journal receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md).
+Its record key must resist
 allocation-address reuse. Prefer a monotonic storage serial assigned at construction and held as immutable
 data in the storage, with explicit exhaustion refusal; do not retain bare raster addresses or a journal of
 publication-owned weak pointers that pins entire old job reservations. Journal storage is fixed and included

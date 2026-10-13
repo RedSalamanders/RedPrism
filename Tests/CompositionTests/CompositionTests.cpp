@@ -33,6 +33,9 @@
 #include "Composition.Tests.RecordedUtilityRegions.h"
 #include "Composition.Tests.RecordedWarpPreview.h"
 #include "Composition.Tests.RestartDeviceOwnerControls.h"
+#include "Composition.Tests.SelectionOutlineController.h"
+#include "Composition.Tests.SelectionOutlineGpu.h"
+#include "Composition.Tests.SelectionOutlineResidency.h"
 #include "Composition.Tests.UtilityAdmission.h"
 #include "Composition.Tests.UtilityCurrentContext.h"
 #include "Composition.Tests.UtilityJoinedClose.h"
@@ -2301,6 +2304,11 @@ int wmain(int argc, wchar_t** argv)
         TestStrokePreviewMask(harness);
         TestStrokeAdoption(harness);
     }
+    gFailures += RunSelectionOutlineGpuTests();
+    gFailures += RunSelectionOutlineResidencyTests();
+
+    gFailures += RunSelectionOutlineControllerTests();
+
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

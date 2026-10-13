@@ -853,3 +853,30 @@ Export's CPU encoding follows actual private-graph retirement; later device chan
 cannot restart an encoder or repeat file publication. Admission uses the real device's texture limit, bounded
 above by 2048; the small-tile fixture must still exercise a second actual mapping failure.
 This does not activate the wider prepared display/tool route or qualify utility owner latency.
+
+
+### Prepared selection outline component (P1)
+
+The explicitly acquired prepared outline route rasterizes immutable selection loops on a COM-initialized
+worker into nine R8 planes: solid coverage and eight ant phases. Source identity is held by its owning
+`SelectionLoops`; cached source bounds, exact document scale/origin, DPI and the fractional canvas-hole
+clip determine the grid. The original Direct2D shadow/white order and fractional clipping remain the
+reference. Pass 9 draws the selected two planes after chrome composition, before Present, without
+walking points, creating paths/textures, copying pixels or allocating on the owner.
+
+A two-cell controller admits complete declared CPU output/scratch/source overlap and original GPU
+residency before source/device capture. It requires concurrent resource creation, creates all eighteen
+texture/view resources on the worker, and refuses unsupported/failing acquisition without synchronous
+fallback. Publication and every frame borrow validate current document, source, view epoch and actual
+queue/device generation. Frame borrowing occurs after chrome preparation. Stale, hidden, replaced and
+stopped keys cannot draw. GPU users acknowledge the original context's last-use event before worker
+retirement and final owner refund. Joined shutdown retains original charges through creator/resource
+retirement and detaches the empty pump.
+
+The component is integrated for harness acquisition. Ordinary activation remains gated by P1's complete
+caller admission, failure reporting, opaque Direct2D allocation/cancellation and G1 measurements; its
+64 MiB opaque headroom is a policy allowance, not a proven allocator bound. Numeric tests retain the
+original raster, residency, controller and clipping references. Actual frame tests compare the prepared
+route with the original Direct2D paint at 96/144/192 DPI and all eight phases, including fractional hole
+edges, within the existing one-byte rounding tolerance. Harness readback occurs after chrome composition
+and before Present; it does not qualify visible frame latency.

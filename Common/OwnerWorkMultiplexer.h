@@ -11,8 +11,22 @@
 class OwnerWorkMultiplexer final : public OwnerWorkPump
 {
   public:
-    static constexpr std::size_t kCapacity = 10;
+    static constexpr std::size_t kCapacity = 11;
 
+    [[nodiscard]] std::size_t SourceCountForTest() const noexcept
+    {
+        std::size_t count = 0;
+        for (const auto* source : _sources)
+            count += source != nullptr ? 1u : 0u;
+        return count;
+    }
+    [[nodiscard]] bool ContainsSourceForTest(const OwnerWorkPump& source) const noexcept
+    {
+        for (const auto* current : _sources)
+            if (current == &source)
+                return true;
+        return false;
+    }
     [[nodiscard]] bool Attach(OwnerWorkPump& source) noexcept
     {
         if (_pumping || &source == this)

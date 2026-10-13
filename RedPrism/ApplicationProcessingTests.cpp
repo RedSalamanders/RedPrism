@@ -43,7 +43,7 @@ struct ProcessingCase final
     bool refuseUtilityRoute = false;
     bool refuseRecordingRoute = false;
     OwnerWorkMultiplexer* routes = nullptr;
-    std::array<InertUtilityPrefix, 10> inert;
+    std::array<InertUtilityPrefix, 8> inert;
     std::size_t attached = 0;
 
     static std::int32_t AfterStage(void* opaque, ApplicationProcessingStage stage) noexcept
@@ -54,9 +54,9 @@ struct ProcessingCase final
         ++state.stageVisits;
         if ((state.refuseUtilityRoute || state.refuseRecordingRoute) && stage == ApplicationProcessingStage::NativeRead)
         {
-            // Three original leaves are live. Leave exactly one free slot for UtilityReadback
-            // when refusing the later shared command route, without manufacturing initialization failure.
-            const std::size_t seedCount = state.refuseUtilityRoute ? 7 : 6;
+            // At NativeRead, original GPU, retry-wait and path-read leaves are three; utility attaches next.
+            // Eight fillers refuse utility; seven fill ten so utility takes slot eleven and recording is refused.
+            const std::size_t seedCount = state.refuseUtilityRoute ? 8 : 7;
             for (std::size_t index = 0; index < seedCount; ++index)
             {
                 if (!state.routes->Attach(state.inert[index]))
@@ -175,7 +175,7 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
         const bool utilityExpected =
             !neverStarted && !retryCase && !utilityRouteRefusal && (!checkpointCase || caseIndex >= 9);
         if (utilityRouteRefusal)
-            expect(state.attached == 7 && state.stageVisits == 9 &&
+            expect(state.attached == 8 && state.stageVisits == 9 &&
                        state.stages[8] == ApplicationProcessingStage::NativeRead && !owner->_utilityReadbackInitialized,
                    "actual-full-router-refuses-utility-after-nine-original-checkpoints");
         expect(owner->_utilityReadbackInitialized == utilityExpected && !owner->_utilityReadback.HasPending() &&
@@ -185,7 +185,7 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
         const bool recordingExpected = !neverStarted && !retryCase && !utilityRouteRefusal && !recordingRouteRefusal &&
                                        (!checkpointCase || caseIndex >= 10);
         if (recordingRouteRefusal)
-            expect(state.attached == 6 && state.stageVisits == 10 &&
+            expect(state.attached == 7 && state.stageVisits == 10 &&
                        state.stages[9] == ApplicationProcessingStage::UtilityReadback &&
                        owner->_utilityReadbackInitialized && !owner->_recordedCommandsInitialized,
                    "actual-full-router-refuses-recorded-command-route-after-ten-original-checkpoints");

@@ -35,7 +35,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Wide RCX imm32 byte-remap parser controls fail
 if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR10EcxGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'R10 ECX terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaShortStackRetNopTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Short-stack RET/one-byte NOP parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaWideUnsignedGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Wide unsigned guarded DWORD parser controls failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaDwordZeroStackTests.ps1')
@@ -46,6 +49,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD RET/one-byte NOP parser controls f
 if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
+Write-Host 'BEGIN isa-r9-r15-pair-controls'
+& (Join-Path $PSScriptRoot 'IsaR9R15PairTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'R9/R15 paired byte-map parser controls failed.' }
+Write-Host 'END isa-r9-r15-pair-controls'
 & (Join-Path $PSScriptRoot 'IsaR9HoistedDirectTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Hoisted R9 message-switch parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')

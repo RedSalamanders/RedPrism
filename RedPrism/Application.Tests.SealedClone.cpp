@@ -510,8 +510,8 @@ int Application::RunSealedCloneHostSelfTest() noexcept
                     ReadActivePixel(_session, static_cast<int>(kCloneDestination.x),
                                     static_cast<int>(kCloneDestination.y), opacityTarget) &&
                     opacityTarget == kRed && _session.history.UndoCount() == 1 &&
-                    _session.history.UndoName() == L"Clone Stamp" && _jobs.ReservedMemoryBytes() == 0 &&
-                    _jobs.ReleasingMemoryBytes() == 0))
+                    _session.history.UndoName() == L"Clone Stamp" && MetadataAccountingSettledForTest() &&
+                    _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0))
         return 5;
     _cloneReadbackTestGate.reset();
     _layerMetadataTestGate.reset();

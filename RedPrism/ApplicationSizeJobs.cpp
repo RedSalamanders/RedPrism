@@ -661,14 +661,37 @@ int Application::RunSizingWorkSelfTest() noexcept
     _session.ReplaceDocument(std::move(replacement).Seal(), active);
     const bool copied = _session.CopySelection();
     _session.ClearDocument();
+    // Reference clear can defer metadata destruction and enqueue original memory acknowledgements.
+    // Keep the baseline clipboard reader alive while consuming those events before the exact charge observation.
+    const bool retirementSettled = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
     const auto& current = _session.Clipboard();
-    const bool replaced = copied && current && current->image.Width() == 1 && current->image.Height() == 1 &&
-                          current->origin == Vec2{0, 0} && current->image.Data() &&
+    const bool replaced = retirementSettled && copied && current && current->image.Width() == 1 &&
+                          current->image.Height() == 1 && current->origin == Vec2{0, 0} && current->image.Data() &&
                           std::equal(literal.begin(), literal.end(), current->image.Data()) &&
                           _session.ClipboardSerial() == clipboardSerial + 1 &&
                           (!clipboardBaseline || current->image != clipboardBaseline->image) && !_session.Document() &&
                           _session.history.UndoCount() == 0 && !_session.history.CanRedo() &&
                           _jobs.ReservedMemoryBytes() == retainedBaseline && _jobs.ReleasingMemoryBytes() == 0;
+    if (!replaced)
+    {
+        const bool literalMatches = current && current->image.Format() == RasterFormat::Bgra8888 &&
+                                    current->image.ByteSize() >= literal.size() && current->image.Data() &&
+                                    std::equal(literal.begin(), literal.end(), current->image.Data());
+        std::fprintf(stderr,
+                     "DIAGNOSTIC sizing-clipboard-retirement settled=%u copied=%u current=%u width=%d height=%d "
+                     "origin=%.3f,%.3f literal=%u serial=%llu originalSerial=%llu distinct=%u document=%u "
+                     "undo=%llu redo=%u reserved=%llu baseline=%llu releasing=%llu idle=%u\n",
+                     retirementSettled ? 1u : 0u, copied ? 1u : 0u, current ? 1u : 0u,
+                     current ? current->image.Width() : 0, current ? current->image.Height() : 0,
+                     current ? current->origin.x : 0.0, current ? current->origin.y : 0.0, literalMatches ? 1u : 0u,
+                     static_cast<unsigned long long>(_session.ClipboardSerial()),
+                     static_cast<unsigned long long>(clipboardSerial),
+                     !clipboardBaseline || (current && current->image != clipboardBaseline->image) ? 1u : 0u,
+                     _session.Document() ? 1u : 0u, static_cast<unsigned long long>(_session.history.UndoCount()),
+                     _session.history.CanRedo() ? 1u : 0u, static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                     static_cast<unsigned long long>(retainedBaseline),
+                     static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()), _jobs.IsIdle() ? 1u : 0u);
+    }
     std::fprintf(stderr, "%s sizing-clipboard-retirement.actual-private-replacement-keeps-baseline-reader-charge\n",
                  replaced ? "PASS" : "FAIL");
     clipboardBaseline.reset();

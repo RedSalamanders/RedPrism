@@ -19,19 +19,34 @@
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
 #include "DistortWorkTests.h"
+#include "Document.Tests.BoundedLassoPoints.h"
+#include "Document.Tests.BoundedLassoTicket.h"
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
 #include "Document.Tests.CopyPixelsLifetime.h"
 #include "Document.Tests.CropLifetime.h"
 #include "Document.Tests.HealWork.h"
+#include "Document.Tests.HistoryOriginalTicket.h"
 #include "Document.Tests.HistoryPublicationLifetime.h"
+#include "Document.Tests.HistoryReferenceTopology.h"
+#include "Document.Tests.HistoryResidencyDelta.h"
+#include "Document.Tests.HistoryTopologyDelta.h"
 #include "Document.Tests.InverseSelection.h"
 #include "Document.Tests.LayerIndex.h"
 #include "Document.Tests.MaskSampleWork.h"
+#include "Document.Tests.OwnedMetadataJobsR4.h"
+#include "Document.Tests.OwnedRecordRoot.h"
 #include "Document.Tests.PendingDisplaySource.h"
+#include "Document.Tests.PersistentHistory.h"
+#include "Document.Tests.PersistentOwnerIndex.h"
 #include "Document.Tests.PlacedRasterWork.h"
 #include "Document.Tests.PreparedRasterPreview.h"
 #include "Document.Tests.PreviewMetadataAdmission.h"
+#include "Document.Tests.ProjectSaveCachedPlan.h"
+#include "Document.Tests.PublicationAllocation.h"
+#include "Document.Tests.PublicationBudget.h"
+#include "Document.Tests.RasterJournalIntegration.h"
+#include "Document.Tests.RasterResidencyJournal.h"
 #include "Document.Tests.RecordLookup.h"
 #include "Document.Tests.SelectionDisplayValue.h"
 #include "Document.Tests.SelectionGeometryLifetime.h"
@@ -41,6 +56,9 @@
 #include "Document.Tests.SelectionOffsetLarge.h"
 #include "Document.Tests.SelectionOffsetNumeric.h"
 #include "Document.Tests.SelectionOutline.h"
+#include "Document.Tests.SelectionOutlineAllocation.h"
+#include "Document.Tests.SelectionOutlineRaster.h"
+#include "Document.Tests.SelectionOutlineRasterViews.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
@@ -8211,6 +8229,18 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryPreparationFaultTests();
     gFailures += RunHistoryRetirementBoundTests();
     gFailures += RunPreparedRasterHistoryTests();
+    gFailures += RunPersistentOwnerIndexTests();
+    gFailures += RunPersistentHistoryTests();
+    gFailures += RunRasterResidencyJournalTests();
+    gFailures += RunRasterJournalIntegrationTests();
+    gFailures += RunHistoryResidencyDeltaTests();
+    gFailures += RunHistoryTopologyDeltaTests();
+    gFailures += RunOwnedRecordRootTests();
+    gFailures += RunPublicationAllocationTests();
+    gFailures += RunPublicationBudgetTests();
+    gFailures += RunHistoryReferenceTopologyTests();
+    gFailures += RunOwnedMetadataJobsR4Tests();
+    gFailures += RunHistoryOriginalTicketTests();
     gFailures += RunPreparedColorHistoryTests();
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
@@ -8366,6 +8396,12 @@ int wmain(int argc, wchar_t** argv)
     TestDistortMasks();
     TestDocumentPixelBudget();
     TestPixelMoveTiles();
+    gFailures += RunProjectSaveCachedPlanTests();
+    gFailures += RunSelectionOutlineAllocationTests();
+    gFailures += RunSelectionOutlineRasterTests();
+    gFailures += RunSelectionOutlineRasterViewsTests();
+    gFailures += RunBoundedLassoPointTests();
+    gFailures += RunBoundedLassoTicketTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

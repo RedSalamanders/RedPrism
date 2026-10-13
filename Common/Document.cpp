@@ -30,6 +30,8 @@
 namespace
 {
 std::atomic<std::uint64_t> gRasterResidencyEpoch{1};
+RasterStorageSerial gRasterStorageSerial;
+Raster::ResidencyJournal gRasterResidencyJournal;
 thread_local bool gRasterResidencyLeaseHeld = false;
 std::mutex gRasterResidencyNotificationsGate;
 std::array<Raster::ResidencySubscription*, Raster::ResidencySubscription::kCapacity> gRasterResidencySubscribers{};
@@ -147,6 +149,16 @@ std::uint64_t Raster::ResidencyEpoch() noexcept
     return gRasterResidencyEpoch.load(std::memory_order_acquire);
 }
 
+Raster::ResidencyJournal::CopyResult Raster::CopyResidencyChanges(std::uint64_t afterEpoch,
+                                                                  std::span<RasterResidencyChange> output,
+                                                                  std::size_t& count, CancelToken cancellation) noexcept
+{
+    count = 0;
+    if (!gRasterResidencyLeaseHeld)
+        return ResidencyJournal::CopyResult::InvalidWitness;
+    return gRasterResidencyJournal.CopySince(afterEpoch, output, count, cancellation);
+}
+
 Raster::ResidencySubscription::~ResidencySubscription() noexcept
 {
     Stop();
@@ -193,6 +205,41 @@ void Raster::NotifyResidencyChanged() noexcept
     for (auto* subscriber : gRasterResidencySubscribers)
         if (subscriber)
             subscriber->_changed(subscriber->_context);
+}
+
+bool RecordSavePolicy<ImageLayer>::Accumulate(RecordSavePlan& plan, const ImageLayer& layer) noexcept
+{
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto add = [](std::uint64_t& target, std::uint64_t value) noexcept
+    {
+        if (value > (std::numeric_limits<std::uint64_t>::max)() - target)
+            return false;
+        target += value;
+        return true;
+    };
+    if (layer.adjustment)
+        for (const auto& channel : layer.adjustment->curves.channels)
+            if (channel.size() > 32)
+                return false;
+    const auto units = static_cast<std::uint64_t>(layer.name.size());
+    if (units > maximum / 32 || !add(plan.metadataBytes, units * 32) ||
+        !add(plan.metadataBytes, sizeof(ImageLayer) + 64 * 1024))
+        return false;
+    const auto asset = [&](const RasterAsset& value) noexcept
+    {
+        if (!value.image.HasStorage() || value.image.Width() < 1 || value.image.Height() < 1 ||
+            value.image.Width() > kMaxCanvasSide || value.image.Height() > kMaxCanvasSide ||
+            value.image.PixelCount() > kMaxLayerPixels)
+            return false;
+        const auto largest = static_cast<std::uint64_t>(value.image.Stride()) * value.image.Height();
+        const auto nameUnits = static_cast<std::uint64_t>(value.name.size());
+        if (nameUnits > (maximum - 128) / 32 || !add(plan.metadataBytes, nameUnits * 32 + 128) ||
+            !add(plan.assetCount, 1))
+            return false;
+        plan.largestAssetBytes = (std::max)(plan.largestAssetBytes, largest);
+        return true;
+    };
+    return (!layer.asset || asset(layer.asset.value())) && (!layer.mask || asset(layer.mask->asset));
 }
 
 std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
@@ -421,9 +468,12 @@ Raster Raster::Make(int width, int height, RasterFormat format)
 
 std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
 {
+    const auto serial = gRasterStorageSerial.Allocate();
+    if (!serial)
+        return {};
     // make_unique establishes exception-safe ownership before the custom shared_ptr control block is made.
     // If that second allocation fails, FreeStorage still returns the already-owned payload exactly once.
-    std::unique_ptr<Storage, FreeStorage> storage{std::make_unique<Storage>().release()};
+    std::unique_ptr<Storage, FreeStorage> storage{std::make_unique<Storage>(serial).release()};
     return std::shared_ptr<Storage>{std::move(storage)};
 }
 
@@ -458,7 +508,10 @@ template <class T> struct ChargedRasterAllocator final
 
 std::shared_ptr<Raster::Storage> Raster::AllocateChargedStorage(std::shared_ptr<const void> lifetime)
 {
-    auto allocated = std::make_unique<ChargedStorage>();
+    const auto serial = gRasterStorageSerial.Allocate();
+    if (!serial)
+        return {};
+    auto allocated = std::make_unique<ChargedStorage>(serial);
     allocated->lifetime = lifetime;
     // The shared_ptr constructor invokes the supplied deleter if control allocation fails. Ownership
     // starts in make_unique and moves once; neither failure path can abandon or double-free the storage.
@@ -589,6 +642,8 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
         return raster;
     }
     auto storage = AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -628,6 +683,8 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     }
     const bool charged = lifetime.use_count() != 0; // A null alias may still own a real lifetime control block.
     auto storage = charged ? AllocateChargedStorage(lifetime) : AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -871,11 +928,11 @@ void Raster::Materialize(const Storage& storage) noexcept
     if (!residency.Held())
         return;
     const auto epoch = ResidencyEpoch();
-    if (epoch == (std::numeric_limits<std::uint64_t>::max)())
-        return; // never wrap a resident witness and authorize an old prepared sample
+    if (epoch != gRasterResidencyJournal.Epoch() || !gRasterResidencyJournal.Append(storage.serial, size))
+        return; // no wrap or journal/publication divergence; private pixels remain unpublished
     storage.bytes = std::move(bytes);
     storage.assembled.store(storage.bytes.data(), std::memory_order_release);
-    gRasterResidencyEpoch.store(epoch + 1, std::memory_order_release);
+    gRasterResidencyEpoch.store(gRasterResidencyJournal.Epoch(), std::memory_order_release);
     residency.Reset();
     lock.unlock();
     NotifyResidencyChanged();
@@ -990,6 +1047,8 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
         return {};
     }
     auto storage = AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = format == RasterFormat::Gray8 ? width : width * 4;

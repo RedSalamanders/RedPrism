@@ -205,8 +205,9 @@ int Application::RunCanvasBrushOpacitySelfTest() noexcept
         if (!expect(name, "terminal-acknowledges-one-brush-after-opacity",
                     _session.history.UndoCount() == 2 && _session.history.UndoName() == L"Brush Stroke" &&
                         _session.ActiveLayer()->opacity == .25 && !_opacityEdit && !_canvasBrushInput.Busy() &&
-                        !_session.PendingBrush() && _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
-                        _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load()))
+                        !_session.PendingBrush() && MetadataAccountingSettledForTest() &&
+                        _hostInputBudget.Used() == 0 && _layerMetadataTestGate->retired.load() &&
+                        _layerMetadataTestGate->retiredOffOwner.load()))
             return 5;
         if (!expect(name, "down-retains-red-and-small-event-time-tip",
                     pixelAt(8, 8) == std::array<std::uint8_t, 4>{0, 0, 255, 255} && pixelAt(8, 11)[3] == 0 &&

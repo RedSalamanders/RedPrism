@@ -219,16 +219,17 @@ int Application::RunCanvasBrushCompetingSelfTest() noexcept
                 return 5;
             retiredOpening = first.firstOpening;
             const auto firstReceipt = _canvasBrushReceipt;
-            _layerMetadataTestGate.reset();
             _opacityEdit.reset();
             _opacityRecorded.reset();
             if (!expect(name, "prior-opening-retired-with-one-brush-receipt",
                         _session.history.UndoCount() == 2 && _session.ActiveLayer()->asset &&
                             _canvasBrushReceipt.Read().outcome == HostOutcome::Succeeded &&
-                            _hostInputBudget.Used() == 0 && _jobs.ReservedMemoryBytes() == 0 &&
+                            _hostInputBudget.Used() == 0 && MetadataAccountingSettledForTest() &&
                             _session.PendingBrush() == nullptr))
                 return 5;
 
+            // Observe the first ticket before selecting the next gate; its history remains charged.
+            _layerMetadataTestGate.reset();
             OnLayerOpacity(.5, ChromeEditPhase::Preview);
             if (!settle() || !_opacityEdit || _session.ActiveLayer()->opacity != .5)
                 return 5;
@@ -262,7 +263,7 @@ int Application::RunCanvasBrushCompetingSelfTest() noexcept
                             pixelAt(8, 8) == std::array<std::uint8_t, 4>{0, 0, 255, 255} &&
                             pixelAt(24, 18) == std::array<std::uint8_t, 4>{255, 0, 0, 255} &&
                             pixelAt(28, 18) == std::array<std::uint8_t, 4>{255, 0, 0, 255} && pixelAt(16, 20)[3] == 0 &&
-                            _hostInputBudget.Used() == 0 && _jobs.ReservedMemoryBytes() == 0 &&
+                            _hostInputBudget.Used() == 0 && MetadataAccountingSettledForTest() &&
                             _session.PendingBrush() == nullptr))
                 return 5;
             continue;
@@ -311,7 +312,7 @@ int Application::RunCanvasBrushCompetingSelfTest() noexcept
                         pixelAt(8, 8) == expectedOrigin && pixelAt(12, 8) == expectedOrigin &&
                         pixelAt(24, 18)[3] == 0 && (lost ? pixelAt(20, 8)[3] == 0 : pixelAt(20, 8) == expectedOrigin) &&
                         !_canvasBrushInput.Busy() && !_session.PendingBrush() && _hostInputBudget.Used() == 0 &&
-                        _jobs.ReservedMemoryBytes() == 0))
+                        MetadataAccountingSettledForTest()))
             return 5;
 
         if (lost)

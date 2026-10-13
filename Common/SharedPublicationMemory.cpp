@@ -1,6 +1,10 @@
 #include "SharedPublicationMemory.h"
 
+#include "PublicationAllocationLedger.h"
+
 #include <cstddef>
+#include <exception>
+#include <limits>
 #include <new>
 #include <utility>
 
@@ -44,16 +48,58 @@ template <class T> struct PublicationAllocator final
 };
 } // namespace
 
+std::uint64_t SharedPublicationMemory::LocalAllocationBytes() const noexcept
+{
+    return _localAllocationBytes.load(std::memory_order_acquire);
+}
+
+bool SharedPublicationMemory::SealLocalAllocations() const noexcept
+{
+    return !_localAllocationSealed.exchange(true, std::memory_order_acq_rel);
+}
+
+bool SharedPublicationMemory::TryAccountLocalAllocation(std::uint64_t bytes) const noexcept
+{
+    if (!bytes || _localAllocationSealed.load(std::memory_order_acquire))
+        return false;
+    auto previous = _localAllocationBytes.load(std::memory_order_relaxed);
+    do
+    {
+        if (previous > _localAllocationLimit || bytes > _localAllocationLimit - previous)
+            return false;
+    } while (!_localAllocationBytes.compare_exchange_weak(previous, previous + bytes, std::memory_order_release,
+                                                          std::memory_order_relaxed));
+    // A racing seal cannot authorize a new published allocation. Original binding still requires all useful
+    // producers to have joined; this rollback makes accidental late construction refuse and unwind.
+    if (_localAllocationSealed.load(std::memory_order_acquire))
+    {
+        ReleaseLocalAllocation(bytes);
+        return false;
+    }
+    return true;
+}
+
+void SharedPublicationMemory::ReleaseLocalAllocation(std::uint64_t bytes) const noexcept
+{
+    auto previous = _localAllocationBytes.load(std::memory_order_relaxed);
+    do
+    {
+        if (!bytes || bytes > previous)
+            std::terminate(); // An accounting mismatch cannot refund live ownership.
+    } while (!_localAllocationBytes.compare_exchange_weak(previous, previous - bytes, std::memory_order_release,
+                                                          std::memory_order_relaxed));
+}
+
 std::uint64_t SharedPublicationMemory::OwnershipAllowance() noexcept
 {
     return kControlBlockLimit + sizeof(PublicationMemoryNode);
 }
 
-std::shared_ptr<SharedPublicationMemory> SharedPublicationMemory::CreateForWork()
+std::shared_ptr<SharedPublicationMemory> SharedPublicationMemory::CreateForWork(std::uint64_t localLimit)
 {
     auto node = std::make_unique<PublicationMemoryNode>();
     auto result = std::allocate_shared<SharedPublicationMemory>(
-        PublicationAllocator<SharedPublicationMemory>{node.get()}, ConstructionTag{}, node.get());
+        PublicationAllocator<SharedPublicationMemory>{node.get()}, ConstructionTag{}, node.get(), localLimit);
     (void)node.release(); // One allocator now owns it. Construction after allocation is nonthrowing.
     return result;
 }
@@ -64,6 +110,7 @@ std::int32_t SharedPublicationMemory::BindForPublication(JobScheduler& scheduler
     if (result >= 0)
     {
         _node->original = original;
+        (void)SealLocalAllocations();
     }
     return result;
 }
@@ -77,7 +124,10 @@ std::int32_t SharedPublicationMemory::BindAfterCompletedWork(JobScheduler& sched
 {
     const auto result = scheduler.RetainMemory(original, _node->lease);
     if (result >= 0)
+    {
         _node->original = original;
+        (void)SealLocalAllocations();
+    }
     return result;
 }
 std::uint64_t SharedPublicationMemory::Bytes() const noexcept
@@ -89,7 +139,10 @@ std::int32_t SharedPublicationMemory::BindForRetirement(JobScheduler& scheduler,
 {
     const auto result = scheduler.RetainRetirementMemory(original, _node->lease);
     if (result >= 0)
+    {
         _node->original = original;
+        (void)SealLocalAllocations();
+    }
     return result;
 }
 std::uint64_t SharedPublicationMemory::ResidentBytes() const noexcept
@@ -111,6 +164,8 @@ std::int32_t SharedPublicationMemory::BindPartitionedAfterCompletedWork(JobSched
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
 }
@@ -125,6 +180,8 @@ std::int32_t SharedPublicationMemory::BindPartitionedForPublication(JobScheduler
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
 }
@@ -139,6 +196,8 @@ std::int32_t SharedPublicationMemory::BindPartitionedForRetirement(JobScheduler&
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
 }
@@ -152,6 +211,8 @@ std::int32_t SharedPublicationMemory::BindPersistentOutputAfterCompletedWork(
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
 }
@@ -166,6 +227,8 @@ std::int32_t SharedPublicationMemory::BindPersistentOutputForPublication(JobSche
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
 }
@@ -180,6 +243,22 @@ std::int32_t SharedPublicationMemory::BindPersistentOutputForRetirement(JobSched
     {
         _node->original = original;
         temporary._node->original = original;
+        (void)SealLocalAllocations();
+        (void)temporary.SealLocalAllocations();
     }
     return result;
+}
+
+bool TryAccountPublicationAllocation(const std::shared_ptr<const SharedPublicationMemory>& memory,
+                                     std::uint64_t bytes) noexcept
+{
+    return memory && memory->TryAccountLocalAllocation(bytes);
+}
+
+void ReleasePublicationAllocation(const std::shared_ptr<const SharedPublicationMemory>& memory,
+                                  std::uint64_t bytes) noexcept
+{
+    if (!memory)
+        std::terminate();
+    memory->ReleaseLocalAllocation(bytes);
 }

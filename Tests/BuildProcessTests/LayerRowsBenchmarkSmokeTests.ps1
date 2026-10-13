@@ -11,6 +11,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path $PSScriptRoot 'LayerRowsAccounting.psm1') -Force
+& (Join-Path $PSScriptRoot 'LayerRowsAccountingTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Layer-row accounting controls failed.' }
+
 if (-not (Test-Path -LiteralPath $ExecutablePath -PathType Leaf)) {
     throw "RedPrism.exe was not found: $ExecutablePath"
 }
@@ -63,11 +67,13 @@ if ($benchRows.Count -ne 3) {
     throw "Layer-row smoke printed $($benchRows.Count) BENCH rows, expected exactly three. See $stdoutPath"
 }
 $seenTrials = [System.Collections.Generic.HashSet[int]]::new()
+$benchReservations = @{}
 foreach ($row in $benchRows) {
     if ($row -notmatch '^LAYER ROWS BENCH trial=(?<trial>\d+) boundary=(?<boundary>\w+) layers=(?<layers>\d+) nameUnits=(?<nameUnits>\d+) elapsedWithWorkerWaitUs=(?<elapsed>\d+) reservedBytes=(?<reserved>\d+) namesRead=(?<names>\d+) totalNameUnits=(?<totalNameUnits>\d+) clockFailures=(?<clockFailures>\d+)$') {
         throw "Malformed layer-row BENCH row: $row"
     }
     $trial = [int]::Parse($Matches['trial'], [System.Globalization.CultureInfo]::InvariantCulture)
+    $benchReservations[$trial] = [uint64]::Parse($Matches['reserved'], [System.Globalization.CultureInfo]::InvariantCulture)
     if (-not $expectedTrials.ContainsKey($trial) -or -not $seenTrials.Add($trial)) {
         throw "Unexpected or duplicate layer-row BENCH trial: $row"
     }
@@ -85,6 +91,8 @@ foreach ($row in $benchRows) {
 if ($seenTrials.Count -ne 3) {
     throw "Layer-row smoke did not report trials 0, 1, and 2. See $stdoutPath"
 }
+
+Assert-LayerRowsAccounting -Lines $lines -BenchReservations $benchReservations
 
 $expectedKinds = @(
     'request', 'prepare', 'uia-navigation-server', 'uia-name-server', 'dispatch',

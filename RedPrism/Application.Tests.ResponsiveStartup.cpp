@@ -46,6 +46,7 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
     };
     // Independent acquired-prefix expectations: row/display/stroke callbacks run only after acquisition.
     // Production has six routes before rows, seven before display and nine before stroke.
+    // With eleven slots the independent filler counts are five/four/three/two; pending leaves exactly one slot.
     constexpr std::array cases{
         Case{"normal", Mode::Normal, Stage::BeforeAcquisition, 5, 0},
         Case{"refuse-before", Mode::Refuse, Stage::BeforeAcquisition, 1, 0},
@@ -58,10 +59,10 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
         Case{"close-display", Mode::ReentrantClose, Stage::Display, 3, 0},
         Case{"close-stroke", Mode::ReentrantClose, Stage::Stroke, 4, 0},
         Case{"close-ready", Mode::ReentrantClose, Stage::ReadyToEnable, 5, 0},
-        Case{"capacity-rows", Mode::Capacity, Stage::BeforeAcquisition, 1, 4},
-        Case{"capacity-display", Mode::Capacity, Stage::LayerRows, 2, 3},
-        Case{"capacity-pending", Mode::Capacity, Stage::LayerRows, 2, 2, true},
-        Case{"capacity-stroke", Mode::Capacity, Stage::Display, 3, 1},
+        Case{"capacity-rows", Mode::Capacity, Stage::BeforeAcquisition, 1, 5},
+        Case{"capacity-display", Mode::Capacity, Stage::LayerRows, 2, 4},
+        Case{"capacity-pending", Mode::Capacity, Stage::LayerRows, 2, 3, true},
+        Case{"capacity-stroke", Mode::Capacity, Stage::Display, 3, 2},
     };
     int failures = 0;
     unsigned int checks = 0;

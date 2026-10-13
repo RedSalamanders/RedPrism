@@ -353,6 +353,22 @@
     <ClCompile Include="Composition.Tests.ChargedRaster.cpp" />
     <ClInclude Include="Composition.Tests.ChargedRaster.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\SelectionOutlineRasterWork.cpp" />
+    <ClCompile Include="..\..\RedPrism\PreparedSelectionOutlineGpu.cpp" />
+    <ClCompile Include="Composition.Tests.SelectionOutlineGpu.cpp" />
+    <ClCompile Include="Composition.Tests.SelectionOutlineResidency.cpp" />
+    <ClInclude Include="..\..\Common\SelectionOutlineRasterWork.h" />
+    <ClInclude Include="..\..\RedPrism\PreparedSelectionOutlineGpu.h" />
+    <ClInclude Include="Composition.Tests.SelectionOutlineGpu.h" />
+    <ClInclude Include="Composition.Tests.SelectionOutlineResidency.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\RedPrism\SelectionOutlineDisplayController.cpp" />
+    <ClCompile Include="Composition.Tests.SelectionOutlineController.cpp" />
+    <ClInclude Include="..\..\RedPrism\SelectionOutlineDisplayController.h" />
+    <ClInclude Include="Composition.Tests.SelectionOutlineController.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

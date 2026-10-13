@@ -332,7 +332,7 @@ int Application::RunCanvasBrushLifetimeWindowSelfTest() noexcept
             receiptPumped &&
             state.stroke.Read().outcome == (scenario.save ? HostOutcome::Succeeded : HostOutcome::Cancelled) &&
             !_canvasLifetime && !_canvasBrushInput.Busy() && !_session.PendingBrushOpening() && !_activeHostRequest &&
-            _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 && _jobs.ReservedMemoryBytes() == 0;
+            _hostRequests.Size() == 0 && _hostInputBudget.Used() == 0 && MetadataAccountingSettledForTest();
 
         bool exactSaved = GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES;
         if (scenario.save && !scenario.failWrite)

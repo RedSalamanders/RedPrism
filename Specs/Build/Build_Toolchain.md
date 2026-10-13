@@ -599,6 +599,19 @@ when receiving vector-data status. Wrong or missing producer, loop, guard, row, 
 provides no exemption. Real adjacent vector code remains gated. This changes no runtime, object, function,
 address or tier allowlist; parser/readback proof is separate from native profile qualification.
 
+The observed ASan Menu switch also has an unsigned wide-stack form: eight-byte `CMP [RSP+disp32],imm8`,
+six-byte unsigned `JA`, seven-byte zero-extending `MOV EAX,[RSP+same disp32]`, then the exact contiguous
+`LEA RCX,imagebase; MOV EAX,[RCX+4*RAX+tableRva]; ADD RAX,RCX; JMP RAX`. The nonnegative maximum 1–127
+bounds maximum+1 aligned DWORDs inside the same executable contribution and containing PDB procedure.
+The complete guard, dispatch and decoded body through the immediately preceding RET MUST match the PE.
+Default/case targets are known body instruction boundaries after dispatch. Interior anonymous symbols,
+overlapping/unknown/missing rows, bad targets and direct body transfers into the table, including archived behavioral reference prefixes and LOOP-family branches, refuse proof.
+An anonymous symbol at the table start is optional for this exact form; a later unrelated data symbol
+cannot extend its guard-derived extent. Only the exact table bytes receive data status and must match
+the listing. Real adjacent vector instructions remain gated. Collecting candidate body rows grants no
+exemption. `IsaWideUnsignedGuardTests.ps1` retains prior controls and checks three accepted forms and
+27 independent refusals. No runtime, object, function, tier or address allowlist changes.
+
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
 placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named
@@ -643,3 +656,22 @@ development builds remain available; a copied candidate with uncertain object pr
 
 Expected: zero MSBuild warnings or errors; `.build\x64\<Configuration>\RedPrism.exe` exists; ASan Debug binaries are
 really instrumented.
+
+
+The observed ASan short-stack Menu form MUST use a complete proof: DWORD `CMP [RSP+disp8],imm8`
+with maximum 1–127, short unsigned `JA`, signed `MOVSXD RAX,[RSP+same disp8]`, and exact contiguous
+RCX image-base/load/add/jump dispatch. The anonymous same-owner DWORD table MUST end at the exact
+PDB procedure end, immediately follow `RET; NOP` with one-byte NOP, and contain only known PE-matching
+case boundaries after dispatch and before the RET. The default MUST also be a known case-body boundary.
+Every row from procedure start through terminal padding MUST be contiguous, known, nonoverlapping and
+PE-matching. Direct branch/call/LOOP-family transfers, with legacy prefixes, MUST NOT bypass the guard
+or enter padding/data. A short-stack one-byte NOP candidate MUST be selected before the generic forward reader, and a refused proof MUST NOT fall back to either the generic or older target-only reader. The distinct long-JA form keeps its existing proof. Unmapped candidate probing supplies no terminal evidence.
+Only the proved table receives data status; real vector instructions in its body stay gated. The existing
+PE-matching INT3 suffix rule still governs a decoder row that crosses the exact table end.
+
+The independent short-stack suite MUST retain five accepted controls (six-entry exact layout, shared-case
+default, bounds 1/127, and a PE-matching INT3 straddle) and 58 refusals. These include malformed guard/index/
+base/load/add/jump, PDB/table/procedure ownership and extents, unknown/missing/overlapping or contradictory
+rows, wrong terminal, out-of-body or interior targets, prefixed and LOOP-family entries, and real vector
+instructions in the body or directly after the exact table end. A genuine following instruction MUST NOT be
+consumed as another target RVA even when its byte encoding equals a valid case address.

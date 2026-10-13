@@ -22,11 +22,14 @@ REDPRISM_SHARED_UINT kCompositionPassAdjust = 6;        // an adjustment layer o
 REDPRISM_SHARED_UINT kCompositionPassStackAdjust = 7;   // a clipped adjustment over the stack's base color
 REDPRISM_SHARED_UINT kCompositionPassLayerAdjust = 8;   // destructive preview on the layer's own pixel grid
 
+REDPRISM_SHARED_UINT kCompositionPassSelectionOutline = 9; // view-grid solid/dash A8 masks
+
 // Layer flags (`flags`).
 REDPRISM_SHARED_UINT kCompositionFlagHasMask = 1u;
 REDPRISM_SHARED_UINT kCompositionFlagHasLive = 2u;
 REDPRISM_SHARED_UINT kCompositionFlagHasFolder = 4u;
 REDPRISM_SHARED_UINT kCompositionFlagMaskPlaced = 8u;
+REDPRISM_SHARED_UINT kCompositionFlagSelectionClip = 16u; // pass 9 only; sourceRect is the local physical clip
 
 // Adjustment kernels (`adjustKind`): which math an adjustment pass runs. CanvasRenderer maps every
 // `AdjustmentKind` to one of these explicitly; the enum's order never reaches the shader.

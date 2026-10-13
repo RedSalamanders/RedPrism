@@ -5,6 +5,7 @@
 
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
+#include "LayerMetadataTestGate.h"
 #include "RecordedDocumentReadbackJob.h"
 #include "SharedPublicationMemory.h"
 #include "UtilityWorkTestGate.h"
@@ -414,6 +415,7 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
             if (!settle())
                 std::_Exit(5);
             _utilityWorkTestGate.reset();
+            _layerMetadataTestGate.reset();
             _session.CancelColorEdit(); // bounded fixture teardown after worker acknowledgement
         });
     constexpr std::array<std::uint8_t, 16> bytes{0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255, 255, 255, 255, 255};
@@ -426,6 +428,7 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
              {Mode::Ordered, Mode::Younger, Mode::Cancel, Mode::Failure, Mode::Stale, Mode::Rebind, Mode::Capture,
               Mode::Sampling, Mode::AdjustmentSnapshot, Mode::PendingSnapshot, Mode::PendingRecord, Mode::Epoch})
         {
+            _layerMetadataTestGate.reset(); // previous weak observer must not retain an independent fixture
             _session.CancelColorEdit();
             DocumentFixture document;
             document.id = Guid::Generate();
@@ -473,7 +476,13 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
                 gate->throwHistoryStage = Stage::PendingRecord;
             State state{*this, mode, QueueHostInput(HostCommandInput{ChromeHost::kCommandEditAdjustment})};
             if (mode == Mode::Younger)
+            {
+                // Keep the opening/younger ordering. The younger rename's original publication is
+                // charged through its live document and single undo entry after the panel closes.
+                _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+                _layerMetadataTestGate->hold = false;
                 state.younger = QueueHostInput(HostLayerRenameInput{id, L"Queued after opening"});
+            }
             if (SettleJobs(_jobs, 15000, dispatch, &state) != SettleResult::Settled)
                 return fail(L"An adjustment opening did not acknowledge its admitted graph.\n");
             const bool constructionFailure = mode == Mode::Capture || mode == Mode::Sampling ||
@@ -486,12 +495,20 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
                                                                                : HostOutcome::Failed;
             const auto outcome = state.opening.Read();
             const auto retainedPanelBytes = success && mode != Mode::Younger ? gate->probeReservationBytes : 0;
+            const auto metadataGate = _layerMetadataTestGate;
+            const bool accountingSettled =
+                mode == Mode::Younger
+                    ? metadataGate && metadataGate->originalAccountingBound &&
+                          metadataGate->accountingOutputBytes > 0 && MetadataAccountingSettledForTest() &&
+                          _jobs.ReservedMemoryBytes() >= metadataGate->accountingOutputBytes &&
+                          _jobs.ReservedMemoryBytes() - metadataGate->accountingOutputBytes == retainedPanelBytes
+                    : _jobs.ReservedMemoryBytes() == retainedPanelBytes;
             if (outcome.outcome != expected || (constructionFailure ? state.visited : !state.visited || !state.held) ||
                 !gate->probeReservationHeld || !gate->retiredOffOwner.load() || gate->retiredNodes.load() != 1 ||
                 gate->retiredOwnerNodes.load() != 0 || _historyWork.Busy() || _utilityTicket ||
                 _gpuWork.LentCount() != 0 || _gpuWork.InFlightCount() != 0 || _gpuWork.HasPending() ||
-                _composition.UtilitySurfaceBytes() != 0 || _jobs.ReservedMemoryBytes() != retainedPanelBytes ||
-                _renderer.PresentCount() != presents || _session.HasColorEdit() != (success && mode != Mode::Younger))
+                _composition.UtilitySurfaceBytes() != 0 || !accountingSettled || _renderer.PresentCount() != presents ||
+                _session.HasColorEdit() != (success && mode != Mode::Younger))
                 return fail(L"Adjustment opening violated terminal lineage, hidden rendering, GPU acknowledgement or "
                             L"retirement.\n");
             if (mode == Mode::Younger)

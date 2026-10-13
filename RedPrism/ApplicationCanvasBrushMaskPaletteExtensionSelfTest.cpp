@@ -307,7 +307,7 @@ int Application::RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept
                     layer && layer->asset && MaskPaletteExtensionSameOriginal(layer->asset->image, image)))
             return 5;
         if (!expect(scenario.name, "budgets-and-worker-owners-released",
-                    _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
+                    MetadataAccountingSettledForTest() && _hostInputBudget.Used() == 0 &&
                         _layerMetadataTestGate->retired.load() && _layerMetadataTestGate->retiredOffOwner.load() &&
                         !_layerMetadataTicket && !_historyWork.Busy() && !_activeHostRequest &&
                         _hostRequests.Size() == 0 && !_canvasBrushInput.Busy() && !_session.PendingBrush() &&

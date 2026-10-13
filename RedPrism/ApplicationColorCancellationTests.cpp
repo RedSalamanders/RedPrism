@@ -3,6 +3,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
+#include "LayerMetadataTestGate.h"
 #include "ProjectStore.h"
 
 #include <array>
@@ -50,6 +51,7 @@ int Application::RunColorCancellationSelfTest() noexcept
             if (!settle())
                 std::_Exit(5);
             _colorWorkTestGate.reset();
+            _layerMetadataTestGate.reset();
             _session.CancelColorEdit(); // reference teardown only after every admitted owner acknowledges
             CancelSizeCard();
         });
@@ -62,7 +64,8 @@ int Application::RunColorCancellationSelfTest() noexcept
     const auto prepare = [&](std::size_t kind) -> bool
     {
         _colorWorkTestGate.reset();
-        _session.CancelColorEdit(); // no worker exists at this independent fixture construction boundary
+        _layerMetadataTestGate.reset(); // drop only the previous original-ticket weak observation
+        _session.CancelColorEdit();     // no worker exists at this independent fixture construction boundary
         CancelSizeCard();
         DocumentFixture document;
         document.id = Guid::Generate();
@@ -256,6 +259,11 @@ int Application::RunColorCancellationSelfTest() noexcept
             const auto cancel = QueuePanelCancel(opening);
             const auto repeat = QueuePanelCancel(opening);
             const Guid id = _session.ActiveLayerID().value();
+            // The canceled OK contributes no history; its younger successful rename still owns its
+            // immutable publication. Observe that original ticket without delaying the ordered rename.
+            _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+            _layerMetadataTestGate->hold = false;
+            const auto renameGate = _layerMetadataTestGate;
             const auto rename = QueueHostInput(HostLayerRenameInput{id, L"After acknowledged Cancel"});
             if (ok.Read().outcome != HostOutcome::Pending || cancel.Read().outcome != HostOutcome::Pending ||
                 repeat.Read().outcome != HostOutcome::Pending || rename.Read().outcome != HostOutcome::Pending ||
@@ -267,8 +275,9 @@ int Application::RunColorCancellationSelfTest() noexcept
                 cancel.Read().outcome != HostOutcome::Succeeded || repeat.Read() != cancel.Read() ||
                 rename.Read().outcome != HostOutcome::Succeeded || _session.HasColorEdit() ||
                 _session.ActiveLayer()->name != L"After acknowledged Cancel" ||
-                _session.Document()->layers.front().asset->image != source || _jobs.ReservedMemoryBytes() != 0 ||
-                _historyWork.Busy() || _session.history.CurrentRevision() == revision)
+                _session.Document()->layers.front().asset->image != source || !renameGate->originalAccountingBound ||
+                renameGate->accountingOutputBytes == 0 || !MetadataAccountingSettledForTest() || _historyWork.Busy() ||
+                _session.history.CurrentRevision() == revision)
                 return fail(
                     L"Held OK pixels escaped cancellation or a younger rename crossed close acknowledgement.\n");
             _session.Undo(); // independent expected entry: only the younger rename, never the canceled OK

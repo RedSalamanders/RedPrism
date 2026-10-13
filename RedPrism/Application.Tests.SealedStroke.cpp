@@ -452,7 +452,8 @@ int Application::RunSealedStrokeHostSelfTest() noexcept
                     !_canvasBrushInput.Busy() && !_opacityEdit && _session.ActiveLayer()->opacity == 1.0 &&
                     _session.history.UndoCount() == 1 && _session.history.UndoName() == L"Brush Stroke" &&
                     ReadActivePixel(_session, 3, 3, queuedPixel) && queuedPixel == kOpaqueRed &&
-                    _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0))
+                    MetadataAccountingSettledForTest() && _jobs.ReservedMemoryBytes() == 0 &&
+                    _jobs.ReleasingMemoryBytes() == 0))
         return 5;
     _layerMetadataTestGate.reset();
 

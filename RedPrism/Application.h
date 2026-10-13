@@ -37,6 +37,7 @@
 #include "Renderer.h"
 #include "RetryWaitQueue.h"
 #include "SamplerState.h"
+#include "SelectionOutlineDisplayController.h"
 #include "SelectionOutlineWork.h"
 #include "SettingsStore.h"
 #include "ShapeEditWork.h"
@@ -117,7 +118,10 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
                         double rotation, std::uint32_t argb);
 
 // The chrome's events (ChromeEvents) land on the handlers below, marked `override`.
-class Application final : public ChromeEvents, private CommittedDisplayClient
+class Application final : public ChromeEvents,
+                          private CommittedDisplayClient,
+                          private SelectionOutlineDisplayClient,
+                          private Renderer::SelectionOutlineFrameSource
 {
   public:
     Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
@@ -131,6 +135,9 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
 
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
+    static int RunStandaloneSelectionOutlineGpuHostSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSelectionOutlineParitySelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSelectionOutlineOwnerCapacitySelfTest(HINSTANCE instance) noexcept;
     static int RunSelectionOutlineTimingSelfTest(HINSTANCE instance) noexcept;
     static int RunOpacityClosureGuardSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -187,6 +194,14 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
 
   private:
+    [[nodiscard]] bool EnableSelectionOutlineForTest(bool allowHidden = true) noexcept;
+    [[nodiscard]] bool DescribeSelectionOutlineOwner(SelectionOutlineDisplayDescriptor&) noexcept override;
+    void SelectionOutlineChangedOwner() noexcept override;
+    void SelectionOutlineFailedOwner(SelectionOutlineDisplayKey, HRESULT) noexcept override;
+    [[nodiscard]] Renderer::SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float, float, float,
+                                                                                   float) noexcept override;
+    void SyncPreparedSelectionOutlineOwner(const SelectionDisplayValue*) noexcept;
+    void SyncLassoOverlay() noexcept;
     [[nodiscard]] bool EnableCommittedDisplayForTest(bool allowHidden = true) noexcept;
     [[nodiscard]] bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
     void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
@@ -827,6 +842,7 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     int RunLayerOpacityHostSelfTest() noexcept;
     int RunLayerOpacityContextsSelfTest() noexcept;
     bool OpenOpacityEditForTest(double value) noexcept;
+    [[nodiscard]] bool MetadataAccountingSettledForTest() noexcept;
     [[nodiscard]] HRESULT StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name = {},
                                              double opacity = 1.0, LayerBlendMode blendMode = LayerBlendMode::Normal,
                                              OpacityMetadataIntent intent = OpacityMetadataIntent::Recorded,
@@ -1199,6 +1215,16 @@ class Application final : public ChromeEvents, private CommittedDisplayClient
     GpuResidencyReservation _strokeFinishShutdownGpu;
     GpuResidencyReservation _strokeFinishShutdownDisplayGpu;
     StrokeFinishSource _strokeFinishSource{*this};
+    SelectionOutlineDisplayController _selectionOutlineDisplay;
+    PreparedSelectionOutlineRaster::GridKey _selectionOutlineGrid;
+    std::array<float, 4> _selectionOutlineHole{};
+    std::optional<DocumentReadAuthority> _selectionOutlineDocument;
+    std::uint64_t _selectionOutlineViewEpoch = 0;
+    bool _selectionOutlineInitialized = false;
+    bool _selectionOutlineAllowHiddenForTest = false;
+    bool _selectionOutlineViewValid = false;
+    bool _selectionOutlineEpochExhausted = false;
+    HRESULT _selectionOutlineFailure = S_OK;
     CommittedDisplayController _committedDisplay;
     PendingDisplayClient _pendingDisplayClient{*this};
     CommittedDisplayController _pendingDisplay;

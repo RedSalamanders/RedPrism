@@ -95,6 +95,14 @@ class CanvasOverlay final : public DxUi::Control
     // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
     // is made once and kept.
     void SetAntPhase(float phase) noexcept;
+    void SetSelectionPaintExternal(bool external) noexcept
+    {
+        if (_selectionPaintExternal != external)
+        {
+            _selectionPaintExternal = external;
+            RequestInvalidate();
+        }
+    }
     [[nodiscard]] float AntPhase() const noexcept
     {
         return _antPhase;
@@ -165,6 +173,7 @@ class CanvasOverlay final : public DxUi::Control
     {
         return _preparedOutline.HasStorage() ? _preparedOutline.Points() : _outline;
     }
+    bool _selectionPaintExternal = false;
     std::vector<OutlineLoop> _outline;
     std::optional<std::uint64_t> _legacyOutlineBytes;
     PreparedSelectionOutline _preparedOutline;

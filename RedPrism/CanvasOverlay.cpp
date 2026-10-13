@@ -409,7 +409,7 @@ CanvasOverlay::SelectionResourcesForTest CanvasOverlay::SelectionResourcesStateF
 
 void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
 {
-    if (SelectionPoints().empty() || !EnsureSelectionResources(dc))
+    if (_selectionPaintExternal || SelectionPoints().empty() || !EnsureSelectionResources(dc))
     {
         return;
     }

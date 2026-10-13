@@ -1,6 +1,7 @@
 #include "LayerMetadataWork.h"
 
 #include "DocumentDraft.h"
+#include "SharedPublicationMemory.h"
 
 #include <algorithm>
 #include <cmath>
@@ -109,7 +110,7 @@ std::optional<LayerMetadataInput> DocumentSession::PrepareTypedLayerOpacityInput
 
 std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublication(
     LayerMetadataInput input, CancelToken cancellation, DocumentHistory::PrepareObserver historyObserver,
-    LayerMetadataPrepareObserver observer)
+    LayerMetadataPrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory)
 {
     if (cancellation.IsCancelled() || !input._valid || !input._document || input._token.target ||
         (!input._authority._preserved && input._history.Depth() != 0) ||
@@ -195,7 +196,7 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
     }
     if (!Checkpoint(observer, LayerMetadataPrepareStage::AfterEdit, cancellation))
         return std::nullopt;
-    result._document = draft.value().Seal(cancellation);
+    result._document = draft.value().Seal(cancellation, memory);
     if (!result._document || !Checkpoint(observer, LayerMetadataPrepareStage::AfterSeal, cancellation) ||
         ValidateDocument(result._document.value()) != DocumentStatus::Ok || cancellation.IsCancelled())
         return std::nullopt;
@@ -211,7 +212,7 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
             {
                 opening.value().EditLayers()[index.value()].opacity = captured._opacityOpening.value();
             }
-            result._opacityHistoryOpening = opening.value().Seal(cancellation);
+            result._opacityHistoryOpening = opening.value().Seal(cancellation, memory);
             if (!result._opacityHistoryOpening ||
                 !Checkpoint(observer, LayerMetadataPrepareStage::AfterOpacityOpening, cancellation) ||
                 ValidateDocument(result._opacityHistoryOpening.value()) != DocumentStatus::Ok ||
@@ -219,9 +220,9 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
                 return std::nullopt;
         }
         const auto& historyOpening = result._opacityHistoryOpening ? result._opacityHistoryOpening : captured._document;
-        result._history =
-            DocumentHistory::PrepareEdit(captured._history, historyOpening, captured._active, result._document,
-                                         captured._active, std::move(historyName), cancellation, historyObserver);
+        result._history = DocumentHistory::PrepareEdit(captured._history, historyOpening, captured._active,
+                                                       result._document, captured._active, std::move(historyName),
+                                                       cancellation, historyObserver, memory);
         if (!result._history || cancellation.IsCancelled())
             return std::nullopt;
     }
@@ -298,7 +299,8 @@ std::uint64_t DocumentSession::LayerMetadataMemoryBytesImpl(LayerMetadataKind ki
     // Existing eight-copy edit accounting covers capture, output, a typed opening and both history snapshots,
     // record/selection children, stack growth and trim. Reserve the captured
     // request, trimmed replacement and all before/after name overlap as well as root/control/block overhead.
-    constexpr std::uint64_t extra = 8192 + sizeof(LayerMetadataInput) + sizeof(PreparedLayerMetadata);
+    const std::uint64_t extra = 16384 + 2 * SharedPublicationMemory::OwnershipAllowance() + sizeof(LayerMetadataInput) +
+                                sizeof(PreparedLayerMetadata);
     constexpr std::uint64_t nameCopies = 8 * sizeof(wchar_t);
     if (!bytes || bytes > maximum - extra || nameUnits > (maximum - bytes - extra) / nameCopies)
         return 0;

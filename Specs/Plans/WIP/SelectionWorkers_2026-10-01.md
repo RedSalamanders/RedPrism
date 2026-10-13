@@ -1,15 +1,17 @@
 # Ordered selection workers (P1.6)
 
-Current continuation (00:39 UTC, 2026-10-12): Main integrates the exact full-width RSI terminal-table
-recognizer after all original controls and 93 new controls pass; the tracked-location fixture passes with
-actual child 57268, exit 0. The runtime allowlist is unchanged. The new genuine pre-runtime freeze binds
-1,253 inputs and 20 contracts (`D69F9A3E…`); independent full-reader expectations retain every original
-product assertion and add the exact new parser roster. Formatting and all 15 skills pass. Fresh Release
-analysis r921 is running before full Release r922, Debug r923 and real ASan r924; ARM64 remains gated.
-The original r917 failure and all private fixture failures remain preserved. A reviewed S5 integration
-checklist identifies every remaining producer, source/view/DPI authority, original-ticket admission,
-bounded uploads and deferred CPU/GPU retirement. S5 and all nine delivery areas remain open.
+Current continuation (2026-10-12, 13:44 UTC): private nine-plane raster view/DPI controls and the composition R8
+mask draw component qualify independently; complete S5 admission, actual host routing and G1 remain open.
+[Rational view references](../../TestRuns/P1SelectionOutlineRasterViews_2026-10-12.md) preserve all 9,241 prior
+records plus twelve new records. [GPU numeric proof](../../TestRuns/P1SelectionOutlineGpu_2026-10-12.md) preserves
+all 6,838 inherited occurrences and tests every solid/dash byte pair over three backgrounds. The original
+GPU reader ordering refusal remains preserved alongside the narrowly verified callback-interleaving correction.
 
+Main selects worker-prepared nine R8 coverage planes plus built-in composition pass9 as the next integration
+candidate. This replaces the experiment's owner-created D2D mask bitmap route; it remains private until the
+complete parent described below qualifies. Main's output-accounting adaptation and reviewed budget/lifetime tests now pass 20,834 private
+DocumentTests records with preserved original numeric references; [evidence](../../TestRuns/P1SelectionOutlineAccounting_2026-10-12.md). Native selection/history qualification remains open after H3 Release r951 fails and the
+private application progresses through separately preserved metadata-accounting fixtures; current r20 is diagnostic.
 
 ## Current continuation checklist (2026-10-11)
 
@@ -748,6 +750,42 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     This completes only S4c's settled host boundary ([record](../../TestRuns/WandLayerHost_2026-10-03.md)).
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
+
+### S5 selected raster/GPU integration sequence
+
+- [x] Prove fixed-DIP coverage, eight dash phases, view clipping, zoom invariance and large anchor subtraction privately.
+- [x] Prove the built-in two-R8 draw pass against independent source-over bytes, clipping and unbound borrowed inputs.
+- [ ] Integrate output buffer/data/control accounting under one immutable local limit; qualify insufficient/sealed
+  refusal, unchanged failed result, real original partition, copied/final weak ownership and consumed refund.
+- [ ] Define one complete parent admitted before capture. CPU envelope includes held source/current/replaced
+  ownership, nine-plane output, reusable four-byte WIC scratch, point/loop geometry, wrapper/control/retirement,
+  upload windows and fixed objects. GPU envelope includes all nine R8 destinations, staging/copy overlap and driver
+  headroom. Checked overflow or any unknown bound refuses the operation. A local output ledger is not admission.
+- [ ] Bind authority to held selection identity, session/document serial, source anchor/translation, exact grid,
+  zoom/DPI and a monotonic view epoch; graphics authority additionally holds the actual device and generation.
+  Same numeric generation on another device cannot adopt. No pointer-only key may outlive its strong source.
+- [ ] Prepare CPU data and create GPU resources on qualified worker lanes; use reported driver concurrency,
+  complete reservation and bounded recorded upload batches. Unsupported concurrency cannot fall back to a large
+  owner allocation. All nine planes publish atomically after actual producer/upload acknowledgements.
+- [ ] Integrate one draw immediately before chrome composition, clipped to the physical canvas hole, preserving
+  selection-under-draft/handle ordering. Pass9 selects solid plus one of eight phase textures; it updates only
+  fixed constants and one draw. SyncChrome/SyncView/frame/paint do not walk contours, create paths or copy pixels.
+- [ ] Replace every changed-selection producer's owner construction, including marquee/lasso, selection move,
+  All/Deselect/Inverse/Expand/Contract/Wand, load, Undo/Redo, replace/resize and lifecycle publication. Draft-only
+  overlays remain separately bounded. Preserve event-time caller policy and original ticket/order.
+- [ ] Coalesce desired view epochs; reject obsolete worker/upload results and re-admit the latest exact key.
+  A raster for another zoom/DPI cannot be rescaled as a final fixed-DIP result. Specify and test the pending-view
+  rendering policy before changing visible behavior. Settled matching source/view performs no rebuild or upload.
+- [ ] Keep current/replaced GPU use and CPU/control ownership charged until actual completion/destruction and
+  consumed acknowledgement. Cover empty/absent selection, source replacement, hide/show, device rebuild,
+  partial allocation/upload, cancellation, stale refusal, weak controls and joined Close without early refund.
+- [ ] Qualify integrated application pixels/lifecycle in Debug/Release/real ASan and analysis/ISA/ARM64 cross builds,
+  then measure complete source capture, preparation, upload, first/warm draw, Apply/retirement and inclusive G1.
+
+The current 64 MiB opaque D2D allowance is planning headroom, not a proven allocator ceiling; DrawGeometry/EndDraw
+are uninterruptible opaque calls. Keep these limits explicit and measure/categorize their cancellation and
+memory behavior under the parent contract. Private component passes cannot turn that allowance into a bound or
+close G1. Approximately 0.8-0.9 s of isolated CPU preparation remains a concrete latency risk to resolve.
 
 ### S5 next engineering checks
 

@@ -437,6 +437,7 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] const std::vector<CanvasOverlay::OutlineLoop>* SelectionOutlineForTest() const noexcept;
     // Lasso draft remains in canvas-hole pixels.
     void SetSelectionAntPhase(float phase) noexcept;
+    void SetSelectionPaintExternal(bool external) noexcept;
     [[nodiscard]] float SelectionAntPhase() const noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
     // The Brush and Eraser header: mode, size, hardness, opacity, mask paint and the color swatch.

@@ -1418,8 +1418,16 @@ function New-GuardedTerminalDwordCase([string]$Name, [string]$Fault = '') {
         if ($Fault -eq "ListingDispatch$i") { $bytes[$bytes.Length-1] = $bytes[$bytes.Length-1] -bxor 1 }
         $rows.Add(('{0:x}: {1} dispatch' -f ($script:imageBase+$dispatch+$offsets[$i]), (Hex-Bytes $bytes)))
     }
-    $pe[0x400+$target-$section] = 0x90
-    $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$target)))
+    # Supply the complete known body required by the exact RET/one-byte NOP proof.
+    # A two-byte target keeps +1 a genuine middle-instruction refusal for the existing negative cases.
+    for ([UInt32]$at = $dispatch + 19; $at -lt $table - 2;) {
+        [byte[]]$body = if ($at -eq $target) { @(0x66,0x90) } else { @(0x90) }
+        Put-Bytes $pe (0x400+$at-$section) $body
+        $rows.Add(('{0:x}: {1} nop' -f ($script:imageBase+$at), (Hex-Bytes $body)))
+        $at += [UInt32]$body.Length
+    }
+    $rows.Add(('{0:x}: c3 ret' -f ($script:imageBase+$table-2)))
+    $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$table-1)))
     for ($i=0; $i -lt 6; ++$i) {
         [UInt32]$entry = $target
         if ($i -eq 5 -and $Fault -eq 'BadLastTarget') { $entry = $target+1 }
