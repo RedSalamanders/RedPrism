@@ -9,6 +9,7 @@
 - [ ] Integrate and qualify actual host/display callers.
 - [x] Qualify private lasso input descriptors/FIFO/terminal adapter against 80 independent facts (21,673 document records total), retaining all predecessors.
 - [x] Qualify private original-ticket opening/replay/Finish nominal scenarios against 35 actual host assertions; [limited receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) retains the competing-input gap.
+- [x] Qualify private event-time terminal/conditional-close ordering and actual freehand/polygon handlers against 50 host assertions; [scoped receipt](../../TestRuns/P1LassoPhysicalHost_2026-10-13.md).
 - [ ] Connect actual admitted opening and ordered host replay, with terminal/cancellation storage and non-wrapping authority.
 - [ ] Replace owner vector copies and conversions with a bounded immutable display capture; prepare draft geometry/coverage on workers and draw it through the shared device route.
 - [ ] Prepare complete lasso/marquee selection and history on the original admitted worker job; publish current-only with deferred old-owner retirement.
@@ -224,3 +225,11 @@ syntax passes; 24 independently modeled descriptor controls pass. A frozen actua
 checks the original 35 facts plus 15 FIFO/physical handler facts. No source in that frozen candidate changes
 until its recorder and bookends close. Full Win32 capture, cancellation/failure/reentry/lifetime scenarios,
 consumer admission, ordinary/native activation, opaque bounds and measured S5/G1 remain open.
+
+
+Physical r1 actual Release/ISA/full application pass is independently closed: 138 stages, 50 host assertions,
+all predecessor events, complete declared byte bookends and archive `CB11CCE5…`. The event-time ordering repair
+is qualified for those direct handlers/FIFO cases. The next frozen r2 compiles and runs actual keyboard,
+reached-allocation failure, held-original cancellation and full memory-admission refusal controls. Its source
+and dependencies remain frozen until actual execution/bookends close. Existing short-outline New-mode
+deselection behavior is retained after primary legacy review; no golden is changed.

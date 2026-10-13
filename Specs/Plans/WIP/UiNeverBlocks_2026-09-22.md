@@ -2,6 +2,11 @@
 
 ## Current delivery checklist
 
+Latest scoped proof: the private event-time Finish/conditional-close repair and actual freehand/polygon
+handlers independently pass 50 host assertions and all 138 application stages. [Evidence](../../TestRuns/P1LassoPhysicalHost_2026-10-13.md)
+retains exact scope. The next frozen actual run checks keyboard, reached allocation failures, original-ticket
+cancellation and memory refusal. Native integration, ordinary activation and complete P1 delivery remain open.
+
 Latest completed step: bounded lasso core/native test repairs are committed and pushed as `5897379`;
 remote identity is verified. All native profiles, analysis, latest-source ARM64 cross-builds, formatting and
 skills pass. The next original-ticket host fixture qualifies 35 nominal scenarios but leaves a verified
