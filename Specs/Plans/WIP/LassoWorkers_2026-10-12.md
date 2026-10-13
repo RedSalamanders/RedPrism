@@ -8,6 +8,7 @@
 - [x] Qualify the private actual renderer/display caller against 29 new assertions and all 137 application stages; [receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md).
 - [ ] Integrate and qualify actual host/display callers.
 - [x] Qualify private lasso input descriptors/FIFO/terminal adapter against 80 independent facts (21,673 document records total), retaining all predecessors.
+- [x] Qualify private original-ticket opening/replay/Finish nominal scenarios against 35 actual host assertions; [limited receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) retains the competing-input gap.
 - [ ] Connect actual admitted opening and ordered host replay, with terminal/cancellation storage and non-wrapping authority.
 - [ ] Replace owner vector copies and conversions with a bounded immutable display capture; prepare draft geometry/coverage on workers and draw it through the shared device route.
 - [ ] Prepare complete lasso/marquee selection and history on the original admitted worker job; publish current-only with deferred old-owner retirement.
@@ -208,3 +209,18 @@ This candidate has no runtime qualification yet. Physical pointer/keyboard/tool/
 polygonal close semantics while acquisition is pending, memory/cancellation bounds, native integration,
 ordinary activation and measured S5/G1 remain open. Native Release/Debug replacements r1006/r1007 pass all
 21,673 exact document records and 136 application stages; replacement real ASan r1008 passes the complete canonical suite and exact roster. All latest-wrapper ARM64 cross-builds also pass; [native receipt](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
+
+### Current physical caller execution
+
+Native lasso core checkpoint `5897379575dc9e812737005cf018121dc59d2131` is committed/pushed and the
+remote identity matches. All native profiles, latest-source ARM64 cross-builds, formatting and skills pass.
+Private actual opening/replay/Finish r1 passes 138 stages and 35 nominal assertions, with exact expected output
+and complete declared byte bookends. It remains limited: a replay-time Finish ordinal could be overtaken by
+physically younger input. The [host receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) records that gap.
+
+The separate physical candidate reserves terminal/conditional-close ordinals at the event, preserves press
+proximity/double-click/AA metadata, and connects pointer, modifier, keyboard and loss callers. Its integrated
+syntax passes; 24 independently modeled descriptor controls pass. A frozen actual Release build/test now
+checks the original 35 facts plus 15 FIFO/physical handler facts. No source in that frozen candidate changes
+until its recorder and bookends close. Full Win32 capture, cancellation/failure/reentry/lifetime scenarios,
+consumer admission, ordinary/native activation, opaque bounds and measured S5/G1 remain open.

@@ -2,6 +2,13 @@
 
 ## Current delivery checklist
 
+Latest completed step: bounded lasso core/native test repairs are committed and pushed as `5897379`;
+remote identity is verified. All native profiles, analysis, latest-source ARM64 cross-builds, formatting and
+skills pass. The next original-ticket host fixture qualifies 35 nominal scenarios but leaves a verified
+competing-input ordering gap. Its separate physical/FIFO repair is compiling with 15 additional references;
+[the receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) and [lasso checklist](LassoWorkers_2026-10-12.md)
+retain exact scope and remaining work. P1 delivery rows below remain open.
+
 Current step (2026-10-13): committed/pushed the qualified native foundations and scanner repair as
 `e69757fd5555e007d455845cd6c00b49f8d93aec`. Release/Debug/real ASan pass with 21,447 document records,
 136 application stages, the real detection probe, analysis and three ARM64 cross-builds. Final scanner r985
