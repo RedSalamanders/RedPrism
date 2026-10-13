@@ -10,11 +10,19 @@
 - [x] Qualify private lasso input descriptors/FIFO/terminal adapter against 80 independent facts (21,673 document records total), retaining all predecessors.
 - [x] Qualify private original-ticket opening/replay/Finish nominal scenarios against 35 actual host assertions; [limited receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) retains the competing-input gap.
 - [x] Qualify private event-time terminal/conditional-close ordering and actual freehand/polygon handlers against 50 host assertions; [scoped receipt](../../TestRuns/P1LassoPhysicalHost_2026-10-13.md).
+- [x] Qualify private actual keyboard/short-outline, reached allocation faults, held-original cancellation and whole-memory refusal: 96 host assertions/all 138 stages; [receipt](../../TestRuns/P1LassoKeyboardFaults_2026-10-13.md).
 - [ ] Connect actual admitted opening and ordered host replay, with terminal/cancellation storage and non-wrapping authority.
 - [ ] Replace owner vector copies and conversions with a bounded immutable display capture; prepare draft geometry/coverage on workers and draw it through the shared device route.
 - [ ] Prepare complete lasso/marquee selection and history on the original admitted worker job; publish current-only with deferred old-owner retirement.
 - [ ] Migrate every draft reader, cancellation/tool-switch/document-replacement and shutdown path; prove actual host ordering and failure semantics.
 - [ ] Qualify native configurations and measure large lasso owner/apply/cancel/frame costs before closing S5.
+
+Current step (2026-10-13): native bounded core/scanner repairs are committed/pushed and pass all required
+profiles. The private full application now independently passes the 96-fact host keyboard/failure/cancel
+fixture. Main next integrates its checked host/display sources and independent CPU/WARP tests; fresh native
+qualification, ordinary activation, complete lifetime/admission and large-lasso S5/G1 remain due.
+
+### Earlier scoped evidence
 
 Status (2026-10-12): **isolated CPU arena and original-ticket lifetime qualification PASS; host/storage integration remains unqualified.** Main's
 `LassoPointArena-r1-Main/Source/Common/BoundedLassoPoints.h` is the tested private snapshot. The r3 qualified report binds 575 new assertions plus two summaries to all 20,782 predecessor DocumentTests records (21,359 total). The core header SHA-256 is `B4999A5CFA4B72C096B67C4A2CCEC8FE3AFB9F4523C0F3BD060A38B6A1919E8B`, unchanged. See [the isolated storage receipt](../../TestRuns/P1LassoStorage_2026-10-12.md).
