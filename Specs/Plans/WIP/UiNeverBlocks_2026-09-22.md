@@ -45,7 +45,8 @@ source/roster rejection controls before this replacement build.
 - [ ] Qualify the selectively adopted native I/O code/tests with canonical analysis and profiles, then finish the remaining F6 delivery cases. The explicit TMP fixture and OS-selected predecessor root remain distinct.
 - [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
 - [ ] Qualify the combined native startup/I/O integration, then complete production caller admission/retirement and ordinary activation.
-- [ ] Add a draft-specific refused retirement-signal and explicit retry test using the existing GPU queue, preserving the current lasso assertions.
+- [x] Qualify private draft-specific retirement refusal/retry and joined Close: R10 actual WARP verifies all 50 controller facts/7,391 composition records; the 1,707-file archive passes. Original failed predicate is preserved with the corrected fair two-pass fixture setup.
+- [ ] Qualify the combined native I/O/startup/retirement integration: canonical Release analysis r1034 is running on frozen source; full profiles follow its independent acceptance.
 
 Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
 assertions and all 138 application stages, with unchanged source/product bookends and complete archives.
