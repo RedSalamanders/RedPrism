@@ -14,9 +14,33 @@ activation and measured S5/G1 remain open; original failures/readers remain reta
 
 Next code checkpoints (2026-10-14):
 
+Latest I/O checkpoint: actual R7 real ASan independently passes 1,953 ordered records in each C:/explicit-Z:
+process, including all nine original failed predicates. Source/dependency/product bookends and the 3,036-file
+archive pass. Main selectively adopts ten code/test/project paths; native analysis/profiles and F6 remain open.
+[Private I/O evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
+Complete-startup R1-R3 build precondition refusals are retained; R4 supplies the full exact pinned consumer
+contract and is compiling unchanged code/282 controls. DxUi stays at 8e899407/API3.
+
+Current file follow-up: the private long-path C++ build, real ASan probe, ISA scan and ordinary C: TEMP
+process pass. The runner then fails with WinError206 while creating the long Z: directory, before any Z:
+test child launches; its 1,669-file source/product archive is retained. The replacement changes only runner
+directory creation to an explicit extended-length API spelling, keeping process TEMP and all 57 new/1,823
+predecessor assertions unchanged. Complete two-profile qualification and native adoption remain open.
+The replacement launches the Z: child, which exits1 on the unchanged environment check and eight 247/248
+boundary predicates. Its 1,671-file archive is retained. Direct Windows observation shows TMP/TEMP retain
+311 units while `GetTempPathW` selects the 14-unit user-profile path. The next candidate selects the long
+fixture root explicitly and bounds the staging filename component; independent tests, actual runtime,
+native adoption and complete F6 qualification remain due.
+The R6 replacement stops at compilation on two narrow-to-wide filename arguments in the new fixture; its
+2,981-file source/product archive is retained and no runtime follows it. Main uses explicit wide filename
+stems in the fresh R7 copy, preserving every expected label, pixel, boundary and fault predicate. Verification
+metadata ordering and predecessor JSON-shape refusals are also retained; their corrections pass independent
+source/roster rejection controls before this replacement build.
+
 - [x] Commit/push the x64-qualified native lasso host/display code, tests and contracts (`451ec70`).
 - [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
-- [ ] Qualify the next long-path I/O candidate in ordinary C: and a 311-code-unit Z: TEMP root, retaining every existing I/O assertion. The unrun candidate has 57 new source-defined controls (1,880 total per process); Main moves its 64 KiB TEMP buffer to heap storage without changing predicates or lifetimes before qualification.
+- [x] Qualify the private long-path I/O candidate: R7 actual real ASan passes C:/explicit-Z: with all 1,823 predecessors and 130 long-path facts (1,953 each), exact readback and verified archive.
+- [ ] Qualify the selectively adopted native I/O code/tests with canonical analysis and profiles, then finish the remaining F6 delivery cases. The explicit TMP fixture and OS-selected predecessor root remain distinct.
 - [ ] Qualify complete responsive cold-start acquisition with 282 new controls; then complete production caller admission and retirement before ordinary activation.
 - [ ] Add a draft-specific refused retirement-signal and explicit retry test using the existing GPU queue, preserving the current lasso assertions.
 

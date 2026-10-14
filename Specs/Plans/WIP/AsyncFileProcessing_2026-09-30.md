@@ -2,6 +2,13 @@
 
 ## Implementation checklist
 
+Latest file checkpoint (2026-10-14): private R7 real ASan verifies all 1,823 predecessors plus 130 long-path
+facts in each ordinary C:/explicit Z: process. Original nine failures are fixed with predicates intact; Main
+verifies source/dependency/product bookends and a 3,036-file archive. Ten reviewed code/test/project paths are
+selectively adopted. Native analysis/profiles and complete F6/G1 remain open. The old fixtures still use their
+OS-selected C: temp fallback; only the new fixture chooses the 311-unit Z: TMP explicitly.
+[Scoped evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
+
 Current step (2026-10-10): cancellation/display repair `c9fd72d` is committed/pushed after exact full x64 Debug r731, Release r732, real ASan r733, analysis r734 and all three ARM64 r89 cross-builds on the D981/1,136-input source. Current-source cost originals r735 and r741 stop before timings: Windows reports the display off (`presentation-unavailable`, visible1/displayOn0). Both failures and immutable archives remain; the temporary real display-power request is restored. The user now confirms the display is on and unlocked; fresh actual presentation measurements are due after the build matrix. The original display-off attempts remain failures. Baseline2.183ms Apply, G1 and ordinary activation remain open. The private utility graph/admission component and original-stream epoch restart now pass authenticated x64 full Debug r759, Release r760, real ASan r761 and Release analysis r762 on DAB609/1,144 inputs ([utility record](../../TestRuns/P1UtilityRecording_2026-10-10.md)); real utility caller integration and production admission/retirement remain due. ARM64 r90 Debug/Release/real ASan cross-builds also pass with all 15 EXE/PDB pairs and five sanitizer instrumentation controls independently authenticated; native ARM64 runtime remains unavailable. Ordinary activation=false, G1=false and P1 Done=false. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md). All nine P1 delivery areas remain open.
 
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
