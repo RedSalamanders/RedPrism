@@ -1,6 +1,6 @@
 # P1.9 H3 — Incremental history storage accounting
 
-Latest continuation (2026-10-13): Native history-index integration passed Release analysis r1005, full Release r1006, Debug r1007 and real ASan Debug r1008; ARM64 Debug, Release and instrumented-ASan cross-builds r1009-r1011 also passed. The strict native roster reports 21,673 DocumentTests records and 136 Application stages. See the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md) and [native gate repairs](../../TestRuns/P1NativeGateRepairs_2026-10-13.md). The separate 1,356-input lasso host has Release analysis r1026 and full x64 Release r1028, Debug r1029 and real ASan r1030 receipts; its exact scope is summarized in the linked integration receipt. ARM64 cross-builds r1031-r1033 remain pending; native ARM64 runtime is unavailable.
+Latest continuation (2026-10-13): Native history-index integration passed Release analysis r1005, full Release r1006, Debug r1007 and real ASan Debug r1008; ARM64 Debug, Release and instrumented-ASan cross-builds r1009-r1011 also passed. The strict native roster reports 21,673 DocumentTests records and 136 Application stages. See the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md) and [native gate repairs](../../TestRuns/P1NativeGateRepairs_2026-10-13.md). The separate 1,356-input lasso host has Release analysis r1026 and full x64 Release r1028, Debug r1029 and real ASan r1030 receipts; its exact scope is summarized in the linked integration receipt. ARM64 cross-builds r1031-r1033 now pass; native ARM64 runtime is unavailable.
 
 Status: **WIP; private producer/scheduler/reference r7, save-admission cache, paired ISA proof, and Accounting-r2 strict original-output sum smoke remain scoped PASS. The native layer-row/history-index foundation qualifies in Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 cross-builds r1009-r1011. The 38-control original-ticket fixture is covered by r1006. These results do not close production caller admission/retirement bounds, ordinary activation, latency, S5/G1 or P1.** See [layer-rows receipt](../../TestRuns/P1LayerRowsRetirement_2026-10-12.md) and [owned-metadata evidence](../../TestRuns/P1OwnedMetadataRoots_2026-10-12.md).
 Parent: [P1 milestone](UiNeverBlocks_2026-09-22.md)
@@ -9,7 +9,7 @@ Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, p
 
 ## Current checklist
 
-Current native qualification: Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 Debug/Release/ASan cross-builds r1009-r1011. The r1006 source freeze contains 1,334 inputs; the strict full roster is 21,673 DocumentTests records and 136 Application stages. Preserve predecessor failures and non-launches as historical receipts (including r954, r958-r961 and ARM111); they are not the current matrix. The separate lasso-host analysis/runtime receipts are complete for x64 r1026 and r1028-r1030; ARM64 r1031-r1033 remain pending. This does not close H3 or broaden the native history-index foundation result. Full production callers, complete admission/retirement bounds, ordinary activation, latency, G1 and P1 remain open; see the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
+Current native qualification: Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 Debug/Release/ASan cross-builds r1009-r1011. The r1006 source freeze contains 1,334 inputs; the strict full roster is 21,673 DocumentTests records and 136 Application stages. Preserve predecessor failures and non-launches as historical receipts (including r954, r958-r961 and ARM111); they are not the current matrix. The separate lasso-host analysis/runtime receipts are complete for x64 r1026 and r1028-r1030; ARM64 r1031-r1033 also pass. This does not close H3 or broaden the native history-index foundation result. Full production callers, complete admission/retirement bounds, ordinary activation, latency, G1 and P1 remain open; see the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
 
 - [x] Inspect the current index and its callers: complete map clones, current-topology traversal, charge sampling,
   bounds scans and diagnostic `RetainedBytes` traversal still occur.
@@ -131,8 +131,10 @@ The current global residency epoch and owner try-acquire permit stay authoritati
 bytes under the existing lease; a history candidate samples under that same lease. A stale publication requires
 a worker refresh before an owner swap. Querying history must never trigger sparse materialization.
 
-A bounded change journal now qualifies in the private actual Raster/history Release candidate; the native
-code remains unchanged. See the [journal receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md).
+The bounded change journal's private actual Raster/history Release evidence remains in the
+[journal receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md). Its integrated native foundation
+subsequently qualifies in r1005-r1008 and r1009-r1011 cross-builds as recorded at the beginning of this plan.
+Complete production caller admission, original-ticket retirement and measured H3/G1 remain open.
 Its record key must resist
 allocation-address reuse. Prefer a monotonic storage serial assigned at construction and held as immutable
 data in the storage, with explicit exhaustion refusal; do not retain bare raster addresses or a journal of

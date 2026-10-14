@@ -1,4 +1,4 @@
-# P1 lasso host integration — native qualification in progress
+# P1 lasso host integration — complete native correctness qualification
 
 ## Checklist
 
@@ -11,8 +11,9 @@
 - [x] Qualify complete latest-source full Release, including all 160 host/29 display facts and unchanged predecessors.
 - [x] Qualify complete latest-source full Debug with exact rosters, source and artifact/profile identity.
 - [x] Qualify complete latest-source real ASan with real detection, all instrumented commands and exact rosters.
-- [ ] Qualify complete latest-source ARM64 cross-builds; native ARM64 runtime remains unavailable.
-- [ ] Qualify actual native host/display, complete admission/retirement, ordinary activation and measured S5/G1.
+- [x] Qualify complete latest-source ARM64 Debug/Release/instrumented-ASan cross-builds; native ARM64 runtime remains unavailable.
+- [x] Qualify the test-enabled native host/display route with the complete exact x64 matrix and ARM64 cross-builds.
+- [ ] Complete operation-wide admission/retirement, ordinary activation and measured S5/G1.
 
 ## Native source and fixture repair
 
@@ -148,3 +149,52 @@ must retain the same 1,352 compiled/project/toolchain inputs while pinning the c
 Complete native Release/Debug/real ASan host/display correctness and analysis pass. ARM64 cross-builds, ordinary activation and performance qualification remain due. The scanner/core
 checkpoint remains qualified by its own earlier record. P1 remains WIP, ordinary activation stays cold, and
 no broad delivery checkbox or Done/merge state changes on this focused result.
+
+## Pushed implementation and ARM64 Debug
+
+The complete x64-qualified native code, tests and contracts are committed/pushed as
+`451ec703c3b39bc132f465bc513f8e08fdc23707`; the remote feature branch matches. The commit does not close the
+remaining ARM64 matrix, ordinary activation or the P1 delivery gates.
+
+ARM64 Debug r1031, PID86668, exits0 at 23:42:50.347826 UTC after starting 23:17:15.254521 UTC.
+Main independently verifies all 1,426 archived files, 1,352 unchanged compiled/project/toolchain inputs,
+930 actual non-ASan compiler command records, five ARM64 PE images and matching full-PDB GUID/age pairs.
+The 1,356-input ARM freeze is `D2F205BEA1143F1D4276C0AA9DB819CF2621CEB35ECC892E19D8621E9C8FB12F`;
+its runner-only difference follows the recorded prelaunch project-cap correction.
+
+Archive: `Z:\CodexArtifacts\RedPrism-P1\2026-10-12\P1-LassoHost-ARM64-Debug-r1031-passed-20261013`.
+Completion SHA256: `2672BC1E63631DD06A75F24BB0454FB9B4B33E95F36F360A22A9837B9D829402`.
+Stdout: `DB42C9B09EB0CF68FA622164AEEC9248D8E7A13796B3E43375CBB49969650C75`; stderr empty.
+Release r1032 runs next; instrumented ASan cross-build r1033 follows. Native ARM64 runtime is unavailable.
+
+## ARM64 Release
+
+ARM64 Release r1032, PID37356, exits0 at 00:10:25.962800 UTC on 2026-10-14 after starting
+23:43:02.377615 UTC on 2026-10-13. Main independently verifies all 1,426 archived files, the same
+1,352 compiled/project/toolchain inputs, 930 non-ASan compiler command records and five ARM64 PE/full-PDB
+GUID/age pairs. The ARM freeze remains `D2F205BEA1143F1D4276C0AA9DB819CF2621CEB35ECC892E19D8621E9C8FB12F`.
+
+Archive: `Z:\CodexArtifacts\RedPrism-P1\2026-10-12\P1-LassoHost-ARM64-Release-r1032-passed-20261013`.
+Completion SHA256: `33F919035A9949B6D061C05270EAB26E4E838102CD6227F1C8E932FBFC5F5A85`.
+Stdout: `D6C01E80CCDED2AE30973D00FFA8B43970AE56BC64496FB396715E4D53996E2B`; stderr empty.
+Instrumented ARM64 ASan r1033 starts at 00:10:34.652078 UTC and remains in progress. Cross-build qualification
+never establishes native ARM64 runtime or G1 performance.
+
+## ARM64 instrumented ASan and completed correctness matrix
+
+ARM64 ASan Debug r1033, PID80656, exits0 at 00:35:28.916286 UTC on 2026-10-14 after starting
+00:10:34.652078 UTC. Main verifies all 1,430 archived files, 1,352 identical compiled/project/toolchain inputs,
+all 930 native compiler command records with `/fsanitize=address`, and five ARM64 PE/full-PDB GUID/age pairs.
+Its ARM freeze remains `D2F205BEA1143F1D4276C0AA9DB819CF2621CEB35ECC892E19D8621E9C8FB12F`.
+
+Archive: `Z:\CodexArtifacts\RedPrism-P1\2026-10-12\P1-LassoHost-ARM64-ASanDebug-r1033-passed-20261013`.
+Completion SHA256: `023DB9509A078DE025A6623BE62B898C94EF6FE307948E268C43716E1856743E`.
+Stdout: `2C7B797B5B252B18C2DF0FDA903EA6A446A735AA7FC899429AD6D45B839159DA`; stderr empty.
+
+The complete current correctness matrix now passes: Release analysis, full x64 Release/Debug/real ASan,
+exact predecessor/delta rosters, all three ARM64 cross-builds, formatting (1,204 files) and skills (15).
+The code is pushed as `451ec70`. The reviewed serial coordinator starts the next private instrumented I/O
+candidate only after these actual native exits, archives and Main identity reports pass.
+
+This closes the scoped native lasso host/display correctness step. It does not close ordinary activation,
+complete production admission/retirement, native ARM64 runtime, measured S5/G1, the broad P1 delivery rows or Done.

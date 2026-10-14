@@ -6,14 +6,16 @@ Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 inde
 integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
 records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
 Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile
-commands are instrumented and the actual heap-use-after-free probe passes. ARM64 r1031 now cross-builds
-with one project at a time; Release/ASan cross-builds follow. Complete admission/retirement, ordinary
+commands are instrumented and the actual heap-use-after-free probe passes. The x64-qualified code/tests
+are committed and pushed as `451ec70`. ARM64 Debug r1031, Release r1032 and instrumented ASan r1033
+independently pass with the same compiled inputs and verified binary/PDB identities. Complete admission/retirement, ordinary
 activation and measured S5/G1 remain open; original failures/readers remain retained.
 [Current native evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
 
 Next code checkpoints (2026-10-14):
 
-- [ ] Finish the exact current ARM64 cross-build matrix, review its artifacts, and commit/push the native lasso host/display step.
+- [x] Commit/push the x64-qualified native lasso host/display code, tests and contracts (`451ec70`).
+- [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
 - [ ] Qualify the next long-path I/O candidate in ordinary C: and a 311-code-unit Z: TEMP root, retaining every existing I/O assertion. The unrun candidate has 57 new source-defined controls (1,880 total per process); Main moves its 64 KiB TEMP buffer to heap storage without changing predicates or lifetimes before qualification.
 - [ ] Qualify complete responsive cold-start acquisition with 282 new controls; then complete production caller admission and retirement before ordinary activation.
 - [ ] Add a draft-specific refused retirement-signal and explicit retry test using the existing GPU queue, preserving the current lasso assertions.

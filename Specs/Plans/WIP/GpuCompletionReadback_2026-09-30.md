@@ -19,6 +19,9 @@
   - [x] Qualify separate targets/shared raster cache and atomic producer-compose/copy recording.
   - [x] Qualify the single-reservation tiled worker job, adopted output, cancellation and bounded restart.
 - [ ] P1.3e — Migrate merge, opening adjustment composites, export/Copy Merged and wand/clone/sampler callers.
+  - [ ] Migrate Hue/Saturation range sampling and targeted adjustment: `AdjustPointer` still calls `WandComposite` synchronously on each eligible press. Capture the committed-document read authority, edit opening, sampled operation and physical point; use admitted region readback and scalar hue application. Preserve the original composite without panel/stroke preview, near-neutral/transparent refusal and all legacy band/targeting numbers.
+  - [ ] Preserve targeted-drag input while its initial readback waits: bounded physical samples retain view delta, modifier, event ordinal and the separate terminal; replay after current-only publication through the existing continuation source, ahead of physically younger commands. Allocation/queue/counter refusal must retain accepted input and preserve the original panel; no synchronous readback fallback.
+  - [ ] Remove the guarded production Wand fallback only after proving its exact transaction/prerequisite behavior. The current fallback is reached when the mode is beyond Subtract or history-restore authority is unavailable; it can synchronously run selection geometry and, for All Layers, composite readback. Invalid mode is a local refusal; supported live contexts need ordered worker settlement with exact cancellation/history semantics.
   - [x] Qualify Merge and adjustment-opening continuations, worker crop/thumbnail, cancellation and exact apply tokens.
   - [x] Migrate PNG/JPEG export with detached CPU encoding and qualify bounded Map-busy recovery, later-tile failure and actual hardware/WARP measurements ([evidence](../../TestRuns/ProjectWriters_2026-10-01.md)).
   - [ ] Migrate clipboard, wand, clone and sampler consumers.
@@ -37,9 +40,10 @@ P1.2 qualification/commit precedes integration of this slice into the primary ch
 
 ## Ownership and execution
 
-The UI thread records D3D commands and owns all immediate-context calls. Workers prepare immutable inputs and
-copy mapped rows into adopted PixelBuffers; they never Map, Unmap, Flush, compose, mutate a document or touch
-Application state. A utility request owns its document snapshot/region, operation stamp, cancellation and device
+The UI thread owns every immediate-context call and executes the admitted command lists. Workers prepare
+immutable inputs, record admitted private composition/copy commands on their captured deferred contexts, and
+copy mapped rows into adopted PixelBuffers. They never Map, Unmap or Flush the immediate context, mutate the
+live document, or access mutable Application state. A utility request owns its document snapshot/region, operation stamp, cancellation and device
 generation. Display canvas resources remain separate from utility targets. Hidden windows release display
 surfaces and can complete accepted utility work without Present.
 
@@ -148,3 +152,26 @@ headroom; workers always use the validated returned row pitch. This scope is rec
 API references checked for this slice: [EnqueueSetEvent](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgidevice2-enqueuesetevent),
 [fence event completion](https://learn.microsoft.com/en-us/windows/win32/api/d3d11_3/nf-d3d11_3-id3d11fence-seteventoncompletion),
 and [Map error/DO_NOT_WAIT behavior](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map).
+
+## Current caller follow-up (2026-10-14)
+
+Main verifies the source audit against the real callers. `ApplicationAdjust.cpp` has two production
+`WandComposite()` calls (range sample and targeted press); the existing asynchronous adjustment-opening
+composite does not cover those later interactions. `RunMagicWand` also retains its guarded reference branch.
+The queued sampler, clone, merge and supported Wand routes already use recorded worker/readback stages;
+this source observation does not close their remaining caller, lifetime or measured gates.
+
+The next isolated scalar prerequisite adds `SampleHueRangeValue(optional<double>)` and
+`BeginHueTargetingValue(optional<double>)`, without reading any raster. Existing raster wrappers keep their
+pre-sample guards and delegate the unchanged band/range math. The scalar boundary refuses null, nonfinite,
+negative or 360-and-above hues. The candidate is prepared, unbuilt and not integrated; independent tests must
+retain the exact legacy replacement/add/remove, Blues targeting and nonaccumulating drag expectations before
+host migration. No source or edit authority is granted by these scalar functions.
+
+The actual host descriptor must remain scalar until complete CPU/GPU admission. Capture one immutable
+committed document after admission, record the 1x1 region with the existing utility service, copy/sample on the
+worker, then publish only if both the original edit and document are current. Targeted press needs its physical
+input buffer and terminal before acknowledgement; readback cancellation, failure, a changed edit/document,
+device rebuild, held producer and joined Close must preserve the original state and retire the original charge.
+No new owner source, wait thread, swap chain or synchronous pixel fallback is required. Real-loop R1/W timings
+remain the existing P1.3/P1 G1 requirement, independent of functional tests.

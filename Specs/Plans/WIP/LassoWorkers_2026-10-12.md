@@ -6,8 +6,9 @@ Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 inde
 integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
 records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
 Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile
-commands are instrumented and the actual heap-use-after-free probe passes. ARM64 r1031 now cross-builds
-with one project at a time; Release/ASan cross-builds follow. Complete admission/retirement, ordinary
+commands are instrumented and the actual heap-use-after-free probe passes. The x64-qualified code/tests
+are committed and pushed as `451ec70`. ARM64 Debug r1031, Release r1032 and instrumented ASan r1033
+independently pass with the same compiled inputs and verified binary/PDB identities. Complete admission/retirement, ordinary
 activation and measured S5/G1 remain open; original failures/readers remain retained.
 [Current native evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
 
@@ -15,7 +16,8 @@ activation and measured S5/G1 remain open; original failures/readers remain reta
 - [x] Qualify private bounded completion geometry/history against 43 independent assertions, preserving all 21,480 predecessor records (21,524 total). See [the private finish proof](../../TestRuns/P1LassoFinish_2026-10-13.md).
 - [x] Qualify private worker-created/current-only bounded session bridge against 67 independent assertions (21,592 total records).
 - [x] Qualify the private actual renderer/display caller against 29 new assertions and all 137 application stages; [receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md).
-- [ ] Integrate and qualify actual host/display callers.
+- [x] Integrate and qualify the test-enabled native host/display callers: exact 160 host/29 draft facts, all 138 Application stages, complete x64/analysis and ARM64 cross-build matrix.
+- [ ] Complete production caller admission/retirement and ordinary activation; measured S5/G1 remains separate.
 - [x] Qualify private lasso input descriptors/FIFO/terminal adapter against 80 independent facts (21,673 document records total), retaining all predecessors.
 - [x] Qualify private original-ticket opening/replay/Finish nominal scenarios against 35 actual host assertions; [limited receipt](../../TestRuns/P1LassoHostAcquisition_2026-10-13.md) retains the competing-input gap.
 - [x] Qualify private event-time terminal/conditional-close ordering and actual freehand/polygon handlers against 50 host assertions; [scoped receipt](../../TestRuns/P1LassoPhysicalHost_2026-10-13.md).
