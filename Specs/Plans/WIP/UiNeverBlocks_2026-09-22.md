@@ -18,8 +18,10 @@ Latest I/O checkpoint: actual R7 real ASan independently passes 1,953 ordered re
 process, including all nine original failed predicates. Source/dependency/product bookends and the 3,036-file
 archive pass. Main selectively adopts ten code/test/project paths; native analysis/profiles and F6 remain open.
 [Private I/O evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
-Complete-startup R1-R3 build precondition refusals are retained; R4 supplies the full exact pinned consumer
-contract and is compiling unchanged code/282 controls. DxUi stays at 8e899407/API3.
+Complete-startup R4 independently passes all 139 application stages and 282 new controls; its 1,982-file
+archive passes. R1-R3 consumer precondition refusals remain retained. Seven source/test/project paths are
+selectively adopted, preserving the I/O entries. DxUi stays at 8e899407/API3.
+[Startup evidence](../../TestRuns/P1CompleteResponsiveStartup_2026-10-14.md).
 
 Current file follow-up: the private long-path C++ build, real ASan probe, ISA scan and ordinary C: TEMP
 process pass. The runner then fails with WinError206 while creating the long Z: directory, before any Z:
@@ -41,7 +43,8 @@ source/roster rejection controls before this replacement build.
 - [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
 - [x] Qualify the private long-path I/O candidate: R7 actual real ASan passes C:/explicit-Z: with all 1,823 predecessors and 130 long-path facts (1,953 each), exact readback and verified archive.
 - [ ] Qualify the selectively adopted native I/O code/tests with canonical analysis and profiles, then finish the remaining F6 delivery cases. The explicit TMP fixture and OS-selected predecessor root remain distinct.
-- [ ] Qualify complete responsive cold-start acquisition with 282 new controls; then complete production caller admission and retirement before ordinary activation.
+- [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
+- [ ] Qualify the combined native startup/I/O integration, then complete production caller admission/retirement and ordinary activation.
 - [ ] Add a draft-specific refused retirement-signal and explicit retry test using the existing GPU queue, preserving the current lasso assertions.
 
 Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
