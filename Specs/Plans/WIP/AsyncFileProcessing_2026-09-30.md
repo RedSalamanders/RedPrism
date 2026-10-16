@@ -2,7 +2,17 @@
 
 ## Implementation checklist
 
-Latest file checkpoint (2026-10-14): private R7 real ASan verifies all 1,823 predecessors plus 130 long-path
+Latest native file checkpoint (2026-10-16): the adopted long-path source is included in qualified native
+`67a77dd`: Release analysis r1034, full x64 Release r1035/Debug r1036/real ASan r1041 and ARM64
+Debug r1042/Release r1043/instrumented ASan r1044 cross-builds pass. Main independently reviews all archives,
+actual compiler/profile/ISA and executable/PDB identities. No native ARM64 execution is claimed.
+[Current x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md);
+[ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+All 184 native path-read controls remain present in each x64 profile; production header reads already yield
+the compute lane to the shared event-wait route. Complete phase bounds, ordinary activation, broader F6 and
+measured G1 remain open. The OS-selected predecessor root and explicit-Z new fixtures remain distinct.
+
+Earlier private file checkpoint (2026-10-14): private R7 real ASan verifies all 1,823 predecessors plus 130 long-path
 facts in each ordinary C:/explicit Z: process. Original nine failures are fixed with predicates intact; Main
 verifies source/dependency/product bookends and a 3,036-file archive. Ten reviewed code/test/project paths are
 selectively adopted. Native analysis/profiles and complete F6/G1 remain open. The old fixtures still use their

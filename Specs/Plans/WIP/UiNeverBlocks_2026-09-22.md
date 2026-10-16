@@ -101,7 +101,17 @@ source/roster rejection controls before this replacement build.
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 
-Current private follow-up (2026-10-16): Hue R3 builds all three executables and passes all three
+Latest private caller checkpoint (2026-10-16): Hue R4 passes all three actual builds/ISA scans and all
+DocumentTests/HostTests/Application processes. The original failed targeting predicate and every later Hue
+case pass unchanged. Main independently reads all 55 scalar, 70 Host Hue and 28 caller facts, all 138 private
+base stages, product/source bookends, three executable/PDB identities and all 2,451 archive files (completion
+`DBB9D7EAEEB4A4954600E27446FC18FD6D4D179B98AB961A4DD8F69D314DD28A`).
+The redundant older-source Wand private build stops before compilation. All its planned assertions join the
+current combined native candidate, with hard Paint parity and private direct-distortion source tests. The
+complete current-source native matrix must qualify that integration; ordinary activation and G1 remain open.
+[Scoped Hue evidence](../../TestRuns/P1HueCallerQualification_2026-10-16.md).
+
+Retained private refusal (2026-10-16): Hue R3 builds all three executables and passes all three
 ISA scans plus actual DocumentTests/HostTests, then the actual Application exits 5 at
 `hue-host.target.literal-blue-range-physical-saturation-15-hue-minus10-no-release-sample`.
 Main independently verifies the complete 2,443-file failed archive (completion
@@ -109,7 +119,7 @@ Main independently verifies the complete 2,443-file failed archive (completion
 `FinishHostContinuation` re-arms queued commands and lasso input but omits acquired Hue input, allowing
 its accepted scalar prefix to lose its wake after the readback request ends. Fresh R4 adds that condition
 to the existing action, preserving every assertion, numeric reference and lifetime predicate. Its actual
-qualification is running; the dependent Wand attempt refuses before compilation. No candidate code is
+private qualification passes as recorded above; the dependent Wand attempt originally refused before compilation. No candidate code is
 adopted and the qualified native source remains `67a77dd`.
 [Retained Hue attempt evidence](../../TestRuns/P1HueCallerQualification_2026-10-16.md).
 
