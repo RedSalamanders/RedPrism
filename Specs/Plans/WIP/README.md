@@ -1,13 +1,15 @@
 # Active plan index
 
-P1 implementation is **ACTIVE**. The current combined startup, long-path I/O and lasso retirement
-source is pushed as `67a77dd`; canonical analysis, full x64 Debug/Release/real ASan and ARM64
-Debug/Release/instrumented-ASan cross-builds pass.
-[X64 checkpoint](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md) and
-[completed ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
-Native ARM64 runtime is unavailable. Complete production admission/retirement, ordinary activation,
-S5/H3/H4 and measured G1 remain open; P1 is WIP. See the current checklist at the beginning of
-[the P1 plan](UiNeverBlocks_2026-09-22.md). The next isolated Hue/Wand/hard-brush draft is unbuilt.
+P1 implementation is **ACTIVE**. The latest native compiled checkpoint (`8e4bf14`) qualifies full x64
+Debug r1074, real ASan r1075 and ARM64 Debug/Release/instrumented-ASan r1086–r1088. Fresh Release analysis
+r1089 is running, followed by full Release r1090. [Current native evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md).
+
+The isolated code candidate is pushed as `b4e3656` on `ej/p1-selection-gesture-prerequisites`: charged gesture
+ownership and bounded physical-prefix tests pass all 22,283 private Release/real-ASan assertions.
+[Prefix evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md). The extracted reusable job and actual
+Win32/Application caller draft is compiling; its runtime waits for native Release qualification. Complete caller
+bounds, remaining press branches, native adoption, ordinary activation, H3/H4 and measured G1 remain open.
+Native ARM64 runtime is unavailable. Follow the opening [P1 checklist](UiNeverBlocks_2026-09-22.md).
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under

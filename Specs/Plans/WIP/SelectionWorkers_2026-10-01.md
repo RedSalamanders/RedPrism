@@ -2,12 +2,16 @@
 
 ## Current delivery checklist (2026-10-16)
 
+- [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
+- [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
+- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. The isolated 338-source application draft is compiling; runtime is serialized after native Release qualification.
+
 - [x] Independently qualify private selected Begin/End history ownership in Release and real ASan: 23 new facts plus all 22,010 predecessors. Preserve the original profile-reader refusal; Main's correction keeps the complete actual stream and exact existing ASan witness. [Ownership evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
 - [ ] Adopt the selected ownership API and qualify actual physical-press/terminal publication lifetimes and complete original-ticket admission; private CPU proof alone does not enable S5.
 - [x] Qualify the native successful-publication repair in full Debug r1074, real ASan r1075 and ARM64 Debug r1086; preserve r1073 and the r1076 disk-full failure independently.
 - [x] Qualify native ARM64 Release r1087 with complete archive, compiler and exact five executable/PDB checks.
 - [x] Qualify instrumented ARM64 ASan r1088 with 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs; all three ARM64 cross-builds pass.
-- [ ] Finish unchanged-source analysis r1089 and full Release r1090 after the preserved headroom preflight. Native ARM64 runtime is unavailable.
+- [ ] Finish unchanged-source analysis r1089 (running) and full Release r1090 after the preserved headroom preflight. Native ARM64 runtime is unavailable.
 - [x] Qualify private corrected original-parent/charged-command/opaque-cleanup Release R4 and real ASan R2: all 22,228 assertions, complete geometry/control bounds, moved Lost, exact post-Close final refund and complete archive/artifact checks; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
 
 - [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
