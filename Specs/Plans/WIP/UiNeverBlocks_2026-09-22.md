@@ -1600,18 +1600,28 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
     lease, worker output, resource/context retirement and maximum overlap before starting. No blocking Map,
     byte conversion or CPU tile composition is allowed in the terminal owner callback. The typed transport and
     detached epoch controls qualify in the `0773548` matrix; actual host recording remains unchecked below.
-  - [ ] Perform healing, sparse snapshot construction, carried-mask growth/eager semantic thumbnail, complete
-    document sealing and history preparation on the Stroke worker. Keep the current wash or settled preview
+  - [x] Implement the admitted worker finish and actual Up/capture-loss host route. `StrokeFinishWork.cpp`
+    prepares Heal, sparse output, carried-mask growth/semantic thumbnail, sealed document and history;
+    `ApplicationStrokeFinishJobs.cpp` invokes it after final coverage. The current `67a77dd` x64
+    Debug/Release/real-ASan checkpoint includes the literal finish, capture-loss prefix, queued Undo-after-Up
+    and scalar parity stages for soft Paint/Eraser, selection, masks, Blur, Clone and Heal. Main verifies the
+    source, test predicates and stage registration. [Current x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md).
+    This closes those code/correctness facts only; the complete production and measured requirements follow.
+  - [ ] Qualify production activation, full admission and retirement of the existing worker healing, sparse
+    snapshot, carried-mask/eager thumbnail, document sealing and history path. Keep the current wash or settled preview
     visible until one current publication succeeds. Refuse cancelled, stale or failed preparation without changing
     pixels/history/saved state. Preserve old owners for worker retirement and the captured reservation until the
     original acknowledgement; there is no younger ticket or ordinal for the resumed phase.
-  - [ ] Wire Up, capture loss, tool/lifecycle settlement and shutdown through that same closure. A consumed
+  - [ ] Complete ordinary tool/lifecycle settlement and shutdown qualification through that same closure,
+    retaining the implemented Up/capture-loss ordering. A consumed
     terminal input does not finish its continuation while the final worker/readback is outstanding. Younger
     history inputs remain queued; view input remains available. Detached exclusive CPU state must never retain
     a borrowed graphics engine, mutable session pointer or live progress callback. Escape after Up keeps the
     accepted stroke; teardown cancels and joins before releasing any borrowed fixture/host state.
-  - [ ] Qualify exact hard/soft/mask/selection/translated/growing strokes, Clone/Blur/Heal, final-tail parity,
-    before/after worker gates, allocation/readback/device faults, input FIFO, Undo/Redo, capture loss and shutdown.
+  - [ ] Finish remaining scenario and phase coverage: explicit hard-brush parity and the complete
+    allocation/readback/device-fault matrix at each final-coverage/publication boundary. Preserve the existing
+    exact soft/mask/selection/translated/growing, Clone/Blur/Heal, final-tail, worker-gate, FIFO, Undo/Redo,
+    capture-loss and shutdown controls.
     Full same-source x64 Debug/Release/real ASan, Release analysis and ARM64 cross-builds precede the step commit.
     Measure terminal owner work and publication on the G1 documents; structural controls alone do not close G1.
 - **P1.5 Raster edits, transforms and shapes**:
