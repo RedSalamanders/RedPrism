@@ -1,5 +1,6 @@
 #include "Document.Tests.SelectionPhysicalPrefix.h"
 #include "../../RedPrism/HostSelectionPressInput.h"
+#include "../../RedPrism/SelectionOutlineGestureJob.h"
 #include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
@@ -8,6 +9,7 @@
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SharedPublicationMemory.h"
+#include "TransformEdit.h"
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -85,286 +87,53 @@ template <class Predicate> void Until(JobScheduler& scheduler, Predicate done)
             SetupFailure("event-wait");
     }
 }
-class PrefixParent;
-struct State final
+using PrefixParent = SelectionOutlineGestureJob;
+struct State final : SelectionOutlineGestureState
 {
-    JobScheduler& scheduler;
-    DocumentSession& session;
-    HostSelectionPressInput& prefix;
     MemoryProbe& memory;
-    PrefixParent* controller = nullptr;
-    JobTicket original;
-    unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;
-    std::uint64_t firstBudget = 0, remainingBudget = 0, openingBytes = 0, queryBaseline = 0, queriesAtEnd = 0;
-    bool opened = false, waiting = false, completed = false, closed = false, clicked = false, aborted = false;
-    bool sameTicket = true, partition = false, inputAcknowledged = false, sourceCurrent = false, terminalLost = false,
-         overflowObserved = false;
-    std::uint64_t terminalOrdinal = 0;
+    std::uint64_t queryBaseline = 0, queriesAtEnd = 0;
     bool writerRan = false, writerSawDeselect = false;
-    std::atomic<bool> parentAcknowledged{false}, writerEnteredBeforeParent{false};
-    JobResult outcome{};
-};
-class PrefixParent final : public Job
-{
-    enum class Phase
-    {
-        Allocate,
-        Open,
-        Collect,
-        Close,
-        Click
-    };
+    unsigned movedCallbacks = 0;
+    bool openTransform = false, foreignOpened = false;
+    const TransformEdit* foreignTransformAddress = nullptr;
+    std::optional<LayerTransform> foreignDraft;
 
-  public:
-    explicit PrefixParent(State& state) : _state(state)
+    std::atomic<bool> writerEnteredBeforeParent{false};
+    State(JobScheduler& scheduler, DocumentSession& session, HostSelectionPressInput& prefix, MemoryProbe& probe)
+        : SelectionOutlineGestureState{scheduler, session, prefix, kOpening, {kTotal, kOpeningLimit, kFinal}},
+          memory(probe)
     {
-        state.controller = this;
-    }
-    JobResult Run(JobContext& context) override
-    {
-        auto& s = _state;
-        ++s.runs;
-        if (_phase == Phase::Allocate)
+        observer = this;
+        notify = [](void* raw, Event event) noexcept
         {
-            s.firstBudget = context.reservedMemoryBytes;
-            _output = SharedPublicationMemory::CreateForWork(kOpeningLimit);
-            _final = SharedPublicationMemory::CreateForWork(kTotal);
-            _temporary = SharedPublicationMemory::CreateForWork(kTotal);
-            return {};
-        }
-        if (_phase == Phase::Open)
-        {
-            ++s.hits;
-            const auto hit = ContainsSelectionForWork(_display, _point, context.cancellation);
-            if (!hit || !hit.value() || !_input)
-                return {JobStatus::Failed, E_INVALIDARG};
-            auto prepared = DocumentSession::PrepareDeferredSelectionMoveOpening(
-                std::move(_input.value()), context.cancellation, {}, _output, true);
-            _input.reset();
-            if (!prepared)
-                return {JobStatus::Failed, E_FAIL};
-            _opening.emplace(std::move(prepared.value()));
-            return {};
-        }
-        s.remainingBudget = context.reservedMemoryBytes;
-        if (_phase == Phase::Collect)
-            return {}; // Event-triggered acknowledgement only; never read mutable input/session on workers.
-        if (_phase == Phase::Close)
-        {
-            ++s.closurePrepares;
-            if (!_closeInput)
-                return {JobStatus::Failed, E_UNEXPECTED};
-            auto memory = _click ? std::shared_ptr<const SharedPublicationMemory>{} : _final;
-            auto prepared = DocumentSession::PrepareSelectionMoveClosurePublication(
-                std::move(_closeInput.value()), context.cancellation, {}, nullptr, {}, memory);
-            _closeInput.reset();
-            if (!prepared)
-                return {JobStatus::Failed, E_FAIL};
-            _close.emplace(std::move(prepared.value()));
-            return {};
-        }
-        ++s.clickPrepares;
-        if (!_commandInput)
-            return {JobStatus::Failed, E_UNEXPECTED};
-        auto prepared = DocumentSession::PrepareSelectionCommandPublication(std::move(_commandInput.value()),
-                                                                            context.cancellation, {}, _final);
-        _commandInput.reset();
-        if (!prepared)
-            return {JobStatus::Failed, E_FAIL};
-        _command.emplace(std::move(prepared.value()));
-        return {};
-    }
-    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
-    {
-        auto& s = _state;
-        s.sameTicket = s.sameTicket && ticket == s.original;
-        if (result.status != JobStatus::Finished)
-            return false;
-        if (_phase == Phase::Allocate)
-        {
-            const auto* arrival = s.prefix.CapturedContext(kOpening);
-            const auto down = s.prefix.Peek(kOpening);
-            if (!arrival || !down || down->action != HostSelectionPressInput::Action::Down ||
-                arrival->document.documentSerial != s.session.DocumentSerial())
-                return Refuse(E_ABORT);
-            // Geometry/history and full source authority are captured only here, after this original admission.
-            _source = s.session.CaptureDocumentReadAuthority();
-            if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
-                return Refuse(E_ABORT);
-            _display = s.session.DisplayedSelectionValue();
-            _point = down->sample.point;
-            auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
-            if (!input || !_source)
-                return Refuse(E_ABORT);
-            _input.emplace(std::move(input.value()));
-            const auto& loops = _display.selection.value().loops;
-            _geometryEnvelope = loops.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(loops.size());
-            ++s.captures;
-            _phase = Phase::Open;
-            return Resume();
-        }
-        if (_phase == Phase::Open)
-        {
-            s.sourceCurrent = _source && s.session.IsDocumentReadCurrent(_source.value());
-            if (!s.sourceCurrent || !_opening)
-                return Refuse(E_ABORT);
-            s.openingBytes = _output->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
-            if (_output->BindContinuingOutputForPublication(s.scheduler, ticket, s.openingBytes) != S_OK)
-                return Refuse(E_FAIL);
-            s.partition = s.scheduler.ReservedMemoryBytes() >= kTotal && _output->BoundTo(s.scheduler, ticket);
-            s.opened = s.session.ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(_opening.value());
-            if (!s.opened)
-                return Refuse(E_ABORT);
-            s.queryBaseline = s.memory.queries;
-            _phase = Phase::Collect;
-            return Consume();
-        }
-        if (_phase == Phase::Collect)
-        {
-            ++s.collectAcks;
-            return Consume();
-        }
-        if (_phase == Phase::Close && _click)
-        {
-            s.closed = _close && s.session.ApplyPreparedSelectionMoveClosureIfCurrent(_close.value());
-            if (!s.closed)
-                return Refuse(E_ABORT);
-            auto input = s.session.PrepareSelectionCommandInput(SelectionCommandKind::Deselect);
-            if (!input)
-                return Refuse(E_ABORT);
-            _commandInput.emplace(std::move(input.value()));
-            _phase = Phase::Click;
-            return Resume();
-        }
-        return false;
-    }
-    bool NotifyInput() noexcept
-    {
-        auto& s = _state;
-        if (!s.waiting || s.prefix.PendingCount() == 0)
-            return false;
-        s.waiting = false;
-        if (s.scheduler.Resume(s.original))
-            return true;
-        s.waiting = true;
-        return false;
-    }
-    void Completed(JobResult result) noexcept override
-    {
-        auto& s = _state;
-        s.completed = true;
-        s.waiting = false;
-        s.outcome = result;
-        if (_error && result.status == JobStatus::Finished)
-            s.outcome = {JobStatus::Failed, _error};
-        if (s.outcome.status == JobStatus::Finished)
-        {
-            const auto required = _command ? _command->OutputMemoryBytes()
-                                           : _final->LocalAllocationBytes() +
-                                                 SharedPublicationMemory::OwnershipAllowance() + _geometryEnvelope;
-            if (!required || required > kFinal ||
-                _final->BindPersistentOutputAfterCompletedWork(s.scheduler, s.original, kFinal, *_temporary) != S_OK)
-                s.outcome = {JobStatus::Failed, E_FAIL};
-            else if (_click)
-                s.clicked = _command && s.session.ApplyPreparedSelectionCommandIfCurrent(_command.value());
-            else
-                s.closed = _close && s.session.ApplyPreparedSelectionMoveClosureIfCurrent(_close.value());
-            if (!s.closed || (_click && !s.clicked))
-                s.outcome = {JobStatus::Failed, E_ABORT};
-        }
-        if (s.outcome.status != JobStatus::Finished)
-        {
-            if (s.opened && !s.closed && _opening)
-                s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
-            if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, s.original) != S_OK)
-                std::terminate();
-        }
-        s.overflowObserved = s.prefix.Overflowed();
-        s.inputAcknowledged = _terminal ? s.prefix.Acknowledge(kOpening) : s.prefix.Drop(kOpening);
-        s.queriesAtEnd = s.memory.queries;
-        s.controller = nullptr;
-        s.parentAcknowledged.store(true, std::memory_order_release);
-    }
-    void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override
-    {
-        auto& s = _state;
-        s.sameTicket = s.sameTicket && ticket == s.original;
-        s.waiting = false;
-        if (s.opened && !s.closed && _opening)
-            s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
-        if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, ticket) != S_OK)
-            std::terminate();
-        s.inputAcknowledged = s.prefix.Drop(kOpening);
-        s.controller = nullptr;
-        s.outcome = {JobStatus::Cancelled};
-    }
-
-  private:
-    bool Refuse(std::int32_t error) noexcept
-    {
-        _error = error;
-        return false;
-    }
-    bool Resume() noexcept
-    {
-        if (!_state.scheduler.Resume(_state.original))
-            return Refuse(E_UNEXPECTED);
-        return true;
-    }
-    bool Consume() noexcept
-    {
-        auto& s = _state;
-        if (!_opening || !s.session.IsPreparedDeferredSelectionMoveGestureCurrent(_opening.value()))
-            return Refuse(E_ABORT);
-        while (auto event = s.prefix.Take(kOpening))
-        {
-            if (event->action == HostSelectionPressInput::Action::Down)
-                continue;
-            if (event->action == HostSelectionPressInput::Action::Move)
+            auto& state = *static_cast<State*>(raw);
+            if (event == Event::Opened)
+                state.queryBaseline = state.memory.queries;
+            if (event == Event::Moved)
             {
-                double dx = event->sample.point.x - _point.x, dy = event->sample.point.y - _point.y;
-                if (event->sample.modifiers.shift)
+                ++state.movedCallbacks;
+                if (state.openTransform)
                 {
-                    if (std::fabs(dx) >= std::fabs(dy))
-                        dy = 0;
-                    else
-                        dx = 0;
+                    state.openTransform = false;
+                    const auto generation = state.session.Generation();
+                    const auto revision = state.session.history.CurrentRevision();
+                    const auto depth = state.session.history.CaptureState().Depth();
+                    state.session.BeginTransform(true);
+                    const auto& pending = state.session.PendingTransformEdit();
+                    state.foreignOpened = pending && state.session.Generation() == generation &&
+                                          state.session.history.CurrentRevision() == revision &&
+                                          state.session.history.CaptureState().Depth() == depth;
+                    if (pending)
+                    {
+                        state.foreignTransformAddress = &pending.value();
+                        state.foreignDraft = pending->draft;
+                    }
                 }
-                if (!s.session.MovePreparedDeferredSelectionMoveIfCurrent(_opening.value(), dx, dy))
-                    return Refuse(E_ABORT);
-                _offset = {std::round(dx), std::round(dy)};
-                ++s.moves;
-                continue;
             }
-            _terminal = true;
-            s.terminalLost = event->action == HostSelectionPressInput::Action::Lost;
-            s.terminalOrdinal = event->sample.ordinal;
-            _click = !s.terminalLost && _offset == Vec2{};
-            auto input = s.session.PrepareSelectionMoveClosureInput(false, s.session.SelectionMoveOpening());
-            if (!input)
-                return Refuse(E_ABORT);
-            _closeInput.emplace(std::move(input.value()));
-            _phase = Phase::Close;
-            return Resume();
-        }
-        s.waiting = true;
-        return true; // No self-rearm or periodic work. The next accepted input supplies readiness.
+            if (event == Event::Terminal)
+                state.queriesAtEnd = state.memory.queries;
+        };
     }
-    State& _state;
-    Phase _phase = Phase::Allocate;
-    std::shared_ptr<SharedPublicationMemory> _output, _final, _temporary;
-    std::optional<DocumentReadAuthority> _source;
-    SelectionDisplayValue _display;
-    Vec2 _point{}, _offset{};
-    std::uint64_t _geometryEnvelope = 0;
-    std::int32_t _error = 0;
-    bool _click = false, _terminal = false;
-    std::optional<SelectionMoveOpeningInput> _input;
-    std::optional<PreparedSelectionMoveOpening> _opening;
-    std::optional<SelectionMoveClosureInput> _closeInput;
-    std::optional<PreparedSelectionMoveClosure> _close;
-    std::optional<SelectionCommandInput> _commandInput;
-    std::optional<PreparedSelectionCommand> _command;
 };
 class YoungerWriter final : public Job
 {
@@ -396,7 +165,8 @@ enum class Mode
     OrdinalExhaust,
     QueuedWriter,
     CancelCollect,
-    ForeignSession
+    ForeignSession,
+    ForeignNotification
 };
 void RunCase(Mode mode, const char* name)
 {
@@ -409,6 +179,10 @@ void RunCase(Mode mode, const char* name)
     document.selection =
         DocumentSelection{false, SelectionLoops{SelectionLoop{kOrigin[0], kOrigin[1], kOrigin[2], kOrigin[3]}}};
     auto layer = ImageLayer::Blank(L"Physical prefix", Vec2{8, 8});
+    if (mode == Mode::ForeignNotification)
+        layer.asset =
+            RasterAsset{Raster::MakeSparse(8, 8, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0), {}, layer.name};
+
     const Guid active = layer.id;
     document.layers.push_back(std::move(layer));
     session->ReplaceDocument(std::move(document).Seal(), active);
@@ -458,6 +232,7 @@ void RunCase(Mode mode, const char* name)
             SetupFailure("ordinal-exhaustion-keeps-last-prefix");
     }
     State state{scheduler, *session, *prefix, memory};
+    state.openTransform = mode == Mode::ForeignNotification;
     JobOptions options;
     options.kind = JobClass::Selection;
     options.serialKey = 1;
@@ -481,6 +256,7 @@ void RunCase(Mode mode, const char* name)
                "foreign-session-preserves-selection-history-generation-and-redo");
         Expect(state.inputAcknowledged && !prefix->Busy() && !state.controller,
                "foreign-session-drops-only-its-bounded-prefix");
+        Expect(state.movedCallbacks == 0, "one-display-notification-per-consumed-move-batch");
         session.reset();
         Settle(scheduler);
         Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 && scheduler.IsIdle(),
@@ -506,12 +282,15 @@ void RunCase(Mode mode, const char* name)
             !state.controller->NotifyInput())
             SetupFailure("second-shift-and-up");
     }
-    else if (mode == Mode::LostMoved || mode == Mode::CancelCollect)
+    else if (mode == Mode::LostMoved || mode == Mode::CancelCollect || mode == Mode::ForeignNotification)
     {
         if (prefix->Move(kOpening, {0, 6}, {}, true, 2) != HostSelectionPressInput::Admission::Recorded)
             SetupFailure("moved-prefix");
         if (mode == Mode::LostMoved && prefix->SealLost(kOpening) != HostSelectionPressInput::Admission::Recorded)
             SetupFailure("lost-seal");
+        if (mode == Mode::ForeignNotification &&
+            prefix->Finish(kOpening, false, 3) != HostSelectionPressInput::Admission::Recorded)
+            SetupFailure("foreign-callback-up");
         if (!state.controller || !state.controller->NotifyInput())
             SetupFailure("moved-ready");
         if (mode == Mode::CancelCollect)
@@ -540,6 +319,34 @@ void RunCase(Mode mode, const char* name)
     if (mode == Mode::OrdinalExhaust)
         memory.scarce = true; // No closing admission/query may depend on newly available memory.
     Settle(scheduler);
+    if (mode == Mode::ForeignNotification)
+    {
+        Expect(state.opened && state.captures == 1 && state.hits == 1 && state.moves == 1 &&
+                   state.movedCallbacks == 1 && state.foreignOpened,
+               "external-notification-opens-foreign-transform-without-generation-or-history-change");
+        Expect(state.completed && state.sameTicket && state.outcome.status == JobStatus::Failed &&
+                   state.outcome.error == E_ABORT && !state.closed && !state.aborted && state.closurePrepares == 0 &&
+                   state.clickPrepares == 0,
+               "post-callback-guard-refuses-before-capturing-or-publishing-closure");
+        const auto& pending = session->PendingTransformEdit();
+        Expect(pending && &pending.value() == state.foreignTransformAddress && state.foreignDraft &&
+                   pending->draft == *state.foreignDraft && pending->persistent && !pending->deferred &&
+                   Literal(session->Selection(), kOrigin) && session->Generation() == generation + 1 &&
+                   session->history.CurrentRevision() == before.Revision() &&
+                   session->history.CaptureState().Depth() == before.Depth() + 1 && !session->history.CanRedo() &&
+                   before.FutureCount() == 1 && session->history.CaptureState().FutureCount() == before.FutureCount() &&
+                   session->history.CaptureState().RedoName() == before.RedoName(),
+               "refusal-preserves-foreign-transform-original-selection-open-history-and-redo");
+        Expect(state.inputAcknowledged && !prefix->Busy() && !state.controller &&
+                   state.queriesAtEnd == state.queryBaseline,
+               "original-prefix-acknowledges-failure-without-new-admission-or-query");
+        session.reset();
+        Settle(scheduler);
+        Expect(scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 && scheduler.IsIdle(),
+               "final-foreign-state-and-original-owners-refund-after-last-reader");
+        scheduler.Close();
+        return;
+    }
     Expect(state.opened && state.partition && state.sourceCurrent && state.captures == 1 && state.hits == 1,
            "original-admission-captures-exact-hit-and-opening-once");
     const bool cancelled = mode == Mode::CancelCollect;
@@ -596,6 +403,9 @@ void RunCase(Mode mode, const char* name)
                state.closurePrepares == (cancelled ? 0u : 1u) &&
                state.clickPrepares == ((mode == Mode::EarlyClick || mode == Mode::QueuedWriter) ? 1u : 0u),
            "event-driven-body-and-capture-counts-match-acknowledged-stages");
+    const unsigned notifications =
+        mode == Mode::AsyncShift ? 2u : (mode == Mode::EarlyClick || mode == Mode::QueuedWriter ? 0u : 1u);
+    Expect(state.movedCallbacks == notifications, "one-display-notification-per-consumed-move-batch");
     if (mode == Mode::QueuedWriter)
         Expect(state.writerRan && state.writerSawDeselect && !state.writerEnteredBeforeParent.load(),
                "younger-writer-observes-only-completed-parent");
@@ -616,6 +426,7 @@ int RunDocumentSelectionPhysicalPrefixTests()
     RunCase(Mode::QueuedWriter, "queued-writer");
     RunCase(Mode::CancelCollect, "cancel-collect");
     RunCase(Mode::ForeignSession, "foreign-session");
+    RunCase(Mode::ForeignNotification, "foreign-notification");
     std::printf("SUMMARY selection-physical-prefix checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }

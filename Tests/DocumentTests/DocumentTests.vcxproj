@@ -589,6 +589,8 @@
     <ClCompile Include="Document.Tests.SelectionGestureParent.cpp" />
     <ClCompile Include="Document.Tests.SelectionGestureAbort.cpp" />
     <ClCompile Include="Document.Tests.SelectionPhysicalPrefix.cpp" />
+    <ClCompile Include="..\..\RedPrism\SelectionOutlineGestureJob.cpp" />
+    <ClInclude Include="..\..\RedPrism\SelectionOutlineGestureState.h" />
     <ClInclude Include="Document.Tests.SelectionHistoryOwnership.h" />
     <ClInclude Include="Document.Tests.ContinuingPublication.h" />
     <ClInclude Include="Document.Tests.SelectionHistoryBoundLifetime.h" />
