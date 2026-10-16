@@ -64,12 +64,19 @@ source/roster rejection controls before this replacement build.
 - [x] Qualify ARM64 Debug r1042 on the same combined repository inputs: complete build, source/archive
   readback, actual compile commands and five ARM64 executable/PDB identities pass; no native execution.
   [ARM64 Debug evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Debug_2026-10-16.md).
-- [ ] Finish ARM64 Release/instrumented-ASan cross-builds r1043-r1044 on the exact combined source.
-  Each next profile waits for the prior complete archive and independent artifact/identity readers.
+- [x] Qualify ARM64 Release r1043 on the same combined source: all 932 compiler records, five ARM64
+  executable/PDB identities and the 1,430-file archive pass.
+  [ARM64 Release evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Release_2026-10-16.md).
+- [ ] Finish instrumented ARM64 ASan r1044 on the exact combined source; Release archive and independent
+  artifact/identity readers pass before ASan starts.
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 
-Current private follow-up: the asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
+Current private follow-up (2026-10-16): Main finds invalid Hue purpose/mode could enqueue before refusal and
+reuse the opening with later valid input. The unbuilt R1 is superseded and retained. Fresh R2 refuses invalid
+input before queue/counter effects and consumes accepted openings before binding; two new exact state tests
+join all 26 preserved Hue host facts. Source-only reader controls pass; actual compilation/runtime remain due.
+The asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
 readback, fixed physical delta/Ctrl/ordinal buffering and a separate release/loss terminal. Actual host tests
 cover literal hue/band values, idle-to-live replay, failed workers, stale document/panel openings and original
 cancellation acknowledgement. Main verified the agent's stale-opening finding and added exact cleanup and
