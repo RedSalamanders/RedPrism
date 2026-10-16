@@ -66,7 +66,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [ ] Qualify the clipboard repair in remaining native profiles: real ASan r1075 is running, then ARM64 r1076–r1078, Release analysis r1079 and full Release r1080. The source is frozen; native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [ ] Finish full x64 Debug/real ASan and ARM64 cross-builds on that same source.
-- [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
+- [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
+- [ ] Qualify that extended prerequisite under real ASan, then complete actual S5 host dispatch, admission/lifetimes and all remaining parent delivery areas.
 
 ### Latest qualified checkpoint
 

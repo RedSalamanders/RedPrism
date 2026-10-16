@@ -1029,8 +1029,21 @@ refund at transfer. The complete operation cannot grow its admission. The output
 remaining temporary/terminal owners stay available until their final acknowledgement or joined Close.
 Default descriptors and final-publication APIs keep their existing behavior.
 
-The candidate is unadopted and under private CPU qualification with 38 source-derived controls for real
+The candidate remains unadopted. Private Release independently qualifies 38 source-derived controls for real
 resumed useful work, exact memory partitions, descriptor/ticket/bounds/repeat/growth refusal, failure,
 cancellation, joined Close and last weak-control refunds. It must also prove terminal-slot pressure, source
 history/geometry ownership and the full physical host before use. The older press-opening prototype is not
 activated by this prerequisite. No ordinary activation, G1 or P1 Done claim follows from a private proof.
+
+The extended private Release proof now qualifies all 22,100 facts: 44 continuing-output checks, 23 bound-history
+checks and 22,033 predecessors. All 64 terminal slots are preclaimed before opening, a 65th is refused, and
+the original job still completes its useful terminal stage. Real ASan of the same source is running.
+[Detailed evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
+
+No-move physical Up needs an additional useful follow-up after End: Deselect for Marquee/Lasso, or the captured
+New-wand operation. The zero-offset geometry helper already shares the original root without allocating.
+A prepared zero-offset End can therefore publish no new graph while the admitted parent retains its closing
+reservation; capture the follow-up only after that real End acknowledgement to preserve its token/generation.
+Use a separately prepared charged final selection-command publication before terminal memory transfer.
+Pointer-loss End preserves the selection and must not synthesize the click follow-up. Moved, no-move, cancelled
+and Lost branches require real host tests before activation. Do not resume useful work after a final transfer.
