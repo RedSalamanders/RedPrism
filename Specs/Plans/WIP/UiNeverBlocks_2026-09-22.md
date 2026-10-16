@@ -97,7 +97,19 @@ source/roster rejection controls before this replacement build.
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 
-Current private follow-up (2026-10-16): private Hue R2 stops at C4189/C2220 on an unused
+Current private follow-up (2026-10-16): Hue R3 builds all three executables and passes all three
+ISA scans plus actual DocumentTests/HostTests, then the actual Application exits 5 at
+`hue-host.target.literal-blue-range-physical-saturation-15-hue-minus10-no-release-sample`.
+Main independently verifies the complete 2,443-file failed archive (completion
+`F3FE301372975223CB2AED2DA767D196C41A2A5E8CC0450FA01D74AC72807458`). Source inspection finds
+`FinishHostContinuation` re-arms queued commands and lasso input but omits acquired Hue input, allowing
+its accepted scalar prefix to lose its wake after the readback request ends. Fresh R4 adds that condition
+to the existing action, preserving every assertion, numeric reference and lifetime predicate. Its actual
+qualification is running; the dependent Wand attempt refuses before compilation. No candidate code is
+adopted and the qualified native source remains `67a77dd`.
+[Retained Hue attempt evidence](../../TestRuns/P1HueCallerQualification_2026-10-16.md).
+
+Earlier Hue R2 stops at C4189/C2220 on an unused
 `historyCount` local in the new scalar fixture; no runtime follows it. Its complete 1,889-file archive
 is retained (completion `95B03EBE38BA6FFDE77CBC1C610263B4455D93BEB30752FABA5EC38F179A265B`).
 Main verifies `SameHuePanelState` already checks the captured history count; fresh R3 removes only the
