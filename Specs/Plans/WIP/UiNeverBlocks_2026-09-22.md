@@ -43,8 +43,12 @@ The shared builder now lives in the geometry TU compiled by all five images. The
 proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 passes on the repaired 1,393-input freeze: 1,810 copied archive inputs/evidence,
 953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 is running;
 Debug r1068, real ASan r1069 and ARM64 r1070–r1072 remain due.
-A separate actual-host scalar closure lifetime draft and 71-fact fixture are compiling privately. Actual
-selection-press dispatch, ordinary activation and all nine delivery areas above remain open.
+The private actual-host scalar closure now qualifies 71 stronger facts and every predecessor Application
+assertion in 143 stages (R8). Main verifies 2,006 archived copies, 336 frozen objects, exact PE/PDB identity,
+zero ISA violations, worker allocation and final zero reserved/releasing bytes. Its isolated real-ASan host
+build is running. This host change is not yet adopted into the native source. Actual selection-press dispatch,
+ordinary activation and all nine delivery areas above remain open.
+[Private host evidence](../../TestRuns/P1ScalarSelectionClosureHost_2026-10-16.md).
 
 - [x] Qualify the original full Debug r1052 and retain its complete predecessor/delta evidence.
 - [x] Preserve and independently read failed native analysis r1053; stop all later gates.
@@ -52,6 +56,8 @@ selection-press dispatch, ordinary activation and all nine delivery areas above 
 - [x] Adopt the reviewed model core and assertion-preserving stack repairs; reconcile owning contracts.
 - [x] Preserve failed r1059, adopt the shared-helper/constant-proof repairs and retain all expectations.
 - [x] Qualify fresh exact-source analysis r1066 and independently review its complete archive/artifacts.
+- [x] Qualify private scalar closure on the actual two-worker/WARP host, including worker allocation, original-ticket retention, final refunds and all predecessor Application assertions.
+- [ ] Qualify the stronger private host under real ASan, then adopt its reviewed production/test changes with owning contracts.
 - [ ] Finish full x64 Release/Debug/real ASan and ARM64 cross-builds on that same source.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
 
