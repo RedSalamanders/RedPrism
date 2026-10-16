@@ -2,25 +2,28 @@
 
 ## Current delivery checklist
 
-Latest native checkpoint (2026-10-16): combined startup, long-path I/O and lasso retirement sources pass
-canonical Release analysis r1034 and complete x64 Release r1035 / Debug r1036 / real ASan r1041. All three runtime profiles retain
-all 139 Application stages, 21,720 DocumentTests, 7,391 composition and 1,953 I/O records. Main verifies their
-archives, 932 actual compiler command records per profile and all five binary/PDB identities. ASan also passes
-concurrent raster stress and the actual detection probe. [Combined x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md).
+Latest native checkpoint (2026-10-16): the combined startup, long-path I/O and lasso retirement
+source `67a77dd` passes canonical Release analysis r1034, complete x64 Release r1035 / Debug r1036 /
+real ASan r1041, and ARM64 Debug r1042 / Release r1043 / instrumented ASan r1044 cross-builds.
+All x64 profiles retain 139 Application stages, 21,720 DocumentTests, 7,391 composition and 1,953 I/O
+records; ASan also passes concurrent raster stress and its actual detection probe. Main verifies all
+archives, 932 compiler command records and five executable/PDB identities per profile.
+[X64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md);
+[completed ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
 
 ASan r1037 was interrupted during compilation on October 14: no completed child receipt exists and no test
 or compiler process remains. Its 2,404-file partial source/object/product snapshot is preserved with independent readback hashes,
-without an inferred exit or success. Fresh full x64 ASan r1041 passes; ARM64 Debug/Release/instrumented-ASan cross-builds
-r1042-r1044 continue serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
+without an inferred exit or success. Fresh full x64 ASan r1041 and all three ARM64 cross-builds
+r1042-r1044 pass serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
 Complete caller admission/retirement, ordinary activation and measured S5/G1 remain open. P1 is not Done.
 The earlier six-profile lasso checkpoint remains [historical evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
 
-Next code checkpoints (2026-10-14):
+Earlier private prerequisites (now included in the qualified matrix above):
 
 Latest I/O checkpoint: actual R7 real ASan independently passes 1,953 ordered records in each C:/explicit-Z:
 process, including all nine original failed predicates. Source/dependency/product bookends and the 3,036-file
-archive pass. Main selectively adopts ten code/test/project paths. Canonical analysis and full x64 Debug/Release now pass;
-real ASan, ARM64 cross-builds and the wider F6 delivery cases remain open.
+archive pass. Main selectively adopts ten code/test/project paths. The complete combined native matrix
+now passes; wider F6 delivery cases remain open.
 [Private I/O evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
 Complete-startup R4 independently passes all 139 application stages and 282 new controls; its 1,982-file
 archive passes. R1-R3 consumer precondition refusals remain retained. Seven source/test/project paths are
@@ -47,9 +50,11 @@ source/roster rejection controls before this replacement build.
 - [x] Commit/push the x64-qualified native lasso host/display code, tests and contracts (`451ec70`).
 - [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
 - [x] Qualify the private long-path I/O candidate: R7 actual real ASan passes C:/explicit-Z: with all 1,823 predecessors and 130 long-path facts (1,953 each), exact readback and verified archive.
-- [ ] Qualify the selectively adopted native I/O code/tests with canonical analysis and profiles, then finish the remaining F6 delivery cases. The explicit TMP fixture and OS-selected predecessor root remain distinct.
+- [x] Qualify the selectively adopted native I/O code/tests with canonical analysis, full x64 profiles and ARM64 cross-builds.
+- [ ] Finish the remaining F6 delivery cases; explicit TMP fixtures and the OS-selected predecessor root remain distinct.
 - [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
-- [ ] Qualify the combined native startup/I/O integration, then complete production caller admission/retirement and ordinary activation.
+- [x] Qualify the combined native startup/I/O integration on the complete current matrix.
+- [ ] Complete production caller admission/retirement and ordinary activation.
 - [x] Qualify private draft-specific retirement refusal/retry and joined Close: R10 actual WARP verifies all 50 controller facts/7,391 composition records; the 1,707-file archive passes. Original failed predicate is preserved with the corrected fair two-pass fixture setup.
 - [x] Qualify combined-source canonical Release analysis r1034: all 1,360 frozen inputs, SAL controls,
   five linked ISA scans and eight scan rejection controls pass; Main verifies the 1,775-file archive
@@ -67,8 +72,9 @@ source/roster rejection controls before this replacement build.
 - [x] Qualify ARM64 Release r1043 on the same combined source: all 932 compiler records, five ARM64
   executable/PDB identities and the 1,430-file archive pass.
   [ARM64 Release evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Release_2026-10-16.md).
-- [ ] Finish instrumented ARM64 ASan r1044 on the exact combined source; Release archive and independent
-  artifact/identity readers pass before ASan starts.
+- [x] Qualify instrumented ARM64 ASan r1044 on the exact combined source: actual exit, all 932 instrumented
+  command records, five ARM64 executable/PDB identities and complete archive pass. Main reads the full
+  six-profile closeout. [ARM64 matrix evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 

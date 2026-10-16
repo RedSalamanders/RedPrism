@@ -1,13 +1,13 @@
 # Active plan index
 
-P1 implementation is **ACTIVE after the user’s resume on 2026-10-07**. Read the
-[saved checkpoint](../../TestRuns/P1Pause_2026-10-06.md) for the prior stop, the
-[foundation receipts](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md) and
-[resource candidate](../../TestRuns/P1StrokeResourceControls_2026-10-07.md) for current qualification, and
-[host closure work](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md) for the next code and executable gates.
-The H3 history-index foundation has native qualification; the integrated lasso route now passes native analysis
-and full Release/Debug/real ASan correctness plus all three ARM64 cross-builds. Native lasso code is pushed
-as `451ec70`; complete production caller admission/retirement, ordinary activation and measured S5/G1 remain open. These scoped results do not close the P1 delivery gates.
+P1 implementation is **ACTIVE**. The current combined startup, long-path I/O and lasso retirement
+source is pushed as `67a77dd`; canonical analysis, full x64 Debug/Release/real ASan and ARM64
+Debug/Release/instrumented-ASan cross-builds pass.
+[X64 checkpoint](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md) and
+[completed ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+Native ARM64 runtime is unavailable. Complete production admission/retirement, ordinary activation,
+S5/H3/H4 and measured G1 remain open; P1 is WIP. See the current checklist at the beginning of
+[the P1 plan](UiNeverBlocks_2026-09-22.md). The next isolated Hue/Wand/hard-brush draft is unbuilt.
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under

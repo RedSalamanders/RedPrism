@@ -1,5 +1,12 @@
 # Bounded lasso input, display and completion (P1 / S5)
 
+Latest native qualification (2026-10-16): combined source `67a77dd` passes canonical analysis,
+full x64 Debug/Release/real ASan and all three ARM64 cross-builds. Main verifies original input,
+draft-display and all 50 retirement facts within the complete suites and checks every artifact.
+[Completed matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+Ordinary activation, complete consumer/admission/retirement, S5 and measured G1 remain open.
+The dated entries below preserve earlier steps and their limits.
+
 ## Delivery checklist
 
 Current combined native checkpoint (2026-10-16): canonical Release analysis r1034 and complete x64
