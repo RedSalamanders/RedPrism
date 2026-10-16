@@ -2,6 +2,11 @@
 
 ## Current delivery checklist
 
+- [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
+- [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
+- [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
+- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; the separate 339-source/144-stage caller is compiling.
+
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 - [x] Qualify the repaired shared engine under real ASan: all 22,296 assertions, 270 instrumented compiler records, its actual UAF control and 1,616-file archive independently pass; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 - [x] Commit/push the qualified shared engine and 68-control fixture as `06b3743` on `ej/p1-selection-gesture-prerequisites`, keeping the native matrix source unchanged.

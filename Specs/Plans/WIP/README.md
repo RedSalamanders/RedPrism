@@ -8,11 +8,15 @@ TMP/TEMP `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r10
 H10 transport freeze `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB` retains all 1,389 compiled/project/toolchain inputs unchanged.
 [Current native evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md). Native ARM64 runtime is unavailable.
 
-The isolated shared-engine candidate is pushed as `06b3743` on `ej/p1-selection-gesture-prerequisites`; the bounded prefix
+The isolated cached-admission candidate is pushed as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`; the bounded prefix
 passes 22,283 private Release/real-ASan assertions. The repaired shared engine Release qualifies
 68 family + 22,228 predecessor assertions (22,296 total); real ASan now independently qualifies the same full stream, 270 instrumented commands, actual UAF control and all 1,616 archive files.
 Private App R4 has build exit 0/ISA exit 0 for 339 sources; runtime remains due after native Release qualification:
 144 stages, 41 new controls and 71 inherited scalar checks. [Engine evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
+The newer cache-derived admission passes private Release and real ASan: 26 memory/large-source and
+12 metadata-only authority facts plus all 22,296 predecessors (22,334 total). Main verifies both full
+archives and exact artifacts; the new mask-fixture compiler failure remains retained. Its cached-admission
+actual caller is compiling but unrun; [admission evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
 Complete production caller bounds, remaining branches, native adoption, ordinary activation, H3/H4,
 measured G1 and P1 Done remain open. Follow the opening [P1 checklist](UiNeverBlocks_2026-09-22.md).
 
