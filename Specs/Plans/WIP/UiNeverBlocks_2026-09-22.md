@@ -70,6 +70,10 @@ source/roster rejection controls before this replacement build.
 - [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
 - [x] Qualify the private long-path I/O candidate: R7 actual real ASan passes C:/explicit-Z: with all 1,823 predecessors and 130 long-path facts (1,953 each), exact readback and verified archive.
 - [x] Qualify the selectively adopted native I/O code/tests with canonical analysis, full x64 profiles and ARM64 cross-builds.
+- [x] Reconcile the existing F6 native header-read migration: production yields its compute lane to the shared
+  event-wait route and retains the original ticket through acknowledgement. Main rereads all 184 actual
+  current-source path-read controls in archived Release/Debug/real-ASan outputs. The old compute-wait summary
+  described the direct reference helper; complete phase bounds, OS stop-to-return and F6/G1 remain open.
 - [ ] Finish the remaining F6 delivery cases; explicit TMP fixtures and the OS-selected predecessor root remain distinct.
 - [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
 - [x] Qualify the combined native startup/I/O integration on the complete current matrix.

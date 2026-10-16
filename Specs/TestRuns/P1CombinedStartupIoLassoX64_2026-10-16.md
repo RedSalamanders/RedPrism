@@ -1,7 +1,7 @@
 # P1 combined startup, long-path I/O and lasso retirement: native x64
 
 Date: 2026-10-16
-Status: PASS for the exact combined-source x64 correctness checkpoint. ARM64 cross-builds are in progress; ordinary activation, complete admission/retirement, performance and P1 Done remain open.
+Status: PASS for the exact combined-source x64 correctness checkpoint. All three ARM64 cross-builds also pass ([matrix](P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md)); ordinary activation, complete admission/retirement, performance and P1 Done remain open.
 
 ## Implementation
 
@@ -47,7 +47,7 @@ Earlier private failures and successful receipts remain retained: [long-path I/O
 
 ## Remaining qualification
 
-- ARM64 Debug r1042, Release r1043 and instrumented ASan r1044 are serial cross-builds in progress. No native ARM64 execution is claimed.
+- ARM64 Debug r1042, Release r1043 and instrumented ASan r1044 pass as recorded in the separate matrix. Native ARM64 runtime remains unavailable.
 - Complete production caller admission/retirement, ordinary activation, broader F6 clipboard/file cases and the original R1/W G1 targets remain open.
 - The private Hue and preserving-panel Wand candidates are unbuilt/unadopted at this checkpoint and have no native qualification.
 - This receipt establishes no RAW/Photoshop speed comparison and does not move P1 to Done.
@@ -55,3 +55,16 @@ Earlier private failures and successful receipts remain retained: [long-path I/O
 r1041-skills.log SHA-256: `56B97A223C140CC95065920380EE9999EB4BDDEFEA8D354EE1A321B7A520124D`.
 
 r1041-format.log SHA-256: `B588086FD7C7C1EAE274572603E5B2A4214ABEBCAAB9315A4C6E3692F687782A`.
+
+## Existing F6 header-read behavior reconciled
+
+Main rereads the archived Application stdout bound to each native profile report (r1035/r1036/r1041).
+All three retain `RunStandalonePathReadContinuationSelfTest`, its 150 path-read checks and 34 boundary
+checks with zero failures. The same one-worker test uses an independent compute job to provide bytes to
+a real pending native pipe read; it cannot finish if that read occupies the compute lane. Cancellation,
+premature and early readiness, replacement, original FIFO, exact nonwrapping read cycles and joined shutdown
+retain their original predicates. Source `ApplicationFileJobs.cpp` suspends the same original ticket on
+`PathReadWait`; native acknowledgement precedes resource reuse/retirement. The old resource summary saying
+the production header wait still occupied a compute lane was stale. Only the direct `ClassifyPathBatch`
+reference helper retains that wait. This reconciliation adds no runtime claim beyond the recorded matrix
+and closes neither complete phase bounds nor OS stop-to-return, F6 or G1.

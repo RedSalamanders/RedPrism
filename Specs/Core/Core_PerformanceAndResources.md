@@ -1078,9 +1078,13 @@ reused after each acknowledged read and released on the worker before completion
 whole request with `E_OUTOFMEMORY` and publishes no classifications; empty, invalid and pre-cancelled batches
 allocate no scratch. No large automatic or per-thread persistent buffer is required.
 Cancellation keeps the active request/reservation until acknowledgement, including a late
-Finished result. Stop callbacks perform only event signaling; synchronous attribute/open calls and the initial
-acknowledged header wait occur on a worker. The wait still occupies a compute lane and remains F6 work for
-shared event-pool migration. No timing guarantee for OS/driver calls is implied.
+Finished result. Stop callbacks perform only event signaling. Production `PathClassificationJob` yields its
+compute lane after native header issue and awaits the Application-owned `PathReadWait` on the scheduler's
+shared event-wait pool. Readiness resumes the same original ticket; actual `GetOverlappedResult` acknowledgement
+precedes reuse or retirement of its file, buffer and OVERLAPPED. Cancellation and joined shutdown preserve
+that ownership. The direct `ClassifyPathBatch` reference helper retains its synchronous worker wait.
+Attribute/open calls remain worker calls; no timing guarantee for OS/driver calls is implied. Complete phase
+admission and measured stop-to-return/G1 requirements remain separate.
 
 WIC decode/encode checkpoints bound pixel bands to 64 KiB or one wider row. Shared sparse rasters are read
 privately without `Data()` assembly, and output is published only when complete. Codec calls and external
