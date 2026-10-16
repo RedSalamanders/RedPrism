@@ -19,7 +19,8 @@
 
 The reviewed Hue, preserving-panel Wand, hard Paint parity, private direct-distortion read and post-Wand
 panel follow-through changes are selectively adopted into 43 code/test/project paths with their contracts
-and guide. Corrected-source runtime qualification is pending. Skills/format checks pass (15 skills,
+and guide. Corrected-source full Debug r1052 passes independent readback. The remaining six gates
+are running serially. Skills/format checks pass (15 skills,
 1,228 files); source-only comparator controls preserve all predecessor expectations.
 
 Canonical analysis r1045 passes on the earlier 35-path / 1,377-input integration: 1,794 archived files,
@@ -28,12 +29,18 @@ Main readback. Its coordinator then refuses the deliberately revoked next-dispat
 source remained unchanged until the archive and coordinator joined; r1046–r1051 were never launched.
 [Analysis and transition evidence](../../TestRuns/P1HueWandAnalysis_2026-10-16.md).
 
-The corrected-source sequence starts actual Debug r1052 at 12:49:16 UTC on its exact 1,380-input freeze,
-then runs analysis r1053, Release r1054, real ASan r1055 and ARM64 Debug r1056/Release r1057/instrumented
-ASan r1058 serially. The expected 945 compiler records, 21,863 Document facts, 142 Application stages,
-9,023 Host PASS records plus the Hue summary, 7,391 composition and 1,953 I/O records are source-derived
-expectations, not passing results. Every predecessor remains required. Ordinary activation and the nine
-delivery areas above remain open.
+Actual full Debug r1052 exits zero (12:49:16–13:34:56 UTC) on the exact 1,380-input freeze. Main verifies
+all 1,805 archived files, 945 compiler records, five executable/PDB identities and the complete runtime roster:
+21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus the Hue summary, 7,391 composition
+and 1,953 I/O records, including the new 28 CPU and 29 actual host follow-through facts. The first strict reader
+refuses a Release-only configuration witness in the historical expectation. A source-defined profile check
+then accepts the actual Debug witness and projects only that verified label; all other predecessors remain
+required. The original refusal is retained and no native retry or test/golden change is made.
+[Debug and verifier evidence](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
+
+A fresh coordinator continues with analysis r1053, Release r1054, real ASan r1055 and ARM64 Debug r1056 /
+Release r1057 / instrumented ASan r1058 serially on the unchanged source. These six results remain pending.
+Ordinary activation and the nine delivery areas above remain open.
 
 - [x] Identify the post-Wand panel rejection and retain the active analysis inputs unchanged.
 - [x] Review the 14-path correction: bind only the acknowledged panel/Wand selection for newly captured
@@ -41,7 +48,7 @@ delivery areas above remain open.
   panel, and retry a stale ready histogram only after original acknowledgement.
 - [x] Close and independently read the earlier static analysis, archive and intended next-dispatch refusal.
 - [x] Selectively adopt the correction and four owning contracts; skills, format and diff checks pass.
-- [ ] Run the independent CPU and actual hidden WARP host follow-through tests: both Wand sources,
+- [x] Run the independent CPU and actual hidden WARP host follow-through tests in full Debug r1052: both Wand sources,
   original-coverage preview/OK, Cancel/reopen, arbitrary-selection refusal and delayed histogram ownership.
 - [ ] Finish the exact corrected-source Debug/analysis/Release/real-ASan and ARM64 cross-build matrix.
 
