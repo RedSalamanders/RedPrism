@@ -5,7 +5,7 @@
 - [x] Implement and independently review the private descriptor-bounded intermediate-output primitive.
 - [x] Qualify 38 basic real-worker checks with all 22,033 predecessors in private Release.
 - [x] Qualify six additional saturated-slot controls and 23 bound selected-history checks: 22,100 total.
-- [ ] Qualify this extended candidate under real ASan, including its own detection probe and complete archive/artifact checks.
+- [x] Qualify this extended candidate under real ASan, including its own detection probe and complete archive/artifact checks.
 - [ ] Integrate physical selection press/Move/Up/Lost, no-op click, cancellation and full lifecycle on the original admitted parent.
 - [ ] Adopt reviewed code/tests and owning contracts, qualify native profiles and G1, then close the parent delivery gates.
 
@@ -64,6 +64,19 @@ Completion: `77C24048B5D1F94E4CCF715C6503CECE10B20B837B7606D849D7DA99BA1E8298`.
 Actual stdout: `76A02B4F4AB8C8D119E4F989C54285E48E4D089D71302EF35C32EE5AD36E9B8D`.
 [Extended qualification](../../.build/P1Drafts/S5IntermediatePublication-r3-Main/main-qualified.json).
 
-Fresh real-ASan CPU qualification is running against this same frozen private source. Its reader selects
-the existing exact ASan witness and preserves the complete actual stream, summaries and all 22,100 records.
-The ordinary physical host and full P1 exits remain due.
+## Extended real-ASan r1 qualified
+
+The private x64 ASan Debug `DocumentTests.exe` actual runtime exits 0 (PID 74292; 19:30:57.764240–19:34:26.298458 UTC).
+Its source-only reader checks all 67 new CPU assertions and all 22,033 predecessor assertions, 22,100 total,
+against the complete actual stream. The attempt has 265 actual instrumented compile records and 1,604 archived
+files. The dedicated real UAF detection probe is observed; source, dependency and product bookends pass, the
+existing ASan profile witness is unchanged, and the receipt reports zero ISA violations.
+
+Archive completion SHA-256: `C500A8BBDA4AB1D72D0158ACA28120610AE2073BF554FDD5319ED2542FD250F1`.
+Main qualification: [`main-qualified.json`](../../.build/P1Drafts/S5IntermediatePublicationAsan-r1-Main/main-qualified.json).
+This is private CPU-ASan evidence only: it does not establish native adoption, actual physical press/host behavior,
+ordinary activation, G1, P1 completion or native ARM64 runtime. The native matrix remains tracked separately.
+
+The private real-ASan CPU qualification above uses this same frozen source, preserves the existing exact ASan
+witness, and checks the complete actual stream and all 22,100 records. The ordinary physical host and full P1
+delivery gates remain due.

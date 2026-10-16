@@ -1037,7 +1037,7 @@ activated by this prerequisite. No ordinary activation, G1 or P1 Done claim foll
 
 The extended private Release proof now qualifies all 22,100 facts: 44 continuing-output checks, 23 bound-history
 checks and 22,033 predecessors. All 64 terminal slots are preclaimed before opening, a 65th is refused, and
-the original job still completes its useful terminal stage. Real ASan of the same source is running.
+the original job still completes its useful terminal stage. Real ASan of the same source independently qualifies all 22,100 facts, 265 instrumented compiler records, an actual UAF detection probe and all 1,604 archive files. The primitive remains private; actual physical dispatch and lifecycle qualification are due.
 [Detailed evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
 
 No-move physical Up needs an additional useful follow-up after End: Deselect for Marquee/Lasso, or the captured

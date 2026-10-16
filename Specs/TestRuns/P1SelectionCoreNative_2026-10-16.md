@@ -165,6 +165,33 @@ Completion: `E594F2479334251EE5694C5CF63A78678A8764E3779CE463E302AD61F27C1CFA`.
 Skills (15), format (1,241 files) and diff checks pass.
 
 Future archives use `.build/P1EvidenceArchives/2026-10-16/` on C: to avoid depending on Z: headroom.
-Real ASan r1075 is running on the same frozen source, followed serially by ARM64 Debug r1076 /
-Release r1077 / instrumented ASan r1078, Release analysis r1079 and complete Release r1080.
-No native ARM64 runtime, ordinary activation, complete P1 delivery or G1 is claimed.
+Real ASan r1075 is qualified on the same frozen source. ARM64 Debug r1076 has started through the
+`ClipboardPhaseNative-r5-Main` controller; ARM64 Release r1077, instrumented ASan r1078, Release analysis
+r1079 and complete Release r1080 remain pending. No native ARM64 runtime, ordinary activation, complete P1
+delivery or G1 is claimed.
+
+## Native real-ASan r1075 qualified
+
+The canonical x64 ASan Debug parent exits 0 (PID 96624; 19:04:08.113067–19:44:12.473715 UTC) on the same
+1,393-input source freeze `E5438956D876ED5E8122E454F239916E09FD67CCBFCA3CB571BFA323F901A693`. Main and the
+independent receipts agree on the actual exit, freeze, archive completion, 953 instrumented compile records,
+1,389 compiled/project/toolchain inputs, and 1,782 archived files. The independently compared PE/PDB receipts
+agree on all five exact executable/PDB hash pairs. Runtime counts are 22,010 Document records, 142 Application
+stages, 8,272 Application stdout assertions, 9,024 Host PASS records, 7,391 WARP records and 1,953 I/O records.
+
+The source-only ASan annotation adapter checks three positive and eight negative controls; its two ASan
+poison/unpoison assertions are retained in the existing full actual stream. The source-only recorded-brush
+callback adapter checks four positive and eight negative controls against that same stream, accounting for the
+four command acknowledgements legally interleaving with the recording-stage acknowledgements. Neither adapter repeats runtime.
+The two reader refusals are retained in the qualification receipt.
+
+Completion SHA-256: `D762C3FD62ABD67E3EF0A29149B37347113C2E9290C16166BF54F3C8EB3896A8`.
+Main qualification: [`r1075-main-qualified.json`](../../.build/P1Integration/LassoHost-r1-Main/r1075-main-qualified.json);
+independent roster, archive/artifact and PE/PDB receipts:
+[`roster`](../../.build/P1Integration/LassoHost-r1-Main/r1075-independent-roster.json),
+[`artifacts`](../../.build/P1Integration/LassoHost-r1-Main/r1075-independent-artifacts.json),
+[`PE/PDB identities`](../../.build/P1Integration/LassoHost-r1-Main/r1075-independent-pe-pdb.json).
+
+This records native x64 ASan test evidence for the frozen candidate. The separate private host/ownership
+changes remain unadopted; physical press routing, ordinary activation, G1, P1 Done and native ARM64 runtime remain open. ARM64 r1076–r1078, analysis r1079 and
+Release r1080 remain separate gates.
