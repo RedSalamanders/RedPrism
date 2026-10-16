@@ -63,8 +63,8 @@ source/roster rejection controls before this replacement build.
   stress, real probe, 932 instrumented command records, five binary/PDB pairs and the 1,747-file archive pass.
 - [ ] Finish ARM64 Debug/Release/instrumented-ASan cross-builds r1042-r1044 on the exact combined source.
   Each next profile waits for the prior complete archive and independent artifact/identity readers.
-- [ ] Commit/push the x64-qualified combined code, tests and contracts; record ARM64 separately when its
-  cross-build matrix completes. Neither checkpoint closes ordinary activation or performance gates.
+- [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
+  ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 
 Current private follow-up: the asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
 readback, fixed physical delta/Ctrl/ordinal buffering and a separate release/loss terminal. Actual host tests
