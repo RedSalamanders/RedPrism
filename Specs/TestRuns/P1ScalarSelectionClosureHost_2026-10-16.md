@@ -115,3 +115,25 @@ Fresh R4 runs that frozen diagnostic image without compilation and with no other
 suite active. It retains the original early-read assertion and every predecessor expectation. Its actual
 result remains pending; a passing repeat alone would not establish the cause of R2's failure. Native
 successful-publication gate validation waits for this private Application child to join before launching.
+
+## Serialized real-ASan R4 independently qualified
+
+The actual frozen diagnostic Application exits 0 (PID 10244; 18:33:19.760674–18:40:49.872492 UTC).
+All 71 stronger scalar-closure facts and all predecessor assertions pass over 143 stages. The deliberate
+unrelated clipboard read reports the intended real owner/reader, no returned handle, one unrelated-render
+callback, zero gated renders and a false worker-read flag. Its original negative assertion passes. This
+passing serialized repeat does not establish the cause of R2's retained failure.
+
+Main verifies the 39-file R4 archive and 34-file diagnostic-build archive, all source/dependency/product
+bookends, 336 exact instrumented command records and 335 unchanged original objects. Only the diagnostic
+fixture object was rebuilt. The full-stream reader passes twelve independent rejection controls; ISA has
+zero violations and the actual UAF probe is detected. Linked GUID `0C9EEAA9-08BC-4A32-ABA2-5E7CE1D244B4`, age 2;
+executable `8B0DB5E931D6FFB42BCF6E6BB920220BD5FA4109301ADD40B0A4F48BD015C42A`;
+PDB `669E770239833360F938FF779B97946B29CECA0FE734FB70450EC06105200FE8`.
+Completion: `388F372F0548F38659E919F946ACAC5A0F8B75B7604EECBF745B58857791F44D`.
+[Main qualification](../../.build/P1Drafts/S5ScalarCloseAsan-r4-Main/main-qualified.json).
+
+This qualifies the stronger private scalar host in Release and real ASan. Native adoption/contracts and
+actual physical-press routing remain due. The current native clipboard-phase repair is independent:
+canonical Debug r1074 precedes real ASan r1075, ARM64 r1076–r1078, Release analysis r1079 and full Release r1080.
+Native ARM64 runtime, ordinary activation, complete P1 delivery and G1 remain open.

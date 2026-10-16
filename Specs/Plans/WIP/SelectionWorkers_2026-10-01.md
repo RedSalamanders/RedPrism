@@ -1011,6 +1011,26 @@ qualify functionality only. Active-desktop measurement must separately satisfy t
 
 ## Next physical press integration requirement (2026-10-16)
 
-The Main draft `.build/P1Drafts/S5PressHost-r1-Main/Source/RedPrism/ApplicationSelectionPressOpeningJobs.cpp` performs exact worker containment and prepares either scalar Move opening or bounded Lasso opening under one original admission. It remains uncompiled and unactivated; owner declarations/dispatch, actual prefix replay, terminal/lifecycle behavior and caller tests are unfinished. Its ownership prerequisite privately passes 22,033 CPU Release facts; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
+The Main draft `.build/P1Drafts/S5PressHost-r1-Main/Source/RedPrism/ApplicationSelectionPressOpeningJobs.cpp` performs exact worker containment and prepares either scalar Move opening or bounded Lasso opening under one original admission. It remains uncompiled and unactivated; owner declarations/dispatch, actual prefix replay, terminal/lifecycle behavior and caller tests are unfinished. Its ownership prerequisite privately passes all 22,033 CPU Release and real-ASan facts; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
 
 Before activation, resolve closure when ordinal or memory capacity is exhausted. An admitted terminal must not depend on obtaining a new ordinal, fresh job slot or unreserved closing memory after the gesture has begun. Prefer retaining an originally admitted resumable parent through accepted input and terminal settlement, with event-driven owner rearming and existing lifecycle preflight. Prove exact Move/Up/Lost/overflow and queued-writer ordering, cancellation/rollback, no-op click, original output/temporary/weak-owner charges and joined Close. Do not add an owner translation/history fallback or silently roll back the reference pointer-loss End policy. Ctrl pixel lift, Wand and preserving-panel authorities remain separately required. The prototype's opening success alone closes none of those delivery gates.
+
+### Continuing-output ownership prerequisite
+
+The existing final-publication memory API transfers the entire original record admission and seals both
+output and temporary owners. Its contract permits only retirement after that transfer. Applying a gesture's
+opening with that API and then resuming useful closing work would violate the ownership contract.
+
+Main's private `S5IntermediatePublication-r1-Main` candidate introduces one explicit descriptor-bounded
+continuing output. It moves only that output's actual accounted envelope into the existing persistent
+endpoint, keeps the original ticket/FIFO/cancellation source and terminal slot, and supplies subsequent worker
+stages only the originally admitted remainder. It performs no query, allocation, admission or early global
+refund at transfer. The complete operation cannot grow its admission. The output seals independently;
+remaining temporary/terminal owners stay available until their final acknowledgement or joined Close.
+Default descriptors and final-publication APIs keep their existing behavior.
+
+The candidate is unadopted and under private CPU qualification with 38 source-derived controls for real
+resumed useful work, exact memory partitions, descriptor/ticket/bounds/repeat/growth refusal, failure,
+cancellation, joined Close and last weak-control refunds. It must also prove terminal-slot pressure, source
+history/geometry ownership and the full physical host before use. The older press-opening prototype is not
+activated by this prerequisite. No ordinary activation, G1 or P1 Done claim follows from a private proof.
