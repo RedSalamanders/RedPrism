@@ -4,18 +4,18 @@
 
 - [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
 - [x] Independently qualify full Debug r1052 for the newer 43-path Hue/Wand/Paint/distortion/follow-through integration, including 28 new CPU and 29 actual host follow-through facts; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
-- [ ] Finish current-source analysis r1053, full Release r1054 / real ASan r1055, and ARM64 Debug r1056 / Release r1057 / instrumented ASan r1058. These are serial actual gates, with original archives retained.
-- [x] Implement isolated S5 scalar outline translation, exact cancellable hit work, worker-prepared Begin/End/Cancel, and reset/swap handling; preserve numeric APIs as references. This candidate is private and not adopted.
-- [x] Review delegated literal tests, correct optional conversion/unused-local and checkpoint/identity fixture issues, and add prepared-opening and mid-traversal cancellation scenarios before compilation.
-- [x] Qualify focused private CPU r2: actual Release rebuild, 21,988 assertions, unchanged predecessors, 261 compiler records, ISA, PE/PDB and all 1,845 archive files pass Main readback. Original r1 fixture compile failure and its 1,815-file archive stay retained; [evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
-- [ ] Qualify the selected translated-output geometry/weak-control lifetime extension: fresh private r3 adds 21 assertions (22,009 expected total), then complete host integration and native profiles. Its first Release build is running; the native checkout remains unchanged.
-- [ ] Complete original-gesture admission and ordered physical-prefix replay, all outside-hit/Wand/pixel-lift branches, preserving-panel authority, cursor/display consumers and worker settlement. The bounded press-input header remains isolated and unintegrated.
-- [ ] Prove complete phase/retirement bounds and exact view/DPI/device behavior; qualify actual host/lifecycle/error scenarios and ordinary activation.
+- [ ] Freshly validate Main's combined source and fixture heap repairs: r1053 analysis failed C6262 (Application frame 16,464 bytes; Clipboard frame 131,752 bytes); Release r1054, real ASan r1055, and ARM64 Debug/Release/instrumented-ASan r1056–r1058 were not launched. The failed attempt remains preserved; none of these gates is passed.
+- [x] Qualify the isolated private S5 core in Release and real ASan: 146 new assertions plus all 21,863 predecessors (22,009 total), with actual compiler, ISA, PE/PDB, archive and sanitizer-probe readback; [evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
+- [x] Reproduce and retain the collapsed finite-offset hit-parity failure: exactly one new predicate fails while all 22,009 prior records pass; independently qualify the corrected private Release and real-ASan candidates with 147 new assertions plus all 21,863 predecessors (22,010 total). Keep the before/after archives and the original failure.
+- [x] Qualify private scalar outline translation, prepared opening/closure/publication, exact cancellable hit work, bounded physical-press-prefix capture, and selected translated-output geometry/weak-control lifetime. Main adopts the reviewed core in 29 paths with the fixture repairs; canonical analysis r1059 is running. Actual host dispatch remains unwired and fresh native qualification is due.
+- [ ] Integrate and validate original-gesture admission, physical-prefix replay, overlapping writers and all outside-hit/Wand/pixel-lift branches, preserving-panel authority, cursor/display consumers, worker settlement, and actual host/lifecycle/error paths.
+- [ ] Prove complete phase/retirement bounds and exact view/DPI/device behavior; qualify ordinary activation and required native profiles after the fresh combined-source matrix.
 - [ ] Close specified G1 measurements and remaining parent gates before P1 Done.
 
 `OwnerWorkMultiplexer` now has eleven qualified leaves. The historical ten-leaf/private-host descriptions
 below describe earlier snapshots. The complete startup/lasso host has since qualified; complete S5 delivery,
-ordinary activation and measured G1 remain open. Native ARM64 runtime remains unavailable.
+ordinary activation and measured G1 remain open. Native ARM64 runtime remains unavailable. The private S5 receipts
+above do not establish native adoption, ordinary host activation, native ARM64 runtime, G1 or P1 Done.
 
 ## Historical continuation notes (through 2026-10-12)
 

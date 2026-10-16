@@ -17,40 +17,37 @@
 
 ### Current integration under validation
 
-The reviewed Hue, preserving-panel Wand, hard Paint parity, private direct-distortion read and post-Wand
-panel follow-through changes are selectively adopted into 43 code/test/project paths with their contracts
-and guide. Corrected-source full Debug r1052 passes independent readback. The remaining six gates
-are running serially. Skills/format checks pass (15 skills,
-1,228 files); source-only comparator controls preserve all predecessor expectations.
+The newer Hue, preserving-panel Wand, hard Paint parity, direct-distortion read and panel follow-through
+integration passes full Debug r1052: 21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus
+Hue summary, 7,391 composition and 1,953 I/O records. Main verifies its 1,805-file archive, 945 actual compiler
+records and five executable/PDB identities. [Debug evidence](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
 
-Canonical analysis r1045 passes on the earlier 35-path / 1,377-input integration: 1,794 archived files,
-943 actual compiler records, five image/PDB pairs, SAL controls and eight scanner rejection controls pass
-Main readback. Its coordinator then refuses the deliberately revoked next-dispatch marker. The active
-source remained unchanged until the archive and coordinator joined; r1046–r1051 were never launched.
-[Analysis and transition evidence](../../TestRuns/P1HueWandAnalysis_2026-10-16.md).
+The following native analysis r1053 fails on two C6262 test fixture stack frames. Main verifies all 1,780 failed
+archive files and preserves the actual diagnostics; r1054–r1058 were never launched. The repair heap-owns the
+large fixture sessions and preserves every test expression/label after reversing only ownership edits. Warning
+limits, goldens, dependency pins and ISA policy are unchanged.
+[Failure and repair evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md).
 
-Actual full Debug r1052 exits zero (12:49:16–13:34:56 UTC) on the exact 1,380-input freeze. Main verifies
-all 1,805 archived files, 945 compiler records, five executable/PDB identities and the complete runtime roster:
-21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus the Hue summary, 7,391 composition
-and 1,953 I/O records, including the new 28 CPU and 29 actual host follow-through facts. The first strict reader
-refuses a Release-only configuration witness in the historical expectation. A source-defined profile check
-then accepts the actual Debug witness and projects only that verified label; all other predecessors remain
-required. The original refusal is retained and no native retry or test/golden change is made.
-[Debug and verifier evidence](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
+Private S5 Release and real ASan now pass all 22,010 assertions (21,863 predecessors plus 147 new facts).
+This includes scalar movement, prepared opening/closure, exact cancellable containment, bounded physical input
+and translated geometry/weak-control lifetime. A controlled finite-offset parity failure is preserved before
+the correction; all other 22,009 records pass in that failing run.
+[Private model evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
 
-A fresh coordinator continues with analysis r1053, Release r1054, real ASan r1055 and ARM64 Debug r1056 /
-Release r1057 / instrumented ASan r1058 serially on the unchanged source. These six results remain pending.
-Ordinary activation and the nine delivery areas above remain open.
+Main adopts the reviewed S5 core together with the fixture repairs in 29 code/test/project paths and updates
+three owning contracts. Skills (15), format (1,241 files) and diff checks pass. Fresh canonical analysis r1059
+is running on an exact 1,393-input freeze with two build workers. It reports a missing shared translation
+link dependency in subset projects; Main prepares a shared-geometry-TU extraction while preserving active inputs.
+Complete x64 Debug/Release/real ASan and all
+ARM64 cross-builds are due on that same source. The actual selection-press host route remains unwired;
+ordinary activation and the nine delivery areas above remain open.
 
-- [x] Identify the post-Wand panel rejection and retain the active analysis inputs unchanged.
-- [x] Review the 14-path correction: bind only the acknowledged panel/Wand selection for newly captured
-  work, retain original public opening coverage/token state, refuse older results without closing a valid
-  panel, and retry a stale ready histogram only after original acknowledgement.
-- [x] Close and independently read the earlier static analysis, archive and intended next-dispatch refusal.
-- [x] Selectively adopt the correction and four owning contracts; skills, format and diff checks pass.
-- [x] Run the independent CPU and actual hidden WARP host follow-through tests in full Debug r1052: both Wand sources,
-  original-coverage preview/OK, Cancel/reopen, arbitrary-selection refusal and delayed histogram ownership.
-- [ ] Finish the exact corrected-source Debug/analysis/Release/real-ASan and ARM64 cross-build matrix.
+- [x] Qualify the original full Debug r1052 and retain its complete predecessor/delta evidence.
+- [x] Preserve and independently read failed native analysis r1053; stop all later gates.
+- [x] Independently qualify private S5 Release/real-ASan, including the retained failed parity predicate.
+- [x] Adopt the reviewed model core and assertion-preserving stack repairs; reconcile owning contracts.
+- [ ] Finish fresh exact-source analysis r1059, full x64 profiles and ARM64 cross-builds.
+- [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
 
 ### Latest qualified checkpoint
 

@@ -1,7 +1,43 @@
 # P1 deferred selection core — private CPU Release qualification
 
-Date: 2026-10-16. Scope: isolated S5 core and descriptor tests. **Not adopted into the native checkout**;
-no Application/GPU/ordinary-activation, full phase-bound, performance/G1 or P1 Done claim.
+Date: 2026-10-16. Scope: isolated S5 core and descriptor tests. **All results below are private CPU qualification;
+none is adopted into the native checkout.** No actual Application route, GPU route, ordinary activation, complete
+phase-bound, performance/G1, native ARM64 runtime, or P1 Done claim follows.
+
+## Latest private qualification state (2026-10-16)
+
+- `.build/P1Drafts/S5CoreQualification-r3-Main/main-qualified.json` independently qualifies the private x64
+  Release candidate: 146 new assertions plus all 21,863 predecessors (22,009 total), exact source roster,
+  262 compiler records, ISA and PE/PDB checks, and all 1,848 archived files. Archive completion SHA-256:
+  `EB96EDCE41202B2E688DEC5D6847E770E580500572E1F8D21D9E603E1BD5B4F4`.
+- `.build/P1Drafts/S5CoreAsan-r1-Main/main-qualified.json` qualifies the corresponding private x64 ASan Debug
+  candidate with the same 22,009 assertions and a real ASan detection probe. The expected negative probe exits 1
+  and its diagnostic hash is recorded in the receipt; this is not full-application ASan qualification. Archive
+  completion SHA-256: `76D07B9DE369EF2108C279FD14EFD7E1DC4905E9602A09E1BEF48A5F241A5266`.
+- `.build/P1Drafts/S5CollapsedHitBefore-r1-Main/main-reproduced.json` retains the controlled pre-fix failure:
+  exactly `deferred-selection-move.collapsed-finite-offset-extent-is-not-movable-like-numeric-reference` fails;
+  all other 22,009 records pass. Its 1,846-file archive is verified, completion SHA-256
+  `384F5C1FB66947E1F48EE09D3EC38B0F38B10C3B3384EDBDECBC918C3DAD387D`.
+- `.build/P1Drafts/S5CollapsedHitAfter-r1-Main/main-qualified.json` qualifies the corrected private Release
+  candidate with 147 new assertions plus all 21,863 predecessors (22,010 total), while retaining the pre-fix
+  failure and its evidence. The 1,850-file archive is verified, completion SHA-256
+  `B5AA5B26825FE40DD38C43027610AF2CB7C5F2CB5772A9AE7F0F8669F37B2E95`.
+- `.build/P1Drafts/S5CollapsedHitAsan-r2-Main/main-qualified.json` qualifies the corrected private real-ASan
+  candidate with all 22,010 assertions and a real negative use-after-free probe (expected exit 1). The 1,857-file
+  archive is verified, completion SHA-256
+  `38D605DFA39D938146621C89464046B5718472231F56D18E33B932269A2CD26C`.
+
+The private CPU results cover scalar outline movement; prepared opening, closure and publication; exact
+cancellable hit traversal; bounded physical-press-prefix capture; selected translated-output geometry and weak
+control lifetime. The bounded physical prefix and all other S5 pieces remain unwired to actual host dispatch.
+Preserve every earlier failure and its archive; these receipts establish isolated candidate behavior only.
+
+Native integration remains pending. Analysis r1053 failed on C6262 (Application frame 16,464 bytes; Clipboard
+frame 131,752 bytes). Native Release r1054, real ASan r1055, and ARM64 Debug/Release/instrumented-ASan r1056–r1058
+were not launched. Main subsequently adopts 29 reviewed source/test/project paths with three owning contracts; fresh canonical
+analysis r1059 is running on 1,393 inputs. The private receipts establish no fresh-matrix pass. Ordinary host activation, native ARM64
+runtime, G1 and P1 Done remain open.
+
 
 ## Implementation and checks
 
@@ -61,8 +97,7 @@ Failed manifest: `64443C7ECD371441CE8E2C57EEA597675F335162EE4CA9D2B656C92EF28BE3
 ## Remaining S5 work
 
 Original-gesture reservation and physical-prefix host integration, all branch/close/display/cursor consumers,
-preserving-panel authority, view/device correctness and complete operation bounds remain open. A fresh r3
-candidate extends selected translated-output ownership to the existing deferred geometry node and weak-control
-lifetime, adding 21 independent ownership assertions; its Release validation is running and is not yet qualified.
-The native checkout stays frozen on the separately Debug-qualified `7b0eeb1` source while its remaining
-analysis/Release/real-ASan/ARM64 gates continue. Private Release success does not replace those gates.
+preserving-panel authority, view/device correctness and complete operation bounds remain open. The private r3
+selected translated-output geometry and weak-control lifetime extension is now qualified in Release and real
+ASan, including the corrected collapsed-finite-offset hit-parity case; see the receipts above. The actual host
+route remains unwired. Main adopts the reviewed core and fixture heap repairs; the fresh combined-source native matrix remains due. Ordinary activation, native ARM64 runtime, complete phase bounds and G1 remain unqualified.
