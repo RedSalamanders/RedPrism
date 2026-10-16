@@ -2,6 +2,9 @@
 
 ## Current delivery checklist
 
+- [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
+- [ ] Qualify that repaired engine under real ASan and the actual Win32 caller (41 new controls plus 71 inherited scalar checks, 144 stages); production bounds, remaining branches, native adoption and measured G1 remain due.
+
 - [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
 - [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
 - [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. The isolated 338-source application draft is compiling; runtime is serialized after native Release qualification.
