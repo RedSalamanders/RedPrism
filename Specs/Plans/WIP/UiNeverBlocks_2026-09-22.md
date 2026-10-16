@@ -41,8 +41,9 @@ verifies all 1,821 copied evidence/input files and preserves the failed run. r10
 
 The shared builder now lives in the geometry TU compiled by all five images. The exact capacity predicate is
 proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 passes on the repaired 1,393-input freeze: 1,810 copied archive inputs/evidence,
-953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 is running;
-Debug r1068, real ASan r1069 and ARM64 r1070–r1072 remain due.
+953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 also qualifies
+22,010 Document facts, 142 Application stages and its complete archive/953 compiler records/five image-PDB pairs.
+Debug r1068 is running; real ASan r1069 and ARM64 r1070–r1072 remain due.
 The private actual-host scalar closure now qualifies 71 stronger facts and every predecessor Application
 assertion in 143 stages (R8). Main verifies 2,006 archived copies, 336 frozen objects, exact PE/PDB identity,
 zero ISA violations, worker allocation and final zero reserved/releasing bytes. Its isolated real-ASan host
@@ -58,7 +59,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify fresh exact-source analysis r1066 and independently review its complete archive/artifacts.
 - [x] Qualify private scalar closure on the actual two-worker/WARP host, including worker allocation, original-ticket retention, final refunds and all predecessor Application assertions.
 - [ ] Qualify the stronger private host under real ASan, then adopt its reviewed production/test changes with owning contracts.
-- [ ] Finish full x64 Release/Debug/real ASan and ARM64 cross-builds on that same source.
+- [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
+- [ ] Finish full x64 Debug/real ASan and ARM64 cross-builds on that same source.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
 
 ### Latest qualified checkpoint

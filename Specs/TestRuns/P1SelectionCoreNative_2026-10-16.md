@@ -10,7 +10,8 @@ Status: native qualification in progress; P1 remains WIP.
 - [x] Reconcile three owning contracts; 15 skills, 1,241 formatted files and diff checks pass.
 - [x] Preserve and independently read failed r1059; apply shared-helper and equivalent capacity-proof repairs.
 - [x] Qualify fresh canonical Release analysis r1066: all linked images, compiler records, complete archive and independent checks pass.
-- [ ] Finish full x64 Debug/Release/real-ASan and ARM64 Debug/Release/instrumented-ASan cross-builds.
+- [x] Qualify full native Release r1067 on the same source, with all 22,010 Document facts and 142 Application stages.
+- [ ] Finish full x64 Debug/real-ASan and ARM64 Debug/Release/instrumented-ASan cross-builds.
 - [ ] Independently read actual results, complete archives, compile records and five PE/PDB pairs per profile.
 
 ## Failed predecessor retained
@@ -105,3 +106,9 @@ Actual stderr is empty. Archive:
 Fresh full Release r1067 starts at 16:57:18.870258 UTC on that same source freeze. Debug r1068, real ASan r1069
 and ARM64 r1070–r1072 remain pending. This analysis checkpoint qualifies compilation and static/linked checks;
 it does not substitute for the runtime or remaining P1 delivery gates.
+
+## Full native Release r1067 qualified
+
+The canonical test parent exits 0, PID 51300, 16:57:18.870258–17:21:28.993496 UTC, on the same 1,393-input freeze. Main independently reads all 1,798 archive copies and the source/evidence/completion manifests; the retained compiler and profile readers verify 953 actual compiler records, 1,389 compiled/project/toolchain inputs and all five exact executable/PDB pairs. Runtime retains 22,010 Document assertions, 142 Application stages, 9,023 Host PASS records plus the Hue summary, 7,391 composition and 1,953 I/O facts.
+
+Completion: `A717705914B94C13AAD87745C5AC3C23153CDA876ABA3ABA86EDAD0FA7CB8E89`. Actual stdout: `E6D165B5CE9B68424716C376BCF4E985AC8A47712E91F30D9F55D7D18DCB9F7E`; stderr: `BEA23A660A3F34C4CC4776B9AB4CD42BE9C6036F93523E8AB1D8652CF4D5648D`. Main receipt: [`r1067-main-qualified.json`](../../.build/P1Integration/LassoHost-r1-Main/r1067-main-qualified.json). Debug r1068 is running; real ASan r1069 and ARM64 r1070–r1072 remain due. Physical press routing, ordinary activation and G1 are separate open gates.
