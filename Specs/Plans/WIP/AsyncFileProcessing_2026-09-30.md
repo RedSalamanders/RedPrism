@@ -114,6 +114,10 @@ Current step (2026-10-10): cancellation/display repair `c9fd72d` is committed/pu
   - [x] F6a — Directory rotation/rollback/cleanup faults, backup-only retry recovery and truthful publication/errors; 24 injected/real filesystem checks and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Cleanup allocates its bounded scratch before staging and never follows reparse targets. Intermittent real save cause, flush/close faults and overall F6 remain open.
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
+    - [x] Recover the two original failed logs and independently verify exact readback hashes
+      ([evidence](../../TestRuns/P1HistoricalSaveFailures_2026-10-16.md)). Neither contains the native error
+      needed to establish cause. The separate outline-fixture/v7 failures and error-5 observations are not
+      substituted for them; the parent cause investigation remains open.
 
     Selection r2 qualification passes Debug/Release, then ASan fails one `destination-retry.baseline` initial
     fixture save. Its complete 423-input/image/log snapshot is preserved under
