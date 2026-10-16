@@ -2,15 +2,18 @@
 
 ## Current delivery checklist
 
-Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 independently pass the
-integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
-records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
-Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile
-commands are instrumented and the actual heap-use-after-free probe passes. The x64-qualified code/tests
-are committed and pushed as `451ec70`. ARM64 Debug r1031, Release r1032 and instrumented ASan r1033
-independently pass with the same compiled inputs and verified binary/PDB identities. Complete admission/retirement, ordinary
-activation and measured S5/G1 remain open; original failures/readers remain retained.
-[Current native evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
+Latest native checkpoint (2026-10-16): combined startup, long-path I/O and lasso retirement sources pass
+canonical Release analysis r1034 and complete x64 Release r1035 / Debug r1036. Both runtime profiles retain
+all 139 Application stages, 21,720 DocumentTests, 7,391 composition and 1,953 I/O records. Main verifies their
+archives, 932 actual compiler command records per profile and all five binary/PDB identities. These latest
+combined code/test changes are not yet committed; `eb7bcee` is the last pushed evidence checkpoint.
+
+ASan r1037 was interrupted during compilation on October 14: no completed child receipt exists and no test
+or compiler process remains. Its partial source/object/product evidence is being preserved without an
+inferred exit or success. Fresh full x64 ASan r1041 and ARM64 Debug/Release/instrumented-ASan cross-builds
+r1042-r1044 run serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
+Complete caller admission/retirement, ordinary activation and measured S5/G1 remain open. P1 is not Done.
+The earlier six-profile lasso checkpoint remains [historical evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
 
 Next code checkpoints (2026-10-14):
 
@@ -46,7 +49,25 @@ source/roster rejection controls before this replacement build.
 - [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
 - [ ] Qualify the combined native startup/I/O integration, then complete production caller admission/retirement and ordinary activation.
 - [x] Qualify private draft-specific retirement refusal/retry and joined Close: R10 actual WARP verifies all 50 controller facts/7,391 composition records; the 1,707-file archive passes. Original failed predicate is preserved with the corrected fair two-pass fixture setup.
-- [ ] Qualify the combined native I/O/startup/retirement integration: canonical Release analysis r1034 is running on frozen source; full profiles follow its independent acceptance.
+- [x] Qualify combined-source canonical Release analysis r1034: all 1,360 frozen inputs, SAL controls,
+  five linked ISA scans and eight scan rejection controls pass; Main verifies the 1,775-file archive
+  (`B57A0B8802205F63906F5B3823A9A0421E866D1DD42FF1050F8636734F654CB8`).
+- [x] Qualify full x64 Release r1035 on that same source: 139 application stages, 21,720 document,
+  7,391 composition and 1,953 I/O records pass; Main verifies all 932 actual compiler commands,
+  five binary/PDB pairs and the 1,763-file archive (`0F5DF9ED...`).
+- [x] Qualify full x64 Debug r1036 on the same source: exact predecessor/delta rosters, all 932 actual
+  compiler commands, five binary/PDB pairs and the 1,783-file archive independently pass (`895332FF...`).
+- [ ] Finish fresh combined native validation: full real ASan r1041 and ARM64 cross-builds r1042-r1044,
+  after preserving interrupted r1037. Each next profile waits for the prior archive and independent readers.
+- [ ] Record the complete combined-source checkpoint and commit/push its code, tests and contracts after
+  the remaining profiles qualify; this checkpoint does not close ordinary activation or performance gates.
+
+Current private follow-up: the asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
+readback, fixed physical delta/Ctrl/ordinal buffering and a separate release/loss terminal. Actual host tests
+cover literal hue/band values, idle-to-live replay, failed workers, stale document/panel openings and original
+cancellation acknowledgement. Main verified the agent's stale-opening finding and added exact cleanup and
+re-use coverage. These sources and tests are unbuilt, unadopted and disabled; production activation,
+complete caller admission/device/shutdown coverage and G1 remain open.
 
 Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
 assertions and all 138 application stages, with unchanged source/product bookends and complete archives.

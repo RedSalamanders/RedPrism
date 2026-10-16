@@ -22,6 +22,14 @@
   - [ ] Migrate Hue/Saturation range sampling and targeted adjustment: `AdjustPointer` still calls `WandComposite` synchronously on each eligible press. Capture the committed-document read authority, edit opening, sampled operation and physical point; use admitted region readback and scalar hue application. Preserve the original composite without panel/stroke preview, near-neutral/transparent refusal and all legacy band/targeting numbers.
   - [ ] Preserve targeted-drag input while its initial readback waits: bounded physical samples retain view delta, modifier, event ordinal and the separate terminal; replay after current-only publication through the existing continuation source, ahead of physically younger commands. Allocation/queue/counter refusal must retain accepted input and preserve the original panel; no synchronous readback fallback.
   - [ ] Remove the guarded production Wand fallback only after proving its exact transaction/prerequisite behavior. The current fallback is reached when the mode is beyond Subtract or history-restore authority is unavailable; it can synchronously run selection geometry and, for All Layers, composite readback. Invalid mode is a local refusal; supported live contexts need ordered worker settlement with exact cancellation/history semantics.
+    - [ ] Preserve an unarmed adjustment panel through layer/composite Wand; generic queue settlement
+      currently commits it and cannot replace this live-context behavior. Add a typed preserving authority
+      and stage route, plus actual press/zero-offset-release tests for New/Add/Subtract, unchanged panel
+      opening/captured selection/settings and original committed pixels.
+    - [ ] Qualify named outer-history Wand without closing its original depth/title, ordinary transform
+      tool settlement and physical brush/warp/pixel/lasso ownership refusal/terminal ordering. Open history
+      alone is not the synchronous fallback trigger. Invalid modes refuse before any source or readback.
+
   - [x] Qualify Merge and adjustment-opening continuations, worker crop/thumbnail, cancellation and exact apply tokens.
   - [x] Migrate PNG/JPEG export with detached CPU encoding and qualify bounded Map-busy recovery, later-tile failure and actual hardware/WARP measurements ([evidence](../../TestRuns/ProjectWriters_2026-10-01.md)).
   - [ ] Migrate clipboard, wand, clone and sampler consumers.
@@ -29,10 +37,21 @@
       utility ownership before encoding and prevents device replacement from replaying completed pixels.
       All six native profiles qualify ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). Wand/clone/sampler
       and remaining live-input/device/measurement scenarios stay open.
+- [ ] Qualify the private Hue caller/core/input and actual-host tests, selectively integrate them with the
+  latest I/O/startup native source, then prove ordinary activation and measured costs. Prepared source is
+  disabled and unbuilt; the exact stale-opening cleanup and hidden-card cancellation controls require runtime.
 - [ ] P1.3f — Prove hidden completion, cancellation, stale generation, device loss, saturation and shutdown with owned event gates.
 - [ ] P1.3f — Complete caller qualification and real-loop measurements; reconcile domain specs and commit/push each slice.
   - [x] Utility/Merge/opening slice: all x64 gates and ARM64 cross-builds pass; specifications and evidence reconciled.
 - [ ] Move this plan to Done after all P1.3 callers and validation are complete.
+
+Current implementation follow-up (2026-10-16, unqualified): Main has an isolated panel-preserving Wand
+caller candidate. Physical intent retains an opaque panel opening/settings witness through older FIFO work;
+the admitted original job separately binds complete source authority. The typed zero-offset outline follow-up
+keeps its original ordinal and selects layer/composite work after worker closure. Global history-restore
+exclusions remain strict. Thirty actual-pointer scenarios and separate scalar-authority controls are prepared;
+actual build/runtime, cancellation/failure/admission/device coverage and selective native integration are due.
+The new sources are not adopted or enabled in the native checkout by this preparation.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.3.
 Owners: `Application`, `JobScheduler`, `GpuWorkQueue`, `GpuCapabilities`, utility composition and their tests.
