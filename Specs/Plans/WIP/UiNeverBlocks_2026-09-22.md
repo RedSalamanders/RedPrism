@@ -61,7 +61,10 @@ source/roster rejection controls before this replacement build.
   compiler commands, five binary/PDB pairs and the 1,783-file archive independently pass (`895332FF...`).
 - [x] Qualify fresh full real ASan r1041 after preserving interrupted r1037: all original suites/stages,
   stress, real probe, 932 instrumented command records, five binary/PDB pairs and the 1,747-file archive pass.
-- [ ] Finish ARM64 Debug/Release/instrumented-ASan cross-builds r1042-r1044 on the exact combined source.
+- [x] Qualify ARM64 Debug r1042 on the same combined repository inputs: complete build, source/archive
+  readback, actual compile commands and five ARM64 executable/PDB identities pass; no native execution.
+  [ARM64 Debug evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Debug_2026-10-16.md).
+- [ ] Finish ARM64 Release/instrumented-ASan cross-builds r1043-r1044 on the exact combined source.
   Each next profile waits for the prior complete archive and independent artifact/identity readers.
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
