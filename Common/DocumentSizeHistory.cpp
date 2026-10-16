@@ -38,6 +38,7 @@ bool DocumentSession::ApplyPreparedDocumentSizeIfCurrent(PreparedDocumentSize& p
     std::swap(_lassoDraft, prepared._retiredLasso);
     InvalidateLassoPendingIntents();
     std::swap(_selectionMoveOrigin, prepared._retiredSelectionMove);
+    _selectionMoveOffset.reset();
     NoteDocumentMutation();
     return true;
 }

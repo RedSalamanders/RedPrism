@@ -295,6 +295,18 @@ last semantic owner on a joined worker before the owner can refund. All existing
 required. These controls qualify CPU metadata/accounting only; display consumers, normal activation and G1 are
 separate gates. See [the exact-source record](../TestRuns/P1RasterPreview_2026-10-08.md).
 
+### Deferred selection movement model
+
+The document runner requires 147 additional ordered assertions: 57 `deferred-selection-move`, 32
+`selection-hit-work`, 37 `selection-press-input` and 21 `selection-move-lifetime` facts. Literal geometry
+and the independent numeric reference cover opening/closure, rounding, cancellation, no-op history and stale
+refusal. The finite `DBL_MAX` offset whose rounded bounds collapse is required to be nonmovable, matching the
+materialized reference. Hit tests cover segment boundaries, holes, large coordinates and cancellation in both
+empty-loop and edge traversal. Physical-prefix tests cover exact event-time values, capacity loss, terminal
+ownership and ordinal exhaustion. Real worker threads prove deferred geometry destruction and final weak
+control retention. All predecessor goldens remain required. Private Release/real-ASan success qualifies these
+model tests only; full native integration, actual Application routes, ordinary activation and G1 are separate.
+
 ### Selection outline source and mapped cache
 
 `DocumentTests` runs 37 `selectiondisplayvalue.*` controls. Independent literal loops require separate rounded

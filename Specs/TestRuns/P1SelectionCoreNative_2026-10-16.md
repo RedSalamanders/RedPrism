@@ -9,7 +9,7 @@ Status: native qualification in progress; P1 remains WIP.
 - [x] Adopt private-qualified S5 model and fixture repairs in 29 code/test/project paths.
 - [x] Reconcile three owning contracts; 15 skills, 1,241 formatted files and diff checks pass.
 - [x] Preserve and independently read failed r1059; apply shared-helper and equivalent capacity-proof repairs.
-- [ ] Finish fresh canonical Release analysis r1066 on the repaired exact source.
+- [x] Qualify fresh canonical Release analysis r1066: all linked images, compiler records, complete archive and independent checks pass.
 - [ ] Finish full x64 Debug/Release/real-ASan and ARM64 Debug/Release/instrumented-ASan cross-builds.
 - [ ] Independently read actual results, complete archives, compile records and five PE/PDB pairs per profile.
 
@@ -87,3 +87,21 @@ After analysis and independent archive/readback pass, the serial plan is Release
 real ASan r1069, then ARM64 Debug r1070 / Release r1071 / instrumented ASan r1072. These results remain due.
 A separate private actual-host scalar closure lifetime implementation and ten-case/71-fact fixture are being
 compiled. They are not adopted and do not activate the physical-press route or qualify native delivery.
+
+## Canonical analysis r1066 qualified
+
+Actual analysis exits zero, PID 91008, 16:16:09.720813–16:56:46.461262 UTC. Main reviews independently verified
+1,810 copied inputs/evidence, the source bookend, all 953 actual compiler records, all 1,389 compiled/project/
+toolchain inputs, five linked zero-violation ISA reports, eight negative scan controls, SAL controls and five
+matching full executable/PDB pairs. Both earlier analysis failures remain retained.
+
+Source manifest: `AF64CD26830B47E200B63DEEEE406C7A1A4AB756A5CCA77BF1C2B2E34F8EE4B4`.
+Evidence manifest: `EB0C9499D8FFCEDDEC887BBB8C9C90482BBFBD25C628F36B0FFBACFC19B87F5E`.
+Completion: `8308062428B789236B4E2BBE670B9C252C5C10F2ED9ADB80E8A35AAEE77E9817`.
+Actual stdout: `6F9936AB70B65B27697BA9D3B378F89FAC5DD1C2B57A12ACEA023368CA89A7D7`.
+Actual stderr is empty. Archive:
+`Z:\CodexArtifacts\RedPrism-P1\2026-10-12\P1-SelectionCore-x64-Release-r1066-passed-20261016`.
+
+Fresh full Release r1067 starts at 16:57:18.870258 UTC on that same source freeze. Debug r1068, real ASan r1069
+and ARM64 r1070–r1072 remain pending. This analysis checkpoint qualifies compilation and static/linked checks;
+it does not substitute for the runtime or remaining P1 delivery gates.

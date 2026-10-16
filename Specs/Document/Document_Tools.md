@@ -465,6 +465,24 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   preserve their live outline behavior. End-before-action
   classification does not migrate its dependent geometry/pixel work. Graph capture/accounting costs,
   broader selection kernels and measured G1 remain separate requirements.
+- The explicit deferred outline-move model keeps the original immutable loops plus a finite, rounded scalar
+  offset. Effective samples change only that offset and generation; `DisplayedSelectionValue` exposes source
+  and translation without constructing geometry. Numeric reference APIs may materialize the translated loops
+  and MUST NOT be used as a synchronous fallback by a future selected host route.
+  `PrepareDeferredSelectionMoveOpeningInput` captures settled authority and immutable document/history roots;
+  worker preparation opens history privately. Publication checks the original authority, exact epoch and
+  monotonic opening before atomically publishing one history depth and scalar mode. It refuses active panels;
+  preserving-panel Wand authority does not authorize an outline move.
+  Closure prepares translated geometry and history away from the owner. Apply binds the exact original loops,
+  offset, document generation, opening, target/crop and history epoch before swapping the prepared result.
+  Cancel restores the original; no-op, outer transaction and Undo/Redo semantics match the numeric reference.
+  `ContainsSelectionForWork` uses the reference nonzero winding and segment tolerance on translated vertices,
+  rather than inverse-translating the query (which changes rounding). It allocates nothing, checks cancellation
+  at most every 1,024 loop/edge steps, and distinguishes cancellation from an outside result.
+  `HostSelectionPressInput` is a bounded 512-event physical prefix with event-time document coordinates,
+  modifiers, antialias choice and nonwrapping ordinal. Up/Lost are separate terminals; overflow preserves the
+  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. This model/descriptor
+  API does not activate an Application route; complete host admission, replay, lifetime and S5/G1 remain due.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,

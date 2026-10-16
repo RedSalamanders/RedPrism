@@ -7,67 +7,6 @@
 #include <type_traits>
 #include <vector>
 
-// Only this producer may adopt its construction-cached geometry. No uncancellable second path traversal.
-class SelectionNudgeBuilder final
-{
-  public:
-    static std::optional<SelectionLoops> Build(const SelectionLoops& source, int dx, int dy, CancelToken cancellation,
-                                               SelectionNudgeObserver observer)
-    {
-        std::uint64_t work = 0;
-        const auto checkpoint = [&](SelectionNudgeStage stage)
-        {
-            if (observer.checkpoint)
-                observer.checkpoint(observer.context, stage, work);
-            return !cancellation.IsCancelled();
-        };
-        if (!checkpoint(SelectionNudgeStage::Begin))
-            return std::nullopt;
-        if (dx == 0 && dy == 0)
-            return checkpoint(SelectionNudgeStage::Complete) ? std::optional(source) : std::nullopt;
-        std::vector<SelectionLoop> loops;
-        loops.reserve(source.size());
-        SelectionLoops result;
-        for (const auto& loop : source)
-        {
-            if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
-                return std::nullopt;
-            SelectionLoop translated;
-            translated.reserve(loop.size());
-            for (const auto& point : loop)
-            {
-                if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
-                    return std::nullopt;
-                const Vec2 next{point.x + static_cast<double>(dx), point.y + static_cast<double>(dy)};
-                translated.push_back(next);
-                if (std::isfinite(next.x) && std::isfinite(next.y))
-                {
-                    if (!result._bounds)
-                        result._bounds = SelectionBounds{next.x, next.y, next.x, next.y};
-                    else
-                    {
-                        result._bounds.value().minX = std::min(result._bounds.value().minX, next.x);
-                        result._bounds.value().minY = std::min(result._bounds.value().minY, next.y);
-                        result._bounds.value().maxX = std::max(result._bounds.value().maxX, next.x);
-                        result._bounds.value().maxY = std::max(result._bounds.value().maxY, next.y);
-                    }
-                }
-            }
-            result._pointCount += translated.size();
-            result._storageBytes += translated.capacity() * sizeof(Vec2);
-            loops.push_back(std::move(translated));
-        }
-        if (!checkpoint(SelectionNudgeStage::Complete))
-            return std::nullopt;
-        if (!loops.empty())
-        {
-            result._storageBytes += sizeof(loops) + loops.capacity() * sizeof(SelectionLoop);
-            result._loops = std::make_shared<const std::vector<SelectionLoop>>(std::move(loops));
-        }
-        return !cancellation.IsCancelled() ? std::optional(std::move(result)) : std::nullopt;
-    }
-};
-
 std::optional<SelectionNudgeInput> DocumentSession::PrepareSelectionNudgeInput(int dx, int dy) const
 {
     if (!_document || !_document.value().selection || _document.value().selection.value().IsEmpty() ||
@@ -93,8 +32,8 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
         input._document.value().height != input._token.canvasHeight)
         return std::nullopt;
     auto loops =
-        SelectionNudgeBuilder::Build(input._document.value().selection.value().loops, input._dx, input._dy,
-                                     cancellation, geometryObserver ? *geometryObserver : SelectionNudgeObserver{});
+        TranslateSelectionLoopsForWork(input._document.value().selection.value().loops, input._dx, input._dy,
+                                       cancellation, geometryObserver ? *geometryObserver : SelectionNudgeObserver{});
     if (!loops || cancellation.IsCancelled())
         return std::nullopt;
     PreparedSelectionNudge result(std::move(input));

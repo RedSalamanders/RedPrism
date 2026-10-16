@@ -2742,6 +2742,7 @@ void DocumentSession::ClearDocument()
     _displayCopy.reset();
     CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     _brush.reset();
     _brushFinishingOpening.reset();
     _brushUpdatingOpening.reset();
@@ -2792,6 +2793,7 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     }
     CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
@@ -2809,6 +2811,7 @@ bool DocumentSession::ApplyDocumentSizeIfCurrent(CanvasDocument document, std::w
     }
     CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();

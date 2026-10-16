@@ -40,8 +40,9 @@ shared helper omitted from three test subsets and two constant-condition fixture
 verifies all 1,821 copied evidence/input files and preserves the failed run. r1060–r1065 never launch.
 
 The shared builder now lives in the geometry TU compiled by all five images. The exact capacity predicate is
-proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 runs on the
-repaired 1,393-input freeze; full Release r1067, Debug r1068, real ASan r1069 and ARM64 r1070–r1072 remain due.
+proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 passes on the repaired 1,393-input freeze: 1,810 copied archive inputs/evidence,
+953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 is running;
+Debug r1068, real ASan r1069 and ARM64 r1070–r1072 remain due.
 A separate actual-host scalar closure lifetime draft and 71-fact fixture are compiling privately. Actual
 selection-press dispatch, ordinary activation and all nine delivery areas above remain open.
 
@@ -50,7 +51,8 @@ selection-press dispatch, ordinary activation and all nine delivery areas above 
 - [x] Independently qualify private S5 Release/real-ASan, including the retained failed parity predicate.
 - [x] Adopt the reviewed model core and assertion-preserving stack repairs; reconcile owning contracts.
 - [x] Preserve failed r1059, adopt the shared-helper/constant-proof repairs and retain all expectations.
-- [ ] Finish fresh exact-source analysis r1066, full x64 profiles and ARM64 cross-builds.
+- [x] Qualify fresh exact-source analysis r1066 and independently review its complete archive/artifacts.
+- [ ] Finish full x64 Release/Debug/real ASan and ARM64 cross-builds on that same source.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
 
 ### Latest qualified checkpoint

@@ -860,6 +860,11 @@ class SelectionLoops
 
   private:
     friend class SelectionNudgeBuilder;
+    // Trusted worker producer only: cached metadata was accumulated while constructing these exact loops.
+    // Reuse normal GeometryNode/weak-control lifetime without a second complete geometry traversal.
+    [[nodiscard]] bool SealPreparedStorageForWork(std::vector<SelectionLoop> loops,
+                                                  std::shared_ptr<const void> lifetime);
+
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
     std::optional<SelectionBounds> _bounds;
@@ -885,7 +890,7 @@ struct DocumentSelection
     }
 };
 
-// Overlay readers share immutable geometry and carry a pixel-move offset as bounded scalar metadata.
+// Overlay readers share immutable geometry and carry pixel/outline-move offsets as bounded scalar metadata.
 // The numeric DisplayedSelection reference still returns translated geometry.
 struct SelectionDisplayValue final
 {
@@ -1443,6 +1448,8 @@ class PanelWandOpening;
 class PreparedWandLayerSelection;
 struct WandLayerSelectionObserver;
 struct WandLayerSelectionMemoryPlan;
+class SelectionMoveOpeningInput;
+class PreparedSelectionMoveOpening;
 class SelectionMoveClosureInput;
 class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
@@ -2564,6 +2571,18 @@ class DocumentSession
     [[nodiscard]] bool CanMoveSelection(Vec2 point) const;
     // Moves the outline only (never pixels); the whole drag is one `Move Selection` entry.
     [[nodiscard]] bool BeginSelectionMove();
+    // Explicit worker-mode prototype: document geometry stays immutable until prepared End/Cancel.
+    // The host must qualify every consumer/close route before choosing this instead of the reference API.
+    [[nodiscard]] bool BeginDeferredSelectionMove();
+    // Selected owner path: worker prepares Begin history; publication only validates and swaps roots.
+    [[nodiscard]] std::optional<SelectionMoveOpeningInput> PrepareDeferredSelectionMoveOpeningInput() const;
+    [[nodiscard]] static std::optional<PreparedSelectionMoveOpening> PrepareDeferredSelectionMoveOpening(
+        SelectionMoveOpeningInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedDeferredSelectionMoveOpeningCurrent(
+        const PreparedSelectionMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(
+        PreparedSelectionMoveOpening& prepared) noexcept;
+
     // Whole-pixel offsets from the drag's start; the outline is not re-clipped, so it can leave and come back.
     void MoveSelection(double dx, double dy);
     void EndSelectionMove();
@@ -2688,7 +2707,8 @@ class DocumentSession
     [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
         bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
-        SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+        SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        const SelectionNudgeObserver* geometryObserver = nullptr, std::shared_ptr<const void> geometryLifetime = {});
     [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
         const PreparedSelectionMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;
@@ -3487,6 +3507,7 @@ class DocumentSession
     std::uint64_t _lassoFinishSerial = 0;
     std::uint64_t _lassoFinishPendingSerial = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;
+    std::optional<Vec2> _selectionMoveOffset;
     std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;
     std::uint64_t _brushOpening = 0;
@@ -3553,6 +3574,7 @@ class DocumentSession
     void MeasureColorEditHistogramInline();
     [[nodiscard]] bool ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening,
                                                const Raster& original) const noexcept;
+    [[nodiscard]] bool HasCurrentDeferredSelectionMoveSource() const noexcept;
     [[nodiscard]] bool HasCurrentWandColorSelectionBinding() const noexcept;
     void NormalizeWandColorSelectionToken(JobToken& token) const noexcept;
     [[nodiscard]] bool IsJobTargetAndSessionCurrent(const JobToken& token, std::uint64_t latestSequence) const noexcept;

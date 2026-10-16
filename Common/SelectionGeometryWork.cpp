@@ -1,7 +1,12 @@
 #include "Document.h"
+#include "SelectionNudgeWork.h"
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
+#include <memory>
 #include <new>
+#include <vector>
 
 namespace
 {
@@ -112,16 +117,101 @@ std::optional<SelectionLoops> SelectionLoops::AdoptForWork(std::vector<Selection
             }
         }
     }
-    const auto allowance = WorkOwnershipAllowance(loops.size());
-    if (!allowance || allowance > maximum - result._storageBytes || cancellation.IsCancelled())
+    if (cancellation.IsCancelled() || !result.SealPreparedStorageForWork(std::move(loops), std::move(lifetime)))
         return std::nullopt;
+    return cancellation.IsCancelled() ? std::nullopt : std::optional(std::move(result));
+}
+
+bool SelectionLoops::SealPreparedStorageForWork(std::vector<SelectionLoop> loops, std::shared_ptr<const void> lifetime)
+{
+    const auto allowance = WorkOwnershipAllowance(loops.size());
+    if (_loops || loops.empty() || !allowance ||
+        allowance > (std::numeric_limits<std::uint64_t>::max)() - _storageBytes)
+        return false;
     auto owned = std::make_unique<GeometryNode>();
     owned->lifetime = lifetime;
     owned->loops = std::move(loops);
-    owned->bytes = result._storageBytes + allowance;
+    owned->bytes = _storageBytes + allowance;
     auto storage =
         std::shared_ptr<GeometryNode>{owned.release(), FreeGeometry{}, GeometryAllocator<GeometryNode>{lifetime}};
     const auto* view = &storage->loops;
-    result._loops = std::shared_ptr<const std::vector<SelectionLoop>>{std::move(storage), view};
-    return cancellation.IsCancelled() ? std::nullopt : std::optional(std::move(result));
+    _loops = std::shared_ptr<const std::vector<SelectionLoop>>{std::move(storage), view};
+    return true;
+}
+
+// Only this producer may adopt its construction-cached geometry. No uncancellable second path traversal.
+class SelectionNudgeBuilder final
+{
+  public:
+    static std::optional<SelectionLoops> Build(const SelectionLoops& source, double dx, double dy,
+                                               CancelToken cancellation, SelectionNudgeObserver observer,
+                                               std::shared_ptr<const void> geometryLifetime = {})
+    {
+        if (!std::isfinite(dx) || !std::isfinite(dy))
+            return std::nullopt;
+        std::uint64_t work = 0;
+        const auto checkpoint = [&](SelectionNudgeStage stage)
+        {
+            if (observer.checkpoint)
+                observer.checkpoint(observer.context, stage, work);
+            return !cancellation.IsCancelled();
+        };
+        if (!checkpoint(SelectionNudgeStage::Begin))
+            return std::nullopt;
+        if (dx == 0 && dy == 0)
+            return checkpoint(SelectionNudgeStage::Complete) ? std::optional(source) : std::nullopt;
+        std::vector<SelectionLoop> loops;
+        loops.reserve(source.size());
+        SelectionLoops result;
+        for (const auto& loop : source)
+        {
+            if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
+                return std::nullopt;
+            SelectionLoop translated;
+            translated.reserve(loop.size());
+            for (const auto& point : loop)
+            {
+                if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
+                    return std::nullopt;
+                const Vec2 next{point.x + static_cast<double>(dx), point.y + static_cast<double>(dy)};
+                translated.push_back(next);
+                if (std::isfinite(next.x) && std::isfinite(next.y))
+                {
+                    if (!result._bounds)
+                        result._bounds = SelectionBounds{next.x, next.y, next.x, next.y};
+                    else
+                    {
+                        result._bounds.value().minX = std::min(result._bounds.value().minX, next.x);
+                        result._bounds.value().minY = std::min(result._bounds.value().minY, next.y);
+                        result._bounds.value().maxX = std::max(result._bounds.value().maxX, next.x);
+                        result._bounds.value().maxY = std::max(result._bounds.value().maxY, next.y);
+                    }
+                }
+            }
+            result._pointCount += translated.size();
+            result._storageBytes += translated.capacity() * sizeof(Vec2);
+            loops.push_back(std::move(translated));
+        }
+        if (!checkpoint(SelectionNudgeStage::Complete))
+            return std::nullopt;
+        if (!loops.empty())
+        {
+            result._storageBytes += sizeof(loops) + loops.capacity() * sizeof(SelectionLoop);
+            if (geometryLifetime)
+            {
+                if (!result.SealPreparedStorageForWork(std::move(loops), std::move(geometryLifetime)))
+                    return std::nullopt;
+            }
+            else
+                result._loops = std::make_shared<const std::vector<SelectionLoop>>(std::move(loops));
+        }
+        return !cancellation.IsCancelled() ? std::optional(std::move(result)) : std::nullopt;
+    }
+};
+
+std::optional<SelectionLoops> TranslateSelectionLoopsForWork(const SelectionLoops& source, double dx, double dy,
+                                                             CancelToken cancellation, SelectionNudgeObserver observer,
+                                                             std::shared_ptr<const void> geometryLifetime)
+{
+    return SelectionNudgeBuilder::Build(source, dx, dy, cancellation, observer, std::move(geometryLifetime));
 }

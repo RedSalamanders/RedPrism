@@ -301,6 +301,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             std::swap(_lassoDraft, drafts.lasso);
             InvalidateLassoPendingIntents();
             std::swap(_selectionMoveOrigin, drafts.selectionMove);
+            _selectionMoveOffset.reset();
             std::swap(_brush, drafts.brush);
             _brushFinishingOpening.reset();
             _brushUpdatingOpening.reset();

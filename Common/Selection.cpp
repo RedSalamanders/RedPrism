@@ -1596,7 +1596,36 @@ bool DocumentSession::CanMoveSelection(Vec2 point) const
     {
         return false;
     }
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        // Numeric reference only: inverse-query translation changes rounding at large coordinates.
+        // The selected host must decide hits off-owner with the exact translated geometry.
+        const auto offset = _selectionMoveOffset.value();
+        const auto bounds = selection->Bounds();
+        // The materialized numeric selection is empty if finite rounding collapses either extent.
+        if (!bounds || !(bounds->maxX + offset.x > bounds->minX + offset.x) ||
+            !(bounds->maxY + offset.y > bounds->minY + offset.y))
+            return false;
+        const auto loops = SelectionGeometry::Translated(selection->loops, offset.x, offset.y);
+        return SelectionGeometry::Contains(loops, point);
+    }
     return SelectionGeometry::Contains(selection->loops, point);
+}
+
+bool DocumentSession::HasCurrentDeferredSelectionMoveSource() const noexcept
+{
+    return _document && _selectionMoveOrigin && _selectionMoveOffset && _document->selection &&
+           _document->selection->antialiased == _selectionMoveOrigin->antialiased &&
+           _document->selection->loops.Identity() == _selectionMoveOrigin->loops.Identity();
+}
+
+bool DocumentSession::BeginDeferredSelectionMove()
+{
+    // Panel-preserving moves need their own opening witness; never silently grant Wand authority here.
+    if (HasColorEdit() || !Selection() || !Selection()->Bounds() || !BeginSelectionMove())
+        return false;
+    _selectionMoveOffset = Vec2{};
+    return true;
 }
 
 bool DocumentSession::BeginSelectionMove()
@@ -1609,6 +1638,7 @@ bool DocumentSession::BeginSelectionMove()
     }
     BeginEdit(L"Move Selection");
     _selectionMoveOrigin = selection;
+    _selectionMoveOffset.reset();
     ++_selectionMoveOpening;
     return true;
 }
@@ -1620,6 +1650,20 @@ void DocumentSession::MoveSelection(double dx, double dy)
         return;
     }
     const DocumentSelection& origin = _selectionMoveOrigin.value();
+    if (_selectionMoveOffset)
+    {
+        if (!HasCurrentDeferredSelectionMoveSource())
+            return;
+        const Vec2 offset{std::round(dx), std::round(dy)};
+        const auto bounds = origin.Bounds();
+        if (!bounds || !std::isfinite(bounds->minX + offset.x) || !std::isfinite(bounds->maxX + offset.x) ||
+            !std::isfinite(bounds->minY + offset.y) || !std::isfinite(bounds->maxY + offset.y) ||
+            offset == _selectionMoveOffset.value())
+            return;
+        _selectionMoveOffset = offset;
+        NoteDocumentMutation();
+        return;
+    }
     _document->selection = DocumentSelection{
         origin.antialiased, SelectionGeometry::Translated(origin.loops, std::round(dx), std::round(dy))};
     NoteDocumentMutation();
@@ -1627,10 +1671,18 @@ void DocumentSession::MoveSelection(double dx, double dy)
 
 void DocumentSession::EndSelectionMove()
 {
-    if (!_selectionMoveOrigin.has_value())
-    {
+    if (!_selectionMoveOrigin)
         return;
+    // Numeric reference only; the selected host uses a prepared worker closure.
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        const auto offset = _selectionMoveOffset.value();
+        if (offset != Vec2{})
+            _document->selection =
+                DocumentSelection{_selectionMoveOrigin->antialiased,
+                                  SelectionGeometry::Translated(_selectionMoveOrigin->loops, offset.x, offset.y)};
     }
+    _selectionMoveOffset.reset();
     _selectionMoveOrigin.reset();
     EndEdit();
 }
@@ -1647,6 +1699,7 @@ void DocumentSession::CancelSelectionMove()
         _document->selection = _selectionMoveOrigin;
         NoteDocumentMutation();
     }
+    _selectionMoveOffset.reset(); // Cancel must not materialize the discarded offset in reference End.
     EndSelectionMove();
 }
 

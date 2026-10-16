@@ -193,7 +193,10 @@ int Application::RunStandaloneStrokeSampleParitySelfTest(HINSTANCE instance) noe
         Guid target{};
         Raster composite;
         auto scene = Scene(test, target, composite);
-        DocumentSession reference;
+        std::unique_ptr<DocumentSession> referenceOwner{new (std::nothrow) DocumentSession()};
+        if (!referenceOwner)
+            return fail(test.name, "allocation");
+        DocumentSession& reference = *referenceOwner;
         reference.ReplaceDocument(scene, target);
         reference.SetBrushEngine(&CpuBrushCoverage::Shared());
         owner->ReplaceDocument(std::move(scene), target, {});

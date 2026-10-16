@@ -25,6 +25,14 @@ graph bound; future host jobs additionally charge wrappers and construction peak
 cache never walks paths or materializes rasters. Existing history/metadata traversals remain H2/H3 work, and the
 core APIs alone establish no host closure, frame latency or G1 qualification.
 
+The explicit deferred selection model updates scalar translation without copying loops. Worker closure may
+retain the original admitted geometry lifetime in its translated storage and weak-control allocator. The
+construction-cached geometry metadata is reused when sealing that storage; no second path walk is introduced.
+The last owner-side geometry release defers point destruction, and the final weak control block retains its
+original charge until worker release. Model byte estimators are prerequisites only: wrappers, retained roots,
+construction peak, first display and all host phases MUST be admitted before a selected route is activated.
+The existing synchronous numeric methods remain references, not an admission-failure fallback.
+
 ## Responsive source acquisition
 
 The shared startup owner acquires prepared layer rows, committed/pending display and the stroke source in that

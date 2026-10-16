@@ -22,12 +22,16 @@
 #include "Document.Tests.BoundedLassoGesture.h"
 #include "Document.Tests.BoundedLassoPoints.h"
 #include "Document.Tests.BoundedLassoTicket.h"
+#include "Document.Tests.DeferredSelectionMove.h"
 #include "Document.Tests.DistortRead.h"
 #include "Document.Tests.HostLassoInput.h"
 #include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
 #include "Document.Tests.LassoSessionBridge.h"
+#include "Document.Tests.SelectionHitWork.h"
+#include "Document.Tests.SelectionMoveGeometryLifetime.h"
+#include "Document.Tests.SelectionPressInput.h"
 
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
@@ -8425,6 +8429,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHostLassoInputTests();
     gFailures += RunLassoConditionalInputTests();
     gFailures += RunLassoDraftRasterTests();
+    gFailures += RunDocumentDeferredSelectionMoveTests();
+    gFailures += RunSelectionHitWorkTests();
+    gFailures += RunSelectionPressInputTests();
+    gFailures += RunSelectionMoveGeometryLifetimeTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

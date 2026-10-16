@@ -685,4 +685,11 @@
     <ClInclude Include="LassoWorkTestGate.h" />
     <ClInclude Include="..\Tests\Support\HistoryWorkFixture.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionHitWork.cpp" />
+    <ClInclude Include="..\Common\SelectionHitWork.h" />
+    <ClCompile Include="..\Common\SelectionMoveOpeningWork.cpp" />
+    <ClInclude Include="..\Common\SelectionMoveOpeningWork.h" />
+    <ClInclude Include="HostSelectionPressInput.h" />
+  </ItemGroup>
 </Project>

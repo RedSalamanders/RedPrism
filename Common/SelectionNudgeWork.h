@@ -19,6 +19,14 @@ struct SelectionNudgeObserver final
     void (*checkpoint)(void*, SelectionNudgeStage, std::uint64_t) noexcept = nullptr;
 };
 
+// Same ordered additions as the numeric Translated reference, with construction-cached metadata and
+// existing at-most-1024-work cancellation checkpoints. A selected admitted lifetime uses deferred geometry
+// destruction and retains that lifetime through the last weak storage control. Empty lifetime keeps the
+// existing numeric/nudge reference construction. Finite offsets only; no session/device access.
+[[nodiscard]] std::optional<SelectionLoops> TranslateSelectionLoopsForWork(
+    const SelectionLoops& source, double dx, double dy, CancelToken cancellation = {},
+    SelectionNudgeObserver observer = {}, std::shared_ptr<const void> geometryLifetime = {});
+
 class SelectionNudgeInput final
 {
   public:

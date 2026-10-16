@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <span>
@@ -341,7 +342,8 @@ void GroupInsertionAndSiblingPlacement()
 void SerialAndStaleAuthorities()
 {
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         const auto oldSerial = session.ClipboardSerial();
         static_cast<void>(session.CopySelection());
@@ -351,7 +353,8 @@ void SerialAndStaleAuthorities()
                "newer-private-copy-refuses-stale-private-paste");
     }
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        DocumentSession& session = *sessionOwner;
         CanvasDocument document = PixelDocument(5, 4);
         session.ReplaceDocument(std::move(document), Id("31000000-0000-4000-8000-000000000002"));
         auto prepared = PrepareForeign(session, ForeignPixels());
@@ -362,7 +365,8 @@ void SerialAndStaleAuthorities()
                "foreign-paste-does-not-depend-on-private-clipboard-serial");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         CanvasDocument replacement = PixelDocument();
         session.ReplaceDocument(std::move(replacement), Id("31000000-0000-4000-8000-000000000002"));
@@ -372,7 +376,8 @@ void SerialAndStaleAuthorities()
                "document-replacement-stales-prepared-paste-without-mutation");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         ImageLayer other = ImageLayer::Blank(L"Other active layer", Vec2{1, 1});
         const Guid otherID = other.id;
         EditLayerRecordsForTest(session,
@@ -385,7 +390,8 @@ void SerialAndStaleAuthorities()
                "active-layer-change-stales-prepared-paste");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         session.RenameLayer(session.ActiveLayerID().value(), L"History changed after preparation");
         const OwnerState changed(session);
@@ -394,9 +400,11 @@ void SerialAndStaleAuthorities()
                "history-change-stales-prepared-paste");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
-        DocumentSession moved(std::move(session));
+        auto movedOwner = std::make_unique<DocumentSession>(std::move(session));
+        DocumentSession& moved = *movedOwner;
         const OwnerState changed(moved);
         Expect(prepared && !moved.ApplyPreparedClipboardPasteIfCurrent(prepared.value()) &&
                    SameOwnerState(moved, changed),

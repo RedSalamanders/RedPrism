@@ -1160,6 +1160,7 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _transformEdit.reset();
     CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     _brush.reset();
     _brushFinishingOpening.reset();
     _brushUpdatingOpening.reset();
@@ -4318,6 +4319,8 @@ SelectionDisplayValue DocumentSession::DisplayedSelectionValue() const
 {
     if (_pixelMove && !HasDeferredTransform())
         return {_pixelMove->origin, _pixelMove->offset};
+    if (HasCurrentDeferredSelectionMoveSource())
+        return {_selectionMoveOrigin, _selectionMoveOffset.value()};
     return {DisplayedSelection(), {}};
 }
 
@@ -4331,6 +4334,12 @@ std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
     if (!_document.has_value())
     {
         return std::nullopt;
+    }
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        DocumentSelection moved = _selectionMoveOrigin.value();
+        moved.loops = SelectionGeometry::Translated(moved.loops, _selectionMoveOffset->x, _selectionMoveOffset->y);
+        return moved; // Numeric reference only; production readers use DisplayedSelectionValue.
     }
     if (_pixelMove)
     {

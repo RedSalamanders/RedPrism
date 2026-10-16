@@ -563,4 +563,25 @@
     <ClInclude Include="..\..\Common\LassoDraftRasterWork.h" />
     <ClInclude Include="Document.Tests.LassoDraftRaster.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.DeferredSelectionMove.cpp" />
+    <ClInclude Include="Document.Tests.DeferredSelectionMove.h" />
+    <ClCompile Include="..\..\Common\SelectionHitWork.cpp" />
+    <ClInclude Include="..\..\Common\SelectionHitWork.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.SelectionHitWork.cpp" />
+    <ClInclude Include="Document.Tests.SelectionHitWork.h" />
+    <ClCompile Include="..\..\Common\SelectionMoveOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\SelectionMoveOpeningWork.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.SelectionPressInput.cpp" />
+    <ClInclude Include="Document.Tests.SelectionPressInput.h" />
+    <ClInclude Include="..\..\RedPrism\HostSelectionPressInput.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.SelectionMoveGeometryLifetime.cpp" />
+    <ClInclude Include="Document.Tests.SelectionMoveGeometryLifetime.h" />
+  </ItemGroup>
 </Project>
