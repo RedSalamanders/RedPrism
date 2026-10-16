@@ -43,11 +43,10 @@ The shared builder now lives in the geometry TU compiled by all five images. The
 proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 passes on the repaired 1,393-input freeze: 1,810 copied archive inputs/evidence,
 953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 also qualifies
 22,010 Document facts, 142 Application stages and its complete archive/953 compiler records/five image-PDB pairs.
-Debug r1068 reaches all tests but its wrapper refuses two uncompiled, misplaced helper files; the complete attempt is retained without an inferred numeric child exit. Fresh clean-snapshot canonical Debug r1073 is running with normal incremental Build; real ASan r1069 and ARM64 r1070–r1072 follow.
+Debug r1068 reaches all tests but its wrapper refuses two uncompiled, misplaced helper files; the complete attempt is retained without an inferred numeric child exit. Fresh clean-snapshot canonical Debug r1073 exits 1 on the post-close clipboard replacement predicate; all 1,820 archive files are verified. Source inspection finds the attempted-publication test gate can release on Busy before a close. A separate successful-publication phase and forced two-busy-retry regression are prepared, preserving the original assertions. ASan r1069 and ARM64 r1070–r1072 never launch; fresh qualification of the repair remains due.
 The private actual-host scalar closure now qualifies 71 stronger facts and every predecessor Application
 assertion in 143 stages (R8). Main verifies 2,006 archived copies, 336 frozen objects, exact PE/PDB identity,
-zero ISA violations, worker allocation and final zero reserved/releasing bytes. Its isolated real-ASan host
-build is running. This host change is not yet adopted into the native source. Actual selection-press dispatch,
+zero ISA violations, worker allocation and final zero reserved/releasing bytes. Its isolated real-ASan host builds successfully, but the first runtime fails a delayed-clipboard negative control; an unchanged-assertion diagnostic runtime is now running alone. This host change is not yet adopted into the native source. Actual selection-press dispatch,
 ordinary activation and all nine delivery areas above remain open.
 [Private host evidence](../../TestRuns/P1ScalarSelectionClosureHost_2026-10-16.md).
 
@@ -59,8 +58,10 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify fresh exact-source analysis r1066 and independently review its complete archive/artifacts.
 - [x] Qualify private scalar closure on the actual two-worker/WARP host, including worker allocation, original-ticket retention, final refunds and all predecessor Application assertions.
 - [ ] Qualify the stronger private host under real ASan, then adopt its reviewed production/test changes with owning contracts.
-- [x] Qualify the private selected history ownership extension in CPU Release: 23 new facts plus all 22,010 predecessors; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
-- [ ] Close the retained private ASan clipboard failure with diagnostics and serialized clipboard suites; qualify the new ownership API under real ASan and its actual host.
+- [x] Qualify the private selected history ownership extension in CPU Release and real ASan: 23 new facts plus all 22,010 predecessors, with the original ASan reader refusal preserved and Main's full-stream profile correction independently checked; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
+- [ ] Close the retained private ASan clipboard failure with diagnostics and serialized clipboard suites; qualify its actual host and adopt the separately qualified ownership API.
+- [x] Preserve and independently verify the real r1073 Debug clipboard failure; retain the original assertions while preparing the separate successful-publication gate and forced busy-retry regression.
+- [ ] Qualify the clipboard gate repair in full native profiles and ARM64 cross-builds.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [ ] Finish full x64 Debug/real ASan and ARM64 cross-builds on that same source.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.

@@ -2,6 +2,10 @@
 
 ## Current delivery checklist (2026-10-16)
 
+- [x] Independently qualify private selected Begin/End history ownership in Release and real ASan: 23 new facts plus all 22,010 predecessors. Preserve the original profile-reader refusal; Main's correction keeps the complete actual stream and exact existing ASan witness. [Ownership evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
+- [ ] Adopt the selected ownership API and qualify actual physical-press/terminal publication lifetimes and complete original-ticket admission; private CPU proof alone does not enable S5.
+- [ ] Finish the current native clipboard successful-publication regression and exact-source Debug/real-ASan/ARM64 matrix. The preceding Debug r1073 failure and build-only ASan R3 are retained; no later profile was passed by those attempts.
+
 - [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
 - [x] Independently qualify full Debug r1052 for the newer 43-path Hue/Wand/Paint/distortion/follow-through integration, including 28 new CPU and 29 actual host follow-through facts; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
 - [ ] Freshly validate Main's combined source and fixture heap repairs: r1053 analysis failed C6262 (Application frame 16,464 bytes; Clipboard frame 131,752 bytes); Release r1054, real ASan r1055, and ARM64 Debug/Release/instrumented-ASan r1056–r1058 were not launched. The failed attempt remains preserved; none of these gates is passed.

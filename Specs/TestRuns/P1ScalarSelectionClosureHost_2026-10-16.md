@@ -101,3 +101,17 @@ ASan R1 successfully builds the application (PID 91256, exit 0). Main verifies e
 R2 continues with the exact successful instrumented application and a freshly executed, authenticated earlier DocumentTests UAF control using a byte-identical ASan runtime DLL. Linked ISA passes and the real UAF control diagnoses correctly (exit 1). The application exits 5, PID 77612, at 17:52:38.567586 UTC. All 71 new scalar facts pass; the run reaches 137 stages and fails exactly `clipboard-delayed.paste.unrelated-read-before-worker-cannot-enter-event-gate`. The complete predecessor roster therefore does not qualify. Main verifies all 35 supplemental archive files and the original source/dependency/product reference; completion `E0388165CEA95733A6E09410886EF509A4CAB06A2954A6E643AC68D444EAC469`. [Failure receipt](../../.build/P1Drafts/S5ScalarCloseAsan-r2-Main/main-failed-closeout.json).
 
 The clipboard failure's cause is unestablished. Native Debug overlapped, but that does not establish causation. Private R3 adds only native owner/window, handle/error, sequence and render/worker-counter diagnostics. Reversing that insertion reproduces the exact original source text; every assertion and label remains unchanged. Its build/ISA run is followed by a wait for both native Debug and ASan parent results, preventing another overlap of these clipboard suites. No passing repeat will be treated as a cause for the older failure.
+
+## Diagnostic ASan R3 build-only and serialized R4 runtime
+
+R3 incrementally rebuilds exactly `ApplicationClipboardDelayedTests.obj`, with 335 original instrumented
+objects unchanged. Build and ISA exit 0. Its unchanged-assertion fixture diagnostic records the clipboard
+owner/sequence, worker-read flag and unrelated/render counts around the deliberate early read. The driver
+then refuses before runtime because native Debug r1073 failed. All 34 supplemental copies are verified;
+completion `51EFD7A2CBA2E9799DB4DCFA417E24775BA9D4D967349AFB1D78057574F476FB`.
+No R3 runtime or detection probe is claimed.
+
+Fresh R4 runs that frozen diagnostic image without compilation and with no other Application clipboard
+suite active. It retains the original early-read assertion and every predecessor expectation. Its actual
+result remains pending; a passing repeat alone would not establish the cause of R2's failure. Native
+successful-publication gate validation waits for this private Application child to join before launching.

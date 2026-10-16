@@ -120,3 +120,26 @@ The r1068 canonical test log reaches `All tests passed`, but its wrapper does no
 Main preserves 1,822 input/evidence files, all five linked products/PDBs, compiler records, scans, runtime logs and screenshots. All original 1,393 inputs match; neither extra file appears in any of the five project lists. Completion `C0ADB5F38F5C540D8A4B65BDFE3C1466E73B2458C9130370D1BEC1A3ECC8B155`; [receipt](../../.build/P1Integration/LassoHost-r1-Main/r1068-wrapper-refusal-archive.json).
 
 Fresh r1073 runs canonical `test.ps1` with its normal incremental Build on the clean 1,393-input snapshot. Its 953 existing objects and linked products are hashed before dispatch. All full tests, ISA controls, probes and screenshots run again; this is not a skip-build or runtime-only pass. The transport-only freeze is `C6E2E92B2B51F54877E00E878ED0E41BAA08445479E0299F016406EBB0FF35FC`; all 1,389 compiled/project/toolchain inputs remain identical. After its independent checks, the serial controller proceeds to real ASan r1069 and ARM64 r1070–r1072, reclaiming only qualified, regenerable `.obj` caches after each archive closes. Exact executables, PDBs, sources, logs and compiler evidence remain retained. Native ARM64 execution remains unavailable.
+
+## Clean-snapshot Debug r1073 failed; successful-publication gate repair
+
+The actual canonical Debug parent exits 1 (PID 68136; 18:07:56.624740–18:22:23.356457 UTC).
+Its Application child exits 5 after 134 stages. The sole recorded failing predicate is
+`clipboard-host.copy-foreign-replacement-after-close.replacement-after-close-leaves-stale-private-receipt-preference`.
+At that callback the actual gate reports zero closed publications and zero receipt placements; the independent
+foreign DIB installation and subsequent literal Paste controls pass. Main reviews the helper's verifier and
+its complete 1,820-file hash/size readback. Completion: `85DFB1571263B3865F84592586E9F47645D87A472A4555018FBA1C38D986832F`.
+ASan r1069 and ARM64 r1070–r1072 never launch.
+
+Source inspection identifies a concrete harness error: `CopyPublished` fires after every Publish attempt,
+including Busy, before the original-ticket retry has published or closed anything. The repair adds a separate
+`CopyPublicationSucceeded` phase, selected only after Publish returns Ok. The foreign-replacement fixture now
+forces two busy attempts and independently requires one successful closed publication, all three formats and
+one gate visit. All original after-close, literal Paste, history and refund assertions remain intact. Native
+fault fixtures retain their attempted-publication phase. This establishes a reproducible regression boundary;
+the old log does not identify which native call first caused its unavailable clipboard.
+
+The initial r1073 transport preflight hash was computed with LF JSON; its actual Windows JSON uses CRLF.
+That wrapper metadata discrepancy is separate from the real nonzero test exit. Any subsequent source-bound
+validation must verify the exact row contents and actual serialized file bytes before comparing a fresh hash.
+Fresh Debug/Release/ASan, analysis and ARM64 validation of this repair remain due.
