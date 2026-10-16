@@ -5,11 +5,12 @@
 // One cold-start owner path for the already qualified prepared display, rows and stroke engines.
 // Run and the prepared benchmark reach this only through explicit fixtures. Ordinary activation follows
 // complete consumer/admission/lifetime and cost qualification; diagnostic direct/prepared routes stay explicit.
-bool Application::InitializeResponsiveSourcesOwner(bool allowHidden) noexcept
+bool Application::InitializeResponsiveSourcesOwner(bool allowHidden, bool includeSelection) noexcept
 {
     if (_shutdownStarted || _jobs.InUiCallback() || !_rendererReady || !_gpuWorkInitialized || !_chrome ||
         !_brushEngine.Ready() || _preparedLayerRowsEnabled || _committedDisplayInitialized ||
-        _pendingDisplayInitialized || _asyncStrokeFinishEnabled || _asyncStrokeSamplesEnabled || _asyncWarpLiveEnabled)
+        _pendingDisplayInitialized || _asyncStrokeFinishEnabled || _asyncStrokeSamplesEnabled ||
+        _asyncWarpLiveEnabled || (includeSelection && (_selectionOutlineInitialized || _lassoDraftDisplayEnabled)))
         return false;
     const auto reached = [this](ApplicationResponsiveSourceStage stage) noexcept
     {
@@ -29,6 +30,13 @@ bool Application::InitializeResponsiveSourcesOwner(bool allowHidden) noexcept
         return false;
     if (!_strokeFinishSource.Start() || !reached(ApplicationResponsiveSourceStage::Stroke))
         return false;
+    if (includeSelection)
+    {
+        if (!EnableSelectionOutlineForTest(allowHidden) || !reached(ApplicationResponsiveSourceStage::SelectionOutline))
+            return false;
+        if (!EnableLassoDraftDisplayForTest() || !reached(ApplicationResponsiveSourceStage::LassoDraft))
+            return false;
+    }
     if (!reached(ApplicationResponsiveSourceStage::ReadyToEnable))
         return false;
     // The input loop and startup-path dispatch follow successful startup. Any acquired-prefix failure uses joined

@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-14
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -352,6 +352,14 @@ Harness-only borrowed startup checkpoints run after each successful stage; retry
 queue's event/registration observer seams. Their contexts outlive initialization and acknowledged shutdown.
 Default startup supplies no observer. These controls qualify acquired-prefix cleanup, not failures inside
 unintercepted scheduler/pool/GPU/allocation APIs. A prefix with no acquired scheduler runs no final worker hook.
+
+The explicit complete responsive-source startup additionally acquires prepared layer rows, prepared display,
+stroke continuation, selection outline and nested lasso draft display in that order. Its owner-routing counts
+are 6 initially, 7 after rows, 9 after display, 10 after stroke and 11 after selection; lasso reuses that existing
+owner. Stroke Finish, stroke sampling and live Warp producer flags remain disabled until the final Ready stage
+succeeds. Failure or shutdown at any acquired prefix uses joined, idempotent Shutdown before owner release.
+The main input loop and startup-path dispatch follow successful acquisition. Default activation remains
+subject to complete consumer admission, lifetime and measured performance qualification.
 
 The scheduler's owner grants memory reservations before dispatch and holds them through UI application and
 payload destruction. Waiting admission uses records, never blocked workers; memory events and retirements retry

@@ -1,8 +1,10 @@
-#include "CodecFileStream.h"
+﻿#include "CodecFileStream.h"
+#include "Win32FilePath.h"
 
 #include <algorithm>
 #include <limits>
 #include <new>
+#include <string>
 #include <utility>
 
 CodecFileStream::CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes,
@@ -33,7 +35,11 @@ HRESULT CodecFileStream::Open(const wchar_t* path, std::uint64_t maximumBytes, C
         return E_INVALIDARG;
     if (cancellation.IsCancelled())
         return E_ABORT;
-    wil::unique_hfile file{CreateFileW(path, readOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE,
+    std::wstring apiPath;
+    const HRESULT pathResult = Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath);
+    if (FAILED(pathResult))
+        return pathResult;
+    wil::unique_hfile file{CreateFileW(apiPath.c_str(), readOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE,
                                        readOnly ? FILE_SHARE_READ : 0, nullptr, readOnly ? OPEN_EXISTING : CREATE_NEW,
                                        FILE_ATTRIBUTE_NORMAL, nullptr)};
     if (!file)
@@ -58,7 +64,7 @@ HRESULT CodecFileStream::Open(const wchar_t* path, std::uint64_t maximumBytes, C
         // Explicit noexcept admission boundary: no owner is published and the entire operation fails.
         file.reset();
         if (!readOnly)
-            (void)DeleteFileW(path);
+            (void)DeleteFileW(apiPath.c_str());
         return E_OUTOFMEMORY;
     }
 }

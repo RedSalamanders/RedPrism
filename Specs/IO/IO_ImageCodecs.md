@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-14
 Owner: `Common/ImageCodecs.*`, `Common/ClipboardDibWork.*`
 
 ## Scope
@@ -101,6 +101,13 @@ admitted production graphs described below.
 - Both write a uniquely named, exclusively created temp file beside the destination, check exact writes,
   flush and close it, then replace the destination atomically (`ReplaceFileW`,
   falling back to `MoveFileExW`), so a crash mid-export never leaves a truncated file at the destination path.
+
+Export selects an exact sibling using the [project staging naming rule](IO_ProjectFormat.md#win32-staging-names):
+retain the destination leaf when its generated suffix fits 255 UTF-16 units; otherwise use the short GUID leaf
+in that same parent. Exclusive creation and exact owned-path cleanup preserve unrelated siblings. The destination
+and generated temporary each receive the appropriate Win32 API spelling; resolving an ordinary path precedes
+adding an extended prefix. Already extended/device spellings remain intact. Codec caps, pixels, quality,
+metadata, cancellation checkpoints and the publication boundary are unchanged.
 
 ## Detached clipboard byte preparation (P1.7 F5a)
 

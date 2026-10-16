@@ -259,6 +259,150 @@ bool LiteralPixels(Rig& rig, ID3D11ShaderResourceView* view) noexcept
            pixel(20, 3) == std::array<std::uint8_t, 4>{0, 0, 0, 102} &&
            pixel(20, 20) == std::array<std::uint8_t, 4>{0, 0, 0, 0};
 }
+void DropRigSourceReferences(Rig& rig) noexcept
+{
+    rig.source = {};
+    rig.descriptor.source = nullptr;
+    rig.gesture.reset();
+    rig.arena.reset();
+    rig.memory.reset();
+}
+void TestRetirementRefusalRetry()
+{
+    auto rig = std::make_unique<Rig>();
+    Expect(rig->Initialize(), "retirement-refusal.real-warp-owner-setup");
+    if (!rig->initialized)
+        return;
+    const bool opened = rig->Open();
+    Expect(opened, "retirement-refusal.original-arena-ticket-ready");
+    if (!opened || !rig->gesture)
+        return;
+    const bool published = rig->Publish();
+    Expect(published, "retirement-refusal.actual-draft-published-before-injection");
+    if (!published)
+        return;
+    const auto original = rig->overlay.BorrowLassoDraftFrameOwner();
+    if (!original)
+    {
+        Expect(false, "retirement-refusal.published-draft-is-readable");
+        return;
+    }
+    const auto cpu = rig->jobs.ReservedMemoryBytes();
+    const auto gpu = rig->budget.ReservedOwner();
+    std::weak_ptr<SharedPublicationMemory> weakSource = rig->memory;
+    const auto failuresBefore = rig->errors;
+    const auto changesBefore = rig->notices;
+    rig->queue.SetRetirementCompletionRefusalsForTest(E_ACCESSDENIED, 1);
+    rig->visible = false;
+    rig->overlay.RequestLassoDraftOwner();
+    // One owner pass detaches the stale cache; the next offers and consumes the real injected refusal.
+    (void)DrainCompletions(rig->jobs);
+    (void)DrainCompletions(rig->jobs);
+    Expect(!rig->overlay.BorrowLassoDraftFrameOwner() && rig->overlay.HasPending() && !rig->overlay.HasReady() &&
+               !rig->routes.HasReady() && rig->queue.InFlightCount() == 0,
+           "retirement-refusal.unpublished-old-draft-stays-dormant-without-event");
+    Expect(rig->jobs.ReservedMemoryBytes() == cpu && cpu > Rig::sourceBytes && rig->budget.ReservedOwner() == gpu &&
+               gpu != 0 && !weakSource.expired() && rig->source.points.Count() == rig->descriptor.key.pointCount,
+           "retirement-refusal.source-readable-and-both-reservations-held");
+    Expect(rig->errors == failuresBefore && rig->notices == changesBefore + 1,
+           "retirement-refusal.invalidation-notice-is-not-a-draft-failure-callback");
+    DropRigSourceReferences(*rig);
+    Expect(!rig->gesture && !rig->arena && !rig->memory && rig->source.points.Empty() &&
+               rig->descriptor.source == nullptr && !weakSource.expired() && rig->jobs.ReservedMemoryBytes() == cpu &&
+               rig->budget.ReservedOwner() == gpu,
+           "retirement-refusal.cache-is-sole-strong-source-holder-after-owner-drop");
+    Expect(rig->device->GetDeviceRemovedReason() == S_OK &&
+               rig->queue.DeviceGeneration() == rig->descriptor.key.deviceGeneration,
+           "retirement-refusal.original-warp-device-remains-healthy");
+    (void)DrainCompletions(rig->jobs);
+    Expect(!rig->overlay.HasReady() && !rig->routes.HasReady() && rig->overlay.HasPending() &&
+               rig->queue.InFlightCount() == 0 && rig->errors == failuresBefore,
+           "retirement-refusal.extra-owner-drain-does-not-retry-or-report-failure");
+    rig->overlay.RetryOwner();
+    Expect(rig->overlay.HasReady() && rig->routes.HasReady(),
+           "retirement-refusal.explicit-retry-rearms-existing-captured-source");
+    // RetryOwner wakes both the parent selection controller and its nested draft. Their fair alternation
+    // gives the already-selected parent turn one pass before the draft records its real retirement event.
+    (void)DrainCompletions(rig->jobs);
+    std::printf("DIAG lasso-retirement.parent-retry-turn in-flight=%zu pending=%d ready=%d cpu=%llu gpu=%llu\n",
+                rig->queue.InFlightCount(), static_cast<int>(rig->overlay.HasPending()),
+                static_cast<int>(rig->overlay.HasReady()),
+                static_cast<unsigned long long>(rig->jobs.ReservedMemoryBytes()),
+                static_cast<unsigned long long>(rig->budget.ReservedOwner()));
+    (void)DrainCompletions(rig->jobs);
+    Expect(rig->queue.InFlightCount() == 1 && rig->overlay.HasPending() && rig->jobs.ReservedMemoryBytes() == cpu &&
+               rig->budget.ReservedOwner() == gpu,
+           "retirement-refusal.retry-records-real-original-stream-event-before-release");
+    const bool retired = rig->Until(
+        [&]()
+        {
+            return !rig->overlay.HasPending() && rig->jobs.IsIdle() && rig->queue.InFlightCount() == 0 &&
+                   rig->jobs.ReservedMemoryBytes() == Rig::sourceBytes && rig->budget.ReservedOwner() == 0 &&
+                   weakSource.expired();
+        });
+    Expect(retired && weakSource.expired() && rig->jobs.ReservedMemoryBytes() == Rig::sourceBytes &&
+               rig->budget.ReservedOwner() == 0 && rig->device->GetDeviceRemovedReason() == S_OK,
+           "retirement-refusal.real-event-releases-arena-but-weak-control-keeps-source-ticket-charge");
+    Expect(rig->errors == failuresBefore && rig->notices == changesBefore + 1,
+           "retirement-refusal.event-ack-is-not-a-failure-or-extra-invalidation-callback");
+    // SharedPublicationMemory's allocate_shared control block retains its original lease until the last weak owner
+    // resets.
+    weakSource.reset();
+    (void)DrainCompletions(rig->jobs);
+    Expect(rig->jobs.ReservedMemoryBytes() == 0 && !rig->overlay.HasPending() && rig->budget.ReservedOwner() == 0,
+           "retirement-refusal.weak-control-reset-acknowledges-original-ticket-and-refunds-zero");
+    Expect(rig->Close() && rig->jobs.ReservedMemoryBytes() == 0,
+           "retirement-refusal.retry-case-closes-after-source-ticket-refund");
+}
+void TestRetirementRefusalJoinedClose()
+{
+    auto rig = std::make_unique<Rig>();
+    Expect(rig->Initialize(), "retirement-close.real-warp-owner-setup");
+    if (!rig->initialized)
+        return;
+    const bool opened = rig->Open();
+    Expect(opened, "retirement-close.original-arena-ticket-ready");
+    if (!opened || !rig->gesture)
+        return;
+    const bool published = rig->Publish();
+    Expect(published, "retirement-close.actual-draft-published-before-injection");
+    if (!published)
+        return;
+    if (!rig->overlay.BorrowLassoDraftFrameOwner())
+    {
+        Expect(false, "retirement-close.published-draft-is-readable");
+        return;
+    }
+    const auto cpu = rig->jobs.ReservedMemoryBytes();
+    const auto gpu = rig->budget.ReservedOwner();
+    std::weak_ptr<SharedPublicationMemory> weakSource = rig->memory;
+    const auto failuresBefore = rig->errors;
+    const auto changesBefore = rig->notices;
+    rig->queue.SetRetirementCompletionRefusalsForTest(E_ACCESSDENIED, 1);
+    rig->visible = false;
+    rig->overlay.RequestLassoDraftOwner();
+    // One owner pass detaches the stale cache; the next offers and consumes the real injected refusal.
+    (void)DrainCompletions(rig->jobs);
+    (void)DrainCompletions(rig->jobs);
+    Expect(!rig->overlay.BorrowLassoDraftFrameOwner() && rig->overlay.HasPending() && !rig->overlay.HasReady() &&
+               !rig->routes.HasReady() && rig->queue.InFlightCount() == 0 && rig->jobs.ReservedMemoryBytes() == cpu &&
+               rig->budget.ReservedOwner() == gpu && !weakSource.expired(),
+           "retirement-close.refused-state-is-unborrowable-and-charged");
+    DropRigSourceReferences(*rig);
+    Expect(!rig->gesture && !rig->arena && !rig->memory && rig->source.points.Empty() &&
+               rig->descriptor.source == nullptr && !weakSource.expired() && rig->jobs.ReservedMemoryBytes() == cpu &&
+               rig->budget.ReservedOwner() == gpu,
+           "retirement-close.cache-is-sole-strong-source-holder-before-close");
+    Expect(rig->device->GetDeviceRemovedReason() == S_OK &&
+               rig->queue.DeviceGeneration() == rig->descriptor.key.deviceGeneration,
+           "retirement-close.original-warp-device-remains-healthy");
+    Expect(rig->notices == changesBefore + 1, "retirement-close.cache-detach-notice-is-distinct-from-failure-callback");
+    Expect(rig->errors == failuresBefore, "retirement-close.barrier-refusal-does-not-report-draft-failure");
+    Expect(rig->Close() && !rig->overlay.HasPending() && rig->budget.ReservedOwner() == 0 &&
+               rig->jobs.ReservedMemoryBytes() == 0 && weakSource.expired(),
+           "retirement-close.joined-shutdown-retires-refused-cache-and-closes-admission");
+    Expect(rig->errors == failuresBefore, "retirement-close.joined-cleanup-does-not-report-draft-failure");
+}
 } // namespace
 int RunLassoDraftControllerTests()
 {
@@ -361,6 +505,8 @@ int RunLassoDraftControllerTests()
     Expect(rig->Close() && !rig->overlay.HasPending() && rig->budget.ReservedOwner() == 0 &&
                rig->jobs.ReservedMemoryBytes() == 0 && weak.expired(),
            "real-joined-close-retires-source-and-draft-before-zero-refund");
+    TestRetirementRefusalRetry();
+    TestRetirementRefusalJoinedClose();
     std::printf("SUMMARY lasso-draft-controller checks=%u failures=%u\n", checks, failures);
     return static_cast<int>(failures);
 }

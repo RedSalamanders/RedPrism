@@ -92,6 +92,7 @@
     <ClInclude Include="..\..\Common\CodecFileStream.h" />
     <ClInclude Include="..\..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
+    <ClInclude Include="..\..\Common\Win32FilePath.h" />
     <ClInclude Include="..\..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\ImageImportWork.h" />
     <ClInclude Include="ImageImportWorkTests.h" />
@@ -123,6 +124,7 @@
     <ClInclude Include="ClipboardTransferTests.h" />
     <ClInclude Include="ProjectPublicationRetryTests.h" />
     <ClInclude Include="Io.Tests.ProjectDurabilityFaults.h" />
+    <ClInclude Include="Io.Tests.LongPathSave.h" />
     <ClInclude Include="ClipboardAvailabilityTests.h" />
     <ClInclude Include="ClipboardReceiptTests.h" />
     <ClInclude Include="ClipboardFingerprintTests.h" />
@@ -220,6 +222,7 @@
     <ClCompile Include="ProjectCancellationTests.cpp" />
     <ClCompile Include="ProjectPublicationRetryTests.cpp" />
     <ClCompile Include="Io.Tests.ProjectDurabilityFaults.cpp" />
+    <ClCompile Include="Io.Tests.LongPathSave.cpp" />
     <ClCompile Include="FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>

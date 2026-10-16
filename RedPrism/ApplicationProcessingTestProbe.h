@@ -31,7 +31,9 @@ enum class ApplicationResponsiveSourceStage : std::uint8_t
     LayerRows,
     Display,
     Stroke,
-    ReadyToEnable
+    ReadyToEnable,
+    SelectionOutline,
+    LassoDraft
 };
 
 // Borrowed startup-only controls. afterStage runs only after the named subsystem successfully initializes;
@@ -48,6 +50,7 @@ struct ApplicationProcessingTestProbe final
     std::int32_t (*afterRuntimeSources)(void*) noexcept = nullptr;
     // Explicit actual-Run startup fixture only. Borrowed context survives Run and joined Shutdown.
     bool responsiveSourcesForTest = false;
+    bool responsiveSelectionSourcesForTest = false; // Explicit complete-source cold-start fixture only.
     std::int32_t (*afterResponsiveSourceStage)(void*, ApplicationResponsiveSourceStage) noexcept = nullptr;
     unsigned int workerCount = 0; // Startup-only; zero preserves the production automatic count.
     // Reached lasso fixture controls, configured before each admitted operation. The borrowed probe and

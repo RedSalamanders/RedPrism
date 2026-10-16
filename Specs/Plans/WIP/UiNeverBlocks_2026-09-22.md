@@ -3,15 +3,15 @@
 ## Current delivery checklist
 
 Latest native checkpoint (2026-10-16): combined startup, long-path I/O and lasso retirement sources pass
-canonical Release analysis r1034 and complete x64 Release r1035 / Debug r1036. Both runtime profiles retain
+canonical Release analysis r1034 and complete x64 Release r1035 / Debug r1036 / real ASan r1041. All three runtime profiles retain
 all 139 Application stages, 21,720 DocumentTests, 7,391 composition and 1,953 I/O records. Main verifies their
-archives, 932 actual compiler command records per profile and all five binary/PDB identities. These latest
-combined code/test changes are not yet committed; `eb7bcee` is the last pushed evidence checkpoint.
+archives, 932 actual compiler command records per profile and all five binary/PDB identities. ASan also passes
+concurrent raster stress and the actual detection probe. [Combined x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md).
 
 ASan r1037 was interrupted during compilation on October 14: no completed child receipt exists and no test
-or compiler process remains. Its partial source/object/product evidence is being preserved without an
-inferred exit or success. Fresh full x64 ASan r1041 and ARM64 Debug/Release/instrumented-ASan cross-builds
-r1042-r1044 run serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
+or compiler process remains. Its 2,404-file partial source/object/product snapshot is preserved with independent readback hashes,
+without an inferred exit or success. Fresh full x64 ASan r1041 passes; ARM64 Debug/Release/instrumented-ASan cross-builds
+r1042-r1044 continue serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
 Complete caller admission/retirement, ordinary activation and measured S5/G1 remain open. P1 is not Done.
 The earlier six-profile lasso checkpoint remains [historical evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
 
@@ -19,18 +19,20 @@ Next code checkpoints (2026-10-14):
 
 Latest I/O checkpoint: actual R7 real ASan independently passes 1,953 ordered records in each C:/explicit-Z:
 process, including all nine original failed predicates. Source/dependency/product bookends and the 3,036-file
-archive pass. Main selectively adopts ten code/test/project paths; native analysis/profiles and F6 remain open.
+archive pass. Main selectively adopts ten code/test/project paths. Canonical analysis and full x64 Debug/Release now pass;
+real ASan, ARM64 cross-builds and the wider F6 delivery cases remain open.
 [Private I/O evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
 Complete-startup R4 independently passes all 139 application stages and 282 new controls; its 1,982-file
 archive passes. R1-R3 consumer precondition refusals remain retained. Seven source/test/project paths are
 selectively adopted, preserving the I/O entries. DxUi stays at 8e899407/API3.
 [Startup evidence](../../TestRuns/P1CompleteResponsiveStartup_2026-10-14.md).
 
-Current file follow-up: the private long-path C++ build, real ASan probe, ISA scan and ordinary C: TEMP
+Retained I/O failure history (superseded by R7 above): the private long-path C++ build, real ASan probe, ISA scan and ordinary C: TEMP
 process pass. The runner then fails with WinError206 while creating the long Z: directory, before any Z:
 test child launches; its 1,669-file source/product archive is retained. The replacement changes only runner
 directory creation to an explicit extended-length API spelling, keeping process TEMP and all 57 new/1,823
-predecessor assertions unchanged. Complete two-profile qualification and native adoption remain open.
+predecessor assertions unchanged. At this failed attempt, complete two-profile qualification and native adoption
+were still open; the successful R7 and current native progress are recorded above.
 The replacement launches the Z: child, which exits1 on the unchanged environment check and eight 247/248
 boundary predicates. Its 1,671-file archive is retained. Direct Windows observation shows TMP/TEMP retain
 311 units while `GetTempPathW` selects the 14-unit user-profile path. The next candidate selects the long
@@ -57,10 +59,12 @@ source/roster rejection controls before this replacement build.
   five binary/PDB pairs and the 1,763-file archive (`0F5DF9ED...`).
 - [x] Qualify full x64 Debug r1036 on the same source: exact predecessor/delta rosters, all 932 actual
   compiler commands, five binary/PDB pairs and the 1,783-file archive independently pass (`895332FF...`).
-- [ ] Finish fresh combined native validation: full real ASan r1041 and ARM64 cross-builds r1042-r1044,
-  after preserving interrupted r1037. Each next profile waits for the prior archive and independent readers.
-- [ ] Record the complete combined-source checkpoint and commit/push its code, tests and contracts after
-  the remaining profiles qualify; this checkpoint does not close ordinary activation or performance gates.
+- [x] Qualify fresh full real ASan r1041 after preserving interrupted r1037: all original suites/stages,
+  stress, real probe, 932 instrumented command records, five binary/PDB pairs and the 1,747-file archive pass.
+- [ ] Finish ARM64 Debug/Release/instrumented-ASan cross-builds r1042-r1044 on the exact combined source.
+  Each next profile waits for the prior complete archive and independent artifact/identity readers.
+- [ ] Commit/push the x64-qualified combined code, tests and contracts; record ARM64 separately when its
+  cross-build matrix completes. Neither checkpoint closes ordinary activation or performance gates.
 
 Current private follow-up: the asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
 readback, fixed physical delta/Ctrl/ordinal buffering and a separate release/loss terminal. Actual host tests

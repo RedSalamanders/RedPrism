@@ -1,7 +1,7 @@
 # Project format (`.prism`)
 
 Status: current normative product contract
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-14
 Owner: `Common/ProjectStore.*`, `Common/ZipOwner.h`
 
 ## Scope
@@ -26,8 +26,18 @@ asset or `manifest.json` is rejected when any path component after the project r
 (`ExplodedMemberPathAllowed`, `ProjectIoStatus::Invalid`). A missing file is `MissingImage`, not a reparse failure.
 A truncated, empty, or non-ZIP `.prism` is `Invalid` or `MissingImage` and yields no layers.
 
-Atomic save: exploded projects write into an exclusively created, unique same-directory `dest.~<guid>` staging
-directory, then rotate `dest` → `dest.old` and the staging directory → `dest`. Before moving `dest`, the writer must
+For containment comparison, matching ordinary and extended DOS spellings, or matching ordinary and extended
+UNC spellings, use the same case-insensitive root and separator boundary. Attribute/reparse checks retain the
+candidate's original API spelling. Other device or volume-GUID namespaces compare only within that same
+namespace; no filesystem identity equivalence is inferred. Empty, dot and parent components remain refused.
+
+`Win32FilePath` resolves ordinary project roots before selecting their API spelling. Already extended/device
+names are preserved. Directory paths use the extended spelling from 248 UTF-16 units and file paths from 260;
+long DOS/UNC paths are converted only after ordinary parsing components are resolved or refused. Input/output
+aliasing cannot discard the source spelling during prefix construction.
+
+Atomic save: exploded projects write into an exclusively created, unique staging directory in the exact
+destination parent using the sibling naming rule below, then rotate `dest` → `dest.old` and staging → `dest`. Before moving `dest`, the writer must
 remove the reserved prior `dest.old`; if that cleanup fails, it leaves `dest` untouched, reports the cleanup error
 and does not publish. A cleanup already in progress may partially remove the older backup; a fault injected before
 the cleanup starts leaves both trees untouched. If `dest` → `dest.old` fails, `dest` remains the current project and the save
@@ -88,7 +98,8 @@ traversing their targets. Paths are bounded to 32,767 UTF-16 units and ordinary 
 exceeding either reports ERROR_FILENAME_EXCED_RANGE. Real cleanup errors may leave a partly cleaned owned tree.
 Read-only files are not forcibly changed. Capture and report the initiating Win32 error before later cleanup.
 
-ZIP projects write into a unique same-directory `dest.~<guid>` file opened with `ZIP_CREATE | ZIP_EXCL`, then
+ZIP projects write into a unique file in the exact destination parent using the sibling naming rule below,
+opened with `ZIP_CREATE | ZIP_EXCL`, then
 `ReplaceFileW` (with the existing `MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed
 successfully before publication; ZIP close, flush, and handle close must all succeed before replacement. A failed
 pre-publication staging or durability step leaves the previous destination intact and removes only the temporary
@@ -109,6 +120,19 @@ use file sources for those assets through close; they retain filenames/manifest,
 Staged asset/manifest files are flushed and closed before rotation or ZIP replacement. Metadata and libzip's
 per-source path copies remain charged by graph admission. Serial encoding and extra ZIP staging IO are measured
 tradeoffs; bounded parallel asset encoding remains tracked in P1.7.
+
+## Win32 staging names
+
+Generated staging uses `<destination-leaf>.~<guid>` when its leaf fits 255 UTF-16 units. Otherwise it uses
+`RedPrism.~<guid>` in the exact same parent. The 38-unit GUID suffix remains unique; creation is exclusive,
+and cleanup addresses only the exact owned path. Empty or over-255 destination leaves and invalid/oversized
+suffixes refuse preparation. This shared rule also applies to PNG/JPEG export. The reserved `dest.old` recovery
+name retains its existing semantics and must independently fit the filesystem's component limit.
+
+The native behavior uses this 255-unit bound without querying every destination volume. Current runtime
+evidence covers local fixed NTFS and ReFS volumes reporting that limit, not arbitrary or remote filesystems.
+Checked flush/close are publication prerequisites; these fixtures do not establish power-loss survival,
+slow-I/O latency or interruption of an in-flight filesystem call.
 
 ## Manifest
 

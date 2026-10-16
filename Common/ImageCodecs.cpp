@@ -4,6 +4,7 @@
 #include "CodecMemoryStream.h"
 #include "RasterWork.h"
 #include "Utf8.h"
+#include "Win32FilePath.h"
 
 #include <algorithm>
 #include <cstring>
@@ -637,16 +638,30 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     // never leaves a truncated PNG/JPEG at `path` and a concurrent reader never sees a partial file.
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    const std::wstring temp = std::wstring(path) + L".~" + Guid::Generate().ToString();
+    const std::wstring suffix = L".~" + Guid::Generate().ToString();
+    std::wstring apiTarget;
+    const bool resolveTarget =
+        std::wstring_view{path}.size() < MAX_PATH && std::wstring_view{path}.size() + suffix.size() >= MAX_PATH;
+    const HRESULT targetResult = resolveTarget ? Win32FilePath::Resolve(path, Win32FilePath::Use::File, apiTarget)
+                                               : Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiTarget);
+    if (FAILED(targetResult))
+        return ImageCodecStatus::Encode;
+    std::wstring temp;
+    if (FAILED(Win32FilePath::SiblingWithSuffix(apiTarget, suffix, temp)))
+        return ImageCodecStatus::Encode;
+    std::wstring apiTemp;
+    const HRESULT tempResult = Win32FilePath::PrefixResolvedPath(temp.c_str(), Win32FilePath::Use::File, apiTemp);
+    if (FAILED(tempResult))
+        return ImageCodecStatus::Encode;
     wil::com_ptr_nothrow<CodecFileStream> file;
-    const HRESULT created = CodecFileStream::Create(temp.c_str(), kMaxEncodedBytes, cancellation, file.put());
+    const HRESULT created = CodecFileStream::Create(apiTemp.c_str(), kMaxEncodedBytes, cancellation, file.put());
     if (FAILED(created))
         return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
     auto cleanup = wil::scope_exit(
         [&]
         {
             file.reset();
-            (void)DeleteFileW(temp.c_str());
+            (void)DeleteFileW(apiTemp.c_str());
         });
     std::vector<std::uint8_t> unused;
     const auto encoded = EncodeToFormat(image, container, quality, resolution, unused, cancellation, file.get());
@@ -659,15 +674,16 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     file.reset();
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
-    const DWORD existing = GetFileAttributesW(path);
+    const DWORD existing = GetFileAttributesW(apiTarget.c_str());
     bool replaced = false;
     if (existing != INVALID_FILE_ATTRIBUTES && (existing & FILE_ATTRIBUTE_DIRECTORY) == 0)
     {
-        replaced = ReplaceFileW(path, temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
+        replaced = ReplaceFileW(apiTarget.c_str(), apiTemp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr,
+                                nullptr) != 0;
     }
     if (!replaced)
     {
-        replaced = MoveFileExW(temp.c_str(), path, MOVEFILE_REPLACE_EXISTING) != 0;
+        replaced = MoveFileExW(apiTemp.c_str(), apiTarget.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
     }
     if (!replaced)
     {
@@ -684,7 +700,12 @@ bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::s
     {
         return false;
     }
-    const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    std::wstring apiPath;
+    const HRESULT pathResult = Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath);
+    if (FAILED(pathResult))
+        return false;
+    const HANDLE file =
+        CreateFileW(apiPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE)
     {
         return false;

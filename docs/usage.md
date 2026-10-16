@@ -32,6 +32,9 @@ version 7. A project the app cannot open (unsupported version, damaged metadata,
 same 100-megapixel budget while editing (a paste, a duplicate, a new mask, a filter, a merge, a distortion, a
 shape) is refused with a notice the same way, and nothing changes.
 
+Long local paths are supported for opening and saving projects and for PNG/JPEG export, within Windows and
+filesystem path limits.
+
 ## Images
 
 PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) open through File › Open, File › Import Images…

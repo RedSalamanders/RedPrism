@@ -2,7 +2,19 @@
 
 ## Delivery checklist
 
-Latest native step: complete Release r1028, Debug r1029 and real ASan r1030 independently pass the
+Current combined native checkpoint (2026-10-16): canonical Release analysis r1034 and complete x64
+Release r1035, Debug r1036 and real ASan r1041 pass on the same frozen repository inputs. The exact 139
+Application stages, 21,720 Document records, 7,391 composition records and all 50 lasso controller facts pass;
+Main independently checks archives, actual compile profiles and five binary/PDB identities. ARM64 cross-builds
+r1042-r1044 are running. Complete admission/large-owner cost, ordinary activation and S5/G1 remain open.
+[Combined x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md).
+
+Earlier private retirement checkpoint: R10 real WARP/Main readback verifies all 50 controller facts,
+preserving every original predicate. The original failed event check remains archived; the fair parent/draft
+two-pass setup fixes the fixture. Only that fixture changed.
+[Private evidence](../../TestRuns/P1LassoDraftRetirement_2026-10-14.md).
+
+Earlier native checkpoint: complete Release r1028, Debug r1029 and real ASan r1030 independently pass the
 integrated 160 host-input facts, 29 draft-display facts, all 138 Application stages, 21,720 DocumentTests
 records and 7,366 composition records. Canonical Release analysis r1026 passes the same 1,356 compiled inputs.
 Main verifies every archive, source bookend, linked scan and compiler profile; all 930 native ASan compile

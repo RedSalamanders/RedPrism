@@ -147,6 +147,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneHistoryResidencyShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneResponsiveSelectionStartupSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -323,7 +324,7 @@ class Application final : public ChromeEvents,
                                                           PreparedSelectionOutline::Loops& retired) noexcept;
     [[nodiscard]] float ChromeDpi() const noexcept;
     [[nodiscard]] bool InitializePreparedDisplayOwner(bool allowHidden) noexcept;
-    [[nodiscard]] bool InitializeResponsiveSourcesOwner(bool allowHidden) noexcept;
+    [[nodiscard]] bool InitializeResponsiveSourcesOwner(bool allowHidden, bool includeSelection = false) noexcept;
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
     void CloseMainWindow() noexcept;

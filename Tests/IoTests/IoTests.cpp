@@ -15,6 +15,7 @@
 #include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
 #include "ImageImportWorkTests.h"
+#include "Io.Tests.LongPathSave.h"
 #include "Io.Tests.ProjectDurabilityFaults.h"
 #include "PathClassificationWorkTests.h"
 #include "ProjectCancellationTests.h"
@@ -2777,6 +2778,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunProjectCancellationTests();
     gFailures += RunImageImportWorkTests();
     gFailures += RunProjectLoadWorkTests();
+    gFailures += RunLongPathSaveTests();
     TestSettingsStore();
     if (gFailures != 0)
     {

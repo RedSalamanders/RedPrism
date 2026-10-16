@@ -308,8 +308,9 @@ int Application::Run(int showCommand) noexcept
         OutputDebugStringW(L"History residency subscription failed.\n");
         return 5;
     }
-    if (_processingTestProbe && _processingTestProbe->responsiveSourcesForTest &&
-        !InitializeResponsiveSourcesOwner(false))
+    if (_processingTestProbe &&
+        (_processingTestProbe->responsiveSourcesForTest || _processingTestProbe->responsiveSelectionSourcesForTest) &&
+        !InitializeResponsiveSourcesOwner(false, _processingTestProbe->responsiveSelectionSourcesForTest))
         return 5;
     if (_processingTestProbe && _processingTestProbe->afterRuntimeSources &&
         FAILED(static_cast<HRESULT>(_processingTestProbe->afterRuntimeSources(_processingTestProbe->context))))
