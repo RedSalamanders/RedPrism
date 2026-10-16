@@ -638,6 +638,26 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     return result;
 }
 
+bool DocumentSession::HasCurrentWandColorSelectionBinding() const noexcept
+{
+    if (!_document || !_colorEdit || !_colorEdit->_wandSelectionBinding)
+        return false;
+    const auto& binding = _colorEdit->_wandSelectionBinding.value();
+    const auto& current = _document->selection;
+    return binding.opening == _colorEdit->openingSequence && binding.selection.has_value() == current.has_value() &&
+           (!current || (binding.selection->antialiased == current->antialiased &&
+                         binding.selection->loops.Identity() == current->loops.Identity()));
+}
+
+void DocumentSession::NormalizeWandColorSelectionToken(JobToken& token) const noexcept
+{
+    if (!HasCurrentWandColorSelectionBinding() || !token.target || token.target->layerId != _colorEdit->layerID)
+        return;
+    // Only a newly captured job receives the acknowledged Wand validation selection. The panel still
+    // samples/renders its original opening coverage; every older produced token stays strict.
+    token.selection = _colorEdit->_wandSelectionBinding->selection;
+}
+
 std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditCommit() const
 {
     if (!_document.has_value() || !_colorEdit.has_value() || _adjustmentEditingID.has_value() ||
@@ -651,6 +671,7 @@ std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditCommit() const
     JobToken token = _colorEdit->sourceToken.value();
     token.sessionIdentity = _tokenIdentity.value;
     token.sequence = _colorEditSequence;
+    NormalizeWandColorSelectionToken(token);
     return ColorEditJobInput{std::move(token), _colorEdit.value()};
 }
 
@@ -667,6 +688,7 @@ std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditPreview() cons
     }
     token->sessionIdentity = _tokenIdentity.value;
     token->sequence = _colorEditSequence;
+    NormalizeWandColorSelectionToken(*token);
     return ColorEditJobInput{std::move(*token), *_colorEdit};
 }
 
@@ -797,7 +819,10 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
     }
     if (!CanApplyJobResult(result.token, _colorEditSequence))
     {
-        CancelColorEdit();
+        // An older selection result must not close this still-valid panel after its acknowledged Wand.
+        // This branch only refuses; publication below still requires the complete public token guard.
+        if (!HasCurrentWandColorSelectionBinding() || !IsJobTargetAndSessionCurrent(result.token, _colorEditSequence))
+            CancelColorEdit();
         return false;
     }
     switch (result.status)

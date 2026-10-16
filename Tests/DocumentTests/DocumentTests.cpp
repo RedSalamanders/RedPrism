@@ -22,7 +22,9 @@
 #include "Document.Tests.BoundedLassoGesture.h"
 #include "Document.Tests.BoundedLassoPoints.h"
 #include "Document.Tests.BoundedLassoTicket.h"
+#include "Document.Tests.DistortRead.h"
 #include "Document.Tests.HostLassoInput.h"
+#include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
 #include "Document.Tests.LassoSessionBridge.h"
@@ -42,6 +44,9 @@
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.OwnedMetadataJobsR4.h"
 #include "Document.Tests.OwnedRecordRoot.h"
+#include "Document.Tests.PanelWand.h"
+#include "Document.Tests.PanelWandAuthority.h"
+#include "Document.Tests.PanelWandFollowthrough.h"
 #include "Document.Tests.PendingDisplaySource.h"
 #include "Document.Tests.PersistentHistory.h"
 #include "Document.Tests.PersistentOwnerIndex.h"
@@ -8257,6 +8262,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();
     gFailures += RunWandLayerSelectionTests();
+    gFailures += RunPanelWandTests();
+    gFailures += RunPanelWandAuthorityTests();
+    gFailures += RunPanelWandFollowthroughTests();
     gFailures += RunWandBooleanAdmissionTests();
     gFailures += RunWandCompositeSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
@@ -8327,6 +8335,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunMaskEditWorkExtraTests();
     gFailures += RunLayerCopyWorkTests();
     gFailures += RunDistortWorkTests();
+    gFailures += RunDistortReadTests();
     gFailures += RunTransformPixelsWorkTests();
     gFailures += RunTransformCommitWorkTests();
     gFailures += RunTransformCancellationWorkTests();
@@ -8375,6 +8384,7 @@ int wmain(int argc, wchar_t** argv)
     TestLevels();
     TestHueSaturation();
     TestHueRangesAndSampling();
+    gFailures += RunHueSampleScalarTests();
     TestImageAdjustments();
     TestFilters();
     TestAdjustmentLayers();

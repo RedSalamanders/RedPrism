@@ -78,8 +78,10 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
                                       owner._graphGpuBudget, envelope, std::move(reservation), region,
                                       owner._renderer.IsWarp()),
           _owner(owner), _stamp(stamp), _request(request), _retirement(envelope.cpuBytes), _outlineLimit(outlineLimit),
-          _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
-          _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId())
+          _authority(owner._session.CaptureHistoryRestoreAuthority()),
+          _panelAuthority(request.panelOpening ? owner._session.CapturePanelWandAuthority() : std::nullopt),
+          _gate(owner._wandLayerHostTestGate), _outputGate(owner._wandOutputLifetimeTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
     ~WandCompositeHostJob() override
@@ -93,7 +95,11 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     [[nodiscard]] bool Current() const noexcept
     {
         return !_owner._shutdownStarted && _owner._wandLayerHostStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._session.CanApplyHistoryRestore(_authority);
+               _owner._historyWork.IsCurrent(_stamp) &&
+               (_request.panelOpening
+                    ? _panelAuthority && _owner._session.IsPanelWandOpeningCurrent(_request.panelOpening.value()) &&
+                          _owner._session.IsPanelWandAuthorityCurrent(_panelAuthority.value())
+                    : _owner._session.CanApplyHistoryRestore(_authority));
     }
     JobResult PrepareReadbackOpening(JobContext&) override
     {
@@ -129,8 +135,11 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            _payload->input = _owner._session.PrepareWandCompositeSelectionInput(_request.point, _request.settings,
-                                                                                 _request.antialiased, _request.mode);
+            _payload->input =
+                (_request.panelOpening ? _owner._session.PreparePanelWandCompositeSelectionInput(
+                                             _request.point, _request.settings, _request.antialiased, _request.mode)
+                                       : _owner._session.PrepareWandCompositeSelectionInput(
+                                             _request.point, _request.settings, _request.antialiased, _request.mode));
             const auto* source = _payload->input ? _payload->input->ReadbackDocument() : nullptr;
             if (!source)
                 return E_ABORT;
@@ -280,6 +289,7 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
     const std::uint64_t _retirement;
     const std::uint64_t _outlineLimit;
     const HistoryRestoreAuthority _authority;
+    const std::optional<PanelWandAuthority> _panelAuthority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
     const std::shared_ptr<WandLayerHostTestGate> _outputGate;
     const DWORD _ownerThread;
@@ -289,7 +299,10 @@ class Application::WandCompositeHostJob final : public RecordedDocumentReadbackJ
 
 HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept
 {
-    if (_wandLayerHostTicket || !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (_wandLayerHostTicket ||
+        !(input.panelOpening ? _session.IsPanelWandOpeningCurrent(input.panelOpening.value()) &&
+                                   _session.CapturePanelWandAuthority().has_value()
+                             : _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority())))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     const auto& document = _session.Document();
     if (!document || !std::isfinite(input.point.x) || !std::isfinite(input.point.y))
@@ -298,7 +311,9 @@ HRESULT Application::StartWandCompositeSelection(const HostWandCompositeNewInput
         return E_INVALIDARG;
     if (input.point.x < 0 || input.point.y < 0 || input.point.x >= document->width || input.point.y >= document->height)
         return S_OK;
-    const auto plan = _session.PlanWandCompositeSelectionMemory(input.point, input.settings, input.mode);
+    const auto plan =
+        (input.panelOpening ? _session.PlanPanelWandCompositeSelectionMemory(input.point, input.settings, input.mode)
+                            : _session.PlanWandCompositeSelectionMemory(input.point, input.settings, input.mode));
     const D3D11_BOX region{0, 0, 0, static_cast<UINT>(document->width), static_cast<UINT>(document->height), 1};
     const auto readback = RecordedDocumentReadbackJob::RequiredMemory(region);
     if (!plan || !readback)

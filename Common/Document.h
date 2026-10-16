@@ -1438,6 +1438,8 @@ class PreparedLassoFinish;
 struct LassoFinishTerminal;
 struct LassoFinishObserver;
 class WandLayerSelectionInput;
+class PanelWandAuthority;
+class PanelWandOpening;
 class PreparedWandLayerSelection;
 struct WandLayerSelectionObserver;
 struct WandLayerSelectionMemoryPlan;
@@ -1595,6 +1597,19 @@ struct ColorEdit
     {
         return grownGrid ? grownGrid->height : Source().Height();
     }
+
+  private:
+    friend class DocumentSession;
+    friend std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit&) noexcept;
+    // Only an acknowledged preserving-panel Wand may bind a new document selection for future jobs.
+    // Original public sampling/coverage/source-token state remains unchanged. Keeping this owner inside
+    // the panel also carries it through every existing capture, Cancel/OK, replacement and retirement swap.
+    struct WandSelectionBinding final
+    {
+        std::uint64_t opening = 0;
+        std::optional<DocumentSelection> selection;
+    };
+    std::optional<WandSelectionBinding> _wandSelectionBinding;
 };
 
 // What the last brush commit installed: the raster and the grid rectangle it covers (for the host's live preview).
@@ -2642,6 +2657,16 @@ class DocumentSession
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<PanelWandOpening> CapturePanelWandOpening() const noexcept;
+    [[nodiscard]] bool IsPanelWandOpeningCurrent(const PanelWandOpening& opening) const noexcept;
+    [[nodiscard]] std::optional<PanelWandAuthority> CapturePanelWandAuthority() const noexcept;
+    [[nodiscard]] bool IsPanelWandAuthorityCurrent(const PanelWandAuthority& authority) const noexcept;
+    // Explicit live-panel selection route. Every other unresolved edit retains its original refusal.
+    // The captured panel opening/sequence survives unchanged; ordinary history restore remains strict.
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandLayerSelectionInput(
+        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PreparePanelWandCompositeSelectionInput(
+        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
         WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr,
@@ -2655,6 +2680,10 @@ class DocumentSession
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
         Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandCompositeSelectionMemory(
+        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandLayerSelectionMemory(
+        Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanPanelWandCompositeSelectionMemory(
         Vec2 point, WandSettings settings, SelectionMode mode = SelectionMode::New) const noexcept;
     [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
         bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
@@ -3096,8 +3125,11 @@ class DocumentSession
     [[nodiscard]] static std::optional<double> SampledHue(const Raster& composite, Vec2 point) noexcept;
     // The eyedroppers: re-center, widen or narrow the selected range's band on the sampled hue.
     void SampleHueRange(const Raster& composite, Vec2 point);
+    // Owner metadata application of a hue computed on an admitted worker. No pixel source is read here.
+    void SampleHueRangeValue(std::optional<double> hue);
     // Targeted adjustment: picks the range owning the sampled color; the drag changes its saturation (or hue).
     bool BeginHueTargeting(const Raster& composite, Vec2 point);
+    [[nodiscard]] bool BeginHueTargetingValue(std::optional<double> hue);
     void DragHueTargeting(double viewDelta, bool adjustsHue);
     void EndHueTargeting() noexcept;
     // Adjustment layers: a new one above the active layer (`New <Kind> Adjustment`; a Gradient Map runs from the
@@ -3338,13 +3370,17 @@ class DocumentSession
   private:
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(Vec2 point, WandSettings settings,
                                                                                    bool antialiased, SelectionMode mode,
-                                                                                   bool composite) const;
+                                                                                   bool composite,
+                                                                                   bool preservePanel = false) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
         WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
         DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
         std::shared_ptr<const SharedPublicationMemory> memory);
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(
-        Vec2 point, WandSettings settings, bool composite, SelectionMode mode) const noexcept;
+        Vec2 point, WandSettings settings, bool composite, SelectionMode mode,
+        bool preservePanel = false) const noexcept;
+    [[nodiscard]] bool PanelWandEligible() const noexcept;
+
     [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;
     [[nodiscard]] bool CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept;
     [[nodiscard]] bool HasDeferredTransform() const noexcept
@@ -3517,6 +3553,9 @@ class DocumentSession
     void MeasureColorEditHistogramInline();
     [[nodiscard]] bool ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening,
                                                const Raster& original) const noexcept;
+    [[nodiscard]] bool HasCurrentWandColorSelectionBinding() const noexcept;
+    void NormalizeWandColorSelectionToken(JobToken& token) const noexcept;
+    [[nodiscard]] bool IsJobTargetAndSessionCurrent(const JobToken& token, std::uint64_t latestSequence) const noexcept;
     // A brush stroke, gradient or Invert/pixel-move edit on `layer` (or its mask): built, validated, pixel-budget
     // limited and clipped to the selection, or null when construction fails, the raster is invalid, or there is no
     // document. `settings` is the brush the caller paints with; edits that only need a raster to write into (a

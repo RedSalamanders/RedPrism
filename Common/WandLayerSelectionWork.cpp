@@ -106,6 +106,69 @@ WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerS
     return WandLayerSelectionAdmission::Ready;
 }
 
+bool DocumentSession::PanelWandEligible() const noexcept
+{
+    return _document && _colorEdit && !_gradient && !_transformEdit && !_brush && !_brushFinishingOpening &&
+           !_brushUpdatingOpening && !HasPendingWarp() && !_pixelMove && !_shapeDraft && !_selectionMoveOrigin &&
+           !_lassoDraft;
+}
+
+std::optional<PanelWandOpening> DocumentSession::CapturePanelWandOpening() const noexcept
+{
+    if (!_document || !_colorEdit)
+        return std::nullopt;
+    PanelWandOpening result;
+    result._session = _tokenIdentity.value;
+    result._documentSerial = _documentSerial;
+    result._opening = _colorEdit->openingSequence;
+    result._sequence = _colorEditSequence;
+    result._valid = true;
+    return result;
+}
+
+bool DocumentSession::IsPanelWandOpeningCurrent(const PanelWandOpening& opening) const noexcept
+{
+    return opening._valid && _document && _colorEdit && opening._session == _tokenIdentity.value &&
+           opening._documentSerial == _documentSerial && opening._opening == _colorEdit->openingSequence &&
+           opening._sequence == _colorEditSequence;
+}
+
+std::optional<PanelWandAuthority> DocumentSession::CapturePanelWandAuthority() const noexcept
+{
+    if (!PanelWandEligible())
+        return std::nullopt;
+    PanelWandAuthority result;
+    result._source = CaptureHistoryRestoreAuthority();
+    result._opening = _colorEdit->openingSequence;
+    result._sequence = _colorEditSequence;
+    result._valid = true;
+    return result;
+}
+
+bool DocumentSession::IsPanelWandAuthorityCurrent(const PanelWandAuthority& authority) const noexcept
+{
+    const auto& source = authority._source;
+    return authority._valid && PanelWandEligible() && source._session == _tokenIdentity.value &&
+           source._documentSerial == _documentSerial && source._generation == _generation &&
+           source._restoreSerial == _restoreSerial && source._documentID == std::optional(_document->id) &&
+           source._active == _activeLayerID && source._maskSelected == _maskSelected && source._crop == _cropRect &&
+           _colorEdit->openingSequence == authority._opening && _colorEditSequence == authority._sequence;
+}
+
+std::optional<WandLayerSelectionInput> DocumentSession::PreparePanelWandLayerSelectionInput(Vec2 point,
+                                                                                            WandSettings settings,
+                                                                                            bool antialiased,
+                                                                                            SelectionMode mode) const
+{
+    return PrepareWandSelectionInput(point, settings, antialiased, mode, false, true);
+}
+
+std::optional<WandLayerSelectionInput> DocumentSession::PreparePanelWandCompositeSelectionInput(
+    Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode) const
+{
+    return PrepareWandSelectionInput(point, settings, antialiased, mode, true, true);
+}
+
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandLayerSelectionInput(Vec2 point,
                                                                                        WandSettings settings,
                                                                                        bool antialiased,
@@ -124,13 +187,21 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandCompositeSele
 
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInput(Vec2 point, WandSettings settings,
                                                                                   bool antialiased, SelectionMode mode,
-                                                                                  bool composite) const
+                                                                                  bool composite,
+                                                                                  bool preservePanel) const
 {
     if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
         !ValidPoint(point, _document->width, _document->height))
         return std::nullopt;
     auto authority = CaptureHistoryRestoreAuthority();
-    if (!CanApplyHistoryRestore(authority))
+    std::optional<PanelWandAuthority> panelAuthority;
+    if (preservePanel)
+    {
+        panelAuthority = CapturePanelWandAuthority();
+        if (!panelAuthority || !IsPanelWandAuthorityCurrent(panelAuthority.value()))
+            return std::nullopt;
+    }
+    else if (!CanApplyHistoryRestore(authority))
         return std::nullopt;
     auto token = CaptureJobToken();
     if (!token)
@@ -138,9 +209,11 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInpu
     std::uint64_t outputHistoryBytes = 0;
     if (!TryAddWandLayerSelectionBytes(history.EditMemoryBytes(_document), 8 * 4096, outputHistoryBytes))
         return std::nullopt;
-    return WandLayerSelectionInput(point, settings, antialiased, mode, std::move(authority), std::move(token.value()),
+    WandLayerSelectionInput result(point, settings, antialiased, mode, std::move(authority), std::move(token.value()),
                                    history.CaptureState(), _document.value(), _activeLayerID, composite,
                                    outputHistoryBytes);
+    result._panelAuthority = std::move(panelAuthority);
+    return result;
 }
 
 std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelectionPublication(
@@ -323,7 +396,10 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
 
 bool DocumentSession::IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept
 {
-    return !prepared._applied && prepared._input._valid && CanApplyHistoryRestore(prepared._input._authority) &&
+    const auto& panel = prepared._input._panelAuthority;
+    const bool currentAuthority =
+        panel ? IsPanelWandAuthorityCurrent(panel.value()) : CanApplyHistoryRestore(prepared._input._authority);
+    return !prepared._applied && prepared._input._valid && currentAuthority &&
            CanApplyJobResult(prepared._input._token, 0) &&
            (prepared._history ? history.CanPublish(prepared._history.value())
                               : history.IsCurrent(prepared._input._history));
@@ -341,9 +417,28 @@ bool DocumentSession::ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayer
         std::swap(_document, prepared._document);
         std::swap(_displayCopy, prepared._retiredDisplay);
         NoteDocumentMutation();
+        if (prepared._input._panelAuthority && _colorEdit)
+        {
+            static_assert(std::is_nothrow_copy_constructible_v<std::optional<DocumentSelection>>);
+            static_assert(std::is_nothrow_move_assignable_v<decltype(_colorEdit->_wandSelectionBinding)>);
+            _colorEdit->_wandSelectionBinding =
+                ColorEdit::WandSelectionBinding{_colorEdit->openingSequence, _document->selection};
+        }
     }
     prepared._applied = true;
     return true;
+}
+
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanPanelWandLayerSelectionMemory(
+    Vec2 point, WandSettings settings, SelectionMode mode) const noexcept
+{
+    return PlanWandSelectionMemory(point, settings, false, mode, true);
+}
+
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanPanelWandCompositeSelectionMemory(
+    Vec2 point, WandSettings settings, SelectionMode mode) const noexcept
+{
+    return PlanWandSelectionMemory(point, settings, true, mode, true);
 }
 
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelectionMemory(
@@ -359,12 +454,13 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandCompositeSe
 }
 
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMemory(Vec2 point, WandSettings settings,
-                                                                                     bool composite,
-                                                                                     SelectionMode mode) const noexcept
+                                                                                     bool composite, SelectionMode mode,
+                                                                                     bool preservePanel) const noexcept
 {
     if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
         !ValidPoint(point, _document->width, _document->height) || _document->width > kMaxCanvasSide ||
-        _document->height > kMaxCanvasSide || !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority()))
+        _document->height > kMaxCanvasSide ||
+        (preservePanel ? !PanelWandEligible() : !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority())))
         return std::nullopt;
     WandLayerSelectionMemoryPlan plan;
     const auto historyBytes = history.EditMemoryBytes(_document);

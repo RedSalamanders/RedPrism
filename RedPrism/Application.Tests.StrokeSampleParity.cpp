@@ -30,6 +30,7 @@ struct ParityCase final
     bool selection = false;
     bool translated = false;
     bool allLayers = false;
+    bool hard = false;
 };
 Raster Pattern(int width, int height, bool mask, bool opaque = false)
 {
@@ -145,7 +146,8 @@ int Application::RunStandaloneStrokeSampleParitySelfTest(HINSTANCE instance) noe
                                ParityCase{"clone-active-pattern", BrushKind::Clone},
                                ParityCase{"clone-all-pattern", BrushKind::Clone, false, false, false, true},
                                ParityCase{"translated-grow-carried-mask", BrushKind::Paint, false, false, true},
-                               ParityCase{"heal-pattern", BrushKind::Heal}};
+                               ParityCase{"heal-pattern", BrushKind::Heal},
+                               ParityCase{"hard-alpha-paint", BrushKind::Paint, false, false, false, false, true}};
     constexpr std::array points{Vec2{110, 24}, Vec2{245, 36}, Vec2{180, 54}, Vec2{270, 28}, Vec2{270, 28}};
     unsigned checks = 0, failures = 0;
     const auto expect = [&](bool value, const char* scenario, const char* control, std::size_t point = 0) noexcept
@@ -196,7 +198,7 @@ int Application::RunStandaloneStrokeSampleParitySelfTest(HINSTANCE instance) noe
         reference.SetBrushEngine(&CpuBrushCoverage::Shared());
         owner->ReplaceDocument(std::move(scene), target, {});
         const BrushSettings settings{
-            test.kind == BrushKind::Heal ? 6.0 : 18.0, test.kind == BrushKind::Heal ? 1.0 : 0.28, 1, 0, 0,
+            test.kind == BrushKind::Heal ? 6.0 : 18.0, test.hard || test.kind == BrushKind::Heal ? 1.0 : 0.28, 1, 0, 0,
             test.kind == BrushKind::Heal ? 1.0 : 0.37};
         reference.brushSettings = settings;
         owner->_session.brushSettings = settings;

@@ -59,15 +59,39 @@ struct RetireWandLayerHostPayload final
 };
 } // namespace
 
+bool Application::PanelWandBusyOwner() const noexcept
+{
+    const auto preservesPanel = [](const HostRequestInput& input) noexcept
+    {
+        if (const auto* wand = std::get_if<HostWandLayerNewInput>(&input))
+            return wand->panelOpening.has_value();
+        if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
+            return click->wand && click->wand->panelOpening.has_value();
+        return false;
+    };
+    if (_activeHostRequest && preservesPanel(_activeHostRequest->input.Input()))
+        return true;
+    // The existing fixed-capacity input ring is the complete accepted intent owner. This bounded
+    // query allocates nothing and stays true through original close/readback/publication retirement.
+    for (std::size_t index = 0; index < _hostRequests.Size(); ++index)
+    {
+        const auto* entry = _hostRequests.PendingAt(index);
+        if (entry && preservesPanel(entry->input.Input()))
+            return true;
+    }
+    return false;
+}
+
 class Application::WandLayerHostJob final : public Job
 {
   public:
     WandLayerHostJob(Application& owner, HistoryWorkStamp stamp, HostWandLayerNewInput request,
                      std::uint64_t retirement, std::uint64_t outlineLimit) noexcept
         : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement), _outlineLimit(outlineLimit),
-          _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
-          _outputGate(owner._wandOutputLifetimeTestGate), _ownerThread(GetCurrentThreadId()),
-          _trace(owner._traceWandForTest)
+          _authority(owner._session.CaptureHistoryRestoreAuthority()),
+          _panelAuthority(request.panelOpening ? owner._session.CapturePanelWandAuthority() : std::nullopt),
+          _gate(owner._wandLayerHostTestGate), _outputGate(owner._wandOutputLifetimeTestGate),
+          _ownerThread(GetCurrentThreadId()), _trace(owner._traceWandForTest)
     {
     }
     JobResult Run(JobContext& context) override
@@ -160,8 +184,11 @@ class Application::WandLayerHostJob final : public Job
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            _payload->input = _owner._session.PrepareWandLayerSelectionInput(_request.point, _request.settings,
-                                                                             _request.antialiased, _request.mode);
+            _payload->input =
+                (_request.panelOpening ? _owner._session.PreparePanelWandLayerSelectionInput(
+                                             _request.point, _request.settings, _request.antialiased, _request.mode)
+                                       : _owner._session.PrepareWandLayerSelectionInput(
+                                             _request.point, _request.settings, _request.antialiased, _request.mode));
             if (_trace)
                 std::printf("WAND CAPTURE input=%d point=%.3f,%.3f generation=%llu\n", _payload->input.has_value(),
                             _request.point.x, _request.point.y,
@@ -269,7 +296,11 @@ class Application::WandLayerHostJob final : public Job
     [[nodiscard]] bool Current() const noexcept
     {
         return !_owner._shutdownStarted && _owner._wandLayerHostStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._session.CanApplyHistoryRestore(_authority);
+               _owner._historyWork.IsCurrent(_stamp) &&
+               (_request.panelOpening
+                    ? _panelAuthority && _owner._session.IsPanelWandOpeningCurrent(_request.panelOpening.value()) &&
+                          _owner._session.IsPanelWandAuthorityCurrent(_panelAuthority.value())
+                    : _owner._session.CanApplyHistoryRestore(_authority));
     }
     Application& _owner;
     const HistoryWorkStamp _stamp;
@@ -277,6 +308,7 @@ class Application::WandLayerHostJob final : public Job
     const std::uint64_t _retirement;
     const std::uint64_t _outlineLimit;
     const HistoryRestoreAuthority _authority;
+    const std::optional<PanelWandAuthority> _panelAuthority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
     const std::shared_ptr<WandLayerHostTestGate> _outputGate;
     const DWORD _ownerThread;
@@ -289,7 +321,10 @@ class Application::WandLayerHostJob final : public Job
 
 HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept
 {
-    if (_wandLayerHostTicket || !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (_wandLayerHostTicket ||
+        !(input.panelOpening ? _session.IsPanelWandOpeningCurrent(input.panelOpening.value()) &&
+                                   _session.CapturePanelWandAuthority().has_value()
+                             : _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority())))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     const auto& document = _session.Document();
     if (!document || !std::isfinite(input.point.x) || !std::isfinite(input.point.y))
@@ -298,7 +333,9 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
         return E_INVALIDARG;
     if (input.point.x < 0 || input.point.y < 0 || input.point.x >= document->width || input.point.y >= document->height)
         return S_OK; // The direct reference ignores outside clicks; a valid in-canvas no-match deselects.
-    const auto plan = _session.PlanWandLayerSelectionMemory(input.point, input.settings, input.mode);
+    const auto plan =
+        (input.panelOpening ? _session.PlanPanelWandLayerSelectionMemory(input.point, input.settings, input.mode)
+                            : _session.PlanWandLayerSelectionMemory(input.point, input.settings, input.mode));
     if (!plan)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const std::uint64_t metadata =

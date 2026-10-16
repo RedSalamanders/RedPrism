@@ -6,6 +6,7 @@
 #include "ContinuationReceipt.h"
 #include "EditorTool.h"
 #include "OpacityInputOrder.h"
+#include "WandLayerSelectionWork.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -68,6 +69,7 @@ struct HostWandLayerNewInput final
     WandSettings settings;
     bool antialiased;
     SelectionMode mode = SelectionMode::New;
+    std::optional<PanelWandOpening> panelOpening; // physical panel identity; source authority follows older FIFO work
 };
 // Same event fields and New coalescing family. The captured All Layers setting selects the distinct
 // composite graph at execution; avoid a duplicate variant alternative and its wider STL dispatch tables.
@@ -136,7 +138,8 @@ enum class HostCanvasInputKind
     Brush,
     Sampler,
     LassoOpening,
-    LassoFinish
+    LassoFinish,
+    HueSample
 };
 struct HostCanvasBrushInput final
 {

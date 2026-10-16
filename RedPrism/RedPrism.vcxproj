@@ -335,6 +335,9 @@
     <ClCompile Include="ApplicationSelectionMoveCloseSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCallerSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveFollowupSelfTest.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandHost.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandLifecycle.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandFollowthrough.cpp" />
     <ClCompile Include="ApplicationSelectionMoveHeaderSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCommandSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
@@ -343,6 +346,10 @@
     <ClCompile Include="ApplicationSamplerIntentSelfTest.cpp" />
     <ClCompile Include="ApplicationSamplerInput.cpp" />
     <ClCompile Include="ApplicationSamplerJobs.cpp" />
+    <ClCompile Include="ApplicationHueReadbackJobs.cpp" />
+    <ClCompile Include="ApplicationHueReadbackPublication.cpp" />
+    <ClCompile Include="ApplicationHueInput.cpp" />
+    <ClCompile Include="Application.Tests.HueReadbackHost.cpp" />
     <ClCompile Include="ApplicationSamplerHostSelfTest.cpp" />
     <ClCompile Include="ApplicationSamplerCallerSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />
@@ -671,6 +678,7 @@
     <ClInclude Include="..\Common\LassoFinishWork.h" />
     <ClInclude Include="..\Common\BoundedLassoGesture.h" />
     <ClInclude Include="HostLassoInput.h" />
+    <ClInclude Include="HostHueInput.h" />
     <ClInclude Include="..\Common\LassoDraftRasterWork.h" />
     <ClInclude Include="PreparedLassoDraftGpu.h" />
     <ClInclude Include="LassoDraftDisplayController.h" />

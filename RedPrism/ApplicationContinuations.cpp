@@ -114,10 +114,11 @@ ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
     return receipt;
 }
 
-bool Application::CanQueueSelectionMoveClick() const noexcept
+bool Application::CanQueueSelectionMoveClick(const HostWandLayerNewInput* wand) const noexcept
 {
     // Match the settled selection factory's gesture exclusions while this outline is still open.
-    return !_session.HasColorEdit() && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
+    const bool panel = wand && wand->panelOpening && _session.IsPanelWandOpeningCurrent(wand->panelOpening.value());
+    return (panel || !_session.HasColorEdit()) && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
            !_session.PendingBrush() && !_session.HasPendingWarp() && !_session.PendingPixelMove() &&
            !_session.PendingShape() && !_session.PendingLasso();
 }
@@ -159,8 +160,9 @@ ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandL
     // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
     DropDrag<OutlineDrag>();
     const auto opening = _session.SelectionMoveOpening();
-    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
-                         : wand && wand->settings.sampleAllLayers
+    const auto receipt = !opening || !CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr)
+                             ? ContinuationReceipt::Failure(E_ABORT)
+                         : wand && wand->settings.sampleAllLayers && !wand->panelOpening
                              ? ContinuationReceipt::Failure(E_INVALIDARG)
                              : QueueHostInput(HostSelectionMoveClickInput{opening.value(), wand});
     ReportHostAdmission(receipt);
@@ -418,6 +420,8 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
     {
         if (!samplerInput)
             SealSamplerForBoundary();
+        if (!canvasInput || canvasInput->kind != HostCanvasInputKind::HueSample)
+            SealHueForBoundaryOwner(ordinal.value());
     }
     return receipt;
 }
@@ -481,6 +485,8 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
             RetireCanvasBrush(result.outcome, canvas->opening);
         else if (canvas->kind == HostCanvasInputKind::Sampler)
             RetireSamplerOpening(canvas->opening);
+        else if (canvas->kind == HostCanvasInputKind::HueSample && result.outcome != HostOutcome::Succeeded)
+            DropHueInputOwner(canvas->opening);
     }
     if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
         close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
@@ -521,6 +527,8 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _pathClassifications = {};
     _historyResidencySource.RetryDeferred();
     if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime ||
+                              (_hueInput.Busy() && _hueAcquiredOpening == _hueInput.Opening() &&
+                               (_hueInput.Peek(_hueInput.Opening()) || _hueCloseAfterPrefix)) ||
                               (_lassoInput.Busy() && _lassoAcquiredOpening == _lassoInput.Opening() &&
                                _lassoInput.Peek(_lassoInput.Opening()))))
     {
@@ -545,6 +553,8 @@ void Application::RunHostContinuation() noexcept
         CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
         SelectionChanged();
     }
+    if (!_activeHostRequest && !_historyWork.Busy() && ReplayHueInputOwner())
+        return; // Older physical deltas use this same source before younger commands.
     if (!_activeHostRequest && !_historyWork.Busy() && ReplayLassoInputOwner())
         return; // One accepted input operation on the existing source; no twelfth owner or extra UI source.
     if (_activeHostRequest)
@@ -619,6 +629,14 @@ void Application::RunHostContinuation() noexcept
                          : _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
         // A stale queued reader has no selected job destructor to release its scalar opening.
         SweepSamplerOpenings();
+        // TakeReady retires mismatched serials before selection. Only that exact unselected Hue
+        // opening has no original job completion available to release its fixed descriptors.
+        if (_hueInput.Busy() && !_hueReadbackTicket)
+        {
+            const auto* hue = _hueInput.CapturedContext(_hueInput.Opening());
+            if (hue && hue->document.documentSerial != _session.DocumentSerial())
+                DropHueInputOwner(_hueInput.Opening());
+        }
         // TakeReady may retire a stale queued brush. Its fixed stream must retire in this same action,
         // including when no selected request remains to rearm the source.
         if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
@@ -795,12 +813,13 @@ void Application::RunHostContinuation() noexcept
             }
             if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
             {
-                if (_session.SelectionMoveOpening() != std::optional(click->opening) || !CanQueueSelectionMoveClick())
+                if (_session.SelectionMoveOpening() != std::optional(click->opening) ||
+                    !CanQueueSelectionMoveClick(click->wand ? &click->wand.value() : nullptr))
                 {
                     FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                     return;
                 }
-                if (click->wand && click->wand->settings.sampleAllLayers)
+                if (click->wand && click->wand->settings.sampleAllLayers && !click->wand->panelOpening)
                 {
                     FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
                     return;
@@ -1032,6 +1051,17 @@ void Application::RunHostContinuation() noexcept
         }
         case HostStage::Settle:
         {
+            if (const auto* wand = std::get_if<HostWandLayerNewInput>(&input); wand && wand->panelOpening)
+            {
+                if (!_session.IsPanelWandOpeningCurrent(wand->panelOpening.value()))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                // Execute retains the existing opacity prerequisite. This input must never commit the panel.
+                _hostStage = HostStage::Execute;
+                break;
+            }
             const auto outcome = StartColorCommit(active.ordinal);
             if (outcome == HostOutcome::Pending)
             {
@@ -1330,8 +1360,10 @@ void Application::RunHostContinuation() noexcept
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
             }
-            const auto result = click->wand ? StartWandLayerSelection(click->wand.value())
-                                            : StartSelectionCommand(SelectionCommandKind::Deselect);
+            const auto result =
+                click->wand ? (click->wand->settings.sampleAllLayers ? StartWandCompositeSelection(click->wand.value())
+                                                                     : StartWandLayerSelection(click->wand.value()))
+                            : StartSelectionCommand(SelectionCommandKind::Deselect);
             if (FAILED(result))
             {
                 _prompts->PostNotice(_window.get(), kNoticeMessage,
@@ -1461,6 +1493,16 @@ void Application::RunHostContinuation() noexcept
             _hostExecutionError = S_OK;
             if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input))
             {
+                if (canvas->kind == HostCanvasInputKind::HueSample)
+                {
+                    const auto result = StartHueReadbackOwner(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        DropHueInputOwner(canvas->opening);
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return;
+                }
                 if (canvas->kind == HostCanvasInputKind::Sampler)
                 {
                     ReplaySamplerOpening(canvas->opening);
@@ -1573,6 +1615,8 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
 void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 {
     const bool cancelFeedbackWasPending = ColorCancelPending();
+    if (_hueInput.Busy() && !_hueReadbackTicket)
+        DropHueInputOwner(_hueInput.Opening());
     // Inspect at most the fixed eight slots before mutation. A sealed stroke may still be queued behind
     // opacity or sampling; only its scalar key survives ClearExcept. Active requests live outside that ring.
     const bool preserve = preserveSealedStroke && CanvasBrushSealedStrokePending();
@@ -1696,6 +1740,11 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionMoveCloseTicket.value());
         }
+        else if (_hueReadbackTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            CancelHueReadbackOwner();
+        }
         else if (_samplerHostTicket)
         {
             (void)_historyWork.RequestCancel();
@@ -1780,6 +1829,8 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 
 void Application::StopHostContinuations() noexcept
 {
+    if (_hueInput.Busy())
+        DropHueInputOwner(_hueInput.Opening());
     if (_lassoInput.Busy())
         CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
 

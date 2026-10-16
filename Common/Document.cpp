@@ -1839,7 +1839,7 @@ std::optional<JobToken> DocumentSession::CaptureJobToken(const std::optional<Gui
     return token;
 }
 
-bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept
+bool DocumentSession::IsJobTargetAndSessionCurrent(const JobToken& token, std::uint64_t latestSequence) const noexcept
 {
     if (!_document.has_value() || token.sessionIdentity != _tokenIdentity.value ||
         token.documentSerial != _documentSerial || token.restoreSerial != _restoreSerial ||
@@ -1854,15 +1854,22 @@ bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t lat
     }
     const TargetIdentity& target = token.target.value();
     const ImageLayer* layer = FindLayer(target.layerId);
-    // A selection can have millions of edges. Validation compares the retained immutable handle in O(1), and
-    // conservatively drops a rebuilt outline even when its points happen to be equal.
-    const bool sameSelection =
-        _document->selection.has_value() == token.selection.has_value() &&
-        (!token.selection.has_value() || (_document->selection->antialiased == token.selection->antialiased &&
-                                          _document->selection->loops.Identity() == token.selection->loops.Identity()));
     return layer != nullptr && (layer->asset.has_value() ? layer->asset->image : Raster{}) == target.image &&
-           layer->transform == target.transform && layer->mask == target.mask && sameSelection &&
-           layer->isGroup == target.isGroup && layer->adjustment == target.adjustment;
+           layer->transform == target.transform && layer->mask == target.mask && layer->isGroup == target.isGroup &&
+           layer->adjustment == target.adjustment;
+}
+
+bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept
+{
+    if (!IsJobTargetAndSessionCurrent(token, latestSequence))
+        return false;
+    if (!token.target)
+        return true;
+    // Public validation still requires the retained exact selection; a dedicated color refusal may
+    // inspect source/session alone but can never publish through that weaker observation.
+    return _document->selection.has_value() == token.selection.has_value() &&
+           (!token.selection || (_document->selection->antialiased == token.selection->antialiased &&
+                                 _document->selection->loops.Identity() == token.selection->loops.Identity()));
 }
 
 namespace

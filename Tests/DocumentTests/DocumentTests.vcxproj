@@ -80,6 +80,7 @@
     <ClInclude Include="Document.Tests.HistoryPublicationLifetime.h" />
     <ClInclude Include="Document.Tests.WandBoundedPlan.h" />
     <ClInclude Include="Document.Tests.SparseRegionReads.h" />
+    <ClInclude Include="Document.Tests.DistortRead.h" />
     <ClInclude Include="Document.Tests.WandBooleanGeometry.h" />
     <ClInclude Include="Document.Tests.WandBooleanCompatibility.h" />
     <ClInclude Include="Document.Tests.WandBooleanLoad.h" />
@@ -203,6 +204,9 @@
     <ClInclude Include="SelectionNudgeTests.h" />
     <ClInclude Include="SelectionPreserveTests.h" />
     <ClInclude Include="WandLayerSelectionTests.h" />
+    <ClInclude Include="Document.Tests.PanelWand.h" />
+    <ClInclude Include="Document.Tests.PanelWandAuthority.h" />
+    <ClInclude Include="Document.Tests.PanelWandFollowthrough.h" />
     <ClInclude Include="WandCompositeSelectionTests.h" />
     <ClInclude Include="SelectionMoveClosureTests.h" />
     <ClInclude Include="SelectionMoveOpeningTests.h" />
@@ -256,6 +260,7 @@
     <ClCompile Include="MaskEditWorkTests.cpp" />
     <ClCompile Include="LayerCopyWorkTests.cpp" />
     <ClCompile Include="DistortWorkTests.cpp" />
+    <ClCompile Include="Document.Tests.DistortRead.cpp" />
     <ClCompile Include="TransformPixelsWorkTests.cpp" />
     <ClCompile Include="TransformCommitWorkTests.cpp" />
     <ClCompile Include="TransformCancellationWorkTests.cpp" />
@@ -345,6 +350,9 @@
     <ClCompile Include="WandCancellationTests.cpp" />
     <ClCompile Include="WandChunkBoundaryTests.cpp" />
     <ClCompile Include="WandLayerSelectionTests.cpp" />
+    <ClCompile Include="Document.Tests.PanelWand.cpp" />
+    <ClCompile Include="Document.Tests.PanelWandAuthority.cpp" />
+    <ClCompile Include="Document.Tests.PanelWandFollowthrough.cpp" />
     <ClCompile Include="WandCompositeSelectionTests.cpp" />
     <ClCompile Include="SelectionMoveClosureTests.cpp" />
     <ClCompile Include="SelectionMoveOpeningTests.cpp" />
@@ -545,10 +553,12 @@
     <ClCompile Include="Document.Tests.LassoSessionBridge.cpp" />
     <ClInclude Include="Document.Tests.LassoSessionBridge.h" />
     <ClCompile Include="Document.Tests.HostLassoInput.cpp" />
+    <ClCompile Include="Document.Tests.HueSampleScalar.cpp" />
     <ClCompile Include="Document.Tests.LassoConditionalInput.cpp" />
     <ClCompile Include="..\..\Common\LassoDraftRasterWork.cpp" />
     <ClCompile Include="Document.Tests.LassoDraftRaster.cpp" />
     <ClInclude Include="Document.Tests.HostLassoInput.h" />
+    <ClInclude Include="Document.Tests.HueSampleScalar.h" />
     <ClInclude Include="Document.Tests.LassoConditionalInput.h" />
     <ClInclude Include="..\..\Common\LassoDraftRasterWork.h" />
     <ClInclude Include="Document.Tests.LassoDraftRaster.h" />

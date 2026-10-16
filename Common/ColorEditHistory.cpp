@@ -80,6 +80,13 @@ std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit& edit) noexcept
         !raster(edit.previewSource) || !raster(edit.previewRaster) || !raster(edit.previewCoverage) ||
         (edit.selection && !add(1, edit.selection->loops.StorageBytes())))
         return 0;
+    if (edit._wandSelectionBinding && edit._wandSelectionBinding->selection)
+    {
+        const auto& loops = edit._wandSelectionBinding->selection->loops;
+        const auto controls = SelectionLoops::WorkOwnershipAllowance(loops.size());
+        if (!controls || !add(1, loops.StorageBytes()) || !add(1, controls))
+            return 0;
+    }
     for (const auto& channel : edit.settings.curves.channels)
         if (!add(channel.capacity(), sizeof(CurvePoint)))
             return 0;

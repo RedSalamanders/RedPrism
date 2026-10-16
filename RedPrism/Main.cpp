@@ -326,6 +326,10 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneResponsiveSelectionStartupSelfTest\n");
         if (const int failed = Application::RunStandaloneResponsiveSelectionStartupSelfTest(instance); failed != 0)
             return failed;
+        // This fixture owns a scheduler/TLS retirement sink and must precede the main Application owner.
+        std::printf("BEGIN self-test.RunStandalonePanelWandFollowthroughSelfTest\n");
+        if (const int failed = Application::RunStandalonePanelWandFollowthroughSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneHistoryResidencyStartupSelfTest\n");
         if (const int failed = Application::RunStandaloneHistoryResidencyStartupSelfTest(instance); failed != 0)
             return failed;

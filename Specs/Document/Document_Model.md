@@ -260,6 +260,15 @@ ranges, four normalized level ranges, curves 2…32 strictly increasing x from 0
 ranges). Adjustment layers apply live in the composition and the Image menu applies the same kinds to a layer's
 pixels (C12, [`Document_Tools.md`](Document_Tools.md), [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)).
 
+### Direct distortion source lifetime
+
+`DistortWarp::Warp` and `WarpMask` retain a contiguous sampling owner for their complete read. An already
+published contiguous source may be shared; an unmaterialized sparse source is copied privately with the
+bounded worker raster reader. The source identity, nested caches and residency epoch are not changed by that
+private read. The uniform 1x1 mask shortcut retains its exact source identity without an assembly. Format,
+corner, sampling and output-byte rules are unchanged. Explicit caller `Data()` keeps its separate publication
+contract; this does not activate an asynchronous caller or establish whole-operation/G1 bounds.
+
 ## Hierarchy and clipping
 
 `ValidateHierarchy` rejects duplicate ids, groups that own an image, missing/non-group parents, and cycles.

@@ -456,9 +456,19 @@ void DocumentSession::SampleHueRange(const Raster& composite, Vec2 point)
     {
         return;
     }
+    SampleHueRangeValue(SampledHue(composite, point));
+}
+
+void DocumentSession::SampleHueRangeValue(std::optional<double> hue)
+{
+    const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
+    if (edit == nullptr || !edit->hueSample.has_value())
+    {
+        return;
+    }
     HueSaturationSettings settings = edit->settings.hsv;
-    const std::optional<double> hue = SampledHue(composite, point);
-    if (settings.range == ColorRange::Master || settings.colorize || !hue.has_value())
+    if (settings.range == ColorRange::Master || settings.colorize || !hue.has_value() || !std::isfinite(hue.value()) ||
+        hue.value() < 0 || hue.value() >= 360)
     {
         return;
     }
@@ -485,8 +495,14 @@ bool DocumentSession::BeginHueTargeting(const Raster& composite, Vec2 point)
     {
         return false;
     }
-    const std::optional<double> hue = SampledHue(composite, point);
-    if (!hue.has_value())
+    return BeginHueTargetingValue(SampledHue(composite, point));
+}
+
+bool DocumentSession::BeginHueTargetingValue(std::optional<double> hue)
+{
+    ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
+    if (edit == nullptr || !edit->targeting || edit->settings.hsv.colorize || !hue.has_value() ||
+        !std::isfinite(hue.value()) || hue.value() < 0 || hue.value() >= 360)
     {
         return false;
     }

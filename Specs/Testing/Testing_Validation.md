@@ -2801,6 +2801,47 @@ address with the adopted chrome buffer and verify its independent zero-relative 
 all existing no-op, mode, cancellation/staleness, refusal, source/output accounting, Undo/Redo and Close
 predicates. Native matrix and measured S5/G1 qualification remain distinct requirements.
 
+### Hue readback and panel-preserving Wand validation (P1)
+
+Keep all predecessor DocumentTests, HostTests, Application WARP, and legacy numeric controls. Add the named source families below to their existing runners and require their complete ordered PASS output; a missing, duplicate, reordered, failed, or unexpected family record fails the corresponding run.
+
+`Document.Tests.HueSampleScalar` emits `huesamplescalar.*`. Preserve the existing Replace/Add/Remove band behavior and literal red/blue references; compare the raster wrappers with their scalar-value counterparts. The six invalid scalar values (360, negative, NaN, both infinities, and nullopt) must refuse without changing panel settings, targeting/drag state, document, global settings, or history. Preserve the raster wrapper's literal transparent, gray, near-gray, half-alpha, out-of-bounds, and nonfinite sampling controls and the existing targeting drag expectations.
+
+`Document.Tests.PanelWand` emits 36 `panel-wand-core.*` assertions: 18 literal geometry cases and 18 route, strict-policy, stale-witness, nested-history, cancellation, transform, and invalid-mode assertions. `Document.Tests.PanelWandAuthority` emits all 11 `panel-wand-authority.*` assertions. The explicit panel-preserving opening and source authority remain separate from global history-restore eligibility; live-panel history restore continues to refuse. Preserve literal layer/composite geometry, panel and source identity, selection/history state, equal-settings reopen invalidation, and the existing strict typed route.
+
+`Host.Tests.HueInput` remains registered in HostTests and requires its source-declared 70 `host-hue-input.*` checks plus `SUMMARY host-hue-input checks=70 failures=0 expected=70`. Retain FIFO event-time delta/modifier/ordinal, terminal-slot, opening identity, invalid-input, overflow-prefix, acknowledgement, and nonwrapping-ordinal predicates.
+
+The actual Application call to `RunHueReadbackHostSelfTest` remains in the sampler caller sequence. Its `hue-admission.*` assertions require invalid purpose and mode to leave the request queue empty, avoid readback/source capture, and preserve the Hue opening and actual shared history-work ordinal. The following valid press must use the exact next opening. Its `hue-host.*` assertions use the original committed document readback and literal color references, including hue 220 producing `HueBand{175, 205, 235, 265}`; preserve original-ticket admission, physical input ordering, cancellation, stale-panel refusal, acknowledgement, unchanged pixels/history, and complete owner retirement.
+
+The ordered Application WARP run adds `BEGIN self-test.RunPanelWandHostSelfTest` followed by `BEGIN self-test.RunPanelWandLifecycleSelfTest`. Require every emitted `panel-wand-host.*` and `panel-wand-lifecycle.*` fact and the source's exact summary: 126 assertions across 30 panel/route/action combinations, and 32 assertions across eight lifecycle combinations. Host cases cover Levels, Hue/Saturation, and Exposure; layer and committed-composite sources; New, Add, Subtract, zero-offset closure, and nested history. Lifecycle cases cover cancellation, worker failure, equal-panel reopen, and panel Cancel for both source routes. Preserve the original selection/history/source and charge through acknowledgement, and keep Cancel's own receipt distinct.
+
+`Document.Tests.PanelWandFollowthrough` adds 28 `panel-wand-followthrough.*` assertions and its exact
+28-assertion/zero-failure summary. Both layer and detached-composite routes use a two-pixel literal red/blue
+source, an opening selection on the first pixel and a Wand selection on the second. New preview/commit must
+blacken only the original opening pixel; old preview/direct-commit/prepared results refuse while the panel
+stays open. Preserve two-step undo, Cancel/reopen, and a subsequent direct-selection-change refusal.
+
+`BEGIN self-test.RunStandalonePanelWandFollowthroughSelfTest` runs the actual hidden WARP host with exactly
+two startup-selected compute workers. Require all 29 `panel-wand-followthrough-host.*` records and its exact
+summary. Physical layer/composite Wand is followed by actual composition preview and worker OK, or Cancel
+and reopen. GPU colors use the existing 2/255 tolerance and exact alpha; committed CPU bytes are literal.
+A computed histogram is held across actual Wand acknowledgement: its original ticket and full reservation
+remain held, the old result refuses, exactly one fresh histogram completes, and payload retirement occurs
+off the owner. Event waits have a failure bound, not a performance assertion. Keep all predecessor records.
+
+`Application.Tests.StrokeSampleParity` adds the `hard-alpha-paint` scenario to the existing actual WARP versus CPU scalar-reference path. Keep hardness at 1.0, the five live sample assertions, final publication, and original off-owner retirement. Preserve the existing 70 facts and 2/255 tolerance; the source-derived summary is 77 checks across 11 scenarios. This does not add an Application stage or change any existing brush golden.
+
+These are functional controls. They do not replace any predecessor gate or the required native x64 Debug, Release, and real ASan Debug runs, ARM64 cross-builds, source/profile binding, ordinary prepared startup and host activation, complete admission/retirement qualification, or measured G1. Private WARP or source-only results do not qualify native profiles, ordinary behavior, native ARM64 runtime, or G1. P1 remains WIP until its independent remaining gates close.
+
+### Private direct distortion sources (P1.9)
+
+`Document.Tests.DistortRead` requires 12 literal `distort-private-read.*` facts: nearest BGRA/Gray identity,
+axis flips, fractional floor/ceil placement, valid nested sparse tile/window overrides with cold source caches,
+format and twisted-corner refusal, and exact 1x1 mask identity/byte 173. Fixtures must contain valid stored sparse
+nodes; sparse bases are forbidden. Dense leaf owners remain materialized and sparse wrappers stay cold. Compare
+all independent literal bytes and preserve every existing warp golden. These reference-API ownership controls
+add no asynchronous/cancellation or performance promise.
+
 ### Settled Inverse selection
 
 `Document.Tests.InverseSelection` requires all original Document assertions plus 43 named controls: absent

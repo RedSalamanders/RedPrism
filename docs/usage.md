@@ -98,6 +98,12 @@ After releasing the stroke, hold Space and drag to pan while the source finishes
 Escape cancels while the pointer is down. After release or capture loss, the accepted stroke is kept even if
 its source is still preparing. Undo after release waits for the stroke, then undoes it.
 
+## Hue/Saturation sampling
+
+In Hue/Saturation, the range eyedroppers recenter, widen or narrow a color band's range. Transparent and
+near-neutral pixels leave it unchanged. Targeted adjustment drags change saturation; hold Ctrl to change hue.
+The amount is measured from the original press. Releasing ends the drag without sampling another position.
+
 ## Settings, crash reports and languages
 
 RedPrism keeps its settings in `%LocalAppData%\RedPrism\settings.json` (`settings.debug.json` for Debug builds), a

@@ -403,6 +403,7 @@ class Application::ColorHistogramJob final : public Job
                 _captureError = E_ABORT;
                 return false;
             }
+            _capturedGeneration = _owner._session.Generation();
             _payload->input.emplace(std::move(input.value()));
             if (_owner._jobs.Resume(ticket))
                 return true;
@@ -429,6 +430,14 @@ class Application::ColorHistogramJob final : public Job
                 }
                 else if (result.status == ColorEditJobStatus::Failed)
                     error = E_FAIL;
+                else if (result.status == ColorEditJobStatus::Ready &&
+                         _capturedGeneration != _owner._session.Generation() &&
+                         !_owner._session.PendingColorEdit()->histogramReady)
+                {
+                    // Source changed while this actual worker ran. The existing continuation may admit
+                    // one fresh capture after acknowledgement; an unchanged source never retries in a loop.
+                    _owner._colorHistogramAttempted = false;
+                }
             }
             if (FAILED(error) && error != E_ABORT)
                 _owner.QueueColorFailure();
@@ -449,6 +458,7 @@ class Application::ColorHistogramJob final : public Job
     const std::uint64_t _serial;
     const std::uint64_t _opening;
     const std::uint64_t _retirement;
+    std::uint64_t _capturedGeneration = 0;
     const std::shared_ptr<ColorWorkTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<ColorHistogramPayload, RetireColorHistogramPayload> _payload;

@@ -65,6 +65,37 @@ enum class WandLayerSelectionAdmission : std::uint8_t
 [[nodiscard]] bool TryAddWandLayerSelectionBytes(std::uint64_t left, std::uint64_t right,
                                                  std::uint64_t& result) noexcept;
 
+// Physical intent binds the panel opening/settings through older FIFO prerequisites without retaining
+// pixels. The admitted job separately captures the complete source authority after those prerequisites.
+class PanelWandOpening final
+{
+  public:
+    PanelWandOpening() = default;
+
+  private:
+    friend class DocumentSession;
+    Guid _session;
+    std::uint64_t _documentSerial = 0;
+    std::uint64_t _opening = 0;
+    std::uint64_t _sequence = 0;
+    bool _valid = false;
+};
+
+// Descriptor-only authority for the explicitly supported live-panel Wand route. No source graph is
+// retained before complete admission. Only DocumentSession can create or validate this witness.
+class PanelWandAuthority final
+{
+  public:
+    PanelWandAuthority() = default;
+
+  private:
+    friend class DocumentSession;
+    HistoryRestoreAuthority _source;
+    std::uint64_t _opening = 0;
+    std::uint64_t _sequence = 0;
+    bool _valid = false;
+};
+
 // Immutable selection-mode capture. Separate entry points bind an active layer or a detached full composite.
 // Complete graph admission must precede owner capture; neither entry point owns a GPU device.
 class WandLayerSelectionInput final
@@ -75,9 +106,10 @@ class WandLayerSelectionInput final
     WandLayerSelectionInput(WandLayerSelectionInput&& source) noexcept
         : _point(source._point), _settings(source._settings), _antialiased(source._antialiased), _mode(source._mode),
           _usesComposite(source._usesComposite), _outputHistoryBytes(source._outputHistoryBytes),
-          _authority(std::move(source._authority)), _token(std::move(source._token)),
-          _history(std::move(source._history)), _document(std::move(source._document)),
-          _active(std::move(source._active)), _valid(std::exchange(source._valid, false))
+          _authority(std::move(source._authority)), _panelAuthority(std::move(source._panelAuthority)),
+          _token(std::move(source._token)), _history(std::move(source._history)),
+          _document(std::move(source._document)), _active(std::move(source._active)),
+          _valid(std::exchange(source._valid, false))
     {
     }
     WandLayerSelectionInput& operator=(WandLayerSelectionInput&& source) noexcept
@@ -91,6 +123,7 @@ class WandLayerSelectionInput final
             _usesComposite = source._usesComposite;
             _outputHistoryBytes = source._outputHistoryBytes;
             _authority = std::move(source._authority);
+            _panelAuthority = std::move(source._panelAuthority);
             _token = std::move(source._token);
             _history = std::move(source._history);
             _document = std::move(source._document);
@@ -126,6 +159,8 @@ class WandLayerSelectionInput final
     bool _usesComposite = false;
     std::uint64_t _outputHistoryBytes = 0;
     HistoryRestoreAuthority _authority;
+    // Inverse/Offset leave this absent and retain strict history-restore authority.
+    std::optional<PanelWandAuthority> _panelAuthority;
     JobToken _token;
     DocumentHistory::StateView _history;
     std::optional<CanvasDocument> _document;

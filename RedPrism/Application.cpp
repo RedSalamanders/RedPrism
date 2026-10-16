@@ -1152,6 +1152,8 @@ int Application::RunSelfTest() noexcept
             return 5;
         if (RunSamplerCallerSelfTest() != 0)
             return 5;
+        if (RunHueReadbackHostSelfTest() != 0)
+            return 5;
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
         if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
@@ -2635,6 +2637,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
     if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
         return followup;
+    std::printf("BEGIN self-test.RunPanelWandHostSelfTest\n");
+    if (const int panelWand = RunPanelWandHostSelfTest(); panelWand != 0)
+        return panelWand;
+    std::printf("BEGIN self-test.RunPanelWandLifecycleSelfTest\n");
+    if (const int panelWandLifecycle = RunPanelWandLifecycleSelfTest(); panelWandLifecycle != 0)
+        return panelWandLifecycle;
     std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;
@@ -4588,6 +4596,18 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
     }
     if (const HueTargetDrag* hue = std::get_if<HueTargetDrag>(&_drag))
     {
+        if (hue->opening)
+        {
+            const auto opening = hue->opening.value();
+            if (release)
+            {
+                _drag = PointerDrag{};
+                SealHueInputOwner(opening, false);
+            }
+            else
+                RecordHueMoveOwner(opening, view.x, (event.modifiers & MK_CONTROL) != 0);
+            return true;
+        }
         // A targeted Hue/Saturation drag changes the picked color's saturation, or its hue with Ctrl, measured from
         // where it started.
         if (release)
@@ -4701,10 +4721,14 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     {
         EndColorSampling();
     }
-    else if (std::holds_alternative<HueTargetDrag>(_drag))
+    else if (const auto* hue = std::get_if<HueTargetDrag>(&_drag))
     {
+        const auto opening = hue->opening;
         _drag = PointerDrag{};
-        _session.EndHueTargeting();
+        if (opening)
+            SealHueInputOwner(opening.value(), true);
+        else
+            _session.EndHueTargeting();
     }
     else
     {
@@ -6880,7 +6904,7 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
         const std::optional<DocumentSelection>& selection = _session.Selection();
         if (selection.has_value() && !selection->loops.empty())
         {
-            _selectionReach = SelectionGeometry::Bounds(selection->loops);
+            _selectionReach = selection->Bounds();
         }
     }
     // The winding test counts a point on the outline (within 1e-9) as inside: the bounds keep a margin for it.
@@ -7179,12 +7203,15 @@ void Application::SelectionRelease(Vec2 view) noexcept
             SelectionChanged();
             return;
         }
-        if (CanQueueSelectionMoveClick() && (_tool != EditorTool::Wand || !_session.wandSettings.sampleAllLayers))
+        const auto wand =
+            _tool == EditorTool::Wand
+                ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings, _session.selectionAntialiased,
+                                                      SelectionMode::New, _session.CapturePanelWandOpening()})
+                : std::nullopt;
+        if (CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr) &&
+            (!wand || !wand->settings.sampleAllLayers || wand->panelOpening))
         {
-            (void)QueueSelectionMoveClick(_tool == EditorTool::Wand
-                                              ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings,
-                                                                                    _session.selectionAntialiased})
-                                              : std::nullopt);
+            (void)QueueSelectionMoveClick(wand);
             SelectionChanged();
             return;
         }
@@ -7284,6 +7311,17 @@ void Application::SelectionChanged() noexcept
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 {
+    if (mode > SelectionMode::Subtract)
+    {
+        ReportHostAdmission(ContinuationReceipt::Failure(E_INVALIDARG));
+        return; // No source capture, readback or synchronous reference for an invalid physical mode.
+    }
+    if (auto panel = _session.CapturePanelWandOpening())
+    {
+        ReportHostAdmission(QueueHostInput(HostWandLayerNewInput{
+            pixel, _session.wandSettings, _session.selectionAntialiased, mode, std::move(panel)}));
+        return;
+    }
     if (_traceWandForTest)
         std::printf("WAND ROUTE point=%.3f,%.3f mode=%u all_layers=%d applicable_history=%d generation=%llu\n", pixel.x,
                     pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,

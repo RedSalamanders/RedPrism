@@ -431,6 +431,12 @@ preserves every original context and reservation until its actual acknowledgemen
 Final publication reuses the admitted final coverage/history/display/rows path. This experimental route remains
 disabled in ordinary startup until actual mode/fault coverage, the complete validation matrix and G1 pass.
 
+The actual application sample-parity fixture includes `hard-alpha-paint` at hardness 1.0 on the same WARP
+GPU-versus-CPU scalar path. Preserve every existing 70 case fact, physical point, setting and 2/255 tolerance.
+The added case requires five live sample comparisons, final pixels/placement/mask/thumbnail/history and
+original off-owner retirement: 77 checks across 11 scenarios, with no new Application stage. This functional
+parity coverage does not replace complete caller admission/fault or measured G1 qualification.
+
 ### Opt-in original Warp parent
 
 The experimental Liquify/Smudge route admits its original processing parent before opening capture. The

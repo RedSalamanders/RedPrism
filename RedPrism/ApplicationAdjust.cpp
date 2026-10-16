@@ -544,6 +544,8 @@ void Application::SyncAdjustPanel() noexcept
 
 bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept
 {
+    if (_hueReadbackEnabled && _hueInput.Busy())
+        return true; // Pending hue input keeps the panel's pointer; no tool fallback while its readback waits.
     if (ColorControlsFrozen())
     {
         return false;
@@ -575,6 +577,8 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
     {
         if (event.action == DxUi::PointerAction::Down && inHole)
         {
+            if (QueueHuePressOwner(pixel, view.x, HostHueInput::Purpose::RangeSample, edit->hueSample.value()))
+                return true;
             const std::optional<Raster> composite = WandComposite();
             if (composite.has_value())
             {
@@ -588,10 +592,12 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
     {
         // Targeted adjustment: the press picks the range under the pointer; the drag (Application::DragPointer)
         // changes its saturation, or its hue with Ctrl, measured from where it started.
+        if (QueueHuePressOwner(pixel, view.x, HostHueInput::Purpose::Targeting, HueSampleMode::Replace))
+            return true;
         const std::optional<Raster> composite = WandComposite();
         if (composite.has_value() && _session.BeginHueTargeting(composite.value(), pixel))
         {
-            _drag = HueTargetDrag{view.x};
+            _drag = HueTargetDrag{view.x, std::nullopt};
             DocumentChanged();
         }
         return true;

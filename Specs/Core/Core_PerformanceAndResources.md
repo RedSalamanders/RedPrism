@@ -1546,3 +1546,28 @@ Draft owner capture/borrow copies bounded metadata/tail only; workers traverse a
 child shares the existing eleven-slot route and its last-use event ownership. Failure or unsupported
 acquisition provides no synchronous owner fallback. Private Direct2D headroom remains an unproven policy
 allowance. Native correctness does not establish complete operation bounds, ordinary activation or G1.
+
+### Hue and panel-preserving Wand ownership
+
+Selected Hue reserves its complete source/readback/metadata/CPU/GPU/retirement envelope before source capture.
+The one-pixel worker result keeps the original ticket and shared charge through actual acknowledgement and
+aggregate retirement. Source, panel and cancellation refusals preserve pixels/history/settings. Publication
+creates no replacement reservation, owner pixel copy or new UI source. Accepted physical input uses fixed
+storage and the existing fair continuation; no idle Hue timer or poll is permitted.
+
+Preserving-panel layer/composite Wand likewise retains its original admission through source/geometry/history
+and retired owners. Queue/selected busy state freezes mutating color controls; Cancel remains available. Exact
+control/weak-owner phase bounds, device faults, ordinary activation and measured G1 remain separately required.
+
+The private post-Wand panel binding owns its immutable selection and is included in color-edit held-memory
+bounds, including geometry capacity and ownership controls. It travels with the existing panel aggregate
+through capture, replacement, cancellation and retirement. No validation traverses that geometry. A ready
+histogram that becomes stale across an actual document-generation change is refused; after its original
+acknowledgement the existing continuation may admit one fresh capture. An unchanged source or failed result
+does not create a retry loop, poll or extra owner-work source.
+
+Direct distortion sampling shares an already published contiguous raster or constructs a private contiguous
+view with `ContiguousRasterForWork`. That view owns its sampled bytes for the complete warp; a cold sparse
+source and its nested tiles acquire no shared assembly. Sampling/homography/edge/rounding math is unchanged.
+The existing private traversal bound and failure policy apply; no cancellation or UI timing guarantee is added
+to the direct numeric-reference API.

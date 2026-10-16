@@ -1,5 +1,6 @@
 #pragma once
 
+#include "HostHueInput.h"
 #include "HostLassoInput.h"
 
 #include "BrushCompute.h"
@@ -152,6 +153,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneSamplerMemorySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept;
@@ -602,7 +604,7 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool ColorControlsFrozen() const noexcept
     {
         const auto& panel = _session.PendingColorEdit();
-        return ColorCommitBusy() ||
+        return _hueInput.Busy() || ColorCommitBusy() || PanelWandBusyOwner() ||
                (_pendingPanelOpening && panel && _pendingPanelOpening.value() == panel->openingSequence) ||
                ColorCancelPending();
     }
@@ -707,7 +709,7 @@ class Application final : public ChromeEvents,
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept;
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveHeader(SelectionAction action, double value) noexcept;
     [[nodiscard]] static bool SelectionMoveHeaderAction(SelectionAction action) noexcept;
-    [[nodiscard]] bool CanQueueSelectionMoveClick() const noexcept;
+    [[nodiscard]] bool CanQueueSelectionMoveClick(const HostWandLayerNewInput* wand = nullptr) const noexcept;
     [[nodiscard]] bool CanQueueSelectionSizeOutline() const noexcept;
     [[nodiscard]] bool CanQueueSelectionLifecycleOutline() const noexcept;
     [[nodiscard]] bool SelectionLifecycleOutlineCurrent() const noexcept;
@@ -903,6 +905,9 @@ class Application final : public ChromeEvents,
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
+    int RunPanelWandHostSelfTest() noexcept;
+    int RunPanelWandLifecycleSelfTest() noexcept;
+    [[nodiscard]] bool PanelWandBusyOwner() const noexcept;
     class WandCompositeHostJob;
     [[nodiscard]] HRESULT StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept;
     int RunWandCompositeHostSelfTest() noexcept;
@@ -911,6 +916,30 @@ class Application final : public ChromeEvents,
     int RunSamplerCallerSelfTest() noexcept;
     [[nodiscard]] bool CanQueueSampler(bool paletteInput = false) const noexcept;
     [[nodiscard]] bool CanChangePaletteDuringSampling() const noexcept;
+    class HueReadbackHostJob;
+    [[nodiscard]] HRESULT StartHueReadbackOwner(std::uint64_t opening) noexcept;
+    [[nodiscard]] bool HueInputCurrentOwner(std::uint64_t opening) const noexcept;
+    void CompleteHueReadbackOwner(std::uint64_t opening, HistoryWorkStamp stamp, JobResult result,
+                                  std::optional<double> hue) noexcept;
+    void CancelHueReadbackOwner() noexcept;
+    [[nodiscard]] bool ReplayHueInputOwner() noexcept;
+    void DropHueInputOwner(std::uint64_t opening) noexcept;
+    [[nodiscard]] bool QueueHuePressOwner(Vec2 pixel, double viewX, HostHueInput::Purpose purpose,
+                                          HueSampleMode mode) noexcept;
+    void RecordHueMoveOwner(std::uint64_t opening, double viewX, bool adjustsHue) noexcept;
+    void SealHueInputOwner(std::uint64_t opening, bool lost) noexcept;
+    void SealHueForBoundaryOwner(std::uint64_t ordinal) noexcept;
+    HostHueInput _hueInput;
+    std::uint64_t _hueInputOpening = 0;
+    std::uint64_t _huePanelSequence = 0;
+    std::uint64_t _hueAcquiredOpening = 0;
+    std::optional<JobTicket> _hueReadbackTicket;
+    std::optional<HistoryWorkStamp> _hueReadbackStamp;
+    bool _hueReadbackEnabled = false;
+    bool _hueCloseAfterPrefix = false; // Clock exhaustion drains accepted input before exact caller-owned drop.
+    std::shared_ptr<ColorWorkTestGate> _hueReadbackTestGate; // Original descriptor owns the optional harness gate.
+    std::uint32_t* _hueCapturesForTest = nullptr;            // Borrowed owner-only, cleared before the fixture exits.
+    int RunHueReadbackHostSelfTest() noexcept;
     class SamplerHostJob;
     HANDLE _samplerAcknowledgedForTest = nullptr; // Owner-only borrowed harness event, cleared before its owner exits.
     std::uint32_t* _samplerSourceCapturesForTest = nullptr; // Borrowed owner-only counter; never read by a worker.
@@ -1617,7 +1646,8 @@ class Application final : public ChromeEvents,
     };
     struct HueTargetDrag
     {
-        double startX = 0; // view x where a targeted Hue/Saturation drag began
+        double startX = 0;                    // view x where a targeted Hue/Saturation drag began
+        std::optional<std::uint64_t> opening; // Event-owned async sample/drag; absent for the legacy reference.
     };
     using PointerDrag = std::variant<std::monostate, PanDrag, ZoomDrag, MoveToolDrag, CropDrag, OutlineDrag, DraftDrag,
                                      PixelDrag, GradientDrag, ColorSampling, HueTargetDrag>;

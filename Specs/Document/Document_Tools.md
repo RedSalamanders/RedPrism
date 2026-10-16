@@ -1229,6 +1229,31 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
 - `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
   wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
 
+### Scalar Hue sampling and preserving-panel Wand
+
+`SampleHueRangeValue(optional<double>)` and `BeginHueTargetingValue(optional<double>)` accept an already sampled
+hue while retaining the raster entry points as numeric references. Missing/nonfinite values or hues outside
+[0,360) refuse without changing panel, targeting, document, global settings or history. Raster wrappers check
+their existing panel prerequisites before sampling, then delegate. Range/band selection, near-neutral refusal
+and half-unit targeting deltas keep the existing formulas; no color or kernel golden changes.
+
+The explicit preserving-panel Wand route uses separate opaque `PanelWandOpening` and `PanelWandAuthority`.
+The physical opening binds session, document serial, exact panel opening and color sequence. It may survive
+older FIFO source changes; the admitted source witness is captured only after those prerequisites finish.
+Global history-restore eligibility stays strict. Layer and committed-composite routes preserve the exact panel
+and source pixels while publishing prepared selection/history atomically. Original press point, mode, source
+choice, settings and antialiasing remain event-time values. Zero-offset outline closure and dependent Wand or
+Deselect retain one input and its original ordinal. Invalid mode, cancellation, stale source or equal-valued
+panel reopening cannot publish partial state. Other typed close policies remain unchanged.
+
+An acknowledged preserving-panel Wand records a private binding to that panel opening and the exact new
+immutable selection identity. Newly captured preview, histogram and commit validation tokens use that bound
+selection while the public panel source token and original sampling/rendering coverage remain unchanged.
+Pre-Wand produced work stays stale. Its selection-only refusal must leave the still-valid panel open; changed
+session, restore, canvas, target image, transform or mask retain their normal strict refusal behavior. A later
+direct selection change cannot acquire the Wand binding. Cancel retains the acknowledged Wand selection;
+the next panel captures that current selection as its own opening coverage.
+
 ### Immutable destructive-panel work
 
 `PrepareColorEditCommit` captures owning inputs for `RunColorEditJob` (`Common/ColorEditWork.*`), which has no

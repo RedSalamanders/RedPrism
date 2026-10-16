@@ -1030,6 +1030,18 @@ holds a project, or opens a new project, centers them, as the point belongs to t
 report the `ProjectIoStatus` through a localized message (unsupported version names the version); `--screenshot`
 runs suppress dialogs.
 
+### Pending Hue and preserving-panel Wand controls
+
+For the explicitly enabled asynchronous route, queued/selected Hue input or preserving-panel Wand freezes
+mutating color controls while Cancel retains its existing action. A consumed Hue press, including a refusal,
+must not fall through to another canvas tool. Capacity and admission errors use the existing localized Busy
+or error feedback. Transparent/near-neutral samples leave panel settings unchanged. This conditional route
+policy does not itself enable ordinary prepared startup or qualify first-frame/G1 bounds.
+
+After the acknowledged Wand, color controls resume on the same panel. Preview and OK keep that panel's
+opening coverage, and Cancel keeps the completed Wand selection. A later panel starts from the current
+selection. A delayed pre-Wand histogram cannot leave an otherwise valid Levels panel permanently unready.
+
 ## Validation
 
 Harness screenshots of the empty-document shell at **96** and **144** DPI (`--screenshot <png> --warp --dpi 96|144`)

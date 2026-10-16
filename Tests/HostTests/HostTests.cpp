@@ -21,6 +21,7 @@
 #include "Host.Tests.CompletedPreviewMemory.h"
 #include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.GpuRecordingLane.h"
+#include "Host.Tests.HueInput.h"
 #include "Host.Tests.JoinedRetirementAuthority.h"
 #include "Host.Tests.OwnerWorkMultiplexer.h"
 #include "Host.Tests.PartitionedRetainedMemory.h"
@@ -1964,6 +1965,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunOpacityInputOrderTests();
     gFailures += RunPointerInputStreamTests();
     gFailures += RunHostPointerInputStreamPeekTests();
+    gFailures += RunHostHueInputTests();
     gFailures += RunSamplerInputTests();
     gFailures += RunSamplerIntentInputTests();
     gFailures += RunContinuationReceiptTests();

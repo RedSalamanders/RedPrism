@@ -546,3 +546,25 @@ An explicit CPU-only capture descriptor requires `S_FALSE` and no GPU charge; CP
 Compute. For detached CPU/event continuations, callers use `ResumeDetachedReadback(original)` or the
 sampler's `ContinuePixelReadback`, preserving suspended readiness on refusal. Owner cancellation never
 resumes an executing CPU body. Serial source-capacity waits and healthy GPU quarantine remain event driven.
+
+## Selected Hue and panel-preserving Wand inputs
+
+The explicit asynchronous Hue route queues a scalar descriptor before retaining source/pixel/GPU owners.
+Invalid purpose/mode refuses before queue, opening and shared ordinal effects; every accepted descriptor
+consumes its opening before binding, even if binding later refuses. The original admitted readback parent
+captures the committed document, reads one pixel and derives hue on its worker. It never samples a panel or
+stroke preview. Apply checks document-read authority, exact panel opening and current color sequence.
+
+The fixed 512-event input retains physical delta, Ctrl choice and shared ordinal. Release/loss owns a separate
+terminal and applies no new release coordinate. One existing continuation applies at most one event per turn.
+Finishing the acquisition request must rearm acquired Hue with a pending prefix or clock-exhaustion closure;
+an idle live target has no polling source or dummy worker. Younger accepted commands close the older gesture
+at their physical boundary. Overflow retains the accepted prefix and Lost terminal; ordinal exhaustion never
+wraps. Stale input cleanup retires only the matching opening. Explicit Cancel retains its cancellation outcome
+through original acknowledgement, including after its panel card hides.
+
+Preserving-panel Wand binds its scalar opening at the physical input and its complete source witness after
+older FIFO work. It does not change global history-restore authority. Its original job owns capture, optional
+recorded composite/readback, worker geometry/history, publication and complete retirement. These selected
+routes do not authorize ordinary prepared startup or replace the remaining admission, device, lifetime and
+G1 gates.
