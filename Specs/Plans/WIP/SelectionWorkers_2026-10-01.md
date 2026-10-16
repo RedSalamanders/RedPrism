@@ -1,5 +1,23 @@
 # Ordered selection workers (P1.6)
 
+## Current delivery checklist (2026-10-16)
+
+- [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+- [x] Independently qualify full Debug r1052 for the newer 43-path Hue/Wand/Paint/distortion/follow-through integration, including 28 new CPU and 29 actual host follow-through facts; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
+- [ ] Finish current-source analysis r1053, full Release r1054 / real ASan r1055, and ARM64 Debug r1056 / Release r1057 / instrumented ASan r1058. These are serial actual gates, with original archives retained.
+- [x] Implement isolated S5 scalar outline translation, exact cancellable hit work, worker-prepared Begin/End/Cancel, and reset/swap handling; preserve numeric APIs as references. This candidate is private and not adopted.
+- [x] Review delegated literal tests, correct optional conversion/unused-local and checkpoint/identity fixture issues, and add prepared-opening and mid-traversal cancellation scenarios before compilation.
+- [ ] Qualify focused private CPU candidate `.build/P1Drafts/S5CoreQualification-r1-Main`: 21,863 unchanged predecessor assertions plus 56 move/opening and 32 hit assertions are required. Its first Release build is running with separate outputs and a verified immutable vcpkg snapshot; no DxUi or dependency project is built.
+- [ ] Complete original-gesture admission and ordered physical-prefix replay, all outside-hit/Wand/pixel-lift branches, preserving-panel authority, cursor/display consumers and worker settlement. The bounded press-input header remains isolated and unintegrated.
+- [ ] Prove complete phase/retirement bounds and exact view/DPI/device behavior; qualify actual host/lifecycle/error scenarios and ordinary activation.
+- [ ] Close specified G1 measurements and remaining parent gates before P1 Done.
+
+`OwnerWorkMultiplexer` now has eleven qualified leaves. The historical ten-leaf/private-host descriptions
+below describe earlier snapshots. The complete startup/lasso host has since qualified; complete S5 delivery,
+ordinary activation and measured G1 remain open. Native ARM64 runtime remains unavailable.
+
+## Historical continuation notes (through 2026-10-12)
+
 Current continuation (2026-10-12, 13:44 UTC): private nine-plane raster view/DPI controls and the composition R8
 mask draw component qualify independently; complete S5 admission, actual host routing and G1 remain open.
 [Rational view references](../../TestRuns/P1SelectionOutlineRasterViews_2026-10-12.md) preserve all 9,241 prior
