@@ -238,3 +238,21 @@ qualified private ASan archives move to Z: with every byte checked and original-
 all source/products/PDB/evidence and completion identities remain. The fresh remaining controller starts
 instrumented ARM64 ASan r1088 under the same unchanged source/runner freeze, followed by x64 analysis r1089
 and full Release r1090. This remains cross-build evidence, not native ARM64 execution or P1 completion.
+
+## ARM64 instrumented ASan r1088 qualified
+
+Canonical ARM64 ASan Debug exits 0 (PID 93676; 20:59:32.044801–21:35:13.322783 UTC). Main checks all
+1,467 archived source/evidence files, 953 actual instrumented compiler records, the unchanged 1,389 compiled,
+project and toolchain inputs, and all five exact ARM64 executable/PDB identities. Source/runner freeze remains
+`C7D41B2E802CE18215D7F043A1EBE08D1AE0959857C1056FC9628488CAC0ED4B`.
+Completion: `569021EC5F6237183B1CC8CD64304F7872C77C01B1C1A9B0B876BE0BD584871D`.
+[Main qualification](../../.build/P1Integration/LassoHost-r1-Main/r1088-main-qualified.json).
+
+All three current ARM64 profiles now cross-build successfully. No ARM64 executable was run on this x64 host.
+The controller reclaims only its verified regenerable ARM64 objects, then stops before analysis at the 6 GiB
+headroom check. No r1089/r1090 compiler or test failure follows from that preflight. Source, products, PDBs,
+libraries, compiler/dependency records and complete evidence stay retained. Independently qualified closed
+x64 Debug/ASan and private object caches are hash-recorded and reclaimed; the first global compiler guard
+refuses unrelated active DxUi compilation without changing files. No other task's processes or files change.
+Qualified ARM64 archives move to the named Z: artifact directory after complete byte comparison, with original
+paths preserved by junctions. Fresh analysis and full Release remain required on the same compiled source.

@@ -66,7 +66,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify the clipboard repair in full native real ASan r1075: actual parent exit 0, all 953 instrumented compiler records, five exact executable/PDB pairs and all 1,782 archive files independently verified. Both genuine ASan poisoning checks and source-defined WARP callback ordering pass strict readers; no runtime repeated.
 - [x] Qualify ARM64 Debug r1086 after independently preserving the r1076 disk-full failure: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs verified; all compiled inputs are unchanged.
 - [x] Qualify ARM64 Release r1087: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs independently verified.
-- [ ] Qualify instrumented ARM64 ASan r1088 (building), Release analysis r1089 and full Release r1090. The compiled source remains frozen; native ARM64 runtime is unavailable.
+- [x] Qualify instrumented ARM64 ASan r1088: 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs independently checked; all three ARM64 cross-builds pass.
+- [ ] Qualify Release analysis r1089 and full Release r1090 on the unchanged compiled source; the prior controller stops at its headroom preflight before either starts. Native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).

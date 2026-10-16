@@ -119,7 +119,7 @@ Physical Win32 dispatch, all display/admission/lifecycle consumers, native adopt
 
 The 26 code/test/project paths and five owning contract updates are committed and pushed as
 [`92782fd`](https://github.com/RedSalamanders/RedPrism/commit/92782fd18d341347b6a253ce2902e174c95c12cd) on
-`ej/p1-selection-gesture-prerequisites`. All 24 C++ source/header paths pass clang-format. One declaration-only
+`ej/p1-selection-gesture-prerequisites`. All 25 C++ source/header paths pass clang-format. One declaration-only
 header needs CR/final-whitespace normalization; Main proves exact declaration equivalence after removing only
 CR/final whitespace and preserves the qualified private source. An isolated Git index leaves the current
 native branch, its working files and compiler inputs unchanged. This is a reviewable code candidate;
