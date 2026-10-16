@@ -2,6 +2,21 @@
 
 ## Current delivery checklist
 
+### Remaining gates before P1 Done
+
+- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
+- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
+- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
+- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
+- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
+- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
+- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
+- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
+### Latest qualified checkpoint
+
 Latest native checkpoint (2026-10-16): the combined startup, long-path I/O and lasso retirement
 source `67a77dd` passes canonical Release analysis r1034, complete x64 Release r1035 / Debug r1036 /
 real ASan r1041, and ARM64 Debug r1042 / Release r1043 / instrumented ASan r1044 cross-builds.
@@ -78,7 +93,14 @@ source/roster rejection controls before this replacement build.
 - [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
   ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
 
-Current private follow-up (2026-10-16): Main finds invalid Hue purpose/mode could enqueue before refusal and
+Current private follow-up (2026-10-16): private Hue R2 stops at C4189/C2220 on an unused
+`historyCount` local in the new scalar fixture; no runtime follows it. Its complete 1,889-file archive
+is retained (completion `95B03EBE38BA6FFDE77CBC1C610263B4455D93BEB30752FABA5EC38F179A265B`).
+Main verifies `SameHuePanelState` already checks the captured history count; fresh R3 removes only the
+redundant local, retaining all 55 predicates and warnings-as-errors. Its actual build is in progress.
+The current qualified native source remains unchanged.
+
+The original Hue admission review finds invalid purpose/mode could enqueue before refusal and
 reuse the opening with later valid input. The unbuilt R1 is superseded and retained. Fresh R2 refuses invalid
 input before queue/counter effects and consumes accepted openings before binding; two new exact state tests
 join all 26 preserved Hue host facts. Source-only reader controls pass; actual compilation/runtime remain due.
@@ -160,16 +182,7 @@ defines `WIN32_LEAN_AND_MEAN`. Main removes the redundant local definition, pres
 No r939–r941 runtime profile launched. The fresh replacement matrix uses analysis r942, Release r943,
 Debug r944 and real ASan r945; ordinary activation and every delivery gate remain open.
 
-- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
-- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
-- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
-- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
-- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
-- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
-- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
-- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
-- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
 
 Current continuation (2026-10-12): private clipboard r7 passes the complete hidden WARP Release suite with
 all 7,399/7,556 predecessor records, eleven new post-close foreign replacement/literal Paste controls and the
