@@ -5,7 +5,8 @@
 - [x] Independently qualify private selected Begin/End history ownership in Release and real ASan: 23 new facts plus all 22,010 predecessors. Preserve the original profile-reader refusal; Main's correction keeps the complete actual stream and exact existing ASan witness. [Ownership evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
 - [ ] Adopt the selected ownership API and qualify actual physical-press/terminal publication lifetimes and complete original-ticket admission; private CPU proof alone does not enable S5.
 - [x] Qualify the native successful-publication repair in full Debug r1074, real ASan r1075 and ARM64 Debug r1086; preserve r1073 and the r1076 disk-full failure independently.
-- [ ] Finish the current native matrix: ARM64 Release r1087 is building, then instrumented ARM64 ASan r1088, analysis r1089 and full Release r1090. Native ARM64 runtime is unavailable.
+- [x] Qualify native ARM64 Release r1087 with complete archive, compiler and exact five executable/PDB checks.
+- [ ] Finish the current native matrix: instrumented ARM64 ASan r1088 is building, followed by analysis r1089 and full Release r1090. Native ARM64 runtime is unavailable.
 - [x] Qualify private corrected original-parent/charged-command/opaque-cleanup Release R4 and real ASan R2: all 22,228 assertions, complete geometry/control bounds, moved Lost, exact post-Close final refund and complete archive/artifact checks; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
 
 - [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).

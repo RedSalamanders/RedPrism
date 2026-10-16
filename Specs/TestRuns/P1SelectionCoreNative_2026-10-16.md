@@ -222,3 +222,19 @@ Only after qualification, 953 regenerable ARM64 Debug objects are hashed and rec
 PDBs, source and evidence remain. ARM64 Release r1087 is building, followed by instrumented ARM64 ASan r1088,
 x64 Release analysis r1089 and full Release r1090. Native ARM64 runtime remains unavailable; this is
 cross-build evidence only. The private gesture APIs and tests remain separate, unadopted work.
+
+## ARM64 Release r1087 qualified
+
+Canonical ARM64 Release exits 0 (PID 74484; 20:17:58.553423–20:53:42.030700 UTC). Main cross-checks the
+independent verification of all 1,463 archive files, 953 actual compile records, all 1,389 unchanged
+compiled/project/toolchain inputs and all five exact ARM64 executable/PDB pairs. Source freeze remains
+`C7D41B2E802CE18215D7F043A1EBE08D1AE0959857C1056FC9628488CAC0ED4B`.
+Completion: `988F54100BFD37A0C7089CC3FD4A7F6F277024B82854E3C9F07CE05906CD5851`.
+[Release cross-build qualification](../../.build/P1Integration/LassoHost-r1-Main/r1087-main-qualified.json).
+
+The controller verifies and reclaims only its 953 regenerable ARM64 Release objects, then stops at its 6 GiB
+preflight before launching ASan. No failed ASan compiler/runtime is inferred. Two closed, independently
+qualified private ASan archives move to Z: with every byte checked and original-path junctions preserved;
+all source/products/PDB/evidence and completion identities remain. The fresh remaining controller starts
+instrumented ARM64 ASan r1088 under the same unchanged source/runner freeze, followed by x64 analysis r1089
+and full Release r1090. This remains cross-build evidence, not native ARM64 execution or P1 completion.

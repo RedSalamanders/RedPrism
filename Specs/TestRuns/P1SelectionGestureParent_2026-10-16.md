@@ -114,3 +114,13 @@ The reviewed native adoption inventory is prepared in
 `.build/P1Integration/SelectionGesturePrerequisites-r1-Main/source-adoption-inventory.json`: 14 modified
 code/project/entry paths and 12 new test files. Native inputs remain frozen for the separate current matrix.
 Physical Win32 dispatch, all display/admission/lifecycle consumers, native adoption and measured G1 remain due.
+
+## Code candidate committed separately
+
+The 26 code/test/project paths and five owning contract updates are committed and pushed as
+[`92782fd`](https://github.com/RedSalamanders/RedPrism/commit/92782fd18d341347b6a253ce2902e174c95c12cd) on
+`ej/p1-selection-gesture-prerequisites`. All 24 C++ source/header paths pass clang-format. One declaration-only
+header needs CR/final-whitespace normalization; Main proves exact declaration equivalence after removing only
+CR/final whitespace and preserves the qualified private source. An isolated Git index leaves the current
+native branch, its working files and compiler inputs unchanged. This is a reviewable code candidate;
+integration and complete native/physical/G1 validation remain due.
