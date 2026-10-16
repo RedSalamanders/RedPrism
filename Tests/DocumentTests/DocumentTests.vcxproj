@@ -588,12 +588,14 @@
     <ClCompile Include="Document.Tests.SelectionCommandMemory.cpp" />
     <ClCompile Include="Document.Tests.SelectionGestureParent.cpp" />
     <ClCompile Include="Document.Tests.SelectionGestureAbort.cpp" />
+    <ClCompile Include="Document.Tests.SelectionPhysicalPrefix.cpp" />
     <ClInclude Include="Document.Tests.SelectionHistoryOwnership.h" />
     <ClInclude Include="Document.Tests.ContinuingPublication.h" />
     <ClInclude Include="Document.Tests.SelectionHistoryBoundLifetime.h" />
     <ClInclude Include="Document.Tests.SelectionCommandMemory.h" />
     <ClInclude Include="Document.Tests.SelectionGestureParent.h" />
     <ClInclude Include="Document.Tests.SelectionGestureAbort.h" />
+    <ClInclude Include="Document.Tests.SelectionPhysicalPrefix.h" />
     <ClInclude Include="Document.Tests.SelectionMoveGeometryLifetime.h" />
   </ItemGroup>
 </Project>
