@@ -2,6 +2,17 @@
 
 ## Implementation checklist
 
+Current implementation checkpoint (2026-10-16): selected Hue readback/physical input and preserving-panel
+layer/composite Wand, including post-Wand preview/OK/Cancel/histogram follow-through, are adopted and pushed
+as `7b0eeb1` with their code, tests, contracts and guide. Full Debug r1052 passes independent complete-roster,
+source/archive/compiler and executable/PDB checks; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
+Current-source analysis r1053 and the subsequent Release/real-ASan/ARM64 gates remain in progress/pending.
+Ordinary activation, complete caller phase/lifetime/device bounds and measured G1 remain open.
+
+- [x] Implement and review the selected Hue/Wand caller integration and qualify full Debug r1052.
+- [ ] Finish the exact current-source remaining native validation matrix and reconcile its evidence.
+- [ ] Close the remaining P1.3 caller, ordinary-activation, phase-bound and G1 gates below.
+
 - [x] P1.3a — Add a qualified device capability report and fence/EnqueueSetEvent route selection.
   - [x] Implement optional-query HRESULT/availability, context/device identity validation and conservative route selection.
   - [x] Review and integrate the cheaper agent's capability truth table and WARP test sidecar.
@@ -19,7 +30,7 @@
   - [x] Qualify separate targets/shared raster cache and atomic producer-compose/copy recording.
   - [x] Qualify the single-reservation tiled worker job, adopted output, cancellation and bounded restart.
 - [ ] P1.3e — Migrate merge, opening adjustment composites, export/Copy Merged and wand/clone/sampler callers.
-  - [ ] Migrate Hue/Saturation range sampling and targeted adjustment: `AdjustPointer` still calls `WandComposite` synchronously on each eligible press. Capture the committed-document read authority, edit opening, sampled operation and physical point; use admitted region readback and scalar hue application. Preserve the original composite without panel/stroke preview, near-neutral/transparent refusal and all legacy band/targeting numbers.
+  - [ ] Migrate Hue/Saturation range sampling and targeted adjustment: the selected `AdjustPointer` route now uses admitted asynchronous readback; the direct reference route remains until ordinary activation qualifies. Capture the committed-document read authority, edit opening, sampled operation and physical point; use admitted region readback and scalar hue application. Preserve the original composite without panel/stroke preview, near-neutral/transparent refusal and all legacy band/targeting numbers.
   - [ ] Preserve targeted-drag input while its initial readback waits: bounded physical samples retain view delta, modifier, event ordinal and the separate terminal; replay after current-only publication through the existing continuation source, ahead of physically younger commands. Allocation/queue/counter refusal must retain accepted input and preserve the original panel; no synchronous readback fallback.
   - [ ] Remove the guarded production Wand fallback only after proving its exact transaction/prerequisite behavior. The current fallback is reached when the mode is beyond Subtract or history-restore authority is unavailable; it can synchronously run selection geometry and, for All Layers, composite readback. Invalid mode is a local refusal; supported live contexts need ordered worker settlement with exact cancellation/history semantics.
     - [ ] Preserve an unarmed adjustment panel through layer/composite Wand; generic queue settlement
@@ -37,21 +48,23 @@
       utility ownership before encoding and prevents device replacement from replaying completed pixels.
       All six native profiles qualify ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). Wand/clone/sampler
       and remaining live-input/device/measurement scenarios stay open.
-- [ ] Qualify the private Hue caller/core/input and actual-host tests, selectively integrate them with the
-  latest I/O/startup native source, then prove ordinary activation and measured costs. Prepared source is
-  disabled and unbuilt; the exact stale-opening cleanup and hidden-card cancellation controls require runtime.
+- [ ] Complete full native qualification of the adopted Hue caller/core/input and actual-host tests, then
+  prove ordinary activation and measured costs. Full Debug now passes the exact stale-opening cleanup,
+  hidden-card cancellation and physical-prefix controls. Remaining profiles and broader phase/device gates
+  stay open; source-only and private component results do not enable ordinary use.
 - [ ] P1.3f — Prove hidden completion, cancellation, stale generation, device loss, saturation and shutdown with owned event gates.
 - [ ] P1.3f — Complete caller qualification and real-loop measurements; reconcile domain specs and commit/push each slice.
   - [x] Utility/Merge/opening slice: all x64 gates and ARM64 cross-builds pass; specifications and evidence reconciled.
 - [ ] Move this plan to Done after all P1.3 callers and validation are complete.
 
-Current implementation follow-up (2026-10-16, unqualified): Main has an isolated panel-preserving Wand
-caller candidate. Physical intent retains an opaque panel opening/settings witness through older FIFO work;
-the admitted original job separately binds complete source authority. The typed zero-offset outline follow-up
-keeps its original ordinal and selects layer/composite work after worker closure. Global history-restore
-exclusions remain strict. Thirty actual-pointer scenarios and separate scalar-authority controls are prepared;
-actual build/runtime, cancellation/failure/admission/device coverage and selective native integration are due.
-The new sources are not adopted or enabled in the native checkout by this preparation.
+The preserving-panel Wand route retains an opaque physical opening/settings witness through older FIFO
+work and binds complete source authority only after admission. Its typed zero-offset outline follow-up keeps
+its original ordinal and selects layer/composite work after worker closure; global history-restore exclusions
+stay strict. Full Debug includes 126 host assertions across 30 panel/route/action cases, 32 lifecycle assertions
+across eight cases, plus 28 CPU and 29 actual post-Wand host follow-through assertions. The original panel
+sampling/render coverage stays fixed while the acknowledged Wand selection receives a private validation
+binding. Old results refuse without closing a still-valid panel; delayed stale histograms retry only after
+original acknowledgement. Complete recovery, full current-source profiles, ordinary activation and G1 stay open.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.3.
 Owners: `Application`, `JobScheduler`, `GpuWorkQueue`, `GpuCapabilities`, utility composition and their tests.
