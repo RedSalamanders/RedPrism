@@ -11,8 +11,9 @@ Status: native qualification in progress; P1 remains WIP.
 - [x] Preserve and independently read failed r1059; apply shared-helper and equivalent capacity-proof repairs.
 - [x] Qualify fresh canonical Release analysis r1066: all linked images, compiler records, complete archive and independent checks pass.
 - [x] Qualify full native Release r1067 on the same source, with all 22,010 Document facts and 142 Application stages.
-- [ ] Finish full x64 Debug/real-ASan and ARM64 Debug/Release/instrumented-ASan cross-builds.
-- [ ] Independently read actual results, complete archives, compile records and five PE/PDB pairs per profile.
+- [x] Qualify current-repair full x64 Debug r1074/real-ASan r1075 and ARM64 Debug r1086/Release r1087/instrumented-ASan r1088 cross-builds.
+- [x] Independently read those actual results, complete archives, compiler records and five PE/PDB pairs per profile.
+- [ ] Qualify current-repair Release analysis r1091 and complete Release r1092 after the retained r1089 temporary-space failure.
 
 ## Failed predecessor retained
 
@@ -256,3 +257,30 @@ x64 Debug/ASan and private object caches are hash-recorded and reclaimed; the fi
 refuses unrelated active DxUi compilation without changing files. No other task's processes or files change.
 Qualified ARM64 archives move to the named Z: artifact directory after complete byte comparison, with original
 paths preserved by junctions. Fresh analysis and full Release remain required on the same compiled source.
+
+## Native analysis r1089 C: temporary-space failure; H10 recovery pending (2026-10-17)
+
+The actual x64 Release analysis parent r1089 (PID 70204) exits 1,
+`2026-10-16T21:40:18.782363Z`–`2026-10-16T22:52:22.279159Z`. MSVC reports C1088 while flushing an intermediate file under
+`C:\Users\eric\AppData\Local\Temp`: **No space left on device**. This is a failed compiler attempt;
+no analysis or subsequent runtime qualification is inferred. r1090 **never launched**.
+
+Main independently verifies all 1805 archived files and completion SHA-256
+`8EDFCAC05A40E47FF15605926FD68BC8F14D922568E15C6870E2F6A815F1B030`. The initial ordinary-path reader refusal over MAX_PATH is retained;
+extended-path readback verifies the original unchanged bytes. The failed attempt's source/runner freeze is
+`C7D41B2E802CE18215D7F043A1EBE08D1AE0959857C1056FC9628488CAC0ED4B` (1,393 transport inputs).
+[Main failed-run verification](../../.build/P1Integration/LassoHost-r1-Main/r1089-main-failed-verified.json).
+
+Recovery is fresh H10 r1091 through canonical `build.ps1` Release Rebuild/Analyze. The script always forces
+Rebuild for Analyze; the transport folder's `incremental` name does not make this an incremental gate.
+Both TMP and TEMP use `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`.
+H10 transport freeze is `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`;
+all 1,389 compiled/project/toolchain inputs remain unchanged. Fresh full Release r1092 follows r1091;
+both gates remain pending. All three ARM64 cross-builds r1086/r1087/r1088 already pass;
+native ARM64 runtime remains unavailable.
+
+Private App R4 has build exit 0 and ISA exit 0 for 339 sources. Its 144 Application stages,
+41 new controls and 71 inherited scalar checks remain due; runtime is serialized after native Release qualification.
+The repaired private engine Release qualifies 68 + 22,228 = 22,296 assertions. Its real-ASan 270-command build
+in `.build/P1Drafts/S5PressEngineAsan-r1-Main` has launched; instrumentation, runtime/UAF probe and archive qualification
+remain pending. Complete production bounds, remaining branches, ordinary activation, native adoption, G1 and P1 Done remain open.

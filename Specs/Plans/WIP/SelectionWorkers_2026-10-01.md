@@ -3,18 +3,18 @@
 ## Current delivery checklist (2026-10-16)
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
-- [ ] Qualify that repaired engine under real ASan and the actual Win32 caller (41 new controls plus 71 inherited scalar checks, 144 stages); production bounds, remaining branches, native adoption and measured G1 remain due.
+- [ ] Qualify the repaired engine under real ASan: its 270-command build has launched; runtime, actual UAF probe and archive qualification remain pending. The actual Win32 caller still owes 144 stages, 41 new controls and 71 inherited scalar checks; production bounds, remaining branches, native adoption and measured G1 remain due.
 
 - [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
 - [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
-- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. The isolated 338-source application draft is compiling; runtime is serialized after native Release qualification.
+- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. Private App R4 has build exit 0 and ISA exit 0 for 339 sources; its runtime remains due and is serialized after native Release qualification.
 
 - [x] Independently qualify private selected Begin/End history ownership in Release and real ASan: 23 new facts plus all 22,010 predecessors. Preserve the original profile-reader refusal; Main's correction keeps the complete actual stream and exact existing ASan witness. [Ownership evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
 - [ ] Adopt the selected ownership API and qualify actual physical-press/terminal publication lifetimes and complete original-ticket admission; private CPU proof alone does not enable S5.
 - [x] Qualify the native successful-publication repair in full Debug r1074, real ASan r1075 and ARM64 Debug r1086; preserve r1073 and the r1076 disk-full failure independently.
 - [x] Qualify native ARM64 Release r1087 with complete archive, compiler and exact five executable/PDB checks.
 - [x] Qualify instrumented ARM64 ASan r1088 with 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs; all three ARM64 cross-builds pass.
-- [ ] Finish unchanged-source analysis r1089 (running) and full Release r1090 after the preserved headroom preflight. Native ARM64 runtime is unavailable.
+- [ ] Qualify fresh full canonical H10 Rebuild/Analyze r1091 and full Release r1092 on unchanged compiled inputs; r1089 failed C1088 on C: TEMP and is independently archived, while r1090 never launched. Native ARM64 runtime is unavailable.
 - [x] Qualify private corrected original-parent/charged-command/opaque-cleanup Release R4 and real ASan R2: all 22,228 assertions, complete geometry/control bounds, moved Lost, exact post-Close final refund and complete archive/artifact checks; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
 
 - [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
@@ -29,6 +29,14 @@
 - [ ] Integrate and validate original-gesture admission, physical-prefix replay, overlapping writers and all outside-hit/Wand/pixel-lift branches, preserving-panel authority, cursor/display consumers, worker settlement, and actual host/lifecycle/error paths.
 - [ ] Prove complete phase/retirement bounds and exact view/DPI/device behavior; qualify ordinary activation and required native profiles after the fresh combined-source matrix.
 - [ ] Close specified G1 measurements and remaining parent gates before P1 Done.
+
+Current native status (2026-10-17): Main independently verifies r1089's actual analysis exit 1,
+C1088 on C: compiler TEMP, and all 1,805 archived files; r1090 never launched.
+Fresh H10 r1091 is a full canonical Release Rebuild/Analyze (`build.ps1` always forces Rebuild),
+with both TMP/TEMP set to `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r1092 follows.
+H10 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`; all 1,389 compiled/project/toolchain inputs are unchanged.
+Both new gates remain pending. ARM64 Debug/Release/instrumented-ASan r1086–r1088 already pass;
+native ARM64 runtime is unavailable. Earlier checkpoint entries below retain their historical status.
 
 `OwnerWorkMultiplexer` now has eleven qualified leaves. The historical ten-leaf/private-host descriptions
 below describe earlier snapshots. The complete startup/lasso host has since qualified; complete S5 delivery,

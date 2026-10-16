@@ -3,11 +3,11 @@
 ## Current delivery checklist
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
-- [ ] Qualify that repaired engine under real ASan and the actual Win32 caller (41 new controls plus 71 inherited scalar checks, 144 stages); production bounds, remaining branches, native adoption and measured G1 remain due.
+- [ ] Qualify the repaired engine under real ASan: its 270-command build has launched; runtime, actual UAF probe and archive qualification remain pending. The actual Win32 caller still owes 144 stages, 41 new controls and 71 inherited scalar checks; production bounds, remaining branches, native adoption and measured G1 remain due.
 
 - [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
 - [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
-- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. The isolated 338-source application draft is compiling; runtime is serialized after native Release qualification.
+- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. Private App R4 has build exit 0 and ISA exit 0 for 339 sources; its runtime remains due and is serialized after native Release qualification.
 
 ### Remaining gates before P1 Done
 
@@ -23,6 +23,14 @@
 - [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
 
 ### Current integration under validation
+
+Current native status (2026-10-17): Main independently verifies r1089's actual analysis exit 1,
+C1088 on C: compiler TEMP, and all 1,805 archived files; r1090 never launched.
+Fresh H10 r1091 is a full canonical Release Rebuild/Analyze (`build.ps1` always forces Rebuild),
+with both TMP/TEMP set to `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r1092 follows.
+H10 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`; all 1,389 compiled/project/toolchain inputs are unchanged.
+Both new gates remain pending. ARM64 Debug/Release/instrumented-ASan r1086–r1088 already pass;
+native ARM64 runtime is unavailable. Earlier checkpoint entries below retain their historical status.
 
 The newer Hue, preserving-panel Wand, hard Paint parity, direct-distortion read and panel follow-through
 integration passes full Debug r1052: 21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus
@@ -74,7 +82,7 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify ARM64 Debug r1086 after independently preserving the r1076 disk-full failure: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs verified; all compiled inputs are unchanged.
 - [x] Qualify ARM64 Release r1087: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs independently verified.
 - [x] Qualify instrumented ARM64 ASan r1088: 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs independently checked; all three ARM64 cross-builds pass.
-- [ ] Qualify Release analysis r1089 (running) and full Release r1090 on the unchanged compiled source; retain the prior controller's headroom preflight. Native ARM64 runtime is unavailable.
+- [ ] Qualify fresh full canonical H10 Rebuild/Analyze r1091 and full Release r1092 on unchanged compiled inputs; r1089 failed C1088 on C: TEMP and is independently archived, while r1090 never launched. Native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
