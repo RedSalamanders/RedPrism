@@ -324,6 +324,11 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
                 ClipboardTransfer::Publish(_payload->transfer, context.cancellation, ClipboardObserver(_gate));
             if (_payload->offered.status == ClipboardTransfer::Status::Cancelled)
                 return {JobStatus::Cancelled};
+            // CopyPublished also gates fault tests after a failed attempt. A successful-publication gate
+            // must not release on a Busy attempt, before the original ticket's bounded retry has published.
+            if (_payload->offered.status == ClipboardTransfer::Status::Ok && _gate &&
+                _gate->phase == ClipboardWorkPhase::CopyPublicationSucceeded)
+                return PassClipboardGate(_gate, _ownerThread, ClipboardWorkPhase::CopyPublicationSucceeded, context);
             return PassClipboardGate(_gate, _ownerThread, ClipboardWorkPhase::CopyPublished, context);
         case Phase::Done:
             return {};

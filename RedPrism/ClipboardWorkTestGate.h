@@ -26,6 +26,7 @@ enum class ClipboardWorkPhase : std::uint8_t
     PasteCaptured,
     PasteCopied,
     PastePrepared,
+    CopyPublicationSucceeded, // only a successful native publication, after CloseClipboard and owner teardown
 };
 
 // Harness-only event gate. Production does not allocate a gate or enter its waits.

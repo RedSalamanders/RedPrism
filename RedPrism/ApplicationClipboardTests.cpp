@@ -261,7 +261,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"paste-owned-receipt", paste, Mode::ReceiptOrigin, ClipboardWorkPhase::PastePrepared,
                  HostOutcome::Succeeded},
         Scenario{"copy-foreign-replacement-after-close", copy, Mode::ForeignReplacement,
-                 ClipboardWorkPhase::CopyPublished, HostOutcome::Succeeded},
+                 ClipboardWorkPhase::CopyPublicationSucceeded, HostOutcome::Succeeded},
         Scenario{"merged", merged, Mode::Success, ClipboardWorkPhase::CopyPrepared, HostOutcome::Succeeded},
         Scenario{"merged-cancel", merged, Mode::Cancel, ClipboardWorkPhase::MergedSnapshot, HostOutcome::Cancelled},
         Scenario{"merged-late-cancel", merged, Mode::LateCancel, ClipboardWorkPhase::CopyPrivateApplied,
@@ -431,6 +431,9 @@ int Application::RunClipboardWorkSelfTest() noexcept
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
         if (retry || scenario.mode == Mode::Exhaust)
             gate->openFailures.store(retry ? 2u : 6u);
+        // A temporary native OpenClipboard failure must not satisfy the successful-publication gate.
+        if (scenario.mode == Mode::ForeignReplacement)
+            gate->openFailures.store(2);
         if (scenario.mode == Mode::EncodeFailure)
             gate->fault = ClipboardTransfer::Fault::PngGlobal;
         if (scenario.mode == Mode::ReceiptFailure)
@@ -600,6 +603,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
                         state.foreignReplacementError, state.foreignReplacementStage, IsWindow(state.foreignWindow),
                         gate->publications.load(), gate->receiptPlacements.load(), _clipboardWriteSucceeded,
                         _clipboardSequence, SystemClipboard::SequenceNumber());
+            expect(gate->forcedBusyAttempts.load() == 2 && gate->openAttempts.load() >= 3 &&
+                       gate->openAttempts.load() <= 6 && gate->visits.load() == 1 && gate->publications.load() == 1 &&
+                       gate->receiptPlacements.load() == 1 && gate->pngPlacements.load() == 1 &&
+                       gate->dibPlacements.load() == 1,
+                   scenario.name, "successful-gate-follows-busy-retries-and-one-closed-publication");
             expect(state.replacementWhilePendingAfterClose && state.foreignReplacementInstalled &&
                        gate->receiptPlacements.load() == 1 && _clipboardWriteSucceeded && _clipboardSequence != 0 &&
                        _clipboardSequence != SystemClipboard::SequenceNumber(),

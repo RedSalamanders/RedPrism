@@ -2769,8 +2769,12 @@ changed opacity refuses closure. Actual dependent layer, tool, command, write, i
 callers stop before mutation. A real Space pan remains usable. Absent/unchanged/expired scalar state does not
 create history. Existing typed worker success and legacy opacity goldens remain unchanged.
 
-`ApplicationClipboardTests` adds eleven `copy-foreign-replacement-after-close` controls. Hold the real worker
-after OS clipboard close and before receipt application; replace the offered contents using a distinct held
+`ApplicationClipboardTests` adds twelve `copy-foreign-replacement-after-close` controls. Force two busy
+OpenClipboard attempts, retaining the original ticket through bounded retries. The successful-publication
+gate MUST wait until the native publication returns Ok after OS clipboard close and immediate-owner teardown;
+a busy or failed attempt cannot satisfy it. Retain the separate attempted-publication gate for native fault
+scenarios. Require exactly one gate visit, one closed publication and one receipt/PNG/DIB placement before
+receipt application; replace the offered contents using a distinct held
 message-only owner and an independent two-pixel BI_RGB DIB. The later actual queued Paste MUST read BGRA
 `13,27,41,255` and `59,73,89,255`, dimensions 2x1, at `(3,3)` on the 9x7 canvas. Require one Paste undo, no redo,
 cleared selection, unchanged private-copy serial, exact receipt outcome and acknowledged original-ticket refund.

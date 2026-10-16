@@ -62,7 +62,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify the private selected history ownership extension in CPU Release and real ASan: 23 new facts plus all 22,010 predecessors, with the original ASan reader refusal preserved and Main's full-stream profile correction independently checked; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
 - [ ] Close the retained private ASan clipboard failure with diagnostics and serialized clipboard suites; qualify its actual host and adopt the separately qualified ownership API.
 - [x] Preserve and independently verify the real r1073 Debug clipboard failure; retain the original assertions while preparing the separate successful-publication gate and forced busy-retry regression.
-- [ ] Qualify the clipboard gate repair in full native profiles and ARM64 cross-builds: Debug r1074 is running, then real ASan r1075, ARM64 r1076–r1078, Release analysis r1079 and full Release r1080. The source is frozen; native ARM64 runtime is unavailable.
+- [x] Qualify the successful-publication clipboard repair in full native Debug r1074, including the forced two-busy retry regression, all predecessor facts and exact archive/953 compiler/five executable-PDB checks. Reader-only refusals remain retained; no runtime repeated.
+- [ ] Qualify the clipboard repair in remaining native profiles: real ASan r1075 is running, then ARM64 r1076–r1078, Release analysis r1079 and full Release r1080. The source is frozen; native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [ ] Finish full x64 Debug/real ASan and ARM64 cross-builds on that same source.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.

@@ -143,3 +143,28 @@ The initial r1073 transport preflight hash was computed with LF JSON; its actual
 That wrapper metadata discrepancy is separate from the real nonzero test exit. Any subsequent source-bound
 validation must verify the exact row contents and actual serialized file bytes before comparing a fresh hash.
 Fresh Debug/Release/ASan, analysis and ARM64 validation of this repair remain due.
+
+## Native successful-publication repair Debug r1074 qualified
+
+Canonical Debug `test.ps1` exits 0 (PID 86420; 18:41:05.229015–19:00:03.381006 UTC).
+The forced two-busy-attempt regression passes with one successful closed receipt/PNG/DIB publication;
+all original after-close foreign Paste, literal pixels, history and retirement assertions remain intact.
+Runtime retains 22,010 Document facts, 142 Application stages, 8,272 Application stdout assertions,
+7,613 stderr assertions, 9,023 Host PASS facts plus Hue summary, 7,391 composition and 1,953 I/O facts.
+The source-only delta adapter proves all 27 original `expect` calls are unchanged, checks the new fact at
+its exact position and the summary change from 285 to 286, then projects only that verified addition for
+immutable predecessor readers. All eight positive/rejection tests pass independently.
+
+Two reader-only refusals remain preserved: missing dataclass module registration, then an omitted unchanged
+S5 `expectations.json` dependency. The corrected fresh reader checks the existing actual successful log;
+no native test or golden is rerun/rebaselined. Main verifies all 1,822 archived copies, all 953 compiler
+records, 1,389 compiled/project/toolchain inputs and all five exact executable/PDB identities.
+Source freeze: `E5438956D876ED5E8122E454F239916E09FD67CCBFCA3CB571BFA323F901A693`.
+Completion: `E594F2479334251EE5694C5CF63A78678A8764E3779CE463E302AD61F27C1CFA`.
+[Main qualification](../../.build/P1Integration/LassoHost-r1-Main/r1074-main-qualified.json).
+Skills (15), format (1,241 files) and diff checks pass.
+
+Future archives use `.build/P1EvidenceArchives/2026-10-16/` on C: to avoid depending on Z: headroom.
+Real ASan r1075 is running on the same frozen source, followed serially by ARM64 Debug r1076 /
+Release r1077 / instrumented ASan r1078, Release analysis r1079 and complete Release r1080.
+No native ARM64 runtime, ordinary activation, complete P1 delivery or G1 is claimed.
