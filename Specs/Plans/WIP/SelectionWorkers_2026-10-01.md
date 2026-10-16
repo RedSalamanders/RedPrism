@@ -1047,3 +1047,18 @@ reservation; capture the follow-up only after that real End acknowledgement to p
 Use a separately prepared charged final selection-command publication before terminal memory transfer.
 Pointer-loss End preserves the selection and must not synthesize the click follow-up. Moved, no-move, cancelled
 and Lost branches require real host tests before activation. Do not resume useful work after a final transfer.
+
+### Original-parent CPU protocol and charged click follow-up (2026-10-16)
+
+Private Release R3 independently qualifies 22,220 facts: 30 charged command, 33 original-parent lifecycle,
+57 opaque cleanup and all 22,100 predecessors. It preserves the actual failed fixture compile and four lifetime
+predicates before repair. Source/dependency/product bookends, all 1,602 archived files, 268 compiler records
+and exact executable/PDB identity pass. Real ASan is building the same frozen source.
+[Detailed evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
+
+The CPU protocol proves one original admitted parent through moved End, no-move End then newly captured
+Deselect, Lost End, worker failure, cancellation and joined Close. Opaque cleanup validates the exact Begin
+predecessor and latest own scalar witness, including foreign pending-transform and transferred gesture guards.
+This does not activate the uncompiled Application press prototype. Physical prefix replay/overflow/ordinal
+exhaustion, captured New-wand and Ctrl/preserving branches, complete display/first-upload consumers, native
+adoption, ordinary activation and G1 remain required.

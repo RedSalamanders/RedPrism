@@ -70,7 +70,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
 - [x] Qualify the same extended prerequisite under real ASan: all 22,100 facts, 265 instrumented compiler records, its own actual UAF probe, exact executable/PDB and all 1,604 archive files independently verified.
-- [ ] Complete actual S5 physical host dispatch, original-parent terminal/cancellation cleanup, charged click follow-up and all remaining parent delivery areas. The private model remains unadopted.
+- [x] Qualify private original-parent/charged-command/opaque-cleanup Release R3: 120 new assertions plus all 22,100 predecessors, with both failed attempts retained and 1,602 archived files/268 compiler records/exact executable-PDB independently checked; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
+- [ ] Qualify this same frozen candidate under real ASan (building), then complete actual S5 physical dispatch, display/admission/lifecycle consumers and all remaining parent delivery areas. The private APIs remain unadopted.
 
 ### Latest qualified checkpoint
 
