@@ -1579,3 +1579,20 @@ view with `ContiguousRasterForWork`. That view owns its sampled bytes for the co
 source and its nested tiles acquire no shared assembly. Sampling/homography/edge/rounding math is unchanged.
 The existing private traversal bound and failure policy apply; no cancellation or UI timing guarantee is added
 to the direct numeric-reference API.
+
+## Descriptor-bounded continuing output and selection geometry
+
+An explicitly opted continuing-output job MUST preadmit its entire useful/input/retirement peak and terminal
+slot before capture. Its intermediate output charge and the record's remaining reservation partition the
+same original admission. No grow/query/allocation/new FIFO identity or extra retained slot is permitted at
+transfer; terminal binding occurs only after the final useful producer joins. Data and allocator/control
+owners, including expired weak controls, retain their charge through actual destruction. Joined Close clears
+the former scheduler counter while foreign leases retain an independent endpoint; a cleared counter is not
+proof of final foreign refund.
+
+Selected Select All/Deselect output bounds include newly allocated history metadata and publication-owner
+allowance. Select All additionally includes cached geometry storage plus WorkOwnershipAllowance; StorageBytes
+alone excludes allocator/control overhead. Admission also covers both publication owners and construction
+peak. Checked arithmetic or insufficient output refuses before mutation. Opaque prepared gesture cleanup
+uses the exact prebuilt Begin-dependent End and latest own scalar authority, with no owner geometry/history
+construction or fresh admission. Physical callers, every display consumer and G1 still require qualification.

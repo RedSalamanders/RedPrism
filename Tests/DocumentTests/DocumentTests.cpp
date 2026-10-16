@@ -22,6 +22,7 @@
 #include "Document.Tests.BoundedLassoGesture.h"
 #include "Document.Tests.BoundedLassoPoints.h"
 #include "Document.Tests.BoundedLassoTicket.h"
+#include "Document.Tests.ContinuingPublication.h"
 #include "Document.Tests.DeferredSelectionMove.h"
 #include "Document.Tests.DistortRead.h"
 #include "Document.Tests.HostLassoInput.h"
@@ -29,6 +30,11 @@
 #include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
 #include "Document.Tests.LassoSessionBridge.h"
+#include "Document.Tests.SelectionCommandMemory.h"
+#include "Document.Tests.SelectionGestureAbort.h"
+#include "Document.Tests.SelectionGestureParent.h"
+#include "Document.Tests.SelectionHistoryBoundLifetime.h"
+#include "Document.Tests.SelectionHistoryOwnership.h"
 #include "Document.Tests.SelectionHitWork.h"
 #include "Document.Tests.SelectionMoveGeometryLifetime.h"
 #include "Document.Tests.SelectionPressInput.h"
@@ -8433,6 +8439,12 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSelectionHitWorkTests();
     gFailures += RunSelectionPressInputTests();
     gFailures += RunSelectionMoveGeometryLifetimeTests();
+    gFailures += RunDocumentSelectionHistoryOwnershipTests();
+    gFailures += RunDocumentContinuingPublicationTests();
+    gFailures += RunDocumentSelectionHistoryBoundLifetimeTests();
+    gFailures += RunDocumentSelectionCommandMemoryTests();
+    gFailures += RunDocumentSelectionGestureParentTests();
+    gFailures += RunSelectionGestureAbortTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

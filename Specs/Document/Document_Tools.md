@@ -1841,3 +1841,18 @@ null, explicit-empty or nonempty selections and their antialiasing/history. New 
 remains bound to the original session/document/selection/history authority. Boolean outputs may retain
 collinear edge vertices and have a cyclic starting vertex; their exact geometry/winding remains required.
 This core preparation contract alone does not activate Add/Subtract in the host's asynchronous New route.
+
+## Selected selection publication ownership prerequisites
+
+The optional charged Select All/Deselect route publishes only after its complete new history/geometry/control
+output is bound. Its constant-time output bound is overflow checked; unbound or underbound results refuse
+before document/history mutation. Select All uses the exact AA full-canvas rectangle; Deselect removes the
+optional selection. True no-op output is zero and preserves history revision, redo and document generation.
+Source, active/mask/crop, preserved gesture and history authority remain mandatory.
+
+A prepared deferred outline opening can opt into opaque own-move/abort authority. Scalar movement retains
+immutable source geometry and renews only that exact gesture's witness. Prebuilt abort preserves the original
+selection root and redo, closes its Begin and matches reference Cancel invalidations. Transform, brush,
+transferred brush/warp work, other gestures, foreign mutations and a consumed opening refuse. Default opening
+and numeric reference routes retain their behavior. These model APIs do not enable physical dispatch or
+change pointer-loss End, click follow-up, preserving callers, ordinary activation or G1 requirements.

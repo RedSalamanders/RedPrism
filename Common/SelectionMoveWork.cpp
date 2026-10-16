@@ -1,5 +1,6 @@
 #include "SelectionMoveWork.h"
 #include "SelectionNudgeWork.h"
+#include "SharedPublicationMemory.h"
 
 #include <limits>
 #include <type_traits>
@@ -22,13 +23,17 @@ std::optional<SelectionMoveClosureInput> DocumentSession::PrepareSelectionMoveCl
 
 std::optional<PreparedSelectionMoveClosure> DocumentSession::PrepareSelectionMoveClosurePublication(
     SelectionMoveClosureInput input, CancelToken cancellation, DocumentHistory::PrepareObserver observer,
-    const SelectionNudgeObserver* geometryObserver, std::shared_ptr<const void> geometryLifetime)
+    const SelectionNudgeObserver* geometryObserver, std::shared_ptr<const void> geometryLifetime,
+    std::shared_ptr<const SharedPublicationMemory> historyMemory)
 {
     if (cancellation.IsCancelled() || !input._valid || !input._opening || !input._document || input._token.target ||
         input._history.Depth() <= 0 || input._document->width != input._token.canvasWidth ||
         input._document->height != input._token.canvasHeight)
         return std::nullopt;
     PreparedSelectionMoveClosure result(std::move(input));
+    result._historyMemory = historyMemory;
+    if (historyMemory && !geometryLifetime)
+        geometryLifetime = historyMemory;
     if (result._input._cancel)
         result._input._document->selection = result._input._origin;
     else if (result._input._offset)
@@ -44,8 +49,9 @@ std::optional<PreparedSelectionMoveClosure> DocumentSession::PrepareSelectionMov
     }
     if (cancellation.IsCancelled() || ValidateDocument(result._input._document.value()) != DocumentStatus::Ok)
         return std::nullopt;
-    result._history = DocumentHistory::PrepareEnd(result._input._history, result._input._document,
-                                                  result._input._active, cancellation, observer);
+    result._history =
+        DocumentHistory::PrepareEnd(result._input._history, result._input._document, result._input._active,
+                                    cancellation, observer, std::move(historyMemory));
     return result._history && !cancellation.IsCancelled()
                ? std::optional<PreparedSelectionMoveClosure>(std::move(result))
                : std::nullopt;
@@ -67,7 +73,8 @@ bool DocumentSession::ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelecti
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<DocumentSelection>>);
-    if (!IsPreparedSelectionMoveClosureCurrent(prepared) || !history.Publish(prepared._history.value()))
+    if ((prepared._historyMemory && !prepared._historyMemory->IsBound()) ||
+        !IsPreparedSelectionMoveClosureCurrent(prepared) || !history.Publish(prepared._history.value()))
         return false;
     if (prepared._input._cancel || prepared._input._offset)
     {

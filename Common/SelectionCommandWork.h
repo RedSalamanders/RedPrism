@@ -3,6 +3,7 @@
 #include "HistoryRestoreWork.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -89,6 +90,9 @@ class PreparedSelectionCommand final
         DocumentHistory::ResidencyPermit& permit) noexcept;
     [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
                                                DocumentHistory::PrepareObserver observer = {});
+    // New selected output only: local history metadata, optional rectangle geometry and its owner control.
+    // Constant-time; zero means unchanged/reference route or unrepresentable output. Does not admit memory.
+    [[nodiscard]] std::uint64_t OutputMemoryBytes() const noexcept;
     [[nodiscard]] bool ChangesSelection() const noexcept
     {
         return _history.has_value();
@@ -101,5 +105,7 @@ class PreparedSelectionCommand final
     std::optional<CanvasDocument> _document;
     std::optional<DocumentHistory::Publication> _history;
     std::optional<CanvasDocument> _retiredDisplay;
+    std::shared_ptr<const SharedPublicationMemory> _memory;
+    std::uint64_t _geometryBytes = 0;
     bool _applied = false;
 };

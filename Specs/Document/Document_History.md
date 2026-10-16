@@ -391,3 +391,16 @@ The producer's local allocation limit is immutable before construction. Checked 
 Worker destruction releases data contributions only after those bytes have actually been destroyed. A copied or weak shared control retains its original accounting owner through actual control deallocation. Therefore an idle scheduler may have a nonzero charge while the live document or history still owns metadata. A completed edit does not imply zero reserved memory. Final graph/control destruction and owner acknowledgement return the original charge exactly once.
 
 Reference history callers must enumerate the complete storage closure from the held direct raster roots, even when a managed topology has no preflattened RasterOwners vector. Nested sparse bases/tiles and shared children participate in the existing dedup set. A reference byte query never materializes a sparse cache; oldest-first trim and legacy saved/revision/Undo/Redo semantics remain unchanged. Native qualification and measured phase costs remain separate requirements.
+
+## Optional prepared Begin/End publication ownership
+
+PrepareBegin and PrepareEnd accept an optional shared publication-memory owner. Every new snapshot, pending,
+entry, stack and topology/index node retains that owner and its local allocation charge; reused nodes retain
+their original owners. The default reference route remains unchanged. Selected move opening/closure binds
+its output before publication; unbound results refuse before mutation. Original and replaced owners retire
+through their real last strong/weak lifetime under the complete original operation admission.
+
+An opt-in prepared deferred move opening may prebuild its exact dependent no-op End before Begin publishes.
+Only its opaque latest own-move authority can use that cleanup. Foreign document/generation/history/target or
+pending gesture state refuses. Cleanup discards the scalar preview, closes only that Begin, preserves redo
+and matches reference Cancel's two invalidations. It grants no successful cancelled-output authority.

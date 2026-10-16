@@ -2,11 +2,13 @@
 
 #include "BrushStroke.h"
 #include "Selection.h"
+#include "SharedPublicationMemory.h"
 #include "WarpStroke.h"
 
 #include <limits>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 SelectionCommandAuthority DocumentSession::CaptureSelectionCommandAuthority() const noexcept
 {
@@ -75,7 +77,8 @@ std::optional<SelectionCommandInput> DocumentSession::PrepareSelectionCommandInp
 }
 
 std::optional<PreparedSelectionCommand> DocumentSession::PrepareSelectionCommandPublication(
-    SelectionCommandInput input, CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+    SelectionCommandInput input, CancelToken cancellation, DocumentHistory::PrepareObserver observer,
+    std::shared_ptr<const SharedPublicationMemory> memory)
 {
     if (cancellation.IsCancelled() || !input._valid || !input._document || input._token.target ||
         input._kind > SelectionCommandKind::Deselect || input._document->width != input._token.canvasWidth ||
@@ -92,6 +95,24 @@ std::optional<PreparedSelectionCommand> DocumentSession::PrepareSelectionCommand
     PreparedSelectionCommand result(std::move(input));
     if (unchanged)
         return result;
+    result._memory = std::move(memory);
+    if (result._memory && selection)
+    {
+        // Select All is exactly one four-point loop. The new node and its last weak control retain this
+        // output owner; its cached complete geometry envelope is added to the local history metadata below.
+        auto loops = SelectionLoops::AdoptForWork(std::vector<SelectionLoop>(selection->loops.Get()), cancellation,
+                                                  result._memory);
+        if (!loops || cancellation.IsCancelled())
+            return std::nullopt;
+        const auto storage = loops->StorageBytes();
+        const auto controls = SelectionLoops::WorkOwnershipAllowance(loops->size());
+        if (!storage || !controls || controls > (std::numeric_limits<std::uint64_t>::max)() - storage)
+            return std::nullopt;
+        // StorageBytes excludes GeometryNode, allocator bookkeeping and the last shared control block.
+        // They remain charged with the same immutable geometry owner, including weak-reader retirement.
+        result._geometryBytes = storage + controls;
+        selection->loops = std::move(loops.value());
+    }
     if (observer.checkpoint)
         observer.checkpoint(observer.context, DocumentHistory::PrepareStage::SelectionSnapshot);
     if (cancellation.IsCancelled())
@@ -111,10 +132,23 @@ std::optional<PreparedSelectionCommand> DocumentSession::PrepareSelectionCommand
     result._document = std::move(after);
     result._history = DocumentHistory::PrepareEdit(
         result._input._history, result._input._document, result._input._active, result._document, result._input._active,
-        result._input._kind == SelectionCommandKind::SelectAll ? L"Select All" : L"Deselect", cancellation, observer);
-    if (!result._history || cancellation.IsCancelled())
+        result._input._kind == SelectionCommandKind::SelectAll ? L"Select All" : L"Deselect", cancellation, observer,
+        result._memory);
+    if (!result._history || cancellation.IsCancelled() || (result._memory && !result.OutputMemoryBytes()))
         return std::nullopt;
     return result;
+}
+
+std::uint64_t PreparedSelectionCommand::OutputMemoryBytes() const noexcept
+{
+    if (!_memory || !_history)
+        return 0;
+    const auto local = _memory->LocalAllocationBytes();
+    const auto allowance = SharedPublicationMemory::OwnershipAllowance();
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (local > maximum - allowance || _geometryBytes > maximum - local - allowance)
+        return 0;
+    return local + allowance + _geometryBytes;
 }
 
 DocumentHistory::ResidencyValidation PreparedSelectionCommand::TryAcquireHistoryResidency(
@@ -147,7 +181,10 @@ bool DocumentSession::IsPreparedSelectionCommandCurrent(const PreparedSelectionC
 bool DocumentSession::ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
-    if (!IsPreparedSelectionCommandCurrent(prepared))
+    const auto outputBytes = prepared.OutputMemoryBytes();
+    if ((prepared._memory &&
+         (!outputBytes || !prepared._memory->IsBound() || prepared._memory->Bytes() < outputBytes)) ||
+        !IsPreparedSelectionCommandCurrent(prepared))
         return false;
     if (prepared._history)
     {
@@ -178,5 +215,11 @@ std::uint64_t DocumentSession::SelectionCommandMemoryBytes(SelectionCommandKind 
     // rasters have already been destroyed, but the inline object/control storage stays until this input retires.
     constexpr std::uint64_t extra = 4096 + sizeof(SelectionCommandInput) + sizeof(PreparedSelectionCommand) +
                                     sizeof(BrushStroke) + sizeof(WarpStroke) + 128;
-    return bytes && bytes <= (std::numeric_limits<std::uint64_t>::max)() - extra ? bytes + extra : 0;
+    const auto controls = kind == SelectionCommandKind::SelectAll ? SelectionLoops::WorkOwnershipAllowance(1) : 0;
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto owners = 2 * SharedPublicationMemory::OwnershipAllowance();
+    if ((kind == SelectionCommandKind::SelectAll && !controls) || extra > maximum - controls ||
+        owners > maximum - controls - extra || bytes > maximum - controls - extra - owners)
+        return 0;
+    return bytes + extra + controls + owners;
 }

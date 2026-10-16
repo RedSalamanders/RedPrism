@@ -588,12 +588,11 @@ bool DocumentHistory::PublishReplacement(ReplacementPublication& publication) no
     return true;
 }
 
-std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateView view,
-                                                                          const std::optional<CanvasDocument>& before,
-                                                                          const std::optional<Guid>& active,
-                                                                          std::wstring name, CancelToken cancellation,
-                                                                          PrepareObserver observer)
+std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(
+    StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& active, std::wstring name,
+    CancelToken cancellation, PrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory)
 {
+    view.publicationMemory = std::move(memory);
     if (!view.owner || view.depth < 0 || view.depth == (std::numeric_limits<int>::max)() ||
         cancellation.IsCancelled() || (view.depth != 0 && !view.pending))
         return std::nullopt;
@@ -612,7 +611,19 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateV
             return std::nullopt;
         if (!HistoryPrepareCheckpoint(observer, PrepareStage::PendingRecord, cancellation))
             return std::nullopt;
-        result.state.pending = std::make_shared<const Pending>(std::move(name), std::move(openingOwner));
+        Pending pending{std::move(name), std::move(openingOwner)};
+        const auto bounds = pending.OwnershipBounds();
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (!bounds || pending.name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
+            return std::nullopt;
+        const auto nameBytes = (pending.name.capacity() + 1) * sizeof(wchar_t) + 64;
+        result.state.pending = result.state.publicationMemory
+                                   ? MakeLocallyOwnedPublicationObject<const Pending>(result.state.publicationMemory,
+                                                                                      bounds->ownershipBytes, nameBytes,
+                                                                                      std::move(pending))
+                                   : std::make_shared<const Pending>(std::move(pending));
+        if (!result.state.pending)
+            return std::nullopt;
     }
     ++result.state.depth;
     if (cancellation.IsCancelled())
@@ -620,12 +631,11 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateV
     return result;
 }
 
-std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateView view,
-                                                                        const std::optional<CanvasDocument>& after,
-                                                                        const std::optional<Guid>& active,
-                                                                        CancelToken cancellation,
-                                                                        PrepareObserver observer)
+std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(
+    StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& active,
+    CancelToken cancellation, PrepareObserver observer, std::shared_ptr<const SharedPublicationMemory> memory)
 {
+    view.publicationMemory = std::move(memory);
     if (!view.owner || view.depth <= 0 || !view.pending || cancellation.IsCancelled())
         return std::nullopt;
     Publication result;
@@ -650,7 +660,18 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
         return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::Entry, cancellation))
         return std::nullopt;
-    const auto entry = std::make_shared<const Entry>(pending->name, pending->before, std::move(finishedOwner));
+    Entry draft{pending->name, pending->before, std::move(finishedOwner)};
+    const auto bounds = draft.OwnershipBounds();
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (!bounds || draft.name.capacity() > (maximum - 64) / sizeof(wchar_t) - 1)
+        return std::nullopt;
+    const auto nameBytes = (draft.name.capacity() + 1) * sizeof(wchar_t) + 64;
+    const auto entry = result.state.publicationMemory
+                           ? MakeLocallyOwnedPublicationObject<const Entry>(
+                                 result.state.publicationMemory, bounds->ownershipBytes, nameBytes, std::move(draft))
+                           : std::make_shared<const Entry>(std::move(draft));
+    if (!entry)
+        return std::nullopt;
     if (!HistoryPrepareCheckpoint(observer, PrepareStage::StackGrowth, cancellation))
         return std::nullopt;
     result.state.past.push_back(entry, result.state.publicationMemory);

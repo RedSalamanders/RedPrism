@@ -50,6 +50,10 @@ class PreparedSelectionMoveOpening final
     explicit PreparedSelectionMoveOpening(SelectionMoveOpeningInput input) noexcept : _input(std::move(input)) {}
     SelectionMoveOpeningInput _input;
     std::optional<DocumentHistory::Publication> _history;
+    std::optional<DocumentHistory::Publication> _abortHistory;
+    std::optional<DocumentReadAuthority> _gestureAuthority;
+    std::optional<CanvasDocument> _retiredDisplay;
     std::optional<DocumentSelection> _origin;
+    std::shared_ptr<const SharedPublicationMemory> _memory;
     bool _applied = false;
 };

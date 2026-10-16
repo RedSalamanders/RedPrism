@@ -88,6 +88,17 @@ remaining CPU reservation once, without allocation, a memory query or a partial 
 must have joined before this transfer; only bounded allocation-free cleanup may follow on the original record.
 The existing ordinary-completion `RetainMemory` contract remains unchanged.
 
+`JobOptions::continuingOutputLimit` is a separate explicit opt-in for one intermediate output from an
+original resumable job. It requires deferred retirement, a retained-slot preclaim and a nonzero limit below
+the whole descriptor admission. The descriptor MUST admit all future useful stages before source capture;
+reservation growth is refused. `RetainContinuingOutputMemory` runs only in that exact successful, uncancelled,
+joined DeferCompletion. It transfers only the declared completed output into the existing persistent endpoint,
+leaves the original global charge, FIFO/ticket/cancellation identity and terminal slot intact, and supplies
+later worker stages only the prepaid remainder. No new slot, allocation, memory query or early refund occurs.
+Only that output seals; other temporary/final producers remain under the original record. Wrong, repeated,
+over-limit and terminal/failed/cancelled/shutdown transfers refuse. Default descriptors and the terminal-only
+RetainPublicationMemory/RetainMemory contracts remain unchanged. Accounting conveys no mutation authority.
+
 Publication provenance MUST compare the original ticket and the live shared-memory endpoint. Wrapper addresses
 and slot/generation numbers alone are insufficient after scheduler reconstruction. `OwnsRetainedMemoryEndpoint`
 is an owner-only identity query: it allocates nothing, samples no memory and grants no callback or mutation authority.

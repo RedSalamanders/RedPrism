@@ -74,6 +74,7 @@ class PreparedSelectionMoveClosure final
     explicit PreparedSelectionMoveClosure(SelectionMoveClosureInput input) noexcept : _input(std::move(input)) {}
     SelectionMoveClosureInput _input;
     std::optional<DocumentHistory::Publication> _history;
+    std::shared_ptr<const SharedPublicationMemory> _historyMemory;
     std::optional<DocumentSelection> _retiredOrigin;
     std::optional<CanvasDocument> _retiredDisplay;
     bool _applied = false;

@@ -2988,3 +2988,23 @@ The independent expected-only reader retains every predecessor assertion, order,
 Source/dependency/product bookends bind each actual run. Private PASS is scoped evidence; integration
 requires fresh analysis, native Debug/Release/real ASan (including actual detection), ARM64 cross-builds,
 formatting/skills and separate ordinary-host/lifetime/admission/large-lasso performance qualification.
+
+## Continuing-output and selection parent prerequisites
+
+DocumentTests includes six independent fixture families: selected history ownership (23 checks), continuing
+output (44), bound history lifetime (23), charged selection command memory (30), original gesture parent (41)
+and opaque gesture abort (57). Existing predecessors and legacy numeric goldens remain unchanged.
+
+The scheduler reference uses real workers, literal 17/41 payloads, declared 256/32/64 KiB partitions and all
+64 terminal slots preclaimed before transfer. Descriptor/ticket/bounds/undercharge/repeat/growth and wrong
+callback refusals preserve state. Useful resume, failure, cancellation, joined Close and final weak refunds
+are required. Geometry/history fixtures use literal square coordinates, exact AA/Undo/Redo/no-op semantics,
+complete storage plus allocator/control accounting, unbound/underbound/stale/cancel refusals and strong/weak
+owner retention. The original parent keeps one admission/ticket through moved End, zero-offset End then fresh
+Deselect, zero/nonzero Lost End, failure, cancellation and Close. A separately admitted settled 8 KiB endpoint
+observer verifies exact final parent refund after closed-scheduler teardown and last weak-control release.
+Pending transform without a generation/history change MUST refuse opaque Move and Abort without overwrite.
+
+Run the full predecessor stream in Release and real ASan, including an actual UAF detection probe, source/
+dependency/product bookends, instrumented compiler records and exact binary/PDB identity. These CPU protocols
+establish no physical Win32 routing, whole caller admission, ordinary activation or measured G1 qualification.
