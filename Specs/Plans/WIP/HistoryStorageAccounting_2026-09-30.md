@@ -231,10 +231,14 @@ accounting and late-residency synchronization, H4 and measured G1 remain separat
       [P1WarpLive](../../TestRuns/P1WarpLive_2026-10-09.md). `HistoryResidencySource::Start` is wired into normal
       `Application::Run`; the original startup/failure/shutdown prefix is qualified in the checklist entry above.
       Remaining direct/reference writers and their caller-specific proofs stay open.
-      Current ImageCodecs/ProjectStore encoders and Warp root copying use private read bands. Nested sparse tiles
-      can still reach `Data()` through `BlitTile`; `TransformEdit::PixelsOf` is another direct materializer. A
-      cached topology never authorizes stale resident totals. Keep the actual growth/refresh/trim gates and
-      measured reference/delta cost under H3.
+      Current ImageCodecs/ProjectStore encoders and Warp root copying use private read bands. Nested sparse
+      region/crop reads now use the nonmaterializing `BlitTile` branch: source windows recurse into caller rows,
+      with no shared-cache publication or assembly/residency gate. The complete current native matrix preserves
+      the independent `sparse-region-reads.*` fixtures, including held-residency reads and unchanged nested cache
+      identities/epoch. Explicit `Data()` keeps its separate materializing branch. `TransformEdit::PixelsOf`
+      remains a direct materializer on the qualified native source; its isolated private-reader repair and tests
+      are not yet built or adopted. A cached topology never authorizes stale resident totals. Keep the actual
+      growth/refresh/trim gates and measured reference/delta cost under H3.
     - [ ] Qualify address reuse, checked overflow and oldest-first cases, plus concurrent late sparse materialization
       and resident-charge synchronization before trim preparation/publication. Current image/project encoders use
       private read bands; exercise actual `Data()` materializers. Verify cancellation/allocation refusal preserves
