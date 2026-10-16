@@ -64,9 +64,10 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Preserve and independently verify the real r1073 Debug clipboard failure; retain the original assertions while preparing the separate successful-publication gate and forced busy-retry regression.
 - [x] Qualify the successful-publication clipboard repair in full native Debug r1074, including the forced two-busy retry regression, all predecessor facts and exact archive/953 compiler/five executable-PDB checks. Reader-only refusals remain retained; no runtime repeated.
 - [x] Qualify the clipboard repair in full native real ASan r1075: actual parent exit 0, all 953 instrumented compiler records, five exact executable/PDB pairs and all 1,782 archive files independently verified. Both genuine ASan poisoning checks and source-defined WARP callback ordering pass strict readers; no runtime repeated.
-- [ ] Qualify the remaining native profiles: ARM64 Debug r1076 is building, followed by Release r1077 / instrumented ASan r1078, Release analysis r1079 and full Release r1080. The source is frozen; native ARM64 runtime is unavailable.
+- [x] Qualify ARM64 Debug r1086 after independently preserving the r1076 disk-full failure: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs verified; all compiled inputs are unchanged.
+- [ ] Qualify ARM64 Release r1087 (building), instrumented ARM64 ASan r1088, Release analysis r1089 and full Release r1090. The compiled source is frozen; native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
-- [ ] Finish full x64 Debug/real ASan and ARM64 cross-builds on that same source.
+- [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
 - [x] Qualify the same extended prerequisite under real ASan: all 22,100 facts, 265 instrumented compiler records, its own actual UAF probe, exact executable/PDB and all 1,604 archive files independently verified.
 - [ ] Complete actual S5 physical host dispatch, original-parent terminal/cancellation cleanup, charged click follow-up and all remaining parent delivery areas. The private model remains unadopted.

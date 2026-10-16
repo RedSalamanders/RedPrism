@@ -195,3 +195,30 @@ independent roster, archive/artifact and PE/PDB receipts:
 This records native x64 ASan test evidence for the frozen candidate. The separate private host/ownership
 changes remain unadopted; physical press routing, ordinary activation, G1, P1 Done and native ARM64 runtime remain open. ARM64 r1076–r1078, analysis r1079 and
 Release r1080 remain separate gates.
+
+## ARM64 disk-full failure retained and Debug r1086 qualified
+
+The actual r1076 ARM64 Debug parent exits 1 (19:58:21.986883–20:13:46.840867 UTC).
+The compiler reports C1088 while flushing its temporary intermediate: no space left on device. Main verifies
+all 1,463 archived source/evidence files and the source/evidence/completion manifests. No later profile runs
+from that controller. Completion: `27CAD5A52CDA5BA4BC5CA3C2D6C3DC17DB1B0E8E00C72247D452376A9C31A852`.
+[Failure verification](../../.build/P1Integration/LassoHost-r1-Main/r1076-main-failed-verified.json).
+
+To recover headroom, the closed r1074/r1075 archives move to the explicit Z: artifact directory only after
+all 1,825/1,785 files, including manifests, compare by length and SHA-256. Junctions preserve both original
+archive paths. Every product, PDB, source, log and manifest remains retained with its original completion hash.
+A recovery-controller preflight refuses an attempt outside the old transport allowlist before any native
+child launches; its log is preserved. A separate serial runner replaces exactly one of the 1,393 transport
+rows; every one of the 1,389 compiled/project/toolchain inputs is unchanged.
+
+Fresh canonical ARM64 Debug r1086 exits 0 (PID 83260; 20:16:53.745329–20:17:24.591034 UTC) with one build worker.
+Main checks the independent 1,463-file archive verification, all 953 actual compile records, every unchanged
+compiled/project/toolchain input and all five exact ARM64 PE/PDB pairs. The source freeze is
+`C7D41B2E802CE18215D7F043A1EBE08D1AE0959857C1056FC9628488CAC0ED4B`.
+Completion: `7E2AEE6A3D0C7A9538384DF39414F45DD19A060E22DBC0AE533210672873038C`.
+[Debug cross-build qualification](../../.build/P1Integration/LassoHost-r1-Main/r1086-main-qualified.json).
+
+Only after qualification, 953 regenerable ARM64 Debug objects are hashed and reclaimed; all linked products,
+PDBs, source and evidence remain. ARM64 Release r1087 is building, followed by instrumented ARM64 ASan r1088,
+x64 Release analysis r1089 and full Release r1090. Native ARM64 runtime remains unavailable; this is
+cross-build evidence only. The private gesture APIs and tests remain separate, unadopted work.
