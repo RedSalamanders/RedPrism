@@ -8,9 +8,9 @@ TMP/TEMP `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r10
 H10 transport freeze `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB` retains all 1,389 compiled/project/toolchain inputs unchanged.
 [Current native evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md). Native ARM64 runtime is unavailable.
 
-The isolated candidate is pushed as `b4e3656` on `ej/p1-selection-gesture-prerequisites`; the bounded prefix
+The isolated shared-engine candidate is pushed as `06b3743` on `ej/p1-selection-gesture-prerequisites`; the bounded prefix
 passes 22,283 private Release/real-ASan assertions. The repaired shared engine Release qualifies
-68 family + 22,228 predecessor assertions (22,296 total); its real-ASan 270-command build has launched and remains pending.
+68 family + 22,228 predecessor assertions (22,296 total); real ASan now independently qualifies the same full stream, 270 instrumented commands, actual UAF control and all 1,616 archive files.
 Private App R4 has build exit 0/ISA exit 0 for 339 sources; runtime remains due after native Release qualification:
 144 stages, 41 new controls and 71 inherited scalar checks. [Engine evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 Complete production caller bounds, remaining branches, native adoption, ordinary activation, H3/H4,

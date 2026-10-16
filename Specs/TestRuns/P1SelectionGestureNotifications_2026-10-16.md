@@ -62,3 +62,29 @@ Actual Win32 Application R4 (`S5PressHost-r4-Main`) is **BUILDING, NOT YET RUN**
 339 required compile commands, 144 application stages, and 41 new + 71 inherited scalar assertions are planned gates.
 Ordinary activation, complete production memory bounds (the 8 MiB limit is a fixture), all other branches,
 native adoption, G1, and P1 Done remain open. No application runtime result is inferred from the engine Release pass.
+
+## Repaired shared engine real ASan qualified
+
+The same shared engine passes real x64 ASan Debug, actual PID 71860, exit 0,
+2026-10-16T23:05:24.792066–23:07:51.535798 UTC. All 68 family assertions and 22,228 predecessors
+pass (22,296 total). Main reviews and executes the independent qualifier, verifies the full stream
+and checks the exact 60-row sanitizer profile witness; all seven existing and seven independent
+missing/duplicate/order/failure/profile/exit/count rejection controls pass.
+
+All 270 actual commands require `/fsanitize=address`, `/MDd`, `/Od`, `/Zi` and the real sanitizer
+requirement header. Its own same-executable UAF control exits 1 with an actual heap-use-after-free
+diagnostic. The ordinary suite has no sanitizer diagnostic. Source/dependency/product bookends,
+all 1,616 archived files, zero-violation ISA scan and executable/PDB GUID/age independently match.
+
+Completion: `BE55409EA580391E7FDEFACE479B91F9C547D9C19D043297258AD196CA84036C`.
+Runtime stdout: `3461A49847F45E2C968926700A320079C2D06686ED92F4572FA99B23E2F5AD31`.
+Executable: `27738C7577EF527E7CD11B47F77997D6C86298E6A982C9F743F6B9FE8F4EBE8E`.
+PDB: `45B30A0DD29F3B421037F37B73FB7C6C4DA4E58690B8E48F1B14396524687B64`.
+CodeView/PDB: `831FDD02-FC5E-44D6-9DFD-AEA741EF9683`, age 1.
+[Main qualification](../../.build/P1Drafts/S5PressEngineAsan-r1-Main/main-qualified.json).
+
+This qualifies the CPU engine. The actual Win32 caller has build/ISA exit 0 with 339 sources,
+but still owes its 144 stages/41 physical and 71 scalar controls. Its runtime waits for the
+native Release suite. Complete caller admission, other physical branches, ordinary activation,
+native integration and measured G1 remain open. The separate cache-derived admission draft
+is uncompiled and does not alter this frozen qualified engine.

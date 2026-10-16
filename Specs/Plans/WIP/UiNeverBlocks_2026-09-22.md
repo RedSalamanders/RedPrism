@@ -3,7 +3,9 @@
 ## Current delivery checklist
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
-- [ ] Qualify the repaired engine under real ASan: its 270-command build has launched; runtime, actual UAF probe and archive qualification remain pending. The actual Win32 caller still owes 144 stages, 41 new controls and 71 inherited scalar checks; production bounds, remaining branches, native adoption and measured G1 remain due.
+- [x] Qualify the repaired shared engine under real ASan: all 22,296 assertions, 270 instrumented compiler records, its actual UAF control and 1,616-file archive independently pass; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
+- [x] Commit/push the qualified shared engine and 68-control fixture as `06b3743` on `ej/p1-selection-gesture-prerequisites`, keeping the native matrix source unchanged.
+- [ ] Qualify the actual Win32 caller: 144 stages, 41 new controls and 71 inherited scalar checks remain due after its build/ISA pass; production bounds, remaining branches, native adoption and measured G1 remain open.
 
 - [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
 - [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
