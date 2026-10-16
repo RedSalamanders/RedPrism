@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-08
+Last reviewed: 2026-10-16
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -396,7 +396,7 @@ reservation, wait or queued retry. Equal totals need no snapshot. Future stages 
 keep the grown total. Software GPU graphs must charge their CPU-backed texture ownership before creation;
 this API alone establishes neither their complete declaration nor production display activation.
 
-The owner router serves one ready leaf per pump, with at most ten leaves. The dormant utility service uses
+The owner router serves one ready leaf per pump, with at most eleven leaves. The dormant utility service uses
 fixed original-ticket slots and a two-word active bitmap; an empty service performs no parent scan, allocation,
 wait registration or periodic wake. Processing startup alone does not activate ordinary utility parents. Joined
 GPU charges remain held on the owner until actual final worker cleanup returns. Application's retry source adds

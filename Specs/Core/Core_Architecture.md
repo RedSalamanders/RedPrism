@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-16
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -119,13 +119,14 @@ event tickets. Handles and contexts remain borrowed until owner teardown removes
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
 `OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
-borrows at most ten distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
+borrows at most eleven distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
 scheduler's one-source registration contract. Application registers this router once and attaches GPU and
 retry readiness sources. Processing startup attaches the dormant `UtilityReadbackOwnerService` after native-read
-initialization, appending its checkpoint without changing the prior stage indices. This adds capacity for a
-tenth distinct leaf; it does not promise a particular array slot or activate a utility parent. Stop the service
+initialization, appending its checkpoint without changing the prior stage indices. The utility service is one bounded leaf;
+the complete responsive startup described below can use all eleven. This promises no particular array slot
+or activation of a utility parent. Stop the service
 before producer shutdown, and release its joined charges/detach it only after actual scheduler Close returns.
 Standalone GPU tests may retain direct registration.
 

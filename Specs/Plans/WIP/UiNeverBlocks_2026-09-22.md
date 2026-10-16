@@ -26,6 +26,10 @@ archives, 932 compiler command records and five executable/PDB identities per pr
 [X64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md);
 [completed ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
 
+Contract reconciliation: the architecture/resource summaries now consistently state eleven owner-router
+leaves, matching `OwnerWorkMultiplexer::kCapacity`, its literal eleven/admitted-twelfth-refusal tests and
+the already-qualified complete startup. The obsolete ten-leaf summaries are corrected; no routing code changes.
+
 ASan r1037 was interrupted during compilation on October 14: no completed child receipt exists and no test
 or compiler process remains. Its 2,404-file partial source/object/product snapshot is preserved with independent readback hashes,
 without an inferred exit or success. Fresh full x64 ASan r1041 and all three ARM64 cross-builds
