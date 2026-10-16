@@ -1,10 +1,12 @@
 #pragma once
 
+#include "HistoryRestoreWork.h"
 #include "HostSelectionPressInput.h"
 #include "Jobs.h"
 
 #include <atomic>
 #include <cstdint>
+#include <optional>
 
 class SelectionOutlineGestureJob;
 // Stable owner-side borrowing boundary. The application must join the scheduler before these references die.
@@ -16,6 +18,12 @@ struct SelectionOutlineGestureState
     struct Limits final
     {
         std::uint64_t totalBytes, continuingOutputBytes, finalOutputBytes;
+    };
+    struct Admission final
+    {
+        DocumentReadAuthority document;
+        HistoryRestoreAuthority editor;
+        DocumentHistory::Authority history;
     };
     enum class Event
     {
@@ -36,6 +44,8 @@ struct SelectionOutlineGestureState
     void* observer = nullptr;
     void (*notify)(void*, Event) noexcept = nullptr;
     SelectionOutlineGestureJob* controller = nullptr;
+    // Optional exact source of a cache-derived admission. Fixture-only callers may supply fixed limits.
+    std::optional<Admission> admissionSource;
     JobTicket original;
     unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;
     std::uint64_t firstBudget = 0, remainingBudget = 0, openingBytes = 0;

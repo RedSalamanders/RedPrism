@@ -32,6 +32,8 @@
 #include "Document.Tests.LassoSessionBridge.h"
 #include "Document.Tests.SelectionCommandMemory.h"
 #include "Document.Tests.SelectionGestureAbort.h"
+#include "Document.Tests.SelectionGestureAdmission.h"
+#include "Document.Tests.SelectionGestureAdmissionAuthority.h"
 #include "Document.Tests.SelectionGestureParent.h"
 #include "Document.Tests.SelectionHistoryBoundLifetime.h"
 #include "Document.Tests.SelectionHistoryOwnership.h"
@@ -8447,6 +8449,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDocumentSelectionGestureParentTests();
     gFailures += RunSelectionGestureAbortTests();
     gFailures += RunDocumentSelectionPhysicalPrefixTests();
+    gFailures += RunDocumentSelectionGestureAdmissionTests();
+    gFailures += RunDocumentSelectionGestureAdmissionAuthorityTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

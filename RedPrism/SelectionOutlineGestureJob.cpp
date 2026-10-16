@@ -1,8 +1,63 @@
 #include "SelectionOutlineGestureJob.h"
+#include "BrushStroke.h"
+#include "SelectionOutlineGestureMemory.h"
+#include "WarpStroke.h"
+
+#include <limits>
 
 #include <cmath>
 #include <exception>
 #include <windows.h>
+
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
+    const DocumentSession& session) noexcept
+{
+    const auto& document = session.Document();
+    const auto source = session.CaptureDocumentReadAuthority();
+    const auto editor = session.CaptureHistoryRestoreAuthority();
+    if (!source || !document || !document->selection || document->selection->IsEmpty() ||
+        !session.CanApplyHistoryRestore(editor))
+        return std::nullopt;
+    const auto history = session.history.EditMemoryBytes(document);
+    const auto retirement = session.HistoryRestoreRetirementMemoryBytes();
+    const auto storage = document->selection->loops.StorageBytes();
+    const auto controls = SelectionLoops::WorkOwnershipAllowance(document->selection->loops.size());
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (!history || !retirement || !storage || !controls || controls > maximum - storage)
+        return std::nullopt;
+    const auto geometry = storage + controls;
+    // One original descriptor covers every branch peak, including retained earlier stage payloads.
+    // H is the complete eight-copy/index/trim envelope of the source. The scalar Begin/End graph adds
+    // at most one pending snapshot and one entry with the same layer/raster occurrence bounds. Two H
+    // cover its future cached metadata envelope; four H cover overlapping candidate/refresh records.
+    // Geometry translation needs one new point/vector graph and one construction overlap. Deselect
+    // allocates no geometry. The old geometry, display, pending/past/future and selected-id owners are
+    // charged by R, even when a foreign edit drops their last live owner during cancellation.
+    constexpr std::uint64_t wrappers = 4096 + sizeof(SelectionOutlineGestureJob) +
+                                       sizeof(SelectionOutlineGestureState) + sizeof(BrushStroke) + sizeof(WarpStroke);
+    const auto owner = SharedPublicationMemory::OwnershipAllowance();
+    if (!owner)
+        return std::nullopt;
+    const auto add = [](std::uint64_t& target, std::uint64_t count, std::uint64_t bytes) noexcept
+    {
+        constexpr auto limit = (std::numeric_limits<std::uint64_t>::max)();
+        if ((bytes && count > limit / bytes) || count * bytes > limit - target)
+            return false;
+        target += count * bytes;
+        return true;
+    };
+    // The opening owner survives useful work. Abort history belongs to the original temporary payload.
+    std::uint64_t opening = wrappers, final = wrappers, temporary = wrappers;
+    if (!add(opening, 2, history) || !add(opening, 1, owner) || !add(final, 4, history) || !add(final, 2, geometry) ||
+        !add(final, 1, owner) || !add(temporary, 4, history) || !add(temporary, 2, retirement) ||
+        !add(temporary, 2, geometry) || !add(temporary, 3, owner))
+        return std::nullopt;
+    std::uint64_t total = temporary;
+    if (!add(total, 1, opening) || !add(total, 1, final))
+        return std::nullopt;
+    return SelectionOutlineGestureMemory{
+        {*source, editor, session.history.CaptureAuthority()}, {total, opening, final}, retirement, history, geometry};
+}
 
 SelectionOutlineGestureJob::SelectionOutlineGestureJob(SelectionOutlineGestureState& state) : _state(state)
 {
@@ -81,6 +136,10 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         if (!arrival || !down || down->action != HostSelectionPressInput::Action::Down ||
             arrival->document.documentSerial != s.session.DocumentSerial() || arrival->mode != SelectionMode::New ||
             arrival->tool == HostSelectionPressInput::Tool::Wand || down->sample.modifiers.control)
+            return Refuse(E_ABORT);
+        if (s.admissionSource && (!s.session.IsDocumentReadCurrent(s.admissionSource->document) ||
+                                  !s.session.CanApplyHistoryRestore(s.admissionSource->editor) ||
+                                  !s.session.history.IsCurrent(s.admissionSource->history)))
             return Refuse(E_ABORT);
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
