@@ -6,7 +6,9 @@ Current implementation checkpoint (2026-10-16): selected Hue readback/physical i
 layer/composite Wand, including post-Wand preview/OK/Cancel/histogram follow-through, are adopted and pushed
 as `7b0eeb1` with their code, tests, contracts and guide. Full Debug r1052 passes independent complete-roster,
 source/archive/compiler and executable/PDB checks; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
-Current-source analysis r1053 and the subsequent Release/real-ASan/ARM64 gates remain in progress/pending.
+Analysis r1053 fails on two test stack frames; fresh S5 integration r1059 then fails on shared-link/fixture
+analysis diagnostics. Both failed archives are independently verified; later profiles never launch. The
+reviewed repairs are adopted and fresh canonical analysis r1066 is running before the full native matrix.
 Ordinary activation, complete caller phase/lifetime/device bounds and measured G1 remain open.
 
 - [x] Implement and review the selected Hue/Wand caller integration and qualify full Debug r1052.

@@ -35,18 +35,22 @@ the correction; all other 22,009 records pass in that failing run.
 [Private model evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
 
 Main adopts the reviewed S5 core together with the fixture repairs in 29 code/test/project paths and updates
-three owning contracts. Skills (15), format (1,241 files) and diff checks pass. Fresh canonical analysis r1059
-is running on an exact 1,393-input freeze with two build workers. It reports a missing shared translation
-link dependency in subset projects; Main prepares a shared-geometry-TU extraction while preserving active inputs.
-Complete x64 Debug/Release/real ASan and all
-ARM64 cross-builds are due on that same source. The actual selection-press host route remains unwired;
-ordinary activation and the nine delivery areas above remain open.
+three owning contracts. Skills (15), format (1,241 files) and diff checks pass. Analysis r1059 then fails on a
+shared helper omitted from three test subsets and two constant-condition fixture warnings; Main independently
+verifies all 1,821 copied evidence/input files and preserves the failed run. r1060–r1065 never launch.
+
+The shared builder now lives in the geometry TU compiled by all five images. The exact capacity predicate is
+proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 runs on the
+repaired 1,393-input freeze; full Release r1067, Debug r1068, real ASan r1069 and ARM64 r1070–r1072 remain due.
+A separate actual-host scalar closure lifetime draft and 71-fact fixture are compiling privately. Actual
+selection-press dispatch, ordinary activation and all nine delivery areas above remain open.
 
 - [x] Qualify the original full Debug r1052 and retain its complete predecessor/delta evidence.
 - [x] Preserve and independently read failed native analysis r1053; stop all later gates.
 - [x] Independently qualify private S5 Release/real-ASan, including the retained failed parity predicate.
 - [x] Adopt the reviewed model core and assertion-preserving stack repairs; reconcile owning contracts.
-- [ ] Finish fresh exact-source analysis r1059, full x64 profiles and ARM64 cross-builds.
+- [x] Preserve failed r1059, adopt the shared-helper/constant-proof repairs and retain all expectations.
+- [ ] Finish fresh exact-source analysis r1066, full x64 profiles and ARM64 cross-builds.
 - [ ] Integrate actual S5 host dispatch, complete admission/lifetimes and all remaining parent delivery areas.
 
 ### Latest qualified checkpoint
