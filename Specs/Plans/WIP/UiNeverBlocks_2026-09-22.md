@@ -17,26 +17,33 @@
 
 ### Current integration under validation
 
-The reviewed Hue, preserving-panel Wand, hard Paint parity and private direct-distortion read changes are
-selectively adopted into 35 code/test/project paths with their domain contracts and guide. They are not yet
-native-qualified. Mandatory skills/format checks pass (15 skills, 1,225 files); source-only comparator controls
-pass without replacing native tests. Canonical analysis r1045 is running on 1,377 exact frozen inputs.
-Main found a panel/Wand follow-through defect during independent source review: new color preview/commit
-captures keep the opening selection witness after the acknowledged Wand changes the document selection.
-The active analysis source remains unchanged. Dispatch admission for the subsequent r1046-r1051 profiles is
-revoked; r1045 must finish and archive normally before a fresh corrected-source matrix can start.
-The expected 943 compiler records, 21,835 Document facts, 141 Application stages, 9,023 Host PASS records plus
-the Hue summary, 7,391 composition and 1,953 I/O records are source-derived expectations, not passing results.
-Every predecessor remains required. Ordinary activation and the nine delivery areas above remain open.
+The reviewed Hue, preserving-panel Wand, hard Paint parity, private direct-distortion read and post-Wand
+panel follow-through changes are selectively adopted into 43 code/test/project paths with their contracts
+and guide. Corrected-source runtime qualification is pending. Skills/format checks pass (15 skills,
+1,228 files); source-only comparator controls preserve all predecessor expectations.
 
-- [x] Identify the post-Wand panel rejection in current source and retain the active analysis inputs unchanged.
-- [x] Finish and review the isolated follow-through repair: bind only the exact acknowledged panel/Wand
-  selection for newly captured work, retain public opening coverage/token state, refuse older results without
-  closing a valid panel, and retry a stale ready histogram only after the original acknowledgement.
-  The reviewed 14-path correction and its test registration remain private, uncompiled and unadopted.
+Canonical analysis r1045 passes on the earlier 35-path / 1,377-input integration: 1,794 archived files,
+943 actual compiler records, five image/PDB pairs, SAL controls and eight scanner rejection controls pass
+Main readback. Its coordinator then refuses the deliberately revoked next-dispatch marker. The active
+source remained unchanged until the archive and coordinator joined; r1046–r1051 were never launched.
+[Analysis and transition evidence](../../TestRuns/P1HueWandAnalysis_2026-10-16.md).
+
+The corrected-source sequence starts actual Debug r1052 at 12:49:16 UTC on its exact 1,380-input freeze,
+then runs analysis r1053, Release r1054, real ASan r1055 and ARM64 Debug r1056/Release r1057/instrumented
+ASan r1058 serially. The expected 945 compiler records, 21,863 Document facts, 142 Application stages,
+9,023 Host PASS records plus the Hue summary, 7,391 composition and 1,953 I/O records are source-derived
+expectations, not passing results. Every predecessor remains required. Ordinary activation and the nine
+delivery areas above remain open.
+
+- [x] Identify the post-Wand panel rejection and retain the active analysis inputs unchanged.
+- [x] Review the 14-path correction: bind only the acknowledged panel/Wand selection for newly captured
+  work, retain original public opening coverage/token state, refuse older results without closing a valid
+  panel, and retry a stale ready histogram only after original acknowledgement.
+- [x] Close and independently read the earlier static analysis, archive and intended next-dispatch refusal.
+- [x] Selectively adopt the correction and four owning contracts; skills, format and diff checks pass.
 - [ ] Run the independent CPU and actual hidden WARP host follow-through tests: both Wand sources,
-  original-coverage preview/OK, Cancel/reopen, arbitrary-selection refusal, and delayed histogram ownership.
-- [ ] Adopt the reviewed correction, update contracts, and qualify its exact source on the complete native matrix.
+  original-coverage preview/OK, Cancel/reopen, arbitrary-selection refusal and delayed histogram ownership.
+- [ ] Finish the exact corrected-source Debug/analysis/Release/real-ASan and ARM64 cross-build matrix.
 
 ### Latest qualified checkpoint
 
