@@ -29,6 +29,7 @@
 #include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
+#include "Document.Tests.LassoOpeningSettings.h"
 #include "Document.Tests.LassoSessionBridge.h"
 #include "Document.Tests.SelectionCommandMemory.h"
 #include "Document.Tests.SelectionGestureAbort.h"
@@ -8453,6 +8454,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDocumentSelectionGestureAdmissionTests();
     gFailures += RunDocumentSelectionGestureAdmissionAuthorityTests();
     gFailures += RunDocumentSelectionGestureResidencyTests();
+    gFailures += RunLassoOpeningSettingsTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

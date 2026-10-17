@@ -3028,3 +3028,7 @@ source-defined stream controls reject missing, duplicate, reordered, failed, unk
 Private Release and exact-source real-ASan proofs require complete archive, compiler/source/dependency/product
 bookends, matching PE/PDB, ISA and a real ASan UAF control. They do not substitute for native application/ARM64
 qualification, ordinary activation, other physical routes or measured G1.
+
+## Lasso opening settings/history authority proof
+
+`Document.Tests.LassoOpeningSettings` preserves all prior assertions and adds 46 primitive numeric/state controls for captured and live settings, signed rounding, exact foreign-editor/history refusal, invalid descriptor pre-mutation rejection, one-shot/move authority, original-ticket binding and final refunds. Foreign Begin is tested separately for both overloads without a generation/revision change. The pre-fix run's two real failures remain preserved; fixed Release and real ASan must pass unchanged predicates and the complete ordered predecessor stream. Counts alone do not qualify a run. See [the scoped evidence](../TestRuns/P1LassoOpeningSettings_2026-10-17.md). Private model proof does not qualify ordinary Win32 routing, latest native integration or P1 Done.

@@ -917,6 +917,7 @@ enum class SelectionMode : std::uint8_t
 // A lasso outline being drawn, in document pixels. `cursor` is the polygonal lasso's rubber-band end point;
 // `anchor` the Marquee's starting corner, in whole pixels.
 class BoundedLassoGesture;
+struct LassoOpeningSettings;
 class LassoOpeningInput;
 class PreparedLassoOpening;
 
@@ -2533,6 +2534,9 @@ class DocumentSession
     // The Marquee starts at a whole-pixel anchor in the current marquee kind; the Lasso in the current lasso kind.
     [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
                                                                             bool marquee);
+    // A queued physical descriptor owns these settings. Later header changes cannot replace its kind/AA.
+    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                            LassoOpeningSettings settings);
     [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(
         LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
         std::shared_ptr<const SharedPublicationMemory> memory);
@@ -3519,6 +3523,9 @@ class DocumentSession
     bool _lassoClosedMask = false;
     std::optional<DocumentHistory::StateView> _lassoClosedHistory;
     void InvalidateLassoPendingIntents() noexcept;
+    [[nodiscard]] std::optional<LassoOpeningInput> CaptureLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                            LassoKind kind, bool marquee,
+                                                                            std::optional<bool> capturedAntialiased);
     std::uint64_t _lassoFinishSerial = 0;
     std::uint64_t _lassoFinishPendingSerial = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;

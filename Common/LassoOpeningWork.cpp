@@ -35,12 +35,23 @@ std::uint64_t PreparedLassoOpening::MemoryBytes(std::uint32_t blocks) noexcept
 }
 std::optional<LassoOpeningInput> DocumentSession::PrepareLassoOpeningInput(Vec2 point, SelectionMode mode, bool marquee)
 {
+    return CaptureLassoOpeningInput(point, mode, marquee ? marqueeKind : lassoKind, marquee, std::nullopt);
+}
+std::optional<LassoOpeningInput> DocumentSession::PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                           LassoOpeningSettings settings)
+{
+    const bool marquee = settings.kind == LassoKind::Rectangle || settings.kind == LassoKind::Ellipse;
+    return CaptureLassoOpeningInput(point, mode, settings.kind, marquee, settings.antialiased);
+}
+std::optional<LassoOpeningInput> DocumentSession::CaptureLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                           LassoKind kind, bool marquee,
+                                                                           std::optional<bool> capturedAntialiased)
+{
     if (_lassoDraft || !CanEditSelection() || _selectionMoveOrigin || !std::isfinite(point.x) ||
         !std::isfinite(point.y) ||
         (_lassoOpening == (std::numeric_limits<std::uint64_t>::max)() ||
          _lassoOpeningIntentSerial == (std::numeric_limits<std::uint64_t>::max)()))
         return std::nullopt;
-    const auto kind = marquee ? marqueeKind : lassoKind;
     const bool validKind = marquee ? (kind == LassoKind::Rectangle || kind == LassoKind::Ellipse)
                                    : (kind == LassoKind::Freehand || kind == LassoKind::Polygonal);
     if (!validKind || (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract))
@@ -53,7 +64,8 @@ std::optional<LassoOpeningInput> DocumentSession::PrepareLassoOpeningInput(Vec2 
         return std::nullopt;
     const auto intent = ++_lassoOpeningIntentSerial;
     _lassoOpeningPendingSerial = intent;
-    return LassoOpeningInput(authority, token.value(), point, mode, kind, marquee, _lassoOpening + 1, intent);
+    return LassoOpeningInput(authority, history.CaptureAuthority(), token.value(), point, mode, kind, marquee,
+                             _lassoOpening + 1, intent, capturedAntialiased);
 }
 std::optional<PreparedLassoOpening> DocumentSession::PrepareLassoOpening(
     LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
@@ -81,15 +93,18 @@ bool DocumentSession::IsPreparedLassoOpeningCurrent(const PreparedLassoOpening& 
     return !prepared._applied && prepared._input._valid && prepared._writer && !_lassoDraft &&
            _lassoOpening != (std::numeric_limits<std::uint64_t>::max)() &&
            prepared._input._opening == _lassoOpening + 1 && prepared._input._intent &&
-           prepared._input._intent == _lassoOpeningPendingSerial && CanEditSelection() &&
-           prepared._input._kind == (prepared._input._marquee ? marqueeKind : lassoKind) &&
+           prepared._input._intent == _lassoOpeningPendingSerial && history.IsCurrent(prepared._input._history) &&
+           CanEditSelection() &&
+           (prepared._input._capturedAntialiased.has_value() ||
+            prepared._input._kind == (prepared._input._marquee ? marqueeKind : lassoKind)) &&
            CanApplyHistoryRestore(prepared._input._authority) && CanApplyJobResult(prepared._input._token, 0);
 }
 bool DocumentSession::ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept
 {
     if (!prepared._memory || !prepared._memory->IsBound() || !IsPreparedLassoOpeningCurrent(prepared) ||
         !prepared._writer->BeginOwner(prepared._input._opening, prepared._input._kind, prepared._input._mode,
-                                      selectionAntialiased, prepared._input._point))
+                                      prepared._input._capturedAntialiased.value_or(selectionAntialiased),
+                                      prepared._input._point))
         return false;
     LassoDraft draft;
     draft.mode = prepared._input._mode;

@@ -13,10 +13,13 @@ command job in `RedPrism/ApplicationMaskJobs.cpp`
 ## Scope
 
 This contract owns how a layer's placement is edited: the drag geometry, snapping, free distortion, the pending-edit
-lifecycle in `DocumentSession`, flips, and the rules the Move tool and its header follow. Rendering of a
+lifecycle in `DocumentSession`, flips, and the rules the Move tool and its header follow. It ports
+archived behavioral reference, `Distort.swift`, `LayerFlip.swift`, the transform parts of
+`EditorSession.swift` and `Crop.swift`, and the geometry of `Rendering/TransformOverlay.swift`. Rendering of a
 transform is the composition's job ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)); the chrome
 that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). Since C9 it also owns the
-selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels.
+selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels, ported from
+`Document/Selection.swift`, `MagicWand.swift`, `MaskTracing.swift` and `Rendering/WandPixels.c`.
 
 ## Asynchronous tool ordering foundations
 
@@ -1856,3 +1859,7 @@ selection root and redo, closes its Begin and matches reference Cancel invalidat
 transferred brush/warp work, other gestures, foreign mutations and a consumed opening refuse. Default opening
 and numeric reference routes retain their behavior. These model APIs do not enable physical dispatch or
 change pointer-loss End, click follow-up, preserving callers, ordinary activation or G1 requirements.
+
+## Worker lasso opening: accepted descriptor settings and history epoch
+
+The `LassoOpeningSettings` overload of `PrepareLassoOpeningInput` records the accepted physical Down's numeric kind and antialias flag. Subsequent header preference changes cannot replace those settings. The bool overload retains its live-kind validation and live-AA-at-acquisition behavior. Invalid kind, selection mode or nonfinite point refuses before rotating the pending intent. Both overloads capture exact `DocumentHistory::Authority`; acquisition requires the same history epoch as well as the existing session/document/editor/token/intent authority. A foreign Begin refuses even when generation and revision are unchanged. Worker-created storage must bind to the original admitted parent before acquisition; moved-from, superseded, cancelled and already-applied results refuse. This API alone does not activate ordinary physical routing.

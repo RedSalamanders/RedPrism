@@ -1610,3 +1610,7 @@ Residency refresh shares the complete original admission and retains its origina
 and ticket. No owner wait, pixel read, index/geometry reconstruction, re-admission or unbounded temporary
 allocation is allowed. Test-only readiness callbacks borrow immutable rasters/events and never an Application,
 mutable document session, UI or GPU owner. The selected structural proof does not qualify ordinary input or G1.
+
+## Lasso opening settings and history authority
+
+Queued lasso opening may retain fixed-size primitive kind/AA settings and an exact history authority value. Capture and owner acquisition perform bounded identity/epoch checks without scanning history or allocating point vectors. The input, writer/control, arena, source roots and retirement must remain covered by the original admitted ticket; this small settings API does not provide complete physical-gesture admission. A history Begin invalidates old openings even when document generation/revision are unchanged. Final retained-resource refund remains independently required.
