@@ -3310,3 +3310,22 @@ MUST NOT execute their encoded bytes. Preserve the prior complete parser and com
 The unchanged failed PE/PDB readback and original refusal remain separate evidence; scanner success alone
 closes no native application, ASan runtime, ARM64, ordinary activation or G1 gate.
 [Evidence](../TestRuns/IsaR8RaxRdx_2026-10-18.md).
+
+
+### Selected Polygonal terminal native qualification
+
+Preserve all 791 predecessor facts and add 18 cases / 208 facts: 81 cases / 999 total and the full
+152-stage Application stream / 10,582 stdout assertions. Cover Escape without publication/history,
+Backspace-to-zero as Finished/endedByBackspace without publication/history, near-first with two corners
+recording a third stored point before Escape, and a true two-corner double-click. The latter MUST click
+the prior corner and assert the accepted Move/PolygonPress double-click and not-near-first flags.
+Check New/present-empty clearing once versus unchanged Add/Subtract and no history, captured mode through
+a direct header callback, and screenshot-DPI override plus native `WM_DPICHANGED` with restored bounds.
+Widget interaction and real-monitor DPI are separate acceptance scope.
+
+Require exact-source Release and real ASan, all predecessor stdout/stderr through the source-only reader,
+actual sanitizer detection, complete original-ticket and strong/weak refunds, full command/object/profile/
+PE/PDB/ISA/archive identity and source-only malformed-input controls. Preserve the original test-driver,
+compile-warning and ISA refusals before correction. The exact unchanged CPU/UAF artifacts and ASan DLL
+closure are reused only under their recorded source/dependency/artifact/profile/scope mapping; both
+complete new Application streams run. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).

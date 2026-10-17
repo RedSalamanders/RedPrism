@@ -265,3 +265,13 @@ Native `WM_MOUSELEAVE` without capture clears hover tracking and the transient p
 the original drawing owner/draft. Reentry continues that same prepared writer. Terminal selection/history
 and joined refunds keep their existing rules. These input invariants do not qualify complete DPI/device/
 hidden-display scope, ordinary activation or measured presentation latency.
+
+
+### Selected Polygonal terminal and DPI-message validation
+
+Native Escape, Backspace-to-zero, two-corner near-first and true double-click handling preserve original
+job/input/history ownership in the selected Polygonal caller. A mode callback preserves its captured mode.
+The DPI fixture uses a screenshot-DPI override plus native `WM_DPICHANGED`, restores the override and window
+bounds, and verifies that the same writer survives with unchanged committed state. This is harness-DPI
+message-path evidence; actual monitor transitions, widget interaction and ordinary activation remain
+separate gates. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).

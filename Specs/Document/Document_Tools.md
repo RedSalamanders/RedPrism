@@ -2051,3 +2051,15 @@ ticket, committed selection and history revision. A view change affects future p
 mapping, not captured drawing kind/mode or accepted coordinates. Pointer leave clears the transient drag;
 reentry adds its next corner on the same parent. The chosen terminal still publishes the original mode's
 independent selection and one history entry, with unchanged Undo/Redo and joined ownership rules.
+
+
+### Selected Polygonal terminal and captured-mode semantics
+
+In the selected original-parent Polygonal caller, Escape discards the draft without selection publication
+or history. Removing its last corner also discards only that draft. A near-first click with two stored
+corners records the clicked point and keeps drawing; a true double-click selects the short terminal.
+The New fixture with a present empty selection clears it once; Add/Subtract preserve their prior selection
+and create no history for this short terminal. The native double-click requires both time and previous-point
+position criteria. Drawing mode is captured at Down; a later header-mode callback does not retarget its writer.
+These requirements do not enable the remaining New/nonempty or lifted-pixel dispatcher branches.
+[Selected native terminal evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).

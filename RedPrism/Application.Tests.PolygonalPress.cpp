@@ -114,6 +114,12 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                "jpeg-cancel",
                                "zoom-live",
                                "pointer-leave-live",
+                               "escape-cancel",
+                               "backspace-zero",
+                               "near-first-two",
+                               "double-click-two",
+                               "header-mode-live",
+                               "harness-dpi-live",
                                "joined-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalFixture" / Guid::Generate().ToString();
@@ -173,6 +179,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                 const auto now = GetTickCount64();
                 if (now >= deadline)
                     return false;
+                if (owner->_jobs.HasUiWork())
+                    continue; // A bounded pump may leave acknowledged ready actions; never wait over them.
                 const HANDLE wake = owner->_jobs.WakeHandle();
                 if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
                                                 MWMO_INPUTAVAILABLE) == WAIT_FAILED)
@@ -188,13 +196,21 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             const bool joined = name == "joined-close";
             const bool zoomLive = name == "zoom-live";
             const bool pointerLeaveLive = name == "pointer-leave-live";
+            const bool escapeCancel = name == "escape-cancel";
+            const bool backspaceZero = name == "backspace-zero";
+            const bool nearFirstTwo = name == "near-first-two";
+            const bool doubleClickTwo = name == "double-click-two";
+            const bool headerModeLive = name == "header-mode-live";
+            const bool harnessDpiLive = name == "harness-dpi-live";
+            const bool shortTwo = nearFirstTwo || doubleClickTwo;
             const bool tool = name == "tool-cancel";
             const bool kindCancel = name == "header-kind-cancel";
             const bool deselect = name == "header-deselect";
             const bool save = name == "save-open" || name == "save-cancel" || name == "save-failed";
             const bool exportOpen = name == "png-open" || name == "jpeg-open";
             const bool exportCancel = name == "png-cancel" || name == "jpeg-cancel";
-            const bool cancelled = tool || kindCancel || joined || deselect;
+            const bool cancelled = tool || kindCancel || joined || deselect || escapeCancel || nearFirstTwo;
+            const bool noPublication = cancelled || backspaceZero;
             if (owner->_polygonalDrawing && owner->_polygonalDrawing->controller)
                 return 5;
             owner->_polygonalDrawing.reset();
@@ -213,6 +229,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             if (mode != SelectionMode::New)
                 fixture.selection = DocumentSelection{
                     false, SelectionLoops{std::vector<SelectionLoop>{{{1, 1}, {5, 1}, {5, 5}, {1, 5}}}}};
+            else if (doubleClickTwo)
+                fixture.selection = DocumentSelection{false, SelectionLoops{}};
             const auto active = fixture.layers[0].id;
             const auto other = fixture.layers[1].id;
             owner->_session.ReplaceDocument(std::move(fixture).Seal(), active);
@@ -239,9 +257,10 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             const auto send = [&](UINT message, Vec2 point, WPARAM modifiers) noexcept
             {
                 const auto view = owner->_viewport.ViewFromDocument(point, owner->DocumentSize());
+                const auto currentHole = owner->_chrome->HolePixels();
                 SendMessageW(owner->_window.get(), message, modifiers,
-                             MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
-                                        static_cast<int>(std::lround(hole.top + view.y))));
+                             MAKELPARAM(static_cast<int>(std::lround(currentHole.left + view.x)),
+                                        static_cast<int>(std::lround(currentHole.top + view.y))));
             };
             const auto click = [&](Vec2 point, bool doubleClick = false) noexcept
             {
@@ -260,6 +279,25 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             click({2, 2});
             const auto creator = owner->_lassoOpeningReceipt;
             const auto opening = owner->_lassoInput.Opening();
+            const auto provisionalReceipt = [&]() noexcept
+            {
+                if (owner->_activeHostRequest)
+                {
+                    const auto* canvas = std::get_if<HostCanvasBrushInput>(&owner->_activeHostRequest->input.Input());
+                    if (canvas && canvas->kind == HostCanvasInputKind::LassoFinish && canvas->opening == opening &&
+                        canvas->lassoClosingIntent)
+                        return owner->_activeHostRequest->input.Receipt();
+                }
+                for (std::size_t index = 0; index < owner->_hostRequests.Size(); ++index)
+                {
+                    const auto* queued = owner->_hostRequests.PendingAt(index);
+                    const auto* canvas = queued ? std::get_if<HostCanvasBrushInput>(&queued->input.Input()) : nullptr;
+                    if (canvas && canvas->kind == HostCanvasInputKind::LassoFinish && canvas->opening == opening &&
+                        canvas->lassoClosingIntent)
+                        return queued->input.Receipt();
+                }
+                return ContinuationReceipt{};
+            };
             const auto* source = owner->_lassoInput.CapturedContext(opening);
             if (!expect(source && source->kind == LassoKind::Polygonal && source->mode == mode &&
                             creator.Read().outcome == HostOutcome::Pending && !owner->_polygonalDrawing &&
@@ -306,14 +344,25 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                             "live-original-job-keeps-writer-without-global-history-barrier"))
                     return 5;
                 click({8, 2});
-                click({8, 7});
+                if (!shortTwo)
+                    click({8, 7});
                 if (!expect(until(
                                 [&]() noexcept
                                 {
                                     return owner->_polygonalDrawing->waiting && owner->_session.PendingLasso() &&
-                                           owner->_session.PendingLasso().value().PointCount() == 3;
+                                           owner->_session.PendingLasso().value().PointCount() == (shortTwo ? 2u : 3u);
                                 }),
                             "separate-physical-corners-replay-on-original-parent"))
+                    return 5;
+                if ((shortTwo || escapeCancel || backspaceZero) &&
+                    !expect(owner->_polygonalDrawing->waiting &&
+                                owner->_polygonalDrawing->controller == preparedWriter &&
+                                owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
+                                owner->_session.PendingLasso().value().PointCount() == (shortTwo ? 2u : 3u) &&
+                                owner->_session.Selection() == original &&
+                                owner->_session.history.CurrentRevision() == revision &&
+                                owner->_session.history.UndoCount() == 0,
+                            "short-or-cancel-prefix-retains-original-uncommitted-writer"))
                     return 5;
                 if (zoomLive)
                 {
@@ -505,7 +554,148 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                 "unsupported-direct-layer-callback-queues-and-refuses-before-source-mutation"))
                         return 5;
                 }
-                click({2, 7});
+                if (nearFirstTwo)
+                {
+                    click({2, 2});
+                    const auto nearReceipt = provisionalReceipt();
+                    if (!expect(nearReceipt.Read().outcome == HostOutcome::Pending &&
+                                    until(
+                                        [&]() noexcept
+                                        {
+                                            return nearReceipt.Read().outcome != HostOutcome::Pending &&
+                                                   owner->_polygonalDrawing->waiting;
+                                        }) &&
+                                    nearReceipt.Read().outcome == HostOutcome::Succeeded &&
+                                    nearReceipt.Read().error == S_OK && owner->_polygonalDrawing->waiting &&
+                                    owner->_polygonalDrawing->controller == preparedWriter &&
+                                    owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
+                                    owner->_session.PendingLasso().value().PointCount() == 3 &&
+                                    owner->_session.Selection() == original &&
+                                    owner->_session.history.CurrentRevision() == revision,
+                                "near-first-two-corners-appends-and-keeps-original-draft-live"))
+                        return 5;
+                    key(VK_ESCAPE);
+                }
+                else if (doubleClickTwo)
+                {
+                    click({8, 2},
+                          true); // The second click is at the previous corner, inside native double-click bounds.
+                    terminal = provisionalReceipt();
+                    const auto accepted = owner->_lassoInput.Peek(opening);
+                    if (!expect(terminal.Read().outcome == HostOutcome::Pending && accepted &&
+                                    accepted->action == HostLassoInput::Action::Move &&
+                                    accepted->sample.operation == HostLassoInput::Operation::PolygonPress &&
+                                    accepted->sample.doubleClick && !accepted->sample.nearFirst,
+                                "two-corner-double-click-retains-selected-short-terminal-receipt"))
+                        return 5;
+                }
+                else if (escapeCancel)
+                {
+                    key(VK_ESCAPE);
+                }
+                else if (backspaceZero)
+                {
+                    key(VK_BACK);
+                    key(VK_BACK);
+                    key(VK_BACK);
+                }
+                else
+                {
+                    if (headerModeLive)
+                    {
+                        const int direction = mode == SelectionMode::Subtract ? -1 : 1;
+                        const int targetMode = static_cast<int>(mode) + direction;
+                        owner->OnSelectionAction(SelectionAction::SetMode, static_cast<double>(targetMode));
+                        if (!expect(owner->_session.selectionModeChoice == static_cast<SelectionMode>(targetMode) &&
+                                        owner->_lassoInput.CapturedContext(opening) &&
+                                        owner->_lassoInput.CapturedContext(opening)->mode == mode &&
+                                        owner->_polygonalDrawing->controller == preparedWriter &&
+                                        owner->_polygonalDrawing->original == ticket &&
+                                        owner->_session.PendingLasso() &&
+                                        owner->_session.PendingLasso().value().PointCount() == 3 &&
+                                        owner->_session.Selection() == original &&
+                                        owner->_session.history.CurrentRevision() == revision,
+                                    "header-mode-callback-preserves-captured-original-drawing-mode"))
+                            return 5;
+                    }
+                    if (harnessDpiLive)
+                    {
+                        RECT originalBounds{};
+                        const bool haveBounds = GetWindowRect(owner->_window.get(), &originalBounds) != FALSE;
+                        const UINT nativeDpi = GetDpiForWindow(owner->_window.get());
+                        const UINT previousHarnessDpi = owner->_screenshotDpi;
+                        const UINT restoredDpi = previousHarnessDpi ? previousHarnessDpi : nativeDpi;
+                        const UINT harnessDpi = nativeDpi == 144 ? 120 : 144;
+                        RECT suggested = originalBounds;
+                        if (haveBounds)
+                        {
+                            suggested.left -= 16;
+                            suggested.right += 16;
+                            suggested.top -= 12;
+                            suggested.bottom += 12;
+                        }
+                        owner->_screenshotDpi = harnessDpi;
+                        if (haveBounds)
+                            SendMessageW(owner->_window.get(), WM_DPICHANGED, MAKELONG(harnessDpi, harnessDpi),
+                                         reinterpret_cast<LPARAM>(&suggested));
+                        owner->RenderFrame();
+                        RECT afterHarnessMessage{};
+                        const bool changed =
+                            haveBounds && owner->ChromeDpi() == static_cast<float>(harnessDpi) &&
+                            GetDpiForWindow(owner->_window.get()) == nativeDpi &&
+                            GetWindowRect(owner->_window.get(), &afterHarnessMessage) &&
+                            afterHarnessMessage.left == suggested.left && afterHarnessMessage.top == suggested.top &&
+                            afterHarnessMessage.right == suggested.right &&
+                            afterHarnessMessage.bottom == suggested.bottom &&
+                            owner->_polygonalDrawing->controller == preparedWriter &&
+                            owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
+                            owner->_session.PendingLasso().value().PointCount() == 3 &&
+                            owner->_session.Selection() == original &&
+                            owner->_session.history.CurrentRevision() == revision;
+                        if (changed)
+                        {
+                            click({2, 7});
+                            click({2, 5});
+                        }
+                        const bool currentViewportClicks =
+                            changed &&
+                            until(
+                                [&]() noexcept
+                                {
+                                    return owner->_polygonalDrawing->waiting && owner->_session.PendingLasso() &&
+                                           owner->_session.PendingLasso().value().PointCount() == 5;
+                                }) &&
+                            owner->_polygonalDrawing->controller == preparedWriter &&
+                            owner->_polygonalDrawing->original == ticket && owner->_session.Selection() == original &&
+                            owner->_session.history.CurrentRevision() == revision;
+                        owner->_screenshotDpi = previousHarnessDpi;
+                        if (haveBounds)
+                            SendMessageW(owner->_window.get(), WM_DPICHANGED, MAKELONG(nativeDpi, nativeDpi),
+                                         reinterpret_cast<LPARAM>(&originalBounds));
+                        owner->RenderFrame();
+                        RECT restoredBounds{};
+                        const bool restored =
+                            owner->ChromeDpi() == static_cast<float>(restoredDpi) &&
+                            GetDpiForWindow(owner->_window.get()) == nativeDpi &&
+                            GetWindowRect(owner->_window.get(), &restoredBounds) &&
+                            restoredBounds.left == originalBounds.left && restoredBounds.top == originalBounds.top &&
+                            restoredBounds.right == originalBounds.right &&
+                            restoredBounds.bottom == originalBounds.bottom &&
+                            owner->_polygonalDrawing->controller == preparedWriter &&
+                            owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
+                            owner->_session.PendingLasso().value().PointCount() == 5;
+                        if (!expect(changed,
+                                    "harness-dpi-override-native-message-rebuilds-live-chrome-not-os-transition"))
+                            return 5;
+                        if (!expect(restored, "native-message-restores-normal-window-harness-dpi"))
+                            return 5;
+                        if (!expect(currentViewportClicks,
+                                    "native-corners-use-current-view-mapping-after-harness-dpichanged"))
+                            return 5;
+                    }
+                    if (!harnessDpiLive)
+                        click({2, 7});
+                }
                 if ((zoomLive || pointerLeaveLive) &&
                     !expect(until(
                                 [&]() noexcept
@@ -526,11 +716,13 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                     key(VK_BACK);
                     click({2, 7});
                 }
-                if (!expect(until(
+                if (!shortTwo && !escapeCancel && !backspaceZero &&
+                    !expect(until(
                                 [&]() noexcept
                                 {
                                     return owner->_polygonalDrawing->waiting && owner->_session.PendingLasso() &&
-                                           owner->_session.PendingLasso().value().PointCount() == 4 &&
+                                           owner->_session.PendingLasso().value().PointCount() ==
+                                               (harnessDpiLive ? 5u : 4u) &&
                                            (name != "hover-backspace" || (owner->_polygonalDrawing->backspaces == 1 &&
                                                                           owner->_polygonalDrawing->cursors >= 1 &&
                                                                           owner->_polygonalDrawing->points == 4));
@@ -548,16 +740,20 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                     owner->OnSelectionAction(SelectionAction::SetLassoKind, 0.0);
                 else if (deselect)
                     owner->OnSelectionAction(SelectionAction::Deselect, 0.0);
+                else if (nearFirstTwo || doubleClickTwo || escapeCancel || backspaceZero)
+                {
+                    // These physical terminals were already sent while the live prefix was inspected.
+                }
                 else if (name == "near-first")
                     click({2, 2});
                 else if (name == "double-click")
                     click({2, 7}, true);
                 else
                     key(VK_RETURN);
-                if (!cancelled)
+                if (!noPublication)
                 {
                     terminal = owner->_lassoFinishReceipt;
-                    if (name == "near-first" || name == "double-click")
+                    if (name == "near-first" || name == "double-click" || doubleClickTwo)
                     {
                         bool capturedTerminal = false;
                         for (std::size_t index = 0; index < owner->_hostRequests.Size(); ++index)
@@ -579,7 +775,54 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                     }
                 }
             }
-            if (!expect(joined || settle(), "original-parent-and-all-host-acknowledgements-join"))
+            const auto terminalSettle =
+                joined ? SettleResult::Settled : SettleJobs(owner->_jobs, 30000, DispatchMessageThunk, owner.get());
+            if (terminalSettle != SettleResult::Settled)
+            {
+                const auto readiness = owner->_jobs.UiReadinessForTest();
+                const auto next = owner->_lassoInput.Peek(opening);
+                const auto* pending = owner->_hostRequests.Front();
+                const auto* selected =
+                    owner->_activeHostRequest
+                        ? std::get_if<HostCanvasBrushInput>(&owner->_activeHostRequest->input.Input())
+                        : nullptr;
+                const auto& current = owner->_polygonalDrawing;
+                std::fprintf(
+                    stderr,
+                    "DIAG polygonal-terminal.%s.%s settle=%u idle=%u ui=%u ready=%u,%u,%u,%u,%u,%u "
+                    "history=%u stamp=%u stage=%u active=%llu canvas=%u intent=%llu front=%llu "
+                    "input=%u count=%zu next=%u,%u,%llu wait=%u reason=%u complete=%u publish=%u "
+                    "controller=%u outcome=%u error=%08lx closing=%llu,%llu replay=%llu,%u "
+                    "refresh=%u docgen=%llu undo=%d reserved=%llu releasing=%llu\n",
+                    family, scenario, static_cast<unsigned>(terminalSettle), owner->_jobs.IsIdle() ? 1u : 0u,
+                    owner->_jobs.HasUiWork() ? 1u : 0u, readiness.completions, readiness.actions,
+                    readiness.source ? 1u : 0u, readiness.resumes ? 1u : 0u, readiness.owner ? 1u : 0u,
+                    readiness.memory ? 1u : 0u, owner->_historyWork.Busy() ? 1u : 0u, owner->_polygonalStamp ? 1u : 0u,
+                    static_cast<unsigned>(owner->_hostStage),
+                    static_cast<unsigned long long>(owner->_activeHostRequest ? owner->_activeHostRequest->ordinal : 0),
+                    selected ? static_cast<unsigned>(selected->kind) : 0u,
+                    static_cast<unsigned long long>(selected ? selected->lassoClosingIntent : 0),
+                    static_cast<unsigned long long>(pending ? pending->ordinal : 0),
+                    owner->_lassoInput.Busy() ? 1u : 0u, owner->_lassoInput.PendingCount(),
+                    next ? static_cast<unsigned>(next.value().action) : 0u,
+                    next ? static_cast<unsigned>(next.value().sample.operation) : 0u,
+                    static_cast<unsigned long long>(next ? next.value().sample.ordinal : 0),
+                    current && current->waiting ? 1u : 0u, current ? static_cast<unsigned>(current->waitReason) : 0u,
+                    current && current->completed ? 1u : 0u, current && current->published ? 1u : 0u,
+                    current && current->controller ? 1u : 0u,
+                    current ? static_cast<unsigned>(current->outcome.status) : 0u,
+                    static_cast<unsigned long>(current ? current->outcome.error : 0),
+                    static_cast<unsigned long long>(current ? current->closingOrdinal : 0),
+                    static_cast<unsigned long long>(current ? current->closingIntent : 0),
+                    static_cast<unsigned long long>(owner->_lassoReplayedClosingIntent),
+                    owner->_lassoReplayedCloseChosen ? 1u : 0u, current ? current->residencyRefreshes : 0u,
+                    static_cast<unsigned long long>(owner->_session.Generation()), owner->_session.history.UndoCount(),
+                    static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
+                    static_cast<unsigned long long>(owner->_jobs.ReleasingMemoryBytes()));
+                std::fflush(stdout);
+                std::fflush(stderr);
+            }
+            if (!expect(terminalSettle == SettleResult::Settled, "original-parent-and-all-host-acknowledgements-join"))
                 return 5;
             const auto& state = owner->_polygonalDrawing;
             if (!expect(state && state->original == ticket && state->sameTicket && state->captures == 1 &&
@@ -599,6 +842,25 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                            !owner->_session.PendingLasso() && owner->_session.Generation() == generation &&
                            owner->_session.history.UndoCount() == 0 &&
                            (tool ? owner->_tool == EditorTool::Move : owner->_session.lassoKind == LassoKind::Freehand);
+            else if (escapeCancel || nearFirstTwo)
+                geometry = state->outcome.status == JobStatus::Cancelled && !state->published &&
+                           state->inputAcknowledged && owner->_lassoCancelledOpening == opening &&
+                           !owner->_lassoInput.Sampling() && !owner->_session.PendingLasso() &&
+                           SamePolygonalHostSelection(owner->_session.Selection(), original) &&
+                           owner->_session.Generation() == generation && owner->_session.history.UndoCount() == 0;
+            else if (backspaceZero)
+                geometry = state->endedByBackspace && state->outcome.status == JobStatus::Finished &&
+                           !state->published && state->inputAcknowledged && state->backspaces == 3 &&
+                           !owner->_session.PendingLasso() &&
+                           SamePolygonalHostSelection(owner->_session.Selection(), original) &&
+                           owner->_session.Generation() == generation && owner->_session.history.UndoCount() == 0;
+            else if (doubleClickTwo)
+                geometry = state->published && terminal.Read().outcome == HostOutcome::Succeeded &&
+                           (mode == SelectionMode::New
+                                ? !owner->_session.Selection() && owner->_session.history.UndoCount() == 1
+                                : SamePolygonalHostSelection(owner->_session.Selection(), original) &&
+                                      owner->_session.history.UndoCount() == 0) &&
+                           owner->_session.Generation() == generation + (mode == SelectionMode::New ? 1u : 0u);
             else
                 geometry = state->published && terminal.Read().outcome == HostOutcome::Succeeded &&
                            PolygonalHostPixels(owner->_session.Selection(), mode) &&
@@ -606,7 +868,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                            owner->_session.Generation() == generation + 1 && owner->_session.history.UndoCount() == 1;
             if (!expect(geometry, "independent4096-centers-terminal-aa-and-cancel-history-policy"))
                 return 5;
-            if (!cancelled)
+            if (!noPublication && !(doubleClickTwo && mode != SelectionMode::New))
             {
                 const auto final = owner->_session.Selection();
                 owner->_session.Undo();
@@ -631,7 +893,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             return 5;
     }
     family = scenario = "close";
-    if (!expect(reached == 63 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
+    if (!expect(reached == 81 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
         return 5;
     return failures ? 5 : 0;
 }
