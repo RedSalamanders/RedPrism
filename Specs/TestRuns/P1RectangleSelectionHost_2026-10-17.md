@@ -1,6 +1,6 @@
 # P1 Rectangle/New actual Win32 host — 2026-10-17
 
-## Release qualified; exact-source ASan pending
+## Release and exact-source real ASan qualified
 
 Release R6 runs the actual hidden two-worker/WARP application through WndProc: all 83 new Rectangle facts,
 all 145 predecessor stages and the complete 146-stage roster pass. Main independently verifies all 1,707
@@ -47,13 +47,29 @@ Local Release qualification: `.build/P1Drafts/S5PressRectangleHost-r6-Main/main-
 New source-only reader: `.build/P1Drafts/S5PressRectangleAppReader-r6-Main/verify-private-app.py`.
 Every failed attempt retains its independent artifact receipt and complete archive.
 
-## Remaining qualification
+## Instrumented qualification and remaining integration
 
-Fresh 341-source exact-R6 ASan build R2 is active. R1 preserves a controller-only v146 argument typo and the
-actual consumer-toolset mismatch before any C++ compilation; correction restores v145 without changing source
-or the pinned DxUi library. ASan build/ISA/artifacts, its actual UAF control and all 146 runtime stages must
-qualify before this host extension is adopted. The qualified 277-source CPU protocol is already pushed as
-`3b7e55a`; that evidence does not substitute for this actual host gate.
+Fresh exact-R6 ASan build R2 independently qualifies all 341 actual instrumented compiler records, matching
+full PE/PDB and zero ISA violations. Actual host PID 98600 exits 0 with the same complete
+146-stage roster, 83 Rectangle/41 prior physical/21 joined-shutdown/71 scalar facts and all native predecessors.
+Its actual intentional UAF control is PID 788, expected exit 1 with
+`AddressSanitizer: heap-use-after-free`. The probe's exact 277-source CPU/engine identity, binary and PDB match
+the separately qualified current protocol. No detection result substitutes for the full instrumented host.
+
+| ASan identity | Value |
+| --- | --- |
+| Build archive / leaves | `F9E4664F14FAB7AD46A2BA42B1F7F69EFFDAB002D6FB106205FF18B3FE68C896` / 1703 |
+| Runtime archive / leaves | `2C8E6ABDAECB3FF6BC9B85C48A24037D3A45C42D53AF82931656323B466CEB71` / 31 |
+| EXE SHA-256 | `91E4C41A2E822134E22AEB709F82A838690CD2045CBBEACE2131F7306DD3CFDA` |
+| Full PDB SHA-256 | `91D99C0424B8136324687594E68B5C6358F0C69E254DB2F3B6B986DE3B9C5EB4` |
+| RSDS GUID / age | `ADC0218C-611F-4EB9-9E95-B8CA78DB5383` / 1 |
+
+R1 preserves a controller-only v146 argument typo and actual consumer-toolset mismatch before any C++
+compilation. R2 restores v145 with source, toolchain and DxUi pin unchanged. Main independently verifies both
+complete archives, all child receipts and stream hashes, actual UAF diagnostics, full unchanged predecessor
+readers, the four-positive/21-negative new-stage controls and final source/dependency/product bookends.
+Local full qualification: `.build/P1Drafts/S5PressRectangleHostAsan-r2-Main/main-qualified.json`.
+The 14 tested host paths and scoped contracts are ready for native integration; ordinary activation remains off.
 
 The integrated `29a8ac2` native baseline separately passes all three ARM64 cross-builds. Native ARM64 runtime
 is unavailable. Combined latest-source native x64 profiles and ARM64 cross-builds remain due after adoption.
