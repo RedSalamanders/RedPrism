@@ -2,6 +2,7 @@
 
 #include "HostHueInput.h"
 #include "HostLassoInput.h"
+#include "PolygonalDrawingJob.h"
 #include "SelectionCursorRequests.h"
 #include "SelectionHitWork.h"
 #include "SelectionOutlineGestureState.h"
@@ -177,6 +178,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneMarqueeModesSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionCursorSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneFreehandPressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
@@ -564,6 +566,25 @@ class Application final : public ChromeEvents,
     std::uint64_t _selectionPressOpening = 0;
     std::uint64_t _selectionPressMovePresentations = 0;
     bool _selectionPressTestEnabled = false;
+
+    // Selected private qualification route; ordinary activation retains the P1 gates.
+    bool _polygonalDrawingTestEnabled = false;
+    bool _polygonalDrawingAntialiased = true;
+    bool _polygonalStopForHost = false;
+    std::uint64_t _polygonalTerminalOrdinal = 0;
+    std::optional<PolygonalDrawingState> _polygonalDrawing;
+    std::optional<HistoryWorkStamp> _polygonalStamp;
+    [[nodiscard]] bool PolygonalInputOwner(std::uint64_t opening) const noexcept;
+    [[nodiscard]] bool PolygonalHostInputSupported(const HostRequestInput& input) const noexcept;
+    [[nodiscard]] bool PolygonalHostInputStops(const HostRequestInput& input) const noexcept;
+    [[nodiscard]] HRESULT StartPolygonalDrawing(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartPolygonalTerminal(std::uint64_t opening) noexcept;
+    [[nodiscard]] HRESULT StartPolygonalHostCancel() noexcept;
+    void PumpPolygonalDrawing() noexcept;
+    void PolygonalDrawingEvent(PolygonalDrawingState::Event) noexcept;
+    [[nodiscard]] bool PolygonalMayReplay(std::uint64_t ordinal) const noexcept;
+    [[nodiscard]] bool PolygonalMayFinish(std::uint64_t ordinal, std::uint64_t intent, bool cancelled) const noexcept;
+    void PolygonalPressResolved(std::uint64_t ordinal, std::uint64_t intent, bool closes) noexcept;
 
     [[nodiscard]] bool SelectionPointerMove(Vec2 view, UINT modifiers) noexcept;
     void SelectionRelease(Vec2 view) noexcept;
@@ -1483,6 +1504,8 @@ class Application final : public ChromeEvents,
         OpacitySettle,
         CanvasBrush,
         Sampler,
+        PolygonalOpening,
+        PolygonalTerminal,
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,

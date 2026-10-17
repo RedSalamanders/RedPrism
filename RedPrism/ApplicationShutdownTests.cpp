@@ -342,24 +342,51 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             }
             else
             {
+                const auto failHeldGate = [&](const char* reason, DWORD nativeError = ERROR_SUCCESS) noexcept
+                {
+                    const auto observed = receipt.Read();
+                    MEMORYSTATUSEX memory{};
+                    memory.dwLength = sizeof(memory);
+                    const bool memoryRead = GlobalMemoryStatusEx(&memory) != FALSE;
+                    std::fprintf(stderr,
+                                 "DIAG inverse-selection-joined-close.%s held-gate reason=%s outcome=%u error=%08lx "
+                                 "native=%lu ticket=%u stamp=%u history=%u queue=%zu active=%u idle=%u ui=%u "
+                                 "ownerReady=%u visits=%u reserved=%llu memoryRead=%u phys=%llu commit=%llu\n",
+                                 phase, reason, static_cast<unsigned>(observed.outcome),
+                                 static_cast<unsigned long>(observed.error), nativeError,
+                                 owner->_inverseSelectionTicket.has_value() ? 1u : 0u,
+                                 owner->_inverseSelectionStamp.has_value() ? 1u : 0u,
+                                 owner->_historyWork.Busy() ? 1u : 0u, owner->_hostRequests.Size(),
+                                 owner->_activeHostRequest.has_value() ? 1u : 0u, owner->_jobs.IsIdle() ? 1u : 0u,
+                                 owner->_jobs.HasUiWork() ? 1u : 0u, owner->_ownerWork.HasReady() ? 1u : 0u,
+                                 gate->visits.load(),
+                                 static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
+                                 memoryRead ? 1u : 0u, static_cast<unsigned long long>(memory.ullAvailPhys),
+                                 static_cast<unsigned long long>(memory.ullAvailPageFile));
+                    std::fflush(stdout);
+                    std::fflush(stderr);
+                    std::_Exit(5);
+                };
                 const auto deadline = GetTickCount64() + 10000;
                 while (!held.reached)
                 {
                     if (PumpMessages(dispatch, &held).quit)
-                        std::_Exit(5);
+                        failHeldGate("quit");
                     (void)DrainCompletions(owner->_jobs);
                     (void)RunUiActions(owner->_jobs);
                     if (held.reached)
                         break;
+                    if (receipt.Read().outcome != HostOutcome::Pending)
+                        failHeldGate("terminal-before-worker-gate");
                     const auto now = GetTickCount64();
                     if (now >= deadline)
-                        std::_Exit(5);
+                        failHeldGate("deadline");
                     if (owner->_jobs.HasUiWork())
                         continue;
                     const HANDLE wake = owner->_jobs.WakeHandle();
                     if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
                                                     MWMO_INPUTAVAILABLE) == WAIT_FAILED)
-                        std::_Exit(5);
+                        failHeldGate("wait-failed", GetLastError());
                 }
                 inverseExpect(receipt.Read().outcome == HostOutcome::Pending && owner->_inverseSelectionTicket &&
                                   owner->_inverseSelectionStamp && owner->_historyWork.Busy() &&

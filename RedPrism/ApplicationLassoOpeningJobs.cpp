@@ -212,6 +212,8 @@ class Application::LassoOpeningJob final : public Job
 
 HRESULT Application::StartLassoOpening(std::uint64_t opening) noexcept
 {
+    if (PolygonalInputOwner(opening))
+        return StartPolygonalDrawing(opening);
     if (!_activeHostRequest || _lassoOpeningTicket || !LassoInputCurrentOwner(opening) ||
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return E_ABORT;

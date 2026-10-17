@@ -1759,3 +1759,19 @@ A blocked original job keeps its ticket and full reservation; it allocates no ne
 requests no polling wake. A known prerequisite/input change may resume it. Replay remains limited
 to sixteen accepted metadata samples per continuation. Hooks run only on the owner; history/geometry
 work and final graph destruction keep their existing admitted worker ownership.
+
+## Selected Polygonal physical owner resources
+
+The selected native caller keeps the original drawing ticket, complete admission and prepared writer after
+its creator receipt completes at acknowledged opening. Metadata-only interactive parking holds no global
+HistoryWork barrier. An ordered closing descriptor or cancelling host action acquires its own terminal
+stamp; only original completion/join releases the writer, input and charges. Save reads committed document
+state without ending the draft; later corners remain governed by shared physical/host ordinals.
+
+Owner readiness and provisional-decision notifications resume the same parked parent through existing
+scheduler events. They add no polling, source/geometry walk, replacement original admission or per-point drawing job. Derived draft/outline display work
+keeps its existing latest-request protocol and budgets.
+Input remains in the existing fixed ring and host descriptor queue. Unsupported competing producers
+refuse before capture/mutation. Joined shutdown suppresses useful callbacks and refunds all retained
+strong/weak CPU/GPU ownership. Structural native cases do not establish the measured 2 ms/G1 budgets,
+complete view/device/scope qualification or ordinary activation.

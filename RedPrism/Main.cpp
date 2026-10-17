@@ -436,6 +436,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunOpacityClosureGuardSelfTest\n");
         if (const int failed = Application::RunOpacityClosureGuardSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePolygonalPressSelfTest\n");
+        if (const int failed = Application::RunStandalonePolygonalPressSelfTest(instance); failed != 0)
+            return failed;
     }
     const std::unique_ptr<Application> application{new (std::nothrow) Application(
         instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};

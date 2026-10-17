@@ -489,3 +489,13 @@ preserves the owner saved marker: Undo to the saved committed revision is unmodi
 new selection is modified. This CPU invariant does not itself qualify an actual Save/Export caller.
 Cancellation, joined Close and foreign Begin behind a gate retain original accounting, drop only own
 input and never roll back foreign history/writer authority.
+
+## Selected Polygonal physical history arbitration
+
+A live selected Polygonal drawing keeps its original admitted job/reservation/prepared writer while the
+creator receipt yields at acknowledged opening. The interactive metadata park holds no global HistoryWork
+barrier. Save captures committed document state and the saved revision, omitting transient selection outlines, without ending that draft. Only the
+selected closing descriptor or an ordered cancelling action owns the terminal barrier; completion or
+joined cleanup releases that exact stamp once. One changed drawing creates one history entry, and Undo
+returns to the revision saved while the draft was live. A younger explicit terminal behind an already
+chosen close acknowledges the original result without a second transaction.

@@ -3061,9 +3061,9 @@ HRESULT Application::InitializeChrome() noexcept
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
@@ -3078,9 +3078,9 @@ void Application::OnLayerSelected(Guid id) noexcept
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
@@ -3122,9 +3122,9 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                    DxUi::TreeDropPlace place) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
@@ -3990,6 +3990,11 @@ void Application::Shutdown() noexcept
     if (_selectionPressStamp)
         (void)_historyWork.Finish(*_selectionPressStamp);
     _selectionPressStamp.reset();
+    // Joined Close suppresses useful Polygonal notifications too; only its acknowledgement releases this stamp.
+    assert(!_polygonalDrawing || !_polygonalDrawing->controller);
+    if (_polygonalStamp)
+        (void)_historyWork.Finish(_polygonalStamp.value());
+    _polygonalStamp.reset();
     if (_selectionPressInput.Busy())
         (void)_selectionPressInput.Drop(_selectionPressInput.Opening());
     // Utility completions are suppressed by Close too. Its join is the acknowledgement for retained
@@ -4417,6 +4422,13 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         _drag = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
         _layoutDirty = true;
         InvalidateFrame();
+        return;
+    }
+    // A multi-click continuation belongs to its original input even while an ordered Save is busy.
+    // mayReplay yields its fixed records before older mutating descriptors; this accepts no foreign edit.
+    if (left && PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        SelectionPress(view, event.modifiers, client);
         return;
     }
     if (left && EditorToolIsSelection(_tool) && QueueSelectionPressOwner(pixel, event.modifiers))
@@ -4952,8 +4964,9 @@ void Application::OnCommand(int command) noexcept
         return;
     }
     if (!_hostExecuting && !view && !file &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() ||
+         _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest ||
+         _hostRequests.Size()))
     {
         if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             _duplicateGesture->pointerDown = false;
@@ -5721,8 +5734,9 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.IsMovingSelection() ||
+         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
+         _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -6380,6 +6394,12 @@ void Application::ApplyDemo() noexcept
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
 {
+    if (!_hostExecuting && PolygonalInputOwner(_lassoInput.Opening()) && action != TransformAction::AutoSelect &&
+        action != TransformAction::ShowControls && action != TransformAction::LockRatio)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return; // Selected Polygonal scope does not admit a competing transform writer.
+    }
     if (!_hostExecuting && (action == TransformAction::Apply || action == TransformAction::Cancel))
     {
         (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
@@ -6955,6 +6975,19 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
+    if (!_hostExecuting && PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        if (action == SelectionAction::Deselect)
+        {
+            ReportHostAdmission(QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect}));
+            return;
+        }
+        if (action == SelectionAction::Expand || action == SelectionAction::Contract)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
+            return; // Never fall through to owner geometry or a second serial selection producer.
+        }
+    }
     if (!_hostExecuting && (action == SelectionAction::Expand || action == SelectionAction::Contract) &&
         _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
@@ -7072,6 +7105,17 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
         }
         SelectionChanged();
         return;
+    }
+    if (_polygonalDrawingTestEnabled && _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Polygonal)
+    {
+        const auto mode = _session.SelectionModeFor(shift, alt);
+        const auto& selection = _session.Selection();
+        if ((modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL) ||
+            (mode == SelectionMode::New && selection && !selection.value().IsEmpty()))
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
+            return; // Until the exact worker hit/lift dispatcher exists, refuse before any owner containment walk.
+        }
     }
     // Ctrl-drag inside the selection cuts and moves its pixels (Photoshop's temporary Move tool); Alt duplicates.
     const bool control = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
@@ -7276,6 +7320,14 @@ void Application::SelectionRelease(Vec2 view) noexcept
 
 void Application::EndSelectionInteraction(bool keepDraft) noexcept
 {
+    if (PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        if (!keepDraft)
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return; // Original completion/join alone may clear its prepared writer; pointer leave preserves it.
+    }
     // Capture lost or a tool change: a polygonal outline survives a pointer leave, a drag does not.
     if (_lassoInput.Busy())
     {
@@ -7408,6 +7460,13 @@ std::optional<Raster> Application::WandComposite() noexcept
 
 void Application::OnBrushAction(BrushAction action, double value) noexcept
 {
+    if (PolygonalInputOwner(_lassoInput.Opening()) &&
+        ((action == BrushAction::SetMaskPaint && _session.PendingGradient()) ||
+         (action == BrushAction::SetSmearMode && _session.HasPendingWarp())))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     // Reached from inside a DxUi callback: chrome re-syncs on the next frame rather than re-entering Prepare.
     switch (action)
     {

@@ -16,6 +16,21 @@ void Application::CancelLassoInputOwner(std::uint64_t opening, HostOutcome outco
 {
     if (!_lassoInput.CapturedContext(opening))
         return;
+    if (PolygonalInputOwner(opening) && _polygonalDrawing && _polygonalDrawing->controller &&
+        _polygonalDrawing->opening == opening)
+    {
+        _lassoCancelledOpening = opening;
+        if (_lassoInput.Sampling())
+        {
+            // Seal at the physical cancel boundary. Never Drop/CancelLasso while original work can use its writer.
+            _polygonalTerminalOrdinal = _historyWork.NextOrdinal().value_or(0);
+            (void)_lassoInput.Finish(opening, _session.selectionAntialiased, true);
+        }
+        (void)_jobs.Cancel(_polygonalDrawing->original);
+        if (_polygonalDrawing->waiting)
+            (void)_jobs.Resume(_polygonalDrawing->original);
+        return; // Original completion/join owns input and prepared-writer acknowledgement.
+    }
     if (outcome == HostOutcome::Cancelled)
         _lassoCancelledOpening = opening;
     if (_lassoOpeningTicket)
@@ -87,6 +102,11 @@ bool Application::QueueLassoOpeningOwner(Vec2 pixel, SelectionMode mode, bool ma
         return true; // The queued descriptor observes no matching stream and fails before capture.
     }
     _lassoInputOpening = opening;
+    if (_polygonalDrawingTestEnabled && captured.kind == LassoKind::Polygonal)
+    {
+        _polygonalDrawingAntialiased = _session.selectionAntialiased;
+        _polygonalTerminalOrdinal = 0;
+    }
     _lassoInputFirstPoint = pixel;
     _lassoAcquiredOpening = 0;
     _lassoSessionOpening = 0;
@@ -159,6 +179,33 @@ bool Application::QueueLassoFinishOwner(bool antialiased) noexcept
 {
     if (!_lassoInput.Busy())
         return false;
+    if (PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        if (!_lassoInput.Sampling())
+            return true; // Preserve an older accepted conditional/explicit terminal and its AA.
+        const auto ordinal = _historyWork.NextOrdinal();
+        if (!ordinal)
+        {
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Failed);
+            return true;
+        }
+        const bool recorded =
+            _polygonalDrawing && _polygonalDrawing->controller
+                ? _polygonalDrawing->controller->Finish(antialiased, ordinal.value())
+                : _lassoInput.Finish(_lassoInput.Opening(), antialiased) == HostLassoInput::Admission::Recorded;
+        if (!recorded)
+        {
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Failed);
+            return true;
+        }
+        _polygonalTerminalOrdinal = ordinal.value();
+        _lassoFinishReceipt =
+            QueueHostInput(HostCanvasBrushInput{_lassoInput.Opening(), HostCanvasInputKind::LassoFinish});
+        _lassoFinishQueued = _lassoFinishReceipt.Read().outcome == HostOutcome::Pending;
+        if (!_lassoFinishQueued)
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Failed);
+        return true;
+    }
     const auto result = _lassoInput.Finish(_lassoInput.Opening(), antialiased);
     if (result == HostLassoInput::Admission::Closed)
         return true; // The original selected terminal already owns its ordinal and physical AA.
@@ -179,6 +226,8 @@ bool Application::QueueLassoFinishOwner(bool antialiased) noexcept
 }
 bool Application::ReplayLassoInputOwner() noexcept
 {
+    if (_polygonalDrawing && _polygonalDrawing->controller && PolygonalInputOwner(_polygonalDrawing->opening))
+        return false; // The original parent exclusively consumes this prefix.
     if (!_lassoInput.Busy() || _lassoAcquiredOpening != _lassoInput.Opening() || _lassoOpeningTicket ||
         _lassoFinishTicket || _lassoReplayedClosingIntent)
         return false;

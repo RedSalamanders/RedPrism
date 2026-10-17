@@ -3232,3 +3232,29 @@ the premature dependent readback and stale inventory-count refusal; qualify the 
 only after join and exact inventory verification. Actual Polygonal multi-click, Save/tool/lifetime
 callers, ordinary activation and measured G1 remain separate.
 [Evidence](../TestRuns/P1PolygonalOwnerGates_2026-10-17.md).
+
+## Selected Polygonal physical caller validation
+
+`Application.Tests.PolygonalPress.cpp` adds 527 source-defined assertions over 45 actual hidden Win32/WARP
+cases (15 in each New/Add/Subtract mode) after all 151 inherited Application stages. Its independent
+4096 pixel-center winding reference checks New rectangle30, Add union37 and Subtract remainder7; existing
+legacy goldens are unchanged. Require native Down/Up/hover/Backspace/Enter, near-first/double-click,
+terminal-before-admission and older-close/younger-Enter order, original ticket/capture/barrier retirement,
+actual Save/load excluding transient selection outlines, live committed-selection preservation and
+saved-marker Undo/Redo, dialog cancellation, injected archive failure without a file,
+cancelled Close confirmation, tool/header cancellation, refused direct layer mutation and joined shutdown
+with complete memory refund. The source-pinned reader checks all 152 stages / 10110 stdout assertions and
+forwards the 151-stage predecessor bytes and stderr unchanged to its immutable reader.
+
+Full scoped Release and real ASan application proof, with an unchanged-source 23454-fact CPU prerequisite
+only under exact artifact/dependency/scope identity, is required before adoption. Preserve original compiler,
+ISA, runtime and reader failures before corrections. Current full native profiles, ARM64 cross-builds,
+ordinary activation and measured G1 remain separate obligations.
+[Evidence](../TestRuns/P1PolygonalPhysicalHost_2026-10-17.md).
+
+The inherited inverse-selection joined-close wait records quit/deadline/native-wait or premature-terminal
+receipt failures with captured ticket/history/native-error/memory state before its existing exit. Its
+10-second bound and success references stay unchanged. A source-only one-TU override can reuse exactly
+348 qualified objects only with unchanged hashes, matching compiler/linker profile and independent
+PE/PDB/ISA checks; both complete native streams still run. Keep the earlier unreported ASan exit 5 in
+the final qualification audit: it did not recur, and no causal fix is inferred from the later pass.

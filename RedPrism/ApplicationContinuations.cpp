@@ -548,6 +548,7 @@ void Application::RunHostContinuation() noexcept
     if (_shutdownStarted)
         return;
     PumpSelectionPressOwner();
+    PumpPolygonalDrawing();
     SweepSamplerOpenings();
     if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
     {
@@ -735,6 +736,11 @@ void Application::RunHostContinuation() noexcept
         switch (_hostStage)
         {
         case HostStage::Begin:
+            if (_polygonalDrawing && _polygonalDrawing->controller && !PolygonalHostInputSupported(input))
+            {
+                FinishHostContinuation({HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)});
+                return; // Selected partial route: no foreign serial Selection admission or synchronous fallback.
+            }
             _hostAfterPrerequisite = HostStage::Execute;
             if (std::holds_alternative<HostCanvasBrushInput>(input))
             {
@@ -1083,6 +1089,20 @@ void Application::RunHostContinuation() noexcept
         case HostStage::CanvasBrush:
             ReplayCanvasBrush();
             return; // One sample per owner action; pending physical input rearms an otherwise idle stream.
+        case HostStage::PolygonalOpening:
+            return; // The original job's acknowledged Opened event completes only the creator receipt.
+        case HostStage::PolygonalTerminal:
+        {
+            const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+            const auto result = canvas ? StartPolygonalTerminal(canvas->opening) : E_INVALIDARG;
+            if (FAILED(result))
+            {
+                if (_polygonalDrawing && _polygonalDrawing->controller)
+                    CancelLassoInputOwner(_polygonalDrawing->opening, HostOutcome::Failed);
+                FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+            }
+            return;
+        }
         case HostStage::Sampler:
             if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
                 canvas && canvas->kind == HostCanvasInputKind::Sampler)
@@ -1416,6 +1436,13 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
+            if (_polygonalDrawing && _polygonalDrawing->controller && PolygonalHostInputStops(input))
+            {
+                const auto result = StartPolygonalHostCancel();
+                if (FAILED(result))
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                return; // Original cancellation must join before tool/history/lifecycle mutation.
+            }
             if (const auto* brush = std::get_if<HostCanvasBrushInput>(&input);
                 brush && brush->kind == HostCanvasInputKind::Brush)
             {
@@ -1522,10 +1549,36 @@ void Application::RunHostContinuation() noexcept
                 if (canvas->kind == HostCanvasInputKind::LassoOpening ||
                     canvas->kind == HostCanvasInputKind::LassoFinish)
                 {
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && _polygonalDrawingTestEnabled &&
+                        _polygonalDrawing && _polygonalDrawing->opening == canvas->opening &&
+                        !_polygonalDrawing->controller && _polygonalDrawing->completed &&
+                        _polygonalDrawing->inputAcknowledged)
+                    {
+                        // An older accepted close may finish before a younger Enter descriptor is selected.
+                        // Acknowledge that exact owned opening; never recapture, drop a newer prefix or edit twice.
+                        const auto result = _polygonalDrawing->outcome;
+                        const auto outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
+                                             : result.status == JobStatus::Failed
+                                                 ? (result.error == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed)
+                                                 : HostOutcome::Succeeded;
+                        FinishHostContinuation({outcome, result.error});
+                        return;
+                    }
                     if (_lassoCancelledOpening == canvas->opening)
                     {
                         FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
                         return; // Exact selected cancellation precedes original creator admission/capture.
+                    }
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && PolygonalInputOwner(canvas->opening))
+                    {
+                        const auto result = StartPolygonalTerminal(canvas->opening);
+                        if (FAILED(result))
+                        {
+                            CancelLassoInputOwner(canvas->opening, HostOutcome::Failed);
+                            FinishHostContinuation(
+                                {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                        }
+                        return; // Resolution may wait for older replay; a missing callback is not stale.
                     }
                     if (canvas->kind == HostCanvasInputKind::LassoFinish && canvas->lassoClosingIntent)
                     {

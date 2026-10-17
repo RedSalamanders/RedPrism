@@ -244,3 +244,13 @@ ticket until acknowledgement, including before source capture. A visible success
 post `WM_SETCURSOR` only to its own still-visible window when that window is under the actual pointer.
 Workers perform no window access. Joined shutdown acknowledges captured work after worker retirement
 and cannot restart a closed request state. The selected route remains gated pending ordinary activation.
+
+## Selected Polygonal native input
+
+The selected test-only Polygonal owner consumes actual Win32 Down/Up, hover and paired key transitions.
+Up preserves a drawing draft; Enter may be captured before original controller admission. Provisional
+near-first/double-click closure waits for ordered replay and retains its own receipt. Capture/writer
+cleanup belongs to original completion or scheduler join; a generic cancellation path MUST NOT drop the
+input/prepared writer while the original job can still access it. Pointer leave that keeps a Polygonal
+draft retains that original owner. The gate remains disabled for ordinary input pending complete scope,
+view/device, full-profile and latency qualification.

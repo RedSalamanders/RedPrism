@@ -35,8 +35,9 @@ void Application::RenameActiveLayer() noexcept
 
 void Application::OnLayerInvoked(Guid id) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() ||
+         _session.PendingGradient() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerInvokeInput{id}));
         return;

@@ -2011,3 +2011,26 @@ the original CPU behavior. Invalid successful ordinals refuse instead of parking
 Backspaces decide it. A rejected proximity close has appended its corner; a chosen close never appends
 the closing point. Preserve physical sample ordinal and opaque intent before terminal normalization.
 A separately queued host descriptor has a distinct ordinal. Actual physical dispatch remains separate.
+
+## Selected Polygonal Win32 original job
+
+The selected test host routes Polygonal Add/Subtract and New with absent/empty prior selection through
+one admitted `PolygonalDrawingJob`. Pointer Down captures fixed event scalars and one physical ordinal;
+Up is nonterminal while drawing. Corners, hover and Backspace replay on the original parent. The creator
+receipt completes at acknowledged Opened while the original ticket, reservation and prepared writer remain
+live. Metadata-only drawing does not hold the global history barrier.
+
+Physical Enter records its ordinal/AA before controller admission. Proximity/double-click closure is
+provisional until older corners and removals replay. A nonclosing provisional request completes only its
+own receipt. A selected close takes the history barrier and permits the same original job to prepare and
+publish its one changed selection/history entry. A younger terminal already queued behind an older
+chosen close acknowledges that earlier outcome; it does not recapture or create another entry.
+
+Save captures committed document state, excluding transient selection outlines from the file, while the
+unfinished Polygonal draft stays live, retaining the original
+ticket and writer on success, dialog cancellation and encode failure. Selected tool changes and explicit
+Deselect cancel and join the original parent before their own action. A cancelled Close confirmation
+keeps the live draft/window; joined shutdown suppresses useful callbacks and refunds every reservation.
+Direct competing layer callbacks enter the ordered host queue and unsupported intents refuse before
+source mutation or another serial Selection producer. New with nonempty prior, Ctrl-lift and other
+unsupported dispatcher branches remain separate; this selected gate is disabled for ordinary input.
