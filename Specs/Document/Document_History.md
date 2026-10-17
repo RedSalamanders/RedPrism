@@ -434,3 +434,7 @@ Pending lasso intent cleanup is a one-shot scalar capability for its original se
 ## Physical selection parent acknowledgement
 
 The selected physical parent retains its single HistoryWork stamp through publication, failed/stale refusal, cancellation or joined shutdown. Finish only that exact stamp before resuming its host receipt. A changed target detected before dispatch reports Stale without creating history or capturing a source; memory refusal reports Failed. Joined shutdown drops never-started input or retires its existing controller without a useful completion callback, preserving independently retained observer charges.
+
+## Ellipse/New original-parent history
+
+Ellipse/New shares the selected original-parent publication/cleanup protocol. Its changed result creates one Elliptical Marquee entry and one generation change, with literal prior selection restored by Undo and terminal AA restored by Redo. Lost/cancellation and stale foreign history/transform preserve their exact source/authority. A kind/envelope mismatch refuses before acquiring source/history roots and must refund the original ticket after its last reader.

@@ -25,6 +25,7 @@
 #include "Document.Tests.ContinuingPublication.h"
 #include "Document.Tests.DeferredSelectionMove.h"
 #include "Document.Tests.DistortRead.h"
+#include "Document.Tests.EllipseFinishPlan.h"
 #include "Document.Tests.HostLassoInput.h"
 #include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
@@ -8462,6 +8463,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRectangleFinishPlanTests();
     gFailures += RunLassoIntentCleanupTests();
     gFailures += RunRectangleGestureParentTests();
+    gFailures += RunEllipseFinishPlanTests();
+    gFailures += RunEllipseGestureParentTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

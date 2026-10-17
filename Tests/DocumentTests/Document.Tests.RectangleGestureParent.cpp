@@ -17,15 +17,16 @@ namespace
 {
 unsigned checks = 0, failures = 0;
 const char* scenarioName = "setup";
+const char* family = "rectangle-gesture-parent";
 void Expect(bool value, const char* label)
 {
     ++checks;
     failures += value ? 0 : 1;
-    std::printf("%s rectangle-gesture-parent.%s.%s\n", value ? "PASS" : "FAIL", scenarioName, label);
+    std::printf("%s %s.%s.%s\n", value ? "PASS" : "FAIL", family, scenarioName, label);
 }
 [[noreturn]] void Broken(const char* label)
 {
-    std::printf("FAIL rectangle-gesture-parent.setup.%s\n", label);
+    std::printf("FAIL %s.setup.%s\n", family, label);
     std::_Exit(1);
 }
 void Settle(JobScheduler& jobs)
@@ -158,19 +159,21 @@ struct Fixture final
     std::unique_ptr<SelectionOutlineGestureState> state;
     std::optional<SelectionOutlineGestureMemory> admitted;
     Probe probe;
-    Fixture(Initial initial, bool scarce = false)
+    Fixture(Initial initial, bool scarce = false, LassoKind kind = LassoKind::Rectangle,
+            std::optional<LassoKind> admissionKind = std::nullopt)
     {
         Install(*session, initial);
         probe.session = session.get();
         memory.scarce = scarce;
         if (jobs.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || !jobs.EnableDeferredRelease())
             Broken("scheduler");
-        admitted = DescribeSelectionOutlineGestureMemory(*session, true);
+        admitted = DescribeSelectionOutlineGestureMemory(*session, admissionKind.value_or(kind));
         if (!admitted || !probe.entered || !probe.proceed)
             Broken("complete-admission");
         HostSelectionPressInput::Context arrival;
         arrival.document = admitted->source.document;
         arrival.ordinal = 1;
+        arrival.kind = kind;
         arrival.active = session->ActiveLayerID();
         arrival.crop = session->CropFrame();
         arrival.mask = session->IsMaskSelected();
@@ -178,7 +181,8 @@ struct Fixture final
             Broken("accepted-down");
         state = std::make_unique<SelectionOutlineGestureState>(jobs, *session, *prefix, 51, admitted->limits);
         state->admissionSource = admitted->source;
-        state->allowNewRectangle = true;
+        state->allowNewRectangle = kind == LassoKind::Rectangle;
+        state->allowNewEllipse = kind == LassoKind::Ellipse;
         state->requireCapturedTarget = true;
         state->observer = &probe;
         state->notify = Probe::Owner;
@@ -229,10 +233,11 @@ struct Fixture final
     }
 };
 void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelectionPressInput::Modifiers modifiers = {},
-             SelectionBounds wanted = {20, 30, 70, 80}, bool lost = false)
+             SelectionBounds wanted = {20, 30, 70, 80}, bool lost = false, LassoKind kind = LassoKind::Rectangle,
+             std::uint64_t expectedPoints = 4)
 {
     scenarioName = name;
-    auto f = std::make_unique<Fixture>(initial);
+    auto f = std::make_unique<Fixture>(initial, false, kind);
     const auto generation = f->session->Generation();
     const auto history = f->session->history.CaptureState();
     const auto revision = f->session->history.CurrentRevision();
@@ -241,7 +246,7 @@ void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelect
     f->Move(last, modifiers, 3);
     f->End(lost);
     f->Submit();
-    f->session->marqueeKind = LassoKind::Ellipse;
+    f->session->marqueeKind = kind == LassoKind::Rectangle ? LassoKind::Ellipse : LassoKind::Rectangle;
     f->session->selectionAntialiased = false;
     Settle(f->jobs);
     const auto& s = *f->state;
@@ -260,10 +265,12 @@ void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelect
     {
         Expect(s.outcome.status == JobStatus::Finished && s.closed && s.closurePrepares == 1 && result &&
                    result->antialiased && result->Bounds() == std::optional(wanted) &&
-                   result->loops.PointCount() == 4 && result->loops.size() == 1,
-               "event-time-rectangle-modifiers-kind-and-terminal-aa");
+                   result->loops.PointCount() == expectedPoints && result->loops.size() == 1,
+               kind == LassoKind::Rectangle ? "event-time-rectangle-modifiers-kind-and-terminal-aa"
+                                            : "event-time-ellipse-modifiers-kind-and-terminal-aa");
         Expect(f->session->Generation() == generation + 1 && f->session->history.UndoCount() == 1 &&
-                   f->session->history.UndoName() == L"Rectangular Marquee" &&
+                   f->session->history.UndoName() ==
+                       (kind == LassoKind::Rectangle ? L"Rectangular Marquee" : L"Elliptical Marquee") &&
                    f->session->history.CaptureState().Depth() == 0,
                "single-atomic-history-edit-with-one-generation");
         f->session->Undo();
@@ -282,10 +289,10 @@ void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelect
     Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
            "last-readers-refund-original-ticket");
 }
-void CancelAndForeign(int mode, const char* name)
+void CancelAndForeign(int mode, const char* name, LassoKind kind = LassoKind::Rectangle)
 {
     scenarioName = name;
-    auto f = std::make_unique<Fixture>(Initial::Old);
+    auto f = std::make_unique<Fixture>(Initial::Old, false, kind);
     const auto generation = f->session->Generation();
     const auto history = f->session->history.CaptureState();
     const auto revision = f->session->history.CurrentRevision();
@@ -353,6 +360,7 @@ void CancelAndForeign(int mode, const char* name)
 } // namespace
 int RunRectangleGestureParentTests()
 {
+    family = "rectangle-gesture-parent";
     checks = failures = 0;
     Numeric(Initial::Absent, "absent");
     Numeric(Initial::Empty, "empty");
@@ -369,5 +377,51 @@ int RunRectangleGestureParentTests()
     CancelAndForeign(3, "foreign-transform");
     CancelAndForeign(4, "cancel-prepared");
     std::printf("SUMMARY rectangle-gesture-parent checks=%u failures=%u\n", checks, failures);
+    return failures ? 1 : 0;
+}
+
+int RunEllipseGestureParentTests()
+{
+    family = "ellipse-gesture-parent";
+    checks = failures = 0;
+    constexpr auto kind = LassoKind::Ellipse;
+    for (const auto initial : {Initial::Absent, Initial::Empty, Initial::Old, Initial::Large, Initial::NoLayers})
+    {
+        const char* name = initial == Initial::Absent  ? "absent"
+                           : initial == Initial::Empty ? "empty"
+                           : initial == Initial::Old   ? "outside"
+                           : initial == Initial::Large ? "large-prior"
+                                                       : "no-layers";
+        // Radius25: ceil(2*pi*25/2)=79, rounded to80 vertices by the legacy rule.
+        Numeric(initial, name, {70, 80}, {}, {20, 30, 70, 80}, false, kind, 80);
+    }
+    Numeric(Initial::Old, "shift", {60, 45}, {true, false, false}, {20, 30, 60, 70}, false, kind, 64);
+    Numeric(Initial::Old, "alt", {25, 40}, {false, false, true}, {20, 30, 25, 40}, false, kind, 32);
+    Numeric(Initial::Old, "lost", {70, 80}, {}, {20, 30, 70, 80}, true, kind, 80);
+    CancelAndForeign(0, "cancel-waiting", kind);
+    CancelAndForeign(1, "joined-close", kind);
+    CancelAndForeign(2, "foreign-history", kind);
+    CancelAndForeign(3, "foreign-transform", kind);
+    CancelAndForeign(4, "cancel-prepared", kind);
+    {
+        scenarioName = "rectangle-admission";
+        auto f = std::make_unique<Fixture>(Initial::Old, false, kind, LassoKind::Rectangle);
+        const auto generation = f->session->Generation();
+        const auto history = f->session->history.CaptureState();
+        const auto original = f->session->Selection();
+        f->Move({70, 80}, {}, 2);
+        f->End();
+        f->Submit();
+        Settle(f->jobs);
+        Expect(f->state->completed && f->state->outcome.status == JobStatus::Failed &&
+                   f->state->outcome.error == E_ABORT && !f->state->captures && !f->state->hits &&
+                   !f->session->PendingLasso() && !f->prefix->Busy() && f->session->Generation() == generation &&
+                   f->session->history.IsCurrent(history) && f->session->Selection() == original,
+               "ellipse-refuses-rectangle-envelope-before-source-capture-or-mutation");
+        f->ReleaseReaders();
+        Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+               "refused-kind-original-ticket-fully-refunds");
+    }
+    std::printf("SUMMARY ellipse-gesture-parent checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }

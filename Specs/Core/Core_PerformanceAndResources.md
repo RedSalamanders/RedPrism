@@ -1626,3 +1626,7 @@ The selected physical parent describes both inside-outline and outside Rectangle
 ## Selected physical Rectangle lifetime qualification
 
 Pointer Down/Move/Up/Lost use bounded descriptor/prefix storage; original admission covers both selected branches before any outline/history root capture. Reuse the same ticket for useful stages, terminal preparation and residency refresh. Suppress useful completion on joined Close, retain borrowed owner state until its producer joins, and release only its exact history stamp/prefix. Final worker retirement must leave independent observer reservations intact. Selected real-Win32 Release/ASan proof does not establish ordinary activation, complete consumer admission or measured G1.
+
+## Ellipse/New bounded geometry envelope
+
+Ellipse/New admits and executes a 4 MiB clip workspace, 2,052 total input points/two loops and 4,096 output points/16 loops. One arena block supplies the marquee's four scalar corners; ellipse generation is capped at 2,048 vertices on the worker, with no sealed-prefix traversal. The captured-kind admission marker prevents use of the smaller Rectangle workspace. New ignores the old outline as clip input while retaining its separately charged source/history/control owners. Complete original-ticket phase/refresh/retirement admission remains mandatory; these bounds alone do not cover display consumers or G1.

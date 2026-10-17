@@ -115,6 +115,28 @@ std::optional<MemoryPlan> PlanNewRectangle() noexcept
     return CalculatePlan(LassoKind::Rectangle, 4, BoundedLassoPoints::MemoryBytes(1), 0, NewRectangleLimits());
 }
 
+std::optional<BoundedSelectionBoolean::Limits> NewMarqueeLimits(LassoKind kind) noexcept
+{
+    if (kind == LassoKind::Rectangle)
+        return NewRectangleLimits();
+    if (kind != LassoKind::Ellipse)
+        return std::nullopt;
+    BoundedSelectionBoolean::Limits limits;
+    limits.workspaceBytes = 4 * 1024 * 1024;
+    limits.inputPoints = 2052; // At most 2048 oval vertices and four canvas corners.
+    limits.inputLoops = 2;
+    limits.outputPoints = 4096;
+    limits.outputLoops = 16;
+    return limits;
+}
+std::optional<MemoryPlan> PlanNewMarquee(LassoKind kind) noexcept
+{
+    const auto limits = NewMarqueeLimits(kind);
+    if (!limits)
+        return std::nullopt;
+    return CalculatePlan(kind, 4, BoundedLassoPoints::MemoryBytes(1), 0, limits.value());
+}
+
 std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                const std::optional<DocumentSelection>& before,
                                BoundedSelectionBoolean::Limits limits) noexcept

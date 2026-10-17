@@ -1874,3 +1874,7 @@ An opaque `LassoIntent` clears only its exact pending opening or finish identity
 ## Qualified selected Rectangle Win32 caller
 
 With its explicit test gate enabled, the physical caller routes Rectangle/New inside and outside hits through the original admitted parent. Absent/empty selection, click, capture loss, cancellation, overflow, stale active target and joined Close retain their distinct terminal semantics. Accepted Down owns primitive kind; accepted Up supplies terminal AA without adding a Move. Physical Alt during drawing does not center it. Every terminal acknowledges the exact prefix and history stamp, and preserves foreign state. This selected caller remains disabled in ordinary operation until complete selection/display admission and activation gates close.
+
+## Kind-bound New marquee preparation
+
+The typed New-marquee descriptor supports Rectangle and Ellipse. It captures the accepted kind before source capture; worker preparation must use that same kind and its admitted limits. Unsupported kinds and mismatched Rectangle-only admission refuse before capture or document/history mutation. Inside-outline movement retains the prior outline; outside Ellipse/New generates the legacy oval under the same original parent, accepted samples, terminal AA, history authority and retirement. Physical Alt never means centered drawing. Ordinary activation and the actual Ellipse caller remain separate gates.

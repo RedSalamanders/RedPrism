@@ -28,13 +28,15 @@ struct SelectionOutlineDrawing final
     bool chosen = false, constrainArmed = false;
 };
 
-std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
-                                                                                   bool allowNewRectangle) noexcept
+namespace
+{
+std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const DocumentSession& session,
+                                                                   std::optional<LassoKind> newMarqueeKind) noexcept
 {
     const auto& document = session.Document();
     const auto source = session.CaptureDocumentReadAuthority();
     const auto editor = session.CaptureHistoryRestoreAuthority();
-    if (!source || !document || ((!document->selection || document->selection->IsEmpty()) && !allowNewRectangle) ||
+    if (!source || !document || ((!document->selection || document->selection->IsEmpty()) && !newMarqueeKind) ||
         !session.CanApplyHistoryRestore(editor))
         return std::nullopt;
     const auto history = session.history.EditMemoryBytes(document);
@@ -43,7 +45,7 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
     const auto controls =
         document->selection ? SelectionLoops::WorkOwnershipAllowance(document->selection->loops.size()) : 0;
     constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    if (!history || !retirement || ((!storage || !controls) && !allowNewRectangle) || controls > maximum - storage)
+    if (!history || !retirement || ((!storage || !controls) && !newMarqueeKind) || controls > maximum - storage)
         return std::nullopt;
     const auto geometry = storage + controls;
     // One original descriptor covers every branch peak, including retained earlier stage payloads.
@@ -72,22 +74,39 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
         !add(final, 1, owner) || !add(temporary, 4, history) || !add(temporary, 2, retirement) ||
         !add(temporary, 2, geometry) || !add(temporary, 3, owner))
         return std::nullopt;
-    if (allowNewRectangle)
+    if (newMarqueeKind)
     {
-        const auto rectangle = LassoFinishGeometry::PlanNewRectangle();
+        const auto marquee = LassoFinishGeometry::PlanNewMarquee(newMarqueeKind.value());
         const auto arena = PreparedLassoOpening::MemoryBytes(1);
         // Keep both possible branch peaks admitted at the original Down. No hit-dependent re-admission.
         // The source R already retains old selection/history; New does not feed the old outline to Clipper.
-        if (!rectangle || !arena || !add(opening, 1, arena) || !add(final, 2, rectangle->outputBytes) ||
-            !add(final, 8, 4096) || !add(temporary, 1, rectangle->preparationBytes) ||
+        if (!marquee || !arena || !add(opening, 1, arena) || !add(final, 2, marquee->outputBytes) ||
+            !add(final, 8, 4096) || !add(temporary, 1, marquee->preparationBytes) ||
             !add(temporary, 1, LocallyOwnedPublicationAllowance<SelectionOutlineDrawing>()) || !add(temporary, 8, 4096))
             return std::nullopt;
     }
     std::uint64_t total = temporary;
     if (!add(total, 1, opening) || !add(total, 1, final))
         return std::nullopt;
-    return SelectionOutlineGestureMemory{
-        {*source, editor, session.history.CaptureAuthority()}, {total, opening, final}, retirement, history, geometry};
+    return SelectionOutlineGestureMemory{{*source, editor, session.history.CaptureAuthority(), newMarqueeKind},
+                                         {total, opening, final},
+                                         retirement,
+                                         history,
+                                         geometry};
+}
+
+} // namespace
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
+                                                                                   bool allowNewRectangle) noexcept
+{
+    return DescribeMarqueeMemory(session, allowNewRectangle ? std::optional{LassoKind::Rectangle} : std::nullopt);
+}
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
+                                                                                   LassoKind newMarqueeKind) noexcept
+{
+    if (!LassoFinishGeometry::NewMarqueeLimits(newMarqueeKind))
+        return std::nullopt;
+    return DescribeMarqueeMemory(session, newMarqueeKind);
 }
 
 SelectionOutlineGestureJob::SelectionOutlineGestureJob(SelectionOutlineGestureState& state) : _state(state)
@@ -109,7 +128,7 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         _output = SharedPublicationMemory::CreateForWork(s.limits.continuingOutputBytes);
         _final = SharedPublicationMemory::CreateForWork(s.limits.totalBytes);
         _temporary = SharedPublicationMemory::CreateForWork(s.limits.totalBytes);
-        if (s.allowNewRectangle)
+        if (s.allowNewRectangle || s.allowNewEllipse)
             _drawing = MakeLocallyOwnedPublicationObject<SelectionOutlineDrawing>(_temporary, s.limits.totalBytes, 0);
         return {};
     }
@@ -119,7 +138,7 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         const auto hit = ContainsSelectionForWork(_display, _point, context.cancellation);
         if (!hit)
             return {JobStatus::Failed, E_INVALIDARG};
-        if (!hit.value() && _drawing && s.allowNewRectangle)
+        if (!hit.value() && _drawing && (s.allowNewRectangle || s.allowNewEllipse))
         {
             _drawing->chosen = true;
             return {};
@@ -153,7 +172,10 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         if (!_drawing || !_drawing->finishInput)
             return {JobStatus::Failed, E_UNEXPECTED};
         LassoFinishObserver observer;
-        observer.geometry.limits = LassoFinishGeometry::NewRectangleLimits();
+        const auto limits = LassoFinishGeometry::NewMarqueeLimits(_drawing->settings.kind);
+        if (!limits)
+            return {JobStatus::Failed, E_INVALIDARG};
+        observer.geometry.limits = limits.value();
         auto prepared = DocumentSession::PrepareLassoFinishPublication(std::move(*_drawing->finishInput),
                                                                        context.cancellation, {}, &observer, _final);
         _drawing->finishInput.reset();
@@ -236,6 +258,8 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
                                   !s.session.CanApplyHistoryRestore(s.admissionSource->editor) ||
                                   !s.session.history.IsCurrent(s.admissionSource->history)))
             return Refuse(E_ABORT);
+        if (_drawing && s.admissionSource && s.admissionSource->newMarqueeKind != std::optional{arrival->kind})
+            return Refuse(E_ABORT); // Never prepare an oval under a rectangle-only admission.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
         if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
@@ -244,7 +268,9 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         _point = down->sample.point;
         if (_drawing)
         {
-            if (arrival->tool != HostSelectionPressInput::Tool::Marquee || arrival->kind != LassoKind::Rectangle)
+            if (arrival->tool != HostSelectionPressInput::Tool::Marquee ||
+                !((arrival->kind == LassoKind::Rectangle && s.allowNewRectangle) ||
+                  (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse)))
                 return Refuse(E_ABORT);
             _drawing->settings = {arrival->kind, down->sample.antialiased};
             _drawing->constrainArmed = !down->sample.modifiers.shift;
