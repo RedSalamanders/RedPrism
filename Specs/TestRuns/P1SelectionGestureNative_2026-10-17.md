@@ -9,8 +9,8 @@ route remains test-only. The newer private captured-settings/history-guard draft
 | Profile | Actual result | Source/product qualification |
 | --- | --- | --- |
 | ARM64 Debug r1093 | Actual parent PID 94712, exit 0; full canonical Rebuild | 1,492 archived files, 969 exact compile records, 1,417 compiled/project/toolchain inputs; five ARM64 PE/full-PDB pairs match |
-| ARM64 Release r1094 | Rebuild in progress | Not qualified yet |
-| ARM64 instrumented ASan r1095 | Serialized after Release | Not qualified yet; native ARM64 runtime unavailable |
+| ARM64 Release r1094 | Actual parent PID 95128, exit 0; full canonical Rebuild | 1,492 archive files, 969 exact Release compiler records and five AA64 PE/full-PDB pairs match |
+| ARM64 instrumented ASan r1095 | Rebuild in progress on the same source freeze | Not qualified yet; native ARM64 runtime unavailable |
 | Latest native x64 Debug/Release/real ASan/analysis | Due for this integration | Earlier native baseline and private caller proofs remain scoped evidence |
 
 The transport pins 1,421 source/runner inputs. Freeze SHA-256:
