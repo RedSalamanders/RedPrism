@@ -11,7 +11,8 @@ results and do not override these remaining gates.
 - [x] Qualify own-writer authority and bounded Rectangle/New geometry in Release and real ASan, all 22,491 facts; pushed as `e695e32`. [Evidence](../../TestRuns/P1LassoDrawingAuthority_2026-10-17.md).
 - [x] Qualify the outside-hit Rectangle/New CPU parent and exact intent cleanup in Release R5 and real ASan R2: 105 new facts and all 22,491 predecessors. Preserve the compile, cancellation-driver and physical Alt failures. Publish 14 code/test paths, four contracts and evidence as `3b7e55a`. [Evidence](../../TestRuns/P1RectangleGestureParent_2026-10-17.md).
 - [x] Independently preserve actual Rectangle Win32 R1 compile/API failure, R2 disk-preflight refusal, R3 stale-outcome fixture failure and R4 post-shutdown settlement-driver failure. Production stays unchanged through the two host fixture repairs.
-- [ ] Qualify all 83 Rectangle Win32 facts and every predecessor Application record in Release R5 (active), then exact-source real ASan. No ordinary activation yet.
+- [x] Qualify actual Rectangle Win32 Release R6: all 83 new facts and every predecessor record pass in 146 stages; retain the inherited 260-character reference-reader failure and the separate newline reader refusal. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
+- [ ] Finish the fresh exact-source 341-TU ASan host build R2 (active), actual detection control and complete 146-stage runtime; preserve the controller-only R1 toolset refusal.
 - [ ] Adopt the combined qualified source and reconcile contracts; run latest-source x64 Debug/Release/real ASan, analysis and all ARM64 cross-builds. Earlier-source results cannot close these gates.
 - [ ] Complete every remaining delivery gate below, including ordinary routes and measured G1, before moving P1 to Done or merging main.
 

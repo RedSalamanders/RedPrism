@@ -9,7 +9,8 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Settings/history epoch (`e03a80d`), own writer/Rectangle plan (`e695e32`) and outside-hit Rectangle/New CPU parent with exact cleanup (`3b7e55a`) each pass their exact-source Release and real-ASan rosters. The latest has 22,596 assertions, including 105 new facts. [Latest CPU evidence](../../TestRuns/P1RectangleGestureParent_2026-10-17.md).
 - [x] Retain the actual compile, cancellation-driver and Alt compatibility failures; prove the correction against legacy canvas behavior while preserving explicit model-centered goldens.
 - [x] Preserve Rectangle Win32 R1 API compile failure, R2 disk-preflight refusal, R3 new stale-outcome expectation failure and R4 post-shutdown driver failure. Independently verify every failed archive before its repair.
-- [ ] Qualify Rectangle Win32 Release R5 (active), all 83 new facts and all predecessor records; then the exact-source real-ASan host.
+- [x] Qualify actual Rectangle Win32 Release R6: all 83 new facts and every predecessor record pass in 146 stages; retain the inherited 260-character reference-reader failure and the separate newline reader refusal. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
+- [ ] Finish the fresh exact-source 341-TU ASan host build R2 (active), actual detection control and complete 146-stage runtime; preserve the controller-only R1 toolset refusal.
 - [ ] Adopt combined code/contracts and qualify latest native x64 Debug/Release/real ASan/analysis and ARM64 cross-builds.
 - [ ] Complete the remaining marquee/lasso/Add/Subtract/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
 - [ ] Prove complete original-ticket phase/retirement bounds, actual view/DPI/device behavior, ordinary activation and measured S5/G1 before closing this child or P1.
