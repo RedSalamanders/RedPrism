@@ -235,3 +235,12 @@ Changing live kind/mode preferences cannot rewrite an accepted Down; Up contribu
 admission performs no geometry capture, stale target preserves foreign state, and joined Close suppresses
 useful completion while retaining borrowed owners until acknowledgement. No ordinary activation follows
 from the selected gate's Release/ASan proof.
+
+## Selected cursor worker messages
+
+Pointer leave invalidates the selected cursor request before the capture-related early return. The
+existing focus/capture/cancel interaction cleanup also invalidates it. Cancellation retains the original
+ticket until acknowledgement, including before source capture. A visible successful completion may
+post `WM_SETCURSOR` only to its own still-visible window when that window is under the actual pointer.
+Workers perform no window access. Joined shutdown acknowledges captured work after worker retirement
+and cannot restart a closed request state. The selected route remains gated pending ordinary activation.

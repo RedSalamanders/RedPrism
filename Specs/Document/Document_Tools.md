@@ -1916,3 +1916,17 @@ nonzero winding reference; inverse-query translation cannot substitute for it at
 
 This API prerequisite does not activate the ordinary pointer consumer or qualify complete host
 admission, retirement, native profiles or G1.
+
+## Selected cursor containment worker
+
+The explicitly selected Application route returns a neutral containment result while exact work is
+pending or unavailable. It reads only finite scalar bounds and the model plan before original whole-job
+admission; it captures immutable geometry only in the admitted owner continuation. Exact containment
+runs on a worker with the existing per-vertex translation and cancellation checkpoints. Ordinary pointer
+activation retains the separate complete-consumer and G1 gates.
+
+At most one useful probe and one replaceable latest scalar request are retained. Document serial,
+document generation, cursor epoch and query coordinates bind cached replies. In particular, equal
+bounds and an unchanged chrome epoch cannot reuse an old result after geometry changes. A superseded
+request retains its original ticket through exact acknowledgement. Stale results cannot publish; failed
+identical queries do not spin retrying. There is no synchronous geometry fallback on refusal.

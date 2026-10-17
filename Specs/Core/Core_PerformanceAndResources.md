@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-16
+Last reviewed: 2026-10-17
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -1684,3 +1684,17 @@ geometry storage plus the existing loop-control allowance; a selected host must 
 its wrapper/payload and every live phase. Exact-plan capture shares the immutable root only after
 admission. Deferred offsets stay scalar, and invalid, overflowed or stale plans fail locally. These
 model bounds do not establish physical caller activation, complete lifetime accounting or timing.
+
+## Selected cursor probe scheduling and retirement
+
+The optional cursor consumer submits one bounded Background record with the complete cached geometry
+envelope plus fixed wrapper/control allowance. Pending queries replace scalar metadata rather than
+allocating or traversing path vectors. Source acquisition and useful work reuse the original record;
+no extra admission is taken. Failed memory admission and cancellation before the first successful stage
+still acknowledge that exact record: the success-only completion hook cannot supply its identity.
+
+Captured geometry readers retire on the worker, including cancelled/skipped useful stages. Shutdown
+closes publication authority, cancels the original ticket, joins workers and only then acknowledges
+owner state; normal completion callbacks remain suppressed during joined Close. Source, reservation
+and wrapper lifetimes cannot be shortened by a neutral cursor result. This route alone establishes no
+ordinary activation, complete-operation G1 result or Photoshop comparison.

@@ -25,6 +25,10 @@ struct ClipboardHolder final
     std::atomic<bool> acquired{false};
     std::atomic<bool> closedCleanly{false};
     std::atomic<DWORD> error{ERROR_SUCCESS};
+    std::atomic<unsigned> setupAttempts{0};
+    std::atomic<DWORD> firstSetupError{ERROR_SUCCESS};
+    void* deniedContext = nullptr;
+    void (*afterFirstDenied)(void*) noexcept = nullptr;
     bool installDib = false;
 };
 DWORD WINAPI HoldClipboard(void* raw) noexcept
@@ -39,10 +43,54 @@ DWORD WINAPI HoldClipboard(void* raw) noexcept
         });
     wil::unique_hwnd window(
         CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
-    if (!window || !OpenClipboard(window.get()))
+    if (!window)
     {
         holder.error.store(GetLastError());
         return 1;
+    }
+    // Native setup shares the desktop clipboard with other applications. Retry only ACCESS_DENIED
+    // through bounded one-shot kernel events; no sleep, busy loop or fabricated acquisition.
+    constexpr std::array<DWORD, 5> setupDelays{20, 40, 80, 160, 320};
+    wil::unique_handle deadline;
+    for (unsigned attempt = 0;; ++attempt)
+    {
+        ++holder.setupAttempts;
+        if (OpenClipboard(window.get()))
+            break;
+        const auto error = GetLastError();
+        if (attempt == 0)
+        {
+            holder.firstSetupError.store(error);
+            if (holder.afterFirstDenied)
+                holder.afterFirstDenied(holder.deniedContext);
+        }
+        if (error != ERROR_ACCESS_DENIED || attempt == setupDelays.size())
+        {
+            holder.error.store(error);
+            return 1;
+        }
+        if (!deadline)
+        {
+            deadline.reset(CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_MODIFY_STATE | SYNCHRONIZE));
+            if (!deadline)
+            {
+                holder.error.store(GetLastError());
+                return 1;
+            }
+        }
+        LARGE_INTEGER due{};
+        due.QuadPart = -static_cast<LONGLONG>(setupDelays[attempt]) * 10000;
+        if (!SetWaitableTimer(deadline.get(), &due, 0, nullptr, nullptr, FALSE))
+        {
+            holder.error.store(GetLastError());
+            return 1;
+        }
+        const HANDLE events[]{deadline.get(), holder.stop.get(), holder.release.get()};
+        if (WaitForMultipleObjects(3, events, FALSE, INFINITE) != WAIT_OBJECT_0)
+        {
+            holder.error.store(ERROR_CANCELLED);
+            return 1;
+        }
     }
     holder.window.store(window.get());
     {
@@ -113,10 +161,111 @@ DWORD WINAPI HoldClipboard(void* raw) noexcept
         }
     }
 }
+int VerifyClipboardHolderSetup() noexcept
+{
+    unsigned checks = 0;
+    unsigned failures = 0;
+    const auto expect = [&](bool value, const char* label) noexcept
+    {
+        ++checks;
+        failures += value ? 0u : 1u;
+        std::printf("%s clipboard-holder-setup.%s\n", value ? "PASS" : "FAIL", label);
+        return value;
+    };
+    const auto summary = wil::scope_exit(
+        [&]() noexcept { std::printf("SUMMARY clipboard-holder-setup checks=%u failures=%u\n", checks, failures); });
+    const auto run = [&](bool exhaust) noexcept
+    {
+        struct Gate final
+        {
+            wil::unique_handle denied{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            wil::unique_handle resume{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+        } gate;
+        ClipboardHolder blocker;
+        ClipboardHolder holder;
+        wil::unique_handle blockerThread;
+        wil::unique_handle thread;
+        auto cleanup = wil::scope_exit(
+            [&]() noexcept
+            {
+                if (gate.resume)
+                    (void)SetEvent(gate.resume.get());
+                if (blocker.release)
+                    (void)SetEvent(blocker.release.get());
+                if (blocker.stop)
+                    (void)SetEvent(blocker.stop.get());
+                if (holder.release)
+                    (void)SetEvent(holder.release.get());
+                if (holder.stop)
+                    (void)SetEvent(holder.stop.get());
+                if (thread)
+                    (void)WaitForSingleObject(thread.get(), INFINITE);
+                if (blockerThread)
+                    (void)WaitForSingleObject(blockerThread.get(), INFINITE);
+            });
+        if (!gate.denied || !gate.resume || !blocker.ready || !blocker.release || !blocker.closed || !blocker.stop ||
+            !holder.ready || !holder.release || !holder.closed || !holder.stop)
+            return false;
+        blockerThread.reset(CreateThread(nullptr, 0, HoldClipboard, &blocker, 0, nullptr));
+        if (!blockerThread || WaitForSingleObject(blocker.ready.get(), 10000) != WAIT_OBJECT_0 || !blocker.acquired ||
+            blocker.error != ERROR_SUCCESS || GetOpenClipboardWindow() != blocker.window.load())
+            return false;
+        const auto sequence = GetClipboardSequenceNumber();
+        holder.deniedContext = &gate;
+        holder.afterFirstDenied = [](void* raw) noexcept
+        {
+            auto& state = *static_cast<Gate*>(raw);
+            (void)SetEvent(state.denied.get());
+            (void)WaitForSingleObject(state.resume.get(), INFINITE);
+        };
+        thread.reset(CreateThread(nullptr, 0, HoldClipboard, &holder, 0, nullptr));
+        if (!thread || WaitForSingleObject(gate.denied.get(), 10000) != WAIT_OBJECT_0)
+            return false;
+        const bool firstDenied = holder.setupAttempts == 1 && holder.firstSetupError == ERROR_ACCESS_DENIED &&
+                                 !holder.acquired && GetOpenClipboardWindow() == blocker.window.load() &&
+                                 GetThreadId(thread.get()) != GetThreadId(blockerThread.get()) &&
+                                 GetThreadId(thread.get()) != GetCurrentThreadId();
+        if (!exhaust)
+        {
+            (void)SetEvent(blocker.release.get());
+            if (WaitForSingleObject(blocker.closed.get(), 10000) != WAIT_OBJECT_0 || !blocker.closedCleanly)
+                return false;
+        }
+        (void)SetEvent(gate.resume.get());
+        if (WaitForSingleObject(holder.ready.get(), 10000) != WAIT_OBJECT_0)
+            return false;
+        const bool reached = exhaust ? !holder.acquired && holder.setupAttempts == 6 &&
+                                           holder.error == ERROR_ACCESS_DENIED &&
+                                           GetOpenClipboardWindow() == blocker.window.load()
+                                     : holder.acquired && holder.setupAttempts == 2 && holder.error == ERROR_SUCCESS &&
+                                           GetOpenClipboardWindow() == holder.window.load();
+        const bool untouchedWhileHeld = !exhaust || GetClipboardSequenceNumber() == sequence;
+        (void)SetEvent(blocker.release.get());
+        (void)SetEvent(blocker.stop.get());
+        (void)SetEvent(holder.release.get());
+        (void)SetEvent(holder.stop.get());
+        if (WaitForSingleObject(thread.get(), 10000) != WAIT_OBJECT_0 ||
+            WaitForSingleObject(blockerThread.get(), 10000) != WAIT_OBJECT_0)
+            return false;
+        DWORD result = STILL_ACTIVE;
+        DWORD blockerResult = STILL_ACTIVE;
+        const bool joined = GetExitCodeThread(thread.get(), &result) && result == (exhaust ? 1u : 0u) &&
+                            GetExitCodeThread(blockerThread.get(), &blockerResult) && blockerResult == 0 &&
+                            !holder.window.load() && holder.closedCleanly == !exhaust && !blocker.window.load() &&
+                            blocker.closedCleanly && untouchedWhileHeld;
+        return firstDenied && reached && joined;
+    };
+    // Real OS denial with a deterministic event gate; no elapsed-time threshold defines success.
+    expect(run(false), "real-denial-release-retry-acquires-on-second-attempt-and-joins");
+    expect(run(true), "six-real-denials-exhaust-preserve-independent-holder-and-join-without-data-change");
+    return failures ? 5 : 0;
+}
 } // namespace
 
 int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept
 {
+    if (const int failed = VerifyClipboardHolderSetup(); failed != 0)
+        return failed;
     unsigned checks = 0;
     unsigned failures = 0;
     unsigned reached = 0;
@@ -177,8 +326,10 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
                                        app._jobs.ReservedMemoryBytes() > 0 && app._retryWait.HasPending();
             if (observed.releaseOnArm)
                 observed.signalSucceeded = SetEvent(observed.holder.release.get()) != FALSE && observed.signalSucceeded;
-            // Signal the actual registered event; do not fabricate readiness or elapsed-time evidence.
-            observed.signalSucceeded = app._retryWait.SignalDeadlineForTest(ticket) && observed.signalSucceeded;
+            // Exhaustion keeps the real holder locked and accelerates only the registered deadline event.
+            // Release uses the genuine native backoff so the desktop clipboard can finish its handoff.
+            if (!observed.releaseOnArm)
+                observed.signalSucceeded = app._retryWait.SignalDeadlineForTest(ticket) && observed.signalSucceeded;
         };
         probe.retryWait.beforePublication = [](void* raw) noexcept
         {
@@ -246,9 +397,19 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
         if (!gate->release || !SetEvent(gate->release.get()))
             return 5;
         thread.reset(CreateThread(nullptr, 0, HoldClipboard, &holder, 0, nullptr));
-        if (!expect(thread && WaitForSingleObject(holder.ready.get(), 10000) == WAIT_OBJECT_0 &&
-                        holder.acquired.load() && holder.error.load() == ERROR_SUCCESS &&
-                        GetOpenClipboardWindow() == holder.window.load(),
+        const auto ready = thread ? WaitForSingleObject(holder.ready.get(), 10000) : WAIT_FAILED;
+        if (!holder.acquired.load())
+        {
+            DWORD blockerProcess = 0;
+            const auto blockerWindow = GetOpenClipboardWindow();
+            if (blockerWindow)
+                (void)GetWindowThreadProcessId(blockerWindow, &blockerProcess);
+            std::printf("DIAG clipboard-holder-setup attempts=%u error=%lu first-error=%lu blocker-pid=%lu ready=%lu\n",
+                        holder.setupAttempts.load(), holder.error.load(), holder.firstSetupError.load(), blockerProcess,
+                        ready);
+        }
+        if (!expect(thread && ready == WAIT_OBJECT_0 && holder.acquired.load() &&
+                        holder.error.load() == ERROR_SUCCESS && GetOpenClipboardWindow() == holder.window.load(),
                     "distinct-native-thread-really-holds-open-clipboard"))
             return 5;
         owner->_clipboardSequence = 0; // external Paste cannot use a private-origin shortcut
@@ -260,6 +421,13 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
         if (!expect(SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled,
                     "production-job-and-real-event-wait-acknowledged"))
             return 5;
+        if (!(retry.armed == (item.release ? 1u : 5u) && retry.sameTicket && retry.actualHolder &&
+              retry.originalBarrier && retry.signalSucceeded && !retry.callbackFailed.load()))
+            std::printf("DIAG clipboard-holder-retry scenario=%s armed=%u same=%u holder=%u barrier=%u signals=%u "
+                        "callback=%u opens=%u\n",
+                        scenario, retry.armed, retry.sameTicket ? 1u : 0u, retry.actualHolder ? 1u : 0u,
+                        retry.originalBarrier ? 1u : 0u, retry.signalSucceeded ? 1u : 0u,
+                        retry.callbackFailed.load() ? 1u : 0u, gate->openAttempts.load());
         expect(retry.armed == (item.release ? 1u : 5u) && retry.sameTicket && retry.actualHolder &&
                    retry.originalBarrier && retry.signalSucceeded && !retry.callbackFailed.load(),
                "same-original-ticket-real-busy-and-retained-reservation-at-each-armed-wait");

@@ -3117,3 +3117,29 @@ rounding and a 65,540-point source. Three static traits constrain the scalar pla
 copy. Full scoped Release and real ASan must preserve the complete ordered roster, genuine UAF
 control, exact compile/source/dependency/product identity, ISA scan and complete archives. Actual
 Application routing and latest native qualification remain distinct gates.
+
+## Cursor worker and clipboard setup validation
+
+`Application.Tests.SelectionCursor` adds 50 facts through an actual hidden Application, WARP device
+and two-worker scheduler. It invokes the production cursor containment function and sends actual
+leave/focus messages; it does not move the user's pointer or claim visible `WM_SETCURSOR` latency.
+Require literal interior/hole/edge/corner results, cache reuse, latest-only dispatch, same-point/same-bounds
+generation changes before chrome publication, stale-source retention, a 65,540-point outline, exact
+deferred translation, memory refusal without retry spin, serial exhaustion and joined Close. A separate
+pre-capture cancellation case must acknowledge the original ticket without entering useful geometry
+work. Counters distinguish accepted failed descriptors from useful captures and normal callbacks.
+
+The native clipboard holder setup retries only genuine `ERROR_ACCESS_DENIED`, with at most six calls
+separated by one-shot kernel events; it never fabricates acquisition, sleeps or busy-polls. Separate
+native-holder controls prove first-denial release/acquisition and six-denial exhaustion, distinct threads,
+actual Win32 ownership, exit/close/join truth and unchanged data while exclusively locked. Release cases
+use the actual production deadline for the handoff; exhaustion may signal the real registered deadline
+while its native holder stays locked. Keep all 53 original contention facts and all existing assertions
+unchanged. Terminal setup and retry failures report their exact native/counter state. A passing repeat
+provides no causal explanation for an earlier uninstrumented failure.
+
+The complete selected Release roster now has 150 Application stages, 9,111 stdout PASS records and
+7,613 stderr facts. Source-only projection removes exactly the 50 new cursor facts/stage and two
+clipboard setup facts/summary and delegates every predecessor byte unchanged. Complete native Debug,
+Release, real ASan and ARM64 cross-build qualification remain separate gates; native ARM64 runtime
+claims require a native host.

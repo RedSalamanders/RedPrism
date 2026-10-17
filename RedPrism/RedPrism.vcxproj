@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -675,6 +675,7 @@
     <ClCompile Include="ApplicationLassoFinishJobs.cpp" />
     <ClCompile Include="ApplicationLassoInput.cpp" />
     <ClCompile Include="ApplicationSelectionPressJobs.cpp" />
+    <ClCompile Include="ApplicationSelectionCursorJobs.cpp" />
     <ClCompile Include="SelectionOutlineGestureJob.cpp" />
     <ClInclude Include="SelectionOutlineGestureState.h" />
     <ClInclude Include="SelectionOutlineGestureMemory.h" />
@@ -682,6 +683,7 @@
     <ClCompile Include="Application.Tests.RectanglePress.cpp" />
     <ClCompile Include="Application.Tests.ClipboardContention.cpp" />
     <ClCompile Include="Application.Tests.MarqueeModes.cpp" />
+    <ClCompile Include="Application.Tests.SelectionCursor.cpp" />
     <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
     <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />

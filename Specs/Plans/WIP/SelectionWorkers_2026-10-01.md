@@ -20,7 +20,10 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Qualify and adopt the actual Rectangle/Ellipse Add/Subtract Win32 caller: all 429 new facts over 52 cases and the complete 149-stage predecessor roster pass exact Release and real ASan (343 App TUs). Five caller/fixture paths, original-ticket memory/lifetime proofs, normal-memory large sources and four contracts are integrated. Ordinary activation and cursor work remain open. [Evidence](../../TestRuns/P1PreservingMarqueeHost_2026-10-17.md).
 - [x] Implement and independently verify the bounded cursor request-state prerequisite: 113 state-machine assertions plus the summary pass focused Release and instrumented ASan runs. The helper/test registration is adopted; complete HostTests and the physical consumer remain separate gates. [Focused evidence](../../TestRuns/P1SelectionCursorState_2026-10-17.md).
 - [x] Qualify and adopt cursor-probe cached description and post-admission immutable-root capture: all 23,039 Document assertions pass complete scoped Release and real ASan (280 TUs), including genuine UAF detection, full roster/archive/source/binary verification and retained fixture failure. Seven code/test paths and three contracts are adopted. [Model evidence](../../TestRuns/P1SelectionCursorProbe_2026-10-17.md).
-- [ ] Qualify and adopt the actual cursor worker consumer. The private hidden-host Release build includes 47 source-defined facts over caching, latest-only work, same-point generation changes, large/deferred geometry, memory refusal, input loss and joined Close. Ordinary activation, measured latency and latest-source native qualification remain open.
+- [x] Qualify the selected cursor worker in complete private Release: all 50 cursor facts, 2 native clipboard setup controls, 53 original contention facts and the full 150-stage predecessor stream pass (9,111 stdout/7,613 stderr records). Main independently verifies the 345-record incremental object/source lineage and full archives; nine caller/fixture paths and four contracts are adopted for canonical native qualification. [Release evidence](../../TestRuns/P1SelectionCursorHost_2026-10-17.md).
+- [x] Qualify adopted cursor source in canonical ARM64 Debug Rebuild `r1111`: actual exit 0, all 1,535 archive files, 982 compiler records and five exact AA64 executable/PDB pairs independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md). ARM64 runtime is unavailable.
+- [x] Qualify adopted cursor/clipboard source in canonical full x64 ASan `r1110`: actual exit 0, all 1,866 archive files, 982 instrumented compiler records, five exact executable/PDB pairs, full 23,039-fact Document/150-stage Application/Host/WARP/I/O rosters, both stress suites, genuine UAF detection and nine harness captures independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+- [ ] Finish adopted cursor source qualification: ARM64 Release `r1112` is running on the same 1,463-input/982-TU freeze; ARM64 instrumented-ASan, current Debug/Release and Release analysis remain due. Ordinary activation and measured G1 remain open.
 - [ ] Complete full native Debug/Release/real ASan, analysis and ARM64 cross-build qualification on the latest adopted CPU source. The `6a7afac` full-ASan and three ARM64 receipts above remain earlier-source evidence; native ARM64 runtime is unavailable. Ordinary activation and measured G1 remain open.
 - [ ] Complete the remaining freehand/polygonal/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
 - [ ] Remove the remaining selection cursor owner containment/translated-geometry walk; preserve exact hit results with bounded latest-request scheduling, source authority and joined lifetime (implementation slice below).
@@ -1105,3 +1108,48 @@ Implementation slice after preserving-marquee host qualification:
    hidden completion and joined Close. Assert bounded dispatch/capture counts and zero owner edge walks.
    Retain the existing full cursor fixture's geometry expectations; no measured timing gate is inferred
    from structural counters. Complete Release/real-ASan and final native qualification before activation.
+
+
+## Next component after cursor qualification: Freehand physical drawing
+
+The selected physical parent currently permits Rectangle/Ellipse only. `HostSelectionPressInput::Begin`
+already accepts Freehand/Polygonal kinds, but `QueueSelectionPressOwner` rejects the Lasso tool and
+`SelectionOutlineGestureJob` allocates drawing state only for its two marquee flags. Its drawing opening
+also hardcodes one arena page. These are separate missing caller/admission paths; generic terminal
+`LassoFinishGeometry::Prepare` support does not qualify them.
+
+Execute the next component in this order, after the current adopted-source native gates close:
+
+1. Define a typed captured drawing-kind policy shared by cached admission, original parent and physical
+   dispatch. Capture tool/kind/mode/AA at accepted Down; mutable header changes cannot rewrite them.
+   First implement Freehand New/Add/Subtract. Polygonal multi-Down/Backspace/close semantics follow as
+   their own component, rather than treating every polygon Down as a conflicting new gesture.
+2. Establish one finite accepted-input/page ceiling from the existing bounded prefix/arena APIs and
+   derive checked Down-time memory before any geometry/history capture. The descriptor must cover the
+   source's cached points/loops, all reserved arena pages, traversal, clip/boolean workspace, maximum
+   output/control owners, source/history/display refresh, construction and retirement. Use that exact
+   page count in `PrepareLassoOpening`; the marquee one-page shortcut is not valid for long paths.
+   Limits are enforced capacity policy. Overflow/capacity refusal cancels the original without a partial
+   selection, replacement admission, unbounded vector growth or owner fallback.
+3. Reuse the original record and accepted physical prefix for containment, move-versus-draw choice,
+   prepared opening, ordered append, terminal closure and acknowledgement. Preserving modes always draw.
+   Keep cursor/rubber-band display state separate from accepted vertices. Verify Up sampling, quarter-pixel
+   skips, modifiers and no-point behavior against the current numeric path and the named Swift oracle
+   before changing those semantics. Source/session/history/opening authority must be checked at every
+   owner acquisition and publication boundary.
+4. Keep append/seal and clip/boolean work on workers under the existing original reservation. Owner
+   messages perform scalar enqueue/acknowledgement only. Retain every arena, original geometry,
+   temporary result and weak/control owner through actual retirement. Late Move/Up/Lost after cancellation
+   or foreign writer cannot consume a new gesture or replace foreign state. Joined Close must release
+   captured roots on workers before the owner's final acknowledgement.
+5. Add independent CPU event-vector and literal geometry/coverage tests: absent/empty/inside/outside,
+   New/Add/Subtract, more than one arena page, long collinear paths, self-intersection, minimum-point
+   closure, accepted-point capacity, prefix overflow, cancelled opening/append/finish, stale document,
+   target/history changes, duplicate terminal, allocation refusal and original-ticket memory lifetime.
+   Extend the actual hidden-window fixture to send the production Freehand pointer sequence, capture
+   loss and cancellation, including cancelled-before-capture and active joined Close. Preserve every
+   predecessor record; keep fault receipts and full source/binary identity.
+6. Close the component with code, contracts, opening checklist, affected validation and commit/push.
+   Ordinary activation and G1 remain separate until every display consumer and complete operation bound
+   is qualified. Then implement the polygonal continuation protocol and the remaining Wand/Ctrl-pixel-lift
+   branches; do not declare the selection delivery area complete from Freehand alone.

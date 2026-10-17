@@ -960,6 +960,8 @@ bool Application::HonorsPointerLoss() const noexcept
 
 void Application::EndPointerInteractions() noexcept
 {
+    if (_asyncSelectionCursorEnabled)
+        InvalidateSelectionCursorOwner();
     _canvasPanLast.reset();
     // Our close preflight's modal loop may release capture. Its Cancel answer must leave this edit live.
     if (_canvasLifetime && _canvasLifetime->presenting && _canvasBrushInput.Busy())

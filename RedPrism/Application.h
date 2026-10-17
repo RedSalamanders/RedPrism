@@ -1,7 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include "HostHueInput.h"
 #include "HostLassoInput.h"
+#include "SelectionCursorRequests.h"
+#include "SelectionHitWork.h"
 #include "SelectionOutlineGestureState.h"
 
 #include "BrushCompute.h"
@@ -173,6 +175,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueeModesSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSelectionCursorSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
@@ -536,6 +539,10 @@ class Application final : public ChromeEvents,
     [[nodiscard]] std::optional<LPCWSTR> CanvasCursorAt(POINT client) noexcept;
     [[nodiscard]] bool CursorPressesLayer(Vec2 pixel, bool control) noexcept;
     [[nodiscard]] bool CursorOverSelection(Vec2 pixel) noexcept;
+    class SelectionCursorJob;
+    [[nodiscard]] bool PreparedCursorOverSelection(Vec2 pixel) noexcept;
+    void StartSelectionCursorOwner() noexcept;
+    void InvalidateSelectionCursorOwner() noexcept;
     void ApplyDemo() noexcept;
     // Selection tools (C9, Specs/Document/Document_Tools.md): header actions, pointer rules, keys and the wand's
     // composite sample. Outline and draft changes touch chrome only; the canvas never re-composites for them.
@@ -1728,6 +1735,21 @@ class Application final : public ChromeEvents,
     std::uint64_t _pressRuleRevision = 0;
     CursorProbe _layerProbe;
     CursorProbe _selectionProbe;
+    SelectionCursorRequests _selectionCursorRequests;
+    std::optional<JobTicket> _selectionCursorTicket;
+    bool _asyncSelectionCursorEnabled = false;
+    // Optional worker-only event diagnostic; its borrowed context outlives the scheduler join.
+    SelectionHitObserver _selectionCursorObserver{};
+    struct SelectionCursorWorkerProbe final
+    {
+        void* context = nullptr;
+        void (*ready)(void*, const JobContext&) noexcept = nullptr;
+        void (*retired)(void*) noexcept = nullptr;
+    };
+    SelectionCursorWorkerProbe _selectionCursorWorkerProbe{};
+    std::uint64_t _selectionCursorDispatches = 0;
+    std::uint64_t _selectionCursorCaptures = 0;
+    std::uint64_t _selectionCursorCompletedCallbacks = 0;
     std::optional<SelectionBounds> _selectionReach; // the selection's bounds: nothing outside them is inside it
     std::uint64_t _selectionReachRevision = 0;
     // LayerUnderPointer's visible pixel layers top-first (index into the document's layers, id), per `_cursorRevision`.

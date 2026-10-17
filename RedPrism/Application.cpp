@@ -3759,6 +3759,9 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    _selectionCursorRequests.Close();
+    if (_selectionCursorTicket)
+        (void)_jobs.Cancel(_selectionCursorTicket.value());
     if (_selectionOutlineInitialized)
         _selectionOutlineDisplay.StopOwner();
     if (_utilityReadbackInitialized)
@@ -3950,6 +3953,10 @@ void Application::Shutdown() noexcept
     // Completed callbacks, so its producer/retirement join is the shutdown acknowledgement instead.
     _colorPreviewTicket.reset();
     _colorHistogramTicket.reset();
+    // Close suppresses callbacks; the joined worker retirement is this exact cursor request acknowledgement.
+    if (const auto request = _selectionCursorRequests.Active())
+        (void)_selectionCursorRequests.Acknowledge(request.value(), std::nullopt);
+    _selectionCursorTicket.reset();
     if (_documentLifecycleStamp)
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
@@ -4216,6 +4223,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_MOUSELEAVE)
     {
         event.action = DxUi::PointerAction::Leave;
+        if (_asyncSelectionCursorEnabled)
+            InvalidateSelectionCursorOwner();
         _mouseTracked = false;
         if (GetCapture() == _window.get())
         {
@@ -6905,6 +6914,8 @@ bool Application::CursorPressesLayer(Vec2 pixel, bool control) noexcept
 
 bool Application::CursorOverSelection(Vec2 pixel) noexcept
 {
+    if (_asyncSelectionCursorEnabled)
+        return PreparedCursorOverSelection(pixel);
     CursorProbe& probe = _selectionProbe;
     if (probe.valid && probe.revision == _cursorRevision && probe.pixel == pixel)
     {
