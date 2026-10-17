@@ -1,8 +1,9 @@
 # Ordered selection workers (P1.6)
 
-- [x] Reproduce and preserve both late foreign-Begin opening failures, keeping all 22,381 predecessors plus the other 44 new controls passing. The two-file history-epoch repair then qualifies all 22,427 Release assertions with unchanged predicates; real ASan is active.
+- [x] Captured settings/history epoch qualifies and is pushed as `e03a80d`: all 22,427 assertions pass in Release and real ASan; all 46 predicates and the two actual pre-fix failures remain preserved. [Evidence](../../TestRuns/P1LassoOpeningSettings_2026-10-17.md).
+- [ ] Finish guarded own-writer/rectangle-plan proof and the outside-hit/New Rectangle original-parent branch; the next private draft is uncompiled.
 - [x] Qualify native integrated-source ARM64 Debug r1093: 969 exact compiler records, 1,492 archive files and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
-- [ ] Finish the same native freeze in ARM64 Release/instrumented ASan and the private fixed lasso source in real ASan; preserve Root code while those builds run.
+- [ ] Finish the same native freeze in ARM64 Release/instrumented ASan; preserve Root code while those builds run.
 
 
 - [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
