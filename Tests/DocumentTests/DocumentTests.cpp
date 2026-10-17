@@ -8478,6 +8478,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreparedPolygonAuthorityTests();
     gFailures += RunPolygonalPlanTests();
     gFailures += RunPolygonalDrawingParentTests();
+    gFailures += RunPolygonalPreRecordedTerminalTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

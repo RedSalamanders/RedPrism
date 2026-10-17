@@ -1990,3 +1990,11 @@ Overflow preserves the accepted prefix and chooses Lost; no partial selection ca
 
 This CPU component is registered in DocumentTests. Its physical multi-click dispatcher, New inside-hit
 choice, Save/tool/lifetime arbitration, ordinary activation and measured owner budgets remain separate.
+
+## Polygonal terminal accepted before controller admission
+
+A physical Finish/Lost accepted before the original controller exists retains its nonzero physical
+ordinal in immutable descriptor metadata. The original controller consumes that recorded terminal; a
+younger opposite terminal cannot replace its outcome or AA. The scalar is observational event order,
+never model authority. Claimed terminal metadata while input is still sampling, or an ordinal not
+after the captured Down, refuses with `E_ABORT` before any source/geometry/history capture.

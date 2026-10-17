@@ -84,7 +84,10 @@ std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSessi
     return result;
 }
 
-PolygonalDrawingJob::PolygonalDrawingJob(PolygonalDrawingState& state) noexcept : _state(state) {}
+PolygonalDrawingJob::PolygonalDrawingJob(PolygonalDrawingState& state) noexcept
+    : _state(state), _explicitTerminalOrdinal(state.terminalOrdinalBeforeAdmission)
+{
+}
 std::int32_t PolygonalDrawingJob::Submit(PolygonalDrawingState& state) noexcept
 {
     if (state.controller || state.original != JobTicket{} || !state.opening || !state.plan.TotalBytes())
@@ -186,6 +189,8 @@ bool PolygonalDrawingJob::DeferCompletion(JobResult result, JobTicket ticket) no
         const auto down = s.input.Peek(s.opening);
         if (!_payload || !arrival || !down || down->action != HostLassoInput::Action::Down ||
             arrival->kind != LassoKind::Polygonal || arrival->mode != s.plan.Mode() ||
+            (s.terminalOrdinalBeforeAdmission &&
+             (s.input.Sampling() || s.terminalOrdinalBeforeAdmission <= arrival->ordinal)) ||
             arrival->document != s.plan._document || arrival->active != s.session.ActiveLayerID() ||
             arrival->mask != s.session.IsMaskSelected() || arrival->crop != s.session.CropFrame() ||
             !s.session.IsDocumentReadCurrent(s.plan._document) || !s.session.CanApplyHistoryRestore(s.plan._editor) ||

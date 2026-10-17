@@ -472,3 +472,10 @@ edit and one generation; Undo restores the exact absent/empty/prior root and Red
 Hover and Backspace alone publish no edit. Cancellation, stale authority, overflow and joined Close
 cannot replace selection/history or roll back a foreign Begin. Joined Close runs no useful completion
 callback. All surviving output/temporary/arena/control and weak owners retain their original charge.
+
+## Polygonal terminal ordering before controller creation
+
+An already accepted Finish/Lost retains its physical ordinal through original controller admission.
+Only the prepared writer and current document/editor/history capabilities can publish. Successful
+Finish records one edit; Lost and contradictory descriptor metadata record none. Contradictory
+metadata must refuse before source capture and release only its original fixed input prefix.

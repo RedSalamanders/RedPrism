@@ -70,10 +70,14 @@ struct PolygonalDrawingState final
     const std::uint64_t opening;
     const PolygonalDrawingPlan plan;
     const bool antialiasedAtDown;
+    // Physical Finish can be accepted while its fixed host descriptor still awaits the original job.
+    // This scalar preserves event order only; writer/history authority remains the prepared capability.
+    const std::uint64_t terminalOrdinalBeforeAdmission;
     PolygonalDrawingState(JobScheduler& jobs, DocumentSession& document, HostLassoInput& prefix, std::uint64_t identity,
-                          PolygonalDrawingPlan admission, bool capturedAntialias) noexcept
+                          PolygonalDrawingPlan admission, bool capturedAntialias,
+                          std::uint64_t capturedTerminalOrdinal = 0) noexcept
         : scheduler(jobs), session(document), input(prefix), opening(identity), plan(admission),
-          antialiasedAtDown(capturedAntialias)
+          antialiasedAtDown(capturedAntialias), terminalOrdinalBeforeAdmission(capturedTerminalOrdinal)
     {
     }
     PolygonalDrawingJob* controller = nullptr;

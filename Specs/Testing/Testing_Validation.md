@@ -3204,3 +3204,15 @@ turns an earlier run into a pass. A single-TU correction requires exact unchange
 Physical New inside-hit/multi-click routing, real queued Save/tool/lifetime arbitration, latest full
 native matrix, ordinary activation and measured G1 remain open.
 [Evidence](../TestRuns/P1PolygonalDrawingParent_2026-10-17.md).
+
+## Polygonal terminal-before-controller validation
+
+Require the four pre-admission Up/Lost and contradictory-descriptor cases in
+`Document.Tests.PolygonalDrawingParent`: fourteen additional source-defined facts preserve all 23,401
+predecessors (23,415 total) in complete scoped Release and real ASan. Cover terminal AA/physical order,
+younger opposite-terminal refusal, no-capture E_ABORT for sampling/nonincreasing contradictions, one
+publication/history or cancellation, exact original-prefix drop and final accounting refund. Keep the
+genuine UAF control, full 284-TU/source/artifact/PE/PDB/ISA readback and source-only roster controls.
+The preserved stale ASan archive-count reader refusal is corrected against the unchanged completed
+bytes; it never replays a compiler or runtime. Physical routing and ordinary/G1 gates remain separate.
+[Evidence](../TestRuns/P1PolygonalPendingTerminal_2026-10-17.md).

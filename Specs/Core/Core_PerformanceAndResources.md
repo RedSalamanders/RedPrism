@@ -1743,3 +1743,10 @@ original job with `E_OUTOFMEMORY`, no Run/source capture and exact input drop. R
 readers remain charged through worker destruction and refund after the actual last owner. Replay is
 bounded to sixteen samples per continuation; full geometry/history and large graph retirement are
 worker work. Structural qualification does not establish measured 2 ms/G1 or ordinary activation.
+
+## Polygonal terminal metadata admission
+
+The optional pre-admission physical terminal ordinal is a const scalar in the original drawing state.
+It is included through the existing complete wrapper/state size bound and adds no per-event allocation,
+copy, source traversal, wake or admission. The same original ticket/reservation owns the recorded
+terminal through capture, publication/drop and final strong/weak retirement.

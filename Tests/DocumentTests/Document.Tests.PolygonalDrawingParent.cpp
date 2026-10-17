@@ -520,6 +520,58 @@ void OrdinalRefusal(bool terminal, const char* name)
     f->Release();
     Expect(f->jobs.ReservedMemoryBytes() == 0, "invalid-order-retirement-refunds");
 }
+void PreRecordedTerminal(bool lost, const char* name)
+{
+    scenario = name;
+    auto f = std::make_unique<Fixture>();
+    f->Rectangle();
+    if (f->input->Finish(81, false, lost) != HostLassoInput::Admission::Recorded)
+        Broken("physical-terminal-before-admission");
+    f->state = std::make_unique<PolygonalDrawingState>(f->jobs, *f->session, *f->input, 81, f->plan.value(), true, 10);
+    f->state->observer = &f->probe;
+    f->state->notify = Probe::Owner;
+    f->Submit();
+    Expect(!f->state->controller->Finish(true, 11, !lost), "already-accepted-terminal-rejects-younger-opposite-loss");
+    Settle(f->jobs);
+    Expect(f->state->completed && f->state->sameTicket && f->state->inputAcknowledged && !f->input->Busy() &&
+               !f->state->controller && f->state->closingOrdinal == 10,
+           "pre-recorded-physical-order-survives-original-controller-admission");
+    Expect(lost ? f->state->outcome.status == JobStatus::Cancelled && !f->state->published &&
+                      !f->session->Selection() && f->session->history.UndoCount() == 0
+                : f->state->published && f->state->outcome.status == JobStatus::Finished &&
+                      Pixels(*f->session, SelectionMode::New) && !f->session->Selection().value().antialiased &&
+                      f->session->history.UndoCount() == 1,
+           "accepted-terminal-aa-and-loss-policy-govern-publication");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "pre-recorded-terminal-last-reader-refund");
+}
+void ContradictoryPreRecordedTerminal(bool stillSampling, const char* name)
+{
+    scenario = name;
+    auto f = std::make_unique<Fixture>();
+    const auto authority = f->session->CaptureDocumentReadAuthority();
+    const auto history = f->session->history.CaptureState();
+    f->Rectangle();
+    if (!stillSampling && f->input->Finish(81, false) != HostLassoInput::Admission::Recorded)
+        Broken("contradictory-recorded-terminal");
+    f->state = std::make_unique<PolygonalDrawingState>(f->jobs, *f->session, *f->input, 81, f->plan.value(), true,
+                                                       stillSampling ? 10u : 1u);
+    f->state->observer = &f->probe;
+    f->state->notify = Probe::Owner;
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->outcome.status == JobStatus::Failed && f->state->outcome.error == E_ABORT &&
+               f->state->captures == 0 && !f->state->published && !f->session->PendingLasso() &&
+               f->session->history.IsCurrent(history),
+           "contradictory-terminal-descriptor-refuses-before-source-capture");
+    Expect(f->session->CaptureDocumentReadAuthority() == authority && f->state->inputAcknowledged &&
+               !f->input->Busy() && f->probe.opened == 0 && f->probe.terminal == 1,
+           "descriptor-refusal-preserves-source-and-drops-only-original-prefix");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "descriptor-refusal-retirement-refunds");
+}
 } // namespace
 
 int RunPolygonalDrawingParentTests()
@@ -547,4 +599,15 @@ int RunPolygonalDrawingParentTests()
     OrdinalRefusal(true, "reordered-terminal");
     std::printf("SUMMARY polygonal-drawing-parent checks=%u failures=%u\n", checks, failures);
     return static_cast<int>(failures);
+}
+
+int RunPolygonalPreRecordedTerminalTests()
+{
+    checks = failures = 0;
+    PreRecordedTerminal(false, "pre-admission-up");
+    PreRecordedTerminal(true, "pre-admission-lost");
+    ContradictoryPreRecordedTerminal(true, "claimed-terminal-still-sampling");
+    ContradictoryPreRecordedTerminal(false, "terminal-not-after-down");
+    std::printf("SUMMARY polygonal-pre-recorded-terminal checks=%u failures=%u\n", checks, failures);
+    return failures == 0 && checks == 14 ? 0 : (failures ? static_cast<int>(failures) : 1);
 }
