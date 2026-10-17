@@ -32,6 +32,7 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Correct exact immediate-R9 inline-table ISA recognition without changing DxUi or the allowlist: 64 new controls, the complete Release scanner suite and the unchanged original failed image pass. [Evidence](../../TestRuns/IsaR9Direct_2026-10-17.md).
 - [x] Qualify and adopt finite Polygonal planning and guarded corner/hover/Backspace primitives: 39 authority + 35 independent plan/coverage facts and all 23,307 Document assertions pass complete scoped Release and real ASan (282 TUs), with exact artifacts/archives and genuine UAF detection. The original physical parent remains a separate step. [Evidence](../../TestRuns/P1PolygonalPrimitives_2026-10-17.md).
 - [x] Qualify and adopt the drawing-only original Polygonal CPU parent: all 94 new facts and 23,307 predecessors pass complete scoped Release and real ASan (23,401 total, 284 TUs), including exact one-ticket partitioned retirement, genuine UAF detection and one-fixture/283-unchanged-object lineage. Preserve every original source-review, compiler, runtime and pre-native refusal. [Evidence](../../TestRuns/P1PolygonalDrawingParent_2026-10-17.md).
+- [ ] Finish the Polygonal physical host continuation. Its private pending-terminal bridge qualifies all 23,415 CPU Release and real-ASan facts and exact 284-TU artifacts; the final ASan reader-only file-count refusal is preserved. The isolated successor's 39 host-order/readiness/Save-marker/cancel/lifetime facts qualify complete Release (23,454 total); real ASan is building. Ordinary routing remains off.
 - [ ] Complete the physical Polygonal dispatcher, New with nonempty prior exact containment, multi-click Up/hover/close and queued Save/tool/lifetime arbitration. The drawing-only CPU adoption does not enable ordinary routing.
 
 - [ ] Complete the remaining polygonal/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
@@ -42,11 +43,12 @@ Previous private core, original-parent, physical-prefix, cached admission and re
 qualified in their named evidence reports; they alone do not activate the ordinary host. The current
 checklist supersedes the old duplicated pending/active summaries retained below.
 
-Current native follow-up on committed `d5b3f8f`: ARM64 Debug `r1120` and fresh Release `r1123`
-qualify all 987 compiler records, 1,469 root inputs, all 1,546 archive files each and five exact AA64
-executable/PDB pairs. Preserve the original `r1121` vcpkg-lock failure and the source-only reader
-ordering refusal. ARM64 ASan `r1122` is running; native runtime, ordinary activation and G1 are not
-claimed. [Evidence](../../TestRuns/P1PolygonalNative_2026-10-17.md).
+Current native follow-up on committed `d5b3f8f`: ARM64 Debug `r1120`, fresh Release `r1123`
+and instrumented ASan `r1122` qualify all 987 actual compiler records, 1,469 root inputs,
+1,546/1,546/1,550 archive files and five exact AA64 executable/PDB pairs per profile. Preserve the
+original `r1121` vcpkg-lock failure and source-only reader ordering refusal. Cross-builds establish no
+native ARM64 runtime; ordinary activation and G1 remain open.
+[Evidence](../../TestRuns/P1PolygonalNative_2026-10-17.md).
 
 ## Historical continuation notes (through 2026-10-12)
 
@@ -1188,13 +1190,35 @@ Implementation sequence and boundaries:
    marker in that same owner transition: Pop already ends the writer, so post-Pop ActiveOwner
    revalidation would incorrectly reject cleanup. Keep foreign writer/history/session state untouched.
 4. Reconcile the long-lived original parent with ordered Save/tool/lifetime/selection commands before
-   connecting physical input. Holding `_activeHostRequest`/HistoryWork indefinitely while waiting for
-   more corners can deadlock a younger settlement command. Define ordered settle/cancel/yield
-   arbitration without releasing original accounting or allowing foreign mutation early. Every older
-   accepted corner/Backspace must precede its closing command; an idle live prefix requests no wake.
-5. Preserve the actual conditional-close event ordinal. The legacy selected terminal has a default
-   ordinal zero while its separate closing intent retains the physical ordinal; a new original parent
-   must retain that real closing identity. Near-first closes only with at least three corners and the
+   connecting physical input. Preserve `EndCanvasEdit(Lasso, Write) == false`: Save/Export snapshots
+   committed document state and leaves the unfinished lasso live. Tool/normal Settle cancels the lasso;
+   Enter finishes it; prompt Cancel preserves it. Do not finish a polygon merely to unblock Save.
+   The original JobScheduler ticket, complete admission and writer/source authority remain live while
+   interactive input is parked. For the drawing-only branch, complete/yield the creator host request
+   after its acknowledged opening; acquire exclusive HistoryWork only for the selected terminal's
+   actual history write, with its ordered host descriptor. The original CPU job is not completed by
+   that host-creator acknowledgement. This avoids retaining a global history-writing barrier forever
+   around metadata-only drawing and permits the ordinary write pipeline to read a committed snapshot.
+   Keep original accounting through all producers and retirement. Model updates after a Save must
+   retain its saved marker; `MarkSaved` changes no history epoch, and `Publish` preserves the owner marker.
+   The owner pump may advance bounded own-key metadata while I/O runs. Hold terminal model/history
+   preparation until its older host prerequisites have been selected/acknowledged; add explicit
+   close-readiness and ordinal-yield hooks, never spin or allocate another original job.
+   Check the scheduler class lane as well as HistoryWork: a suspended Selection job retains its
+   document serial key against younger Selection jobs. Save uses the distinct I/O class and may run;
+   another selection producer must first settle/cancel/join this original writer (or refuse before
+   capture). Merely yielding the creator receipt cannot admit a second selection producer safely.
+   Provisional near/double-click close descriptors stay reserved at physical event time, because their
+   decision is known only after older corners/Backspaces replay. A non-closing proximity request
+   acknowledges without history; a closing request authorizes the same original job to proceed.
+   Read-only writes must not manufacture a history mutation or terminate the draft. Tool/layer
+   cancellation and lifetime confirmation preserve their existing rules; a cancelled confirmation or
+   output dialog cannot drop the live draft. Qualify Save/Export while still open, Save then further
+   corners/Enter/Undo, I/O failure/cancel, and close prompt Cancel before actual host adoption.
+5. Preserve the actual conditional-close event ordinal and opaque close intent before legacy Select
+   normalizes its terminal fields to zero. Its separately queued host descriptor has its own shared
+   ordinal; do not conflate that descriptor ordinal with the preceding physical sample ordinal.
+   Retain both identities and use the selected descriptor to order the closing history write. Near-first closes only with at least three corners and the
    legacy eight-view-pixel hit region; double-click/Enter retain short-path behavior. Physical terminal
    AA belongs to the chosen close. Rejected early proximity presses acknowledge without history.
 6. Independently qualify the finite plan, triangle/self-intersection coverage, guarded append/hover/
