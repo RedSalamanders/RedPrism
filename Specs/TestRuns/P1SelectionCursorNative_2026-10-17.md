@@ -16,6 +16,7 @@ Composition 138 and I/O 84. DxUi remains pinned to `8e8994079e82f79e6765e6a885c0
 | --- | --- | --- | --- |
 | x64 ASan Debug full test r1110 | PID 18660, exit 0; 11:34:08–12:25:24 UTC | All 1,866 archive files, exact 982 instrumented compiler records, five exact executable/PDB pairs, complete runtime roster, both stress suites, genuine UAF detection and nine harness PNGs | `5C90BBEFE3E8500C44AFAAB6BD6CF844A39D6481DA36E5F197C035DE1ECF862B` |
 | ARM64 Debug Rebuild r1111 | PID 63748, exit 0; 11:38:28–12:08:34 UTC | All 1,535 archived input/evidence files, exact 982 compiler records, current/frozen sources and five AA64 executable/full-PDB pairs | `7F29696CCDFC3F4FE7DAD04DC391424F487325CF667AE3D5D620A26DDD14DAA0` |
+| ARM64 Release Rebuild r1112 | PID 39924, exit 0; 12:14:51–12:54:41 UTC | All 1,535 archive files, exact 982 compiler records and five AA64 executable/full-PDB pairs independently verified | `D33525723DB62B5D3B89D63EE7FEEC3886F4EFE8FDA1DAF26F76AEA2C1A596E1` |
 
 Main reviews the archive/profile and PE/PDB readers and verifies their actual successful log hashes.
 The durable raw receipts and readback reports are beneath
@@ -40,7 +41,7 @@ and log SHA-256; no native runtime or build is replayed for qualification.
 
 ## Remaining qualification
 
-- ARM64 Release Rebuild r1112 is running; instrumented ASan Rebuild remains due on this same source.
+- ARM64 instrumented ASan Rebuild remains due on this same source; Debug and Release are qualified above.
 - Current-source full x64 Debug/Release and Release analysis remain due.
 - Ordinary activation, every remaining P1 delivery area and measured G1 remain open.
 
