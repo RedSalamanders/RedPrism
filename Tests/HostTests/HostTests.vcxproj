@@ -259,6 +259,8 @@
     <ClCompile Include="Host.Tests.PublicationCallback.cpp" />
     <ClCompile Include="Host.Tests.PublicationRetention.cpp" />
     <ClCompile Include="Host.Tests.RetirementMemory.cpp" />
+    <ClCompile Include="Host.Tests.SelectionCursorRequests.cpp" />
+    <ClInclude Include="Host.Tests.SelectionCursorRequests.h" />
     <ClInclude Include="Host.Tests.RetirementMemory.h" />
     <ClCompile Include="Host.Tests.GpuRecordingLane.cpp" />
     <ClInclude Include="Host.Tests.GpuRecordingLane.h" />

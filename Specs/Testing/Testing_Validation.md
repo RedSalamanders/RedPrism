@@ -3097,3 +3097,12 @@ foreign target, loss, cancellation, prefix overflow and joined refunds. The sour
 requires exact order and forwards all predecessor bytes unchanged; counts alone never qualify.
 See [the scoped evidence](../TestRuns/P1PreservingMarqueeHost_2026-10-17.md). Ordinary activation, cursor
 work, remaining selection branches, latest native profiles and measured G1 remain separate gates.
+
+## Cursor request state prerequisite
+
+`Host.Tests.SelectionCursorRequests.cpp` adds 113 independent state-machine expectations and one
+zero-failure summary. Cases cover true/false caching, latest-only replacement, exact acknowledgement,
+document/epoch/generation changes, invalid coordinates, admission refusal without retry spin,
+invalidation, joined Close, signed zero, negative coordinates and serial exhaustion. Seven compile-time
+traits constrain scalar ownership and the 256-byte ceiling. Focused runs are not complete HostTests,
+Application, native-matrix or timing qualification; those receipts remain separate P1 obligations.

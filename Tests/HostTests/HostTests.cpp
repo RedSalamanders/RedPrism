@@ -38,6 +38,7 @@
 #include "Host.Tests.RetainedGrowth.h"
 #include "Host.Tests.RetainedSlotAdmission.h"
 #include "Host.Tests.RetirementMemory.h"
+#include "Host.Tests.SelectionCursorRequests.h"
 #include "Host.Tests.UiFrameLatency.h"
 #include "Host.Tests.UiTimingAttribution.h"
 #include "Host.Tests.WarpFactoryLifetime.h"
@@ -1987,6 +1988,7 @@ int wmain(int argc, wchar_t** argv)
     TestVersionInfo();
     gFailures += RunPublicationCallbackTests();
     gFailures += RunPublicationRetentionTests();
+    gFailures += RunSelectionCursorRequestsTests();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

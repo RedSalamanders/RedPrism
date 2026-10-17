@@ -1660,3 +1660,18 @@ cannot substitute a smaller New-only envelope. Physical-prefix overflow chooses 
 allocating replacement input. Joined Close retains the producer/source until the original acknowledgement;
 all source/geometry/history/control readers retain their declared charges through actual retirement.
 The normal-memory structural proof does not replace complete consumer, ordinary-host or G1 measurements.
+
+## Cursor request state prerequisite
+
+`SelectionCursorRequests` holds at most one active request, one replaceable latest descriptor,
+one cached reply and one failed-admission identity in at most 256 bytes of trivial storage.
+Its key binds document serial, document generation, cursor epoch and finite document coordinates.
+A replacement cannot dispatch until the exact original request is acknowledged; foreign or duplicate
+acknowledgements cannot consume it. Invalid queries and Close clear publication authority while
+retaining the active identity through acknowledgement. Close is permanent. A failed identical query
+cannot retry on repeated pointer messages; a changed query can request admission again. Serials
+never wrap. The helper owns no geometry, scheduler, document, history or graphics resources.
+
+This scalar prerequisite alone neither moves the physical cursor consumer to a worker nor qualifies
+ordinary activation, complete memory admission or G1. The selected host must still admit and capture
+immutable geometry, cancel stale work, retire captured readers and acknowledge joined shutdown.
