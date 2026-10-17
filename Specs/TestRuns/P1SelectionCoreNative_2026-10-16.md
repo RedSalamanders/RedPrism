@@ -316,3 +316,38 @@ Appended status correction: the repaired shared engine's real ASan is already in
 [Existing engine evidence](P1SelectionGestureNotifications_2026-10-16.md#repaired-shared-engine-real-asan-qualified)
 and [Main receipt](../../.build/P1Drafts/S5PressEngineAsan-r1-Main/main-qualified.json) supersede the earlier pending
 engine-ASan statement above. Actual caller qualification, ordinary activation, native adoption, G1 and P1 Done remain open.
+
+## Full native Release r1092 qualified after archive/readback recovery (2026-10-17)
+
+Main qualifies the actual H11 x64 Release parent r1092, PID 5940, exit 0,
+`2026-10-17T00:23:24.950308Z`–`2026-10-17T01:00:25.681689Z` (UTC). Independent roster/artifact/PE-PDB receipts agree on
+1,800 verified archived files, 953 actual compiler records, all 1,389 unchanged compiled/project/toolchain inputs,
+and five exact executable/PDB pairs. The 1,393-input transport freeze is
+`BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`.
+
+The complete Release roster passes 22,010 Document records; 142 Application stages with 8,272 stdout and
+7,613 stderr assertions; 9,023 Host PASS records; 7,391 composition/WARP records; and 1,953 I/O records.
+Archive completion SHA-256: `78B3B923BFD5F1BC2DC394C7719767C854E550600F30A1F868C9E6CC5FC2D13A`.
+[Main qualification](../../.build/P1Integration/LassoHost-r1-Main/r1092-main-qualified.json);
+independent [roster](../../.build/P1Integration/LassoHost-r1-Main/r1092-independent-roster.json),
+[artifacts](../../.build/P1Integration/LassoHost-r1-Main/r1092-independent-artifacts.json),
+[PE/PDB identities](../../.build/P1Integration/LassoHost-r1-Main/r1092-independent-pe-pdb.json).
+
+The original archiver fails for disk space while copying `RedPrism.pdb`; its
+[copy-error log](../../.build/P1Integration/LassoHost-r1-Main/r1092-archive-copy-failed-r1.log) and partial archive
+`.build/P1A/2026-10-17/P1-LassoHost-x64-Release-r1092-passed-20261017/` remain retained.
+[Recovery preparation](../../.build/P1Integration/LassoHost-r1-Main/r1092-archive-recovery-preparation.json)
+keeps the original archive recipe/checks and copies into the fresh C: archive
+`.build/P1A/2026-10-17/P1-r1092-x64-Release-recovered/`. No native build or runtime is rerun.
+H11's coordinator joins with exit 1 on that copy refusal; it is not a coordinator PASS. Main's recovered
+qualification applies to the actual native parent exit 0 and its independently verified original evidence.
+
+The first roster reader consults the old R5 preflight and refuses its stale transport metadata before roster parsing.
+[Readback preparation](../../.build/P1Drafts/NativeReleaseReadback-r1-Main/preparation.json) changes only the current
+preflight reference and a fresh readback path; the actual/current freeze is the BF07 hash above. Exact source pins,
+stream policies, counts and goldens remain unchanged. This readback repair also repeats no build or runtime.
+
+This supersedes the earlier pending r1092 status. All seven baseline profiles now qualify: x64 Debug r1074,
+real ASan r1075, ARM64 Debug/Release/instrumented-ASan r1086–r1088, Release analysis r1091 and full Release r1092.
+ARM64 evidence is cross-build only; native ARM64 runtime remains unavailable. Private APIs and new gesture candidates
+remain unadopted and outside this baseline qualification. Ordinary activation, measured G1 and P1 Done remain open.

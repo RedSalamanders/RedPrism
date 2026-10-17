@@ -5,17 +5,20 @@
 - [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
 - [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
 - [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
-- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; the separate 339-source/144-stage caller has build/ISA exit 0 and awaits serialized runtime qualification.
-- [ ] Close/click history residency: add owner try/worker refresh on the original ticket before final transfer, cover late sparse materialization, busy/cancel/Close and exact trim outcomes, and release the permit before callbacks. Current CPU admission receipts do not close this H3 gate.
+- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; R4 fails its cancellation-wait checkpoint, so R5 never runs; a fresh 340-source/145-stage diagnostic caller is compiling.
+- [x] Qualify the initial 30 close/click residency controls in private Release and real ASan (22,364 total each), retaining exact source/artifact checks and two independently confirmed review gaps; [scoped evidence](../../TestRuns/P1SelectionGestureResidency_2026-10-17.md).
+- [x] Qualify the stronger 47-control repair in private Release R6 and real ASan R2: 22,381 assertions each, 273 compiler records, exact live charges, foreign-editor refusal and actual UAF control; compile/preflight failures remain retained.
+- [ ] Commit/push the qualified protocol and scoped contracts, then complete actual-caller/native integration before activation or G1 closure.
+- [ ] Qualify real queued/active selection-press shutdown; the new 21-control Win32 draft finishes its exact stamp and drops a never-started prefix after joined Close. It is uncompiled and grants no activation or G1 claim.
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 - [x] Qualify the repaired shared engine under real ASan: all 22,296 assertions, 270 instrumented compiler records, its actual UAF control and 1,616-file archive independently pass; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 - [x] Commit/push the qualified shared engine and 68-control fixture as `06b3743` on `ej/p1-selection-gesture-prerequisites`, keeping the native matrix source unchanged.
-- [ ] Qualify the actual Win32 caller: 144 stages, 41 new controls and 71 inherited scalar checks remain due after its build/ISA pass; production bounds, remaining branches, native adoption and measured G1 remain open.
+- [ ] Qualify the actual Win32 caller after the retained R4 cancellation-wait failure. R5 preserves build/ISA evidence and refuses the failed predecessor before runtime; the fresh diagnostic candidate retains all 41 physical and 71 scalar checks and adds 21 joined-shutdown controls. Remaining branches, native adoption and G1 stay open.
 
 - [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
 - [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
-- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. Private App R4 has build exit 0 and ISA exit 0 for 339 sources; its runtime remains due and is serialized after native Release qualification.
+- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. Private App R4 has a retained actual runtime exit 5 at the cancellation-wait checkpoint; R5 runtime is refused. The fresh diagnostic caller is compiling against the qualified native baseline and stronger CPU protocol.
 
 ### Remaining gates before P1 Done
 
@@ -37,7 +40,7 @@ actual parent exit 0, 1,813 archived files, 953 compiler records, all 1,389 unch
 inputs, five exact PE/PDB pairs and zero ISA violations. The original H10 long-path reader refusal is retained;
 extended-path access reproduces the original checks against the same evidence without rerunning analysis.
 H10/H11 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`.
-Fresh H11 full Release r1092 has launched and remains unqualified. r1089's actual compiler-space failure and
+Full Release r1092 now independently qualifies 1,800 archive files, 953 compiler records and its complete runtime roster. The original archive-copy disk refusal and stale roster-transport metadata refusal are retained; recovery repeats no build or runtime. r1089's actual compiler-space failure and
 1,805-file archive remain retained; r1090 never launched. ARM64 Debug/Release/instrumented-ASan r1086–r1088
 already pass as cross-builds; native ARM64 runtime is unavailable. Earlier entries below retain their historical status.
 
@@ -92,7 +95,7 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify ARM64 Release r1087: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs independently verified.
 - [x] Qualify instrumented ARM64 ASan r1088: 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs independently checked; all three ARM64 cross-builds pass.
 - [x] Qualify canonical full Release Rebuild/Analyze r1091: 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled inputs, five exact PE/PDB pairs and zero ISA violations; the original long-path reader refusal is retained. [Evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md#canonical-release-rebuildanalyze-r1091-qualified-2026-10-17).
-- [ ] Qualify fresh H11 full Release r1092 on that same compiled source; the earlier r1089 compiler-space failure is retained and r1090 never launched. Native ARM64 runtime is unavailable.
+- [x] Qualify full native Release r1092: 22,010 Document facts, 142 Application stages, all Host/composition/I/O records, 1,800 archived files and 953 compiler records; archive-copy and stale-reader-metadata refusals are retained and recovered without rerunning tests. The complete current native baseline now passes; ARM64 remains cross-build only.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
