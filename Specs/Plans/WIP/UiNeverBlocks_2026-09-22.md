@@ -8,7 +8,8 @@
 - [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; R4 fails its cancellation-wait checkpoint, so R5 never runs; a fresh 340-source/145-stage diagnostic caller is compiling.
 - [x] Qualify the initial 30 close/click residency controls in private Release and real ASan (22,364 total each), retaining exact source/artifact checks and two independently confirmed review gaps; [scoped evidence](../../TestRuns/P1SelectionGestureResidency_2026-10-17.md).
 - [x] Qualify the stronger 47-control repair in private Release R6 and real ASan R2: 22,381 assertions each, 273 compiler records, exact live charges, foreign-editor refusal and actual UAF control; compile/preflight failures remain retained.
-- [ ] Commit/push the qualified protocol and scoped contracts, then complete actual-caller/native integration before activation or G1 closure.
+- [x] Commit/push the qualified nine-path protocol/test change, three scoped contracts and evidence as `853d801` on `ej/p1-selection-gesture-prerequisites`; the native checkout remains unchanged.
+- [ ] Complete actual-caller and native integration before ordinary activation or G1 closure.
 - [ ] Qualify real queued/active selection-press shutdown; the new 21-control Win32 draft finishes its exact stamp and drops a never-started prefix after joined Close. It is uncompiled and grants no activation or G1 claim.
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
