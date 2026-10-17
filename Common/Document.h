@@ -2539,9 +2539,16 @@ class DocumentSession
                                                                             LassoOpeningSettings settings);
     [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(
         LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
-        std::shared_ptr<const SharedPublicationMemory> memory);
+        std::shared_ptr<const SharedPublicationMemory> memory, bool retainOwnGesture = false);
     [[nodiscard]] bool IsPreparedLassoOpeningCurrent(const PreparedLassoOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    // Opaque own-writer authority: a foreign editor/history or direct writer mutation refuses.
+    [[nodiscard]] bool IsPreparedLassoGestureCurrent(const PreparedLassoOpening& prepared) const noexcept;
+    [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
+                                                    bool fromCenter) noexcept;
+    [[nodiscard]] bool AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    [[nodiscard]] std::optional<LassoFinishTerminal> ClosePreparedLassoGestureForWork(
+        PreparedLassoOpening& prepared, bool terminalAntialiased) noexcept;
     // Display capture follows complete display admission; close follows complete finish admission.
     [[nodiscard]] std::optional<LassoFinishTerminal> CaptureBoundedLassoDisplayForWork() const noexcept;
     [[nodiscard]] std::optional<LassoFinishTerminal> CloseBoundedLassoForWork(
@@ -3523,6 +3530,7 @@ class DocumentSession
     bool _lassoClosedMask = false;
     std::optional<DocumentHistory::StateView> _lassoClosedHistory;
     void InvalidateLassoPendingIntents() noexcept;
+    [[nodiscard]] bool CanApplyHistoryRestoreWithoutLasso(const HistoryRestoreAuthority& authority) const noexcept;
     [[nodiscard]] std::optional<LassoOpeningInput> CaptureLassoOpeningInput(Vec2 point, SelectionMode mode,
                                                                             LassoKind kind, bool marquee,
                                                                             std::optional<bool> capturedAntialiased);

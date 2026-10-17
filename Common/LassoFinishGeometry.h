@@ -57,6 +57,10 @@ struct Result final
     std::optional<DocumentSelection> selection;
     LassoKind kind = LassoKind::Freehand;
 };
+// Rectangle/New has at most four input corners. These fixed ceilings apply to its worker clip as well
+// as its complete Down-time admission. Source selection is retained/accounted separately, never a clip input.
+[[nodiscard]] BoundedSelectionBoolean::Limits NewRectangleLimits() noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanNewRectangle() noexcept;
 [[nodiscard]] std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                              const std::optional<DocumentSelection>& before,
                                              BoundedSelectionBoolean::Limits limits = {}) noexcept;

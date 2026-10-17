@@ -69,5 +69,8 @@ class PreparedLassoOpening final
     std::shared_ptr<BoundedLassoGesture> _writer;
     std::shared_ptr<const SharedPublicationMemory> _memory;
     std::uint64_t _retirementBytes = 0;
+    BoundedLassoGesture::Key _gestureKey;
+    bool _ownGesture = false; // Only the original-parent opt-in retains the applied writer.
+    bool _gestureActive = false;
     bool _applied = false;
 };

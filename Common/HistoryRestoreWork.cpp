@@ -103,12 +103,17 @@ HistoryRestoreAuthority DocumentSession::CaptureHistoryRestoreAuthority() const 
 
 bool DocumentSession::CanApplyHistoryRestore(const HistoryRestoreAuthority& authority) const noexcept
 {
+    return !_lassoDraft && CanApplyHistoryRestoreWithoutLasso(authority);
+}
+
+bool DocumentSession::CanApplyHistoryRestoreWithoutLasso(const HistoryRestoreAuthority& authority) const noexcept
+{
     return authority._valid && authority._session == _tokenIdentity.value &&
            authority._documentSerial == _documentSerial && authority._generation == _generation &&
            authority._restoreSerial == _restoreSerial && authority._active == _activeLayerID &&
            authority._maskSelected == _maskSelected && authority._crop == _cropRect && !HasColorEdit() && !_gradient &&
            !_transformEdit && !_brush && !_brushFinishingOpening && !_brushUpdatingOpening && !HasPendingWarp() &&
-           !_pixelMove && !_shapeDraft && !_selectionMoveOrigin && !_lassoDraft;
+           !_pixelMove && !_shapeDraft && !_selectionMoveOrigin;
 }
 
 bool DocumentSession::ApplyPreparedHistoryRestoreIfCurrent(PreparedHistoryRestore& prepared) noexcept

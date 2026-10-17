@@ -44,6 +44,34 @@ struct ByteSum final
         return true;
     }
 };
+[[nodiscard]] std::optional<MemoryPlan> CalculatePlan(LassoKind kind, std::uint64_t pointCount,
+                                                      std::uint64_t retainedArenaBytes, std::uint64_t traversalBytes,
+                                                      BoundedSelectionBoolean::Limits limits) noexcept
+{
+    MemoryPlan result;
+    result.retainedArenaBytes = retainedArenaBytes;
+    result.traversalBytes = traversalBytes;
+    ByteSum outline, output, complete;
+    const auto points = kind == LassoKind::Ellipse ? std::uint64_t{2048} : pointCount;
+    if (points > limits.inputPoints - (std::min)(limits.inputPoints, std::uint64_t{4}))
+        return std::nullopt;
+    const auto ownership = SelectionLoops::WorkOwnershipAllowance(limits.outputLoops);
+    if (!ownership || !outline.Add(points, sizeof(Vec2)) || !outline.Add(1024) ||
+        !output.Add(limits.outputPoints, sizeof(Vec2)) || !output.Add(limits.outputLoops, sizeof(SelectionLoop)) ||
+        !output.Add(ownership) || !output.Add(sizeof(std::vector<SelectionLoop>)))
+        return std::nullopt;
+    result.outlineBytes = outline.value;
+    result.workspaceBytes = PixelBuffer::RequiredBytes(limits.workspaceBytes);
+    result.outputBytes = output.value;
+    // One adapter workspace at a time; clipped output coexists with mode output and the original outline.
+    // Recycled workspace capacity remains charged rather than assuming free returns process commit.
+    if (!result.workspaceBytes || !complete.Add(result.traversalBytes) || !complete.Add(result.outlineBytes) ||
+        !complete.Add(result.workspaceBytes) || !complete.Add(result.outputBytes, 2) ||
+        !complete.Add(SharedPublicationMemory::OwnershipAllowance()) || !complete.Add(sizeof(Result) + 4096))
+        return std::nullopt;
+    result.preparationBytes = complete.value;
+    return result;
+}
 [[nodiscard]] std::optional<SelectionLoop> Oval(SelectionBounds box, const CancelToken& cancellation)
 {
     const double a = box.Width() / 2.0, b = box.Height() / 2.0;
@@ -70,6 +98,23 @@ struct ByteSum final
 }
 } // namespace
 
+BoundedSelectionBoolean::Limits NewRectangleLimits() noexcept
+{
+    BoundedSelectionBoolean::Limits limits;
+    limits.workspaceBytes = 64 * 1024;
+    limits.inputPoints = 8; // Four marquee corners plus the four canvas corners.
+    limits.inputLoops = 2;
+    limits.outputPoints = 16;
+    limits.outputLoops = 4;
+    return limits;
+}
+
+std::optional<MemoryPlan> PlanNewRectangle() noexcept
+{
+    // MarqueeOwner always resets its inline tail before adding four corners; no sealed prefix is traversed.
+    return CalculatePlan(LassoKind::Rectangle, 4, BoundedLassoPoints::MemoryBytes(1), 0, NewRectangleLimits());
+}
+
 std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                const std::optional<DocumentSelection>& before,
                                BoundedSelectionBoolean::Limits limits) noexcept
@@ -77,32 +122,12 @@ std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
     if (!terminal.key.opening || !terminal.key.revision || terminal.kind > LassoKind::Ellipse ||
         terminal.mode > SelectionMode::Subtract || !ValidLimits(limits) ||
         terminal.points.Count() > limits.inputPoints - (std::min)(limits.inputPoints, std::uint64_t{4}) ||
-        limits.inputLoops < 2 || (before && before->loops.PointCount() > limits.outputPoints) ||
-        (before && before->loops.size() >= limits.inputLoops))
+        limits.inputLoops < 2 ||
+        (terminal.mode != SelectionMode::New && before &&
+         (before->loops.PointCount() > limits.outputPoints || before->loops.size() >= limits.inputLoops)))
         return std::nullopt;
-    MemoryPlan result;
-    result.retainedArenaBytes = terminal.points.RetainedArenaBytes();
-    result.traversalBytes = terminal.points.TraversalScratchBytes();
-    ByteSum outline, output, complete;
-    const auto points = terminal.kind == LassoKind::Ellipse ? std::uint64_t{2048} : terminal.points.Count();
-    if (points > limits.inputPoints - (std::min)(limits.inputPoints, std::uint64_t{4}))
-        return std::nullopt;
-    const auto ownership = SelectionLoops::WorkOwnershipAllowance(limits.outputLoops);
-    if (!ownership || !outline.Add(points, sizeof(Vec2)) || !outline.Add(1024) ||
-        !output.Add(limits.outputPoints, sizeof(Vec2)) || !output.Add(limits.outputLoops, sizeof(SelectionLoop)) ||
-        !output.Add(ownership) || !output.Add(sizeof(std::vector<SelectionLoop>)))
-        return std::nullopt;
-    result.outlineBytes = outline.value;
-    result.workspaceBytes = PixelBuffer::RequiredBytes(limits.workspaceBytes);
-    result.outputBytes = output.value;
-    // One adapter workspace at a time; clipped output coexists with mode output and the original outline.
-    // Recycled workspace capacity remains charged rather than assuming free returns process commit.
-    if (!result.workspaceBytes || !complete.Add(result.traversalBytes) || !complete.Add(result.outlineBytes) ||
-        !complete.Add(result.workspaceBytes) || !complete.Add(result.outputBytes, 2) ||
-        !complete.Add(SharedPublicationMemory::OwnershipAllowance()) || !complete.Add(sizeof(Result) + 4096))
-        return std::nullopt;
-    result.preparationBytes = complete.value;
-    return result;
+    return CalculatePlan(terminal.kind, terminal.points.Count(), terminal.points.RetainedArenaBytes(),
+                         terminal.points.TraversalScratchBytes(), limits);
 }
 
 std::optional<Result> Prepare(const BoundedLassoGesture::Display& terminal, int width, int height,

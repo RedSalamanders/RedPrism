@@ -422,3 +422,7 @@ host callback or joined shutdown cleanup. The original source/history/saved-mark
 
 The selected CPU protocol is independently tested. Actual pointer callers, native integration, ordinary
 activation, the other gesture branches and measured G1 remain separate gates.
+
+## Owned lasso authority and history exclusion
+
+A selected own-writer lasso may validate its original immutable history epoch while ignoring only its exact currently owned lasso draft in the editor exclusion check. Every other editor exclusion remains mandatory; a foreign Begin invalidates the writer even when generation/revision are unchanged. General `CanApplyHistoryRestore` continues to reject every live lasso. Own drag/abort/close before a prepared selection publication preserve generation, revision, Undo/Redo and transaction depth.

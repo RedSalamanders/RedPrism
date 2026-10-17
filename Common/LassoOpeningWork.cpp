@@ -69,7 +69,7 @@ std::optional<LassoOpeningInput> DocumentSession::CaptureLassoOpeningInput(Vec2 
 }
 std::optional<PreparedLassoOpening> DocumentSession::PrepareLassoOpening(
     LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
-    std::shared_ptr<const SharedPublicationMemory> memory)
+    std::shared_ptr<const SharedPublicationMemory> memory, bool retainOwnGesture)
 {
     const auto bytes = PreparedLassoOpening::MemoryBytes(blocks);
     if (!input._valid || !input._opening || !bytes || !memory || cancellation.IsCancelled())
@@ -78,6 +78,7 @@ std::optional<PreparedLassoOpening> DocumentSession::PrepareLassoOpening(
     if (!points || cancellation.IsCancelled())
         return std::nullopt;
     PreparedLassoOpening prepared(std::move(input));
+    prepared._ownGesture = retainOwnGesture;
     // The arena has its own original accounted publication. The writer declares only its new control/object;
     // the conservative retirement bound includes both, without charging the shared arena twice.
     prepared._writer =
@@ -112,14 +113,62 @@ bool DocumentSession::ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& p
     draft.anchor = prepared._input._marquee
                        ? std::optional(Vec2{std::round(prepared._input._point.x), std::round(prepared._input._point.y)})
                        : std::nullopt;
-    draft._bounded = std::move(prepared._writer);
+    if (prepared._ownGesture)
+        draft._bounded = prepared._writer; // Original parent retains its exact opaque writer until retirement.
+    else
+        draft._bounded = std::move(prepared._writer); // Reference/cold opening keeps its original ownership graph.
     draft._boundedRetirementBytes = prepared._retirementBytes;
     _lassoOpening = prepared._input._opening;
     InvalidateLassoPendingIntents();
     _lassoDraft.emplace(std::move(draft));
+    if (prepared._ownGesture)
+    {
+        prepared._gestureKey = prepared._writer->CurrentOwner();
+        prepared._gestureActive = true;
+    }
     prepared._applied = true;
     return true;
 }
+bool DocumentSession::IsPreparedLassoGestureCurrent(const PreparedLassoOpening& prepared) const noexcept
+{
+    return prepared._ownGesture && prepared._applied && prepared._gestureActive && prepared._input._valid &&
+           prepared._writer && _lassoDraft && _lassoDraft->_bounded == prepared._writer &&
+           _lassoOpening == prepared._input._opening && prepared._writer->ActiveOwner() &&
+           prepared._writer->CurrentOwner() == prepared._gestureKey &&
+           CanApplyHistoryRestoreWithoutLasso(prepared._input._authority) &&
+           history.IsCurrent(prepared._input._history) && CanApplyJobResult(prepared._input._token, 0);
+}
+
+bool DocumentSession::DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
+                                                   bool fromCenter) noexcept
+{
+    if (!prepared._input._marquee || !IsPreparedLassoGestureCurrent(prepared) ||
+        !DragBoundedMarquee(point, square, fromCenter))
+        return false;
+    prepared._gestureKey = prepared._writer->CurrentOwner();
+    return true;
+}
+
+bool DocumentSession::AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept
+{
+    if (!IsPreparedLassoGestureCurrent(prepared))
+        return false;
+    CancelLasso();
+    prepared._gestureActive = false;
+    return true;
+}
+
+std::optional<LassoFinishTerminal> DocumentSession::ClosePreparedLassoGestureForWork(PreparedLassoOpening& prepared,
+                                                                                     bool terminalAntialiased) noexcept
+{
+    if (!IsPreparedLassoGestureCurrent(prepared))
+        return std::nullopt;
+    auto terminal = CloseBoundedLassoForWork(terminalAntialiased);
+    if (terminal)
+        prepared._gestureActive = false;
+    return terminal;
+}
+
 std::optional<LassoFinishTerminal> DocumentSession::CaptureBoundedLassoDisplayForWork() const noexcept
 {
     if (!_lassoDraft || !_lassoDraft->_bounded || !_lassoDraft->_bounded->ActiveOwner())

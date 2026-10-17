@@ -1614,3 +1614,7 @@ mutable document session, UI or GPU owner. The selected structural proof does no
 ## Lasso opening settings and history authority
 
 Queued lasso opening may retain fixed-size primitive kind/AA settings and an exact history authority value. Capture and owner acquisition perform bounded identity/epoch checks without scanning history or allocating point vectors. The input, writer/control, arena, source roots and retirement must remain covered by the original admitted ticket; this small settings API does not provide complete physical-gesture admission. A history Begin invalidates old openings even when document generation/revision are unchanged. Final retained-resource refund remains independently required.
+
+## Rectangle/New worker envelope and owned writer retention
+
+Rectangle/New geometry may use the fixed `PlanNewRectangle` envelope: one arena block, no sealed-prefix traversal, 64 KiB clip workspace, 8 input points/2 input loops and 16 output points/4 output loops. The actual worker must use these same limits. Old selection geometry is retained/accounted separately and is not a New clip input; Add/Subtract cannot inherit this plan for a large prior. This geometry envelope excludes source/history, host prefix, display, refresh and retirement, which must be admitted before capture. Opted-in prepared lasso owners keep their original writer/arena charged after abort or document replacement until final strong and weak owner release; neither settlement nor a removed live draft alone permits refund.
