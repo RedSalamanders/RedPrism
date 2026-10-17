@@ -1,81 +1,22 @@
 # Ordered selection workers (P1.6)
 
-- [x] Complete integrated `29a8ac2` ARM64 Debug/Release/instrumented-ASan qualification: all three canonical Rebuilds, exact 969-source command sets, complete archives and five matching AA64 PE/PDB pairs pass. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md#arm64-instrumented-asan-r1095-qualified--matrix-complete). Native ARM64 runtime is unavailable.
-- [x] Private outside-hit Rectangle/New parent and exact intent cleanup qualify all 22,596 Release facts; retain the actual compile and cancellation-driver failures. Predicates and production code stay unchanged through both fixture repairs.
-- [ ] Qualify exact-source real ASan (active), then the separate 83-fact actual Win32 fixture; complete later integration and latest native gates. No ordinary activation or G1 closure yet.
+## Current delivery checklist — 2026-10-17
 
-- [x] ARM64 Release r1094 qualifies the same frozen integrated source: 1,492 archive files, 969 compiler records and five exact AA64 PE/PDB pairs; [evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md#arm64-release-r1094-qualified).
-- [ ] Finish latest integrated x64 Debug/Release/real ASan/analysis after the next combined integration; all current-source ARM64 cross-builds qualify above.
-- [x] Private guarded own-writer/Rectangle-New plan passes all 22,491 Release facts (64 new), with 276 compiler records and the complete archive independently verified.
-- [x] Exact-source own-writer/rectangle real ASan qualifies all 22,491 assertions and its actual UAF probe, with 276 instrumented commands and complete archive; code/tests/four contracts/evidence are pushed as `e695e32`. [Evidence](../../TestRuns/P1LassoDrawingAuthority_2026-10-17.md).
-- [ ] Qualify the separate outside-hit Rectangle/New physical parent, exact intent cleanup and actual Win32 fixture; this draft is uncompiled. Ordinary activation, full remaining branches and G1 remain open.
+This child plan and parent P1 remain **WIP**. Earlier dated notes are historical.
 
-- [x] Captured settings/history epoch qualifies and is pushed as `e03a80d`: all 22,427 assertions pass in Release and real ASan; all 46 predicates and the two actual pre-fix failures remain preserved. [Evidence](../../TestRuns/P1LassoOpeningSettings_2026-10-17.md).
-- [ ] Finish guarded own-writer/rectangle-plan proof and the outside-hit/New Rectangle original-parent branch; the next private draft is uncompiled.
-- [x] Qualify native integrated-source ARM64 Debug r1093: 969 exact compiler records, 1,492 archive files and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
-- [x] Finish the same native freeze in ARM64 instrumented ASan; all three cross-build profiles qualify above, and the controller joins 0.
+- [x] Integrated `29a8ac2` passes canonical ARM64 Debug/Release/instrumented-ASan Rebuilds with 969 exact compiler records per profile and five verified AA64 PE/PDB pairs; native ARM64 runtime is unavailable. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
+- [x] Inside-outline actual caller passes Release and real ASan: 41 physical, 21 shutdown and 71 scalar controls plus all 145 Application stages. The 51 reviewed paths and five contracts are adopted. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
+- [x] Settings/history epoch (`e03a80d`), own writer/Rectangle plan (`e695e32`) and outside-hit Rectangle/New CPU parent with exact cleanup (`3b7e55a`) each pass their exact-source Release and real-ASan rosters. The latest has 22,596 assertions, including 105 new facts. [Latest CPU evidence](../../TestRuns/P1RectangleGestureParent_2026-10-17.md).
+- [x] Retain the actual compile, cancellation-driver and Alt compatibility failures; prove the correction against legacy canvas behavior while preserving explicit model-centered goldens.
+- [x] Preserve Rectangle Win32 R1 API compile failure, R2 disk-preflight refusal, R3 new stale-outcome expectation failure and R4 post-shutdown driver failure. Independently verify every failed archive before its repair.
+- [ ] Qualify Rectangle Win32 Release R5 (active), all 83 new facts and all predecessor records; then the exact-source real-ASan host.
+- [ ] Adopt combined code/contracts and qualify latest native x64 Debug/Release/real ASan/analysis and ARM64 cross-builds.
+- [ ] Complete the remaining marquee/lasso/Add/Subtract/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
+- [ ] Prove complete original-ticket phase/retirement bounds, actual view/DPI/device behavior, ordinary activation and measured S5/G1 before closing this child or P1.
 
-
-- [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
-- [x] Exact caller real ASan: fresh 340-source build/ISA, 145-stage actual runtime, 41 physical/21 shutdown/71 scalar controls, every native predecessor and the actual UAF probe independently pass. The 51 reviewed code/test/project paths and five CPU contracts are adopted with 1,269-file formatting.
-- [ ] Fresh native Debug/Release/real ASan, analysis and ARM64 cross-builds for this integration; remaining physical branches, display/phase ownership and ordinary activation. Private results do not close S5 or G1.
-
-
-## Current delivery checklist (2026-10-16)
-
-- [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
-- [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
-- [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
-- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; R4 fails its cancellation-wait checkpoint, so R5 never runs; a fresh 340-source/145-stage diagnostic caller is compiling.
-- [x] Qualify the initial 30 close/click residency controls in private Release and real ASan (22,364 total each), retaining exact source/artifact checks and two independently confirmed review gaps; [scoped evidence](../../TestRuns/P1SelectionGestureResidency_2026-10-17.md).
-- [x] Qualify the stronger 47-control repair in private Release R6 and real ASan R2: 22,381 assertions each, 273 compiler records, exact live charges, foreign-editor refusal and actual UAF control; compile/preflight failures remain retained.
-- [x] Commit/push the qualified nine-path protocol/test change, three scoped contracts and evidence as `853d801` on `ej/p1-selection-gesture-prerequisites`; the native checkout remains unchanged.
-- [ ] Complete actual-caller and native integration before ordinary activation or G1 closure.
-- [ ] Qualify real queued/active selection-press shutdown; the new 21-control Win32 draft finishes its exact stamp and drops a never-started prefix after joined Close. It is uncompiled and grants no activation or G1 claim.
-
-- [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
-- [x] Qualify the repaired shared engine under real ASan: all 22,296 assertions, 270 instrumented compiler records, its actual UAF control and 1,616-file archive independently pass; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
-- [x] Commit/push the qualified shared engine and 68-control fixture as `06b3743` on `ej/p1-selection-gesture-prerequisites`, keeping the native matrix source unchanged.
-- [ ] Qualify the actual Win32 caller after the retained R4 cancellation-wait failure. R5 preserves build/ISA evidence and refuses the failed predecessor before runtime; the fresh diagnostic candidate retains all 41 physical and 71 scalar checks and adds 21 joined-shutdown controls. Remaining branches, native adoption and G1 stay open.
-
-- [x] Qualify private bounded physical-prefix Release R2 and real ASan R2: 55 new facts plus all 22,228 predecessors, with retained runtime/link failures and complete artifact checks; [evidence](../../TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md).
-- [x] Commit/push the qualified prefix test code and evidence as `b4e3656` on `ej/p1-selection-gesture-prerequisites`, preserving the native compiled-source freeze.
-- [ ] Qualify the extracted reusable job and its actual Application/Win32 handlers, complete caller admission and remaining physical branches before native integration or ordinary activation. Private App R4 has a retained actual runtime exit 5 at the cancellation-wait checkpoint; R5 runtime is refused. The fresh diagnostic caller is compiling against the qualified native baseline and stronger CPU protocol.
-
-- [x] Independently qualify private selected Begin/End history ownership in Release and real ASan: 23 new facts plus all 22,010 predecessors. Preserve the original profile-reader refusal; Main's correction keeps the complete actual stream and exact existing ASan witness. [Ownership evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
-- [ ] Adopt the selected ownership API and qualify actual physical-press/terminal publication lifetimes and complete original-ticket admission; private CPU proof alone does not enable S5.
-- [x] Qualify the native successful-publication repair in full Debug r1074, real ASan r1075 and ARM64 Debug r1086; preserve r1073 and the r1076 disk-full failure independently.
-- [x] Qualify native ARM64 Release r1087 with complete archive, compiler and exact five executable/PDB checks.
-- [x] Qualify instrumented ARM64 ASan r1088 with 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs; all three ARM64 cross-builds pass.
-- [x] Qualify canonical full Release Rebuild/Analyze r1091: 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled inputs, five exact PE/PDB pairs and zero ISA violations; the original long-path reader refusal is retained. [Evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md#canonical-release-rebuildanalyze-r1091-qualified-2026-10-17).
-- [x] Qualify full native Release r1092: 22,010 Document facts, 142 Application stages, all Host/composition/I/O records, 1,800 archived files and 953 compiler records; archive-copy and stale-reader-metadata refusals are retained and recovered without rerunning tests. The complete current native baseline now passes; ARM64 remains cross-build only.
-- [x] Qualify private corrected original-parent/charged-command/opaque-cleanup Release R4 and real ASan R2: all 22,228 assertions, complete geometry/control bounds, moved Lost, exact post-Close final refund and complete archive/artifact checks; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
-
-- [x] Qualify the combined startup/I/O/lasso source `67a77dd` in canonical analysis, full x64 Debug/Release/real ASan and all ARM64 cross-builds; [x64](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md), [ARM64](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
-- [x] Independently qualify full Debug r1052 for the newer 43-path Hue/Wand/Paint/distortion/follow-through integration, including 28 new CPU and 29 actual host follow-through facts; [receipt](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
-- [x] Validate Main's combined source and fixture heap repairs in later analysis r1066, Release r1067, Debug r1074, real ASan r1075 and ARM64 r1086–r1088. Preserve the earlier failed attempts: r1053 analysis failed C6262 (Application frame 16,464 bytes; Clipboard frame 131,752 bytes); Release r1054, real ASan r1055, and ARM64 Debug/Release/instrumented-ASan r1056–r1058 were not launched. The failed attempt remains preserved; none of these gates is passed.
-- [x] Qualify the isolated private S5 core in Release and real ASan: 146 new assertions plus all 21,863 predecessors (22,009 total), with actual compiler, ISA, PE/PDB, archive and sanitizer-probe readback; [evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
-- [x] Reproduce and retain the collapsed finite-offset hit-parity failure: exactly one new predicate fails while all 22,009 prior records pass; independently qualify the corrected private Release and real-ASan candidates with 147 new assertions plus all 21,863 predecessors (22,010 total). Keep the before/after archives and the original failure.
-- [x] Qualify private scalar outline translation, prepared opening/closure/publication, exact cancellable hit work, bounded physical-press-prefix capture, and selected translated-output geometry/weak-control lifetime. Main adopts the reviewed core in 29 paths with the fixture repairs; r1059 fails and is archived. Shared-helper/capacity-proof repairs are adopted; fresh analysis r1066 passes all source/archive/compiler and five-image checks. Full Release r1067 qualifies 22,010 Document facts, 142 Application stages and its full archive/artifact checks; Debug r1068 subsequently refuses after its full test log because of two extra uncompiled helper drafts; all evidence is preserved and no numeric child exit is inferred. The clean-snapshot r1073 clipboard failure is retained; its repair qualifies in Debug r1074, real ASan r1075 and ARM64 Debug r1086. Remaining current native profiles and actual physical selection-press dispatch remain open.
-- [x] Qualify private R8 scalar closure on the real two-worker/WARP host: 71 stronger facts, all predecessor Application events, worker allocation, original-ticket retention, final zero reserved/releasing bytes and exact archive/artifact readback; [evidence](../../TestRuns/P1ScalarSelectionClosureHost_2026-10-16.md).
-- [x] Independently qualify the private stronger scalar host under real ASan R4: 71 new facts and all 143 stages, retaining the earlier diagnostic failure without a causal claim.
-- [ ] Adopt that reviewed host closure and the separately qualified model prerequisites, then qualify native source and complete physical callers.
-- [ ] Integrate and validate original-gesture admission, physical-prefix replay, overlapping writers and all outside-hit/Wand/pixel-lift branches, preserving-panel authority, cursor/display consumers, worker settlement, and actual host/lifecycle/error paths.
-- [ ] Prove complete phase/retirement bounds and exact view/DPI/device behavior; qualify ordinary activation and required native profiles after the fresh combined-source matrix.
-- [ ] Close specified G1 measurements and remaining parent gates before P1 Done.
-
-Current native status (2026-10-17): Main independently verifies r1089's actual analysis exit 1,
-C1088 on C: compiler TEMP, and all 1,805 archived files; r1090 never launched.
-Fresh H10 r1091 is a full canonical Release Rebuild/Analyze (`build.ps1` always forces Rebuild),
-with both TMP/TEMP set to `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r1092 follows.
-H10 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`; all 1,389 compiled/project/toolchain inputs are unchanged.
-Both new gates remain pending. ARM64 Debug/Release/instrumented-ASan r1086–r1088 already pass;
-native ARM64 runtime is unavailable. Earlier checkpoint entries below retain their historical status.
-
-`OwnerWorkMultiplexer` now has eleven qualified leaves. The historical ten-leaf/private-host descriptions
-below describe earlier snapshots. The complete startup/lasso host has since qualified; complete S5 delivery,
-ordinary activation and measured G1 remain open. Native ARM64 runtime remains unavailable. The private S5 receipts
-above do not establish native adoption, ordinary host activation, native ARM64 runtime, G1 or P1 Done.
+Previous private core, original-parent, physical-prefix, cached admission and residency prerequisites remain
+qualified in their named evidence reports; they alone do not activate the ordinary host. The current
+checklist supersedes the old duplicated pending/active summaries retained below.
 
 ## Historical continuation notes (through 2026-10-12)
 
