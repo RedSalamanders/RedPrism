@@ -1,5 +1,6 @@
 #include "Selection.h"
 #include "BoundedLassoGesture.h"
+#include "SelectionHitWork.h"
 
 #include "CanvasSize.h"
 #include "RasterWork.h"
@@ -1899,4 +1900,35 @@ WandFailure DocumentSession::MagicWand(Vec2 point, SelectionMode mode, const Ras
         ApplySelection(outline.value(), mode, L"Magic Wand");
     }
     return WandFailure::None;
+}
+
+std::optional<SelectionCursorProbePlan> DocumentSession::DescribeSelectionCursorProbe() const noexcept
+{
+    const auto& selection = Selection();
+    const auto authority = CaptureDocumentReadAuthority();
+    if (!authority || !selection || selection.value().IsEmpty() || !CanEditSelection() || _lassoDraft)
+        return std::nullopt;
+    const auto bounds = selection.value().Bounds();
+    if (!bounds)
+        return std::nullopt;
+    const auto offset = HasCurrentDeferredSelectionMoveSource() ? _selectionMoveOffset.value() : Vec2{};
+    const SelectionBounds moved{bounds.value().minX + offset.x, bounds.value().minY + offset.y,
+                                bounds.value().maxX + offset.x, bounds.value().maxY + offset.y};
+    if (!std::isfinite(moved.minX) || !std::isfinite(moved.minY) || !std::isfinite(moved.maxX) ||
+        !std::isfinite(moved.maxY) || !(moved.maxX > moved.minX) || !(moved.maxY > moved.minY))
+        return std::nullopt;
+    const auto storage = selection.value().loops.StorageBytes();
+    const auto ownership = SelectionLoops::WorkOwnershipAllowance(selection.value().loops.size());
+    if (!storage || !ownership || ownership > (std::numeric_limits<std::uint64_t>::max)() - storage)
+        return std::nullopt;
+    return SelectionCursorProbePlan{authority.value(), offset, moved, storage + ownership};
+}
+
+std::optional<SelectionDisplayValue> DocumentSession::CaptureSelectionCursorProbe(
+    const SelectionCursorProbePlan& admitted) const noexcept
+{
+    const auto current = DescribeSelectionCursorProbe();
+    if (!current || current.value() != admitted)
+        return std::nullopt;
+    return SelectionDisplayValue{Selection(), admitted.translation};
 }

@@ -598,6 +598,8 @@
     <ClCompile Include="Document.Tests.RectangleGestureParent.cpp" />
     <ClCompile Include="Document.Tests.EllipseFinishPlan.cpp" />
     <ClCompile Include="Document.Tests.MarqueeModePlan.cpp" />
+    <ClCompile Include="Document.Tests.SelectionCursorProbe.cpp" />
+    <ClInclude Include="Document.Tests.SelectionCursorProbe.h" />
     <ClInclude Include="Document.Tests.EllipseFinishPlan.h" />
     <ClInclude Include="Document.Tests.MarqueeModePlan.h" />
     <ClCompile Include="..\..\RedPrism\SelectionOutlineGestureJob.cpp" />

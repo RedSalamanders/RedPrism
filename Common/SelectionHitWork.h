@@ -29,3 +29,14 @@ inline constexpr std::size_t kSelectionHitCheckpointQuantum = 1024;
 [[nodiscard]] std::optional<bool> ContainsSelectionForWork(const SelectionDisplayValue& display, Vec2 query,
                                                            CancelToken cancellation = {},
                                                            SelectionHitObserver observer = {}) noexcept;
+
+// Cached metadata only. This owns no geometry/history root. The caller adds its fixed job/payload
+// metadata before admission; capture validates every field again under that original ticket.
+struct SelectionCursorProbePlan final
+{
+    DocumentReadAuthority document;
+    Vec2 translation{};
+    SelectionBounds bounds;
+    std::uint64_t retainedBytes = 0;
+    [[nodiscard]] bool operator==(const SelectionCursorProbePlan&) const noexcept = default;
+};

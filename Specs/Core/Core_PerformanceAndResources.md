@@ -1675,3 +1675,12 @@ never wrap. The helper owns no geometry, scheduler, document, history or graphic
 This scalar prerequisite alone neither moves the physical cursor consumer to a worker nor qualifies
 ordinary activation, complete memory admission or G1. The selected host must still admit and capture
 immutable geometry, cancel stale work, retire captured readers and acknowledge joined shutdown.
+
+## Cursor geometry capture prerequisite
+
+Cursor-probe description performs cached scalar queries before admission, without point traversal,
+geometry/history capture or translated-vector construction. Its retained envelope includes original
+geometry storage plus the existing loop-control allowance; a selected host must additionally admit
+its wrapper/payload and every live phase. Exact-plan capture shares the immutable root only after
+admission. Deferred offsets stay scalar, and invalid, overflowed or stale plans fail locally. These
+model bounds do not establish physical caller activation, complete lifetime accounting or timing.

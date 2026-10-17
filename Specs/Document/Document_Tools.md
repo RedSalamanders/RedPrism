@@ -1898,3 +1898,21 @@ owns kind/mode; accepted Up seals AA without inventing another Move. Physical Sh
 Add/Subtract, rearm and non-centered rules. The same admission/ticket covers input, closure and retirement.
 Absent, explicit-empty, foreign target, loss, cancellation, overflow and joined Close retain their distinct
 semantics. This selected caller remains disabled in ordinary use until complete activation gates close.
+
+## Cursor containment model prerequisite
+
+`DescribeSelectionCursorProbe` returns only cached scalar authority, translated bounds and a
+retained-geometry/control envelope. It captures no geometry or history, walks no points, and does
+not materialize deferred translation. No document, absent/empty/collapsed selection, an incompatible
+transform/lasso, nonfinite or collapsed translated bounds, or an unavailable/overflowed storage
+bound returns no plan. The caller must add its job/payload/construction costs before admission.
+
+After that original admission, `CaptureSelectionCursorProbe` recomputes and matches every plan
+field before sharing the immutable original selection and scalar translation. Changed session,
+document serial, generation, restore authority, bounds, translation or declared bytes refuses.
+Persisted document identifiers alone cannot authorize capture. Captured roots survive replacement
+or deselection. Worker containment retains the existing per-vertex translation, edge tolerance and
+nonzero winding reference; inverse-query translation cannot substitute for it at large coordinates.
+
+This API prerequisite does not activate the ordinary pointer consumer or qualify complete host
+admission, retirement, native profiles or G1.

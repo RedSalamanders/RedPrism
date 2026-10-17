@@ -3106,3 +3106,14 @@ document/epoch/generation changes, invalid coordinates, admission refusal withou
 invalidation, joined Close, signed zero, negative coordinates and serial exhaustion. Seven compile-time
 traits constrain scalar ownership and the 256-byte ceiling. Focused runs are not complete HostTests,
 Application, native-matrix or timing qualification; those receipts remain separate P1 obligations.
+
+## Cursor geometry capture model validation
+
+`Document.Tests.SelectionCursorProbe` adds 33 independently specified facts while preserving all
+23,006 predecessors. It checks absent/empty/collapsed inputs, real transform/lasso eligibility,
+literal rectangle and edge hits, exact immutable-root capture, rejected plan tampering and foreign
+session/reopen/generation, root survival, scalar deferred translation, large-coordinate per-vertex
+rounding and a 65,540-point source. Three static traits constrain the scalar plan and shared display
+copy. Full scoped Release and real ASan must preserve the complete ordered roster, genuine UAF
+control, exact compile/source/dependency/product identity, ISA scan and complete archives. Actual
+Application routing and latest native qualification remain distinct gates.

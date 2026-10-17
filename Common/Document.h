@@ -892,6 +892,8 @@ struct DocumentSelection
 
 // Overlay readers share immutable geometry and carry pixel/outline-move offsets as bounded scalar metadata.
 // The numeric DisplayedSelection reference still returns translated geometry.
+struct SelectionCursorProbePlan;
+
 struct SelectionDisplayValue final
 {
     std::optional<DocumentSelection> selection;
@@ -2584,6 +2586,10 @@ class DocumentSession
     void SetSelection(std::optional<DocumentSelection> value, std::wstring name);
     // True where dragging in New mode would move the selection outline.
     [[nodiscard]] bool CanMoveSelection(Vec2 point) const;
+    // Cached descriptor first; immutable geometry is captured only after the caller admits its job.
+    [[nodiscard]] std::optional<SelectionCursorProbePlan> DescribeSelectionCursorProbe() const noexcept;
+    [[nodiscard]] std::optional<SelectionDisplayValue> CaptureSelectionCursorProbe(
+        const SelectionCursorProbePlan& admitted) const noexcept;
     // Moves the outline only (never pixels); the whole drag is one `Move Selection` entry.
     [[nodiscard]] bool BeginSelectionMove();
     // Explicit worker-mode prototype: document geometry stays immutable until prepared End/Cancel.

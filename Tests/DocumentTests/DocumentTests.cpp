@@ -37,6 +37,7 @@
 #include "Document.Tests.RectangleFinishPlan.h"
 #include "Document.Tests.RectangleGestureParent.h"
 #include "Document.Tests.SelectionCommandMemory.h"
+#include "Document.Tests.SelectionCursorProbe.h"
 #include "Document.Tests.SelectionGestureAbort.h"
 #include "Document.Tests.SelectionGestureAdmission.h"
 #include "Document.Tests.SelectionGestureAdmissionAuthority.h"
@@ -8468,6 +8469,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunEllipseGestureParentTests();
     gFailures += RunMarqueeModePlanTests();
     gFailures += RunMarqueeModeParentTests();
+    gFailures += RunSelectionCursorProbeTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);
