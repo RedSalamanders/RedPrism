@@ -1,5 +1,10 @@
 # Ordered selection workers (P1.6)
 
+- [x] Reproduce and preserve both late foreign-Begin opening failures, keeping all 22,381 predecessors plus the other 44 new controls passing. The two-file history-epoch repair then qualifies all 22,427 Release assertions with unchanged predicates; real ASan is active.
+- [x] Qualify native integrated-source ARM64 Debug r1093: 969 exact compiler records, 1,492 archive files and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
+- [ ] Finish the same native freeze in ARM64 Release/instrumented ASan and the private fixed lasso source in real ASan; preserve Root code while those builds run.
+
+
 - [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
 - [x] Exact caller real ASan: fresh 340-source build/ISA, 145-stage actual runtime, 41 physical/21 shutdown/71 scalar controls, every native predecessor and the actual UAF probe independently pass. The 51 reviewed code/test/project paths and five CPU contracts are adopted with 1,269-file formatting.
 - [ ] Fresh native Debug/Release/real ASan, analysis and ARM64 cross-builds for this integration; remaining physical branches, display/phase ownership and ordinary activation. Private results do not close S5 or G1.

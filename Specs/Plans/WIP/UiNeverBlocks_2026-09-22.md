@@ -2,6 +2,10 @@
 
 ## Current delivery checklist
 
+- [ ] Qualify the captured-settings lasso opening extension and exact history authority: the private 46-control draft retains 42 reviewed controls and adds four foreign-Begin checks; the two actual foreign-Begin publication failures are independently reproduced/archived, then a two-file history-epoch guard passes all 22,427 Release assertions unchanged. Exact-source real ASan is running. Native source is frozen for the `29a8ac2` matrix.
+- [x] Qualify integrated-source ARM64 Debug r1093: full Rebuild parent exit 0, 1,492 verified archive files, 969 exact compiler records, 1,417 compiled/project/toolchain inputs and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
+- [ ] Finish ARM64 Release r1094 (active) and instrumented-ASan r1095 on that same integrated-source freeze; native ARM64 execution is unavailable.
+
 - [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
 - [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
 - [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
