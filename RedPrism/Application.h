@@ -171,6 +171,8 @@ class Application final : public ChromeEvents,
     static int RunStandaloneSelectionPressGestureSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionPressShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;

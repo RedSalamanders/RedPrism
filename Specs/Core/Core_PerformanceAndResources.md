@@ -1630,3 +1630,11 @@ Pointer Down/Move/Up/Lost use bounded descriptor/prefix storage; original admiss
 ## Ellipse/New bounded geometry envelope
 
 Ellipse/New admits and executes a 4 MiB clip workspace, 2,052 total input points/two loops and 4,096 output points/16 loops. One arena block supplies the marquee's four scalar corners; ellipse generation is capped at 2,048 vertices on the worker, with no sealed-prefix traversal. The captured-kind admission marker prevents use of the smaller Rectangle workspace. New ignores the old outline as clip input while retaining its separately charged source/history/control owners. Complete original-ticket phase/refresh/retirement admission remains mandatory; these bounds alone do not cover display consumers or G1.
+
+## Selected physical Ellipse admission
+
+Physical Ellipse/New reads the cached typed plan before geometry/history capture. It uses the existing
+4 MiB worker workspace, 2,052 input-point and 4,096 output-point ceilings; the original parent also
+charges retained source/history, opening, construction and retirement. The pointer callback captures
+only fixed settings and accepted document coordinates; it never builds an oval or changes the declared
+kind at a later header tick. This selected route supplies no ordinary-host or G1 timing qualification.

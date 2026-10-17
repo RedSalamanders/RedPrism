@@ -583,3 +583,9 @@ G1 gates.
 ## Selected Rectangle/New physical host
 
 The explicitly test-enabled Rectangle/New route records only a fixed event descriptor and bounded accepted prefix in WndProc. One host FIFO entry, history stamp and original job own containment, inside-outline movement or outside drawing, publication and retirement. Complete cached branch admission precedes source capture; validate captured active/crop/mask target and session/document identity. A pre-dispatch E_ABORT drops only that exact input and reports Stale. No eligible admission failure falls back to synchronous geometry. Ordinary activation still requires every consumer and remaining branch gate.
+
+## Selected physical Ellipse caller
+
+The explicitly enabled selection-press caller dispatches Rectangle/New and Ellipse/New through the same
+original parent. Accepted Down captures the primitive kind; worker containment chooses an existing-outline
+move or a new shape under that kind-specific admission. Ordinary activation remains separately gated.

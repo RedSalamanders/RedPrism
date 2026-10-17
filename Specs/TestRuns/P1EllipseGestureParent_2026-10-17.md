@@ -25,7 +25,7 @@ Main strengthens the ported legacy case to exact coverage bytes 255 at (40,40) a
 Main adds 77 parent facts: absent/empty/old/65,540-point prior/no-layer sources, Shift/Alt, Lost, cancellation,
 joined Close, foreign history/transform, prepared cancellation, single history entry/Undo/Redo, original-ticket
 charges and final refunds. The oval references require 80/64/32 vertices for the named literal bounds. The
-old 75 Rectangle cases keep their exact calls/defaults and output labels. The final two cases deliberately
+old 75 Rectangle facts keep their exact calls/defaults and output labels. The final two cases deliberately
 supply the smaller Rectangle admission and require refusal before capture plus a complete refund.
 
 ## Passing profiles

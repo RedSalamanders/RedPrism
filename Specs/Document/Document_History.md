@@ -438,3 +438,10 @@ The selected physical parent retains its single HistoryWork stamp through public
 ## Ellipse/New original-parent history
 
 Ellipse/New shares the selected original-parent publication/cleanup protocol. Its changed result creates one Elliptical Marquee entry and one generation change, with literal prior selection restored by Undo and terminal AA restored by Redo. Lost/cancellation and stale foreign history/transform preserve their exact source/authority. A kind/envelope mismatch refuses before acquiring source/history roots and must refund the original ticket after its last reader.
+
+## Selected physical Ellipse history
+
+An admitted outside Ellipse/New drag publishes one `Elliptical Marquee` entry and one document
+generation advance. A Down inside the old outline moves that outline instead: the scalar Move and
+acknowledged End retain their two generation advances and one `Move Selection` entry. Click, Lost,
+cancellation and joined Close keep their existing distinct history behavior.

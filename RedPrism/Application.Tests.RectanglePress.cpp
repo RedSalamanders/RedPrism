@@ -9,21 +9,31 @@
 #include <cstdio>
 #include <memory>
 #include <new>
+#include <span>
 
 int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcept
 {
+    return RunStandaloneMarqueePressSelfTest(instance, LassoKind::Rectangle);
+}
+int Application::RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept
+{
+    return RunStandaloneMarqueePressSelfTest(instance, LassoKind::Ellipse);
+}
+int Application::RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept
+{
+    const bool ellipse = kind == LassoKind::Ellipse;
+    const char* family = ellipse ? "application-ellipse-press" : "application-rectangle-press";
     unsigned checks = 0, failures = 0;
     const char* scenario = "setup";
     const auto expect = [&](bool value, const char* label) noexcept
     {
         ++checks;
         failures += value ? 0u : 1u;
-        std::printf("%s application-rectangle-press.%s.%s\n", value ? "PASS" : "FAIL", scenario, label);
+        std::printf("%s %s.%s.%s\n", value ? "PASS" : "FAIL", family, scenario, label);
         return value;
     };
-    auto summary = wil::scope_exit(
-        [&]() noexcept
-        { std::printf("SUMMARY application-rectangle-press checks=%u failures=%u\n", checks, failures); });
+    auto summary = wil::scope_exit([&]() noexcept
+                                   { std::printf("SUMMARY %s checks=%u failures=%u\n", family, checks, failures); });
     bool refuseMemory = false;
     ApplicationProcessingTestProbe probe;
     probe.workerCount = 2;
@@ -84,18 +94,24 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
         }
         return true;
     };
-    constexpr std::array cases{"absent", "empty",     "outside",     "click-old",     "click-absent",
-                               "lost",   "cancelled", "refused",     "active-target", "overflow",
-                               "shift",  "alt",       "joined-close"};
+    constexpr std::array rectangleCases{"absent", "empty",     "outside",     "click-old",     "click-absent",
+                                        "lost",   "cancelled", "refused",     "active-target", "overflow",
+                                        "shift",  "alt",       "joined-close"};
+    constexpr std::array ellipseCases{"absent", "empty",     "outside", "click-old",     "click-absent",
+                                      "lost",   "cancelled", "refused", "active-target", "overflow",
+                                      "shift",  "alt",       "inside",  "joined-close"};
+    const auto cases =
+        ellipse ? std::span<const char* const>{ellipseCases} : std::span<const char* const>{rectangleCases};
     unsigned reached = 0;
     for (unsigned mode = 0; mode < cases.size(); ++mode)
     {
         scenario = cases[mode];
         const bool original = mode >= 2 && mode != 4;
         const bool cancel = mode == 6, refused = mode == 7, target = mode == 8;
-        const bool overflow = mode == 9, shift = mode == 10, alt = mode == 11, joined = mode == 12,
+        const bool overflow = mode == 9, shift = mode == 10, alt = mode == 11, joined = mode == cases.size() - 1,
                    lost = mode == 5 || overflow;
         const bool click = mode == 3 || mode == 4;
+        const bool inside = ellipse && mode == 12;
         DocumentFixture fixture;
         fixture.width = fixture.height = 64;
         fixture.layers.push_back(ImageLayer::Blank(L"Rectangle press", {64, 64}));
@@ -108,7 +124,7 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
         const auto active = fixture.layers[0].id, other = fixture.layers[1].id;
         owner->_session.ReplaceDocument(std::move(fixture).Seal(), active);
         owner->_tool = EditorTool::Marquee;
-        owner->_session.marqueeKind = LassoKind::Rectangle;
+        owner->_session.marqueeKind = kind;
         owner->_session.selectionModeChoice = SelectionMode::New;
         owner->_session.selectionAntialiased = false;
         owner->_viewport.zoom = 1.0;
@@ -127,11 +143,12 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
                                     static_cast<int>(std::lround(hole.top + view.y))));
         };
         refuseMemory = refused;
-        send(WM_LBUTTONDOWN, {50, 50}, MK_LBUTTON);
+        send(WM_LBUTTONDOWN, inside ? Vec2{24, 24} : Vec2{50, 50}, MK_LBUTTON);
         if (!expect(owner->_selectionPressInput.Busy() &&
                         owner->_selectionPressReceipt.Read().outcome == HostOutcome::Pending &&
                         !owner->_session.PendingLasso() && !owner->_session.IsMovingSelection(),
-                    "wndproc-outside-down-records-only-fixed-descriptor"))
+                    inside ? "wndproc-inside-down-records-only-fixed-descriptor"
+                           : "wndproc-outside-down-records-only-fixed-descriptor"))
             return 5;
         if (target)
             owner->_session.SelectLayer(other);
@@ -154,7 +171,11 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
                     heldKeys[VK_MENU] = 0x80;
                     KeyboardState::Write(heldKeys);
                 }
-                send(WM_MOUSEMOVE, shift || alt ? Vec2{60, 55} : Vec2{60, 60}, MK_LBUTTON | (shift ? MK_SHIFT : 0));
+                send(WM_MOUSEMOVE,
+                     inside         ? Vec2{32, 28}
+                     : shift || alt ? Vec2{60, 55}
+                                    : Vec2{60, 60},
+                     MK_LBUTTON | (shift ? MK_SHIFT : 0));
                 if (alt)
                     KeyboardState::Write(beforeKeys);
             }
@@ -165,15 +186,16 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
             if (!until(
                     [&]() noexcept
                     {
-                        return owner->_selectionPressState && owner->_selectionPressState->drawing &&
-                               owner->_selectionPressState->waiting && owner->_selectionPressState->moves == 1;
+                        return owner->_selectionPressState && owner->_selectionPressState.value().drawing &&
+                               owner->_selectionPressState.value().waiting &&
+                               owner->_selectionPressState.value().moves == 1;
                     }))
                 return 5;
             if (joined)
             {
                 joinedSourcePreserved =
                     owner->_session.Selection() &&
-                    owner->_session.Selection()->Bounds() == std::optional<SelectionBounds>{{8, 8, 40, 40}} &&
+                    owner->_session.Selection().value().Bounds() == std::optional<SelectionBounds>{{8, 8, 40, 40}} &&
                     owner->_session.Generation() == generation && owner->_session.history.UndoCount() == entries;
                 owner->Shutdown();
             }
@@ -186,7 +208,7 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
             ReleaseCapture();
         else
         {
-            owner->_session.marqueeKind = LassoKind::Ellipse;
+            owner->_session.marqueeKind = ellipse ? LassoKind::Rectangle : LassoKind::Ellipse;
             owner->_session.selectionAntialiased = true;
             send(WM_LBUTTONUP, {63, 63}, 0); // Release point is not an invented Move.
         }
@@ -209,26 +231,35 @@ int Application::RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcep
             joined ? joinedSourcePreserved && !owner->_session.Document() && !owner->_session.Selection() &&
                          owner->_jobs.IsIdle()
             : cancel || lost || refused || target
-                ? selection && !selection->antialiased &&
-                      selection->Bounds() == std::optional<SelectionBounds>{{8, 8, 40, 40}}
-            : click ? !selection
-                    : selection && selection->antialiased && selection->loops.PointCount() == 4 &&
-                          selection->Bounds() == std::optional<SelectionBounds>{alt ? SelectionBounds{50, 50, 60, 55}
-                                                                                    : SelectionBounds{50, 50, 60, 60}};
+                ? selection && !selection.value().antialiased &&
+                      selection.value().Bounds() == std::optional<SelectionBounds>{{8, 8, 40, 40}}
+            : inside ? selection && !selection.value().antialiased && selection.value().loops.PointCount() == 4 &&
+                           selection.value().Bounds() == std::optional<SelectionBounds>{{16, 12, 48, 44}}
+            : click  ? !selection
+                     : selection && selection.value().antialiased &&
+                           selection.value().loops.PointCount() == (ellipse ? 32u : 4u) &&
+                           selection.value().Bounds() ==
+                               std::optional<SelectionBounds>{alt ? SelectionBounds{50, 50, 60, 55}
+                                                                  : SelectionBounds{50, 50, 60, 60}};
         if (!expect(geometry &&
-                        (joined || (owner->_session.Generation() == generation + (changed ? 1 : 0) &&
+                        (joined || (owner->_session.Generation() == generation + (inside    ? 2
+                                                                                  : changed ? 1
+                                                                                            : 0) &&
                                     owner->_session.history.UndoCount() == entries + (changed ? 1 : 0))) &&
                         (target ? owner->_session.ActiveLayerID() == other : true),
                     "literal-event-time-shape-aa-single-edit-source-or-joined-retirement"))
             return 5;
         const auto& state = owner->_selectionPressState;
         if (!expect(target ? !owner->_activeHostRequest
-                           : state && !state->controller &&
-                                 (refused ? !state->opened && !state->captures
-                                          : state->drawing && state->sameTicket && state->captures == 1 &&
-                                                state->hits == 1 && state->inputAcknowledged &&
-                                                (joined ? !state->completed && state->aborted : state->completed)) &&
-                                 (!overflow || (state->moves == 511 && state->overflowObserved && state->terminalLost)),
+                           : state && !state.value().controller &&
+                                 (refused ? !state.value().opened && !state.value().captures
+                                          : state.value().drawing == !inside && state.value().sameTicket &&
+                                                state.value().captures == 1 && state.value().hits == 1 &&
+                                                state.value().inputAcknowledged &&
+                                                (joined ? !state.value().completed && state.value().aborted
+                                                        : state.value().completed)) &&
+                                 (!overflow || (state.value().moves == 511 && state.value().overflowObserved &&
+                                                state.value().terminalLost)),
                     "actual-message-route-uses-one-parent-and-preserves-joined-or-refused-lifetimes"))
             return 5;
         refuseMemory = false;

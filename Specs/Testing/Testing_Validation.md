@@ -3048,3 +3048,13 @@ The standalone physical Rectangle gate covers 13 scenarios/83 facts on the actua
 ## Ellipse/New CPU qualification
 
 Preserve all predecessor records and add the 20 Ellipse geometry/legacy-coverage references plus 77 original-parent, source, history, cancellation, refusal and lifetime facts. Require fresh exact-source Release and real ASan, the actual UAF control, complete ordered readers, exact command/ISA/PE/PDB/archive identity and final bookends. The independent serial geometric reference uses the documented 1/128 grid and a derived floating-point accumulation bound; legacy coverage remains exact 255/0. See [the qualified CPU evidence](../TestRuns/P1EllipseGestureParent_2026-10-17.md). Actual Win32, native integration, ordinary activation and measured G1 remain open.
+
+## Selected physical Ellipse host validation
+
+The shared physical fixture MUST retain all 83 Rectangle facts and all prior Application records and
+exercise the 14 Ellipse scenarios (89 facts), including inside-outline movement. Its complete roster
+is 147 stages, 8,577 stdout facts and 7,613 stderr facts. The independent reader checks exact order,
+source identity, summary and actual zero exit, then forwards every predecessor byte unchanged.
+Release evidence and the retained R1 fixture failure are in
+[`P1EllipseSelectionHost_2026-10-17.md`](../TestRuns/P1EllipseSelectionHost_2026-10-17.md).
+Complete adopted-source native ASan and ARM64 qualification remain due.
