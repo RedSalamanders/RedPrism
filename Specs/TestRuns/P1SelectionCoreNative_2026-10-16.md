@@ -284,3 +284,35 @@ Private App R4 has build exit 0 and ISA exit 0 for 339 sources. Its 144 Applicat
 The repaired private engine Release qualifies 68 + 22,228 = 22,296 assertions. Its real-ASan 270-command build
 in `.build/P1Drafts/S5PressEngineAsan-r1-Main` has launched; instrumentation, runtime/UAF probe and archive qualification
 remain pending. Complete production bounds, remaining branches, ordinary activation, native adoption, G1 and P1 Done remain open.
+
+## Canonical Release Rebuild/Analyze r1091 qualified (2026-10-17)
+
+Main independently qualifies the actual H10 x64 Release Rebuild/Analyze parent r1091, PID 86380, exit 0,
+`2026-10-16T22:59:53.077901Z`–`2026-10-17T00:17:01.596794Z` (UTC). This is canonical full Rebuild/Analyze; `build.ps1` forces Rebuild,
+regardless of the transport directory's `incremental` name. Analysis qualification does not establish full Release runtime success.
+
+Main and the independent analysis/artifact receipts agree on 1,813 verified archive files, 953 actual compiler command
+records, and all 1,389 unchanged compiled/project/toolchain inputs within the 1,393-input H10 transport freeze
+`BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`. All five exact PE/PDB pairs (RedPrism, HostTests, DocumentTests,
+CompositionTests and IoTests) match the independent CodeView identities and linked scans: zero ISA violations;
+all eight negative scan controls pass. Archive completion SHA-256:
+`113FE1146E656AB7C0A6B024D053E518487140435E0B60B75AED71B779B8FB57`.
+[Main qualification](../../.build/P1Integration/LassoHost-r1-Main/r1091-main-qualified.json);
+independent [analysis](../../.build/P1Integration/LassoHost-r1-Main/r1091-independent-analysis.json),
+[artifacts](../../.build/P1Integration/LassoHost-r1-Main/r1091-independent-artifacts.json),
+[PE/PDB identities](../../.build/P1Integration/LassoHost-r1-Main/r1091-independent-pe-pdb.json).
+
+The original H10 artifact-reader refusal remains retained at
+`.build/P1Drafts/ClipboardPhaseNative-r10-Main/actual-r1/r1091-artifact-reader.log`, SHA-256
+`558F6D09EF556EBA05786C53BE699125331E913F75BF3169C153AC56BDEAE99D`. The replacement readers change only Windows filesystem access to extended paths;
+they reproduce the original checks against the original evidence. No native build or runtime is rerun for this reader repair.
+[Filesystem-only reader preparation](../../.build/P1Drafts/NativeAnalysisExtendedReader-r1-Main/preparation.json).
+
+Fresh H11 full Release r1092 has launched separately and is not yet qualified; no Release pass is claimed here.
+ARM64 Debug/Release/instrumented-ASan r1086–r1088 already qualify as cross-builds; native ARM64 runtime is unavailable.
+
+Appended status correction: the repaired shared engine's real ASan is already independently qualified:
+68 family + 22,228 predecessor facts = 22,296, with 270 actual instrumented commands and its own UAF control.
+[Existing engine evidence](P1SelectionGestureNotifications_2026-10-16.md#repaired-shared-engine-real-asan-qualified)
+and [Main receipt](../../.build/P1Drafts/S5PressEngineAsan-r1-Main/main-qualified.json) supersede the earlier pending
+engine-ASan statement above. Actual caller qualification, ordinary activation, native adoption, G1 and P1 Done remain open.

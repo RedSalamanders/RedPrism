@@ -5,7 +5,7 @@
 - [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
 - [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
 - [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
-- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; the separate 339-source/144-stage caller is compiling.
+- [ ] Qualify the cached-admission actual Win32 caller, complete display/phase ownership and native integration before ordinary activation or G1 closure; the separate 339-source/144-stage caller has build/ISA exit 0 and awaits serialized runtime qualification.
 - [ ] Close/click history residency: add owner try/worker refresh on the original ticket before final transfer, cover late sparse materialization, busy/cancel/Close and exact trim outcomes, and release the permit before callbacks. Current CPU admission receipts do not close this H3 gate.
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
@@ -32,13 +32,14 @@
 
 ### Current integration under validation
 
-Current native status (2026-10-17): Main independently verifies r1089's actual analysis exit 1,
-C1088 on C: compiler TEMP, and all 1,805 archived files; r1090 never launched.
-Fresh H10 r1091 is a full canonical Release Rebuild/Analyze (`build.ps1` always forces Rebuild),
-with both TMP/TEMP set to `Z:\CodexArtifacts\RedPrism-P1\CompilerScratch\r1091`; full Release r1092 follows.
-H10 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`; all 1,389 compiled/project/toolchain inputs are unchanged.
-Both new gates remain pending. ARM64 Debug/Release/instrumented-ASan r1086–r1088 already pass;
-native ARM64 runtime is unavailable. Earlier checkpoint entries below retain their historical status.
+Current native status (2026-10-17): full canonical Release Rebuild/Analyze r1091 is independently qualified:
+actual parent exit 0, 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled/project/toolchain
+inputs, five exact PE/PDB pairs and zero ISA violations. The original H10 long-path reader refusal is retained;
+extended-path access reproduces the original checks against the same evidence without rerunning analysis.
+H10/H11 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`.
+Fresh H11 full Release r1092 has launched and remains unqualified. r1089's actual compiler-space failure and
+1,805-file archive remain retained; r1090 never launched. ARM64 Debug/Release/instrumented-ASan r1086–r1088
+already pass as cross-builds; native ARM64 runtime is unavailable. Earlier entries below retain their historical status.
 
 The newer Hue, preserving-panel Wand, hard Paint parity, direct-distortion read and panel follow-through
 integration passes full Debug r1052: 21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus
@@ -90,7 +91,8 @@ ordinary activation and all nine delivery areas above remain open.
 - [x] Qualify ARM64 Debug r1086 after independently preserving the r1076 disk-full failure: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs verified; all compiled inputs are unchanged.
 - [x] Qualify ARM64 Release r1087: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs independently verified.
 - [x] Qualify instrumented ARM64 ASan r1088: 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs independently checked; all three ARM64 cross-builds pass.
-- [ ] Qualify fresh full canonical H10 Rebuild/Analyze r1091 and full Release r1092 on unchanged compiled inputs; r1089 failed C1088 on C: TEMP and is independently archived, while r1090 never launched. Native ARM64 runtime is unavailable.
+- [x] Qualify canonical full Release Rebuild/Analyze r1091: 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled inputs, five exact PE/PDB pairs and zero ISA violations; the original long-path reader refusal is retained. [Evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md#canonical-release-rebuildanalyze-r1091-qualified-2026-10-17).
+- [ ] Qualify fresh H11 full Release r1092 on that same compiled source; the earlier r1089 compiler-space failure is retained and r1090 never launched. Native ARM64 runtime is unavailable.
 - [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
 - [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
 - [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
