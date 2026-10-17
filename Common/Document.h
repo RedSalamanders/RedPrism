@@ -917,6 +917,8 @@ enum class SelectionMode : std::uint8_t
 // A lasso outline being drawn, in document pixels. `cursor` is the polygonal lasso's rubber-band end point;
 // `anchor` the Marquee's starting corner, in whole pixels.
 class BoundedLassoGesture;
+struct LassoOpeningSettings;
+class LassoIntent;
 class LassoOpeningInput;
 class PreparedLassoOpening;
 
@@ -2533,11 +2535,26 @@ class DocumentSession
     // The Marquee starts at a whole-pixel anchor in the current marquee kind; the Lasso in the current lasso kind.
     [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
                                                                             bool marquee);
+    // A queued physical descriptor owns these settings. Later header changes cannot replace its kind/AA.
+    [[nodiscard]] std::optional<LassoOpeningInput> PrepareLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                            LassoOpeningSettings settings);
     [[nodiscard]] static std::optional<PreparedLassoOpening> PrepareLassoOpening(
         LassoOpeningInput input, std::uint32_t blocks, CancelToken cancellation,
-        std::shared_ptr<const SharedPublicationMemory> memory);
+        std::shared_ptr<const SharedPublicationMemory> memory, bool retainOwnGesture = false);
     [[nodiscard]] bool IsPreparedLassoOpeningCurrent(const PreparedLassoOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    // Opaque own-writer authority: a foreign editor/history or direct writer mutation refuses.
+    [[nodiscard]] bool IsPreparedLassoGestureCurrent(const PreparedLassoOpening& prepared) const noexcept;
+    [[nodiscard]] std::optional<LassoIntent> CaptureLassoIntent(const LassoOpeningInput& input) const noexcept;
+    [[nodiscard]] std::optional<LassoIntent> CaptureLassoIntent(const LassoFinishInput& input) const noexcept;
+    [[nodiscard]] bool DiscardLassoIntentIfCurrent(const LassoIntent& intent) noexcept;
+    // Closed terminal capture may refuse. Retire only this exact writer's captured history through its owner.
+    [[nodiscard]] bool DiscardPreparedClosedLassoIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
+                                                    bool fromCenter) noexcept;
+    [[nodiscard]] bool AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    [[nodiscard]] std::optional<LassoFinishTerminal> ClosePreparedLassoGestureForWork(
+        PreparedLassoOpening& prepared, bool terminalAntialiased) noexcept;
     // Display capture follows complete display admission; close follows complete finish admission.
     [[nodiscard]] std::optional<LassoFinishTerminal> CaptureBoundedLassoDisplayForWork() const noexcept;
     [[nodiscard]] std::optional<LassoFinishTerminal> CloseBoundedLassoForWork(
@@ -3519,6 +3536,10 @@ class DocumentSession
     bool _lassoClosedMask = false;
     std::optional<DocumentHistory::StateView> _lassoClosedHistory;
     void InvalidateLassoPendingIntents() noexcept;
+    [[nodiscard]] bool CanApplyHistoryRestoreWithoutLasso(const HistoryRestoreAuthority& authority) const noexcept;
+    [[nodiscard]] std::optional<LassoOpeningInput> CaptureLassoOpeningInput(Vec2 point, SelectionMode mode,
+                                                                            LassoKind kind, bool marquee,
+                                                                            std::optional<bool> capturedAntialiased);
     std::uint64_t _lassoFinishSerial = 0;
     std::uint64_t _lassoFinishPendingSerial = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;

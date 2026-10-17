@@ -386,14 +386,7 @@ incremental raster/history accounting remains tracked by P1.9.
 
 An admitted metadata producer records every newly allocated record root, topology/root group, history snapshot, entry, stack and persistent-index node against its original publication-memory owner. Object, retained child capacity and shared-control allowances are separate from the complete operation admission. Reused immutable nodes retain their existing original owners; they are not reassigned to the younger edit. Reference allocations without an accounting owner retain their established layout and release policy.
 
-The producer's local allocation limit is immutable before construction. Checked overflow, insufficient
-budget and an attempted allocation after sealing refuse before a publication can escape. At terminal
-binding, once all useful producers have joined, seal the terminal ledger and partition the original
-remaining reservation into persistent output and temporary retirement charges. An explicitly opted
-continuing output seals only its own completed ledger under the continuing-output contract in
-Core_Architecture; later useful stages retain the prepaid remainder of that same original admission.
-Publication, stale refusal, failure, cancellation and joined Close keep their distinct existing authority.
-No new reservation, admission query or early refund is permitted at either transfer.
+The producer's local allocation limit is immutable before construction. Checked overflow, insufficient budget and an attempted allocation after sealing refuse before a publication can escape. Once useful producers have joined, seal the ledger and partition the original complete reservation into its persistent output and temporary retirement charges. Publication, stale refusal, failure, cancellation and joined Close keep their distinct existing authority. No new reservation, admission query or early refund is permitted at partitioning.
 
 Worker destruction releases data contributions only after those bytes have actually been destroyed. A copied or weak shared control retains its original accounting owner through actual control deallocation. Therefore an idle scheduler may have a nonzero charge while the live document or history still owns metadata. A completed edit does not imply zero reserved memory. Final graph/control destruction and owner acknowledgement return the original charge exactly once.
 
@@ -429,3 +422,26 @@ host callback or joined shutdown cleanup. The original source/history/saved-mark
 
 The selected CPU protocol is independently tested. Actual pointer callers, native integration, ordinary
 activation, the other gesture branches and measured G1 remain separate gates.
+
+## Owned lasso authority and history exclusion
+
+A selected own-writer lasso may validate its original immutable history epoch while ignoring only its exact currently owned lasso draft in the editor exclusion check. Every other editor exclusion remains mandatory; a foreign Begin invalidates the writer even when generation/revision are unchanged. General `CanApplyHistoryRestore` continues to reject every live lasso. Own drag/abort/close before a prepared selection publication preserve generation, revision, Undo/Redo and transaction depth.
+
+## Exact lasso intent cleanup and Rectangle/New parent
+
+Pending lasso intent cleanup is a one-shot scalar capability for its original session, document serial, intent serial and opening/finish kind. A stale or foreign capability leaves pending edits untouched. Closed own-writer cleanup validates the original editor/history epoch, removes only that closed writer and swaps retained history owners into the prepared payload for original-ticket retirement. It never rolls back an unrelated transaction. Rectangle/New history preparation, residency try/refresh and final publication use the same parent admission; cancelled or stale results do not create a successful history entry.
+
+## Physical selection parent acknowledgement
+
+The selected physical parent retains its single HistoryWork stamp through publication, failed/stale refusal, cancellation or joined shutdown. Finish only that exact stamp before resuming its host receipt. A changed target detected before dispatch reports Stale without creating history or capturing a source; memory refusal reports Failed. Joined shutdown drops never-started input or retires its existing controller without a useful completion callback, preserving independently retained observer charges.
+
+## Ellipse/New original-parent history
+
+Ellipse/New shares the selected original-parent publication/cleanup protocol. Its changed result creates one Elliptical Marquee entry and one generation change, with literal prior selection restored by Undo and terminal AA restored by Redo. Lost/cancellation and stale foreign history/transform preserve their exact source/authority. A kind/envelope mismatch refuses before acquiring source/history roots and must refund the original ticket after its last reader.
+
+## Selected physical Ellipse history
+
+An admitted outside Ellipse/New drag publishes one `Elliptical Marquee` entry and one document
+generation advance. A Down inside the old outline moves that outline instead: the scalar Move and
+acknowledged End retain their two generation advances and one `Move Selection` entry. Click, Lost,
+cancellation and joined Close keep their existing distinct history behavior.

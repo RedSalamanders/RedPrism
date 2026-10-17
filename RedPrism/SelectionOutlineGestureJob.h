@@ -11,6 +11,8 @@
 #include <memory>
 #include <optional>
 
+struct SelectionOutlineDrawing;
+
 class SelectionOutlineGestureJob final : public Job
 {
     enum class Phase
@@ -21,7 +23,10 @@ class SelectionOutlineGestureJob final : public Job
         Close,
         Click,
         RefreshClose,
-        RefreshClick
+        RefreshClick,
+        DrawOpen,
+        DrawFinish,
+        DrawRefresh
     };
 
   public:
@@ -34,6 +39,9 @@ class SelectionOutlineGestureJob final : public Job
 
   private:
     bool NotifyMoves(bool changed) noexcept;
+    bool ConsumeDrawing() noexcept;
+    bool DrawingCurrent() const noexcept;
+    void AbortDrawing() noexcept;
     bool Refuse(std::int32_t error) noexcept;
     bool Resume() noexcept;
     bool Consume() noexcept;
@@ -53,4 +61,5 @@ class SelectionOutlineGestureJob final : public Job
     std::optional<SelectionCommandInput> _commandInput;
     std::optional<PreparedSelectionCommand> _command;
     DocumentHistory::ResidencyPermit _residency;
+    std::shared_ptr<SelectionOutlineDrawing> _drawing;
 };

@@ -679,6 +679,7 @@
     <ClInclude Include="SelectionOutlineGestureState.h" />
     <ClInclude Include="SelectionOutlineGestureMemory.h" />
     <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
+    <ClCompile Include="Application.Tests.RectanglePress.cpp" />
     <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
     <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />

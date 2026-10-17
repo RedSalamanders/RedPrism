@@ -1,5 +1,9 @@
 #include "SelectionOutlineGestureJob.h"
 #include "BrushStroke.h"
+#include "LassoFinishWork.h"
+#include "LassoIntent.h"
+#include "LassoOpeningWork.h"
+#include "LocallyOwnedPublication.h"
 #include "SelectionOutlineGestureMemory.h"
 #include "WarpStroke.h"
 
@@ -9,21 +13,39 @@
 #include <exception>
 #include <windows.h>
 
-std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
-    const DocumentSession& session) noexcept
+// Allocated on the original worker before source capture. Its last owner retires through the original
+// temporary partition; no owner callback allocates or destroys a large prepared geometry/history graph.
+struct SelectionOutlineDrawing final
+{
+    LassoOpeningSettings settings;
+    std::optional<LassoIntent> openingIntent, finishIntent;
+    std::optional<HistoryRestoreAuthority> editor;
+    std::optional<DocumentHistory::Authority> history;
+    std::optional<LassoOpeningInput> openingInput;
+    std::optional<PreparedLassoOpening> opening;
+    std::optional<LassoFinishInput> finishInput;
+    std::optional<PreparedLassoFinish> finish;
+    bool chosen = false, constrainArmed = false;
+};
+
+namespace
+{
+std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const DocumentSession& session,
+                                                                   std::optional<LassoKind> newMarqueeKind) noexcept
 {
     const auto& document = session.Document();
     const auto source = session.CaptureDocumentReadAuthority();
     const auto editor = session.CaptureHistoryRestoreAuthority();
-    if (!source || !document || !document->selection || document->selection->IsEmpty() ||
+    if (!source || !document || ((!document->selection || document->selection->IsEmpty()) && !newMarqueeKind) ||
         !session.CanApplyHistoryRestore(editor))
         return std::nullopt;
     const auto history = session.history.EditMemoryBytes(document);
     const auto retirement = session.HistoryRestoreRetirementMemoryBytes();
-    const auto storage = document->selection->loops.StorageBytes();
-    const auto controls = SelectionLoops::WorkOwnershipAllowance(document->selection->loops.size());
+    const auto storage = document->selection ? document->selection->loops.StorageBytes() : 0;
+    const auto controls =
+        document->selection ? SelectionLoops::WorkOwnershipAllowance(document->selection->loops.size()) : 0;
     constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
-    if (!history || !retirement || !storage || !controls || controls > maximum - storage)
+    if (!history || !retirement || ((!storage || !controls) && !newMarqueeKind) || controls > maximum - storage)
         return std::nullopt;
     const auto geometry = storage + controls;
     // One original descriptor covers every branch peak, including retained earlier stage payloads.
@@ -52,11 +74,39 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
         !add(final, 1, owner) || !add(temporary, 4, history) || !add(temporary, 2, retirement) ||
         !add(temporary, 2, geometry) || !add(temporary, 3, owner))
         return std::nullopt;
+    if (newMarqueeKind)
+    {
+        const auto marquee = LassoFinishGeometry::PlanNewMarquee(newMarqueeKind.value());
+        const auto arena = PreparedLassoOpening::MemoryBytes(1);
+        // Keep both possible branch peaks admitted at the original Down. No hit-dependent re-admission.
+        // The source R already retains old selection/history; New does not feed the old outline to Clipper.
+        if (!marquee || !arena || !add(opening, 1, arena) || !add(final, 2, marquee->outputBytes) ||
+            !add(final, 8, 4096) || !add(temporary, 1, marquee->preparationBytes) ||
+            !add(temporary, 1, LocallyOwnedPublicationAllowance<SelectionOutlineDrawing>()) || !add(temporary, 8, 4096))
+            return std::nullopt;
+    }
     std::uint64_t total = temporary;
     if (!add(total, 1, opening) || !add(total, 1, final))
         return std::nullopt;
-    return SelectionOutlineGestureMemory{
-        {*source, editor, session.history.CaptureAuthority()}, {total, opening, final}, retirement, history, geometry};
+    return SelectionOutlineGestureMemory{{*source, editor, session.history.CaptureAuthority(), newMarqueeKind},
+                                         {total, opening, final},
+                                         retirement,
+                                         history,
+                                         geometry};
+}
+
+} // namespace
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
+                                                                                   bool allowNewRectangle) noexcept
+{
+    return DescribeMarqueeMemory(session, allowNewRectangle ? std::optional{LassoKind::Rectangle} : std::nullopt);
+}
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
+                                                                                   LassoKind newMarqueeKind) noexcept
+{
+    if (!LassoFinishGeometry::NewMarqueeLimits(newMarqueeKind))
+        return std::nullopt;
+    return DescribeMarqueeMemory(session, newMarqueeKind);
 }
 
 SelectionOutlineGestureJob::SelectionOutlineGestureJob(SelectionOutlineGestureState& state) : _state(state)
@@ -78,13 +128,22 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         _output = SharedPublicationMemory::CreateForWork(s.limits.continuingOutputBytes);
         _final = SharedPublicationMemory::CreateForWork(s.limits.totalBytes);
         _temporary = SharedPublicationMemory::CreateForWork(s.limits.totalBytes);
+        if (s.allowNewRectangle || s.allowNewEllipse)
+            _drawing = MakeLocallyOwnedPublicationObject<SelectionOutlineDrawing>(_temporary, s.limits.totalBytes, 0);
         return {};
     }
     if (_phase == Phase::Open)
     {
         ++s.hits;
         const auto hit = ContainsSelectionForWork(_display, _point, context.cancellation);
-        if (!hit || !hit.value() || !_input)
+        if (!hit)
+            return {JobStatus::Failed, E_INVALIDARG};
+        if (!hit.value() && _drawing && (s.allowNewRectangle || s.allowNewEllipse))
+        {
+            _drawing->chosen = true;
+            return {};
+        }
+        if (!hit.value() || !_input)
             return {JobStatus::Failed, E_INVALIDARG};
         auto prepared = DocumentSession::PrepareDeferredSelectionMoveOpening(std::move(_input.value()),
                                                                              context.cancellation, {}, _output, true);
@@ -95,6 +154,47 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         return {};
     }
     s.remainingBudget = context.reservedMemoryBytes;
+    if (_phase == Phase::DrawOpen)
+    {
+        if (!_drawing || !_drawing->openingInput)
+            return {JobStatus::Failed, E_UNEXPECTED};
+        auto prepared = DocumentSession::PrepareLassoOpening(std::move(*_drawing->openingInput), 1,
+                                                             context.cancellation, _output, true);
+        _drawing->openingInput.reset();
+        if (!prepared)
+            return {JobStatus::Failed, E_FAIL};
+        _drawing->opening.emplace(std::move(*prepared));
+        return {};
+    }
+    if (_phase == Phase::DrawFinish)
+    {
+        ++s.closurePrepares;
+        if (!_drawing || !_drawing->finishInput)
+            return {JobStatus::Failed, E_UNEXPECTED};
+        LassoFinishObserver observer;
+        const auto limits = LassoFinishGeometry::NewMarqueeLimits(_drawing->settings.kind);
+        if (!limits)
+            return {JobStatus::Failed, E_INVALIDARG};
+        observer.geometry.limits = limits.value();
+        auto prepared = DocumentSession::PrepareLassoFinishPublication(std::move(*_drawing->finishInput),
+                                                                       context.cancellation, {}, &observer, _final);
+        _drawing->finishInput.reset();
+        if (!prepared)
+            return {JobStatus::Failed, E_FAIL};
+        _drawing->finish.emplace(std::move(*prepared));
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::DrawingPrepared);
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+    }
+    if (_phase == Phase::DrawRefresh)
+    {
+        ++s.residencyRefreshes;
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted);
+        const bool refreshed =
+            _drawing && _drawing->finish && _drawing->finish->RefreshHistoryResidency(context.cancellation);
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        return refreshed ? JobResult{} : JobResult{JobStatus::Failed, E_FAIL};
+    }
     if (_phase == Phase::RefreshClose || _phase == Phase::RefreshClick)
     {
         ++s.residencyRefreshes;
@@ -150,25 +250,97 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             arrival->document.documentSerial != s.session.DocumentSerial() || arrival->mode != SelectionMode::New ||
             arrival->tool == HostSelectionPressInput::Tool::Wand || down->sample.modifiers.control)
             return Refuse(E_ABORT);
+        if (s.requireCapturedTarget &&
+            (arrival->active != s.session.ActiveLayerID() || arrival->crop != s.session.CropFrame() ||
+             arrival->mask != s.session.IsMaskSelected()))
+            return Refuse(E_ABORT);
         if (s.admissionSource && (!s.session.IsDocumentReadCurrent(s.admissionSource->document) ||
                                   !s.session.CanApplyHistoryRestore(s.admissionSource->editor) ||
                                   !s.session.history.IsCurrent(s.admissionSource->history)))
             return Refuse(E_ABORT);
+        if (_drawing && s.admissionSource && s.admissionSource->newMarqueeKind != std::optional{arrival->kind})
+            return Refuse(E_ABORT); // Never prepare an oval under a rectangle-only admission.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
         if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
             return Refuse(E_ABORT);
         _display = s.session.DisplayedSelectionValue();
         _point = down->sample.point;
-        auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
-        if (!input || !_source)
+        if (_drawing)
+        {
+            if (arrival->tool != HostSelectionPressInput::Tool::Marquee ||
+                !((arrival->kind == LassoKind::Rectangle && s.allowNewRectangle) ||
+                  (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse)))
+                return Refuse(E_ABORT);
+            _drawing->settings = {arrival->kind, down->sample.antialiased};
+            _drawing->constrainArmed = !down->sample.modifiers.shift;
+            _drawing->editor = s.session.CaptureHistoryRestoreAuthority();
+            _drawing->history = s.session.history.CaptureAuthority();
+        }
+        if (_display.selection && !_display.selection->IsEmpty())
+        {
+            auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
+            if (!input)
+                return Refuse(E_ABORT);
+            _input.emplace(std::move(*input));
+            const auto& loops = _display.selection->loops;
+            _geometryEnvelope = loops.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(loops.size());
+        }
+        else if (!_drawing)
             return Refuse(E_ABORT);
-        _input.emplace(std::move(input.value()));
-        const auto& loops = _display.selection.value().loops;
-        _geometryEnvelope = loops.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(loops.size());
         ++s.captures;
         _phase = Phase::Open;
         return Resume();
+    }
+    if (_phase == Phase::Open && _drawing && _drawing->chosen)
+    {
+        s.sourceCurrent = _source && s.session.IsDocumentReadCurrent(*_source);
+        if (!s.sourceCurrent || !_drawing->editor || !_drawing->history ||
+            !s.session.CanApplyHistoryRestore(*_drawing->editor) || !s.session.history.IsCurrent(*_drawing->history))
+            return Refuse(E_ABORT);
+        auto input = s.session.PrepareLassoOpeningInput(_point, SelectionMode::New, _drawing->settings);
+        if (!input)
+            return Refuse(E_ABORT);
+        _drawing->openingIntent = s.session.CaptureLassoIntent(*input);
+        if (!_drawing->openingIntent)
+            return Refuse(E_ABORT);
+        _drawing->openingInput.emplace(std::move(*input));
+        _phase = Phase::DrawOpen;
+        return Resume();
+    }
+    if (_phase == Phase::DrawOpen)
+    {
+        if (!_drawing || !_drawing->opening)
+            return Refuse(E_ABORT);
+        s.openingBytes = _output->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
+        if (_output->BindContinuingOutputForPublication(s.scheduler, ticket, s.openingBytes) != S_OK)
+            return Refuse(E_FAIL);
+        s.partition = s.scheduler.ReservedMemoryBytes() >= s.limits.totalBytes && _output->BoundTo(s.scheduler, ticket);
+        s.opened = s.session.ApplyPreparedLassoOpeningIfCurrent(*_drawing->opening);
+        s.drawing = true;
+        if (!s.opened)
+            return Refuse(E_ABORT);
+        s.Notify(SelectionOutlineGestureState::Event::Opened);
+        _phase = Phase::Collect;
+        return Consume();
+    }
+    if (_phase == Phase::DrawRefresh)
+        _phase = Phase::DrawFinish;
+    if (_phase == Phase::DrawFinish)
+    {
+        if (!_drawing || !_drawing->finish || !s.session.IsPreparedLassoFinishCurrent(*_drawing->finish))
+            return Refuse(E_ABORT);
+        ++s.residencyTries;
+        const auto decision = _drawing->finish->TryAcquireHistoryResidency(_residency);
+        if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            return Refuse(E_ABORT);
+        if (decision != DocumentHistory::ResidencyValidation::Ready)
+        {
+            _residency.Reset();
+            _phase = Phase::DrawRefresh;
+            return Resume();
+        }
+        return false;
     }
     if (_phase == Phase::Open)
     {
@@ -252,7 +424,22 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     s.outcome = result;
     if (_error && result.status == JobStatus::Finished)
         s.outcome = {JobStatus::Failed, _error};
-    if (s.outcome.status == JobStatus::Finished)
+    if (s.drawing && s.terminalLost)
+        s.outcome = {JobStatus::Cancelled};
+    if (s.outcome.status == JobStatus::Finished && s.drawing)
+    {
+        const auto required = _drawing && _drawing->finish ? _drawing->finish->OutputAllocationBytes() : 0;
+        if (!_drawing || !_drawing->finish || !s.session.IsPreparedLassoFinishCurrent(*_drawing->finish) ||
+            required > s.limits.finalOutputBytes ||
+            _final->BindPersistentOutputAfterCompletedWork(s.scheduler, s.original, s.limits.finalOutputBytes,
+                                                           *_temporary) != S_OK)
+            s.outcome = {JobStatus::Failed, E_FAIL};
+        else
+            s.closed = s.session.ApplyPreparedLassoFinishIfCurrent(*_drawing->finish);
+        if (!s.closed && s.outcome.status == JobStatus::Finished)
+            s.outcome = {JobStatus::Failed, E_ABORT};
+    }
+    else if (s.outcome.status == JobStatus::Finished)
     {
         const auto required = _command ? _command->OutputMemoryBytes()
                                        : _final->LocalAllocationBytes() +
@@ -271,6 +458,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     _residency.Reset(); // Before rollback, retirement binding, prefix acknowledgement or host callbacks.
     if (s.outcome.status != JobStatus::Finished)
     {
+        AbortDrawing();
         if (s.opened && !s.closed && _opening)
             s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
         if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, s.original) != S_OK)
@@ -289,6 +477,7 @@ void SelectionOutlineGestureJob::RetainJoinedRetirement(JobScheduler&, JobTicket
     _residency.Reset();
     s.sameTicket = s.sameTicket && ticket == s.original;
     s.waiting = false;
+    AbortDrawing();
     if (s.opened && !s.closed && _opening)
         s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
     if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, ticket) != S_OK)
@@ -313,6 +502,8 @@ bool SelectionOutlineGestureJob::Resume() noexcept
 
 bool SelectionOutlineGestureJob::Consume() noexcept
 {
+    if (_drawing && _drawing->chosen)
+        return ConsumeDrawing();
     auto& s = _state;
     if (!_opening || !s.session.IsPreparedDeferredSelectionMoveGestureCurrent(_opening.value()))
         return Refuse(E_ABORT);
@@ -364,4 +555,79 @@ bool SelectionOutlineGestureJob::NotifyMoves(bool changed) noexcept
     // Host callbacks may publish UI Automation events and reenter the owner. A foreign pending edit can
     // appear without changing document generation; never capture a closure under that foreign authority.
     return _opening && _state.session.IsPreparedDeferredSelectionMoveGestureCurrent(*_opening);
+}
+
+bool SelectionOutlineGestureJob::DrawingCurrent() const noexcept
+{
+    return _drawing && _drawing->opening && _state.session.IsPreparedLassoGestureCurrent(*_drawing->opening);
+}
+void SelectionOutlineGestureJob::AbortDrawing() noexcept
+{
+    if (_state.opened && !_state.closed && DrawingCurrent())
+        _state.aborted = _state.session.AbortPreparedLassoGestureIfCurrent(*_drawing->opening);
+    if (_drawing)
+    {
+        if (_drawing->openingIntent)
+            (void)_state.session.DiscardLassoIntentIfCurrent(*_drawing->openingIntent);
+        if (_drawing->finishIntent)
+            (void)_state.session.DiscardLassoIntentIfCurrent(*_drawing->finishIntent);
+        if (_drawing->opening)
+            (void)_state.session.DiscardPreparedClosedLassoIfCurrent(*_drawing->opening);
+    }
+}
+bool SelectionOutlineGestureJob::ConsumeDrawing() noexcept
+{
+    auto& s = _state;
+    if (!DrawingCurrent())
+        return Refuse(E_ABORT);
+    bool changed = false;
+    while (auto event = s.prefix.Take(s.opening))
+    {
+        if (event->action == HostSelectionPressInput::Action::Down)
+            continue;
+        if (event->action == HostSelectionPressInput::Action::Move)
+        {
+            // EditorCanvas.dragMarqueeDraft: Option selects Subtract at Down, never fromCenter.
+            // A Shift already held at Down becomes a square modifier only after it is released.
+            if (!event->sample.modifiers.shift)
+                _drawing->constrainArmed = true;
+            if (!s.session.DragPreparedMarqueeIfCurrent(*_drawing->opening, event->sample.point,
+                                                        _drawing->constrainArmed && event->sample.modifiers.shift,
+                                                        false))
+                return Refuse(E_ABORT);
+            ++s.moves;
+            changed = true;
+            continue;
+        }
+        _terminal = true;
+        s.terminalLost = event->action == HostSelectionPressInput::Action::Lost;
+        s.terminalOrdinal = event->sample.ordinal;
+        if (changed)
+            s.Notify(SelectionOutlineGestureState::Event::Moved);
+        if (!DrawingCurrent())
+            return Refuse(E_ABORT);
+        if (s.terminalLost)
+        {
+            s.aborted = s.session.AbortPreparedLassoGestureIfCurrent(*_drawing->opening);
+            return s.aborted ? false : Refuse(E_ABORT);
+        }
+        auto terminal = s.session.ClosePreparedLassoGestureForWork(*_drawing->opening, event->sample.antialiased);
+        if (!terminal)
+            return Refuse(E_ABORT);
+        auto input = s.session.PrepareClosedBoundedLassoFinishInput(std::move(*terminal));
+        if (!input)
+            return Refuse(E_ABORT);
+        _drawing->finishIntent = s.session.CaptureLassoIntent(*input);
+        if (!_drawing->finishIntent)
+            return Refuse(E_ABORT);
+        _drawing->finishInput.emplace(std::move(*input));
+        _phase = Phase::DrawFinish;
+        return Resume();
+    }
+    if (changed)
+        s.Notify(SelectionOutlineGestureState::Event::Moved);
+    if (!DrawingCurrent())
+        return Refuse(E_ABORT);
+    s.waiting = true;
+    return true;
 }

@@ -52,7 +52,10 @@ DWORD WINAPI ReleaseWriterAfterWait(void* raw) noexcept
 
 bool ReadLiteralFile(const std::filesystem::path& path, std::vector<std::uint8_t>& bytes)
 {
-    wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+    std::wstring api;
+    if (FAILED(Win32FilePath::Prepare(path.c_str(), Win32FilePath::Use::File, api)))
+        return false;
+    wil::unique_hfile file(CreateFileW(api.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!file)
         return false;
@@ -76,12 +79,16 @@ struct SessionProjectEntry final
 bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProjectEntry>& entries)
 {
     entries.clear();
-    const auto rootAttributes = GetFileAttributesW(root.c_str());
+    std::wstring rootApi;
+    if (FAILED(Win32FilePath::Prepare(root.c_str(), Win32FilePath::Use::Directory, rootApi)))
+        return false;
+    const std::filesystem::path preparedRoot{rootApi};
+    const auto rootAttributes = GetFileAttributesW(preparedRoot.c_str());
     if (rootAttributes == INVALID_FILE_ATTRIBUTES || (rootAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
         (rootAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
         return false;
     std::error_code error;
-    std::filesystem::recursive_directory_iterator iterator(root, error), end;
+    std::filesystem::recursive_directory_iterator iterator(preparedRoot, error), end;
     if (error)
         return false;
     for (; iterator != end; iterator.increment(error))
@@ -89,11 +96,14 @@ bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProje
         if (error)
             return false;
         const auto& path = iterator->path();
-        const auto attributes = GetFileAttributesW(path.c_str());
+        std::wstring api;
+        if (FAILED(Win32FilePath::Prepare(path.c_str(), Win32FilePath::Use::File, api)))
+            return false;
+        const auto attributes = GetFileAttributesW(api.c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
             return false;
         SessionProjectEntry entry{
-            path.lexically_relative(root).generic_wstring(), (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, {}};
+            path.lexically_relative(preparedRoot).generic_wstring(), (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, {}};
         if (!entry.directory && !ReadLiteralFile(path, entry.bytes))
             return false;
         entries.push_back(std::move(entry));

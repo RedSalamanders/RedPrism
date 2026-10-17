@@ -11,7 +11,9 @@
 
 bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
 {
-    if (!_selectionPressTestEnabled || _tool != EditorTool::Marquee || _session.marqueeKind != LassoKind::Rectangle ||
+    const auto kind = _session.marqueeKind;
+    if (!_selectionPressTestEnabled || _tool != EditorTool::Marquee ||
+        (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse) ||
         _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU)) != SelectionMode::New ||
         (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))
         return false;
@@ -36,7 +38,7 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
     HostSelectionPressInput::Context context;
     context.document = *authority;
     context.tool = HostSelectionPressInput::Tool::Marquee;
-    context.kind = LassoKind::Rectangle;
+    context.kind = kind;
     context.mode = SelectionMode::New;
     // These are scalar event-time settings. Mutable source geometry/history is captured after admission.
     context.active = _session.ActiveLayerID();
@@ -146,11 +148,12 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     if (!_selectionPressTestEnabled || !_activeHostRequest || !arrival || !authority ||
         arrival->document.documentSerial != authority->documentSerial ||
         arrival->document.sessionIdentity != authority->sessionIdentity ||
-        arrival->ordinal != _activeHostRequest->ordinal ||
+        arrival->ordinal != _activeHostRequest->ordinal || arrival->active != _session.ActiveLayerID() ||
+        arrival->crop != _session.CropFrame() || arrival->mask != _session.IsMaskSelected() ||
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) ||
         (_selectionPressState && _selectionPressState->controller))
         return E_ABORT;
-    const auto memory = DescribeSelectionOutlineGestureMemory(_session);
+    const auto memory = DescribeSelectionOutlineGestureMemory(_session, arrival->kind);
     if (!memory)
         return E_OUTOFMEMORY;
     _selectionPressStamp =
@@ -161,6 +164,9 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     _selectionPressMovePresentations = 0;
     _selectionPressState.emplace(_jobs, _session, _selectionPressInput, opening, limits);
     _selectionPressState->admissionSource = memory->source;
+    _selectionPressState->allowNewRectangle = arrival->kind == LassoKind::Rectangle;
+    _selectionPressState->allowNewEllipse = arrival->kind == LassoKind::Ellipse;
+    _selectionPressState->requireCapturedTarget = true;
     _selectionPressState->observer = this;
     _selectionPressState->notify = [](void* raw, SelectionOutlineGestureState::Event event) noexcept
     { static_cast<Application*>(raw)->SelectionPressEventOwner(event); };

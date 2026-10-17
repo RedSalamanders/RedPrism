@@ -1,6 +1,6 @@
 # P1 Ellipse Win32 host qualification — 2026-10-17
 
-Status: **WIP; failed R1 retained, corrected R2 running**. P1 remains WIP.
+Status: **scoped Release R2 qualified; combined native ASan/ARM64 due**. P1 remains WIP.
 
 ## Scope
 
@@ -25,9 +25,21 @@ Completion SHA-256: `5B3B53CA48ABF7177004B2406E8A4014E636F8151E8349800C3C24B061A
 Local failed receipt: `.build/P1Drafts/S5PressMarqueeHost-r1-Main/main-failed-verified.json`.
 Original failed source and complete artifacts remain intact. No failed run is counted as qualified.
 
-## Current work
+## Corrected Release R2 — qualified
 
 Separate corrected source: `.build/P1Drafts/S5PressMarqueeHost-r2-Main/SourceFull`.
-Fresh Release compiler set: 341 translation units; strict source-derived reader retains all predecessors.
-Release runtime/readback, real host ASan and final combined native qualification remain due.
+Actual build child 64624, ISA child, host child 97248 and strict reader child 17752 all exit 0.
+Host runtime runs from 06:01:04.898208 to 06:02:23.538652 UTC. Main verifies all 341 exact compiler
+commands and objects, all 1,710 archive files, source/dependency/product bookends, matching executable/full-PDB
+GUID and age, zero ISA violations, all 89 Ellipse facts, 83 Rectangle facts and the complete 147-stage roster.
+The four positive and 21 negative source-only reader controls pass; no complete passing transcript is fabricated.
+
+Archive completion SHA-256: `A4D1B13909A00BFEA7F3476DE5E75C4F32A2478D984170CC41B0E4957A3FEEF8`.
+Local independent receipt: `.build/P1Drafts/S5PressMarqueeHost-r2-Main/main-qualified.json`.
+
+## Remaining qualification
+
+Integrate the selected source and run the complete native Debug/Release/real-ASan/analysis and ARM64 matrix.
+The full native ASan run will cover the actual host and all five executables; a duplicate private host-ASan
+rebuild is unnecessary. Rectangle's earlier ASan receipt does not qualify the new Ellipse host by itself.
 Ordinary activation, remaining selection branches and measured G1 remain open. DxUi source and pin are unchanged.

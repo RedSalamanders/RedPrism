@@ -104,20 +104,6 @@ and slot/generation numbers alone are insufficient after scheduler reconstructio
 is an owner-only identity query: it allocates nothing, samples no memory and grants no callback or mutation authority.
 Close removes the live endpoint, while older foreign graphs keep their independent charged endpoint until final release.
 
-The selected SelectionOutlineGestureJob is an explicitly enabled Application parent borrowing stable
-session/input state. One original Selection job retains its shared host ordinal, FIFO position, cancellation
-identity and complete admission through worker containment/opening, accepted physical-prefix replay,
-moved or no-op End, any subsequent Deselect, residency refresh and terminal acknowledgement. Workers consume
-sealed inputs; owner callbacks validate authority and publish prepared results. An idle input wait disarms
-until accepted input supplies readiness; presentation coalescing does not discard accepted mutations.
-
-Scheduler Close suppresses normal Completed/host-success callbacks. After producers join, the selected
-parent's RetainJoinedRetirement resets its residency permit, may execute only its separately held exact-own
-prebuilt abort, binds original retirement ownership and drops its active prefix/controller. The accounting
-hook itself grants no document/history authority. Application retains borrowed owners through this join,
-then finishes the exact selection-press history stamp and drops a never-started queued prefix. Teardown is
-idempotent; foreign editor state is never overwritten and foreign readers keep their independent charges.
-
 Jobs that lend mapped storage or retain an external receiver across a terminal worker result MUST opt in with
 `JobOptions::deferredRetirement`. After the worker has returned (or its cancelled Run has been skipped), the
 owner invokes `Job::DeferRetirement` for Finished, Failed and Cancelled results, before the success-only hook.
@@ -593,3 +579,13 @@ older FIFO work. It does not change global history-restore authority. Its origin
 recorded composite/readback, worker geometry/history, publication and complete retirement. These selected
 routes do not authorize ordinary prepared startup or replace the remaining admission, device, lifetime and
 G1 gates.
+
+## Selected Rectangle/New physical host
+
+The explicitly test-enabled Rectangle/New route records only a fixed event descriptor and bounded accepted prefix in WndProc. One host FIFO entry, history stamp and original job own containment, inside-outline movement or outside drawing, publication and retirement. Complete cached branch admission precedes source capture; validate captured active/crop/mask target and session/document identity. A pre-dispatch E_ABORT drops only that exact input and reports Stale. No eligible admission failure falls back to synchronous geometry. Ordinary activation still requires every consumer and remaining branch gate.
+
+## Selected physical Ellipse caller
+
+The explicitly enabled selection-press caller dispatches Rectangle/New and Ellipse/New through the same
+original parent. Accepted Down captures the primitive kind; worker containment chooses an existing-outline
+move or a new shape under that kind-specific admission. Ordinary activation remains separately gated.

@@ -481,9 +481,8 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   at most every 1,024 loop/edge steps, and distinguishes cancellation from an outside result.
   `HostSelectionPressInput` is a bounded 512-event physical prefix with event-time document coordinates,
   modifiers, antialias choice and nonwrapping ordinal. Up/Lost are separate terminals; overflow preserves the
-  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. The model API alone
-  does not activate ordinary Application routing. The selected test-only parent below reuses this prefix;
-  remaining physical branches, complete display/admission integration, ordinary activation and S5/G1 remain open.
+  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. This model/descriptor
+  API does not activate an Application route; complete host admission, replay, lifetime and S5/G1 remain due.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
@@ -1858,24 +1857,24 @@ transferred brush/warp work, other gestures, foreign mutations and a consumed op
 and numeric reference routes retain their behavior. These model APIs do not enable physical dispatch or
 change pointer-loss End, click follow-up, preserving callers, ordinary activation or G1 requirements.
 
-### Selected original-parent physical press (test-only)
+## Worker lasso opening: accepted descriptor settings and history epoch
 
-The Application route remains disabled by default: _selectionPressTestEnabled is false and only explicit
-self-tests enable it. Eligibility is New mode, Rectangle marquee, no Ctrl, a nonempty existing selection and
-an inside hit. Down captures only a fixed event-time descriptor/ordinal before complete admission; the
-admitted parent validates the cached admission tuple before capturing immutable roots and preparing Begin.
-Outside-hit drawing, absent/empty selection, lasso, Ellipse, Add/Subtract, Wand, Ctrl pixel lift and
-preserving-panel callers remain separate integration work.
+The `LassoOpeningSettings` overload of `PrepareLassoOpeningInput` records the accepted physical Down's numeric kind and antialias flag. Subsequent header preference changes cannot replace those settings. The bool overload retains its live-kind validation and live-AA-at-acquisition behavior. Invalid kind, selection mode or nonfinite point refuses before rotating the pending intent. Both overloads capture exact `DocumentHistory::Authority`; acquisition requires the same history epoch as well as the existing session/document/editor/token/intent authority. A foreign Begin refuses even when generation and revision are unchanged. Worker-created storage must bind to the original admitted parent before acquisition; moved-from, superseded, cancelled and already-applied results refuse. This API alone does not activate ordinary physical routing.
 
-Replay preserves every accepted sample in order and applies event-time Shift axis constraint, while
-emitting at most one Moved notification per replay batch. The opaque own-gesture guard is rechecked after
-that callback before any terminal capture. Up uses the accepted prefix rather than release coordinates;
-Lost, capacity overflow and ordinal exhaustion retain the last accepted sample without a new Move,
-ordinal, job slot or admission. Moved Up/Lost prepares End. Zero-offset Up acknowledges no-op End before
-capturing a separate Deselect under the original parent; zero-offset Lost ends without Deselect.
+## Guarded ownership of a worker-created lasso writer
 
-Cancellation uses only the prebuilt exact-own abort; stale refusal preserves foreign state. A Close
-refresh retains its original prepared input and complete admission, validates opaque gesture authority
-again, and releases its residency permit before later work, rollback, retirement or callbacks. An actual
-queued/active shutdown follows the joined-owner rules in Core_Architecture. This route does not activate
-ordinary input or establish other caller branches, native configuration coverage, complete S5 or G1.
+`PrepareLassoOpening` retains own-gesture authority only with its explicit default-false opt-in. Guarded marquee drag, abort and close require the same applied active writer and latest own key, plus unchanged session/document/editor/history/token authority. Own successful or unchanged drags retain that authority; a foreign direct writer mutation revokes it without permitting rollback. Closing consumes own active authority and seals the supplied physical terminal AA. General history restoration still refuses a live lasso. The default reference path retains its original ownership and live API behavior. These primitives alone do not enable ordinary physical input.
+
+## Selected Rectangle/New physical-parent protocol
+
+The explicitly opted-in parent may choose Rectangle/New after cancellable worker containment finds no hit, including absent or explicit-empty source selection. It reuses the original admitted parent, fixed Down settings, ordered samples and terminal AA. Physical Alt never requests `fromCenter`; physical Shift held at Down must first be released before constraining the draft. The model's explicit centered-drag API retains its numeric behavior. Lost/cancelled drawing preserves the original selection. This protocol alone does not activate ordinary input.
+
+An opaque `LassoIntent` clears only its exact pending opening or finish identity. It cannot clear a newer intent, another kind, session/document, or foreign editor/history authority. Closed own-writer cleanup requires its exact original authority and retains old owners for worker retirement.
+
+## Qualified selected Rectangle Win32 caller
+
+With its explicit test gate enabled, the physical caller routes Rectangle/New inside and outside hits through the original admitted parent. Absent/empty selection, click, capture loss, cancellation, overflow, stale active target and joined Close retain their distinct terminal semantics. Accepted Down owns primitive kind; accepted Up supplies terminal AA without adding a Move. Physical Alt during drawing does not center it. Every terminal acknowledges the exact prefix and history stamp, and preserves foreign state. This selected caller remains disabled in ordinary operation until complete selection/display admission and activation gates close.
+
+## Kind-bound New marquee preparation
+
+The typed New-marquee descriptor supports Rectangle and Ellipse. It captures the accepted kind before source capture; worker preparation must use that same kind and its admitted limits. Unsupported kinds and mismatched Rectangle-only admission refuse before capture or document/history mutation. Inside-outline movement retains the prior outline; outside Ellipse/New generates the legacy oval under the same original parent, accepted samples, terminal AA, history authority and retirement. Physical Alt never means centered drawing. The explicit physical caller routes both New kinds, including inside-outline movement; accepted Up supplies AA without an invented Move. Ordinary activation remains a separate gate.

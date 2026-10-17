@@ -3029,32 +3029,32 @@ Private Release and exact-source real-ASan proofs require complete archive, comp
 bookends, matching PE/PDB, ISA and a real ASan UAF control. They do not substitute for native application/ARM64
 qualification, ordinary activation, other physical routes or measured G1.
 
-### Selected actual selection-press and joined-shutdown validation
+## Lasso opening settings/history authority proof
 
-Retain the full physical-prefix/notification, cached-admission and metadata-authority fixtures as well as
-the CPU controls above. They require event-time input, exact mutation/history/FIFO outcomes, one presentation
-per replay batch, post-callback foreign-editor refusal, checked cached bounds and refusal of late Crop,
-Active, Mask and HistoryBegin changes before capture. Live opening/final charges must remain observable
-until their last actual history/geometry/control reader; final refund alone is insufficient.
+`Document.Tests.LassoOpeningSettings` preserves all prior assertions and adds 46 primitive numeric/state controls for captured and live settings, signed rounding, exact foreign-editor/history refusal, invalid descriptor pre-mutation rejection, one-shot/move authority, original-ticket binding and final refunds. Foreign Begin is tested separately for both overloads without a generation/revision change. The pre-fix run's two real failures remain preserved; fixed Release and real ASan must pass unchanged predicates and the complete ordered predecessor stream. Counts alone do not qualify a run. See [the scoped evidence](../TestRuns/P1LassoOpeningSettings_2026-10-17.md). Private model proof does not qualify ordinary Win32 routing, latest native integration or P1 Done.
 
-Application.Tests.SelectionPressGesture requires 41 controls on the real hidden Win32/WARP owner and two
-workers, using WndProc messages for early Up, moved Up/Lost, cancellation, admission refusal and overflow.
-Check literal geometry/generation/history, the original ticket, one capture after successful admission,
-zero captures on admission refusal, acknowledgement and coalesced presentation. Overflow preserves all 511 accepted Moves and refuses the extra point.
-Application.Tests.SelectionPressShutdown requires 21 controls on genuinely queued and active parents:
-exact receipt/stamp/prefix settlement after joined Close, suppressed useful completion, retired original
-controller/charges, an independently retained observer, and idempotent repeated Shutdown. Preserve all 71
-scalar controls and every native predecessor assertion, expected byte, order, summary and stage.
+## Own-writer and Rectangle/New primitive qualification
 
-Fixture Until loops must pump messages, DrainCompletions then RunUiActions before testing readiness and
-waiting, matching Application and SettleJobs. Failure diagnostics cannot change successful predicates,
-deadlines, capture/mouse-leave behavior or reader acceptance. Retain R4/R6 actual failures, R5's strict
-pre-runtime prerequisite refusal and R7's filesystem-only artifact-reader refusal with its adapter.
-Independent readers must reject missing, duplicate, reordered, failed, unknown, miscounted, bad-exit or
-sanitizer-diagnostic streams and bind exact source/dependency/product/compiler/archive/PE-PDB identity.
+`Document.Tests.LassoGestureAuthority` adds 45 original-ticket, numeric, authority and lifetime facts; `Document.Tests.RectangleFinishPlan` adds 19 independent shape/area, bounded-plan, prior-selection, cancellation and clipping facts. Preserve all predecessor facts and the original default-path behavior in Release and real ASan. Exact source/command/profile/PE/PDB/archive identity and the complete ordered stream remain required. See [the scoped evidence](../TestRuns/P1LassoDrawingAuthority_2026-10-17.md). Private primitive proof cannot qualify the later physical parent, ordinary routing, latest native integration, G1 or P1 Done.
 
-Require Main's exact-source actual-caller Release and real-ASan qualification, including actual UAF
-detection, before native adoption. After integration require fresh canonical analysis, native x64
-Debug/Release/real ASan, ARM64 cross-builds and existing formatting/skills gates. Cross-build success is
-not native ARM64 runtime evidence. Keep _selectionPressTestEnabled false for ordinary input; these
-selected tests do not close other physical callers, complete S5, measured G1 or P1 Done.
+## Rectangle/New original parent and intent cleanup qualification
+
+`Document.Tests.RectangleGestureParent` adds 75 literal geometry/state, event-time settings, original-ticket, cancellation, refusal, history and shutdown facts. `RunLassoIntentCleanupTests` adds 30 exact-intent/foreign-state cleanup facts while preserving all 45 prior authority predicates. Release and real ASan must retain every predecessor assertion, source/profile/artifact identity, actual sanitizer detection, complete archive and strict full-stream validation. Physical modifier expectations follow the legacy canvas; explicit model `fromCenter` goldens remain unchanged. See [the retained failures and passing CPU evidence](../TestRuns/P1RectangleGestureParent_2026-10-17.md). These CPU gates do not qualify actual Win32, ordinary activation, latest native integration, G1 or P1 Done.
+
+## Rectangle Win32 and long-path reference qualification
+
+The standalone physical Rectangle gate covers 13 scenarios/83 facts on the actual two-worker/WARP application, followed by all predecessor Application stages. Require exact-source Release and real ASan, actual sanitizer detection, exact compiler/ISA/PE/PDB/archive identity and complete ordered streams. Retain failed fixture/API, stale-outcome, joined-driver and path attempts before correction. Literal-tree reference readers use the existing checked Win32 path adapter so a 260-character backup image can be independently compared without changing any expected bytes or save behavior. Reader adapters validate their exact new stage and forward untouched predecessor bytes, including its existing CHROME SYNC LF records, to the unchanged full comparator. See [the complete evidence](../TestRuns/P1RectangleSelectionHost_2026-10-17.md). Ordinary activation, latest native profiles and G1 remain separate gates.
+
+## Ellipse/New CPU qualification
+
+Preserve all predecessor records and add the 20 Ellipse geometry/legacy-coverage references plus 77 original-parent, source, history, cancellation, refusal and lifetime facts. Require fresh exact-source Release and real ASan, the actual UAF control, complete ordered readers, exact command/ISA/PE/PDB/archive identity and final bookends. The independent serial geometric reference uses the documented 1/128 grid and a derived floating-point accumulation bound; legacy coverage remains exact 255/0. See [the qualified CPU evidence](../TestRuns/P1EllipseGestureParent_2026-10-17.md). Actual Win32, native integration, ordinary activation and measured G1 remain open.
+
+## Selected physical Ellipse host validation
+
+The shared physical fixture MUST retain all 83 Rectangle facts and all prior Application records and
+exercise the 14 Ellipse scenarios (89 facts), including inside-outline movement. Its complete roster
+is 147 stages, 8,577 stdout facts and 7,613 stderr facts. The independent reader checks exact order,
+source identity, summary and actual zero exit, then forwards every predecessor byte unchanged.
+Release evidence and the retained R1 fixture failure are in
+[`P1EllipseSelectionHost_2026-10-17.md`](../TestRuns/P1EllipseSelectionHost_2026-10-17.md).
+Complete adopted-source native ASan and ARM64 qualification remain due.

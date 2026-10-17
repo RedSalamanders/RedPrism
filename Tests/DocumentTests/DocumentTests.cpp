@@ -25,11 +25,16 @@
 #include "Document.Tests.ContinuingPublication.h"
 #include "Document.Tests.DeferredSelectionMove.h"
 #include "Document.Tests.DistortRead.h"
+#include "Document.Tests.EllipseFinishPlan.h"
 #include "Document.Tests.HostLassoInput.h"
 #include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
 #include "Document.Tests.LassoFinishGeometry.h"
+#include "Document.Tests.LassoGestureAuthority.h"
+#include "Document.Tests.LassoOpeningSettings.h"
 #include "Document.Tests.LassoSessionBridge.h"
+#include "Document.Tests.RectangleFinishPlan.h"
+#include "Document.Tests.RectangleGestureParent.h"
 #include "Document.Tests.SelectionCommandMemory.h"
 #include "Document.Tests.SelectionGestureAbort.h"
 #include "Document.Tests.SelectionGestureAdmission.h"
@@ -8453,6 +8458,13 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDocumentSelectionGestureAdmissionTests();
     gFailures += RunDocumentSelectionGestureAdmissionAuthorityTests();
     gFailures += RunDocumentSelectionGestureResidencyTests();
+    gFailures += RunLassoOpeningSettingsTests();
+    gFailures += RunLassoGestureAuthorityTests();
+    gFailures += RunRectangleFinishPlanTests();
+    gFailures += RunLassoIntentCleanupTests();
+    gFailures += RunRectangleGestureParentTests();
+    gFailures += RunEllipseFinishPlanTests();
+    gFailures += RunEllipseGestureParentTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

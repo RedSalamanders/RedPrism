@@ -757,8 +757,8 @@ document serial, generation, separate collapse revision, session document read
 authority and held layer root; the source owns every pointer identity. One active request and one newest key
 bound refreshes. Cancellation retains original record/source/accounting until acknowledgement.
 
-For ordinary `RetainMemory`, a successful, nonzero, uncancelled original job reservation may transfer to one
-of 64 fixed retained-memory slots only during that exact job's owner final apply or `Completed` callback. Pump/progress, foreign/stale/reused
+A successful, nonzero, uncancelled original job reservation may transfer to one of 64 fixed retained-memory
+slots only during that exact job's owner final apply or `Completed` callback. Pump/progress, foreign/stale/reused
 jobs and another job's final callback (including a custom apply handler) have no such authority. Transfer performs
 no second admission, memory query or allocation; tokens bind scheduler lifetime, slot and generation. Retained cache
 accounting alone does not keep useful work awake. Replacement/clear detaches every chrome borrow before the
@@ -1611,16 +1611,30 @@ and ticket. No owner wait, pixel read, index/geometry reconstruction, re-admissi
 allocation is allowed. Test-only readiness callbacks borrow immutable rasters/events and never an Application,
 mutable document session, UI or GPU owner. The selected structural proof does not qualify ordinary input or G1.
 
-### Selected original-parent admission
+## Lasso opening settings and history authority
 
-The selected inside-New-Rectangle descriptor reads cached H = EditMemoryBytes(document), R =
-HistoryRestoreRetirementMemoryBytes(), and G = selection StorageBytes plus WorkOwnershipAllowance. Let O
-be SharedPublicationMemory::OwnershipAllowance and W be 4096 plus sizeof(SelectionOutlineGestureJob),
-sizeof(SelectionOutlineGestureState), sizeof(BrushStroke) and sizeof(WarpStroke). Its checked envelopes are
-opening = 2H + W + O, final = 4H + 2G + W + O, temporary = 4H + 2R + 2G + W + 3O, and total is their sum.
-Unavailable bounds or overflow refuse before capture. Admission retains the scalar tuple
-{DocumentReadAuthority, HistoryRestoreAuthority, DocumentHistory::Authority}; all three must still match
-before retaining document/history/geometry roots. Generation alone is insufficient for Crop, Active, Mask
-or HistoryBegin changes. Later workers receive total minus the actual continuing-output charge, with no
-new admission, memory query or reservation growth. These are the selected CPU bounds; complete display/GPU,
-other physical branches and measured G1 remain separately required.
+Queued lasso opening may retain fixed-size primitive kind/AA settings and an exact history authority value. Capture and owner acquisition perform bounded identity/epoch checks without scanning history or allocating point vectors. The input, writer/control, arena, source roots and retirement must remain covered by the original admitted ticket; this small settings API does not provide complete physical-gesture admission. A history Begin invalidates old openings even when document generation/revision are unchanged. Final retained-resource refund remains independently required.
+
+## Rectangle/New worker envelope and owned writer retention
+
+Rectangle/New geometry may use the fixed `PlanNewRectangle` envelope: one arena block, no sealed-prefix traversal, 64 KiB clip workspace, 8 input points/2 input loops and 16 output points/4 output loops. The actual worker must use these same limits. Old selection geometry is retained/accounted separately and is not a New clip input; Add/Subtract cannot inherit this plan for a large prior. This geometry envelope excludes source/history, host prefix, display, refresh and retirement, which must be admitted before capture. Opted-in prepared lasso owners keep their original writer/arena charged after abort or document replacement until final strong and weak owner release; neither settlement nor a removed live draft alone permits refund.
+
+## Original-parent Rectangle/New admission
+
+The selected physical parent describes both inside-outline and outside Rectangle/New branch peaks before source capture. Cancellable containment chooses a branch without re-admission. Opening, retained input, final geometry/history, refresh overlap and retirement stay under the original ticket. The drawing payload is allocated by that worker; owner replay performs scalar authority checks and accepted marquee updates. Rectangle/New executes the admitted 64 KiB geometry workspace and never traverses a large old outline as a New boolean input. Terminal cleanup retains strong and weak owners until their exact original charges can refund. Actual ordinary callers, complete display ownership and G1 remain separate qualification.
+
+## Selected physical Rectangle lifetime qualification
+
+Pointer Down/Move/Up/Lost use bounded descriptor/prefix storage; original admission covers both selected branches before any outline/history root capture. Reuse the same ticket for useful stages, terminal preparation and residency refresh. Suppress useful completion on joined Close, retain borrowed owner state until its producer joins, and release only its exact history stamp/prefix. Final worker retirement must leave independent observer reservations intact. Selected real-Win32 Release/ASan proof does not establish ordinary activation, complete consumer admission or measured G1.
+
+## Ellipse/New bounded geometry envelope
+
+Ellipse/New admits and executes a 4 MiB clip workspace, 2,052 total input points/two loops and 4,096 output points/16 loops. One arena block supplies the marquee's four scalar corners; ellipse generation is capped at 2,048 vertices on the worker, with no sealed-prefix traversal. The captured-kind admission marker prevents use of the smaller Rectangle workspace. New ignores the old outline as clip input while retaining its separately charged source/history/control owners. Complete original-ticket phase/refresh/retirement admission remains mandatory; these bounds alone do not cover display consumers or G1.
+
+## Selected physical Ellipse admission
+
+Physical Ellipse/New reads the cached typed plan before geometry/history capture. It uses the existing
+4 MiB worker workspace, 2,052 input-point and 4,096 output-point ceilings; the original parent also
+charges retained source/history, opening, construction and retirement. The pointer callback captures
+only fixed settings and accepted document coordinates; it never builds an oval or changes the declared
+kind at a later header tick. This selected route supplies no ordinary-host or G1 timing qualification.

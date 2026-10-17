@@ -6,7 +6,7 @@
 #include <optional>
 
 // Owner-only cached description, before any source/history/outline root is retained. This describes
-// the exact inside-selection New outline branch; other tools and display preparation are separate.
+// the selected inside-outline branch plus its explicit captured New marquee kind; display remains separate.
 struct SelectionOutlineGestureMemory final
 {
     SelectionOutlineGestureState::Admission source;
@@ -14,4 +14,7 @@ struct SelectionOutlineGestureMemory final
     std::uint64_t sourceBytes = 0, historyBytes = 0, geometryBytes = 0;
 };
 [[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
-    const DocumentSession& session) noexcept;
+    const DocumentSession& session, bool allowNewRectangle = false) noexcept;
+// Admit this exact captured kind before the original parent captures any source.
+[[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
+    const DocumentSession& session, LassoKind newMarqueeKind) noexcept;
