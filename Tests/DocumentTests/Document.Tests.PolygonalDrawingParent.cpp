@@ -3,6 +3,7 @@
 #include "../Support/DocumentFixture.h"
 #include "SelectionHitWork.h"
 
+#include <array>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -572,6 +573,246 @@ void ContradictoryPreRecordedTerminal(bool stillSampling, const char* name)
     Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
            "descriptor-refusal-retirement-refunds");
 }
+
+struct HostGates final
+{
+    struct Decision final
+    {
+        std::uint64_t ordinal = 0, intent = 0;
+        bool closes = false;
+    };
+    std::uint64_t limit = 1000, terminalOrdinal = 0, terminalIntent = 0;
+    unsigned replayQueries = 0, terminalQueries = 0, decisions = 0;
+    bool terminalAllowed = false, terminalCancelled = false, wrongThread = false;
+    DWORD owner = GetCurrentThreadId();
+    std::array<Decision, 4> resolved{};
+    static bool Replay(void* raw, std::uint64_t ordinal) noexcept
+    {
+        auto& self = *static_cast<HostGates*>(raw);
+        self.wrongThread = self.wrongThread || self.owner != GetCurrentThreadId();
+        ++self.replayQueries;
+        return ordinal <= self.limit;
+    }
+    static bool Terminal(void* raw, std::uint64_t ordinal, std::uint64_t intent, bool cancelled) noexcept
+    {
+        auto& self = *static_cast<HostGates*>(raw);
+        self.wrongThread = self.wrongThread || self.owner != GetCurrentThreadId();
+        ++self.terminalQueries;
+        self.terminalOrdinal = ordinal;
+        self.terminalIntent = intent;
+        self.terminalCancelled = cancelled;
+        return self.terminalAllowed;
+    }
+    static void Resolve(void* raw, std::uint64_t ordinal, std::uint64_t intent, bool closes) noexcept
+    {
+        auto& self = *static_cast<HostGates*>(raw);
+        self.wrongThread = self.wrongThread || self.owner != GetCurrentThreadId();
+        if (self.decisions >= self.resolved.size())
+            Broken("fixed-close-decisions");
+        self.resolved[self.decisions++] = {ordinal, intent, closes};
+    }
+    void Bind(PolygonalDrawingState& state) noexcept
+    {
+        state.hostObserver = this;
+        state.mayReplay = Replay;
+        state.mayFinish = Terminal;
+        state.pressResolved = Resolve;
+    }
+};
+void HostOrderingAndSavedMarker()
+{
+    scenario = "host-ordering-save-marker";
+    HostGates gate;
+    auto f = std::make_unique<Fixture>();
+    gate.limit = 2;
+    gate.Bind(*f->state);
+    const auto history = f->session->history.CaptureState();
+    const auto revision = f->session->history.CurrentRevision();
+    f->Rectangle();
+    f->Submit();
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Ordinal; });
+    Expect(f->state->points == 1 && f->input->PendingCount() == 2 &&
+               f->session->PendingLasso().value().PointCount() == 2 && f->session->history.IsCurrent(history),
+           "older-host-boundary-leaves-younger-corners-unconsumed");
+    const auto ticket = f->state->original;
+    const auto runs = f->state->runs;
+    const auto queries = gate.replayQueries;
+    (void)DrainCompletions(f->jobs);
+    (void)RunUiActions(f->jobs);
+    Expect(f->state->runs == runs && gate.replayQueries == queries && f->state->controller &&
+               f->jobs.ReservedMemoryBytes() >= f->plan.value().TotalBytes(),
+           "parked-boundary-holds-original-charge-without-polling");
+    f->session->history.MarkSaved(revision);
+    Expect(!f->session->history.IsModified() && f->session->history.IsCurrent(history) &&
+               f->session->PendingLasso().value().PointCount() == 2 && !f->session->Selection(),
+           "saved-committed-revision-does-not-end-live-draft-or-mutate-history");
+    gate.limit = 4;
+    f->Wake();
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Input; });
+    Expect(f->state->points == 3 && f->input->PendingCount() == 0 &&
+               f->session->PendingLasso().value().PointCount() == 4 && f->state->original == ticket,
+           "owner-prerequisite-notification-resumes-same-parent-after-save");
+    f->Finish(false);
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Terminal; });
+    Expect(f->state->finishBudget == 0 && f->input->PendingCount() == 1 && f->session->PendingLasso() &&
+               f->session->history.IsCurrent(history) && f->state->captures == 1 && !f->state->completed,
+           "terminal-stays-unconsumed-before-close-and-finish-history-capture");
+    Expect(gate.terminalOrdinal == 10 && gate.terminalIntent == 0 && !gate.terminalCancelled && !gate.wrongThread,
+           "readiness-observes-physical-terminal-only-on-owner");
+    gate.terminalAllowed = true;
+    f->Wake();
+    Settle(f->jobs);
+    Expect(f->state->published && f->state->sameTicket && f->state->original == ticket && f->memory.queries == 1 &&
+               f->session->history.UndoCount() == 1 && f->session->history.IsModified() &&
+               Pixels(*f->session, SelectionMode::New) && !f->session->Selection().value().antialiased,
+           "ordered-finish-publishes-once-on-original-admission-with-terminal-aa");
+    f->session->Undo();
+    Expect(f->session->history.CurrentRevision() == revision && !f->session->history.IsModified() &&
+               !f->session->Selection(),
+           "undo-retains-save-marker-written-while-polygon-was-open");
+    f->session->Redo();
+    Expect(f->session->history.IsModified() && Pixels(*f->session, SelectionMode::New),
+           "redo-restores-finish-and-preserves-saved-revision");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "host-boundary-last-reader-refunds-original-accounting");
+}
+void HostProvisionalDecision()
+{
+    scenario = "host-provisional-close";
+    HostGates gate;
+    auto f = std::make_unique<Fixture>();
+    gate.Bind(*f->state);
+    f->Point({8, 2}, 2);
+    f->Press({8, 7}, 3, true, false, true, 93);
+    f->Press({2, 7}, 4);
+    f->Press({11, 9}, 5, true, false, false, 95);
+    f->Point({11, 9}, 6);
+    f->Submit();
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Terminal; });
+    Expect(gate.decisions == 2 && gate.resolved[0].ordinal == 3 && gate.resolved[0].intent == 93 &&
+               !gate.resolved[0].closes && gate.resolved[1].ordinal == 5 && gate.resolved[1].intent == 95 &&
+               gate.resolved[1].closes && !gate.wrongThread,
+           "provisional-requests-resolve-once-after-older-corners-with-distinct-identities");
+    Expect(f->state->points == 3 && f->session->PendingLasso().value().PointCount() == 4 &&
+               f->state->closingOrdinal == 5 && f->state->closingIntent == 95 && f->input->PendingCount() == 1,
+           "closing-press-is-never-appended-and-younger-corners-are-discarded");
+    const auto runs = f->state->runs;
+    f->Wake();
+    Until(f->jobs, [&] { return f->state->waiting; });
+    Expect(gate.decisions == 2 && f->state->runs == runs + 1 && f->state->finishBudget == 0 &&
+               gate.terminalOrdinal == 5 && gate.terminalIntent == 95 && !f->state->published,
+           "explicit-prerequisite-wake-rechecks-readiness-without-replaying-close-decision");
+    gate.terminalAllowed = true;
+    f->Wake();
+    Settle(f->jobs);
+    Expect(f->state->published && Pixels(*f->session, SelectionMode::New) &&
+               !f->session->Selection().value().antialiased && f->session->history.UndoCount() == 1,
+           "selected-terminal-keeps-physical-aa-and-independent-rectangle-result");
+    Expect(f->state->sameTicket && f->state->captures == 1 && f->memory.queries == 1 && f->state->inputAcknowledged &&
+               !f->input->Busy() && f->probe.terminal == 1,
+           "provisional-arbitration-never-readmits-or-duplicates-terminal");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "provisional-original-charge-retires-after-last-reader");
+}
+void HostBarrierEnd(int kind, const char* name)
+{
+    scenario = name;
+    HostGates gate;
+    auto f = std::make_unique<Fixture>(Initial::Prior, SelectionMode::Add);
+    gate.Bind(*f->state);
+    const auto before = f->session->Selection();
+    f->Rectangle();
+    f->Submit();
+    f->Finish();
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Terminal; });
+    Expect(f->session->PendingLasso() && f->state->finishBudget == 0 && f->input->PendingCount() == 1 &&
+               f->jobs.ReservedMemoryBytes() >= f->plan.value().TotalBytes(),
+           "gated-terminal-holds-live-writer-and-original-reservation");
+    if (kind == 2)
+    {
+        f->session->history.Begin(L"Foreign gated transaction", f->session->Document(), f->session->ActiveLayerID());
+        gate.terminalAllowed = true;
+        f->Wake();
+    }
+    else if (kind == 1)
+        f->jobs.Close();
+    else if (!f->jobs.Cancel(f->state->original) || !f->jobs.Resume(f->state->original))
+        Broken("gated-cancel");
+    const auto foreign = f->session->history.CaptureState();
+    if (kind != 1)
+        Settle(f->jobs);
+    Expect(!f->state->published && f->session->Selection() == before && f->session->history.IsCurrent(foreign) &&
+               (kind == 2 ? f->state->outcome.status == JobStatus::Failed && f->state->outcome.error == E_ABORT &&
+                                f->session->PendingLasso().has_value()
+                          : f->state->outcome.status == JobStatus::Cancelled && !f->session->PendingLasso()),
+           "gated-cancel-shutdown-or-staleness-preserves-source-and-foreign-history");
+    Expect(f->state->inputAcknowledged && !f->input->Busy() && !f->state->controller &&
+               f->probe.terminal == (kind == 1 ? 0u : 1u),
+           "original-input-drops-once-and-joined-close-suppresses-useful-callback");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "gated-terminal-all-owners-refund-on-final-retirement");
+}
+void HostGatedLoss()
+{
+    scenario = "host-gated-loss";
+    HostGates gate;
+    auto f = std::make_unique<Fixture>();
+    gate.Bind(*f->state);
+    const auto history = f->session->history.CaptureState();
+    f->Rectangle();
+    f->Submit();
+    f->Finish(false, 10, true);
+    Until(f->jobs,
+          [&] { return f->state->waiting && f->state->waitReason == PolygonalDrawingState::WaitReason::Terminal; });
+    Expect(gate.terminalCancelled && gate.terminalOrdinal == 10 && gate.terminalIntent == 0 && !gate.wrongThread,
+           "loss-readiness-retains-accepted-physical-terminal-identity");
+    Expect(f->input->PendingCount() == 1 && f->session->PendingLasso() && !f->state->completed &&
+               !f->state->controller->Finish(true, 11),
+           "gated-loss-remains-original-and-refuses-younger-successful-finish");
+    gate.terminalAllowed = true;
+    f->Wake();
+    Settle(f->jobs);
+    Expect(f->state->outcome.status == JobStatus::Cancelled && !f->state->published && !f->session->PendingLasso() &&
+               !f->session->Selection() && f->session->history.IsCurrent(history),
+           "released-loss-cancels-own-draft-without-partial-selection-or-history");
+    Expect(f->state->inputAcknowledged && !f->input->Busy() && f->state->sameTicket && f->memory.queries == 1 &&
+               f->probe.terminal == 1,
+           "gated-loss-acknowledges-and-retires-one-original-operation");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "gated-loss-final-reader-refunds");
+}
+void HostInvalidOrdinal(bool terminal, const char* name)
+{
+    scenario = name;
+    HostGates gate;
+    auto f = std::make_unique<Fixture>();
+    gate.Bind(*f->state);
+    f->Rectangle();
+    if (!terminal)
+        f->Point({3, 7}, 3);
+    f->Submit();
+    f->Finish(true, terminal ? 4u : 10u);
+    Settle(f->jobs);
+    Expect(f->state->completed && f->state->outcome.status == JobStatus::Failed &&
+               f->state->outcome.error == E_INVALIDARG && gate.terminalQueries == 0,
+           "malformed-order-refuses-instead-of-parking-behind-readiness");
+    Expect(!f->state->published && !f->session->Selection() && f->session->history.UndoCount() == 0 &&
+               !f->input->Busy() && f->state->inputAcknowledged,
+           "invalid-order-cannot-publish-or-strand-original-prefix");
+    f->Release();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "malformed-gated-operation-refunds");
+}
+
 } // namespace
 
 int RunPolygonalDrawingParentTests()
@@ -610,4 +851,19 @@ int RunPolygonalPreRecordedTerminalTests()
     ContradictoryPreRecordedTerminal(false, "terminal-not-after-down");
     std::printf("SUMMARY polygonal-pre-recorded-terminal checks=%u failures=%u\n", checks, failures);
     return failures == 0 && checks == 14 ? 0 : (failures ? static_cast<int>(failures) : 1);
+}
+
+int RunPolygonalHostGateTests()
+{
+    checks = failures = 0;
+    HostOrderingAndSavedMarker();
+    HostProvisionalDecision();
+    HostBarrierEnd(0, "host-gated-cancel");
+    HostBarrierEnd(1, "host-gated-joined-close");
+    HostBarrierEnd(2, "host-gated-foreign-history");
+    HostGatedLoss();
+    HostInvalidOrdinal(false, "host-gated-invalid-point");
+    HostInvalidOrdinal(true, "host-gated-invalid-terminal");
+    std::printf("SUMMARY polygonal-host-gates checks=%u failures=%u\n", checks, failures);
+    return failures == 0 && checks == 39 ? 0 : (failures ? static_cast<int>(failures) : 1);
 }

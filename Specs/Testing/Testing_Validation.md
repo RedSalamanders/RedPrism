@@ -3216,3 +3216,19 @@ genuine UAF control, full 284-TU/source/artifact/PE/PDB/ISA readback and source-
 The preserved stale ASan archive-count reader refusal is corrected against the unchanged completed
 bytes; it never replays a compiler or runtime. Physical routing and ordinary/G1 gates remain separate.
 [Evidence](../TestRuns/P1PolygonalPendingTerminal_2026-10-17.md).
+
+## Polygonal owner gate validation
+
+`RunPolygonalHostGateTests` adds 39 source-defined facts over eight calls after every 23,415 predecessor
+assertion (23,454 total), complete scoped Release and real ASan with 284 exact compiler records. Cover
+Peek-before-Take ordinal boundaries, original-ticket/memory ownership without polling, terminal gating
+before close/history capture, owner-only hooks, one-time early-near/selected-close decisions, terminal
+AA and independent rectangle coverage, Save-marker/Undo/Redo, cancellation/joined Close/foreign Begin,
+accepted Lost versus younger Finish, invalid orders that refuse rather than park, and final refund.
+
+The source-only reader preserves all predecessor bytes; require four newline/BOM positives and thirteen
+refusals, genuine UAF detection and exact source/object/profile/PE/PDB/ISA/archive readback. Preserve
+the premature dependent readback and stale inventory-count refusal; qualify the same completed runtime
+only after join and exact inventory verification. Actual Polygonal multi-click, Save/tool/lifetime
+callers, ordinary activation and measured G1 remain separate.
+[Evidence](../TestRuns/P1PolygonalOwnerGates_2026-10-17.md).

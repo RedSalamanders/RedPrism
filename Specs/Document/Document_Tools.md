@@ -1998,3 +1998,16 @@ ordinal in immutable descriptor metadata. The original controller consumes that 
 younger opposite terminal cannot replace its outcome or AA. The scalar is observational event order,
 never model authority. Claimed terminal metadata while input is still sampling, or an ordinal not
 after the captured Down, refuses with `E_ABORT` before any source/geometry/history capture.
+
+## Polygonal owner readiness and provisional closure
+
+Optional owner-only `mayReplay` and `mayFinish` hooks yield before taking the next fixed input record.
+False parks the same original job with that record unconsumed; only known input/prerequisite changes
+notify it. Readiness grants no model authority and never closes the writer or captures terminal history
+early. Queries MUST NOT mutate session/input state or reenter the controller. Absent hooks preserve
+the original CPU behavior. Invalid successful ordinals refuse instead of parking indefinitely.
+
+`pressResolved` reports each nonzero opaque provisional intent exactly once after older corners and
+Backspaces decide it. A rejected proximity close has appended its corner; a chosen close never appends
+the closing point. Preserve physical sample ordinal and opaque intent before terminal normalization.
+A separately queued host descriptor has a distinct ordinal. Actual physical dispatch remains separate.

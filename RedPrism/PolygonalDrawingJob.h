@@ -64,6 +64,13 @@ struct PolygonalDrawingState final
         FinishPrepared,
         ResidencyRefreshed
     };
+    enum class WaitReason
+    {
+        None,
+        Input,
+        Ordinal,
+        Terminal
+    };
     JobScheduler& scheduler;
     DocumentSession& session;
     HostLassoInput& input;
@@ -85,6 +92,7 @@ struct PolygonalDrawingState final
     JobResult outcome;
     bool opened = false;
     bool waiting = false;
+    WaitReason waitReason = WaitReason::None;
     bool completed = false;
     bool published = false;
     bool cancelled = false;
@@ -107,6 +115,17 @@ struct PolygonalDrawingState final
     // Worker probes borrow only immutable data and readiness gates, never mutable session/UI state.
     void* workObserver = nullptr;
     void (*checkpoint)(void*, WorkStage) noexcept = nullptr;
+    // Owner-only readiness queries. A false answer parks the SAME original job with the next
+    // fixed input record unconsumed. The host calls NotifyInput only when a prerequisite changes.
+    // Queries grant no model authority and must not mutate the session or reenter this controller.
+    void* hostObserver = nullptr;
+    bool (*mayReplay)(void*, std::uint64_t physicalOrdinal) noexcept = nullptr;
+    bool (*mayFinish)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent,
+                      bool cancelled) noexcept = nullptr;
+    // Exactly once after older corners/Backspaces decide each opaque provisional close intent.
+    // A nonclosing press has already appended its corner; a closing press is never appended.
+    void (*pressResolved)(void*, std::uint64_t physicalOrdinal, std::uint64_t closeIntent,
+                          bool closes) noexcept = nullptr;
     void* observer = nullptr;
     void (*notify)(void*, Event) noexcept = nullptr;
     void Notify(Event event) const noexcept
@@ -127,6 +146,7 @@ class PolygonalDrawingJob final : public Job
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override;
     void Completed(JobResult result) noexcept override;
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override;
+    // Input arrival OR an owner prerequisite change may wake a parked original job. No timer/poll.
     [[nodiscard]] bool NotifyInput() noexcept;
     [[nodiscard]] bool Finish(bool antialiased, std::uint64_t ordinal, bool cancelled = false) noexcept;
 

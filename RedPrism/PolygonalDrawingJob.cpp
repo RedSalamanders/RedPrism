@@ -280,10 +280,39 @@ bool PolygonalDrawingJob::Consume() noexcept
     auto& s = _state;
     if (!Current())
         return Refuse(E_ABORT);
+    s.waitReason = PolygonalDrawingState::WaitReason::None;
     unsigned consumed = 0;
     bool changed = false;
-    while (const auto event = s.input.Take(s.opening))
+    const auto park = [&](PolygonalDrawingState::WaitReason reason) noexcept
     {
+        if (changed)
+            s.Notify(PolygonalDrawingState::Event::Changed);
+        if (!Current())
+            return Refuse(E_ABORT);
+        s.waitReason = reason;
+        s.waiting = true;
+        return true;
+    };
+    while (const auto next = s.input.Peek(s.opening))
+    {
+        // Peek before Take: a host barrier must never consume a physically younger record, nor
+        // close the mutable writer or capture finish history before its ordered descriptor is ready.
+        if (next->action == HostLassoInput::Action::Move && next->sample.ordinal > _lastOrdinal && s.mayReplay &&
+            !s.mayReplay(s.hostObserver, next->sample.ordinal))
+            return park(PolygonalDrawingState::WaitReason::Ordinal);
+        if (next->action == HostLassoInput::Action::Up || next->action == HostLassoInput::Action::Lost)
+        {
+            const auto ordinal = s.closingOrdinal ? s.closingOrdinal : _explicitTerminalOrdinal;
+            const bool cancelled = next->action == HostLassoInput::Action::Lost;
+            // Invalid successful ordinals follow the existing refusal path, never park forever.
+            const bool valid =
+                cancelled || (ordinal && (s.closingOrdinal ? ordinal == _lastOrdinal : ordinal > _lastOrdinal));
+            if (valid && s.mayFinish && !s.mayFinish(s.hostObserver, ordinal, s.closingIntent, cancelled))
+                return park(PolygonalDrawingState::WaitReason::Terminal);
+        }
+        const auto event = s.input.Take(s.opening);
+        if (!event)
+            return Refuse(E_ABORT);
         if (event->action == HostLassoInput::Action::Down)
             continue;
         if (event->action == HostLassoInput::Action::Up || event->action == HostLassoInput::Action::Lost)
@@ -328,6 +357,10 @@ bool PolygonalDrawingJob::Consume() noexcept
                 return Refuse(E_ABORT);
             s.closingOrdinal = sample.ordinal;
             s.closingIntent = sample.closingIntent;
+            if (sample.closingIntent && s.pressResolved)
+                s.pressResolved(s.hostObserver, sample.ordinal, sample.closingIntent, true);
+            if (!Current())
+                return Refuse(E_ABORT);
             continue;
         }
         std::optional<bool> updated;
@@ -361,6 +394,10 @@ bool PolygonalDrawingJob::Consume() noexcept
         if (!updated)
             return Refuse(Current() ? E_OUTOFMEMORY : E_ABORT);
         changed = changed || updated.value();
+        if (sample.operation == HostLassoInput::Operation::PolygonPress && sample.closingIntent && s.pressResolved)
+            s.pressResolved(s.hostObserver, sample.ordinal, sample.closingIntent, false);
+        if (!Current())
+            return Refuse(E_ABORT);
         ++consumed;
         s.maximumSamples = (std::max)(s.maximumSamples, consumed);
         if (consumed == 16 && s.input.PendingCount())
@@ -374,6 +411,7 @@ bool PolygonalDrawingJob::Consume() noexcept
         s.Notify(PolygonalDrawingState::Event::Changed);
     if (!Current())
         return Refuse(E_ABORT);
+    s.waitReason = PolygonalDrawingState::WaitReason::Input;
     s.waiting = true;
     return true;
 }

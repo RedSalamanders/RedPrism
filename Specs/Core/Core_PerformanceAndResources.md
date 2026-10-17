@@ -1750,3 +1750,12 @@ The optional pre-admission physical terminal ordinal is a const scalar in the or
 It is included through the existing complete wrapper/state size bound and adds no per-event allocation,
 copy, source traversal, wake or admission. The same original ticket/reservation owns the recorded
 terminal through capture, publication/drop and final strong/weak retirement.
+
+## Polygonal event-driven owner gates
+
+Readiness and provisional-decision hooks use bounded owner scalar/function-pointer storage covered
+by the original complete state/wrapper admission. Peek-before-Take preserves blocked fixed records.
+A blocked original job keeps its ticket and full reservation; it allocates no new job/admission and
+requests no polling wake. A known prerequisite/input change may resume it. Replay remains limited
+to sixteen accepted metadata samples per continuation. Hooks run only on the owner; history/geometry
+work and final graph destruction keep their existing admitted worker ownership.

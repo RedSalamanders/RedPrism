@@ -479,3 +479,13 @@ An already accepted Finish/Lost retains its physical ordinal through original co
 Only the prepared writer and current document/editor/history capabilities can publish. Successful
 Finish records one edit; Lost and contradictory descriptor metadata record none. Contradictory
 metadata must refuse before source capture and release only its original fixed input prefix.
+
+## Polygonal closure readiness and saved revision
+
+A blocked original terminal retains its live writer and fixed terminal record; no finish geometry/history
+input is captured until owner readiness permits it and prepared source/editor/history guards still pass.
+Metadata-only replay and a saved-revision publication create no history edit. A later valid finish
+preserves the owner saved marker: Undo to the saved committed revision is unmodified, and Redo to the
+new selection is modified. This CPU invariant does not itself qualify an actual Save/Export caller.
+Cancellation, joined Close and foreign Begin behind a gate retain original accounting, drop only own
+input and never roll back foreign history/writer authority.
