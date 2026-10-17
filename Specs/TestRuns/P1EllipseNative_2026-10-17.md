@@ -26,7 +26,7 @@ Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1101-main-qualified.json
 
 - Full native x64 ASan r1100: failed resource attempt preserved below. Fresh full r1107 is independently qualified below.
 - Full x64 Debug r1102; canonical Release Rebuild/Analyze r1104; full Release r1106: due.
-- ARM64 Release r1103: independently qualified below; instrumented ASan r1105 cross-build: active.
+- ARM64 Release r1103: independently qualified below; instrumented ASan r1105 cross-build: independently qualified below.
 - Native ARM64 runtime is unavailable; cross-build evidence is never described as runtime qualification.
 
 The separate Add/Subtract draft remains uncompiled. The real clipboard-contention draft has prior focused
@@ -94,4 +94,19 @@ profile, roster and source predicates remain unchanged. No build, runtime or arc
 
 Archive completion SHA-256: `0F37529608C2FAD7FBD9CC06BF9A84AA44BD9E3F7AC2CE7D2021912BCD241D20`.
 Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1107-main-qualified.json`.
-ARM64 ASan r1105 remains active. Ordinary activation, remaining delivery work, measured G1 and P1 Done remain open.
+ARM64 ASan r1105 is independently qualified below. Ordinary activation, remaining delivery work, measured G1 and P1 Done remain open.
+
+## ARM64 ASan Debug r1105 — qualified instrumented cross-build
+
+Canonical `build.ps1 -Platform ARM64 -Configuration "ASan Debug" -Rebuild -MaxCpuCount 1` succeeds.
+Actual child 88160 exits 0, 07:29:46.080410–07:57:50.939519 UTC, on the unchanged 1,433-input original transport
+freeze (`3D216C65FAB7636D322B40CD5E4310E3355BB3C0EC590FB568F0D733242E7FE2`).
+Main independently verifies all 1,508 archive files, 975 compiler records with real sanitizer instrumentation,
+forced sanitizer header, Debug CRT/optimization settings and five exact AA64 executable/full-PDB pairs.
+All three current-source ARM64 configurations are now qualified as cross-builds. Native ARM64 runtime remains
+unavailable and is not claimed.
+
+Archive completion SHA-256: `645A8CD1AE3326BA4D9933923247ACAF03FCBB4EA1E9E6340EF2851FFEAB147A`.
+Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1105-main-qualified.json`.
+The separate F5 clipboard and S12 preserving-selection drafts remain unadopted. Current-source x64
+Debug/Release/analysis, ordinary activation, remaining delivery areas and measured G1 still keep P1 in WIP.
