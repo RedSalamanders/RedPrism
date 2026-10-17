@@ -579,3 +579,7 @@ older FIFO work. It does not change global history-restore authority. Its origin
 recorded composite/readback, worker geometry/history, publication and complete retirement. These selected
 routes do not authorize ordinary prepared startup or replace the remaining admission, device, lifetime and
 G1 gates.
+
+## Selected Rectangle/New physical host
+
+The explicitly test-enabled Rectangle/New route records only a fixed event descriptor and bounded accepted prefix in WndProc. One host FIFO entry, history stamp and original job own containment, inside-outline movement or outside drawing, publication and retirement. Complete cached branch admission precedes source capture; validate captured active/crop/mask target and session/document identity. A pre-dispatch E_ABORT drops only that exact input and reports Stale. No eligible admission failure falls back to synchronous geometry. Ordinary activation still requires every consumer and remaining branch gate.

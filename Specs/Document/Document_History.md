@@ -430,3 +430,7 @@ A selected own-writer lasso may validate its original immutable history epoch wh
 ## Exact lasso intent cleanup and Rectangle/New parent
 
 Pending lasso intent cleanup is a one-shot scalar capability for its original session, document serial, intent serial and opening/finish kind. A stale or foreign capability leaves pending edits untouched. Closed own-writer cleanup validates the original editor/history epoch, removes only that closed writer and swaps retained history owners into the prepared payload for original-ticket retirement. It never rolls back an unrelated transaction. Rectangle/New history preparation, residency try/refresh and final publication use the same parent admission; cancelled or stale results do not create a successful history entry.
+
+## Physical selection parent acknowledgement
+
+The selected physical parent retains its single HistoryWork stamp through publication, failed/stale refusal, cancellation or joined shutdown. Finish only that exact stamp before resuming its host receipt. A changed target detected before dispatch reports Stale without creating history or capturing a source; memory refusal reports Failed. Joined shutdown drops never-started input or retires its existing controller without a useful completion callback, preserving independently retained observer charges.

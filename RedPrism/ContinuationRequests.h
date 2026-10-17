@@ -139,7 +139,8 @@ enum class HostCanvasInputKind
     Sampler,
     LassoOpening,
     LassoFinish,
-    HueSample
+    HueSample,
+    SelectionPress
 };
 struct HostCanvasBrushInput final
 {

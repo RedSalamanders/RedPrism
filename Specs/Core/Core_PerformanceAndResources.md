@@ -1622,3 +1622,7 @@ Rectangle/New geometry may use the fixed `PlanNewRectangle` envelope: one arena 
 ## Original-parent Rectangle/New admission
 
 The selected physical parent describes both inside-outline and outside Rectangle/New branch peaks before source capture. Cancellable containment chooses a branch without re-admission. Opening, retained input, final geometry/history, refresh overlap and retirement stay under the original ticket. The drawing payload is allocated by that worker; owner replay performs scalar authority checks and accepted marquee updates. Rectangle/New executes the admitted 64 KiB geometry workspace and never traverses a large old outline as a New boolean input. Terminal cleanup retains strong and weak owners until their exact original charges can refund. Actual ordinary callers, complete display ownership and G1 remain separate qualification.
+
+## Selected physical Rectangle lifetime qualification
+
+Pointer Down/Move/Up/Lost use bounded descriptor/prefix storage; original admission covers both selected branches before any outline/history root capture. Reuse the same ticket for useful stages, terminal preparation and residency refresh. Suppress useful completion on joined Close, retain borrowed owner state until its producer joins, and release only its exact history stamp/prefix. Final worker retirement must leave independent observer reservations intact. Selected real-Win32 Release/ASan proof does not establish ordinary activation, complete consumer admission or measured G1.

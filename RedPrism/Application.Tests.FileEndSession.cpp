@@ -8,6 +8,7 @@
 #include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
 #include "Resources.h"
+#include "Win32FilePath.h"
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 
@@ -51,7 +52,10 @@ DWORD WINAPI ReleaseWriterAfterWait(void* raw) noexcept
 
 bool ReadLiteralFile(const std::filesystem::path& path, std::vector<std::uint8_t>& bytes)
 {
-    wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+    std::wstring api;
+    if (FAILED(Win32FilePath::Prepare(path.c_str(), Win32FilePath::Use::File, api)))
+        return false;
+    wil::unique_hfile file(CreateFileW(api.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!file)
         return false;
@@ -75,12 +79,16 @@ struct SessionProjectEntry final
 bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProjectEntry>& entries)
 {
     entries.clear();
-    const auto rootAttributes = GetFileAttributesW(root.c_str());
+    std::wstring rootApi;
+    if (FAILED(Win32FilePath::Prepare(root.c_str(), Win32FilePath::Use::Directory, rootApi)))
+        return false;
+    const std::filesystem::path preparedRoot{rootApi};
+    const auto rootAttributes = GetFileAttributesW(preparedRoot.c_str());
     if (rootAttributes == INVALID_FILE_ATTRIBUTES || (rootAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
         (rootAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
         return false;
     std::error_code error;
-    std::filesystem::recursive_directory_iterator iterator(root, error), end;
+    std::filesystem::recursive_directory_iterator iterator(preparedRoot, error), end;
     if (error)
         return false;
     for (; iterator != end; iterator.increment(error))
@@ -88,11 +96,14 @@ bool ReadLiteralTree(const std::filesystem::path& root, std::vector<SessionProje
         if (error)
             return false;
         const auto& path = iterator->path();
-        const auto attributes = GetFileAttributesW(path.c_str());
+        std::wstring api;
+        if (FAILED(Win32FilePath::Prepare(path.c_str(), Win32FilePath::Use::File, api)))
+            return false;
+        const auto attributes = GetFileAttributesW(api.c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
             return false;
         SessionProjectEntry entry{
-            path.lexically_relative(root).generic_wstring(), (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, {}};
+            path.lexically_relative(preparedRoot).generic_wstring(), (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, {}};
         if (!entry.directory && !ReadLiteralFile(path, entry.bytes))
             return false;
         entries.push_back(std::move(entry));
@@ -527,9 +538,20 @@ int Application::RunFileEndSessionSelfTest() noexcept
             _projectSaveTestGate->createAssetCollisionForTest = scenario.nativeAssetError;
             if (scenario.nativeAssetError)
             {
-                _projectSaveTestGate->assetStagingPatternForTest = output.wstring() + L".~*";
-                _projectSaveTestGate->assetStagingParentForTest = output.parent_path().wstring() + L"\\";
-                _projectSaveTestGate->assetLeafForTest = _session.Document()->layers.front().id.ToString() + L".png";
+                auto& trace = *_projectSaveTestGate;
+                trace.assetLeafForTest = _session.Document()->layers.front().id.ToString() + L".png";
+                // Prefix for the complete future directory conflict, not just its shorter search pattern.
+                // All allocation remains in fixture setup; the worker's actual filesystem seam stays bounded.
+                const auto tail = L".~00000000-0000-4000-8000-000000000000\\images\\" + trace.assetLeafForTest;
+                const auto candidate = output.wstring() + tail;
+                std::wstring prepared;
+                if (FAILED(Win32FilePath::PrefixResolvedPath(candidate.c_str(), Win32FilePath::Use::Directory,
+                                                             prepared)) ||
+                    prepared.size() < tail.size())
+                    return 5;
+                prepared.resize(prepared.size() - tail.size());
+                trace.assetStagingPatternForTest = prepared + L".~*";
+                trace.assetStagingParentForTest = std::filesystem::path(prepared).parent_path().wstring() + L"\\";
             }
             _projectSaveTestGate->faultStageForTest = scenario.fault;
             _projectSaveTestGate->faultAtVisitForTest = scenario.publishedCleanup ? 2u : 1u;
@@ -986,6 +1008,11 @@ int Application::RunFileEndSessionSelfTest() noexcept
         if (scenario.nativeAssetError)
         {
             const auto& trace = *_projectSaveTestGate;
+            std::printf("INFO file-end-session-native-collision case=%s matches=%u created=%u error=%u "
+                        "parentLength=%zu patternLength=%zu status=%u\n",
+                        scenario.name, trace.assetStagingMatchesForTest, trace.assetCollisionCreatedForTest ? 1u : 0u,
+                        trace.assetCollisionErrorForTest, trace.assetStagingParentForTest.size(),
+                        trace.assetStagingPatternForTest.size(), static_cast<unsigned int>(trace.saveStatus));
             expect(trace.assetStagingMatchesForTest == 1 && trace.assetCollisionCreatedForTest &&
                        trace.assetCollisionErrorForTest == ERROR_SUCCESS && !trace.faultTraceTruncated &&
                        trace.faultVisits[static_cast<std::size_t>(ProjectSaveFaultStage::ManifestClose)] == 1,

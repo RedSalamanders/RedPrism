@@ -3977,6 +3977,14 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(*_selectionOffsetStamp);
     _selectionOffsetStamp.reset();
     _selectionOffsetTicket.reset();
+    // Close suppresses useful completion callbacks. Its joined retirement acknowledges the original
+    // selection-press parent; only now finish its exact barrier and discard a never-started prefix.
+    assert(!_selectionPressState || !_selectionPressState->controller);
+    if (_selectionPressStamp)
+        (void)_historyWork.Finish(*_selectionPressStamp);
+    _selectionPressStamp.reset();
+    if (_selectionPressInput.Busy())
+        (void)_selectionPressInput.Drop(_selectionPressInput.Opening());
     // Utility completions are suppressed by Close too. Its join is the acknowledgement for retained
     // readback/export/merge/clone tickets; retire their exact history stamp only after producers/maps join.
     if (_utilityStamp)
@@ -4224,7 +4232,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         event.action = DxUi::PointerAction::Up;
         if (GetCapture() == _window.get() &&
-            !(message == WM_RBUTTONUP && (_canvasBrushInput.Sampling() || _canvasPanLast)))
+            !(message == WM_RBUTTONUP &&
+              (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling())))
         {
             // A refused right gesture cannot release an admitted left path's capture. Its own left release
             // below ends that path; this release is not a capture loss.
@@ -4249,6 +4258,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     event.yPixels = static_cast<float>(point.y);
     if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    if (RouteSelectionPressOwner(event, message))
+        return;
     if (RouteDeferredCanvasPan(event, message))
         return;
     if (_canvasBrushInput.Busy() && event.action != DxUi::PointerAction::Wheel)
@@ -4399,6 +4410,8 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         InvalidateFrame();
         return;
     }
+    if (left && EditorToolIsSelection(_tool) && QueueSelectionPressOwner(pixel, event.modifiers))
+        return;
     if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
@@ -4651,6 +4664,7 @@ void Application::HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool i
 
 void Application::EndPointerDrag(PointerEnd end) noexcept
 {
+    LoseSelectionPressOwner();
     const bool lost = end == PointerEnd::Lost;
     // A warp and a stroke keep what they painted either way (Decision D10); a shape draft adds its layer as a release
     // would, and drops when the pointer was lost.
