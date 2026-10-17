@@ -42,6 +42,12 @@ Previous private core, original-parent, physical-prefix, cached admission and re
 qualified in their named evidence reports; they alone do not activate the ordinary host. The current
 checklist supersedes the old duplicated pending/active summaries retained below.
 
+Current native follow-up on committed `d5b3f8f`: ARM64 Debug `r1120` and fresh Release `r1123`
+qualify all 987 compiler records, 1,469 root inputs, all 1,546 archive files each and five exact AA64
+executable/PDB pairs. Preserve the original `r1121` vcpkg-lock failure and the source-only reader
+ordering refusal. ARM64 ASan `r1122` is running; native runtime, ordinary activation and G1 are not
+claimed. [Evidence](../../TestRuns/P1PolygonalNative_2026-10-17.md).
+
 ## Historical continuation notes (through 2026-10-12)
 
 Current continuation (2026-10-12, 13:44 UTC): private nine-plane raster view/DPI controls and the composition R8
