@@ -3186,3 +3186,21 @@ Complete scoped Release and real ASan preserve all 23,233 predecessor assertions
 with genuine sanitizer detection, exact 282-TU profile/artifacts/PDB/ISA and full archive readback.
 [Evidence](../TestRuns/P1PolygonalPrimitives_2026-10-17.md). This is not physical-parent, latest full
 native-matrix, ordinary input or G1 qualification.
+
+## Polygonal original drawing parent validation
+
+`Document.Tests.PolygonalDrawingParent` registers 94 source-defined facts over twenty calls. Require
+all 23,307 predecessor assertions as well (23,401 total), complete scoped Release and real ASan, actual
+UAF detection, exact 284-TU compiler/object/profile/PE/PDB/ISA/source identities and all runtime archives.
+Independent 12-by-10 rectangle/union/difference and 15-center triangle formulas check every pixel.
+Cover absent/explicit-empty, captured/terminal AA, Undo/Redo, physical close identity, idle park,
+hover/Backspace/refill, early-near/double-click, older close versus younger Finish, bounded bursts,
+full-ring Lost, invalid ordinals, scarce-memory dispatch before capture, forged source, foreign Begin,
+last-corner removal, parked/prepared cancellation, joined Close and exact last-reader refund.
+
+Fixtures on one thread join and uninstall each release sink before starting the next. Preserve the
+first fixture compile/runtime refusals and reader-only/pre-native refusals; a corrected fixture never
+turns an earlier run into a pass. A single-TU correction requires exact unchanged-object lineage.
+Physical New inside-hit/multi-click routing, real queued Save/tool/lifetime arbitration, latest full
+native matrix, ordinary activation and measured G1 remain open.
+[Evidence](../TestRuns/P1PolygonalDrawingParent_2026-10-17.md).

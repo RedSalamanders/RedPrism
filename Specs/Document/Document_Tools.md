@@ -1971,3 +1971,22 @@ writer/Begin, wrong kind and consumed authority refuse without replacing foreign
 alone changes neither committed selection, history, generation nor redo. `PolygonalLimits` and
 `PlanPolygonal` describe the finite arena/worker capacities; generic drag-Up `PlanDrawing` still
 refuses Polygonal. These primitives do not enable the multi-click physical parent or ordinary routing.
+
+## Polygonal original drawing job
+
+`DescribePolygonalDrawing` uses cached scalar metadata only. Add/Subtract and New with absent or
+explicitly empty prior selection use the original `PolygonalDrawingJob`; New with a nonempty prior
+refuses this drawing-only descriptor until the separate exact containment dispatcher selects a branch.
+Captured document/editor/history/target, kind, mode and opening AA govern preparation; live header
+changes do not reinterpret the gesture. Point/hover/Backspace consume at most sixteen accepted
+metadata samples per owner continuation. Empty input parks until known input rearms the same ticket.
+
+Nonzero, strictly increasing physical ordinals order accepted samples. Near-first closes only after
+three accepted corners, and double-click closes without appending that closing point. Preserve the
+selected physical close ordinal and opaque host intent before the legacy prefix normalizes its terminal;
+the intent is observational host metadata, never document mutation authority. An older accepted close
+wins over a younger explicit Finish, including its AA. Last-corner Backspace ends with no history.
+Overflow preserves the accepted prefix and chooses Lost; no partial selection can commit.
+
+This CPU component is registered in DocumentTests. Its physical multi-click dispatcher, New inside-hit
+choice, Save/tool/lifetime arbitration, ordinary activation and measured owner budgets remain separate.

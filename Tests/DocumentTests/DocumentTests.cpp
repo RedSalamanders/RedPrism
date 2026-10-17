@@ -35,6 +35,7 @@
 #include "Document.Tests.LassoOpeningSettings.h"
 #include "Document.Tests.LassoSessionBridge.h"
 #include "Document.Tests.MarqueeModePlan.h"
+#include "Document.Tests.PolygonalDrawingParent.h"
 #include "Document.Tests.PolygonalPlan.h"
 #include "Document.Tests.RectangleFinishPlan.h"
 #include "Document.Tests.RectangleGestureParent.h"
@@ -8476,6 +8477,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunFreehandGestureParentTests();
     gFailures += RunPreparedPolygonAuthorityTests();
     gFailures += RunPolygonalPlanTests();
+    gFailures += RunPolygonalDrawingParentTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

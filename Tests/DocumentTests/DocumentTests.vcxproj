@@ -600,6 +600,10 @@
     <ClCompile Include="Document.Tests.MarqueeModePlan.cpp" />
     <ClCompile Include="Document.Tests.FreehandPlan.cpp" />
     <ClCompile Include="Document.Tests.PolygonalPlan.cpp" />
+    <ClCompile Include="Document.Tests.PolygonalDrawingParent.cpp" />
+    <ClInclude Include="Document.Tests.PolygonalDrawingParent.h" />
+    <ClCompile Include="..\..\RedPrism\PolygonalDrawingJob.cpp" />
+    <ClInclude Include="..\..\RedPrism\PolygonalDrawingJob.h" />
     <ClInclude Include="Document.Tests.FreehandPlan.h" />
     <ClInclude Include="Document.Tests.PolygonalPlan.h" />
     <ClCompile Include="Document.Tests.SelectionCursorProbe.cpp" />

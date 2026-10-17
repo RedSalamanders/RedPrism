@@ -1727,3 +1727,19 @@ capacity can refuse before the live-point limit. Exact key validation precedes e
 update; no cursor path becomes an accepted corner. Last-corner draft removal keeps its prepared
 writer and held snapshots charged. These CPU bounds do not substitute for original-parent/host,
 complete consumer, ordinary activation or measured G1 qualification.
+
+## Polygonal original drawing admission and retirement
+
+The drawing-only descriptor admits wrappers, retained source/history, finite arena, complete bounded
+geometry/boolean preparation, old/new outputs, construction overlap, residency refresh and strong/weak
+retirement before source capture. The original ticket/reservation survives every useful phase; no
+second admission or reservation growth is permitted. Opening uses one continuing output partition.
+Final success or retirement uses one output/temporary transfer from the remaining original reservation.
+Before opening publication, bind opening/temporary for retirement; no finish graph can exist there.
+Independent roots MUST NOT each consume the same descriptor-reserved terminal slot.
+
+Descriptor submission may succeed before memory is sampled. Insufficient dispatch memory fails the
+original job with `E_OUTOFMEMORY`, no Run/source capture and exact input drop. Retained live/weak
+readers remain charged through worker destruction and refund after the actual last owner. Replay is
+bounded to sixteen samples per continuation; full geometry/history and large graph retirement are
+worker work. Structural qualification does not establish measured 2 ms/G1 or ordinary activation.

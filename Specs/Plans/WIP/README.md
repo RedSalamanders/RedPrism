@@ -70,3 +70,7 @@ On completion of a plan, merge durable requirements into the owning domain spec,
 indexed here before they authorize implementation.
 
 P1 H4 explicit raster mip qualification: [record](../../TestRuns/P1GpuMipChain_2026-10-05.md), managed commit `af7986f`; document resource graphs/consumer activation/G1 remain open.
+
+Polygonal drawing CPU parent (2026-10-17): complete scoped Release/real-ASan qualify all 23,401 facts,
+284-TU identities and original admission/retirement, with retained failures. Physical multi-click/New
+inside-hit/command arbitration, latest native qualification and ordinary/G1 gates stay open.

@@ -463,3 +463,12 @@ Guarded corner/hover/Backspace operations publish no selection/history/generatio
 the last corner ends only the original validated writer, preserving the original selection, saved
 state and redo branch. Its prepared handle and immutable snapshots keep the original memory owner
 until actual strong/weak retirement. Foreign Begin/editor state cannot be rolled back by these APIs.
+
+## Polygonal original drawing history
+
+Opening, collected corners, terminal geometry/history preparation, residency refresh and final apply
+retain the original admitted job ticket. A changed Polygonal drawing publishes one `Polygonal Lasso`
+edit and one generation; Undo restores the exact absent/empty/prior root and Redo restores the result.
+Hover and Backspace alone publish no edit. Cancellation, stale authority, overflow and joined Close
+cannot replace selection/history or roll back a foreign Begin. Joined Close runs no useful completion
+callback. All surviving output/temporary/arena/control and weak owners retain their original charge.
