@@ -90,6 +90,7 @@ struct JobScheduler::Impl final
         JobOptions options{};
         std::uint64_t reserved = 0;
         std::size_t retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+        bool continuingOutputTransferred = false;
         std::unique_ptr<Job> job;
         std::optional<CancelSource> cancel;
         JobResult result{};
@@ -283,6 +284,8 @@ struct JobScheduler::Impl final
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         if (record.cancel->Token().IsCancelled() || workers.ShutdownToken().stop_requested())
             return E_ABORT;
+        if (record.options.continuingOutputLimit)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE); // Complete future stages were admitted together.
         return totalBytes < record.reserved ? E_INVALIDARG : S_OK;
     }
 
@@ -930,6 +933,43 @@ std::int32_t JobScheduler::RetainPublicationMemory(JobTicket ticket, SharedRetai
     return RetainSharedMemoryImpl(ticket, retained, true);
 }
 
+std::int32_t JobScheduler::RetainContinuingOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                        SharedRetainedMemoryLease& output) noexcept
+{
+    if (!_impl || _impl->closed)
+        return E_UNEXPECTED;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (!self.inCallback || !self.publicationMemoryCallback || self.publicationMemoryCallback.value() != original ||
+        !self.acknowledgedJobCallback || self.acknowledgedJobCallback.value() != original || output || !outputBytes ||
+        original.slot >= kCapacity || !self.retainedMemoryOwner)
+        return E_INVALIDARG;
+    WorkerResources::ExclusiveLock guard{self.lock};
+    auto& record = self.records[original.slot];
+    if (record.generation != original.generation || record.state != Impl::State::Suspended || self.closing ||
+        record.result.status != JobStatus::Finished || !record.cancel || record.cancel->Token().IsCancelled() ||
+        self.workers.ShutdownToken().stop_requested() || !record.options.deferredRetirement ||
+        !record.options.reserveRetainedMemory || !record.options.continuingOutputLimit ||
+        record.continuingOutputTransferred || outputBytes > record.options.continuingOutputLimit ||
+        outputBytes >= record.reserved || record.retainedSlot >= kRetainedMemoryCapacity)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    const auto& terminal = self.retainedMemory[record.retainedSlot];
+    if (terminal.reservedFor != record.sequence || terminal.bytes || !terminal.generation)
+        std::terminate();
+    // The original memory budget already owns these bytes. Only their ownership changes. Persistent output
+    // uses the existing endpoint's aggregate last-reader acknowledgement, so the terminal slot stays reserved.
+    record.reserved -= outputBytes;
+    record.continuingOutputTransferred = true;
+    self.sharedMemory->residentBytes.fetch_add(outputBytes, std::memory_order_relaxed);
+    output._state = self.sharedMemory;
+    output._slot = kRetainedMemoryCapacity;
+    output._part = 2;
+    output._generation = original.generation;
+    output._bytes = outputBytes;
+    self.publicationMemoryCallback.reset(); // No second transfer in this same joined acknowledgement.
+    return S_OK;
+}
+
 std::int32_t JobScheduler::RetainRetirementMemory(JobTicket ticket, SharedRetainedMemoryLease& retained) noexcept
 {
     return RetainSharedMemoryImpl(ticket, retained, false, true);
@@ -1131,7 +1171,9 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
 {
     ticket = {};
     if (!job || static_cast<unsigned int>(options.kind) >= static_cast<unsigned int>(JobClass::Count) ||
-        static_cast<unsigned int>(options.executionLane) >= static_cast<unsigned int>(JobExecutionLane::Count))
+        static_cast<unsigned int>(options.executionLane) >= static_cast<unsigned int>(JobExecutionLane::Count) ||
+        (options.continuingOutputLimit && (!options.deferredRetirement || !options.reserveRetainedMemory ||
+                                           options.continuingOutputLimit >= options.memoryBytes)))
     {
         return E_INVALIDARG;
     }
@@ -1194,6 +1236,7 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         record.sequence = ++self.nextSequence;
         record.generation = record.sequence;
         record.retainedSlot = retainedSlot;
+        record.continuingOutputTransferred = false;
         if (retainedSlot < kRetainedMemoryCapacity)
         {
             auto& cache = self.retainedMemory[retainedSlot];

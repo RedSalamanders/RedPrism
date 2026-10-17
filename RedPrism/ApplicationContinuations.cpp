@@ -547,6 +547,7 @@ void Application::RunHostContinuation() noexcept
     RunCanvasLifetimePreflight();
     if (_shutdownStarted)
         return;
+    PumpSelectionPressOwner();
     SweepSamplerOpenings();
     if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
     {
@@ -1508,6 +1509,16 @@ void Application::RunHostContinuation() noexcept
                     ReplaySamplerOpening(canvas->opening);
                     return;
                 }
+                if (canvas->kind == HostCanvasInputKind::SelectionPress)
+                {
+                    const auto result = StartSelectionPressGesture(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        (void)_selectionPressInput.Drop(canvas->opening);
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return;
+                }
                 if (canvas->kind == HostCanvasInputKind::LassoOpening ||
                     canvas->kind == HostCanvasInputKind::LassoFinish)
                 {
@@ -1675,7 +1686,17 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_clipboardTicket)
+        if (_selectionPressState && _selectionPressState->controller)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionPressState->original);
+            if (_selectionPressState->waiting)
+            {
+                _selectionPressState->waiting = false;
+                (void)_jobs.Resume(_selectionPressState->original);
+            }
+        }
+        else if (_clipboardTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_clipboardTicket.value());

@@ -1994,16 +1994,14 @@ class DocumentHistory
     [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo,
                                                                    CancelToken cancellation = {},
                                                                    PrepareObserver observer = {});
-    [[nodiscard]] static std::optional<Publication> PrepareBegin(StateView view,
-                                                                 const std::optional<CanvasDocument>& before,
-                                                                 const std::optional<Guid>& active, std::wstring name,
-                                                                 CancelToken cancellation = {},
-                                                                 PrepareObserver observer = {});
-    [[nodiscard]] static std::optional<Publication> PrepareEnd(StateView view,
-                                                               const std::optional<CanvasDocument>& after,
-                                                               const std::optional<Guid>& active,
-                                                               CancelToken cancellation = {},
-                                                               PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareBegin(
+        StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& active,
+        std::wstring name, CancelToken cancellation = {}, PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] static std::optional<Publication> PrepareEnd(
+        StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& active,
+        CancelToken cancellation = {}, PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
     // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
     // the exact next structural epoch and can publish only after this predecessor successfully publishes.
@@ -2577,11 +2575,21 @@ class DocumentSession
     // Selected owner path: worker prepares Begin history; publication only validates and swaps roots.
     [[nodiscard]] std::optional<SelectionMoveOpeningInput> PrepareDeferredSelectionMoveOpeningInput() const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveOpening> PrepareDeferredSelectionMoveOpening(
-        SelectionMoveOpeningInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+        SelectionMoveOpeningInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {}, bool prepareAbort = false);
     [[nodiscard]] bool IsPreparedDeferredSelectionMoveOpeningCurrent(
         const PreparedSelectionMoveOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedDeferredSelectionMoveOpeningIfCurrent(
         PreparedSelectionMoveOpening& prepared) noexcept;
+    // Opaque ownership of the exact published deferred gesture. Only this route renews authority after its
+    // own scalar moves. A foreign mutation or history publication refuses both movement and cleanup.
+    [[nodiscard]] bool IsPreparedDeferredSelectionMoveGestureCurrent(
+        const PreparedSelectionMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool MovePreparedDeferredSelectionMoveIfCurrent(PreparedSelectionMoveOpening& prepared, double dx,
+                                                                  double dy) noexcept;
+    // Cleanup of an already published opening: uses the worker-prepared no-op End, allocates nothing and
+    // restores the reference Cancel generation semantics. It never publishes cancelled worker output.
+    [[nodiscard]] bool AbortPreparedDeferredSelectionMoveIfCurrent(PreparedSelectionMoveOpening& prepared) noexcept;
 
     // Whole-pixel offsets from the drag's start; the outline is not re-clipped, so it can leave and come back.
     void MoveSelection(double dx, double dy);
@@ -2591,6 +2599,11 @@ class DocumentSession
     [[nodiscard]] bool IsMovingSelection() const noexcept
     {
         return _selectionMoveOrigin.has_value();
+    }
+    // Constant-time mode query; no geometry capture or numeric materialization.
+    [[nodiscard]] bool IsDeferredSelectionMove() const noexcept
+    {
+        return HasCurrentDeferredSelectionMoveSource();
     }
     // Session-local event authority. Closing and reopening an equal outline is a distinct move.
     [[nodiscard]] std::optional<std::uint64_t> SelectionMoveOpening() const noexcept
@@ -2615,7 +2628,8 @@ class DocumentSession
     [[nodiscard]] std::optional<SelectionCommandInput> PreparePreservingSelectionCommandInput(
         SelectionCommandKind kind) const;
     [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(
-        SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+        SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
@@ -2708,7 +2722,8 @@ class DocumentSession
         bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
         SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
-        const SelectionNudgeObserver* geometryObserver = nullptr, std::shared_ptr<const void> geometryLifetime = {});
+        const SelectionNudgeObserver* geometryObserver = nullptr, std::shared_ptr<const void> geometryLifetime = {},
+        std::shared_ptr<const SharedPublicationMemory> historyMemory = {});
     [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
         const PreparedSelectionMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;

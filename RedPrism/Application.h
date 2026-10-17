@@ -2,6 +2,7 @@
 
 #include "HostHueInput.h"
 #include "HostLassoInput.h"
+#include "SelectionOutlineGestureState.h"
 
 #include "BrushCompute.h"
 #include "CanvasRenderer.h"
@@ -154,6 +155,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePanelWandFollowthroughSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneScalarSelectionClosureSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCloneReadbackShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept;
@@ -166,6 +168,8 @@ class Application final : public ChromeEvents,
     static int RunStandaloneCommittedDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLassoDraftDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLassoHostInputSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSelectionPressGestureSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSelectionPressShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) noexcept;
@@ -532,6 +536,22 @@ class Application final : public ChromeEvents,
     // composite sample. Outline and draft changes touch chrome only; the canvas never re-composites for them.
     void OnSelectionAction(SelectionAction action, double value) noexcept override;
     void SelectionPress(Vec2 view, UINT modifiers, POINT client) noexcept;
+    // Private qualification route. Complete cached bounds and remaining physical branches gate activation.
+    [[nodiscard]] bool QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept;
+    [[nodiscard]] bool RouteSelectionPressOwner(const DxUi::PointerEvent&, UINT message) noexcept;
+    void LoseSelectionPressOwner() noexcept;
+    void PumpSelectionPressOwner() noexcept;
+    void SelectionPressEventOwner(SelectionOutlineGestureState::Event) noexcept;
+    [[nodiscard]] HRESULT StartSelectionPressGesture(std::uint64_t opening) noexcept;
+
+    HostSelectionPressInput _selectionPressInput;
+    std::optional<SelectionOutlineGestureState> _selectionPressState;
+    std::optional<HistoryWorkStamp> _selectionPressStamp;
+    ContinuationReceipt _selectionPressReceipt;
+    std::uint64_t _selectionPressOpening = 0;
+    std::uint64_t _selectionPressMovePresentations = 0;
+    bool _selectionPressTestEnabled = false;
+
     [[nodiscard]] bool SelectionPointerMove(Vec2 view, UINT modifiers) noexcept;
     void SelectionRelease(Vec2 view) noexcept;
     void EndSelectionInteraction(bool keepDraft) noexcept;

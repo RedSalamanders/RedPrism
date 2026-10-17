@@ -70,3 +70,53 @@ Local receipt, stream, command-JSON and source hashes were recalculated with Pow
 R7 retains `main-independent-artifacts-r2.log`: the initial independent reader refused the existing relocated DxUi header mapping. The r3 filesystem adapter recognizes only the exact existing DxUi physical root; source/dependency hashes and archive checks remain intact, with no repeated build or runtime. Main's receipt retains that refusal and cites the r3 report. Its limits remain explicit: object payloads are represented by exact index/product hashes, and some immutable inputs have live bookends without archived copies. Reader controls include 15 independent full-stream rejection cases, plus the source-only 8 shutdown, 8 physical and 12 scalar negatives; these are parser controls, not extra runtime assertions.
 
 The opening P1 and SelectionWorkers checklists record the selected Release result and keep exact-source ASan, native integration, remaining branches, ordinary activation and G1 open. No actual-caller ASan outcome is inferred.
+
+## Exact-source actual-caller real ASan
+
+Main independently qualifies the same S7 caller source under real ASan. Fresh build PID 89792 exits 0 with
+zero warnings/errors; all 340 exact project/TLOG compile records use `/fsanitize=address /MDd /Od /Zi` and
+RequireAddressSanitizer.h. The unchanged pinned ASan dependencies, source/product bookends, matching PE/PDB
+and zero-violation ISA report are verified. The fresh build archive contains 1,693 files; no compiler replays
+are used during the subsequent runtime-only attempt.
+
+Actual Application PID 22044 exits 0 between `2026-10-17T02:02:53.879553+00:00` and
+`2026-10-17T02:09:00.266950+00:00`: 145 stages, all 41 physical, 21 queued/active shutdown, 71 scalar,
+8,272 inherited stdout and 7,613 inherited stderr assertions. The source-defined reader requires every event
+and summary in order. Its source-only controls pass 3 full-stream positives and 47 negatives, retaining the
+12 scalar/follow, 8 physical and 8 shutdown predecessor controls. The one additional clipboard assertion and
+286-check summary are source-version changes, not an ASan conditional; the adapter validates them explicitly
+before comparing the original 8,271-record ASan predecessor. No golden or deadline changes.
+
+The separately copied, already qualified 273-TU instrumented DocumentTests control has the same probe source
+as S7. Actual PID 74268 exits 1 and reports `AddressSanitizer: heap-use-after-free`. Its six copied products,
+source identity and referenced original qualification are hash verified. This control does not substitute
+for the 340 instrumented Application compile records or the actual Application run. The runtime archive
+contains 31 files and references the complete build archive.
+
+| Identity | SHA-256 |
+| --- | --- |
+| Main ASan qualification | `19E650D8677FAE1F23874EB66D1C750994A8DA5DA9CF745D6CD1D82C436A8D9B` |
+| Actual stdout | `C3B090363BC8E508B5E89854C42D5DBBBA70B08A40B4C5C3A930325D5F5826BA` |
+| Actual stderr | `55440BC7606D3389D56BD62BA676C7F809B20E44973DD1FE133B4532355FA55F` |
+| Build archive completion | `46471704AE35E911AF4BE645E288715444D8C8AC0842DF8EBC8FF81181515593` |
+| Runtime archive completion | `F022DCEEB400CB1BABAC48F47000EFC448DFC07E91917F85E5EF30F92BCEF4BA` |
+| RedPrism.exe | `04901D6AF429CF9871FE0C90818DAB32042B5DC5BE06F369FBCB713330BC771E` |
+| RedPrism.pdb | `869D4AFF562FCBE96C7E99F3FCD6A936F990E9AB9EC081C344E220AAE5C4CED9` |
+
+Receipts are under `.build/P1Drafts/S5PressHostAsan-r1-Main/` (`main-build-qualified.json` and
+`main-qualified.json`). Physical storage is the exact task-specific
+`D:/RedPrismBuildCaches/.build/p1-opacity-host-proof-selection-press-asan-r1` root, reached through its
+`Storage` junction. Sources and pinned libraries remain at their frozen logical locations; the build/runtime
+transport records this mapping and preserves every failure and prior receipt.
+
+## Native adoption boundary
+
+Main adopts 51 code/test/project paths from this qualified source plus the five scoped CPU contracts.
+Native Directory.Build.props is unchanged; the private single-compiler property is not imported. Formatting
+checks 1,269 files and removes one extra EOF blank line only from SelectionGestureAbort.h. All other adopted
+code bytes match the S7 input bookend. The inventory and formatting receipt are under
+`.build/P1Integration/SelectionCallerNativeAdoption-r1-Main/`. The native source now needs fresh Debug,
+Release, real ASan, analysis and ARM64 cross-build qualification; the seven previously qualified profiles
+remain evidence for the earlier native baseline. Ordinary input remains disabled for this new route.
+The captured-settings API draft and remaining outside-hit/other branches are not included in this adoption.
+These results do not close native integration, complete S5, measured G1 or P1 Done.

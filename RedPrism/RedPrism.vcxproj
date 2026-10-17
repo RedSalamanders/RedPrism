@@ -674,6 +674,12 @@
     <ClCompile Include="ApplicationLassoOpeningJobs.cpp" />
     <ClCompile Include="ApplicationLassoFinishJobs.cpp" />
     <ClCompile Include="ApplicationLassoInput.cpp" />
+    <ClCompile Include="ApplicationSelectionPressJobs.cpp" />
+    <ClCompile Include="SelectionOutlineGestureJob.cpp" />
+    <ClInclude Include="SelectionOutlineGestureState.h" />
+    <ClInclude Include="SelectionOutlineGestureMemory.h" />
+    <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
+    <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
     <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />
     <ClInclude Include="..\Common\BoundedLassoGesture.h" />
@@ -691,5 +697,9 @@
     <ClCompile Include="..\Common\SelectionMoveOpeningWork.cpp" />
     <ClInclude Include="..\Common\SelectionMoveOpeningWork.h" />
     <ClInclude Include="HostSelectionPressInput.h" />
+    <ClInclude Include="SelectionOutlineGestureJob.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Application.Tests.ScalarSelectionClosure.cpp" />
   </ItemGroup>
 </Project>

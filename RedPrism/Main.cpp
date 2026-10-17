@@ -268,6 +268,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneLassoDraftDisplaySelfTest\n");
         if (const int failed = Application::RunStandaloneLassoDraftDisplaySelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionPressGestureSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionPressGestureSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionPressShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionPressShutdownSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneLassoHostInputSelfTest\n");
         if (const int failed = Application::RunStandaloneLassoHostInputSelfTest(instance); failed != 0)
             return failed;
@@ -329,6 +335,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         // This fixture owns a scheduler/TLS retirement sink and must precede the main Application owner.
         std::printf("BEGIN self-test.RunStandalonePanelWandFollowthroughSelfTest\n");
         if (const int failed = Application::RunStandalonePanelWandFollowthroughSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneScalarSelectionClosureSelfTest\n");
+        if (const int failed = Application::RunStandaloneScalarSelectionClosureSelfTest(instance); failed != 0)
             return failed;
         std::printf("BEGIN self-test.RunStandaloneHistoryResidencyStartupSelfTest\n");
         if (const int failed = Application::RunStandaloneHistoryResidencyStartupSelfTest(instance); failed != 0)

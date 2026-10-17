@@ -481,8 +481,9 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   at most every 1,024 loop/edge steps, and distinguishes cancellation from an outside result.
   `HostSelectionPressInput` is a bounded 512-event physical prefix with event-time document coordinates,
   modifiers, antialias choice and nonwrapping ordinal. Up/Lost are separate terminals; overflow preserves the
-  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. This model/descriptor
-  API does not activate an Application route; complete host admission, replay, lifetime and S5/G1 remain due.
+  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. The model API alone
+  does not activate ordinary Application routing. The selected test-only parent below reuses this prefix;
+  remaining physical branches, complete display/admission integration, ordinary activation and S5/G1 remain open.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
@@ -1841,3 +1842,40 @@ null, explicit-empty or nonempty selections and their antialiasing/history. New 
 remains bound to the original session/document/selection/history authority. Boolean outputs may retain
 collinear edge vertices and have a cyclic starting vertex; their exact geometry/winding remains required.
 This core preparation contract alone does not activate Add/Subtract in the host's asynchronous New route.
+
+## Selected selection publication ownership prerequisites
+
+The optional charged Select All/Deselect route publishes only after its complete new history/geometry/control
+output is bound. Its constant-time output bound is overflow checked; unbound or underbound results refuse
+before document/history mutation. Select All uses the exact AA full-canvas rectangle; Deselect removes the
+optional selection. True no-op output is zero and preserves history revision, redo and document generation.
+Source, active/mask/crop, preserved gesture and history authority remain mandatory.
+
+A prepared deferred outline opening can opt into opaque own-move/abort authority. Scalar movement retains
+immutable source geometry and renews only that exact gesture's witness. Prebuilt abort preserves the original
+selection root and redo, closes its Begin and matches reference Cancel invalidations. Transform, brush,
+transferred brush/warp work, other gestures, foreign mutations and a consumed opening refuse. Default opening
+and numeric reference routes retain their behavior. These model APIs do not enable physical dispatch or
+change pointer-loss End, click follow-up, preserving callers, ordinary activation or G1 requirements.
+
+### Selected original-parent physical press (test-only)
+
+The Application route remains disabled by default: _selectionPressTestEnabled is false and only explicit
+self-tests enable it. Eligibility is New mode, Rectangle marquee, no Ctrl, a nonempty existing selection and
+an inside hit. Down captures only a fixed event-time descriptor/ordinal before complete admission; the
+admitted parent validates the cached admission tuple before capturing immutable roots and preparing Begin.
+Outside-hit drawing, absent/empty selection, lasso, Ellipse, Add/Subtract, Wand, Ctrl pixel lift and
+preserving-panel callers remain separate integration work.
+
+Replay preserves every accepted sample in order and applies event-time Shift axis constraint, while
+emitting at most one Moved notification per replay batch. The opaque own-gesture guard is rechecked after
+that callback before any terminal capture. Up uses the accepted prefix rather than release coordinates;
+Lost, capacity overflow and ordinal exhaustion retain the last accepted sample without a new Move,
+ordinal, job slot or admission. Moved Up/Lost prepares End. Zero-offset Up acknowledges no-op End before
+capturing a separate Deselect under the original parent; zero-offset Lost ends without Deselect.
+
+Cancellation uses only the prebuilt exact-own abort; stale refusal preserves foreign state. A Close
+refresh retains its original prepared input and complete admission, validates opaque gesture authority
+again, and releases its residency permit before later work, rollback, retirement or callbacks. An actual
+queued/active shutdown follows the joined-owner rules in Core_Architecture. This route does not activate
+ordinary input or establish other caller branches, native configuration coverage, complete S5 or G1.

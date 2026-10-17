@@ -6,12 +6,14 @@
 - [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
 - [x] Commit/push the qualified cached-admission code, 38-control extension and evidence as `2c0ecd2` on `ej/p1-selection-gesture-prerequisites`, preserving the native validation source.
 - [x] Qualify the cached-admission actual Win32 caller in private Release R7: 41 physical, 21 joined-shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; Main independently verifies 1,698 archive files and 340 exact compiler records. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
-- [ ] Qualify that exact caller under real ASan, adopt the reviewed code and finish display/phase ownership before ordinary activation or G1 closure; a fresh 340-source instrumented build is running.
+- [x] Qualify the exact caller under real ASan: 340 instrumented compiler records, 145 stages, every physical/shutdown/scalar/native record, actual UAF detection and both complete archives independently pass. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
+- [x] Adopt the 51 reviewed code/test/project paths and five CPU contracts into the native checkout, reconcile selected-caller contracts and pass formatting across 1,269 files.
+- [ ] Qualify this newly integrated native source in Debug/Release/real ASan, analysis and ARM64 cross-builds; finish remaining physical branches and display/phase ownership before ordinary activation or G1 closure.
 - [x] Qualify the initial 30 close/click residency controls in private Release and real ASan (22,364 total each), retaining exact source/artifact checks and two independently confirmed review gaps; [scoped evidence](../../TestRuns/P1SelectionGestureResidency_2026-10-17.md).
 - [x] Qualify the stronger 47-control repair in private Release R6 and real ASan R2: 22,381 assertions each, 273 compiler records, exact live charges, foreign-editor refusal and actual UAF control; compile/preflight failures remain retained.
 - [x] Commit/push the qualified nine-path protocol/test change, three scoped contracts and evidence as `853d801` on `ej/p1-selection-gesture-prerequisites`; the native checkout remains unchanged.
 - [ ] Complete actual-caller and native integration before ordinary activation or G1 closure.
-- [x] Qualify the 21 real queued/active selection-press shutdown controls in private Release R7: joined Close finishes its exact stamp, drops a never-started prefix and preserves the independent observer charge. Exact-source ASan and native integration remain due.
+- [x] Qualify the 21 real queued/active selection-press shutdown controls in private Release R7: joined Close finishes its exact stamp, drops a never-started prefix and preserves the independent observer charge. The same 21 controls now pass exact-source real ASan; fresh native qualification remains due.
 
 - [x] Qualify the shared selection gesture engine in private Release: 68 family controls plus all 22,228 predecessors, one display notification per replay batch and refusal after a foreign callback; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
 - [x] Qualify the repaired shared engine under real ASan: all 22,296 assertions, 270 instrumented compiler records, its actual UAF control and 1,616-file archive independently pass; [evidence](../../TestRuns/P1SelectionGestureNotifications_2026-10-16.md).
@@ -37,7 +39,7 @@
 
 ### Current integration under validation
 
-Current native status (2026-10-17): full canonical Release Rebuild/Analyze r1091 is independently qualified:
+Native baseline before the current caller adoption (2026-10-17): full canonical Release Rebuild/Analyze r1091 is independently qualified:
 actual parent exit 0, 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled/project/toolchain
 inputs, five exact PE/PDB pairs and zero ISA violations. The original H10 long-path reader refusal is retained;
 extended-path access reproduces the original checks against the same evidence without rerunning analysis.

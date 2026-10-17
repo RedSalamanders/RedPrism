@@ -7,6 +7,7 @@
 #include <limits>
 #include <new>
 #include <utility>
+#include <windows.h>
 
 struct PublicationMemoryNode final
 {
@@ -107,6 +108,22 @@ std::shared_ptr<SharedPublicationMemory> SharedPublicationMemory::CreateForWork(
 std::int32_t SharedPublicationMemory::BindForPublication(JobScheduler& scheduler, JobTicket original) noexcept
 {
     const auto result = scheduler.RetainPublicationMemory(original, _node->lease);
+    if (result >= 0)
+    {
+        _node->original = original;
+        (void)SealLocalAllocations();
+    }
+    return result;
+}
+
+std::int32_t SharedPublicationMemory::BindContinuingOutputForPublication(JobScheduler& scheduler, JobTicket original,
+                                                                         std::uint64_t outputBytes) noexcept
+{
+    const auto local = LocalAllocationBytes();
+    const auto allowance = OwnershipAllowance();
+    if (local > (std::numeric_limits<std::uint64_t>::max)() - allowance || outputBytes < local + allowance)
+        return E_INVALIDARG;
+    const auto result = scheduler.RetainContinuingOutputMemory(original, outputBytes, _node->lease);
     if (result >= 0)
     {
         _node->original = original;

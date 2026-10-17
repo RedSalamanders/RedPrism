@@ -8,6 +8,7 @@
 #include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
 #include "Resources.h"
+#include "Win32FilePath.h"
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 
@@ -527,9 +528,20 @@ int Application::RunFileEndSessionSelfTest() noexcept
             _projectSaveTestGate->createAssetCollisionForTest = scenario.nativeAssetError;
             if (scenario.nativeAssetError)
             {
-                _projectSaveTestGate->assetStagingPatternForTest = output.wstring() + L".~*";
-                _projectSaveTestGate->assetStagingParentForTest = output.parent_path().wstring() + L"\\";
-                _projectSaveTestGate->assetLeafForTest = _session.Document()->layers.front().id.ToString() + L".png";
+                auto& trace = *_projectSaveTestGate;
+                trace.assetLeafForTest = _session.Document()->layers.front().id.ToString() + L".png";
+                // Prefix for the complete future directory conflict, not just its shorter search pattern.
+                // All allocation remains in fixture setup; the worker's actual filesystem seam stays bounded.
+                const auto tail = L".~00000000-0000-4000-8000-000000000000\\images\\" + trace.assetLeafForTest;
+                const auto candidate = output.wstring() + tail;
+                std::wstring prepared;
+                if (FAILED(Win32FilePath::PrefixResolvedPath(candidate.c_str(), Win32FilePath::Use::Directory,
+                                                             prepared)) ||
+                    prepared.size() < tail.size())
+                    return 5;
+                prepared.resize(prepared.size() - tail.size());
+                trace.assetStagingPatternForTest = prepared + L".~*";
+                trace.assetStagingParentForTest = std::filesystem::path(prepared).parent_path().wstring() + L"\\";
             }
             _projectSaveTestGate->faultStageForTest = scenario.fault;
             _projectSaveTestGate->faultAtVisitForTest = scenario.publishedCleanup ? 2u : 1u;
@@ -986,6 +998,11 @@ int Application::RunFileEndSessionSelfTest() noexcept
         if (scenario.nativeAssetError)
         {
             const auto& trace = *_projectSaveTestGate;
+            std::printf("INFO file-end-session-native-collision case=%s matches=%u created=%u error=%u "
+                        "parentLength=%zu patternLength=%zu status=%u\n",
+                        scenario.name, trace.assetStagingMatchesForTest, trace.assetCollisionCreatedForTest ? 1u : 0u,
+                        trace.assetCollisionErrorForTest, trace.assetStagingParentForTest.size(),
+                        trace.assetStagingPatternForTest.size(), static_cast<unsigned int>(trace.saveStatus));
             expect(trace.assetStagingMatchesForTest == 1 && trace.assetCollisionCreatedForTest &&
                        trace.assetCollisionErrorForTest == ERROR_SUCCESS && !trace.faultTraceTruncated &&
                        trace.faultVisits[static_cast<std::size_t>(ProjectSaveFaultStage::ManifestClose)] == 1,

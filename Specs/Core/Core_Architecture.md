@@ -88,10 +88,35 @@ remaining CPU reservation once, without allocation, a memory query or a partial 
 must have joined before this transfer; only bounded allocation-free cleanup may follow on the original record.
 The existing ordinary-completion `RetainMemory` contract remains unchanged.
 
+`JobOptions::continuingOutputLimit` is a separate explicit opt-in for one intermediate output from an
+original resumable job. It requires deferred retirement, a retained-slot preclaim and a nonzero limit below
+the whole descriptor admission. The descriptor MUST admit all future useful stages before source capture;
+reservation growth is refused. `RetainContinuingOutputMemory` runs only in that exact successful, uncancelled,
+joined DeferCompletion. It transfers only the declared completed output into the existing persistent endpoint,
+leaves the original global charge, FIFO/ticket/cancellation identity and terminal slot intact, and supplies
+later worker stages only the prepaid remainder. No new slot, allocation, memory query or early refund occurs.
+Only that output seals; other temporary/final producers remain under the original record. Wrong, repeated,
+over-limit and terminal/failed/cancelled/shutdown transfers refuse. Default descriptors and the terminal-only
+RetainPublicationMemory/RetainMemory contracts remain unchanged. Accounting conveys no mutation authority.
+
 Publication provenance MUST compare the original ticket and the live shared-memory endpoint. Wrapper addresses
 and slot/generation numbers alone are insufficient after scheduler reconstruction. `OwnsRetainedMemoryEndpoint`
 is an owner-only identity query: it allocates nothing, samples no memory and grants no callback or mutation authority.
 Close removes the live endpoint, while older foreign graphs keep their independent charged endpoint until final release.
+
+The selected SelectionOutlineGestureJob is an explicitly enabled Application parent borrowing stable
+session/input state. One original Selection job retains its shared host ordinal, FIFO position, cancellation
+identity and complete admission through worker containment/opening, accepted physical-prefix replay,
+moved or no-op End, any subsequent Deselect, residency refresh and terminal acknowledgement. Workers consume
+sealed inputs; owner callbacks validate authority and publish prepared results. An idle input wait disarms
+until accepted input supplies readiness; presentation coalescing does not discard accepted mutations.
+
+Scheduler Close suppresses normal Completed/host-success callbacks. After producers join, the selected
+parent's RetainJoinedRetirement resets its residency permit, may execute only its separately held exact-own
+prebuilt abort, binds original retirement ownership and drops its active prefix/controller. The accounting
+hook itself grants no document/history authority. Application retains borrowed owners through this join,
+then finishes the exact selection-press history stamp and drops a never-started queued prefix. Teardown is
+idempotent; foreign editor state is never overwritten and foreign readers keep their independent charges.
 
 Jobs that lend mapped storage or retain an external receiver across a terminal worker result MUST opt in with
 `JobOptions::deferredRetirement`. After the worker has returned (or its cancelled Run has been skipped), the

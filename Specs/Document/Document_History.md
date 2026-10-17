@@ -386,8 +386,46 @@ incremental raster/history accounting remains tracked by P1.9.
 
 An admitted metadata producer records every newly allocated record root, topology/root group, history snapshot, entry, stack and persistent-index node against its original publication-memory owner. Object, retained child capacity and shared-control allowances are separate from the complete operation admission. Reused immutable nodes retain their existing original owners; they are not reassigned to the younger edit. Reference allocations without an accounting owner retain their established layout and release policy.
 
-The producer's local allocation limit is immutable before construction. Checked overflow, insufficient budget and an attempted allocation after sealing refuse before a publication can escape. Once useful producers have joined, seal the ledger and partition the original complete reservation into its persistent output and temporary retirement charges. Publication, stale refusal, failure, cancellation and joined Close keep their distinct existing authority. No new reservation, admission query or early refund is permitted at partitioning.
+The producer's local allocation limit is immutable before construction. Checked overflow, insufficient
+budget and an attempted allocation after sealing refuse before a publication can escape. At terminal
+binding, once all useful producers have joined, seal the terminal ledger and partition the original
+remaining reservation into persistent output and temporary retirement charges. An explicitly opted
+continuing output seals only its own completed ledger under the continuing-output contract in
+Core_Architecture; later useful stages retain the prepaid remainder of that same original admission.
+Publication, stale refusal, failure, cancellation and joined Close keep their distinct existing authority.
+No new reservation, admission query or early refund is permitted at either transfer.
 
 Worker destruction releases data contributions only after those bytes have actually been destroyed. A copied or weak shared control retains its original accounting owner through actual control deallocation. Therefore an idle scheduler may have a nonzero charge while the live document or history still owns metadata. A completed edit does not imply zero reserved memory. Final graph/control destruction and owner acknowledgement return the original charge exactly once.
 
 Reference history callers must enumerate the complete storage closure from the held direct raster roots, even when a managed topology has no preflattened RasterOwners vector. Nested sparse bases/tiles and shared children participate in the existing dedup set. A reference byte query never materializes a sparse cache; oldest-first trim and legacy saved/revision/Undo/Redo semantics remain unchanged. Native qualification and measured phase costs remain separate requirements.
+
+## Optional prepared Begin/End publication ownership
+
+PrepareBegin and PrepareEnd accept an optional shared publication-memory owner. Every new snapshot, pending,
+entry, stack and topology/index node retains that owner and its local allocation charge; reused nodes retain
+their original owners. The default reference route remains unchanged. Selected move opening/closure binds
+its output before publication; unbound results refuse before mutation. Original and replaced owners retire
+through their real last strong/weak lifetime under the complete original operation admission.
+
+An opt-in prepared deferred move opening may prebuild its exact dependent no-op End before Begin publishes.
+Only its opaque latest own-move authority can use that cleanup. Foreign document/generation/history/target or
+pending gesture state refuses. Cleanup discards the scalar preview, closes only that Begin, preserves redo
+and matches reference Cancel's two invalidations. It grants no successful cancelled-output authority.
+
+## Selected deferred-outline close residency
+
+The opt-in deferred outline controller validates its exact opaque opening authority before every Close
+completion, including after residency refresh. Document generation and history revision alone are insufficient:
+a foreign editor can open without changing either. Refusal preserves that editor and the original opening;
+it MUST NOT run the old opening's abort through a foreign editor. The subsequent no-move Deselect validates its
+separate complete command/restore authority after the no-op End has acknowledged.
+
+`PreparedSelectionMoveClosure` exposes the existing one-shot residency try and cancellable worker refresh
+against its original prepared after-document. Busy/Refresh resumes the original ticket and reservation; it
+MUST NOT recapture session input, regenerate a revision, repeat geometry/End preparation or query admission.
+Ready is held only through the scheduler's bounded, callback-free transition to final partition/publication.
+Reset the permit before the next useful worker stage, rollback, retirement binding, prefix acknowledgement,
+host callback or joined shutdown cleanup. The original source/history/saved-marker checks still apply.
+
+The selected CPU protocol is independently tested. Actual pointer callers, native integration, ordinary
+activation, the other gesture branches and measured G1 remain separate gates.

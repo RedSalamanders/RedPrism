@@ -2988,3 +2988,73 @@ The independent expected-only reader retains every predecessor assertion, order,
 Source/dependency/product bookends bind each actual run. Private PASS is scoped evidence; integration
 requires fresh analysis, native Debug/Release/real ASan (including actual detection), ARM64 cross-builds,
 formatting/skills and separate ordinary-host/lifetime/admission/large-lasso performance qualification.
+
+## Continuing-output and selection parent prerequisites
+
+DocumentTests includes six independent fixture families: selected history ownership (23 checks), continuing
+output (44), bound history lifetime (23), charged selection command memory (30), original gesture parent (41)
+and opaque gesture abort (57). Existing predecessors and legacy numeric goldens remain unchanged.
+
+The scheduler reference uses real workers, literal 17/41 payloads, declared 256/32/64 KiB partitions and all
+64 terminal slots preclaimed before transfer. Descriptor/ticket/bounds/undercharge/repeat/growth and wrong
+callback refusals preserve state. Useful resume, failure, cancellation, joined Close and final weak refunds
+are required. Geometry/history fixtures use literal square coordinates, exact AA/Undo/Redo/no-op semantics,
+complete storage plus allocator/control accounting, unbound/underbound/stale/cancel refusals and strong/weak
+owner retention. The original parent keeps one admission/ticket through moved End, zero-offset End then fresh
+Deselect, zero/nonzero Lost End, failure, cancellation and Close. A separately admitted settled 8 KiB endpoint
+observer verifies exact final parent refund after closed-scheduler teardown and last weak-control release.
+Pending transform without a generation/history change MUST refuse opaque Move and Abort without overwrite.
+
+Run the full predecessor stream in Release and real ASan, including an actual UAF detection probe, source/
+dependency/product bookends, instrumented compiler records and exact binary/PDB identity. These CPU protocols
+establish no physical Win32 routing, whole caller admission, ordinary activation or measured G1 qualification.
+
+### Selected deferred-outline staged-residency controls
+
+`Document.Tests.SelectionGestureResidency` requires 47 independent controls across late Move, late Click,
+Busy/release, cancellation, joined Close and foreign-transform Move/Click. The late 64-by-64 BGRA cache grows
+by exactly 16,384 bytes; literal selection bounds, history count/revision/name, generation and trim order
+remain checked. An explicit worker inspection gate proves original reservation plus an independently admitted
+8,192-byte observer and the remaining worker partition before refresh can finish. Scarce-memory sampling
+proves no second admission or source/geometry preparation.
+
+The foreign editor opens during the gated refresh without changing generation/history; refusal must preserve
+its exact transform address/draft, selection root/opening and history. The independent endpoint observes exact
+live opening/final charges before final source/session release and the observer-only charge afterwards.
+Callback lease availability and cancellation/joined-Close release are checked separately. A watchdog expiration
+is a failure, never a passing release. All preceding assertions and goldens remain required; independent strict
+source-defined stream controls reject missing, duplicate, reordered, failed, unknown or miscounted output.
+
+Private Release and exact-source real-ASan proofs require complete archive, compiler/source/dependency/product
+bookends, matching PE/PDB, ISA and a real ASan UAF control. They do not substitute for native application/ARM64
+qualification, ordinary activation, other physical routes or measured G1.
+
+### Selected actual selection-press and joined-shutdown validation
+
+Retain the full physical-prefix/notification, cached-admission and metadata-authority fixtures as well as
+the CPU controls above. They require event-time input, exact mutation/history/FIFO outcomes, one presentation
+per replay batch, post-callback foreign-editor refusal, checked cached bounds and refusal of late Crop,
+Active, Mask and HistoryBegin changes before capture. Live opening/final charges must remain observable
+until their last actual history/geometry/control reader; final refund alone is insufficient.
+
+Application.Tests.SelectionPressGesture requires 41 controls on the real hidden Win32/WARP owner and two
+workers, using WndProc messages for early Up, moved Up/Lost, cancellation, admission refusal and overflow.
+Check literal geometry/generation/history, the original ticket, one capture after successful admission,
+zero captures on admission refusal, acknowledgement and coalesced presentation. Overflow preserves all 511 accepted Moves and refuses the extra point.
+Application.Tests.SelectionPressShutdown requires 21 controls on genuinely queued and active parents:
+exact receipt/stamp/prefix settlement after joined Close, suppressed useful completion, retired original
+controller/charges, an independently retained observer, and idempotent repeated Shutdown. Preserve all 71
+scalar controls and every native predecessor assertion, expected byte, order, summary and stage.
+
+Fixture Until loops must pump messages, DrainCompletions then RunUiActions before testing readiness and
+waiting, matching Application and SettleJobs. Failure diagnostics cannot change successful predicates,
+deadlines, capture/mouse-leave behavior or reader acceptance. Retain R4/R6 actual failures, R5's strict
+pre-runtime prerequisite refusal and R7's filesystem-only artifact-reader refusal with its adapter.
+Independent readers must reject missing, duplicate, reordered, failed, unknown, miscounted, bad-exit or
+sanitizer-diagnostic streams and bind exact source/dependency/product/compiler/archive/PE-PDB identity.
+
+Require Main's exact-source actual-caller Release and real-ASan qualification, including actual UAF
+detection, before native adoption. After integration require fresh canonical analysis, native x64
+Debug/Release/real ASan, ARM64 cross-builds and existing formatting/skills gates. Cross-build success is
+not native ARM64 runtime evidence. Keep _selectionPressTestEnabled false for ordinary input; these
+selected tests do not close other physical callers, complete S5, measured G1 or P1 Done.

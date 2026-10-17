@@ -62,6 +62,10 @@ class SharedPublicationMemory final
     [[nodiscard]] std::int32_t BindPersistentOutputForRetirement(JobScheduler& scheduler, JobTicket original,
                                                                  std::uint64_t outputBytes,
                                                                  SharedPublicationMemory& temporary) noexcept;
+    // Explicit descriptor-opted intermediate publication. Seal this output only; its original job keeps
+    // the remaining admission and terminal slot for future useful stages and later retirement accounting.
+    [[nodiscard]] std::int32_t BindContinuingOutputForPublication(JobScheduler& scheduler, JobTicket original,
+                                                                  std::uint64_t outputBytes) noexcept;
     [[nodiscard]] bool IsBound() const noexcept;
     // Owner-only provenance against the live scheduler endpoint and original ticket. Closed/reconstructed
     // schedulers refuse; this grants no callback, document or mutation authority.

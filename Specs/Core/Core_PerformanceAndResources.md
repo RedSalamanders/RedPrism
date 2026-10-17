@@ -757,8 +757,8 @@ document serial, generation, separate collapse revision, session document read
 authority and held layer root; the source owns every pointer identity. One active request and one newest key
 bound refreshes. Cancellation retains original record/source/accounting until acknowledgement.
 
-A successful, nonzero, uncancelled original job reservation may transfer to one of 64 fixed retained-memory
-slots only during that exact job's owner final apply or `Completed` callback. Pump/progress, foreign/stale/reused
+For ordinary `RetainMemory`, a successful, nonzero, uncancelled original job reservation may transfer to one
+of 64 fixed retained-memory slots only during that exact job's owner final apply or `Completed` callback. Pump/progress, foreign/stale/reused
 jobs and another job's final callback (including a custom apply handler) have no such authority. Transfer performs
 no second admission, memory query or allocation; tokens bind scheduler lifetime, slot and generation. Retained cache
 accounting alone does not keep useful work awake. Replacement/clear detaches every chrome borrow before the
@@ -1579,3 +1579,48 @@ view with `ContiguousRasterForWork`. That view owns its sampled bytes for the co
 source and its nested tiles acquire no shared assembly. Sampling/homography/edge/rounding math is unchanged.
 The existing private traversal bound and failure policy apply; no cancellation or UI timing guarantee is added
 to the direct numeric-reference API.
+
+## Descriptor-bounded continuing output and selection geometry
+
+An explicitly opted continuing-output job MUST preadmit its entire useful/input/retirement peak and terminal
+slot before capture. Its intermediate output charge and the record's remaining reservation partition the
+same original admission. No grow/query/allocation/new FIFO identity or extra retained slot is permitted at
+transfer; terminal binding occurs only after the final useful producer joins. Data and allocator/control
+owners, including expired weak controls, retain their charge through actual destruction. Joined Close clears
+the former scheduler counter while foreign leases retain an independent endpoint; a cleared counter is not
+proof of final foreign refund.
+
+Selected Select All/Deselect output bounds include newly allocated history metadata and publication-owner
+allowance. Select All additionally includes cached geometry storage plus WorkOwnershipAllowance; StorageBytes
+alone excludes allocator/control overhead. Admission also covers both publication owners and construction
+peak. Checked arithmetic or insufficient output refuses before mutation. Opaque prepared gesture cleanup
+uses the exact prebuilt Begin-dependent End and latest own scalar authority, with no owner geometry/history
+construction or fresh admission. Physical callers, every display consumer and G1 still require qualification.
+
+## Selected deferred-outline live publication charges
+
+A settled selected outline publication keeps its original charge while live history or geometry still owns
+its data or shared controls. Move's history entry retains the charged opening snapshot and its final
+entry/after/translated geometry; neither charge may refund at terminal acknowledgement alone. A zero-offset
+End drops the unused opening before the separately charged Deselect publication. Exact-current abort returns
+to the original history. Stale refusal preserves any still-live original opening charge through its real last
+reader, including a foreign editor/session lifetime.
+
+Residency refresh shares the complete original admission and retains its original source, prepared payload
+and ticket. No owner wait, pixel read, index/geometry reconstruction, re-admission or unbounded temporary
+allocation is allowed. Test-only readiness callbacks borrow immutable rasters/events and never an Application,
+mutable document session, UI or GPU owner. The selected structural proof does not qualify ordinary input or G1.
+
+### Selected original-parent admission
+
+The selected inside-New-Rectangle descriptor reads cached H = EditMemoryBytes(document), R =
+HistoryRestoreRetirementMemoryBytes(), and G = selection StorageBytes plus WorkOwnershipAllowance. Let O
+be SharedPublicationMemory::OwnershipAllowance and W be 4096 plus sizeof(SelectionOutlineGestureJob),
+sizeof(SelectionOutlineGestureState), sizeof(BrushStroke) and sizeof(WarpStroke). Its checked envelopes are
+opening = 2H + W + O, final = 4H + 2G + W + O, temporary = 4H + 2R + 2G + W + 3O, and total is their sum.
+Unavailable bounds or overflow refuse before capture. Admission retains the scalar tuple
+{DocumentReadAuthority, HistoryRestoreAuthority, DocumentHistory::Authority}; all three must still match
+before retaining document/history/geometry roots. Generation alone is insufficient for Crop, Active, Mask
+or HistoryBegin changes. Later workers receive total minus the actual continuing-output charge, with no
+new admission, memory query or reservation growth. These are the selected CPU bounds; complete display/GPU,
+other physical branches and measured G1 remain separately required.

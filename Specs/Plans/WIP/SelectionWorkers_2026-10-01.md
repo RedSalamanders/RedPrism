@@ -1,7 +1,8 @@
 # Ordered selection workers (P1.6)
 
 - [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
-- [ ] Exact caller real ASan (340-source build running), native adoption, remaining physical branches, display/phase ownership and ordinary activation; these selected Release results do not close S5 or G1.
+- [x] Exact caller real ASan: fresh 340-source build/ISA, 145-stage actual runtime, 41 physical/21 shutdown/71 scalar controls, every native predecessor and the actual UAF probe independently pass. The 51 reviewed code/test/project paths and five CPU contracts are adopted with 1,269-file formatting.
+- [ ] Fresh native Debug/Release/real ASan, analysis and ARM64 cross-builds for this integration; remaining physical branches, display/phase ownership and ordinary activation. Private results do not close S5 or G1.
 
 
 ## Current delivery checklist (2026-10-16)

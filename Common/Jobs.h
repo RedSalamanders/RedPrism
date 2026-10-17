@@ -67,6 +67,11 @@ struct JobOptions final
     bool reserveRetainedMemory = false;
     // Explicit opt-in; never run a capacity-blocked command recorder on the ordinary kernel workers.
     JobExecutionLane executionLane = JobExecutionLane::Compute;
+    // Explicit one-time immutable output before further useful stages on this same admitted record.
+    // Includes its control/metadata ownership; strictly smaller than memoryBytes. The remaining original
+    // reservation and descriptor-preclaimed terminal slot survive unchanged in identity/FIFO. Zero opts out.
+    // Whole-operation admission is final for this option: IncreaseReservation is forbidden.
+    std::uint64_t continuingOutputLimit = 0;
 };
 
 struct JobTicket final
@@ -326,6 +331,12 @@ class JobScheduler final
     // No fresh query/allocation/admission or early refund. Failure preserves the record/output. This call
     // supplies accounting, not a publication authority, worker acknowledgement, GPU completion or history permit.
     [[nodiscard]] std::int32_t RetainPublicationMemory(JobTicket job, SharedRetainedMemoryLease& retained) noexcept;
+    // Exact successful joined DeferCompletion only, once per explicitly opted-in descriptor. Transfer just
+    // outputBytes to a persistent immutable lease; keep the remaining originally admitted bytes, job and
+    // terminal retained slot for later useful stages. No allocation, query, new admission or FIFO change.
+    // All producers of this output must have joined. This supplies accounting, never mutation authority.
+    [[nodiscard]] std::int32_t RetainContinuingOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                            SharedRetainedMemoryLease& output) noexcept;
     // Exact terminal callback or the joined Close retirement hook, including failed/cancelled jobs. Transfers
     // the entire original reservation to a preallocated owner with a descriptor-reserved slot. This is only
     // accounting for final destruction/weak-control ownership; no useful-work or publication authority and
