@@ -1,5 +1,10 @@
 # Asynchronous file processing (P1.7)
 
+## Current delivery checklist — 2026-10-17
+
+- [x] Qualify and adopt real external clipboard contention: four native Copy/Paste release/exhaust cases, all 53 new facts and the complete 148-stage predecessor roster pass exact Release and real ASan (342 App TUs), including actual UAF detection. Saved clipboard, original ticket/history/reservation and joined holder/worker lifetime are checked; retained reader refusal is corrected without runtime replay. [Evidence](../../TestRuns/P1ClipboardRealContention_2026-10-17.md).
+- [ ] Finish remaining F5/F6 phase, lifecycle, ordinary activation and measured G1 gates; qualify all full native profiles on the latest adopted source. Native ARM64 execution remains unavailable.
+
 ## Implementation checklist
 
 Latest native file checkpoint (2026-10-16): the adopted long-path source is included in qualified native

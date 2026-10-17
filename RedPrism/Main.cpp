@@ -277,6 +277,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneEllipsePressSelfTest\n");
         if (const int failed = Application::RunStandaloneEllipsePressSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneClipboardContentionSelfTest\n");
+        if (const int failed = Application::RunStandaloneClipboardContentionSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneSelectionPressShutdownSelfTest\n");
         if (const int failed = Application::RunStandaloneSelectionPressShutdownSelfTest(instance); failed != 0)
             return failed;

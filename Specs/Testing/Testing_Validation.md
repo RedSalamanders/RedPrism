@@ -3070,3 +3070,17 @@ collinear-rectangle cases below 512 MiB; those original counts must reach the wo
 probes and rectangle areas 42/12 validate union/difference. No RSS or G1 claim follows from admission.
 See [the scoped evidence](../TestRuns/P1PreservingMarquee_2026-10-17.md). Actual Win32 Add/Subtract routing,
 latest adopted-source native profiles, ordinary activation and G1 remain separate gates.
+
+## Real external clipboard-contention host validation
+
+The standalone `Application.Tests.ClipboardContention` fixture owns a separate native thread and
+message-only HWND that genuinely holds `OpenClipboard`. Copy/Paste cover release after the first armed
+wait and six-attempt exhaustion through production retry events. Assert the same original ticket,
+history barrier, reservation and actual holder at every wait; forced/injected failure counters remain
+zero. Literal DIB/private-copy pixels, independent public outcome/history, saved clipboard restoration,
+thread/window joining and final refunds are required. Copy retains its successful private result if
+system mirroring exhausts; Paste exhaustion fails without source/history mutation.
+All 53 new facts and the complete predecessor Application stream must pass in Release and real ASan.
+Native Inspect diagnostics are accepted only in their source-defined Pending-to-Settled windows: one
+failed Open for Paste release and six for exhaustion, with valid native DWORD fields. Every unrelated
+byte still passes to the unchanged predecessor reader. See [the scoped evidence](../TestRuns/P1ClipboardRealContention_2026-10-17.md).
