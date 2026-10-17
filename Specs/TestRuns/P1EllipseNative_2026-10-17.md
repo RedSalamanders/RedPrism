@@ -24,9 +24,9 @@ Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1101-main-qualified.json
 
 ## Remaining matrix
 
-- Full native x64 ASan r1100: failed resource attempt preserved below. Fresh full r1107 is active.
+- Full native x64 ASan r1100: failed resource attempt preserved below. Fresh full r1107 is independently qualified below.
 - Full x64 Debug r1102; canonical Release Rebuild/Analyze r1104; full Release r1106: due.
-- ARM64 Release r1103: independently qualified below; instrumented ASan r1105 cross-build: due.
+- ARM64 Release r1103: independently qualified below; instrumented ASan r1105 cross-build: active.
 - Native ARM64 runtime is unavailable; cross-build evidence is never described as runtime qualification.
 
 The separate Add/Subtract draft remains uncompiled. The real clipboard-contention draft has prior focused
@@ -60,7 +60,7 @@ and five exact AA64 executable/full-PDB pairs with matching GUID/age. No native 
 Archive completion SHA-256: `27DBF60D20C4BE2004430D6BA0F64D33C0403C7908AFE0CAF82ACC55C7003A76`.
 Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1103-main-qualified.json`.
 
-## Fresh ASan retry r1107 — active, no pass yet
+## Fresh ASan retry r1107 — preparation, now qualified below
 
 The new runner adds only the explicit r1107 attempt and its filename; the canonical command, original TEMP,
 all test predicates and all 1,429 compiled/project/toolchain inputs remain unchanged.
@@ -70,3 +70,28 @@ source-derived expectations. The original r1100 archive and zero-byte completion
 Closed caches are losslessly compressed with full hash readback; one closed private cache is relocated to a
 verified copy with its original path retained by junction. The existing 6 GiB C:/12 GiB D: dispatch guards pass.
 This preparation is not runtime, performance, ordinary-activation or P1 Done qualification.
+
+## Full x64 ASan r1107 — independently qualified
+
+Canonical `test.ps1 -Platform x64 -Configuration "ASan Debug" -MaxCpuCount 1` exits 0.
+Actual child 55360 runs 07:20:22.821751–07:41:13.758496 UTC. The freeze is the separately pinned r1107
+transport above; all 1,429 compiled/project/toolchain inputs remain the adopted `6a7afac` source.
+
+Main independently verifies all 1,833 archived source/evidence files, all 975 real instrumented compiler
+records, five exact executable/full-PDB GUID/age pairs and zero ISA violations. Strict runtime readers verify
+22,693 Document facts; 9,024 Host PASS records; 7,391 composition records; 1,953 I/O records; and all 147
+Application stages with 8,577 stdout / 7,613 stderr assertions. Both canonical concurrent stress suites and
+the genuine heap-use-after-free detection diagnostic pass. Diagnostic SHA-256:
+`381992E50BB9B581AA7A4C3352E195C39F9EEA909CD312158502994899217C25`.
+All nine canonical harness PNGs are archived and independently checked against their exact capture rows.
+Functional benchmark smoke checks do not establish G1 performance while compilation is active.
+
+Before archiving, the private archive recipe is corrected to strip the configuration space in PNG filenames,
+matching unchanged `test.ps1`. Its first extra screenshot reader refuses the OEM build-banner byte C9 when
+trying to decode the whole mixed-encoding parent log as UTF-8. The refusal remains retained. Readback resumes
+against the same archive by isolating raw screenshot rows before strict decoding; the original artifact,
+profile, roster and source predicates remain unchanged. No build, runtime or archive is repeated.
+
+Archive completion SHA-256: `0F37529608C2FAD7FBD9CC06BF9A84AA44BD9E3F7AC2CE7D2021912BCD241D20`.
+Local receipt: `.build/P1Integration/LassoHost-r1-Main/r1107-main-qualified.json`.
+ARM64 ASan r1105 remains active. Ordinary activation, remaining delivery work, measured G1 and P1 Done remain open.
