@@ -10,7 +10,7 @@ route remains test-only. The newer private captured-settings/history-guard draft
 | --- | --- | --- |
 | ARM64 Debug r1093 | Actual parent PID 94712, exit 0; full canonical Rebuild | 1,492 archived files, 969 exact compile records, 1,417 compiled/project/toolchain inputs; five ARM64 PE/full-PDB pairs match |
 | ARM64 Release r1094 | Actual parent PID 95128, exit 0; full canonical Rebuild | 1,492 archive files, 969 exact Release compiler records and five AA64 PE/full-PDB pairs match |
-| ARM64 instrumented ASan r1095 | Rebuild in progress on the same source freeze | Not qualified yet; native ARM64 runtime unavailable |
+| ARM64 instrumented ASan r1095 | Actual parent PID 86856, exit 0; full canonical Rebuild | 1,496 archive files, 969 actual instrumented compiler records and five matching AA64 PE/full-PDB pairs |
 | Latest native x64 Debug/Release/real ASan/analysis | Due for this integration | Earlier native baseline and private caller proofs remain scoped evidence |
 
 The transport pins 1,421 source/runner inputs. Freeze SHA-256:
@@ -69,3 +69,20 @@ Release stdout SHA-256: `A59513453FB3DAB402AAE2149D20BF715183E7E87BF070204F20356
 Archive completion SHA-256: `6AAF862C794AB1E5009336F281FF91AB972E0CC3C04270849FD3843499943A44`.
 The exact Main receipt is `.build/P1Integration/LassoHost-r1-Main/r1094-main-qualified.json`;
 its SHA-256 is `3EBC70DDCE44B450A87FDA16CF0C20B93444508ACDE9B2B91DDBB581EC7152F2`. This is cross-build proof, not native runtime or G1 qualification.
+
+## ARM64 instrumented ASan r1095 qualified — matrix complete
+
+The same immutable `29a8ac2` source freeze completes canonical instrumented ARM64 ASan Rebuild:
+actual parent PID 86856 exits 0, 03:20:55.723846–03:47:00.159950 UTC. Main's reviewed artifact reader
+verifies all 1,496 archive files, all 969 actual instrumented compile commands (forced sanitizer header,
+`/fsanitize=address /MDd /Od /Zi`), all 1,417 compiled/project/toolchain inputs and five exact AA64 PE/PDB pairs.
+The controller joins with exit 0. All three ARM64 cross-build profiles are now independently qualified.
+
+Stdout SHA-256: `2F00AACDC27953ECC517F8BE166035F1B0732FD7BEF7C1B12259BB6A6224F31C`.
+Archive completion: `68FFC1BD2FACD69F9CEEBF83CAC3010810F5193675041EDB98B9D19A891FB413`.
+Main receipt: `.build/P1Integration/LassoHost-r1-Main/r1095-main-qualified.json`, SHA-256
+`F4FD236EAC89E5EECA63288E8ECE55F80CB28435EA3FE3D29F33C96DAC690445`. Native ARM64 execution and performance are not claimed on this x64 host.
+
+The newer private lasso/rectangle primitives and outside-hit parent are separate source snapshots.
+Their integration must receive the final latest-source native gates; repeating old-source x64 gates before
+that integration would not qualify the later code. Latest x64 Debug/Release/real ASan/analysis remain due.

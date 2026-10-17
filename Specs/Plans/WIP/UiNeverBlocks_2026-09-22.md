@@ -1,7 +1,11 @@
 # P1 — Responsive raster editor delivery milestone
 
+- [x] Complete integrated `29a8ac2` ARM64 Debug/Release/instrumented-ASan qualification: all three canonical Rebuilds, exact 969-source command sets, complete archives and five matching AA64 PE/PDB pairs pass. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md#arm64-instrumented-asan-r1095-qualified--matrix-complete). Native ARM64 runtime is unavailable.
+- [x] Private outside-hit Rectangle/New parent and exact intent cleanup qualify all 22,596 Release facts; retain the actual compile and cancellation-driver failures. Predicates and production code stay unchanged through both fixture repairs.
+- [ ] Qualify exact-source real ASan (active), then the separate 83-fact actual Win32 fixture; complete later integration and latest native gates. No ordinary activation or G1 closure yet.
+
 - [x] ARM64 Release r1094 qualifies the same frozen integrated source: 1,492 archive files, 969 compiler records and five exact AA64 PE/PDB pairs; [evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md#arm64-release-r1094-qualified).
-- [ ] Finish r1095 instrumented-ASan cross-build and latest integrated x64 Debug/Release/real ASan/analysis; native ARM64 runtime remains unavailable.
+- [ ] Finish latest integrated x64 Debug/Release/real ASan/analysis after the next combined integration; all current-source ARM64 cross-builds qualify above.
 - [x] Private guarded own-writer/Rectangle-New plan passes all 22,491 Release facts (64 new), with 276 compiler records and the complete archive independently verified.
 - [x] Exact-source own-writer/rectangle real ASan qualifies all 22,491 assertions and its actual UAF probe, with 276 instrumented commands and complete archive; code/tests/four contracts/evidence are pushed as `e695e32`. [Evidence](../../TestRuns/P1LassoDrawingAuthority_2026-10-17.md).
 - [ ] Qualify the separate outside-hit Rectangle/New physical parent, exact intent cleanup and actual Win32 fixture; this draft is uncompiled. Ordinary activation, full remaining branches and G1 remain open.
@@ -11,7 +15,7 @@
 - [x] Qualify and publish captured lasso settings plus exact history authority as `e03a80d`: all 22,427 Release and real-ASan assertions pass with the original 46 predicates unchanged; preserve both reproduced foreign-Begin failures and the pre-dispatch refusal. [Evidence](../../TestRuns/P1LassoOpeningSettings_2026-10-17.md). Native source stays frozen for the `29a8ac2` matrix.
 - [ ] Complete the guarded own-writer API and outside-hit/New Rectangle physical parent, including complete original-ticket bounds, terminal publication and exact cancellation; the private draft is uncompiled.
 - [x] Qualify integrated-source ARM64 Debug r1093: full Rebuild parent exit 0, 1,492 verified archive files, 969 exact compiler records, 1,417 compiled/project/toolchain inputs and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
-- [ ] Finish instrumented-ASan r1095 on that same integrated-source freeze; Release r1094 qualifies above, and native ARM64 execution is unavailable.
+- [x] Finish instrumented-ASan r1095 on that same source freeze; all three ARM64 cross-builds qualify above.
 
 - [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
 - [x] Qualify the exact admission source under real ASan: all 22,334 assertions, 272 instrumented commands, the actual UAF control and 1,621 archived files independently pass; [evidence](../../TestRuns/P1SelectionGestureAdmission_2026-10-17.md).
