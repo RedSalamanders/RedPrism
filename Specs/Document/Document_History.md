@@ -426,3 +426,7 @@ activation, the other gesture branches and measured G1 remain separate gates.
 ## Owned lasso authority and history exclusion
 
 A selected own-writer lasso may validate its original immutable history epoch while ignoring only its exact currently owned lasso draft in the editor exclusion check. Every other editor exclusion remains mandatory; a foreign Begin invalidates the writer even when generation/revision are unchanged. General `CanApplyHistoryRestore` continues to reject every live lasso. Own drag/abort/close before a prepared selection publication preserve generation, revision, Undo/Redo and transaction depth.
+
+## Exact lasso intent cleanup and Rectangle/New parent
+
+Pending lasso intent cleanup is a one-shot scalar capability for its original session, document serial, intent serial and opening/finish kind. A stale or foreign capability leaves pending edits untouched. Closed own-writer cleanup validates the original editor/history epoch, removes only that closed writer and swaps retained history owners into the prepared payload for original-ticket retirement. It never rolls back an unrelated transaction. Rectangle/New history preparation, residency try/refresh and final publication use the same parent admission; cancelled or stale results do not create a successful history entry.

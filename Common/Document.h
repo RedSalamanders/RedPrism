@@ -918,6 +918,7 @@ enum class SelectionMode : std::uint8_t
 // `anchor` the Marquee's starting corner, in whole pixels.
 class BoundedLassoGesture;
 struct LassoOpeningSettings;
+class LassoIntent;
 class LassoOpeningInput;
 class PreparedLassoOpening;
 
@@ -2544,6 +2545,11 @@ class DocumentSession
     [[nodiscard]] bool ApplyPreparedLassoOpeningIfCurrent(PreparedLassoOpening& prepared) noexcept;
     // Opaque own-writer authority: a foreign editor/history or direct writer mutation refuses.
     [[nodiscard]] bool IsPreparedLassoGestureCurrent(const PreparedLassoOpening& prepared) const noexcept;
+    [[nodiscard]] std::optional<LassoIntent> CaptureLassoIntent(const LassoOpeningInput& input) const noexcept;
+    [[nodiscard]] std::optional<LassoIntent> CaptureLassoIntent(const LassoFinishInput& input) const noexcept;
+    [[nodiscard]] bool DiscardLassoIntentIfCurrent(const LassoIntent& intent) noexcept;
+    // Closed terminal capture may refuse. Retire only this exact writer's captured history through its owner.
+    [[nodiscard]] bool DiscardPreparedClosedLassoIfCurrent(PreparedLassoOpening& prepared) noexcept;
     [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
                                                     bool fromCenter) noexcept;
     [[nodiscard]] bool AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept;

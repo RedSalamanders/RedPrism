@@ -2,6 +2,7 @@
 
 #include "LassoFinishGeometry.h"
 #include "LassoFinishWork.h"
+#include "LassoIntent.h"
 #include "LocallyOwnedPublication.h"
 #include "SharedPublicationMemory.h"
 
@@ -273,5 +274,44 @@ bool DocumentSession::SetLassoOpeningCountersForTest(std::uint64_t opening, std:
         return false;
     _lassoOpening = opening;
     _lassoOpeningIntentSerial = intent;
+    return true;
+}
+
+std::optional<LassoIntent> DocumentSession::CaptureLassoIntent(const LassoOpeningInput& input) const noexcept
+{
+    if (!input._valid || !input._intent || input._authority._session != _tokenIdentity.value ||
+        input._authority._documentSerial != _documentSerial || input._intent != _lassoOpeningPendingSerial)
+        return std::nullopt;
+    return LassoIntent(_tokenIdentity.value, _documentSerial, input._intent, true);
+}
+std::optional<LassoIntent> DocumentSession::CaptureLassoIntent(const LassoFinishInput& input) const noexcept
+{
+    if (!input._valid || !input._intent || input._authority._session != _tokenIdentity.value ||
+        input._authority._documentSerial != _documentSerial || input._intent != _lassoFinishPendingSerial)
+        return std::nullopt;
+    return LassoIntent(_tokenIdentity.value, _documentSerial, input._intent, false);
+}
+bool DocumentSession::DiscardLassoIntentIfCurrent(const LassoIntent& intent) noexcept
+{
+    if (intent._session != _tokenIdentity.value || intent._documentSerial != _documentSerial || !intent._serial)
+        return false;
+    auto& pending = intent._opening ? _lassoOpeningPendingSerial : _lassoFinishPendingSerial;
+    if (pending != intent._serial)
+        return false;
+    pending = 0;
+    return true;
+}
+bool DocumentSession::DiscardPreparedClosedLassoIfCurrent(PreparedLassoOpening& prepared) noexcept
+{
+    if (!prepared._ownGesture || !prepared._applied || prepared._gestureActive || !prepared._writer ||
+        _lassoClosedWriter != prepared._writer || !_lassoClosedRevision ||
+        _lassoClosedOpening != prepared._input._opening || prepared._retiredClosedHistory)
+        return false;
+    // The prepared owner keeps both writer and replaced history roots alive for original-ticket retirement.
+    prepared._retiredClosedHistory.swap(_lassoClosedHistory);
+    _lassoClosedRevision = 0;
+    _lassoClosedArenaIdentity = nullptr;
+    _lassoClosedWriter.reset();
+    _lassoClosedSource.reset();
     return true;
 }

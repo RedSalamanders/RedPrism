@@ -35,7 +35,8 @@ struct SelectionOutlineGestureState
     {
         ClosePrepared,
         ClickPrepared,
-        ResidencyRefreshStarted
+        ResidencyRefreshStarted,
+        DrawingPrepared
     };
     // Optional worker readiness probe for event-gated fixtures. Its context may hold immutable rasters
     // and events, never an Application, mutable session, UI or GPU owner.
@@ -57,6 +58,9 @@ struct SelectionOutlineGestureState
     SelectionOutlineGestureJob* controller = nullptr;
     // Optional exact source of a cache-derived admission. Fixture-only callers may supply fixed limits.
     std::optional<Admission> admissionSource;
+    // Selected Rectangle/New outside-hit branch only. All other branches retain their existing contract.
+    bool allowNewRectangle = false, drawing = false;
+    bool requireCapturedTarget = false;
     JobTicket original;
     unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;
     std::uint64_t firstBudget = 0, remainingBudget = 0, openingBytes = 0;

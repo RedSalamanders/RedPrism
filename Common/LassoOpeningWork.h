@@ -72,5 +72,6 @@ class PreparedLassoOpening final
     BoundedLassoGesture::Key _gestureKey;
     bool _ownGesture = false; // Only the original-parent opt-in retains the applied writer.
     bool _gestureActive = false;
+    std::optional<DocumentHistory::StateView> _retiredClosedHistory;
     bool _applied = false;
 };

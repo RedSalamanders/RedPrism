@@ -1864,3 +1864,9 @@ The `LassoOpeningSettings` overload of `PrepareLassoOpeningInput` records the ac
 ## Guarded ownership of a worker-created lasso writer
 
 `PrepareLassoOpening` retains own-gesture authority only with its explicit default-false opt-in. Guarded marquee drag, abort and close require the same applied active writer and latest own key, plus unchanged session/document/editor/history/token authority. Own successful or unchanged drags retain that authority; a foreign direct writer mutation revokes it without permitting rollback. Closing consumes own active authority and seals the supplied physical terminal AA. General history restoration still refuses a live lasso. The default reference path retains its original ownership and live API behavior. These primitives alone do not enable ordinary physical input.
+
+## Selected Rectangle/New physical-parent protocol
+
+The explicitly opted-in parent may choose Rectangle/New after cancellable worker containment finds no hit, including absent or explicit-empty source selection. It reuses the original admitted parent, fixed Down settings, ordered samples and terminal AA. Physical Alt never requests `fromCenter`; physical Shift held at Down must first be released before constraining the draft. The model's explicit centered-drag API retains its numeric behavior. Lost/cancelled drawing preserves the original selection. This protocol alone does not activate ordinary input.
+
+An opaque `LassoIntent` clears only its exact pending opening or finish identity. It cannot clear a newer intent, another kind, session/document, or foreign editor/history authority. Closed own-writer cleanup requires its exact original authority and retains old owners for worker retirement.

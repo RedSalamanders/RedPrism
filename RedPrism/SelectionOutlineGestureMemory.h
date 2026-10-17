@@ -14,4 +14,4 @@ struct SelectionOutlineGestureMemory final
     std::uint64_t sourceBytes = 0, historyBytes = 0, geometryBytes = 0;
 };
 [[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
-    const DocumentSession& session) noexcept;
+    const DocumentSession& session, bool allowNewRectangle = false) noexcept;

@@ -7,6 +7,7 @@
 #include "Jobs.h"
 #include "LassoFinishGeometry.h"
 #include "LassoFinishWork.h"
+#include "LassoIntent.h"
 #include "LassoOpeningWork.h"
 #include "LocallyOwnedPublication.h"
 #include "MemoryAdmission.h"
@@ -28,6 +29,8 @@ constexpr std::uint64_t kAdmissionBytes = 4ULL * 1024 * 1024;
 constexpr std::uint32_t kBlocks = 1;
 constexpr std::uint32_t kTimeoutMs = 10'000;
 constexpr unsigned kExpectedChecks = 45;
+constexpr unsigned kIntentCleanupChecks = 30;
+const char* gFamily = "lasso-gesture-authority";
 unsigned gChecks = 0;
 unsigned gFailures = 0;
 
@@ -35,7 +38,7 @@ void Expect(bool condition, const char* label) noexcept
 {
     ++gChecks;
     gFailures += condition ? 0u : 1u;
-    std::printf("%s lasso-gesture-authority.%s\n", condition ? "PASS" : "FAIL", label);
+    std::printf("%s %s.%s\n", condition ? "PASS" : "FAIL", gFamily, label);
 }
 
 bool SampleMemory(void*, MemorySnapshot& out) noexcept
@@ -79,6 +82,9 @@ struct OpeningState final
     JobTicket ticket;
     std::thread::id owner;
     std::optional<LassoOpeningInput> input;
+    std::optional<LassoIntent> intent;
+    std::optional<LassoFinishTerminal> closed;
+    std::optional<LassoFinishInput> finishInput;
     std::optional<PreparedLassoOpening> prepared;
     std::shared_ptr<SharedPublicationMemory> memory;
     JobResult terminal{JobStatus::Failed, E_UNEXPECTED};
@@ -86,6 +92,12 @@ struct OpeningState final
     std::int32_t bindResult = E_UNEXPECTED;
     unsigned runs = 0;
     bool retainOwnGesture = true;
+    bool cancelPreparation = false;
+    bool failAfterInputMove = false;
+    bool finishWork = false;
+    bool referenceFinish = false;
+    bool workerInputMoved = false;
+    bool preparationRefused = false;
     bool noCaptureBeforeDelivery = false;
     bool capturedOnOwner = false;
     bool workerOnOriginalSlot = true;
@@ -108,16 +120,37 @@ class OpeningJob final : public Job
                                  context.reservedMemoryBytes == kAdmissionBytes && context.deferredRetirement;
         if (!_preparing)
             return {};
-        if (!s.input || !s.workerOnOriginalSlot)
+        if (!s.workerOnOriginalSlot || (s.finishWork ? !s.finishInput : !s.input))
             return {JobStatus::Failed, E_ABORT};
         s.memory = SharedPublicationMemory::CreateForWork(PreparedLassoOpening::MemoryBytes(kBlocks));
+        CancelSource cancelled;
+        if (s.cancelPreparation)
+            (void)cancelled.Cancel();
+        const auto cancellation = s.cancelPreparation ? cancelled.Token() : context.cancellation;
+        if (s.finishWork)
+        {
+            auto moved = std::move(s.finishInput.value());
+            s.workerInputMoved = true;
+            if (s.failAfterInputMove)
+                return {JobStatus::Failed, E_FAIL};
+            // Cleanup cases stop here: no finished document/history publication is exposed.
+            auto prepared =
+                DocumentSession::PrepareLassoFinishPublication(std::move(moved), cancellation, {}, nullptr, s.memory);
+            s.preparationRefused = !prepared;
+            return {s.cancelPreparation ? JobStatus::Cancelled : JobStatus::Failed, prepared ? E_UNEXPECTED : E_ABORT};
+        }
+        auto moved = std::move(s.input.value());
+        s.workerInputMoved = true;
+        if (s.failAfterInputMove)
+            return {JobStatus::Failed, E_FAIL};
         // The false branch intentionally omits the new argument, exercising the default API.
-        auto prepared = s.retainOwnGesture ? DocumentSession::PrepareLassoOpening(std::move(s.input.value()), kBlocks,
-                                                                                  context.cancellation, s.memory, true)
-                                           : DocumentSession::PrepareLassoOpening(std::move(s.input.value()), kBlocks,
-                                                                                  context.cancellation, s.memory);
+        auto prepared =
+            s.retainOwnGesture
+                ? DocumentSession::PrepareLassoOpening(std::move(moved), kBlocks, cancellation, s.memory, true)
+                : DocumentSession::PrepareLassoOpening(std::move(moved), kBlocks, cancellation, s.memory);
+        s.preparationRefused = !prepared;
         if (!prepared)
-            return {JobStatus::Failed, E_ABORT};
+            return {s.cancelPreparation ? JobStatus::Cancelled : JobStatus::Failed, E_ABORT};
         s.prepared.emplace(std::move(prepared.value()));
         return {};
     }
@@ -130,10 +163,29 @@ class OpeningJob final : public Job
             s.scheduler->ReservedMemoryBytes() != s.reservedBefore + kAdmissionBytes)
             return false;
         s.capturedOnOwner = std::this_thread::get_id() == s.owner;
-        auto input = s.session->PrepareLassoOpeningInput({8.5, -2.5}, SelectionMode::New,
-                                                         LassoOpeningSettings{LassoKind::Rectangle, false});
-        if (input)
-            s.input.emplace(std::move(input.value()));
+        if (s.finishWork)
+        {
+            if (s.closed)
+            {
+                auto input = s.referenceFinish ? s.session->PrepareLassoFinishInput(s.closed.value())
+                                               : s.session->PrepareClosedBoundedLassoFinishInput(s.closed.value());
+                if (input)
+                {
+                    s.finishInput.emplace(std::move(input.value()));
+                    s.intent = s.session->CaptureLassoIntent(s.finishInput.value());
+                }
+            }
+        }
+        else
+        {
+            auto input = s.session->PrepareLassoOpeningInput({8.5, -2.5}, SelectionMode::New,
+                                                             LassoOpeningSettings{LassoKind::Rectangle, false});
+            if (input)
+            {
+                s.input.emplace(std::move(input.value()));
+                s.intent = s.session->CaptureLassoIntent(s.input.value());
+            }
+        }
         _preparing = true;
         s.resumedOriginal = s.scheduler->Resume(ticket);
         return s.resumedOriginal;
@@ -204,21 +256,34 @@ struct Fixture final
             scheduler.Close(); // Join every job that borrows state before destroying state/session.
         session.CancelLasso();
         finishInput.reset();
-        state.input.reset();
-        state.prepared.reset();
-        state.memory.reset();
+        const auto release = [](OpeningState& value) noexcept
+        {
+            value.input.reset();
+            value.finishInput.reset();
+            value.closed.reset();
+            value.intent.reset();
+            value.prepared.reset();
+            value.memory.reset();
+        };
+        release(state);
+        release(newer);
+        release(finish);
+        release(later);
         if (!Settle(scheduler))
             scheduler.Close();
     }
     JobScheduler& scheduler;
     DocumentSession session;
     OpeningState state;
+    OpeningState newer;
+    OpeningState finish;
+    OpeningState later;
     std::optional<LassoFinishInput> finishInput;
 };
 
-bool Submit(Fixture& fixture)
+bool Submit(Fixture& fixture, OpeningState* selected = nullptr)
 {
-    auto& s = fixture.state;
+    auto& s = selected ? *selected : fixture.state;
     auto& scheduler = fixture.scheduler;
     if (!Settle(scheduler))
         return false;
@@ -235,7 +300,8 @@ bool Submit(Fixture& fixture)
     std::unique_ptr<Job> job = std::make_unique<OpeningJob>(s);
     if (scheduler.Submit(job, options, s.ticket) != S_OK || job)
         return false;
-    s.noCaptureBeforeDelivery = !s.input && !s.prepared && !fixture.session.PendingLasso();
+    s.noCaptureBeforeDelivery =
+        !s.input && !s.finishInput && !s.intent && !s.prepared && !fixture.session.PendingLasso();
     return Settle(scheduler);
 }
 
@@ -616,10 +682,338 @@ void CheckHistoryBeforeAcquisition(JobScheduler& scheduler)
                !f->session.PendingLasso() && foreign.Matches(f->session),
            "history.foreign-begin-before-acquisition-keeps-fixed-s8-epoch-refusal");
 }
+bool PreparedOpeningCurrent(Fixture& f, OpeningState& state) noexcept
+{
+    return state.prepared && f.session.IsPreparedLassoOpeningCurrent(state.prepared.value());
+}
+
+bool DiscardIntent(Fixture& f, OpeningState& state) noexcept
+{
+    return state.intent && f.session.DiscardLassoIntentIfCurrent(state.intent.value());
+}
+
+bool DiscardClosed(Fixture& f, OpeningState& state) noexcept
+{
+    return state.prepared && f.session.DiscardPreparedClosedLassoIfCurrent(state.prepared.value());
+}
+
+bool StoppedOriginal(const OpeningState& state, bool cancelled) noexcept
+{
+    return state.noCaptureBeforeDelivery && state.capturedOnOwner && state.resumedOriginal &&
+           state.workerOnOriginalSlot && state.runs == 2 && state.workerInputMoved && state.completedOnOwner &&
+           state.intent && !state.prepared && state.bindResult == S_OK && state.boundOriginal && state.memory &&
+           state.memory->Bytes() == kAdmissionBytes &&
+           state.terminal.status == (cancelled ? JobStatus::Cancelled : JobStatus::Failed) &&
+           state.terminal.error == (cancelled ? E_ABORT : E_FAIL);
+}
+
+bool StopFinish(Fixture& f, OpeningState& state, const LassoFinishTerminal& terminal, bool reference = false)
+{
+    state.finishWork = true;
+    state.referenceFinish = reference;
+    state.cancelPreparation = true;
+    state.closed.emplace(terminal);
+    return Submit(f, &state) && StoppedOriginal(state, true) && state.preparationRefused;
+}
+
+void CheckStoppedOpeningIntents(JobScheduler& scheduler)
+{
+    for (const bool cancel : {true, false})
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        f->state.cancelPreparation = cancel;
+        f->state.failAfterInputMove = !cancel;
+        const Stamp before(f->session);
+        const bool submitted = Submit(*f);
+        const bool movedCannotCapture = f->state.input && !f->session.CaptureLassoIntent(f->state.input.value());
+        const auto copy = f->state.intent;
+        Expect(submitted && StoppedOriginal(f->state, cancel) && movedCannotCapture &&
+                   (!cancel || f->state.preparationRefused) && !f->session.PendingLasso() && before.Matches(f->session),
+               cancel ? "opening.cancelled-worker-move-retains-original-scalar-claim"
+                      : "opening.failed-worker-move-retains-original-scalar-claim");
+        const bool discarded = DiscardIntent(*f, f->state);
+        const bool repeated = copy && f->session.DiscardLassoIntentIfCurrent(copy.value());
+        Expect(submitted && discarded && !repeated && !DiscardIntent(*f, f->state) && !f->session.PendingLasso() &&
+                   f->session.LassoOpeningForWork() == 0 && before.Matches(f->session) && LiteralRedoBranch(f->session),
+               cancel ? "opening.cancelled-claim-copy-clears-once-without-document-history-change"
+                      : "opening.failed-claim-copy-clears-once-without-document-history-change");
+    }
+}
+
+void CheckAcquiredAndSupersededIntents(JobScheduler& scheduler)
+{
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool opened = Submit(*f) && Ready(*f) && f->state.intent && Apply(*f);
+        const Stamp before(f->session);
+        const bool discarded = DiscardIntent(*f, f->state);
+        Expect(opened && !discarded && Current(*f) && LiteralDraft(f->session, {9, -3, 9, -3}, 1, 1) &&
+                   before.Matches(f->session),
+               "opening.after-acquire-old-claim-refuses-with-exact-live-draft");
+    }
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool first = Submit(*f) && Ready(*f) && f->state.intent;
+        const bool newer = Submit(*f, &f->newer) && f->newer.intent && PreparedOpeningCurrent(*f, f->newer);
+        const Stamp before(f->session);
+        const bool oldDiscard = DiscardIntent(*f, f->state);
+        Expect(first && newer && !oldDiscard && PreparedOpeningCurrent(*f, f->newer) &&
+                   !PreparedOpeningCurrent(*f, f->state) && before.Matches(f->session) && !f->session.PendingLasso(),
+               "opening.old-claim-cannot-clear-newer-opening-pending");
+        const auto copy = f->newer.intent;
+        const bool newDiscard = DiscardIntent(*f, f->newer);
+        const bool repeated = copy && f->session.DiscardLassoIntentIfCurrent(copy.value());
+        const bool applied =
+            f->newer.prepared && f->session.ApplyPreparedLassoOpeningIfCurrent(f->newer.prepared.value());
+        Expect(first && newer && newDiscard && !repeated && !applied && !PreparedOpeningCurrent(*f, f->newer) &&
+                   before.Matches(f->session) && LiteralRedoBranch(f->session) && !f->session.PendingLasso(),
+               "opening.newer-claim-clears-only-itself-and-prevents-late-acquire");
+    }
+}
+
+void CheckFinishIntentKinds(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const bool opened = Submit(*f) && Ready(*f) && Apply(*f) && Drag(*f, {13.5, 2.5});
+    const auto terminal = Close(*f, false);
+    const Stamp before(f->session);
+    const bool firstFinish = terminal && StopFinish(*f, f->finish, terminal.value());
+    const bool movedCannotCapture =
+        f->finish.finishInput && !f->session.CaptureLassoIntent(f->finish.finishInput.value());
+    Expect(opened && firstFinish && movedCannotCapture && f->state.intent && f->finish.intent &&
+               LiteralDisplay(terminal.value().display, {9, -3, 14, 3}, 2, 4) && before.Matches(f->session),
+           "finish.cancelled-worker-move-retains-exact-finish-claim");
+    // Fresh fixture: opening intent 1 and finish intent 1 have different opaque kinds.
+    const bool wrongKind = DiscardIntent(*f, f->state);
+    const bool finishStillCurrent = DiscardIntent(*f, f->finish);
+    Expect(opened && firstFinish && !wrongKind && finishStillCurrent && !DiscardIntent(*f, f->finish) &&
+               before.Matches(f->session) && !f->session.PendingLasso(),
+           "finish.old-opening-kind-cannot-clear-first-finish-claim");
+    // Reference recaptures create successive finish intents over the same immutable terminal.
+    const bool secondFinish = terminal && StopFinish(*f, f->newer, terminal.value(), true);
+    const bool thirdFinish = terminal && StopFinish(*f, f->later, terminal.value(), true);
+    const bool stale = DiscardIntent(*f, f->newer);
+    const auto copy = f->later.intent;
+    const bool latest = DiscardIntent(*f, f->later);
+    const bool repeated = copy && f->session.DiscardLassoIntentIfCurrent(copy.value());
+    Expect(secondFinish && thirdFinish && !stale && latest && !repeated && before.Matches(f->session) &&
+               LiteralRedoBranch(f->session) && !f->session.PendingLasso(),
+           "finish.older-same-kind-claim-cannot-clear-newer-finish");
+}
+
+void CheckParallelIntentKinds(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const bool opened = Submit(*f) && Ready(*f) && Apply(*f) && Drag(*f, {13.5, 2.5});
+    const auto terminal = Close(*f, false);
+    const bool finish = terminal && StopFinish(*f, f->finish, terminal.value());
+    const bool newer = Submit(*f, &f->newer) && f->newer.intent && PreparedOpeningCurrent(*f, f->newer);
+    const Stamp before(f->session);
+    const auto copy = f->finish.intent;
+    const bool finishDiscarded = DiscardIntent(*f, f->finish);
+    Expect(opened && finish && newer && finishDiscarded && PreparedOpeningCurrent(*f, f->newer) &&
+               before.Matches(f->session) && !f->session.PendingLasso(),
+           "kinds.finish-cleanup-preserves-simultaneous-new-opening-pending");
+    const bool repeated = copy && f->session.DiscardLassoIntentIfCurrent(copy.value());
+    const bool openingDiscarded = DiscardIntent(*f, f->newer);
+    Expect(opened && finish && newer && !repeated && openingDiscarded && !PreparedOpeningCurrent(*f, f->newer) &&
+               before.Matches(f->session) && LiteralRedoBranch(f->session) && !f->session.PendingLasso(),
+           "kinds.copied-finish-claim-never-clears-the-other-kind");
+}
+
+void CheckIntentSessions(JobScheduler& scheduler)
+{
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        auto other = std::make_unique<Fixture>(scheduler);
+        const bool first = Submit(*f) && Ready(*f) && f->state.intent;
+        const bool second = Submit(*other) && Ready(*other) && other->state.intent;
+        const Stamp source(f->session);
+        const Stamp foreign(other->session);
+        const bool wrong = f->state.intent && other->session.DiscardLassoIntentIfCurrent(f->state.intent.value());
+        Expect(first && second && !wrong && PreparedOpeningCurrent(*f, f->state) &&
+                   PreparedOpeningCurrent(*other, other->state) && source.Matches(f->session) &&
+                   foreign.Matches(other->session),
+               "session.foreign-guid-refuses-with-both-pending-openings-preserved");
+        const bool own = DiscardIntent(*f, f->state);
+        const bool foreignOwn = DiscardIntent(*other, other->state);
+        Expect(first && second && own && foreignOwn && !PreparedOpeningCurrent(*f, f->state) &&
+                   !PreparedOpeningCurrent(*other, other->state) && source.Matches(f->session) &&
+                   foreign.Matches(other->session),
+               "session.each-session-can-still-discard-only-its-own-claim");
+    }
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool first = Submit(*f) && Ready(*f) && f->state.intent;
+        const auto serial = f->session.DocumentSerial();
+        f->session.CreateDocument(24, 16, true);
+        const Stamp replacement(f->session);
+        const bool newer = Submit(*f, &f->newer) && f->newer.intent && PreparedOpeningCurrent(*f, f->newer);
+        const bool old = DiscardIntent(*f, f->state);
+        const bool stillNew = PreparedOpeningCurrent(*f, f->newer);
+        const bool own = DiscardIntent(*f, f->newer);
+        Expect(first && newer && f->session.DocumentSerial() != serial && !old && stillNew && own &&
+                   replacement.Matches(f->session) && f->session.Document() && f->session.Document()->width == 24 &&
+                   f->session.Document()->height == 16 && !f->session.PendingLasso(),
+               "session.replaced-document-old-claim-cannot-clear-fresh-pending");
+    }
+}
+
+void CheckIntentForeignEditors(JobScheduler& scheduler)
+{
+    for (const bool history : {true, false})
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool prepared = Submit(*f) && Ready(*f) && f->state.intent;
+        const Stamp before(f->session);
+        if (history)
+            f->session.history.Begin(L"Foreign intent cleanup Begin", f->session.Document(),
+                                     f->session.ActiveLayerID());
+        else
+            f->session.BeginTransform(true);
+        const Stamp foreign(f->session);
+        const auto& editor = f->session.PendingTransformEdit();
+        const auto* address = editor ? &editor.value() : nullptr;
+        const auto draft = editor ? std::optional(editor.value().draft) : std::optional<LayerTransform>{};
+        const bool present = history ? (!f->session.history.IsCurrent(before.history) && foreign.history.Depth() == 1 &&
+                                        foreign.history.FutureCount() == 1)
+                                     : (address && draft && before.Matches(f->session));
+        Expect(prepared && present && f->session.Generation() == before.generation &&
+                   f->session.history.CurrentRevision() == before.revision && !f->session.PendingLasso(),
+               history ? "foreign-history.begin-keeps-generation-revision-before-intent-cleanup"
+                       : "foreign-transform.exact-editor-exists-before-intent-cleanup");
+        const auto copy = f->state.intent;
+        const bool cleaned = DiscardIntent(*f, f->state);
+        const bool repeated = copy && f->session.DiscardLassoIntentIfCurrent(copy.value());
+        const bool applied = Apply(*f);
+        const auto& after = f->session.PendingTransformEdit();
+        const bool editorPreserved =
+            history ? !after : (after && &after.value() == address && after.value().draft == draft.value());
+        Expect(prepared && present && cleaned && !repeated && !applied && editorPreserved &&
+                   foreign.Matches(f->session) && f->session.LassoOpeningForWork() == 0 && !f->session.PendingLasso(),
+               history ? "foreign-history.exact-owned-intent-clears-with-foreign-pending-preserved"
+                       : "foreign-transform.exact-owned-intent-clears-with-exact-editor-preserved");
+    }
+}
+
+void CheckClosedIntentRetirement(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    auto other = std::make_unique<Fixture>(scheduler);
+    const bool opened = Submit(*f) && Ready(*f) && Apply(*f) && Drag(*f, {13.5, 2.5});
+    auto terminal = Close(*f, false);
+    const Stamp before(f->session);
+    f->session.history.Begin(L"Foreign Begin after Close", f->session.Document(), f->session.ActiveLayerID());
+    const Stamp foreign(f->session);
+    const Stamp otherBefore(other->session);
+    const bool captureRefused = terminal && !f->session.PrepareClosedBoundedLassoFinishInput(terminal.value());
+    Expect(opened && terminal && captureRefused && LiteralDisplay(terminal.value().display, {9, -3, 14, 3}, 2, 4) &&
+               f->session.Generation() == before.generation &&
+               f->session.history.CurrentRevision() == before.revision && foreign.history.Depth() == 1 &&
+               foreign.history.FutureCount() == 1 && foreign.Matches(f->session),
+           "closed.foreign-history-refuses-terminal-capture-with-literal-source-preserved");
+    const bool wrongSession =
+        f->state.prepared && other->session.DiscardPreparedClosedLassoIfCurrent(f->state.prepared.value());
+    const bool cleaned = DiscardClosed(*f, f->state);
+    const bool repeated = DiscardClosed(*f, f->state);
+    const bool afterCleanupCapture =
+        terminal && f->session.PrepareClosedBoundedLassoFinishInput(terminal.value()).has_value();
+    Expect(opened && captureRefused && !wrongSession && cleaned && !repeated && !afterCleanupCapture &&
+               foreign.Matches(f->session) && otherBefore.Matches(other->session) &&
+               f->session.LassoOpeningForWork() == 1 && !f->session.PendingLasso(),
+           "closed.exact-owner-cleans-once-without-touching-foreign-history-or-session");
+    std::weak_ptr<SharedPublicationMemory> weak = f->state.memory;
+    const auto localBytes = f->state.memory ? f->state.memory->LocalAllocationBytes() : 0;
+    terminal.reset(); // A diagnostic snapshot must not mask the prepared owner's retirement.
+    f->state.memory.reset();
+    const auto retained = [&]() noexcept
+    {
+        const auto witness = weak.lock();
+        return witness && witness->Bytes() == kAdmissionBytes && witness->ResidentBytes() == kAdmissionBytes &&
+               witness->LocalAllocationBytes() == localBytes;
+    };
+    Expect(opened && cleaned && f->state.prepared && localBytes > 0 && Settle(scheduler) &&
+               scheduler.ReservedMemoryBytes() == kAdmissionBytes && retained() && foreign.Matches(f->session),
+           "closed.prepared-retirement-keeps-exact-original-charge-after-all-display-readers-drop");
+    f->state.prepared.reset();
+    Expect(opened && cleaned && Settle(scheduler) && weak.expired() &&
+               scheduler.ReservedMemoryBytes() == kAdmissionBytes && foreign.Matches(f->session),
+           "closed.last-strong-owner-leaves-only-charged-weak-control");
+    weak.reset();
+    Expect(Settle(scheduler) && scheduler.ReservedMemoryBytes() == 0 && scheduler.ReleasingMemoryBytes() == 0 &&
+               foreign.Matches(f->session),
+           "closed.last-weak-release-refunds-exact-original-charge");
+}
+
+void CheckNewerClosedAndDefault(JobScheduler& scheduler)
+{
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool first = Submit(*f) && Ready(*f) && Apply(*f);
+        const auto terminal = Close(*f, false);
+        const bool newer = Submit(*f, &f->newer) && f->newer.intent && PreparedOpeningCurrent(*f, f->newer);
+        const Stamp before(f->session);
+        const bool cleaned = DiscardClosed(*f, f->state);
+        const bool pendingPreserved = PreparedOpeningCurrent(*f, f->newer);
+        const bool acquired =
+            f->newer.prepared && f->session.ApplyPreparedLassoOpeningIfCurrent(f->newer.prepared.value());
+        const auto display = f->session.CaptureBoundedLassoDisplayForWork();
+        Expect(first && terminal && newer && cleaned && pendingPreserved && acquired && display &&
+                   display.value().display.key == BoundedLassoGesture::Key{2, 1} &&
+                   display.value().display.points.Bounds() == std::optional(SelectionBounds{9, -3, 9, -3}) &&
+                   before.Matches(f->session) && !DiscardClosed(*f, f->state),
+               "closed.owned-metadata-cleanup-preserves-newer-pending-opening");
+    }
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        const bool first = Submit(*f) && Ready(*f) && Apply(*f);
+        const auto oldTerminal = Close(*f, false);
+        const bool newPrepared = Submit(*f, &f->newer) && PreparedOpeningCurrent(*f, f->newer);
+        const bool acquired =
+            f->newer.prepared && f->session.ApplyPreparedLassoOpeningIfCurrent(f->newer.prepared.value());
+        const Stamp before(f->session);
+        const bool discarded = DiscardClosed(*f, f->state);
+        const auto display = f->session.CaptureBoundedLassoDisplayForWork();
+        Expect(first && oldTerminal && newPrepared && acquired && !discarded && display &&
+                   display.value().display.key == BoundedLassoGesture::Key{2, 1} &&
+                   display.value().display.points.Bounds() == std::optional(SelectionBounds{9, -3, 9, -3}) &&
+                   f->session.IsPreparedLassoGestureCurrent(f->newer.prepared.value()) && before.Matches(f->session),
+               "closed.old-owner-cannot-clean-newer-live-opening-two");
+        const bool dragged = f->newer.prepared && f->session.DragPreparedMarqueeIfCurrent(f->newer.prepared.value(),
+                                                                                          {13.5, 2.5}, false, false);
+        const auto terminal = f->newer.prepared
+                                  ? f->session.ClosePreparedLassoGestureForWork(f->newer.prepared.value(), false)
+                                  : std::nullopt;
+        const bool oldCleanup = DiscardClosed(*f, f->state);
+        const bool captured = terminal && StopFinish(*f, f->finish, terminal.value());
+        const bool duplicate =
+            terminal && f->session.PrepareClosedBoundedLassoFinishInput(terminal.value()).has_value();
+        Expect(first && acquired && dragged && terminal && !oldCleanup && captured && !duplicate &&
+                   terminal.value().display.key == BoundedLassoGesture::Key{2, 2} &&
+                   terminal.value().display.points.Bounds() == std::optional(SelectionBounds{9, -3, 14, 3}) &&
+                   DiscardIntent(*f, f->finish) && before.Matches(f->session),
+               "closed.old-owner-cannot-overwrite-newer-terminal-or-its-one-shot-capture");
+    }
+    {
+        auto f = std::make_unique<Fixture>(scheduler);
+        f->state.retainOwnGesture = false;
+        const bool first = Submit(*f) && Ready(*f) && Apply(*f);
+        const bool dragged = f->session.DragBoundedMarquee({13.5, 2.5}, false, false);
+        const auto terminal = f->session.CloseBoundedLassoForWork(false);
+        const Stamp before(f->session);
+        const bool cleaned = DiscardClosed(*f, f->state);
+        const bool captured = terminal && StopFinish(*f, f->finish, terminal.value());
+        Expect(first && dragged && terminal && !cleaned && captured &&
+                   LiteralDisplay(terminal.value().display, {9, -3, 14, 3}, 2, 4) && DiscardIntent(*f, f->finish) &&
+                   before.Matches(f->session),
+               "closed.default-non-opt-in-refuses-cleanup-and-preserves-exact-terminal");
+    }
+}
 } // namespace
 
 int RunLassoGestureAuthorityTests()
 {
+    gFamily = "lasso-gesture-authority";
     gChecks = 0;
     gFailures = 0;
     auto scheduler = std::make_unique<JobScheduler>();
@@ -644,4 +1038,33 @@ int RunLassoGestureAuthorityTests()
     scheduler->Close();
     std::printf("SUMMARY lasso-gesture-authority checks=%u failures=%u\n", gChecks, gFailures);
     return gChecks == kExpectedChecks && gFailures == 0 ? 0 : static_cast<int>(gFailures ? gFailures : 1);
+}
+
+int RunLassoIntentCleanupTests()
+{
+    gFamily = "lasso-intent-cleanup";
+    gChecks = 0;
+    gFailures = 0;
+    auto scheduler = std::make_unique<JobScheduler>();
+    const bool started =
+        scheduler->Initialize(1, {}, {SampleMemory, nullptr}) == S_OK && scheduler->EnableDeferredRelease();
+    Expect(started, "scheduler.original-ticket-worker-and-retirement-initialized");
+    if (started)
+    {
+        CheckStoppedOpeningIntents(*scheduler);
+        CheckAcquiredAndSupersededIntents(*scheduler);
+        CheckFinishIntentKinds(*scheduler);
+        CheckParallelIntentKinds(*scheduler);
+        CheckIntentSessions(*scheduler);
+        CheckIntentForeignEditors(*scheduler);
+        CheckClosedIntentRetirement(*scheduler);
+        CheckNewerClosedAndDefault(*scheduler);
+        const bool settled = Settle(*scheduler);
+        Expect(gChecks == kIntentCleanupChecks - 1 && settled && scheduler->IsIdle() &&
+                   scheduler->ReservedMemoryBytes() == 0 && scheduler->ReleasingMemoryBytes() == 0,
+               "scheduler.all-original-ticket-charges-and-records-drain");
+    }
+    scheduler->Close();
+    std::printf("SUMMARY lasso-intent-cleanup checks=%u failures=%u\n", gChecks, gFailures);
+    return gChecks == kIntentCleanupChecks && gFailures == 0 ? 0 : static_cast<int>(gFailures ? gFailures : 1);
 }

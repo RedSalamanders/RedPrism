@@ -595,6 +595,7 @@
     <ClCompile Include="Document.Tests.LassoOpeningSettings.cpp" />
     <ClCompile Include="Document.Tests.LassoGestureAuthority.cpp" />
     <ClCompile Include="Document.Tests.RectangleFinishPlan.cpp" />
+    <ClCompile Include="Document.Tests.RectangleGestureParent.cpp" />
     <ClCompile Include="..\..\RedPrism\SelectionOutlineGestureJob.cpp" />
     <ClInclude Include="..\..\RedPrism\SelectionOutlineGestureState.h" />
     <ClInclude Include="..\..\RedPrism\SelectionOutlineGestureMemory.h" />
@@ -611,6 +612,8 @@
     <ClInclude Include="Document.Tests.LassoOpeningSettings.h" />
     <ClInclude Include="Document.Tests.LassoGestureAuthority.h" />
     <ClInclude Include="Document.Tests.RectangleFinishPlan.h" />
+    <ClInclude Include="Document.Tests.RectangleGestureParent.h" />
+    <ClInclude Include="..\..\Common\LassoIntent.h" />
     <ClInclude Include="Document.Tests.SelectionMoveGeometryLifetime.h" />
   </ItemGroup>
 </Project>

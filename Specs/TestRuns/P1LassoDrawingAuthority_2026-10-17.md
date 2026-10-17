@@ -17,7 +17,7 @@ permission to mutate or roll back a foreign editor.
 ## Independent behavioral references
 
 The 45 own-authority facts use literal numeric/state references: `(8.5,-2.5)` opens at `(9,-3)`; ordinary,
-negative Shift, Alt-centered and Shift+Alt drags have separate literal bounds. Identical samples keep the exact
+negative Shift, explicit fromCenter and combined constrained/centered model drags have separate literal bounds. Identical samples keep the exact
 key; invalid finite-state/nonfinite samples refuse without mutation. Both terminal AA choices override the
 live preference. Close/abort are one-shot; a malformed terminal cannot steal the valid terminal's capture.
 Foreign direct writers, Begin transactions, transforms, sessions and replacement documents remain intact.
@@ -30,7 +30,7 @@ worker execution, owner delivery and unbound refusal use a real one-worker sched
 bounded authority fixture; Main independently reviewed all predicates and performed all runtime/artifact checks.
 
 The 19 rectangle facts use independent box/area references over forward/reverse drags, signed rounding,
-Shift, Alt, combined modifiers, negative anchors, large finite surrounding coordinates and canvas edges.
+constrain, explicit fromCenter, their combination, negative anchors, large finite surrounding coordinates and canvas edges.
 They distinguish degenerate New (Clear) from clipped-outside New (present empty), preserve an explicit-empty
 prior, and prove replacement of a 400-point/100-loop prior without feeding it into the clipper. The same small
 bounds refuse large-prior Add/Subtract. Cancellation and invalid canvas stop before clipping/publication.

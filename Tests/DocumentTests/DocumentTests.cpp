@@ -33,6 +33,7 @@
 #include "Document.Tests.LassoOpeningSettings.h"
 #include "Document.Tests.LassoSessionBridge.h"
 #include "Document.Tests.RectangleFinishPlan.h"
+#include "Document.Tests.RectangleGestureParent.h"
 #include "Document.Tests.SelectionCommandMemory.h"
 #include "Document.Tests.SelectionGestureAbort.h"
 #include "Document.Tests.SelectionGestureAdmission.h"
@@ -8459,6 +8460,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunLassoOpeningSettingsTests();
     gFailures += RunLassoGestureAuthorityTests();
     gFailures += RunRectangleFinishPlanTests();
+    gFailures += RunLassoIntentCleanupTests();
+    gFailures += RunRectangleGestureParentTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);
