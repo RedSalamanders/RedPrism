@@ -1,9 +1,14 @@
 # Ordered selection workers (P1.6)
 
+- [x] ARM64 Release r1094 qualifies the same frozen integrated source: 1,492 archive files, 969 compiler records and five exact AA64 PE/PDB pairs; [evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md#arm64-release-r1094-qualified).
+- [ ] Finish r1095 instrumented-ASan cross-build and latest integrated x64 Debug/Release/real ASan/analysis; native ARM64 runtime remains unavailable.
+- [x] Private guarded own-writer/Rectangle-New plan passes all 22,491 Release facts (64 new), with 276 compiler records and the complete archive independently verified.
+- [ ] Qualify exact-source own-writer/rectangle real ASan (active), then publish this code/test step; the separate outside-hit parent/cleanup draft is uncompiled.
+
 - [x] Captured settings/history epoch qualifies and is pushed as `e03a80d`: all 22,427 assertions pass in Release and real ASan; all 46 predicates and the two actual pre-fix failures remain preserved. [Evidence](../../TestRuns/P1LassoOpeningSettings_2026-10-17.md).
 - [ ] Finish guarded own-writer/rectangle-plan proof and the outside-hit/New Rectangle original-parent branch; the next private draft is uncompiled.
 - [x] Qualify native integrated-source ARM64 Debug r1093: 969 exact compiler records, 1,492 archive files and five matching ARM64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md).
-- [ ] Finish the same native freeze in ARM64 Release/instrumented ASan; preserve Root code while those builds run.
+- [ ] Finish the same native freeze in ARM64 instrumented ASan; Release qualifies above. Preserve Root code while that build runs.
 
 
 - [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).

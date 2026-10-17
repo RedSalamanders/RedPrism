@@ -56,3 +56,16 @@ DxUi library does not modify its source; pin remains `8e8994079e82f79e6765e6a885
 The earlier native seven-profile qualification remains attached to its earlier source. These new integrated
 profiles cannot inherit that result by name. Remaining S5 branches, complete caller/display bounds, ordinary
 activation, latest x64 gates and measured G1 remain required before P1 moves to Done.
+
+## ARM64 Release r1094 qualified
+
+The same immutable `29a8ac2` source freeze completes the canonical ARM64 Release Rebuild:
+actual parent PID 95128 exits 0, 02:52:07.149181–03:20:38.330267 UTC. Main's reviewed reader
+verifies all 1,492 archive files, all 969 exact Release compiler records, 1,417 compiled/project/toolchain
+inputs and five exact AA64 PE/PDB pairs. Debug and Release are both qualified; r1095 instrumented-ASan
+is running on the same freeze. Native ARM64 execution is unavailable on this x64 host.
+
+Release stdout SHA-256: `A59513453FB3DAB402AAE2149D20BF715183E7E87BF070204F20356EED9B60A2`.
+Archive completion SHA-256: `6AAF862C794AB1E5009336F281FF91AB972E0CC3C04270849FD3843499943A44`.
+The exact Main receipt is `.build/P1Integration/LassoHost-r1-Main/r1094-main-qualified.json`;
+its SHA-256 is `3EBC70DDCE44B450A87FDA16CF0C20B93444508ACDE9B2B91DDBB581EC7152F2`. This is cross-build proof, not native runtime or G1 qualification.
