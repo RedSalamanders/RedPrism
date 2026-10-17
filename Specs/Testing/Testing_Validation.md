@@ -3258,3 +3258,22 @@ receipt failures with captured ticket/history/native-error/memory state before i
 348 qualified objects only with unchanged hashes, matching compiler/linker profile and independent
 PE/PDB/ISA checks; both complete native streams still run. Keep the earlier unreported ASan exit 5 in
 the final qualification audit: it did not recur, and no causal fix is inferred from the later pass.
+
+
+### Polygonal live-draft PNG/JPEG export validation
+
+The same native fixture extends all 45 cases / 527 facts with twelve actual PNG/JPEG success/picker-Cancel
+cases across New/Add/Subtract, reaching 57 cases / 713 facts. Require exact host receipt/error, original
+live ticket/writer/input, unchanged project path and dirty saved marker, no cancellation artifact, decoded
+64×64 PNG zero BGRA pixels and JPEG opaque white pixels within the existing `jpeg.flatten-white-matte`
+6/255 tolerance. Later closure, independent selection pixels, Undo/Redo and complete joined refunds remain
+required. Production behavior and all legacy goldens stay unchanged.
+
+Main verifies the complete 152 stages / 10296 stdout assertions and unchanged 151-stage predecessor bytes
+and stderr, both exact native Release/real-ASan profiles, 349-object lineage (one new test TU, 348 unchanged
+qualified objects), matching full PE/PDB and zero ISA violations. The source-only acceptance reader must
+pass its complete inherited-chain positives and malformed/missing/reordered/duplicate receipt controls;
+preserve reader-only refusals without rerunning successful native code. Earlier CPU/UAF prerequisite
+receipts are reusable only under exact unchanged source/dependency/artifact/profile/scope identity.
+[Evidence](../TestRuns/P1PolygonalExport_2026-10-17.md). Final latest-source native/ARM64, ordinary activation,
+measured G1 and the inherited unexplained held-gate ASan audit remain separate.

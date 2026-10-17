@@ -499,3 +499,9 @@ selected closing descriptor or an ordered cancelling action owns the terminal ba
 joined cleanup releases that exact stamp once. One changed drawing creates one history entry, and Undo
 returns to the revision saved while the draft was live. A younger explicit terminal behind an already
 chosen close acknowledges the original result without a second transaction.
+
+
+PNG/JPEG export during a selected live Polygonal draft leaves the project path, history revision and saved
+marker unchanged on success and picker cancellation. Closing that draft still creates only its one changed
+selection entry; Undo restores the original committed selection and its previously dirty marker, and Redo
+restores the new selection. Export never marks the committed revision as saved.

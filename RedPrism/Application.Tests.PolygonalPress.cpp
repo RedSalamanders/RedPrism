@@ -2,6 +2,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ChromeHost.h"
+#include "ImageCodecs.h"
 #include "KeyboardState.h"
 #include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
@@ -107,6 +108,10 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                "blocked-layer",
                                "header-deselect",
                                "header-kind-cancel",
+                               "png-open",
+                               "jpeg-open",
+                               "png-cancel",
+                               "jpeg-cancel",
                                "joined-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalFixture" / Guid::Generate().ToString();
@@ -183,6 +188,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             const bool kindCancel = name == "header-kind-cancel";
             const bool deselect = name == "header-deselect";
             const bool save = name == "save-open" || name == "save-cancel" || name == "save-failed";
+            const bool exportOpen = name == "png-open" || name == "jpeg-open";
+            const bool exportCancel = name == "png-cancel" || name == "jpeg-cancel";
             const bool cancelled = tool || kindCancel || joined || deselect;
             if (owner->_polygonalDrawing && owner->_polygonalDrawing->controller)
                 return 5;
@@ -206,6 +213,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             const auto other = fixture.layers[1].id;
             owner->_session.ReplaceDocument(std::move(fixture).Seal(), active);
             owner->_session.history.Reset();
+            if (exportOpen || exportCancel)
+                owner->_session.history.MarkSaved(Guid::Generate()); // Export must preserve a genuinely dirty marker.
             owner->_tool = EditorTool::Lasso;
             owner->_session.lassoKind = LassoKind::Polygonal;
             owner->_session.selectionModeChoice = mode;
@@ -355,6 +364,77 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                     "injected-native-archive-failure-publishes-no-file-or-selection"))
                             return 5;
                 }
+                if (exportOpen || exportCancel)
+                {
+                    const bool jpeg = name == "jpeg-open" || name == "jpeg-cancel";
+                    const auto format = jpeg ? HostWriteFormat::Jpeg : HostWriteFormat::Png;
+                    const auto path = output / L"exports" /
+                                      std::wstring(family, family + std::char_traits<char>::length(family)) /
+                                      (std::wstring(name.begin(), name.end()) + (jpeg ? L".jpg" : L".png"));
+                    std::filesystem::create_directories(path.parent_path(), pathError);
+                    if (!expect(!pathError, "exclusive-export-parent-ready"))
+                        return 5;
+                    const std::wstring priorProjectPath = L"before-export.prism";
+                    owner->_documentPath = priorProjectPath;
+                    std::optional<std::wstring> selectedPath;
+                    if (exportOpen)
+                        selectedPath = path.wstring();
+                    const auto write = owner->QueueHostInput(HostWriteInput{format, false, std::move(selectedPath)});
+                    const auto wanted = exportCancel ? HostOutcome::Cancelled : HostOutcome::Succeeded;
+                    const auto error = exportCancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+                    if (!expect(until([&]() noexcept { return write.Read().outcome != HostOutcome::Pending; }) &&
+                                    write.Read().outcome == wanted && write.Read().error == error,
+                                "actual-png-or-jpeg-host-write-resolves-exact-outcome"))
+                        return 5;
+                    if (!expect(owner->_polygonalDrawing->controller && owner->_polygonalDrawing->waiting &&
+                                    owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
+                                    owner->_session.PendingLasso().value().PointCount() == 3 &&
+                                    !owner->_historyWork.Busy() && owner->_session.Selection() == original &&
+                                    owner->_session.history.CurrentRevision() == revision &&
+                                    owner->_session.history.IsModified() && owner->_documentPath == priorProjectPath,
+                                "export-preserves-live-original-draft-ticket-history-path-and-saved-marker"))
+                        return 5;
+                    if (exportCancel)
+                    {
+                        if (!expect(!std::filesystem::exists(path), "cancelled-export-publishes-no-artifact"))
+                            return 5;
+                    }
+                    else
+                    {
+                        DecodedImage decoded;
+                        const bool decodedOk =
+                            ImportImageFile(path.c_str(), kMaxLayerPixels, decoded) == ImageCodecStatus::Ok &&
+                            decoded.image.HasStorage();
+                        if (!expect(decodedOk && decoded.image.Format() == RasterFormat::Bgra8888 &&
+                                        decoded.image.Width() == 64 && decoded.image.Height() == 64,
+                                    "export-output-decodes-to-independent64x64"))
+                            return 5;
+                        bool pixelsMatch = true;
+                        const auto* bytes = decoded.image.Data();
+                        for (std::size_t pixel = 0; pixel < 64u * 64u && pixelsMatch; ++pixel)
+                        {
+                            const auto* bgra = bytes + pixel * 4;
+                            if (jpeg)
+                            {
+                                constexpr int kWhiteMatteJpegTolerance =
+                                    6; // Existing jpeg.flatten-white-matte reference tolerance.
+                                pixelsMatch = bgra[3] == 255 &&
+                                              std::abs(static_cast<int>(bgra[0]) - 255) <= kWhiteMatteJpegTolerance &&
+                                              std::abs(static_cast<int>(bgra[1]) - 255) <= kWhiteMatteJpegTolerance &&
+                                              std::abs(static_cast<int>(bgra[2]) - 255) <= kWhiteMatteJpegTolerance;
+                            }
+                            else
+                                pixelsMatch = bgra[0] == 0 && bgra[1] == 0 && bgra[2] == 0 && bgra[3] == 0;
+                        }
+                        if (jpeg)
+                        {
+                            if (!expect(pixelsMatch, "jpeg-transparent-blank-flattens-to-white-matte"))
+                                return 5;
+                        }
+                        else if (!expect(pixelsMatch, "png-transparent-blank-retains-allzero-pixels"))
+                            return 5;
+                    }
+                }
                 if (name == "prompt-cancel")
                 {
                     owner->_session.history.MarkSaved(Guid::Generate());
@@ -476,7 +556,9 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                 owner->_session.Undo();
                 const bool undone = SamePolygonalHostSelection(owner->_session.Selection(), original) &&
                                     owner->_session.history.CanRedo();
-                const bool saved = name != "save-open" || !owner->_session.history.IsModified();
+                const bool saved = exportOpen || exportCancel ? owner->_session.history.IsModified()
+                                   : name == "save-open"      ? !owner->_session.history.IsModified()
+                                                              : true;
                 owner->_session.Redo();
                 if (!expect(undone && saved && SamePolygonalHostSelection(owner->_session.Selection(), final) &&
                                 owner->_session.history.UndoCount() == 1 && owner->_session.history.IsModified(),
@@ -493,7 +575,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             return 5;
     }
     family = scenario = "close";
-    if (!expect(reached == 45 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
+    if (!expect(reached == 57 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
         return 5;
     return failures ? 5 : 0;
 }

@@ -2034,3 +2034,13 @@ keeps the live draft/window; joined shutdown suppresses useful callbacks and ref
 Direct competing layer callbacks enter the ordered host queue and unsupported intents refuse before
 source mutation or another serial Selection producer. New with nonempty prior, Ctrl-lift and other
 unsupported dispatcher branches remain separate; this selected gate is disabled for ordinary input.
+
+
+### Polygonal export while drawing
+
+A selected live Polygonal draft permits ordered PNG/JPEG export of committed document pixels. Successful
+export and picker cancellation preserve its original ticket, writer, fixed input, committed selection and
+history revision. Export leaves the project path and saved marker unchanged, including when the committed
+revision was already dirty. Later corners and the chosen terminal remain on the original drawing parent.
+PNG preserves transparent blank pixels; JPEG uses the existing white matte and codec tolerance. This
+selected qualification does not enable the ordinary route or complete view/device/dispatcher scope.
