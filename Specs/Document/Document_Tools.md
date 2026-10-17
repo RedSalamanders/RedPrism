@@ -13,13 +13,10 @@ command job in `RedPrism/ApplicationMaskJobs.cpp`
 ## Scope
 
 This contract owns how a layer's placement is edited: the drag geometry, snapping, free distortion, the pending-edit
-lifecycle in `DocumentSession`, flips, and the rules the Move tool and its header follow. It ports
-archived behavioral reference, `Distort.swift`, `LayerFlip.swift`, the transform parts of
-`EditorSession.swift` and `Crop.swift`, and the geometry of `Rendering/TransformOverlay.swift`. Rendering of a
+lifecycle in `DocumentSession`, flips, and the rules the Move tool and its header follow. Rendering of a
 transform is the composition's job ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)); the chrome
 that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). Since C9 it also owns the
-selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels, ported from
-`Document/Selection.swift`, `MagicWand.swift`, `MaskTracing.swift` and `Rendering/WandPixels.c`.
+selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels.
 
 ## Asynchronous tool ordering foundations
 
