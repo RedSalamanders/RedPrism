@@ -7,6 +7,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
+& (Join-Path $PSScriptRoot 'IsaR8RaxRdxTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Guarded R8/RAX/RDX interior DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRsiDwordTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RSI terminal DWORD parser controls failed.' }
 Write-Host 'BEGIN isa-rsi64-terminal-controls'

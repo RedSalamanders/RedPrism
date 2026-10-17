@@ -3297,3 +3297,16 @@ bookends, exact one-TU/348-reused-object lineage, matching x64 PE/full-PDB and z
 source-only reader requires four local byte-preservation positives, two complete inherited-chain profile
 positives and 26 refusals. [Evidence](../TestRuns/P1PolygonalView_2026-10-17.md). Complete DPI/device/hidden
 scope, dispatcher branches, final full native/ARM64, ordinary activation and measured G1 remain open.
+
+
+### Guarded R8/RAX/RDX interior-table ISA controls
+
+`IsaScanTests.ps1` runs `IsaR8RaxRdxTests.ps1`: 107 independently encoded controls (22 accepted, 85 refused)
+for the exact biased R15D/EAX unsigned guard and R8-image-base/RAX-index/RDX-target switch defined in
+`Build_Toolchain.md`. Cover bounds 1/5/12/127, alternate biases, exact guard-start entry, same-owner repeated
+symbols, RET/backward-JMP alignment, split LOCK memory INC/DEC/XADD, malformed PE/PDB/listing/body and
+case/default boundaries, conflicting ownership and genuine VEX/EVEX body/target instructions. These controls
+MUST NOT execute their encoded bytes. Preserve the prior complete parser and compiled tier/runtime/PDB controls.
+The unchanged failed PE/PDB readback and original refusal remain separate evidence; scanner success alone
+closes no native application, ASan runtime, ARM64, ordinary activation or G1 gate.
+[Evidence](../TestRuns/IsaR8RaxRdx_2026-10-18.md).

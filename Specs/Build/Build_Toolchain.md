@@ -708,3 +708,20 @@ Its reported vector-data bytes must match the PE. The existing one-byte form sta
 `IsaR9ByteSwitchTests.ps1` adds 109 independent controls (7 accepted, 102 refused); actual vector code
 in the body, target or adjacent range remains gated. No DxUi or allowlist change is involved.
 [Original failed-image and scanner regression evidence](../TestRuns/IsaR9AlignedTail_2026-10-17.md).
+
+
+### R8/RAX/RDX guarded interior DWORD table
+
+The observed pinned WindowHost switch adds only this exact contiguous seven-row, 36-byte sequence:
+`LEA EAX,[R15+disp32]; CMP EAX,max; JA rel32; LEA R8,imagebase; MOV EDX,[R8+4*RAX+tableRva]; ADD RDX,R8; JMP RDX`.
+Maximum is 1–127. Complete PE/listing agreement, one owning executable contribution and exact anonymous
+same-owner PDB start/end MUST prove maximum+1 DWORDs. A unique containing procedure supplies complete
+known, contiguous code before its first anonymous data symbol; code/default/case routing and no incoming
+guard-interior/data transfers remain required. Its code ends with RET or a backward JMP plus at most three
+alignment bytes. The table can follow earlier anonymous tail data; later data is not thereby proved.
+
+A separate LLVM LOCK row requires an adjacent PE-matching memory INC/DEC/XADD row. Orphan, unknown,
+register-only, missing, mismatching or non-atomic suffixes refuse this proof. Only verified table bytes receive
+data status; actual vector instructions in code remain gated. `IsaR8RaxRdxTests.ps1` adds 107 encoded controls
+(22 accepted, 85 refused) to every x64 scanner regression. No DxUi or allowlist change is involved.
+[Exact failed-image and regression evidence](../TestRuns/IsaR8RaxRdx_2026-10-18.md).
