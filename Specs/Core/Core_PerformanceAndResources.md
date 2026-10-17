@@ -1698,3 +1698,22 @@ closes publication authority, cancels the original ticket, joins workers and onl
 owner state; normal completion callbacks remain suppressed during joined Close. Source, reservation
 and wrapper lifetimes cannot be shortened by a neutral cursor result. This route alone establishes no
 ordinary activation, complete-operation G1 result or Photoshop comparison.
+
+## Selected Freehand whole-gesture envelope
+
+`PlanDrawing` captures kind/mode, exact arena capacity, worker geometry limits and finish memory
+before any source/history root capture. Freehand has 1,023 sealed 64-point blocks plus one inline tail
+(65,536 accepted vertices); the worker allocates and prefaults every admitted arena page. New admits
+32 MiB geometry workspace, 65,540 input points/two loops and 262,160 output points/65,552 loops.
+Add/Subtract apply the checked preserving-source capacity formula to these base limits and cached
+source point/loop counts. These are enforced capacity ceilings, not a promise that every possible
+self-intersection fits. Exhaustion fails the original without larger re-admission or partial output.
+
+The original operation also admits wrappers, retained source/history, arena/traversal, old/new outputs,
+construction overlap, display/history refresh and final strong/weak retirement. The geometry plan
+alone does not cover the host. The same captured plan governs allocation and actual worker limits.
+Bounded owner replay uses at most sixteen accepted moves per continuation and one prefaulted
+64-point chunk per metadata update. Only known pending input rearms work; settled empty input
+causes no wake. The arena prefix is neither traversed nor recycled there. Complete path geometry,
+coverage and history work retain worker ownership. Structural bounds establish no 2 ms/G1 timing
+qualification, ordinary activation or permission to use the synchronous reference as a failure fallback.

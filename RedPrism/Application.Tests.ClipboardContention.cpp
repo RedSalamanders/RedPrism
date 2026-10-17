@@ -298,6 +298,7 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             Application* owner = nullptr; // accessed only by the owner-side armed callback
             bool releaseOnArm = false;
             unsigned armed = 0;
+            unsigned heldWaits = 0, closedWaits = 0;
             std::optional<JobTicket> ticket;
             bool sameTicket = true;
             bool actualHolder = true;
@@ -318,13 +319,22 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
                 observed.ticket = ticket;
             observed.sameTicket = observed.sameTicket && observed.ticket.value() == ticket &&
                                   number == observed.armed && delay == RetryWaitQueue::DelayMs(number);
-            observed.actualHolder = observed.actualHolder && observed.holder.acquired.load() &&
-                                    GetOpenClipboardWindow() == observed.holder.window.load() &&
-                                    !observed.holder.closedCleanly.load();
+            // Only the first release wait is caused by our held clipboard. Inspect and Copy share
+            // six native acquisitions; an unrelated desktop owner may deny a later acquisition after
+            // our holder has closed. Every later wait must still retain the same ticket and barriers.
+            const bool expectHeld = !observed.releaseOnArm || observed.armed == 1;
+            const bool held = observed.holder.acquired.load() &&
+                              GetOpenClipboardWindow() == observed.holder.window.load() &&
+                              !observed.holder.closedCleanly.load();
+            const bool closed = observed.holder.closedCleanly.load() &&
+                                WaitForSingleObject(observed.holder.closed.get(), 0) == WAIT_OBJECT_0;
+            observed.heldWaits += expectHeld && held ? 1u : 0u;
+            observed.closedWaits += !expectHeld && closed ? 1u : 0u;
+            observed.actualHolder = observed.actualHolder && (expectHeld ? held : closed);
             observed.originalBarrier = observed.originalBarrier && app._clipboardTicket == std::optional{ticket} &&
                                        app._historyWork.Busy() && app._activeHostRequest &&
                                        app._jobs.ReservedMemoryBytes() > 0 && app._retryWait.HasPending();
-            if (observed.releaseOnArm)
+            if (observed.releaseOnArm && observed.armed == 1)
                 observed.signalSucceeded = SetEvent(observed.holder.release.get()) != FALSE && observed.signalSucceeded;
             // Exhaustion keeps the real holder locked and accelerates only the registered deadline event.
             // Release uses the genuine native backoff so the desktop clipboard can finish its handoff.
@@ -421,15 +431,21 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
         if (!expect(SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled,
                     "production-job-and-real-event-wait-acknowledged"))
             return 5;
-        if (!(retry.armed == (item.release ? 1u : 5u) && retry.sameTicket && retry.actualHolder &&
-              retry.originalBarrier && retry.signalSucceeded && !retry.callbackFailed.load()))
+        if (!((item.release ? retry.armed >= 1 && retry.armed <= 5 && retry.heldWaits == 1 &&
+                                  retry.closedWaits + 1 == retry.armed
+                            : retry.armed == 5 && retry.heldWaits == 5 && retry.closedWaits == 0) &&
+              retry.sameTicket && retry.actualHolder && retry.originalBarrier && retry.signalSucceeded &&
+              !retry.callbackFailed.load()))
             std::printf("DIAG clipboard-holder-retry scenario=%s armed=%u same=%u holder=%u barrier=%u signals=%u "
                         "callback=%u opens=%u\n",
                         scenario, retry.armed, retry.sameTicket ? 1u : 0u, retry.actualHolder ? 1u : 0u,
                         retry.originalBarrier ? 1u : 0u, retry.signalSucceeded ? 1u : 0u,
                         retry.callbackFailed.load() ? 1u : 0u, gate->openAttempts.load());
-        expect(retry.armed == (item.release ? 1u : 5u) && retry.sameTicket && retry.actualHolder &&
-                   retry.originalBarrier && retry.signalSucceeded && !retry.callbackFailed.load(),
+        expect((item.release ? retry.armed >= 1 && retry.armed <= 5 && retry.heldWaits == 1 &&
+                                   retry.closedWaits + 1 == retry.armed
+                             : retry.armed == 5 && retry.heldWaits == 5 && retry.closedWaits == 0) &&
+                   retry.sameTicket && retry.actualHolder && retry.originalBarrier && retry.signalSucceeded &&
+                   !retry.callbackFailed.load(),
                "same-original-ticket-real-busy-and-retained-reservation-at-each-armed-wait");
         expect(gate->forcedBusyAttempts.load() == 0 && gate->openFailures.load() == 0 &&
                    gate->openAttempts.load() >= (item.release ? 2u : 6u) && gate->openAttempts.load() <= 6 &&

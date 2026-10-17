@@ -1930,3 +1930,28 @@ document generation, cursor epoch and query coordinates bind cached replies. In 
 bounds and an unchanged chrome epoch cannot reuse an old result after geometry changes. A superseded
 request retains its original ticket through exact acknowledgement. Stale results cannot publish; failed
 identical queries do not spin retrying. There is no synchronous geometry fallback on refusal.
+
+## Selected Freehand original parent
+
+The explicit selected caller supports Freehand New/Add/Subtract with one immutable drawing plan shared
+by accepted Down, cached admission and the original parent. Only New may choose outline movement
+after worker containment; preserving modes always draw. Accepted kind/mode cannot be rewritten by
+later headers. Up supplies terminal antialiasing without adding a Move or rubber-band point.
+
+`ExtendPreparedFreehandIfCurrent` requires the exact applied writer and latest own key, original
+session/document/editor/history/token authority and captured Freehand kind. A quarter-pixel no-op
+preserves its key; a successful append renews only that key. Foreign writer, history or target edits
+refuse without replacing or cancelling foreign state. Capacity refusal publishes no partial selection.
+
+Worker-created, prefaulted storage holds at most 65,536 accepted vertices. The 512-slot pending input
+ring is separate from that lifetime capacity. Owner replay consumes at most sixteen accepted moves
+per continuation; each metadata update visits at most one prefaulted 64-point chunk. Full path
+traversal, clipping, booleans, history preparation and final graph/control retirement run on workers
+under the original admission. The existing owner budget and measured G1 gates remain mandatory.
+
+While the original selected parent owns the pointer prefix or controller, generic pointer cleanup
+MUST hand it Lost and return. It cannot cancel the live writer before the original acknowledgement.
+Accepted Up remains authoritative over a later loss. Lost/cancelled drawing preserves its original
+selection/history; final publication and joined Close retain the original ticket, input and history
+barriers through acknowledged retirement. Activation of this worker route in ordinary operation
+remains disabled pending complete consumer admission, remaining branches and activation/G1 qualification.

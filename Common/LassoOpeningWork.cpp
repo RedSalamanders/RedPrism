@@ -140,6 +140,19 @@ bool DocumentSession::IsPreparedLassoGestureCurrent(const PreparedLassoOpening& 
            history.IsCurrent(prepared._input._history) && CanApplyJobResult(prepared._input._token, 0);
 }
 
+std::optional<bool> DocumentSession::ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
+                                                                     Vec2 point) noexcept
+{
+    if (prepared._input._marquee || prepared._input._kind != LassoKind::Freehand ||
+        !IsPreparedLassoGestureCurrent(prepared))
+        return std::nullopt;
+    const auto outcome = prepared._writer->ExtendOwner(prepared._gestureKey, point);
+    if (outcome == BoundedLassoGesture::Outcome::Refused)
+        return std::nullopt;
+    prepared._gestureKey = prepared._writer->CurrentOwner();
+    return outcome == BoundedLassoGesture::Outcome::Changed;
+}
+
 bool DocumentSession::DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
                                                    bool fromCenter) noexcept
 {

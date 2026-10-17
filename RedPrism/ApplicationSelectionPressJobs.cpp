@@ -11,10 +11,12 @@
 
 bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
 {
-    const auto kind = _session.marqueeKind;
+    const bool marquee = _tool == EditorTool::Marquee;
+    const bool freehand = _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Freehand;
+    const auto kind = marquee ? _session.marqueeKind : _session.lassoKind;
     const auto mode = _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
-    if (!_selectionPressTestEnabled || _tool != EditorTool::Marquee ||
-        (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse) ||
+    if (!_selectionPressTestEnabled || (!marquee && !freehand) ||
+        (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse && kind != LassoKind::Freehand) ||
         (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract) ||
         (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))
         return false;
@@ -38,7 +40,7 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
     }
     HostSelectionPressInput::Context context;
     context.document = *authority;
-    context.tool = HostSelectionPressInput::Tool::Marquee;
+    context.tool = marquee ? HostSelectionPressInput::Tool::Marquee : HostSelectionPressInput::Tool::Lasso;
     context.kind = kind;
     context.mode = mode;
     // These are scalar event-time settings. Mutable source geometry/history is captured after admission.
@@ -168,6 +170,7 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     _selectionPressMovePresentations = 0;
     _selectionPressState.emplace(_jobs, _session, _selectionPressInput, opening, limits);
     _selectionPressState->admissionSource = memory->source;
+    _selectionPressState->drawingPlan = memory->drawing;
     _selectionPressState->allowNewRectangle = arrival->kind == LassoKind::Rectangle;
     _selectionPressState->allowNewEllipse = arrival->kind == LassoKind::Ellipse;
     _selectionPressState->allowPreservingMarquee = arrival->mode != SelectionMode::New;

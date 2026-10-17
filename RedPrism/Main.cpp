@@ -1,4 +1,4 @@
-﻿#include "Application.Tests.RowPublication.h"
+#include "Application.Tests.RowPublication.h"
 #include "Application.h"
 #include "CommandLine.h"
 #include "CrashDumps.h"
@@ -282,6 +282,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
             return failed;
         std::printf("BEGIN self-test.RunStandaloneMarqueeModesSelfTest\n");
         if (const int failed = Application::RunStandaloneMarqueeModesSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneFreehandPressSelfTest\n");
+        if (const int failed = Application::RunStandaloneFreehandPressSelfTest(instance); failed != 0)
             return failed;
         std::printf("BEGIN self-test.RunStandaloneSelectionCursorSelfTest\n");
         if (const int failed = Application::RunStandaloneSelectionCursorSelfTest(instance); failed != 0)

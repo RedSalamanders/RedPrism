@@ -2,6 +2,7 @@
 
 #include "HostSelectionPressInput.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -224,6 +225,37 @@ void TestInvalidPressDescriptorsDoNotConsumeOpening() noexcept
            "nonfinite-down-refuses-without-consuming-valid-outside-canvas-press");
 }
 
+void TestPhysicalFreehandCapturesKindModeAndAa() noexcept
+{
+    constexpr std::array modes{SelectionMode::New, SelectionMode::Add, SelectionMode::Subtract};
+    for (const auto mode : modes)
+    {
+        auto input = std::make_unique<Input>();
+        auto context = Context();
+        context.tool = Input::Tool::Lasso;
+        context.kind = LassoKind::Freehand;
+        context.mode = mode;
+        context.ordinal = 71;
+        context.mask = false;
+        Expect(input->Begin(72, context, Vec2{1.25, 2.5}, Input::Modifiers{true, false, true}, false),
+               "physical-freehand-down-admitted-for-each-captured-mode");
+
+        context.tool = Input::Tool::Marquee;
+        context.kind = LassoKind::Rectangle;
+        context.mode = SelectionMode::New;
+        const auto* captured = input->CapturedContext(72);
+        const auto down = input->Take(72);
+        Expect(captured && captured->tool == Input::Tool::Lasso && captured->kind == LassoKind::Freehand &&
+                   captured->mode == mode && !captured->mask &&
+                   IsEvent(down, Action::Down, 1.25, 2.5, true, false, true, 71, false),
+               "physical-freehand-down-retains-kind-mode-point-modifiers-and-aa-after-header-change");
+        Expect(input->Finish(72, true, 72) == Admission::Recorded &&
+                   IsEvent(input->Take(72), Action::Up, 1.25, 2.5, true, false, true, 72, true) &&
+                   input->Acknowledge(72),
+               "physical-freehand-up-keeps-last-accepted-point-and-release-aa");
+    }
+}
+
 void TestFullCapacityOverflowPrefix() noexcept
 {
     auto input = std::make_unique<Input>();
@@ -277,7 +309,8 @@ int RunSelectionPressInputTests()
     TestOpeningValidationAndExhaustion();
     TestSealLostAtOrdinalExhaustionAndAfterUp();
     TestInvalidPressDescriptorsDoNotConsumeOpening();
+    TestPhysicalFreehandCapturesKindModeAndAa();
     TestFullCapacityOverflowPrefix();
-    std::printf("SUMMARY selection-press-input assertions=%d failures=%d expected=37\n", gAssertions, gFailures);
-    return gFailures == 0 && gAssertions == 37 ? 0 : 1;
+    std::printf("SUMMARY selection-press-input assertions=%d failures=%d expected=46\n", gAssertions, gFailures);
+    return gFailures == 0 && gAssertions == 46 ? 0 : 1;
 }

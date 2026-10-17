@@ -26,11 +26,12 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Qualify adopted cursor source in ARM64 Release Rebuild `r1112`: actual exit 0, all 1,535 archive files, 982 compiler records and five exact AA64 executable/PDB pairs independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
 - [x] Qualify adopted cursor source in ARM64 instrumented ASan Rebuild `r1113`: actual exit 0, all 1,540 archive files, exact 982 sanitizer compiler records and five AA64 executable/full-PDB pairs independently verified. Debug/Release/ASan cross-builds now all pass; native ARM64 runtime is unavailable. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
 - [x] Qualify adopted cursor source in canonical full x64 Debug `r1114`: actual exit 0, all 1,743 archive files, 982 compiler records, five exact executable/full-PDB pairs, complete five-suite roster and nine harness captures independently verified. Preserve the two reader-only refusals and corrected source/profile projection without replaying tests. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
-- [ ] Complete full Release and Release-analysis qualification on the latest adopted milestone source. Current Debug/real-ASan and three ARM64 cross-build profiles are qualified above; every subsequent source adoption retains its affected tests and final latest-source gates. Ordinary activation and measured G1 remain open.
-- [x] Qualify the private Freehand admission/input prerequisites in complete scoped Release and real ASan: all 23,123 assertions, exact 281-TU artifacts, full predecessor rosters and genuine sanitizer detection. The original reader-order failure is retained and repaired without replaying code. This source is not adopted. [Evidence](../../TestRuns/P1FreehandPlan_2026-10-17.md).
-- [ ] Complete and qualify the Freehand CPU parent and actual physical caller, complete source/admission/retirement bounds and owning contracts before adoption. The isolated draft now includes 110 new CPU parent assertions and 45 Win32 cases/418 facts; the R1 compile failure is retained, its identifier-only correction compiles the complete 281-TU Document project with zero warnings in Release and real ASan, and both 346-TU Application builds are running. Full runtime/adoption qualification is still due. All remaining selection branches and G1 stay open.
-- [ ] Complete full native Debug/Release/real ASan, analysis and ARM64 cross-build qualification on the latest adopted CPU source. The `6a7afac` full-ASan and three ARM64 receipts above remain earlier-source evidence; native ARM64 runtime is unavailable. Ordinary activation and measured G1 remain open.
-- [ ] Complete the remaining freehand/polygonal/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
+- [ ] Complete the latest adopted milestone full x64 Debug/Release/real-ASan, Release analysis and all three ARM64 cross-build gates. The full cursor-native receipts above qualify their own earlier source; Freehand has scoped Document/Application Release and real-ASan proof. Ordinary activation and measured G1 remain open; native ARM64 runtime is unavailable.
+- [x] Qualify the private Freehand admission/input prerequisites in complete scoped Release and real ASan: all 23,123 assertions, exact 281-TU artifacts, full predecessor rosters and genuine sanitizer detection. The original reader-order failure is retained and repaired without replaying code. These prerequisites are now included in the qualified Freehand adoption below. [Evidence](../../TestRuns/P1FreehandPlan_2026-10-17.md).
+- [x] Qualify and adopt the Freehand original parent and actual Win32 caller: 75 plan/9 queue/110 parent/472 host facts, all 23,233 Document assertions and the complete 151-stage Application roster pass scoped Release and real ASan. Main verifies full archives, actual UAF detection, exact 627-command/object lineage, executable/PDB identities and all retained failures. The selected gate remains off for ordinary input. [Evidence](../../TestRuns/P1FreehandHost_2026-10-17.md).
+- [x] Correct exact immediate-R9 inline-table ISA recognition without changing DxUi or the allowlist: 64 new controls, the complete Release scanner suite and the unchanged original failed image pass. [Evidence](../../TestRuns/IsaR9Direct_2026-10-17.md).
+
+- [ ] Complete the remaining polygonal/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
 - [ ] Remove the remaining selection cursor owner containment/translated-geometry walk; preserve exact hit results with bounded latest-request scheduling, source authority and joined lifetime (implementation slice below).
 - [ ] Prove complete original-ticket phase/retirement bounds, actual view/DPI/device behavior, ordinary activation and measured S5/G1 before closing this child or P1.
 
@@ -1115,15 +1116,15 @@ Implementation slice after preserving-marquee host qualification:
    from structural counters. Complete Release/real-ASan and final native qualification before activation.
 
 
-## Next component after cursor qualification: Freehand physical drawing
+## Freehand selected component — qualified 2026-10-17
 
-The selected physical parent currently permits Rectangle/Ellipse only. `HostSelectionPressInput::Begin`
-already accepts Freehand/Polygonal kinds, but `QueueSelectionPressOwner` rejects the Lasso tool and
-`SelectionOutlineGestureJob` allocates drawing state only for its two marquee flags. Its drawing opening
-also hardcodes one arena page. These are separate missing caller/admission paths; generic terminal
-`LassoFinishGeometry::Prepare` support does not qualify them.
+The typed original drawing plan, admitted arena allocation, guarded Freehand writer and actual physical
+caller are implemented and adopted with scoped Release/real-ASan proof. The earlier missing Lasso
+routing and hardcoded one-page drawing opening are corrected. The sequence below records that
+component's design and the remaining activation/Polygonal obligations; the opening checklist and
+[receipt](../../TestRuns/P1FreehandHost_2026-10-17.md) state its current qualification.
 
-Execute the next component in this order, after the current adopted-source native gates close:
+Implementation sequence and boundaries:
 
 1. Define a typed captured drawing-kind policy shared by cached admission, original parent and physical
    dispatch. Capture tool/kind/mode/AA at accepted Down; mutable header changes cannot rewrite them.
@@ -1142,9 +1143,13 @@ Execute the next component in this order, after the current adopted-source nativ
    skips, modifiers and no-point behavior against the current numeric path and the named Swift oracle
    before changing those semantics. Source/session/history/opening authority must be checked at every
    owner acquisition and publication boundary.
-4. Keep append/seal and clip/boolean work on workers under the existing original reservation. Owner
-   messages perform scalar enqueue/acknowledgement only. Retain every arena, original geometry,
-   temporary result and weak/control owner through actual retirement. Late Move/Up/Lost after cancellation
+4. Use the normative bounded metadata route: the worker allocates and prefaults the complete arena;
+   owner replay consumes at most sixteen accepted moves, each touching at most one 64-point chunk.
+   This preserves the existing single-writer/snapshot protocol without a new mutable-writer transfer.
+   Full traversal, clip/boolean/history preparation and graph retirement stay on workers under the
+   original reservation. This refines the earlier worker-append proposal; preserve the 2 ms owner
+   budget and keep ordinary activation/G1 unqualified until measured. Retain every arena, original
+   geometry, temporary result and weak/control owner through actual retirement. Late Move/Up/Lost after cancellation
    or foreign writer cannot consume a new gesture or replace foreign state. Joined Close must release
    captured roots on workers before the owner's final acknowledgement.
 5. Add independent CPU event-vector and literal geometry/coverage tests: absent/empty/inside/outside,
@@ -1158,3 +1163,36 @@ Execute the next component in this order, after the current adopted-source nativ
    Ordinary activation and G1 remain separate until every display consumer and complete operation bound
    is qualified. Then implement the polygonal continuation protocol and the remaining Wand/Ctrl-pixel-lift
    branches; do not declare the selection delivery area complete from Freehand alone.
+
+## Next component: Polygonal original-parent continuation
+
+1. Keep the multi-click protocol separate from drag-Up finishing. `PlanDrawing(Polygonal)` remains
+   refused until its own caller exists. Reuse the existing 512-slot `HostLassoInput` point/cursor/
+   Backspace/conditional-close/finish descriptors and shared nonwrapping host event ordinals. Pointer
+   Up is nonterminal; hover changes only the rubber band. Capture kind/mode at the first accepted Down.
+2. Use a finite checked plan for 65,536 live accepted corners and 1,023 arena blocks. Backspace/re-extend
+   cannot recycle sealed nodes while snapshots exist, so arena exhaustion may precede the live-corner
+   limit. Original admission includes retained source/history, traversal, worker clip/boolean/output,
+   construction/refresh and strong/weak retirement. There is no replacement admission or partial result.
+3. Add own-key guarded point/cursor/removal APIs. A quarter-pixel no-op preserves the key; hover never
+   adds a vertex. Last-corner removal validates before Pop and resets only the matching draft/active
+   marker in that same owner transition: Pop already ends the writer, so post-Pop ActiveOwner
+   revalidation would incorrectly reject cleanup. Keep foreign writer/history/session state untouched.
+4. Reconcile the long-lived original parent with ordered Save/tool/lifetime/selection commands before
+   connecting physical input. Holding `_activeHostRequest`/HistoryWork indefinitely while waiting for
+   more corners can deadlock a younger settlement command. Define ordered settle/cancel/yield
+   arbitration without releasing original accounting or allowing foreign mutation early. Every older
+   accepted corner/Backspace must precede its closing command; an idle live prefix requests no wake.
+5. Preserve the actual conditional-close event ordinal. The legacy selected terminal has a default
+   ordinal zero while its separate closing intent retains the physical ordinal; a new original parent
+   must retain that real closing identity. Near-first closes only with at least three corners and the
+   legacy eight-view-pixel hit region; double-click/Enter retain short-path behavior. Physical terminal
+   AA belongs to the chosen close. Rejected early proximity presses acknowledge without history.
+6. Independently qualify the finite plan, triangle/self-intersection coverage, guarded append/hover/
+   Backspace, last-corner cleanup, immutable held snapshots and exhausted-arena refusal before host
+   integration. Then actual Win32 tests cover multi-Down/Up, hover exclusion, two-versus-three-corner
+   proximity, double-click, Enter/Escape/Backspace-to-zero, view/DPI/header changes, loss/overflow,
+   foreign edits, queued commands, stale/duplicate close, memory refusal and joined strong/weak refunds.
+7. Keep numeric reference goldens, complete predecessor rosters, code/contracts/evidence and the
+   opening checklist synchronized. Commit/push the qualified component; complete remaining Wand,
+   Ctrl-pixel-lift, coverage/display/transform consumers, ordinary activation and measured G1 before Done.

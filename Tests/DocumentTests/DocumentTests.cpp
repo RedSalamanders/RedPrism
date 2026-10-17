@@ -26,6 +26,7 @@
 #include "Document.Tests.DeferredSelectionMove.h"
 #include "Document.Tests.DistortRead.h"
 #include "Document.Tests.EllipseFinishPlan.h"
+#include "Document.Tests.FreehandPlan.h"
 #include "Document.Tests.HostLassoInput.h"
 #include "Document.Tests.HueSampleScalar.h"
 #include "Document.Tests.LassoConditionalInput.h"
@@ -8470,6 +8471,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunMarqueeModePlanTests();
     gFailures += RunMarqueeModeParentTests();
     gFailures += RunSelectionCursorProbeTests();
+    gFailures += RunFreehandPlanTests();
+    gFailures += RunFreehandGestureParentTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

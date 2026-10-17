@@ -47,6 +47,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls f
 & (Join-Path $PSScriptRoot 'IsaQwordRetNopTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD RET/one-byte NOP parser controls failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR9DirectTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Immediate R9 direct terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
 Write-Host 'BEGIN isa-r9-r15-pair-controls'

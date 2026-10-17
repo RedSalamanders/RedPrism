@@ -72,6 +72,29 @@ struct Result final
                                                                            std::uint64_t sourceLoops = 0) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0,
                                                     std::uint64_t sourceLoops = 0) noexcept;
+// Physical Freehand has a finite complete-gesture arena independent of the pending input ring.
+// The arena holds 1023 sealed 64-point blocks plus one inline tail: exactly 65,536 vertices.
+// These are enforced capacity ceilings; complex paths may exhaust worker scratch/output and fail
+// the original gesture. No partial result or larger replacement admission is permitted.
+inline constexpr std::uint32_t kFreehandMaximumPoints = 65'536;
+inline constexpr std::uint32_t kFreehandArenaBlocks = 1023;
+[[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> FreehandLimits(SelectionMode mode,
+                                                                            std::uint64_t sourcePoints = 0,
+                                                                            std::uint64_t sourceLoops = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourcePoints = 0,
+                                                     std::uint64_t sourceLoops = 0) noexcept;
+// Complete immutable Down-time drawing descriptor. Polygonal remains a separate multi-press protocol.
+struct DrawingPlan final
+{
+    LassoKind kind;
+    SelectionMode mode;
+    std::uint32_t arenaBlocks;
+    std::uint32_t maximumPoints;
+    BoundedSelectionBoolean::Limits geometry;
+    MemoryPlan finish;
+};
+[[nodiscard]] std::optional<DrawingPlan> PlanDrawing(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0,
+                                                     std::uint64_t sourceLoops = 0) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                              const std::optional<DocumentSelection>& before,
                                              BoundedSelectionBoolean::Limits limits = {}) noexcept;

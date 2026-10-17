@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "HostHueInput.h"
 #include "HostLassoInput.h"
@@ -176,6 +176,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueeModesSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionCursorSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneFreehandPressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;

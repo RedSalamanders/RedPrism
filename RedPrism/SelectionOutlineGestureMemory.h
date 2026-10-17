@@ -12,6 +12,7 @@ struct SelectionOutlineGestureMemory final
     SelectionOutlineGestureState::Admission source;
     SelectionOutlineGestureState::Limits limits;
     std::uint64_t sourceBytes = 0, historyBytes = 0, geometryBytes = 0;
+    std::optional<LassoFinishGeometry::DrawingPlan> drawing;
 };
 [[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
     const DocumentSession& session, bool allowNewRectangle = false) noexcept;

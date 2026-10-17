@@ -179,6 +179,8 @@ struct Fixture final
         arrival.document = admitted->source.document;
         arrival.ordinal = 1;
         arrival.kind = kind;
+        arrival.tool =
+            kind == LassoKind::Freehand ? HostSelectionPressInput::Tool::Lasso : HostSelectionPressInput::Tool::Marquee;
         arrival.mode = mode;
         arrival.active = session->ActiveLayerID();
         arrival.crop = session->CropFrame();
@@ -187,6 +189,8 @@ struct Fixture final
             Broken("accepted-down");
         state = std::make_unique<SelectionOutlineGestureState>(jobs, *session, *prefix, 51, admitted->limits);
         state->admissionSource = admitted->source;
+        if (kind == LassoKind::Freehand)
+            state->drawingPlan = admitted.value().drawing;
         state->allowNewRectangle = kind == LassoKind::Rectangle;
         state->allowNewEllipse = kind == LassoKind::Ellipse;
         state->allowPreservingMarquee = preservingEnabled && mode != SelectionMode::New;
@@ -223,9 +227,9 @@ struct Fixture final
         if (prefix->Move(51, point, modifiers, false, ordinal) != HostSelectionPressInput::Admission::Recorded)
             Broken("accepted-move");
     }
-    void End(bool lost = false)
+    void End(bool lost = false, std::uint64_t ordinal = 5)
     {
-        if (prefix->Finish(51, true, 5, lost) != HostSelectionPressInput::Admission::Recorded)
+        if (prefix->Finish(51, true, ordinal, lost) != HostSelectionPressInput::Admission::Recorded)
             Broken("accepted-terminal");
     }
     void ReleaseReaders()
@@ -505,6 +509,212 @@ void RefusePreserving(LassoKind kind, SelectionMode mode, bool wrongAdmission)
     Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
            "refused-preserving-mode-fully-refunds-original-ticket");
 }
+
+double FreehandArea(const DocumentSelection& selection)
+{
+    double area = 0;
+    for (const auto& loop : selection.loops.Get())
+        for (std::size_t i = 0; i < loop.size(); ++i)
+        {
+            const auto a = loop[i], b = loop[(i + 1) % loop.size()];
+            area += a.x * b.y - b.x * a.y;
+        }
+    return std::abs(area) / 2;
+}
+bool FreehandPixels(const DocumentSelection& selection, SelectionMode mode)
+{
+    const auto coverage = SelectionGeometry::Coverage(selection.loops.Get(), 12, 9, false);
+    if (coverage.Width() != 12 || coverage.Height() != 9)
+        return false;
+    for (int y = 0; y < 9; ++y)
+        for (int x = 0; x < 12; ++x)
+        {
+            const bool before = x >= 1 && x < 7 && y >= 2 && y < 6;
+            const bool draw = x >= 4 && x < 10 && y >= 3 && y < 7;
+            const bool expected = mode == SelectionMode::New   ? draw
+                                  : mode == SelectionMode::Add ? before || draw
+                                                               : before && !draw;
+            if (coverage.Data()[static_cast<std::size_t>(y) * coverage.Stride() + x] != (expected ? 255 : 0))
+                return false;
+        }
+    return true;
+}
+void FreehandNumeric(SelectionMode mode)
+{
+    scenarioName = "literal";
+    const bool replace = mode == SelectionMode::New;
+    auto f = std::make_unique<Fixture>(Initial::Old, false, LassoKind::Freehand, std::nullopt, mode, std::nullopt,
+                                       replace ? Vec2{10, 7} : Vec2{4, 3});
+    const auto original = f->session->Selection();
+    const auto generation = f->session->Generation();
+    if (replace)
+    {
+        f->Move({4, 7}, {}, 2);
+        f->Move({4, 3}, {}, 3);
+        f->Move({10, 3}, {}, 4);
+    }
+    else
+    {
+        f->Move({10, 3}, {}, 2);
+        f->Move({10, 7}, {}, 3);
+        f->Move({4, 7}, {}, 4);
+    }
+    f->End();
+    f->Submit();
+    f->session->lassoKind = LassoKind::Polygonal;
+    f->session->selectionModeChoice = SelectionMode::New;
+    Settle(f->jobs);
+    const auto& state = *f->state;
+    const auto& result = f->session->Selection();
+    Expect(state.completed && state.outcome.status == JobStatus::Finished && state.drawing && state.closed &&
+               state.sameTicket && state.captures == 1 && state.hits == (replace ? 1u : 0u) && state.inputAcknowledged,
+           "captured-kind-mode-original-parent-and-one-source");
+    const double expected = replace ? 24 : mode == SelectionMode::Add ? 39 : 15;
+    Expect(result && result.value().antialiased && FreehandArea(result.value()) == expected &&
+               FreehandPixels(result.value(), mode),
+           "literal-area24-39-15-and-all108-pixel-centers");
+    Expect(f->session->Generation() == generation + 1 && f->session->history.UndoCount() == 1 &&
+               f->session->history.UndoName() == L"Lasso",
+           "one-atomic-generation-and-lasso-history-entry");
+    Expect(state.moves == 3 && state.maximumDrawingSamples == 3 && f->memory.queries == 1 &&
+               state.firstBudget == f->admitted.value().limits.totalBytes &&
+               state.openingBytes <= f->admitted.value().limits.continuingOutputBytes,
+           "three-bounded-metadata-updates-no-readmission-and-original-opening-partition");
+    f->session->Undo();
+    Expect(f->session->Selection() == original && f->session->history.CanRedo(), "undo-restores-original-root");
+    f->session->Redo();
+    Expect(f->session->Selection() && FreehandPixels(f->session->Selection().value(), mode) &&
+               f->session->Selection().value().antialiased,
+           "redo-restores-complete-terminal-selection");
+    f->ReleaseReaders();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "final-reader-refunds-original-ticket");
+}
+void FreehandCancellation(SelectionMode mode, bool joined)
+{
+    scenarioName = joined ? "joined-close" : "cancel-waiting";
+    auto f = std::make_unique<Fixture>(Initial::Old, false, LassoKind::Freehand, std::nullopt, mode, std::nullopt,
+                                       Vec2{10, 7});
+    const auto original = f->session->Selection();
+    const auto generation = f->session->Generation();
+    const auto history = f->session->history.CaptureState();
+    f->Move({4, 7}, {}, 2);
+    f->Submit();
+    Until(f->jobs, [&] { return f->state->waiting; });
+    Expect(f->state->drawing && f->state->opened && f->session->PendingLasso() && f->state->moves == 1 &&
+               f->jobs.ReservedMemoryBytes() >= f->admitted.value().limits.totalBytes,
+           "live-original-waits-on-events-with-entire-admission-held");
+    if (joined)
+        f->jobs.Close();
+    else
+    {
+        if (!f->jobs.Cancel(f->state->original))
+            Broken("freehand-cancel");
+        f->state->waiting = false;
+        if (!f->jobs.Resume(f->state->original))
+            Broken("freehand-cancel-resume");
+        Settle(f->jobs);
+    }
+    Expect(f->state->outcome.status == JobStatus::Cancelled && f->state->aborted && f->state->completed == !joined &&
+               !f->state->controller && f->state->inputAcknowledged,
+           "cancel-or-joined-close-acknowledges-exact-original-and-aborts-writer");
+    Expect(!f->prefix->Busy() && !f->session->PendingLasso() && f->session->Selection() == original &&
+               f->session->Generation() == generation && f->session->history.IsCurrent(history),
+           "no-partial-selection-history-or-generation-publication");
+    f->ReleaseReaders();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(),
+           "joined-final-readers-return-all-charges");
+}
+bool FreehandRectanglePixels(const DocumentSelection& selection)
+{
+    // Collinear vertices are permitted by the clipper contract. Test the complete literal rectangle,
+    // independently of how many redundant edge vertices survive, with the serial coverage reference.
+    const auto coverage = SelectionGeometry::Coverage(selection.loops.Get(), 36, 8, false);
+    if (coverage.Width() != 36 || coverage.Height() != 8)
+        return false;
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 36; ++x)
+        {
+            const bool expected = x >= 1 && x < 33 && y >= 1 && y < 5;
+            if (coverage.Data()[static_cast<std::size_t>(y) * coverage.Stride() + x] != (expected ? 255 : 0))
+                return false;
+        }
+    return true;
+}
+void FreehandMultiblock()
+{
+    scenarioName = "131-points";
+    auto f = std::make_unique<Fixture>(Initial::Absent, false, LassoKind::Freehand, std::nullopt, SelectionMode::New,
+                                       std::nullopt, Vec2{1, 1});
+    for (std::uint64_t i = 1; i <= 128; ++i)
+        f->Move({1.0 + .25 * i, 1}, {}, i + 1);
+    f->Move({33, 5}, {}, 130);
+    f->Move({1, 5}, {}, 131);
+    f->End(false, 132);
+    f->Submit();
+    Settle(f->jobs);
+    const auto& state = *f->state;
+    const auto& result = f->session->Selection();
+    Expect(state.completed && state.closed && state.outcome.status == JobStatus::Finished && state.moves == 130 &&
+               state.sameTicket && state.captures == 1 && state.inputAcknowledged,
+           "all130-physical-moves-complete-under-one-original-parent");
+    Expect(result && result.value().Bounds() == std::optional(SelectionBounds{1, 1, 33, 5}) &&
+               FreehandArea(result.value()) == 128 && FreehandRectanglePixels(result.value()),
+           "two-sealed-blocks-and-inline-tail-produce-literal-area128");
+    Expect(state.maximumDrawingSamples == 16 && state.collectAcks >= 8 && f->memory.queries == 1,
+           "owner-continuations-cap-at16-and-rearm-only-known-pending-input");
+    Expect(f->session->history.UndoCount() == 1 && f->session->history.UndoName() == L"Lasso" &&
+               !f->session->PendingLasso(),
+           "one-atomic-history-publication-after-worker-geometry");
+    f->ReleaseReaders();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(),
+           "multiblock-final-retirement-refunds-admission");
+}
+void FreehandInsideMove()
+{
+    scenarioName = "inside-move";
+    auto f = std::make_unique<Fixture>(Initial::Old, false, LassoKind::Freehand, std::nullopt, SelectionMode::New,
+                                       std::nullopt, Vec2{2, 3});
+    f->Move({6, 5}, {}, 2);
+    f->End(false, 3);
+    f->Submit();
+    Settle(f->jobs);
+    const auto& state = *f->state;
+    Expect(state.completed && state.closed && !state.drawing && state.hits == 1 && state.sameTicket &&
+               state.outcome.status == JobStatus::Finished,
+           "inside-new-keeps-exact-worker-hit-outline-move-branch");
+    Expect(f->session->Selection() &&
+               f->session->Selection().value().Bounds() == std::optional(SelectionBounds{5, 4, 11, 8}) &&
+               !f->session->Selection().value().antialiased && f->session->history.UndoCount() == 1,
+           "literal-offset4-2-preserves-original-selection-aa");
+    Expect(!f->session->PendingLasso() && state.captures == 1 && state.inputAcknowledged && f->memory.queries == 1,
+           "move-branch-never-opens-freehand-or-readmits");
+    f->ReleaseReaders();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(),
+           "move-branch-returns-complete-original-charge");
+}
+void FreehandShort(SelectionMode mode)
+{
+    scenarioName = "short";
+    auto f = std::make_unique<Fixture>(Initial::Old, false, LassoKind::Freehand, std::nullopt, mode, std::nullopt,
+                                       Vec2{10, 7});
+    const auto original = f->session->Selection();
+    const auto generation = f->session->Generation();
+    f->End(false, 2);
+    f->Submit();
+    Settle(f->jobs);
+    const bool clear = mode == SelectionMode::New;
+    Expect(f->state->completed && f->state->closed && f->state->outcome.status == JobStatus::Finished &&
+               f->state->drawing && !f->state->moves,
+           "single-point-terminal-is-accepted-without-invented-up-sample");
+    Expect(clear ? !f->session->Selection() : f->session->Selection() == original,
+           "short-new-clears-and-preserving-modes-keep-original-selection");
+    Expect(f->session->Generation() == generation + (clear ? 1u : 0u) &&
+               f->session->history.UndoCount() == (clear ? 1 : 0),
+           "short-terminal-preserves-noop-history-semantics");
+    f->ReleaseReaders();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "short-terminal-final-charge-refund");
+}
+
 } // namespace
 int RunRectangleGestureParentTests()
 {
@@ -598,4 +808,32 @@ int RunMarqueeModeParentTests()
         }
     std::printf("SUMMARY marquee-mode-parent checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
+}
+
+int RunFreehandGestureParentTests()
+{
+    checks = failures = 0;
+    for (const auto mode : {SelectionMode::New, SelectionMode::Add, SelectionMode::Subtract})
+    {
+        family = mode == SelectionMode::New   ? "freehand-new-parent"
+                 : mode == SelectionMode::Add ? "freehand-add-parent"
+                                              : "freehand-subtract-parent";
+        FreehandNumeric(mode);
+        FreehandCancellation(mode, false);
+        FreehandCancellation(mode, true);
+        FreehandShort(mode);
+        CancelAndForeign(2, "foreign-history", LassoKind::Freehand, mode);
+        CancelAndForeign(3, "foreign-transform", LassoKind::Freehand, mode);
+        CancelAndForeign(4, "cancel-prepared", LassoKind::Freehand, mode);
+        if (mode != SelectionMode::New)
+        {
+            RefusePreserving(LassoKind::Freehand, mode, true);
+            RefusePreserving(LassoKind::Freehand, mode, false);
+        }
+    }
+    family = "freehand-new-parent";
+    FreehandMultiblock();
+    FreehandInsideMove();
+    std::printf("SUMMARY freehand-gesture-parent checks=%u failures=%u expected=110\n", checks, failures);
+    return failures || checks != 110 ? 1 : 0;
 }

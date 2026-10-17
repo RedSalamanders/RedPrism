@@ -4673,7 +4673,13 @@ void Application::HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool i
 
 void Application::EndPointerDrag(PointerEnd end) noexcept
 {
-    LoseSelectionPressOwner();
+    if (_selectionPressInput.Busy() || (_selectionPressState && _selectionPressState.value().controller))
+    {
+        // The original admitted parent owns loss, rollback and its writer/history acknowledgement.
+        // Generic cleanup must not cancel that writer before its accepted Lost reaches the parent.
+        LoseSelectionPressOwner();
+        return;
+    }
     const bool lost = end == PointerEnd::Lost;
     // A warp and a stroke keep what they painted either way (Decision D10); a shape draft adds its layer as a release
     // would, and drops when the pointer was lost.

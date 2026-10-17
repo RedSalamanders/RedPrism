@@ -2552,6 +2552,9 @@ class DocumentSession
     [[nodiscard]] bool DiscardLassoIntentIfCurrent(const LassoIntent& intent) noexcept;
     // Closed terminal capture may refuse. Retire only this exact writer's captured history through its owner.
     [[nodiscard]] bool DiscardPreparedClosedLassoIfCurrent(PreparedLassoOpening& prepared) noexcept;
+    // Original writer only; true changes one bounded chunk, false is a quarter-pixel no-op, null refuses.
+    [[nodiscard]] std::optional<bool> ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
+                                                                      Vec2 point) noexcept;
     [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,
                                                     bool fromCenter) noexcept;
     [[nodiscard]] bool AbortPreparedLassoGestureIfCurrent(PreparedLassoOpening& prepared) noexcept;

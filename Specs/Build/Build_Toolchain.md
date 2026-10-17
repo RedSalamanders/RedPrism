@@ -623,6 +623,15 @@ the listing. Real adjacent vector instructions remain gated. Collecting candidat
 exemption. `IsaWideUnsignedGuardTests.ps1` retains prior controls and checks three accepted forms and
 27 independent refusals. No runtime, object, function, tier or address allowlist changes.
 
+The observed pinned Menu immediate-R9 switch is a separate exact terminal form: `MOVZX EAX,[RDI+1]`,
+`CMP AL,max`, unsigned `JA rel32`, immediate `LEA R9,imagebase`, `MOV EAX,[R9+4*RAX+tableRva]`,
+`ADD RAX,R9`, `JMP RAX`. All seven PE/listing rows, same-contribution guard/dispatch, anonymous data
+start, exact maximum+1 DWORD terminal PDB extent, known immediately preceding RET, and forward
+case/default decoded boundaries are required. Maximum is 1–127. Only those proved data bytes are
+exempt, and their reported bytes must match the PE. Real vector code in the body, target or adjacent
+range remains gated. `IsaR9DirectTests.ps1` provides 64 independent controls; neither DxUi nor the
+runtime/object/function/tier/address allowlists change. [Exact readback](../TestRuns/IsaR9Direct_2026-10-17.md).
+
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
 placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named

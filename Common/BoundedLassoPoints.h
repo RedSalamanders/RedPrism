@@ -147,9 +147,9 @@ class BoundedLassoPoints final
                     return false;
                 order.push_back(index);
             }
-            for (auto current = order.rbegin(); current != order.rend(); ++current)
+            for (auto sealedBlock = order.rbegin(); sealedBlock != order.rend(); ++sealedBlock)
             {
-                if (cancel.IsCancelled() || !visitor(std::span<const Vec2>(_arena->blocks[*current].points)))
+                if (cancel.IsCancelled() || !visitor(std::span<const Vec2>(_arena->blocks[*sealedBlock].points)))
                     return false;
             }
             return !cancel.IsCancelled() &&

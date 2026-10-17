@@ -445,3 +445,14 @@ An admitted outside Ellipse/New drag publishes one `Elliptical Marquee` entry an
 generation advance. A Down inside the old outline moves that outline instead: the scalar Move and
 acknowledged End retain their two generation advances and one `Move Selection` entry. Click, Lost,
 cancellation and joined Close keep their existing distinct history behavior.
+
+## Selected Freehand history and pointer loss
+
+The original selected Freehand parent owns opening, ordered accepted samples, terminal geometry,
+history preparation/residency refresh and publication through one ticket and HistoryWork stamp.
+A changed result records one `Lasso` entry; no-op, absent versus explicit-empty, Undo/Redo and saved
+marker behavior remain those of the numeric reference. Metadata-only drawing does not publish history.
+Generic pointer cleanup cannot cancel an owned live writer ahead of the original Lost acknowledgement.
+Lost, cancellation, stale refusal and joined Close preserve the original selection/history and cannot
+roll back a foreign Begin or editor. Final strong and weak owners retain the original charge until
+worker retirement. Selected runtime proof remains separate from ordinary activation and measured G1.

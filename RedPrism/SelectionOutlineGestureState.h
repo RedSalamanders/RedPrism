@@ -3,6 +3,7 @@
 #include "HistoryRestoreWork.h"
 #include "HostSelectionPressInput.h"
 #include "Jobs.h"
+#include "LassoFinishGeometry.h"
 
 #include <atomic>
 #include <cstdint>
@@ -61,11 +62,13 @@ struct SelectionOutlineGestureState
     // Optional exact source of a cache-derived admission. Fixture-only callers may supply fixed limits.
     std::optional<Admission> admissionSource;
     // Explicitly selected kind branches; preserving modes also require allowPreservingMarquee.
+    std::optional<LassoFinishGeometry::DrawingPlan> drawingPlan;
     bool allowNewRectangle = false, allowNewEllipse = false, drawing = false;
     bool allowPreservingMarquee = false;
     bool requireCapturedTarget = false;
     JobTicket original;
     unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;
+    unsigned maximumDrawingSamples = 0;
     std::uint64_t firstBudget = 0, remainingBudget = 0, openingBytes = 0;
     bool opened = false, waiting = false, completed = false, closed = false, clicked = false, aborted = false;
     bool sameTicket = true, partition = false, inputAcknowledged = false, sourceCurrent = false, terminalLost = false,

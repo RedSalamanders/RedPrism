@@ -598,6 +598,8 @@
     <ClCompile Include="Document.Tests.RectangleGestureParent.cpp" />
     <ClCompile Include="Document.Tests.EllipseFinishPlan.cpp" />
     <ClCompile Include="Document.Tests.MarqueeModePlan.cpp" />
+    <ClCompile Include="Document.Tests.FreehandPlan.cpp" />
+    <ClInclude Include="Document.Tests.FreehandPlan.h" />
     <ClCompile Include="Document.Tests.SelectionCursorProbe.cpp" />
     <ClInclude Include="Document.Tests.SelectionCursorProbe.h" />
     <ClInclude Include="Document.Tests.EllipseFinishPlan.h" />

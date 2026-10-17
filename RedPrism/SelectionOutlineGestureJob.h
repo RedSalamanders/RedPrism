@@ -46,6 +46,7 @@ class SelectionOutlineGestureJob final : public Job
     bool Resume() noexcept;
     bool Consume() noexcept;
     SelectionOutlineGestureState& _state;
+    const std::optional<LassoFinishGeometry::DrawingPlan> _drawingPolicy;
     Phase _phase = Phase::Allocate;
     std::shared_ptr<SharedPublicationMemory> _output, _final, _temporary;
     std::optional<DocumentReadAuthority> _source;

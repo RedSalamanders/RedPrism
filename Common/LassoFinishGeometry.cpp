@@ -185,6 +185,66 @@ std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::u
     return CalculatePlan(kind, 4, BoundedLassoPoints::MemoryBytes(1), 0, limits.value());
 }
 
+std::optional<BoundedSelectionBoolean::Limits> FreehandLimits(SelectionMode mode, std::uint64_t sourcePoints,
+                                                              std::uint64_t sourceLoops) noexcept
+{
+    BoundedSelectionBoolean::Limits base;
+    base.inputPoints = kFreehandMaximumPoints + 4ULL;
+    base.inputLoops = 2;
+    base.outputPoints = 4ULL * kFreehandMaximumPoints + 16;
+    base.outputLoops = kFreehandMaximumPoints + 16ULL;
+    base.workspaceBytes = 32ULL * 1024 * 1024;
+    if (mode == SelectionMode::New)
+        return base; // Old geometry is retained separately, never a New boolean input.
+    if (mode != SelectionMode::Add && mode != SelectionMode::Subtract)
+        return std::nullopt;
+    const BoundedSelectionBoolean::Limits maximum;
+    if (sourcePoints > maximum.outputPoints || sourceLoops >= maximum.inputLoops)
+        return std::nullopt;
+    ByteSum inputPoints, inputLoops, outputPoints, outputLoops, workspace;
+    if (!inputPoints.Add(sourcePoints) || !inputPoints.Add(base.outputPoints) || !inputLoops.Add(sourceLoops) ||
+        !inputLoops.Add(base.outputLoops) || !inputLoops.Add(1) || inputPoints.value > maximum.inputPoints ||
+        inputLoops.value > maximum.inputLoops || !outputPoints.Add(sourcePoints, 8) ||
+        !outputPoints.Add(base.outputPoints, 2) || !outputPoints.Add(16) || !outputLoops.Add(sourcePoints) ||
+        !outputLoops.Add(sourceLoops) || !outputLoops.Add(base.outputLoops) || !outputLoops.Add(16) ||
+        !workspace.Add(inputPoints.value, 512) || !workspace.Add(inputLoops.value, 256) ||
+        !workspace.Add(base.workspaceBytes))
+        return std::nullopt;
+    BoundedSelectionBoolean::Limits result;
+    result.inputPoints = inputPoints.value;
+    result.inputLoops = inputLoops.value;
+    result.outputPoints = (std::min)(maximum.outputPoints, outputPoints.value);
+    result.outputLoops = (std::min)(maximum.outputLoops, outputLoops.value);
+    result.workspaceBytes =
+        static_cast<std::size_t>((std::min)(static_cast<std::uint64_t>(maximum.workspaceBytes), workspace.value));
+    return result;
+}
+std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourcePoints,
+                                       std::uint64_t sourceLoops) noexcept
+{
+    const auto limits = FreehandLimits(mode, sourcePoints, sourceLoops);
+    if (!limits)
+        return std::nullopt;
+    return CalculatePlan(LassoKind::Freehand, kFreehandMaximumPoints,
+                         BoundedLassoPoints::MemoryBytes(kFreehandArenaBlocks),
+                         static_cast<std::uint64_t>(kFreehandArenaBlocks) * sizeof(std::uint32_t), limits.value());
+}
+
+std::optional<DrawingPlan> PlanDrawing(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints,
+                                       std::uint64_t sourceLoops) noexcept
+{
+    const bool freehand = kind == LassoKind::Freehand;
+    const auto limits = freehand ? FreehandLimits(mode, sourcePoints, sourceLoops)
+                                 : MarqueeLimits(kind, mode, sourcePoints, sourceLoops);
+    const auto plan =
+        freehand ? PlanFreehand(mode, sourcePoints, sourceLoops) : PlanMarquee(kind, mode, sourcePoints, sourceLoops);
+    if (!limits || !plan)
+        return std::nullopt;
+    return DrawingPlan{
+        kind,           mode,        freehand ? kFreehandArenaBlocks : 1, freehand ? kFreehandMaximumPoints : 4,
+        limits.value(), plan.value()};
+}
+
 std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                const std::optional<DocumentSelection>& before,
                                BoundedSelectionBoolean::Limits limits) noexcept

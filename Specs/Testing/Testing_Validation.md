@@ -3076,13 +3076,17 @@ latest adopted-source native profiles, ordinary activation and G1 remain separat
 The standalone `Application.Tests.ClipboardContention` fixture owns a separate native thread and
 message-only HWND that genuinely holds `OpenClipboard`. Copy/Paste cover release after the first armed
 wait and six-attempt exhaustion through production retry events. Assert the same original ticket,
-history barrier, reservation and actual holder at every wait; forced/injected failure counters remain
-zero. Literal DIB/private-copy pixels, independent public outcome/history, saved clipboard restoration,
+history barrier and reservation at every wait. The original holder must be open at the first
+release wait and all five exhaustion waits. Later release waits require that original holder to be
+closed: unrelated desktop owners can deny a later native acquisition. Release allows one through
+five armed waits within the shared six-acquisition limit; forced/injected failure counters remain zero. Literal DIB/private-copy pixels, independent public outcome/history, saved clipboard restoration,
 thread/window joining and final refunds are required. Copy retains its successful private result if
 system mirroring exhausts; Paste exhaustion fails without source/history mutation.
 All 53 new facts and the complete predecessor Application stream must pass in Release and real ASan.
 Native Inspect diagnostics are accepted only in their source-defined Pending-to-Settled windows: one
-failed Open for Paste release and six for exhaustion, with valid native DWORD fields. Every unrelated
+through five failed Open calls for Paste release and six for exhaustion, with genuine ACCESS_DENIED
+and valid native DWORD fields. Only the additional source-defined release diagnostics may be projected
+before the unchanged predecessor reader; assertion labels, order and every other byte remain required. Every unrelated
 byte still passes to the unchanged predecessor reader. See [the scoped evidence](../TestRuns/P1ClipboardRealContention_2026-10-17.md).
 
 ## Preserving marquee actual-window validation
@@ -3143,3 +3147,30 @@ The complete selected Release roster now has 150 Application stages, 9,111 stdou
 clipboard setup facts/summary and delegates every predecessor byte unchanged. Complete native Debug,
 Release, real ASan and ARM64 cross-build qualification remain separate gates; native ARM64 runtime
 claims require a native host.
+
+## Selected Freehand parent and actual-window validation
+
+`Document.Tests.FreehandPlan` supplies 75 independent finite-capacity/geometry facts; the physical
+input suite supplies nine long-path/queue facts. The shared original-parent fixture adds 110 facts
+covering New/Add/Subtract, literal areas and complete hard-coverage grids, 131 accepted points over
+two sealed blocks, captured settings, no-op/short/inside behavior, exact writer authority, refusal,
+cancellation, foreign edits and original strong/weak retirement. Keep all 23,039 prior facts
+(23,233 total) in complete scoped Release and real ASan; require actual UAF detection.
+
+`Application.Tests.FreehandPress` adds 472 facts over 51 actual hidden Win32/two-worker/WARP cases,
+including live capture loss for Freehand, Rectangle and Ellipse in all three modes. Retain every
+predecessor record: 151 stages, 9,583 stdout PASS records and 7,613 stderr facts. Independent readers
+require source-derived exact order, summaries, actual exits, compiler/dependency and executable/full-PDB
+identity, ISA proof and complete archives. A valid unchanged Document image may reuse its exact
+compiler-input/artifact/profile receipt; a fresh Application run cannot inherit an older exit.
+Keep failed runs and reader/scanner repairs separately. Private selected proof does not qualify
+ordinary activation, latest full native profiles, G1 or P1 Done.
+
+## Immediate R9 terminal switch-data validation
+
+`IsaR9DirectTests.ps1` adds 64 independent PE/PDB/listing controls: three accepted maximum ranges
+and 61 refusals. Require exact guarded zero-extension/dispatch rows and anonymous terminal extent;
+missing, unknown, mismatched, foreign or malformed proof refuses. True VEX in executable body,
+case-target or adjacent code remains rejected. Keep all existing parser and compiled ISA controls.
+Original failed linked images are rechecked without rebuilding, preserving the failed report and
+exact binary/PDB/raw metadata hashes. [Evidence](../TestRuns/IsaR9Direct_2026-10-17.md).
