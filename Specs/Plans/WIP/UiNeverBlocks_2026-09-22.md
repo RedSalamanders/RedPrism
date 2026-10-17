@@ -28,7 +28,7 @@ results and do not override these remaining gates.
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
 - [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and the remaining large-outline cursor containment walk and complete deferred transform settlement (P1.5–P1.6, S5).
 - [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
 - [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
 - [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).

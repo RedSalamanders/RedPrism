@@ -20,6 +20,7 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [ ] Qualify the new physical Add/Subtract marquee extension and actual window fixture; preserve the normal-memory, original-ticket, modifier, cancellation and joined-Close expectations.
 - [ ] Complete full native Debug/Release/real ASan, analysis and ARM64 cross-build qualification on the latest adopted CPU source. The `6a7afac` full-ASan and three ARM64 receipts above remain earlier-source evidence; native ARM64 runtime is unavailable. Ordinary activation and measured G1 remain open.
 - [ ] Complete the remaining marquee/lasso/Add/Subtract/Wand/pixel-lift physical branches, overlapping writer/target guards, deferred transform settlement and worker-only geometry/coverage/outline consumers.
+- [ ] Remove the remaining selection cursor owner containment/translated-geometry walk; preserve exact hit results with bounded latest-request scheduling, source authority and joined lifetime (implementation slice below).
 - [ ] Prove complete original-ticket phase/retirement bounds, actual view/DPI/device behavior, ordinary activation and measured S5/G1 before closing this child or P1.
 
 Previous private core, original-parent, physical-prefix, cached admission and residency prerequisites remain
@@ -1065,3 +1066,39 @@ predecessor and latest own scalar witness, including foreign pending-transform a
 This does not activate the uncompiled Application press prototype. Physical prefix replay/overflow/ordinal
 exhaustion, captured New-wand and Ctrl/preserving branches, complete display/first-upload consumers, native
 adoption, ordinary activation and G1 remain required.
+
+## Next selected consumer: exact cursor containment off the owner
+
+Code inspection on 2026-10-17 confirms a remaining owner walk in `Application::CursorOverSelection`
+(`Application.cpp`, the call to `CanMoveSelection`). The current memo avoids repeated work at one
+position, but a new in-bounds pointer position can still visit the complete outline. `CanMoveSelection`
+also materializes translated geometry for the deferred-move numeric reference. The 50,000-point cursor
+fixture in `ApplicationChromeSync.cpp` currently expects those synchronous calls; it must be adapted with
+its literal inside/corner/outside expectations intact. This is source inspection, not timing evidence.
+
+Implementation slice after preserving-marquee host qualification:
+
+1. Capture only a fixed request descriptor in the cursor callback: document/session lifetime, current
+   selection/translation authority, view/cursor epoch and exact query point. Outside cached finite bounds
+   is an immediate false. Do not retain the geometry root or construct translated vectors before complete
+   admission. Describe retained/control/retirement needs from cached immutable metadata.
+2. Bound outstanding work to one original cursor ticket and one replaceable latest descriptor. Repeated
+   requests for the same source/point reuse the pending or exact cached result. A changed query cancels
+   obsolete work and waits for its acknowledgement before replacement dispatch; no timer or polling loop.
+   Finite-value/counter/admission failures must not fall back to an owner geometry walk.
+3. Acquire the immutable display value only under the admitted original record and matching source witness.
+   Run `ContainsSelectionForWork` on a worker, preserving per-vertex translation and the existing segment
+   tolerance; subtracting translation from the query is not equivalent at large coordinates. Preserve
+   `CanMoveSelection` eligibility and collapsed/explicit-empty geometry semantics separately.
+4. Publish only if request, source, translation and cursor/view epoch still match. Pending probes use the
+   neutral selection cursor; a stale result cannot affect a later document or pointer. Refresh only the
+   current application's cursor through its existing message route, never a different window's cursor.
+   Pointer Down must retain its independent exact worker classification.
+5. Join cancellation/retirement before Application, HWND and source owners disappear. Apply performs no
+   traversal, point construction or final large-owner destruction. Preserve weak-owner charges and existing
+   scheduler wake/idle behavior.
+6. Add independent host controls for literal inside/corner/outside and boundary/holes/translated cases,
+   source replacement, repeated point, rapid latest-point replacement, refused admission, epoch exhaustion,
+   hidden completion and joined Close. Assert bounded dispatch/capture counts and zero owner edge walks.
+   Retain the existing full cursor fixture's geometry expectations; no measured timing gate is inferred
+   from structural counters. Complete Release/real-ASan and final native qualification before activation.
