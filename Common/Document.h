@@ -923,6 +923,11 @@ struct LassoOpeningSettings;
 class LassoIntent;
 class LassoOpeningInput;
 class PreparedLassoOpening;
+enum class PreparedLassoRemoval : std::uint8_t
+{
+    Continues,
+    Ended
+};
 
 struct LassoDraft
 {
@@ -2553,6 +2558,14 @@ class DocumentSession
     // Closed terminal capture may refuse. Retire only this exact writer's captured history through its owner.
     [[nodiscard]] bool DiscardPreparedClosedLassoIfCurrent(PreparedLassoOpening& prepared) noexcept;
     // Original writer only; true changes one bounded chunk, false is a quarter-pixel no-op, null refuses.
+    // Exact own-key point/cursor/pop metadata. Polygon removal of the last corner ends that exact
+    // draft without publishing selection/history; the prepared owner retains its writer for retirement.
+    [[nodiscard]] std::optional<bool> ExtendPreparedLassoPointIfCurrent(PreparedLassoOpening& prepared,
+                                                                        Vec2 point) noexcept;
+    [[nodiscard]] std::optional<bool> MovePreparedPolygonCursorIfCurrent(PreparedLassoOpening& prepared,
+                                                                         std::optional<Vec2> point) noexcept;
+    [[nodiscard]] std::optional<PreparedLassoRemoval> RemovePreparedPolygonPointIfCurrent(
+        PreparedLassoOpening& prepared) noexcept;
     [[nodiscard]] std::optional<bool> ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
                                                                       Vec2 point) noexcept;
     [[nodiscard]] bool DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,

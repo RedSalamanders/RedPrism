@@ -3,3 +3,5 @@
 int RunLassoGestureAuthorityTests();
 
 int RunLassoIntentCleanupTests();
+
+int RunPreparedPolygonAuthorityTests();

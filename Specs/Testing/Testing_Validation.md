@@ -3174,3 +3174,15 @@ missing, unknown, mismatched, foreign or malformed proof refuses. True VEX in ex
 case-target or adjacent code remains rejected. Keep all existing parser and compiled ISA controls.
 Original failed linked images are rechecked without rebuilding, preserving the failed report and
 exact binary/PDB/raw metadata hashes. [Evidence](../TestRuns/IsaR9Direct_2026-10-17.md).
+
+## Polygonal finite plan and metadata validation
+
+`RunPreparedPolygonAuthorityTests` adds 39 own-key, kind, hover, quarter-pixel, nonfinite, close,
+foreign writer/Begin, last-corner removal, immutable snapshot, one-block exhaustion/refill and
+original-refund expectations. `Document.Tests.PolygonalPlan` adds 35 independent literal capacity,
+invalid/overflow, drag-Up refusal, short-mode and geometry checks. Triangle/bowtie references
+check every pixel of independent 12-by-10 literal masks (28/24 covered pixel centers).
+Complete scoped Release and real ASan preserve all 23,233 predecessor assertions (23,307 total),
+with genuine sanitizer detection, exact 282-TU profile/artifacts/PDB/ISA and full archive readback.
+[Evidence](../TestRuns/P1PolygonalPrimitives_2026-10-17.md). This is not physical-parent, latest full
+native-matrix, ordinary input or G1 qualification.

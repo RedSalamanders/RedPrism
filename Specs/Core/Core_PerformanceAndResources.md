@@ -1717,3 +1717,13 @@ Bounded owner replay uses at most sixteen accepted moves per continuation and on
 causes no wake. The arena prefix is neither traversed nor recycled there. Complete path geometry,
 coverage and history work retain worker ownership. Structural bounds establish no 2 ms/G1 timing
 qualification, ordinary activation or permission to use the synchronous reference as a failure fallback.
+
+## Polygonal scalar plan and guarded metadata
+
+The Polygonal plan uses the same enforced 65,536-point/1,023-block base capacity policy as Freehand,
+with source-aware preserving limits, complete worker workspace/output declarations and checked
+refusal. Backspace/refill does not recycle a sealed block while readers exist, so exhausted arena
+capacity can refuse before the live-point limit. Exact key validation precedes each bounded metadata
+update; no cursor path becomes an accepted corner. Last-corner draft removal keeps its prepared
+writer and held snapshots charged. These CPU bounds do not substitute for original-parent/host,
+complete consumer, ordinary activation or measured G1 qualification.

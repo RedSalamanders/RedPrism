@@ -456,3 +456,10 @@ Generic pointer cleanup cannot cancel an owned live writer ahead of the original
 Lost, cancellation, stale refusal and joined Close preserve the original selection/history and cannot
 roll back a foreign Begin or editor. Final strong and weak owners retain the original charge until
 worker retirement. Selected runtime proof remains separate from ordinary activation and measured G1.
+
+## Polygonal metadata and last-corner removal
+
+Guarded corner/hover/Backspace operations publish no selection/history/generation change. Removing
+the last corner ends only the original validated writer, preserving the original selection, saved
+state and redo branch. Its prepared handle and immutable snapshots keep the original memory owner
+until actual strong/weak retirement. Foreign Begin/editor state cannot be rolled back by these APIs.

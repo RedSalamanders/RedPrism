@@ -1955,3 +1955,19 @@ Accepted Up remains authoritative over a later loss. Lost/cancelled drawing pres
 selection/history; final publication and joined Close retain the original ticket, input and history
 barriers through acknowledged retirement. Activation of this worker route in ordinary operation
 remains disabled pending complete consumer admission, remaining branches and activation/G1 qualification.
+
+## Guarded Polygonal metadata primitives
+
+`ExtendPreparedLassoPointIfCurrent` supports a captured Freehand/Polygonal writer only; the existing
+Freehand wrapper retains its kind restriction. `MovePreparedPolygonCursorIfCurrent` changes only
+the rubber band, rejects nonfinite positions and preserves the key on repeated hover.
+`RemovePreparedPolygonPointIfCurrent` returns Continues or Ended. Last-corner Pop validates the
+exact current writer first, then clears only its matching draft/active marker in that same owner
+transition; Pop already ends the writer, so no subsequent ActiveOwner check may reject cleanup.
+The prepared handle and held snapshots retain the original arena/control charge after draft removal.
+
+All three APIs retain original session/document/editor/history/token and own-key checks. Foreign
+writer/Begin, wrong kind and consumed authority refuse without replacing foreign state. Metadata
+alone changes neither committed selection, history, generation nor redo. `PolygonalLimits` and
+`PlanPolygonal` describe the finite arena/worker capacities; generic drag-Up `PlanDrawing` still
+refuses Polygonal. These primitives do not enable the multi-click physical parent or ordinary routing.

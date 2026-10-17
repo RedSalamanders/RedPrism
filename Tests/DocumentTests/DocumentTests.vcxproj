@@ -599,7 +599,9 @@
     <ClCompile Include="Document.Tests.EllipseFinishPlan.cpp" />
     <ClCompile Include="Document.Tests.MarqueeModePlan.cpp" />
     <ClCompile Include="Document.Tests.FreehandPlan.cpp" />
+    <ClCompile Include="Document.Tests.PolygonalPlan.cpp" />
     <ClInclude Include="Document.Tests.FreehandPlan.h" />
+    <ClInclude Include="Document.Tests.PolygonalPlan.h" />
     <ClCompile Include="Document.Tests.SelectionCursorProbe.cpp" />
     <ClInclude Include="Document.Tests.SelectionCursorProbe.h" />
     <ClInclude Include="Document.Tests.EllipseFinishPlan.h" />

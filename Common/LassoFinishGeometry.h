@@ -83,6 +83,16 @@ inline constexpr std::uint32_t kFreehandArenaBlocks = 1023;
                                                                             std::uint64_t sourceLoops = 0) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourcePoints = 0,
                                                      std::uint64_t sourceLoops = 0) noexcept;
+inline constexpr std::uint32_t kPolygonalMaximumPoints = kFreehandMaximumPoints;
+inline constexpr std::uint32_t kPolygonalArenaBlocks = kFreehandArenaBlocks;
+// Polygonal uses the same finite arena and enforced geometry ceilings, with ordered Backspace and
+// re-extension allowed to exhaust the non-recycled node budget before the live-point limit. This
+// model plan does not enable polygonal in the drag parent's Up-finishes protocol.
+[[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> PolygonalLimits(SelectionMode mode,
+                                                                             std::uint64_t sourcePoints = 0,
+                                                                             std::uint64_t sourceLoops = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanPolygonal(SelectionMode mode, std::uint64_t sourcePoints = 0,
+                                                      std::uint64_t sourceLoops = 0) noexcept;
 // Complete immutable Down-time drawing descriptor. Polygonal remains a separate multi-press protocol.
 struct DrawingPlan final
 {

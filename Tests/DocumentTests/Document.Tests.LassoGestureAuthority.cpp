@@ -91,6 +91,7 @@ struct OpeningState final
     std::uint64_t reservedBefore = 0;
     std::int32_t bindResult = E_UNEXPECTED;
     unsigned runs = 0;
+    LassoKind kind = LassoKind::Rectangle;
     bool retainOwnGesture = true;
     bool cancelPreparation = false;
     bool failAfterInputMove = false;
@@ -179,7 +180,7 @@ class OpeningJob final : public Job
         else
         {
             auto input = s.session->PrepareLassoOpeningInput({8.5, -2.5}, SelectionMode::New,
-                                                             LassoOpeningSettings{LassoKind::Rectangle, false});
+                                                             LassoOpeningSettings{s.kind, false});
             if (input)
             {
                 s.input.emplace(std::move(input.value()));
@@ -1009,6 +1010,189 @@ void CheckNewerClosedAndDefault(JobScheduler& scheduler)
                "closed.default-non-opt-in-refuses-cleanup-and-preserves-exact-terminal");
     }
 }
+
+bool OpenPointDraft(Fixture& fixture, LassoKind kind = LassoKind::Polygonal)
+{
+    fixture.state.kind = kind;
+    return Submit(fixture) && Ready(fixture) && Apply(fixture) && Current(fixture);
+}
+void CheckPolygonPointMetadata(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const Stamp before(f->session);
+    const bool opened = OpenPointDraft(*f);
+    Expect(opened, "points.original-admitted-own-polygon-writer-opens");
+    if (!opened)
+        return;
+    auto& prepared = f->state.prepared.value();
+    const auto initial = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(initial && initial.value().display.kind == LassoKind::Polygonal &&
+               initial.value().display.points.Count() == 1 && !initial.value().display.anchor &&
+               initial.value().display.key.revision == 1 &&
+               initial.value().display.points.Bounds() == std::optional(SelectionBounds{8.5, -2.5, 8.5, -2.5}),
+           "points.literal-first-corner-stays-unrounded-eightpointfive-minus2point5");
+    const auto closePoint = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {8.6, -2.5});
+    const auto unchanged = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(closePoint && !closePoint.value() && initial && unchanged &&
+               SameDisplay(initial.value().display, unchanged.value().display) && Current(*f),
+           "points.sub-quarter-distance-is-noop-without-revoking-own-key");
+    f->session.lassoKind = LassoKind::Freehand;
+    const auto cursor = f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{22, 19});
+    const auto cursorDisplay = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(cursor && cursor.value() && cursorDisplay && cursorDisplay.value().display.kind == LassoKind::Polygonal &&
+               cursorDisplay.value().display.cursor == std::optional(Vec2{22, 19}) &&
+               cursorDisplay.value().display.points.Count() == 1 && cursorDisplay.value().display.key.revision == 2 &&
+               Current(*f),
+           "cursor.accepted-kind-survives-header-change-and-cursor-adds-no-vertex");
+    const auto repeated = f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{22, 19});
+    const auto repeatedDisplay = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(repeated && !repeated.value() && cursorDisplay && repeatedDisplay &&
+               SameDisplay(cursorDisplay.value().display, repeatedDisplay.value().display),
+           "cursor.identical-hover-preserves-revision-and-snapshot");
+    const auto invalid =
+        f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{(std::numeric_limits<double>::quiet_NaN)(), 19});
+    const auto invalidDisplay = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(!invalid && cursorDisplay && invalidDisplay &&
+               SameDisplay(cursorDisplay.value().display, invalidDisplay.value().display) && Current(*f),
+           "cursor.nonfinite-refusal-preserves-exact-writer-and-old-cursor");
+    const auto second = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {12.5, -2.5});
+    Expect(second && second.value() && f->session.PendingLasso().value().PointCount() == 2 && Current(*f),
+           "points.append-renews-only-own-writer-key");
+    const auto boundary = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {12.75, -2.5});
+    Expect(boundary && boundary.value() && f->session.PendingLasso().value().PointCount() == 3,
+           "points.exact-quarter-distance-is-an-accepted-corner");
+    const auto removed = f->session.RemovePreparedPolygonPointIfCurrent(prepared);
+    const auto held = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(removed == std::optional{PreparedLassoRemoval::Continues} && held &&
+               held.value().display.points.Count() == 2 && held.value().display.key.revision == 5 && Current(*f),
+           "pop.nonfinal-corner-removal-renews-current-key");
+    const auto cleared = f->session.MovePreparedPolygonCursorIfCurrent(prepared, std::nullopt);
+    const auto clearedDisplay = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(cleared && cleared.value() && clearedDisplay && !clearedDisplay.value().display.cursor &&
+               clearedDisplay.value().display.points.Count() == 2 && clearedDisplay.value().display.key.revision == 6,
+           "cursor.leave-clears-only-rubberband-not-accepted-corners");
+    const auto terminal = Close(*f, true);
+    Expect(terminal && terminal.value().display.kind == LassoKind::Polygonal && terminal.value().display.antialiased &&
+               !terminal.value().display.cursor && terminal.value().display.points.Count() == 2 &&
+               terminal.value().display.key.revision == 6 && !Current(*f) && !f->session.PendingLasso(),
+           "close.original-two-corners-and-terminal-aa-exclude-hover");
+    Expect(!f->session.ExtendPreparedLassoPointIfCurrent(prepared, {16, 8}) &&
+               !f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{16, 8}) &&
+               !f->session.RemovePreparedPolygonPointIfCurrent(prepared) && !Abort(*f),
+           "close.every-late-operation-refuses-consumed-own-authority");
+    Expect(before.Matches(f->session) && LiteralRedoBranch(f->session),
+           "metadata.no-selection-history-generation-or-redo-publication");
+    Expect(held && held.value().display.cursor == std::optional(Vec2{22, 19}) &&
+               held.value().display.points.Bounds() == std::optional(SelectionBounds{8.5, -2.5, 12.5, -2.5}),
+           "retention.earlier-corner-cursor-snapshot-stays-immutable");
+}
+void CheckPolygonLastCorner(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const Stamp before(f->session);
+    const bool opened = OpenPointDraft(*f);
+    Expect(opened, "last-corner.original-writer-opens");
+    if (!opened)
+        return;
+    auto& prepared = f->state.prepared.value();
+    const auto held = f->session.CaptureBoundedLassoDisplayForWork();
+    const auto result = f->session.RemovePreparedPolygonPointIfCurrent(prepared);
+    Expect(result == std::optional{PreparedLassoRemoval::Ended} && !f->session.PendingLasso() && !Current(*f),
+           "last-corner.matched-pop-ends-writer-and-draft-in-one-transition");
+    Expect(before.Matches(f->session) && LiteralRedoBranch(f->session),
+           "last-corner.preserve-original-selection-history-generation-and-redo");
+    Expect(!f->session.RemovePreparedPolygonPointIfCurrent(prepared) &&
+               !f->session.ExtendPreparedLassoPointIfCurrent(prepared, {10, 10}) &&
+               !f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{10, 10}) && !Abort(*f),
+           "last-corner.ended-writer-cannot-be-edited-or-rolled-back-again");
+    Expect(held && held.value().display.points.Count() == 1 && held.value().display.key.revision == 1 &&
+               scheduler.ReservedMemoryBytes() >= kAdmissionBytes,
+           "last-corner.held-snapshot-and-control-keep-original-admission");
+}
+void CheckPolygonForeign(JobScheduler& scheduler, bool history)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const bool opened = OpenPointDraft(*f);
+    Expect(opened, history ? "foreign-history.original-writer-opens" : "foreign-writer.original-writer-opens");
+    if (!opened)
+        return;
+    if (history)
+        f->session.history.Begin(L"Foreign polygon edit", f->session.Document(), f->session.ActiveLayerID());
+    else
+        f->session.ExtendLasso({16, 8});
+    const auto held = f->session.CaptureBoundedLassoDisplayForWork();
+    const auto* address = &f->session.PendingLasso().value();
+    const Stamp foreign(f->session);
+    auto& prepared = f->state.prepared.value();
+    Expect(!Current(*f) && !f->session.ExtendPreparedLassoPointIfCurrent(prepared, {17, 8}) &&
+               !f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{17, 8}) &&
+               !f->session.RemovePreparedPolygonPointIfCurrent(prepared) && !Abort(*f),
+           history ? "foreign-history.all-metadata-and-abort-operations-refuse"
+                   : "foreign-writer.all-metadata-and-abort-operations-refuse");
+    Expect(PreservesDraft(f->session, held, address) && foreign.Matches(f->session),
+           history ? "foreign-history.exact-foreign-draft-and-history-survive"
+                   : "foreign-writer.exact-foreign-draft-and-history-survive");
+}
+void CheckPolygonWrongKind(JobScheduler& scheduler, LassoKind kind)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const bool opened = OpenPointDraft(*f, kind);
+    const char* openLabel = kind == LassoKind::Freehand ? "wrong-kind.freehand-opens" : "wrong-kind.rectangle-opens";
+    Expect(opened, openLabel);
+    if (!opened)
+        return;
+    auto& prepared = f->state.prepared.value();
+    const auto held = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(!f->session.MovePreparedPolygonCursorIfCurrent(prepared, Vec2{16, 8}) &&
+               !f->session.RemovePreparedPolygonPointIfCurrent(prepared) && Current(*f) && held &&
+               PreservesDraft(f->session, held, &f->session.PendingLasso().value()),
+           kind == LassoKind::Freehand ? "wrong-kind.freehand-rejects-polygon-cursor-and-pop"
+                                       : "wrong-kind.rectangle-rejects-polygon-cursor-and-pop");
+    if (kind == LassoKind::Rectangle)
+        Expect(!f->session.ExtendPreparedLassoPointIfCurrent(prepared, {16, 8}) && Current(*f),
+               "wrong-kind.marquee-rejects-point-append-without-revoking-authority");
+    else
+    {
+        const auto appended = f->session.ExtendPreparedFreehandIfCurrent(prepared, {16, 8});
+        Expect(appended && appended.value() && Current(*f) && f->session.PendingLasso().value().PointCount() == 2,
+               "wrong-kind.existing-freehand-wrapper-keeps-its-accepted-point-behavior");
+    }
+}
+void CheckPolygonCapacity(JobScheduler& scheduler)
+{
+    auto f = std::make_unique<Fixture>(scheduler);
+    const Stamp before(f->session);
+    const bool opened = OpenPointDraft(*f);
+    Expect(opened, "capacity.original-one-block-writer-opens");
+    if (!opened)
+        return;
+    auto& prepared = f->state.prepared.value();
+    bool accepted = true;
+    for (unsigned index = 1; index <= 127; ++index)
+    {
+        const auto appended = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {8.5 + .25 * index, -2.5});
+        accepted = accepted && appended && appended.value();
+    }
+    const auto held = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(accepted && held && held.value().display.points.Count() == 128 && Current(*f),
+           "capacity.one-sealed-block-plus-inline-tail-holds128-corners");
+    const auto refused = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {48, -2.5});
+    const auto after = f->session.CaptureBoundedLassoDisplayForWork();
+    Expect(!refused && held && after && SameDisplay(held.value().display, after.value().display) && Current(*f),
+           "capacity.exhaustion-refuses-without-dropping-accepted-points-or-own-key");
+    const auto removed = f->session.RemovePreparedPolygonPointIfCurrent(prepared);
+    const auto refill = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {99, -2.5});
+    Expect(removed == std::optional{PreparedLassoRemoval::Continues} && refill && refill.value() &&
+               f->session.PendingLasso().value().PointCount() == 128 && Current(*f),
+           "capacity.backspace-refills-inline-tail-without-recycling-sealed-node");
+    const auto secondRefusal = f->session.ExtendPreparedLassoPointIfCurrent(prepared, {100, -2.5});
+    Expect(!secondRefusal && held && held.value().display.points.Count() == 128 &&
+               held.value().display.points.Bounds() == std::optional(SelectionBounds{8.5, -2.5, 40.25, -2.5}) &&
+               Current(*f) && before.Matches(f->session),
+           "capacity.refill-keeps-earlier-snapshot-and-never-admits-extra-node");
+    Expect(Abort(*f) && !f->session.PendingLasso() && before.Matches(f->session),
+           "capacity.exhausted-original-can-still-cancel-without-selection-publication");
+}
 } // namespace
 
 int RunLassoGestureAuthorityTests()
@@ -1067,4 +1251,31 @@ int RunLassoIntentCleanupTests()
     scheduler->Close();
     std::printf("SUMMARY lasso-intent-cleanup checks=%u failures=%u\n", gChecks, gFailures);
     return gChecks == kIntentCleanupChecks && gFailures == 0 ? 0 : static_cast<int>(gFailures ? gFailures : 1);
+}
+
+int RunPreparedPolygonAuthorityTests()
+{
+    gFamily = "prepared-polygon-authority";
+    gChecks = gFailures = 0;
+    auto scheduler = std::make_unique<JobScheduler>();
+    const bool started =
+        scheduler->Initialize(1, {}, {SampleMemory, nullptr}) == S_OK && scheduler->EnableDeferredRelease();
+    Expect(started, "scheduler.original-worker-and-retirement-ready");
+    if (started)
+    {
+        CheckPolygonPointMetadata(*scheduler);
+        CheckPolygonLastCorner(*scheduler);
+        CheckPolygonForeign(*scheduler, false);
+        CheckPolygonForeign(*scheduler, true);
+        CheckPolygonWrongKind(*scheduler, LassoKind::Freehand);
+        CheckPolygonWrongKind(*scheduler, LassoKind::Rectangle);
+        CheckPolygonCapacity(*scheduler);
+        const bool settled = Settle(*scheduler);
+        Expect(settled && scheduler->IsIdle() && !scheduler->ReservedMemoryBytes() &&
+                   !scheduler->ReleasingMemoryBytes(),
+               "scheduler.all-exact-original-owners-and-records-refund");
+    }
+    scheduler->Close();
+    std::printf("SUMMARY prepared-polygon-authority checks=%u failures=%u expected=39\n", gChecks, gFailures);
+    return gChecks == 39 && !gFailures ? 0 : static_cast<int>(gFailures ? gFailures : 1);
 }

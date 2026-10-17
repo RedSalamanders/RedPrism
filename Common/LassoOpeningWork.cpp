@@ -140,10 +140,11 @@ bool DocumentSession::IsPreparedLassoGestureCurrent(const PreparedLassoOpening& 
            history.IsCurrent(prepared._input._history) && CanApplyJobResult(prepared._input._token, 0);
 }
 
-std::optional<bool> DocumentSession::ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
-                                                                     Vec2 point) noexcept
+std::optional<bool> DocumentSession::ExtendPreparedLassoPointIfCurrent(PreparedLassoOpening& prepared,
+                                                                       Vec2 point) noexcept
 {
-    if (prepared._input._marquee || prepared._input._kind != LassoKind::Freehand ||
+    if (prepared._input._marquee ||
+        (prepared._input._kind != LassoKind::Freehand && prepared._input._kind != LassoKind::Polygonal) ||
         !IsPreparedLassoGestureCurrent(prepared))
         return std::nullopt;
     const auto outcome = prepared._writer->ExtendOwner(prepared._gestureKey, point);
@@ -151,6 +152,46 @@ std::optional<bool> DocumentSession::ExtendPreparedFreehandIfCurrent(PreparedLas
         return std::nullopt;
     prepared._gestureKey = prepared._writer->CurrentOwner();
     return outcome == BoundedLassoGesture::Outcome::Changed;
+}
+
+std::optional<bool> DocumentSession::ExtendPreparedFreehandIfCurrent(PreparedLassoOpening& prepared,
+                                                                     Vec2 point) noexcept
+{
+    if (prepared._input._kind != LassoKind::Freehand)
+        return std::nullopt;
+    return ExtendPreparedLassoPointIfCurrent(prepared, point);
+}
+
+std::optional<bool> DocumentSession::MovePreparedPolygonCursorIfCurrent(PreparedLassoOpening& prepared,
+                                                                        std::optional<Vec2> point) noexcept
+{
+    if (prepared._input._marquee || prepared._input._kind != LassoKind::Polygonal ||
+        !IsPreparedLassoGestureCurrent(prepared))
+        return std::nullopt;
+    const auto outcome = prepared._writer->CursorOwner(prepared._gestureKey, point);
+    if (outcome == BoundedLassoGesture::Outcome::Refused)
+        return std::nullopt;
+    prepared._gestureKey = prepared._writer->CurrentOwner();
+    _lassoDraft->cursor = point;
+    return outcome == BoundedLassoGesture::Outcome::Changed;
+}
+
+std::optional<PreparedLassoRemoval> DocumentSession::RemovePreparedPolygonPointIfCurrent(
+    PreparedLassoOpening& prepared) noexcept
+{
+    if (prepared._input._marquee || prepared._input._kind != LassoKind::Polygonal ||
+        !IsPreparedLassoGestureCurrent(prepared) ||
+        prepared._writer->PopOwner(prepared._gestureKey) == BoundedLassoGesture::Outcome::Refused)
+        return std::nullopt;
+    prepared._gestureKey = prepared._writer->CurrentOwner();
+    if (prepared._writer->PointCountOwner())
+        return PreparedLassoRemoval::Continues;
+    // PopOwner already ended the exact writer. Do not revalidate ActiveOwner after that transition:
+    // this is the matching owner-only reset used by RemoveLastBoundedLassoPoint. The prepared handle
+    // retains the arena/control owner, so resetting the draft cannot retire the point graph here.
+    _lassoDraft.reset();
+    prepared._gestureActive = false;
+    return PreparedLassoRemoval::Ended;
 }
 
 bool DocumentSession::DragPreparedMarqueeIfCurrent(PreparedLassoOpening& prepared, Vec2 point, bool square,

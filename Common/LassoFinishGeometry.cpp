@@ -230,6 +230,22 @@ std::optional<MemoryPlan> PlanFreehand(SelectionMode mode, std::uint64_t sourceP
                          static_cast<std::uint64_t>(kFreehandArenaBlocks) * sizeof(std::uint32_t), limits.value());
 }
 
+std::optional<BoundedSelectionBoolean::Limits> PolygonalLimits(SelectionMode mode, std::uint64_t sourcePoints,
+                                                               std::uint64_t sourceLoops) noexcept
+{
+    return FreehandLimits(mode, sourcePoints, sourceLoops);
+}
+std::optional<MemoryPlan> PlanPolygonal(SelectionMode mode, std::uint64_t sourcePoints,
+                                        std::uint64_t sourceLoops) noexcept
+{
+    const auto limits = PolygonalLimits(mode, sourcePoints, sourceLoops);
+    if (!limits)
+        return std::nullopt;
+    return CalculatePlan(LassoKind::Polygonal, kPolygonalMaximumPoints,
+                         BoundedLassoPoints::MemoryBytes(kPolygonalArenaBlocks),
+                         static_cast<std::uint64_t>(kPolygonalArenaBlocks) * sizeof(std::uint32_t), limits.value());
+}
+
 std::optional<DrawingPlan> PlanDrawing(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints,
                                        std::uint64_t sourceLoops) noexcept
 {

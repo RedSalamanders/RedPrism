@@ -13,6 +13,9 @@ The original geometry, live-loss, clipboard-oracle and ISA failures remain retai
 [Freehand evidence](../../TestRuns/P1FreehandHost_2026-10-17.md),
 [scanner correction](../../TestRuns/IsaR9Direct_2026-10-17.md).
 These component receipts do not replace latest full native integration, remaining branches or G1.
+Polygonal finite-plan and guarded metadata prerequisites now qualify all 23,307 Document assertions
+in scoped Release/real ASan; [evidence](../../TestRuns/P1PolygonalPrimitives_2026-10-17.md).
+The multi-click original parent and physical integration remain open.
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under
