@@ -6,7 +6,7 @@ $r9Repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $r9Repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
 
 # Independent PE/listing/PDB parser controls. No synthetic byte array is executed.
-function New-R9ByteSwitchCase([string]$Name,[string]$Fault='',[int]$Maximum=12) {
+function New-R9ByteSwitchCase([string]$Name,[string]$Fault='',[int]$Maximum=12,[switch]$AlignedTail) {
     $case=New-SyntheticCase ($Name+'Seed') -PdbData
     $pe=[IO.File]::ReadAllBytes($case.Binary)
     [uint32]$section=$script:sectionRva
@@ -50,23 +50,29 @@ function New-R9ByteSwitchCase([string]$Name,[string]$Fault='',[int]$Maximum=12) 
     $starts=@(0,4,10,17,25,28);$lengths=@(4,6,7,8,3,2)
     for($i=0;$i-lt6;++$i){$definitions.Add(@{Rva=$prefix+$starts[$i];Bytes=[byte[]]$bytes[$starts[$i]..($starts[$i]+$lengths[$i]-1)];Name="Guard$i"})}
     $definitions.Add(@{Rva=$target;Bytes=[byte[]]@(0x0f,0x1f,0x40,0);Name='Target'})
-    [byte[]]$tail=@(0xc3,0xe8,0,0,0,0,0xcc,0x90)
-    Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32](($section+0x600)-($table-2))))
+    [int]$tailSize=if($AlignedTail){9}else{8}
+    [byte[]]$tail=if($AlignedTail){@(0xc3,0xe8,0,0,0,0,0xcc,0x66,0x90)}else{@(0xc3,0xe8,0,0,0,0,0xcc,0x90)}
+    Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32](($section+0x600)-($table-$tailSize+6))))
     switch($Fault){
         'WrongRet' {$tail[0]=0x90}
         'WrongCall' {$tail[1]=0xe9}
         'WrongInt3' {$tail[6]=0x90}
         'WrongNop' {$tail[7]=0xcc}
-        'TailCallIntoGuard' {Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32](($prefix+17)-($table-2))))}
-        'TailCallIntoTable' {Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32]($table-($table-2))))}
+        'WrongNopSecond' {$tail[8]=0x91}
+        'TailCallIntoGuard' {Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32](($prefix+17)-($table-$tailSize+6))))}
+        'TailCallIntoTable' {Put-Bytes $tail 2 ([BitConverter]::GetBytes([int32]($table-($table-$tailSize+6))))}
     }
-    $tailStarts=@(0,1,6,7);$tailLengths=@(1,5,1,1)
-    for($i=0;$i-lt4;++$i){$definitions.Add(@{Rva=$table-8+$tailStarts[$i];Bytes=[byte[]]$tail[$tailStarts[$i]..($tailStarts[$i]+$tailLengths[$i]-1)];Name="Tail$i"})}
+    $tailStarts=@(0,1,6,7);$tailLengths=@(1,5,1,$(if($AlignedTail){2}else{1}))
+    for($i=0;$i-lt4;++$i){$definitions.Add(@{Rva=$table-$tailSize+$tailStarts[$i];Bytes=[byte[]]$tail[$tailStarts[$i]..($tailStarts[$i]+$tailLengths[$i]-1)];Name="Tail$i"})}
     if($Fault.StartsWith('Alternate',[StringComparison]::Ordinal)){
         [byte[]]$comparison=@(0x41,0x80,0xf9,[byte]$Maximum)
         [byte[]]$branch=@(0x0f,0x85,0,0,0,0)
         [uint32]$alternate=$prefix-16
         Put-Bytes $branch 2 ([BitConverter]::GetBytes([int32](($prefix+4)-($alternate+10))))
+        if($Fault.StartsWith('AlternateShort',[StringComparison]::Ordinal)){
+            $branch=[byte[]]@(0x75,[byte](($prefix+4)-($alternate+6)))
+            if($Fault-eq'AlternateShortWrongJne'){$branch[0]=0x74}
+        }
         if($Fault-eq'AlternateWrongCmp'){$comparison[3]--}
         if($Fault-eq'AlternateWrongRegister'){$comparison[2]=0xf8}
         if($Fault-eq'AlternateWrongJne'){$branch[1]=0x84}
@@ -193,3 +199,26 @@ foreach($row in @('Guard0','Guard1','Guard2','Guard3','Guard4','Guard5','Tail0',
     foreach($kind in 'Missing','Listing','Unknown'){Invoke-R9Control ($kind+$row) ($kind+$row) 12 $false}
 }
 Write-Host "SUMMARY isa-r9-byte-switch controls=$($r9Names.Count) accepted=$r9Accepted refused=$($r9Names.Count-$r9Accepted)"
+
+# Exact two-byte alignment sibling; unchanged old cases above remain mandatory.
+$alignedControls=0
+foreach($maximum in 1,12,127){
+    Invoke-Control (New-R9ByteSwitchCase ("AlignedMaximum"+$maximum) '' $maximum -AlignedTail) $true ($maximum+1) 0
+    ++$alignedControls
+}
+foreach($positive in 'AlternateValid','AlternateShortValid','IncomingCmp','SplitLock'){
+    Invoke-Control (New-R9ByteSwitchCase ("Aligned"+$positive) $positive 12 -AlignedTail) $true 13 0
+    ++$alignedControls
+}
+foreach($fault in @($faults)+@('WrongNopSecond','AlternateShortWrongJne')){
+    Invoke-Control (New-R9ByteSwitchCase ("Aligned"+$fault) $fault 12 -AlignedTail) $false
+    ++$alignedControls
+}
+foreach($row in @('Guard0','Guard1','Guard2','Guard3','Guard4','Guard5','Tail0','Tail1','Tail2','Tail3','AlternateJne')){
+    foreach($kind in 'Missing','Listing','Unknown'){
+        $fault=if($row-eq'AlternateJne'){"AlternateShort"+$kind+$row}else{$kind+$row}
+        Invoke-Control (New-R9ByteSwitchCase ("Aligned"+$fault) $fault 12 -AlignedTail) $false
+        ++$alignedControls
+    }
+}
+Write-Host "SUMMARY isa-r9-aligned-tail controls=$alignedControls accepted=7 failures=0"

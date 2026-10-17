@@ -1694,11 +1694,17 @@ namespace RedPrismBuild
             foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
                 if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
             int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
-            if (tableRaw < 8 || tableRaw > pe.Length - checked((int)(end - begin)) ||
-                !StartsWithAt(pe, tableRaw - 8, 0xc3, 0xe8) ||
-                !StartsWithAt(pe, tableRaw - 2, 0xcc, 0x90)) return null;
-            int[] tailStarts = { -8, -7, -2, -1 };
-            int[] tailLengths = { 1, 5, 1, 1 };
+            if (tableRaw < 9 || tableRaw > pe.Length - checked((int)(end - begin))) return null;
+            // The same terminal switch may align its DWORD data with one or two NOP bytes.
+            // Accept only RET, CALL rel32, INT3, then exactly 90 or 66 90, corroborated below.
+            bool alignedTail = StartsWithAt(pe, tableRaw - 9, 0xc3, 0xe8) &&
+                StartsWithAt(pe, tableRaw - 3, 0xcc, 0x66, 0x90);
+            int tailSize = alignedTail ? 9 : 8;
+            if (!alignedTail && (!StartsWithAt(pe, tableRaw - 8, 0xc3, 0xe8) ||
+                !StartsWithAt(pe, tableRaw - 2, 0xcc, 0x90))) return null;
+            if (begin < afterJump + (ulong)tailSize || fallback >= (long)begin - tailSize) return null;
+            int[] tailStarts = alignedTail ? new int[] { -9, -8, -3, -2 } : new int[] { -8, -7, -2, -1 };
+            int[] tailLengths = { 1, 5, 1, alignedTail ? 2 : 1 };
             for (int i = 0; i < tailStarts.Length; ++i)
             {
                 ulong address = (ulong)((long)begin + tailStarts[i]);
@@ -1713,12 +1719,12 @@ namespace RedPrismBuild
                     !IsDecodedBoundary(procedure.Begin, owner.Module, contributions, decoded, decodedStarts) ||
                     !IsDecodedBoundary((ulong)fallback, owner.Module, contributions, decoded, decodedStarts)) continue;
                 var table = new InlineTable { Begin = begin, End = end, Module = owner.Module,
-                    ContributionBegin = owner.Begin, ContributionEnd = owner.End };
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = alignedTail };
                 bool valid = true;
                 for (uint entry = 0; entry <= maximum && valid; ++entry)
                 {
                     ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * entry))));
-                    valid = target >= procedure.Begin && target < begin - 8 && (target < prefix || target >= afterJump) &&
+                    valid = target >= procedure.Begin && target < begin - (ulong)tailSize && (target < prefix || target >= afterJump) &&
                             IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts);
                     table.Targets.Add(target);
                 }
@@ -1768,12 +1774,14 @@ namespace RedPrismBuild
                     if (target >= (long)begin && target < (long)end) { valid = false; break; }
                     if (!intoGuard) continue;
                     ulong comparison = address >= 4 ? address - 4 : 0;
-                    if (target != (long)prefix + 4 || instruction.Length != 6 || pe[source] != 0x0f || pe[source + 1] != 0x85 ||
+                    bool alternateJne = (instruction.Length == 6 && pe[source] == 0x0f && pe[source + 1] == 0x85) ||
+                        (alignedTail && instruction.Length == 2 && pe[source] == 0x75);
+                    if (target != (long)prefix + 4 || !alternateJne ||
                         comparison < procedure.Begin ||
                         !guardRows.TryGetValue(comparison, out byte[] cmp) || cmp.Length != 4 ||
                         !StartsWith(cmp, 0x41, 0x80, 0xf9) || cmp[3] != maximum ||
                         !MatchesDecodedPe(pe, sections, imageBase, comparison, cmp, contributions, decoded, decodedStarts) ||
-                        !guardRows.TryGetValue(address, out byte[] branch) || branch.Length != 6 ||
+                        !guardRows.TryGetValue(address, out byte[] branch) || branch.Length != instruction.Length ||
                         !MatchesDecodedPe(pe, sections, imageBase, address, branch, contributions, decoded, decodedStarts))
                     { valid = false; break; }
                 }

@@ -695,3 +695,16 @@ base/load/add/jump, PDB/table/procedure ownership and extents, unknown/missing/o
 rows, wrong terminal, out-of-body or interior targets, prefixed and LOOP-family entries, and real vector
 instructions in the body or directly after the exact table end. A genuine following instruction MUST NOT be
 consumed as another target RVA even when its byte encoding equals a valid case address.
+
+
+### R9 byte-switch two-byte alignment sibling
+
+The existing exact R9B-guarded switch may end with `RET; CALL rel32; INT3; 66 90`
+instead of the one-byte NOP tail. Both tail encodings require complete PE-matching decoded rows,
+the same anonymous terminal PDB table extent, complete preceding body and valid case/default targets.
+Only the two-byte sibling additionally accepts a short JNE into the shared JA when its immediately
+preceding R9B comparison uses exactly the same maximum. Other incoming guard transfers refuse proof.
+Its reported vector-data bytes must match the PE. The existing one-byte form stays covered.
+`IsaR9ByteSwitchTests.ps1` adds 109 independent controls (7 accepted, 102 refused); actual vector code
+in the body, target or adjacent range remains gated. No DxUi or allowlist change is involved.
+[Original failed-image and scanner regression evidence](../TestRuns/IsaR9AlignedTail_2026-10-17.md).
