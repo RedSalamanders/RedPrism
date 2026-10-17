@@ -226,3 +226,12 @@ publishing or releasing unfinished source/row/GPU owners. The selected receipt, 
 reservation survive until acknowledgement; then the original receipt reports cancellation and joined cleanup
 drains all opening references. Previously published color remains selected. No source is captured on refusal
 or cancellation before admission; palette, document and history stay unchanged in that case.
+
+## Selected preserving marquee messages
+
+Under the explicit selection-press gate, Rectangle/Ellipse Add/Subtract Down records a fixed descriptor
+before source capture. Ordered Move/Up/Lost remain attached to its original history barrier and prefix.
+Changing live kind/mode preferences cannot rewrite an accepted Down; Up contributes AA only. Refused
+admission performs no geometry capture, stale target preserves foreign state, and joined Close suppresses
+useful completion while retaining borrowed owners until acknowledgement. No ordinary activation follows
+from the selected gate's Release/ASan proof.

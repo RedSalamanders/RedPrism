@@ -1651,3 +1651,12 @@ Checked overflow, invalid counts or exhausted enforced capacities fail the origi
 publication, owner fallback or new admission. These coefficients are capacity policy, not a theorem that
 every possible boolean result fits. The original reservation also covers retained source/history,
 construction, output owners, refresh and retirement; the geometry plan alone cannot cover those consumers.
+
+## Selected preserving marquee Win32 admission
+
+The selected physical Add/Subtract caller reads the typed cached source-count plan before capture and
+uses that exact original reservation for every stage. It performs no inside-outline containment and
+cannot substitute a smaller New-only envelope. Physical-prefix overflow chooses cancellation without
+allocating replacement input. Joined Close retains the producer/source until the original acknowledgement;
+all source/geometry/history/control readers retain their declared charges through actual retirement.
+The normal-memory structural proof does not replace complete consumer, ordinary-host or G1 measurements.

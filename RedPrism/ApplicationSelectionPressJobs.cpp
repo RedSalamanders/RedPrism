@@ -12,9 +12,10 @@
 bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
 {
     const auto kind = _session.marqueeKind;
+    const auto mode = _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
     if (!_selectionPressTestEnabled || _tool != EditorTool::Marquee ||
         (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse) ||
-        _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU)) != SelectionMode::New ||
+        (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract) ||
         (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))
         return false;
     if (_selectionPressInput.Busy() || (_selectionPressState && _selectionPressState->controller))
@@ -39,7 +40,7 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
     context.document = *authority;
     context.tool = HostSelectionPressInput::Tool::Marquee;
     context.kind = kind;
-    context.mode = SelectionMode::New;
+    context.mode = mode;
     // These are scalar event-time settings. Mutable source geometry/history is captured after admission.
     context.active = _session.ActiveLayerID();
     context.crop = _session.CropFrame();
@@ -54,7 +55,10 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
             break;
         }
     }
-    if (!_selectionPressInput.Begin(opening, context, pixel, {}, _session.selectionAntialiased))
+    if (!_selectionPressInput.Begin(
+            opening, context, pixel,
+            {(modifiers & MK_SHIFT) != 0, (modifiers & MK_CONTROL) != 0, KeyboardState::Held(VK_MENU)},
+            _session.selectionAntialiased))
     {
         ReportHostAdmission(ContinuationReceipt::Failure(E_INVALIDARG));
         return true; // The exact queued descriptor fails without source capture.
@@ -153,7 +157,7 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) ||
         (_selectionPressState && _selectionPressState->controller))
         return E_ABORT;
-    const auto memory = DescribeSelectionOutlineGestureMemory(_session, arrival->kind);
+    const auto memory = DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
     if (!memory)
         return E_OUTOFMEMORY;
     _selectionPressStamp =
@@ -166,6 +170,7 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     _selectionPressState->admissionSource = memory->source;
     _selectionPressState->allowNewRectangle = arrival->kind == LassoKind::Rectangle;
     _selectionPressState->allowNewEllipse = arrival->kind == LassoKind::Ellipse;
+    _selectionPressState->allowPreservingMarquee = arrival->mode != SelectionMode::New;
     _selectionPressState->requireCapturedTarget = true;
     _selectionPressState->observer = this;
     _selectionPressState->notify = [](void* raw, SelectionOutlineGestureState::Event event) noexcept

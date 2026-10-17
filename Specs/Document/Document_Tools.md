@@ -1889,3 +1889,12 @@ preserves absence/revision/history; explicit-empty subtraction retains its empty
 A foreign target/editor/history change refuses without rolling back foreign state. Cancellation/loss
 preserves the original outline, and joined Close retains the original parent until worker acknowledgement.
 The new mode gate defaults off. This model protocol alone does not enable the ordinary physical caller.
+
+## Selected preserving marquee physical caller
+
+The explicit selected physical gate supports Rectangle/Ellipse Add/Subtract through the typed original
+parent. Those modes always draw without containment, including inside an old outline. Accepted Down
+owns kind/mode; accepted Up seals AA without inventing another Move. Physical Shift/Alt retain the legacy
+Add/Subtract, rearm and non-centered rules. The same admission/ticket covers input, closure and retirement.
+Absent, explicit-empty, foreign target, loss, cancellation, overflow and joined Close retain their distinct
+semantics. This selected caller remains disabled in ordinary use until complete activation gates close.

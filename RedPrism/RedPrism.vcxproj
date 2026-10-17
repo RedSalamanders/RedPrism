@@ -681,6 +681,7 @@
     <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
     <ClCompile Include="Application.Tests.RectanglePress.cpp" />
     <ClCompile Include="Application.Tests.ClipboardContention.cpp" />
+    <ClCompile Include="Application.Tests.MarqueeModes.cpp" />
     <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
     <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
     <ClInclude Include="..\Common\LassoFinishWork.h" />

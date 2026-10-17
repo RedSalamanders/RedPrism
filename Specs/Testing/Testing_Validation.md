@@ -3084,3 +3084,16 @@ All 53 new facts and the complete predecessor Application stream must pass in Re
 Native Inspect diagnostics are accepted only in their source-defined Pending-to-Settled windows: one
 failed Open for Paste release and six for exhaustion, with valid native DWORD fields. Every unrelated
 byte still passes to the unchanged predecessor reader. See [the scoped evidence](../TestRuns/P1ClipboardRealContention_2026-10-17.md).
+
+## Preserving marquee actual-window validation
+
+`Application.Tests.MarqueeModes` adds 429 assertions over 52 actual Win32/two-worker/WARP cases across
+Rectangle/Ellipse Add/Subtract. Preserve the entire predecessor stream (149 stages, 9,059 stdout and
+7,613 stderr facts), exact full 343-TU compiler/source/dependency/product/archive identity, zero ISA
+violations and matching executable/full-PDB in Release and real ASan with actual UAF detection. Include
+normal 2 GiB admission and original 65,540-point counts, no preserving-mode containment, captured Down
+kind/mode, terminal AA, Shift rearm/Alt semantics, literal winding/bounds/history/Undo/Redo, refusal,
+foreign target, loss, cancellation, prefix overflow and joined refunds. The source-only isolated reader
+requires exact order and forwards all predecessor bytes unchanged; counts alone never qualify.
+See [the scoped evidence](../TestRuns/P1PreservingMarqueeHost_2026-10-17.md). Ordinary activation, cursor
+work, remaining selection branches, latest native profiles and measured G1 remain separate gates.
