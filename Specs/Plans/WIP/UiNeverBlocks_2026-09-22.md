@@ -14,7 +14,8 @@ results and do not override these remaining gates.
 - [x] Qualify actual Rectangle Win32 Release R6: all 83 new facts and every predecessor record pass in 146 stages; retain the inherited 260-character reference-reader failure and the separate newline reader refusal. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
 - [x] Complete exact-source Rectangle Win32 real ASan: fresh 341 instrumented TUs, actual UAF detection, all 146 stages and both full archives independently pass. The 14 host paths, five contracts and evidence are pushed as `562b1b5`. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
 - [x] Qualify Ellipse/New CPU Release: 20 reviewed geometry/legacy-coverage facts and 77 original-parent/authority/lifetime facts preserve all 22,596 predecessors (22,693 total); retain the artifact-reader status-literal refusal without rerunning code.
-- [ ] Qualify the exact frozen Ellipse source under fresh 278-TU real ASan (active), then the actual Ellipse Win32 caller. Ordinary activation and final native gates remain open.
+- [x] Complete exact-source fresh 278-TU Ellipse real ASan, actual UAF control, all 22,693 assertions and complete archive/PE/PDB/ISA readback. Publish the 11 CPU code/test paths, four contracts and evidence as `cb72fb2`. [Evidence](../../TestRuns/P1EllipseGestureParent_2026-10-17.md).
+- [ ] Qualify the separate 89-fact/147-stage actual Ellipse Win32 caller: fresh 341-TU Release is compiling; exact CPU byte-equivalence and runtime gate are verified. Real host ASan, ordinary activation and final native integration remain due.
 - [ ] Adopt the combined qualified source and reconcile contracts; run latest-source x64 Debug/Release/real ASan, analysis and all ARM64 cross-builds. Earlier-source results cannot close these gates.
 - [ ] Complete every remaining delivery gate below, including ordinary routes and measured G1, before moving P1 to Done or merging main.
 
