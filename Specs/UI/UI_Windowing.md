@@ -254,3 +254,14 @@ cleanup belongs to original completion or scheduler join; a generic cancellation
 input/prepared writer while the original job can still access it. Pointer leave that keeps a Polygonal
 draft retains that original owner. The gate remains disabled for ordinary input pending complete scope,
 view/device, full-profile and latency qualification.
+
+
+### Polygonal live view and pointer leave
+
+Queued Zoom In/Out during a selected live Polygonal drawing changes the viewport while retaining its
+original ticket, prepared writer, committed selection and history. Subsequent native corner coordinates
+use the current viewport mapping; already captured document coordinates and drawing mode stay unchanged.
+Native `WM_MOUSELEAVE` without capture clears hover tracking and the transient pointer drag while retaining
+the original drawing owner/draft. Reentry continues that same prepared writer. Terminal selection/history
+and joined refunds keep their existing rules. These input invariants do not qualify complete DPI/device/
+hidden-display scope, ordinary activation or measured presentation latency.

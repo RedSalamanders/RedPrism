@@ -37,7 +37,7 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Correct the exact R9-byte switch two-byte-alignment ISA form: 109 added controls, the complete Release scanner regression and the unchanged original failed executable/PDB pass. Original failure retained; no DxUi or allowlist change. [Evidence](../../TestRuns/IsaR9AlignedTail_2026-10-17.md).
 - [x] Qualify and adopt the selected Polygonal Win32 caller: all 527 source-defined facts over 45 cases and the complete 152-stage Application roster pass scoped Release and real ASan with exact 349-object lineage (one failure-diagnostic test override plus 348 qualified objects) and full archive readback. Preserve the original ISA/runner and Save-fixture failures; production behavior and legacy goldens stay unchanged through the fixture correction. Eleven caller/fixture/test/project paths and five contracts are integrated; ordinary activation remains off. [Evidence](../../TestRuns/P1PolygonalPhysicalHost_2026-10-17.md).
 - [x] Qualify and adopt native PNG/JPEG export and picker cancellation while the Polygonal draft is live: twelve new cases / 186 independent facts preserve all 527 original facts (57 cases / 713 total) and the complete 152 stages / 10,296 stdout assertions in scoped Release and real ASan. Main verifies source-only reader controls, full archives, 349-object lineage, PE/PDB/ISA and retained reader refusal. Project path, dirty saved marker, original ownership and decoded output pixels pass. Production and legacy goldens are unchanged. [Evidence](../../TestRuns/P1PolygonalExport_2026-10-17.md).
-- [ ] Qualify native zoom and pointer-leave/reentry during the original live Polygonal job: Main reviewed the private six-case extension, corrected replay timing and derives 63 cases / 791 facts. Compilation and full native Release/real-ASan proof remain pending.
+- [x] Qualify and adopt native zoom and pointer-leave/reentry on the original live Polygonal job: six new cases / 78 facts preserve all 713 predecessors (63 cases / 791 total), with the complete 152 stages / 10,374 stdout assertions passing scoped Release and real ASan. Main corrects replay timing and the agent's count, verifies source-only controls, all archives, 349-object lineage and PE/PDB/ISA; current-view corners, original writer/history, Undo/Redo and joined refunds pass. Complete DPI/device/dispatcher scope and ordinary activation remain open. [Evidence](../../TestRuns/P1PolygonalView_2026-10-17.md).
 - [ ] Audit the retained inherited inverse-selection held-gate ASan exit 5 at final native qualification. It did not recur in the complete diagnostic run; failure-only state/error logging is now retained and no causal fix is claimed.
 - [ ] Complete the physical Polygonal dispatcher, New with nonempty prior exact containment, multi-click Up/hover/close and queued Save/tool/lifetime arbitration. The drawing-only CPU adoption does not enable ordinary routing.
 
@@ -1235,3 +1235,59 @@ Implementation sequence and boundaries:
 7. Keep numeric reference goldens, complete predecessor rosters, code/contracts/evidence and the
    opening checklist synchronized. Commit/push the qualified component; complete remaining Wand,
    Ctrl-pixel-lift, coverage/display/transform consumers, ordinary activation and measured G1 before Done.
+
+
+## Remaining exact-hit Polygonal dispatcher — implementation sequence
+
+This section describes work still due after the selected drawing caller and live-draft export adoption.
+The opening checklist is authoritative for qualification; no ordinary activation follows from this design.
+
+1. Preserve **physical** Down, Move/hover, Up, Backspace, explicit terminal and loss in fixed scalar storage
+   before the exact worker hit resolves. Every Down retains its own tool/kind/mode, modifiers, target/crop,
+   document/session identity, AA, view-mapped document coordinates and shared physical ordinal. A first Up
+   must not be eagerly treated as either a drawing terminal or an irrelevant drawing release while the
+   branch is unknown. Bound all storage and refuse capacity/ordinal exhaustion before model mutation.
+2. Extend one original parent's admitted peak for exact hit plus the possible outline move, Polygonal draw,
+   lifted-pixel branch and all retained source/history/output/refresh/retirement owners. Capture immutable
+   geometry/history after admission, run the exact displayed-selection hit on the worker, validate complete
+   editor/history/target authority, then open only the chosen writer. Do not recapture/re-admit the first
+   physical gesture under a second original job after discovering the hit.
+3. Inside plain New retains the existing outline-move rules through first Up/loss; outside plain New keeps
+   the Polygonal draft open across Up. Add/Subtract draw even inside prior geometry. Ctrl-inside lifts pixels
+   and Alt copies under the existing document contract. The legacy oracle is
+   archived behavioral reference (Ctrl/inside, then New/inside, then drawing).
+   Keep `PlanDrawing(Polygonal)` refused in the old drag-Up parent until its complete multi-click protocol is
+   implemented; merely adding it to the old kind check gives the wrong terminal semantics.
+4. Preserve younger accepted taps while hit is delayed. For an outside drawing they remain corners on that
+   original ticket; for an inside move they become later ordered gestures only after the first terminal and
+   original acknowledgement. The pending scalar tail may not be silently dropped, reinterpreted from current
+   headers/views, published as extra vertices, or allowed to retain the first writer after acknowledgement.
+   Bind later admissions to their event descriptors under the existing host authority/order rules; do not
+   manufacture read/editor authority from a naked generation or storage address.
+5. Reserve shared host ordinals for ambiguous later Down/terminal descriptors before replay. A Save/export
+   between first Up and a later tap observes the proper committed revision for either classification. A
+   drawing creator yields at acknowledged opening while retaining its job, full admission and writer; an
+   outline/lift terminal keeps its actual barrier through completion. Use event-driven readiness and bounded
+   replay (at most sixteen metadata records per owner continuation), with complete fixed-queue refusal.
+6. Qualify source/history replacement, editor reentrancy, scope/view/DPI/device changes, tool/header/Deselect,
+   Save/export success/cancel/failure, cancelled Close and joined shutdown against both branches. Preserve the
+   exact chosen terminal ordinal/AA; one changed gesture creates one history entry. No synchronous containment,
+   pixel/coverage construction, source-root copy, worker wait or competing serial producer may be a fallback.
+
+### Required independent scenarios
+
+- Start with prior rectangle `[1,5) × [1,5)` on a 64×64 document. Inside Down `(2,2)` followed by delta `(3,2)`
+  moves the sixteen covered pixel centers to `[4,8) × [3,7)`; Shift constrains to `(3,0)` and `[4,8) × [1,5)`.
+  An unchanged inside click retains the existing click/Deselect history policy. Preserve its original ticket,
+  source snapshot, authority, saved marker and Undo/Redo.
+- Outside Down `(10,10)` plus `(14,10)`, `(14,14)`, `(10,14)` creates sixteen new covered centers at
+  `[10,14) × [10,14)`; pointer Up never inserts a vertex or completes it. Terminal AA is the chosen physical
+  close's setting. Add/Subtract retain their existing independent boolean references and legacy goldens.
+- Gate the exact hit worker; deliver first Move/Up, several later taps, Enter/Backspace and a Save/tool/lifetime
+  descriptor in different shared orders. Check the two possible interpretations against the table above,
+  including an earlier chosen close with younger Enter and a refused provisional close.
+- Exercise fixed-input/host-queue/arena exhaustion, admission refusal before capture, ordinal exhaustion and
+  cancellation at allocation/hit/open/finish/residency gates. Verify exact original strong/weak CPU/GPU charges
+  and final refunds, with no leaked writer/input, partial history or dropped accepted younger tap.
+- Retain all qualified selected-caller/export/view predecessor facts, complete source-pinned native streams,
+  real sanitizer instrumentation and later changed-source ARM64/full-native/G1 obligations before activation.

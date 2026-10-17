@@ -112,6 +112,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                "jpeg-open",
                                "png-cancel",
                                "jpeg-cancel",
+                               "zoom-live",
+                               "pointer-leave-live",
                                "joined-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalFixture" / Guid::Generate().ToString();
@@ -184,6 +186,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             const bool early = name == "finish-before-admission" || name == "older-close-younger-enter";
             const bool duplicate = name == "older-close-younger-enter";
             const bool joined = name == "joined-close";
+            const bool zoomLive = name == "zoom-live";
+            const bool pointerLeaveLive = name == "pointer-leave-live";
             const bool tool = name == "tool-cancel";
             const bool kindCancel = name == "header-kind-cancel";
             const bool deselect = name == "header-deselect";
@@ -293,6 +297,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                         "acknowledged-opening-yields-only-creator-receipt"))
                 return 5;
             const auto ticket = owner->_polygonalDrawing->original;
+            const auto* preparedWriter = owner->_polygonalDrawing->controller;
             if (!early)
             {
                 if (!expect(until([&]() noexcept { return owner->_polygonalDrawing->waiting; }) &&
@@ -310,6 +315,43 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                 }),
                             "separate-physical-corners-replay-on-original-parent"))
                     return 5;
+                if (zoomLive)
+                {
+                    const double zoomBefore = owner->_viewport.zoom;
+                    const auto zoomCommand =
+                        mode == SelectionMode::Add ? ChromeHost::kCommandZoomOut : ChromeHost::kCommandZoomIn;
+                    const auto zoom = owner->QueueHostInput(HostCommandInput{zoomCommand});
+                    if (!expect(until([&]() noexcept { return zoom.Read().outcome != HostOutcome::Pending; }) &&
+                                    zoom.Read().outcome == HostOutcome::Succeeded && zoom.Read().error == S_OK &&
+                                    (mode == SelectionMode::Add ? owner->_viewport.zoom < zoomBefore
+                                                                : owner->_viewport.zoom > zoomBefore) &&
+                                    owner->_polygonalDrawing->original == ticket &&
+                                    owner->_polygonalDrawing->controller == preparedWriter &&
+                                    owner->_session.PendingLasso() &&
+                                    owner->_session.PendingLasso().value().PointCount() == 3 &&
+                                    owner->_session.Selection() == original &&
+                                    owner->_session.history.CurrentRevision() == revision &&
+                                    owner->_session.history.UndoCount() == 0,
+                                "queued-live-zoom-changes-view-preserves-original-writer-committed-state"))
+                        return 5;
+                }
+                if (pointerLeaveLive)
+                {
+                    send(WM_MOUSEMOVE, {2, 7}, 0);
+                    const bool trackedBeforeLeave = owner->_mouseTracked;
+                    SendMessageW(owner->_window.get(), WM_MOUSELEAVE, 0, 0);
+                    if (!expect(trackedBeforeLeave && !owner->_mouseTracked &&
+                                    std::holds_alternative<std::monostate>(owner->_drag) &&
+                                    owner->_polygonalDrawing->original == ticket &&
+                                    owner->_polygonalDrawing->controller == preparedWriter &&
+                                    owner->_session.PendingLasso() &&
+                                    owner->_session.PendingLasso().value().PointCount() == 3 &&
+                                    owner->_session.Selection() == original &&
+                                    owner->_session.history.CurrentRevision() == revision &&
+                                    owner->_session.history.UndoCount() == 0,
+                                "native-mouse-leave-preserves-live-original-writer-and-committed-state"))
+                        return 5;
+                }
                 if (save)
                 {
                     const auto leaf = mode == SelectionMode::New   ? L"new.prism"
@@ -464,6 +506,20 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                         return 5;
                 }
                 click({2, 7});
+                if ((zoomLive || pointerLeaveLive) &&
+                    !expect(until(
+                                [&]() noexcept
+                                {
+                                    return owner->_polygonalDrawing->waiting && owner->_session.PendingLasso() &&
+                                           owner->_session.PendingLasso().value().PointCount() == 4;
+                                }) &&
+                                owner->_polygonalDrawing->original == ticket &&
+                                owner->_polygonalDrawing->controller == preparedWriter &&
+                                owner->_session.Selection() == original &&
+                                owner->_session.history.CurrentRevision() == revision &&
+                                owner->_session.history.UndoCount() == 0,
+                            "reentering-native-corner-continues-same-prepared-writer"))
+                    return 5;
                 if (name == "hover-backspace")
                 {
                     send(WM_MOUSEMOVE, {11, 9}, 0);
@@ -575,7 +631,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
             return 5;
     }
     family = scenario = "close";
-    if (!expect(reached == 57 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
+    if (!expect(reached == 63 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
         return 5;
     return failures ? 5 : 0;
 }

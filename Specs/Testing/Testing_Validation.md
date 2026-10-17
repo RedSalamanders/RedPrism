@@ -3277,3 +3277,23 @@ preserve reader-only refusals without rerunning successful native code. Earlier 
 receipts are reusable only under exact unchanged source/dependency/artifact/profile/scope identity.
 [Evidence](../TestRuns/P1PolygonalExport_2026-10-17.md). Final latest-source native/ARM64, ordinary activation,
 measured G1 and the inherited unexplained held-gate ASan audit remain separate.
+
+
+### Polygonal live zoom and pointer leave validation
+
+`Application.Tests.PolygonalPress.cpp` extends all 57 cases / 713 facts with `zoom-live` and
+`pointer-leave-live` across New/Add/Subtract. Six additional cases include the inherited common predicates
+and twelve scenario-specific checks: 78 new facts, 63 cases / 791 total. `joined-close` stays last. Require
+queued Zoom In/Out to change the view in the expected direction with an exact successful receipt; native
+`WM_MOUSEMOVE`/`WM_MOUSELEAVE` must establish/clear real tracking and clear the transient drag. Both cases
+retain the exact original controller/ticket, committed selection/history and live three-corner draft.
+After reentry, wait on scheduler events for the fourth corner; a sent native message alone is not replay
+acknowledgement. The same independent 4096-center terminal geometry, one entry, Undo/Redo and final
+strong/weak CPU/GPU refunds remain required.
+
+Qualify the full 152 stages / 10374 stdout assertions and immutable predecessor stderr in exact native
+Release/real ASan. Main must verify all 713 prior facts, complete archives and source/object/product
+bookends, exact one-TU/348-reused-object lineage, matching x64 PE/full-PDB and zero ISA violations. The
+source-only reader requires four local byte-preservation positives, two complete inherited-chain profile
+positives and 26 refusals. [Evidence](../TestRuns/P1PolygonalView_2026-10-17.md). Complete DPI/device/hidden
+scope, dispatcher branches, final full native/ARM64, ordinary activation and measured G1 remain open.

@@ -2044,3 +2044,10 @@ history revision. Export leaves the project path and saved marker unchanged, inc
 revision was already dirty. Later corners and the chosen terminal remain on the original drawing parent.
 PNG preserves transparent blank pixels; JPEG uses the existing white matte and codec tolerance. This
 selected qualification does not enable the ordinary route or complete view/device/dispatcher scope.
+
+
+Selected Polygonal Zoom In/Out and native pointer leave/reentry preserve the original drawing writer,
+ticket, committed selection and history revision. A view change affects future physical-to-document
+mapping, not captured drawing kind/mode or accepted coordinates. Pointer leave clears the transient drag;
+reentry adds its next corner on the same parent. The chosen terminal still publishes the original mode's
+independent selection and one history entry, with unchanged Undo/Redo and joined ownership rules.
