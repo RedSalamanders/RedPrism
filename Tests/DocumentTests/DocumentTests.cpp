@@ -35,6 +35,7 @@
 #include "Document.Tests.SelectionGestureAdmission.h"
 #include "Document.Tests.SelectionGestureAdmissionAuthority.h"
 #include "Document.Tests.SelectionGestureParent.h"
+#include "Document.Tests.SelectionGestureResidency.h"
 #include "Document.Tests.SelectionHistoryBoundLifetime.h"
 #include "Document.Tests.SelectionHistoryOwnership.h"
 #include "Document.Tests.SelectionHitWork.h"
@@ -8451,6 +8452,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDocumentSelectionPhysicalPrefixTests();
     gFailures += RunDocumentSelectionGestureAdmissionTests();
     gFailures += RunDocumentSelectionGestureAdmissionAuthorityTests();
+    gFailures += RunDocumentSelectionGestureResidencyTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

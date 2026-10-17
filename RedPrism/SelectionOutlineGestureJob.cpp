@@ -95,6 +95,17 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         return {};
     }
     s.remainingBudget = context.reservedMemoryBytes;
+    if (_phase == Phase::RefreshClose || _phase == Phase::RefreshClick)
+    {
+        ++s.residencyRefreshes;
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted);
+        const bool refreshed = _phase == Phase::RefreshClose
+                                   ? _close && _close->RefreshHistoryResidency(context.cancellation)
+                                   : _command && _command->RefreshHistoryResidency(context.cancellation);
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        return refreshed ? JobResult{} : JobResult{JobStatus::Failed, E_FAIL};
+    }
     if (_phase == Phase::Collect)
         return {}; // Event-triggered acknowledgement only; never read mutable input/session on workers.
     if (_phase == Phase::Close)
@@ -109,7 +120,8 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         if (!prepared)
             return {JobStatus::Failed, E_FAIL};
         _close.emplace(std::move(prepared.value()));
-        return {};
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::ClosePrepared);
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
     }
     ++s.clickPrepares;
     if (!_commandInput)
@@ -120,7 +132,8 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     if (!prepared)
         return {JobStatus::Failed, E_FAIL};
     _command.emplace(std::move(prepared.value()));
-    return {};
+    s.NotifyWork(SelectionOutlineGestureState::WorkStage::ClickPrepared);
+    return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
 }
 
 bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket ticket) noexcept
@@ -178,9 +191,35 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         ++s.collectAcks;
         return Consume();
     }
+    if (_phase == Phase::RefreshClose)
+        _phase = Phase::Close;
+    else if (_phase == Phase::RefreshClick)
+        _phase = Phase::Click;
+    if (_phase == Phase::Close || _phase == Phase::Click)
+    {
+        const bool close = _phase == Phase::Close;
+        // A foreign editor may open while the original ticket waits for residency without changing
+        // document generation or history. Retain the opening's complete opaque gesture authority.
+        if ((close && (!_opening || !s.session.IsPreparedDeferredSelectionMoveGestureCurrent(*_opening))) ||
+            (close ? !_close || !s.session.IsPreparedSelectionMoveClosureCurrent(*_close)
+                   : !_command || !s.session.IsPreparedSelectionCommandCurrent(*_command)))
+            return Refuse(E_ABORT);
+        ++s.residencyTries;
+        const auto decision =
+            close ? _close->TryAcquireHistoryResidency(_residency) : _command->TryAcquireHistoryResidency(_residency);
+        if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            return Refuse(E_ABORT);
+        if (decision != DocumentHistory::ResidencyValidation::Ready)
+        {
+            _residency.Reset();
+            _phase = close ? Phase::RefreshClose : Phase::RefreshClick;
+            return Resume(); // Original admission/ticket; no final transfer until the witness is Ready.
+        }
+    }
     if (_phase == Phase::Close && _click)
     {
         s.closed = _close && s.session.ApplyPreparedSelectionMoveClosureIfCurrent(_close.value());
+        _residency.Reset(); // No lease crosses the next useful stage or source capture.
         if (!s.closed)
             return Refuse(E_ABORT);
         auto input = s.session.PrepareSelectionCommandInput(SelectionCommandKind::Deselect);
@@ -229,6 +268,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
         if (!s.closed || (_click && !s.clicked))
             s.outcome = {JobStatus::Failed, E_ABORT};
     }
+    _residency.Reset(); // Before rollback, retirement binding, prefix acknowledgement or host callbacks.
     if (s.outcome.status != JobStatus::Finished)
     {
         if (s.opened && !s.closed && _opening)
@@ -246,6 +286,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
 void SelectionOutlineGestureJob::RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept
 {
     auto& s = _state;
+    _residency.Reset();
     s.sameTicket = s.sameTicket && ticket == s.original;
     s.waiting = false;
     if (s.opened && !s.closed && _opening)

@@ -31,6 +31,17 @@ struct SelectionOutlineGestureState
         Moved,
         Terminal
     };
+    enum class WorkStage
+    {
+        ClosePrepared,
+        ClickPrepared,
+        ResidencyRefreshStarted
+    };
+    // Optional worker readiness probe for event-gated fixtures. Its context may hold immutable rasters
+    // and events, never an Application, mutable session, UI or GPU owner.
+    void* workObserver = nullptr;
+    void (*workCheckpoint)(void*, WorkStage) noexcept = nullptr;
+    unsigned residencyTries = 0, residencyRefreshes = 0;
     JobScheduler& scheduler;
     DocumentSession& session;
     HostSelectionPressInput& prefix;
@@ -55,6 +66,11 @@ struct SelectionOutlineGestureState
     std::uint64_t terminalOrdinal = 0;
     std::atomic<bool> parentAcknowledged{false};
     JobResult outcome{};
+    void NotifyWork(WorkStage stage) const noexcept
+    {
+        if (workCheckpoint)
+            workCheckpoint(workObserver, stage);
+    }
     void Notify(Event event) const noexcept
     {
         if (notify)

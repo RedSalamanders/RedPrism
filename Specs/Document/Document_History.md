@@ -404,3 +404,21 @@ An opt-in prepared deferred move opening may prebuild its exact dependent no-op 
 Only its opaque latest own-move authority can use that cleanup. Foreign document/generation/history/target or
 pending gesture state refuses. Cleanup discards the scalar preview, closes only that Begin, preserves redo
 and matches reference Cancel's two invalidations. It grants no successful cancelled-output authority.
+
+## Selected deferred-outline close residency
+
+The opt-in deferred outline controller validates its exact opaque opening authority before every Close
+completion, including after residency refresh. Document generation and history revision alone are insufficient:
+a foreign editor can open without changing either. Refusal preserves that editor and the original opening;
+it MUST NOT run the old opening's abort through a foreign editor. The subsequent no-move Deselect validates its
+separate complete command/restore authority after the no-op End has acknowledged.
+
+`PreparedSelectionMoveClosure` exposes the existing one-shot residency try and cancellable worker refresh
+against its original prepared after-document. Busy/Refresh resumes the original ticket and reservation; it
+MUST NOT recapture session input, regenerate a revision, repeat geometry/End preparation or query admission.
+Ready is held only through the scheduler's bounded, callback-free transition to final partition/publication.
+Reset the permit before the next useful worker stage, rollback, retirement binding, prefix acknowledgement,
+host callback or joined shutdown cleanup. The original source/history/saved-marker checks still apply.
+
+The selected CPU protocol is independently tested. Actual pointer callers, native integration, ordinary
+activation, the other gesture branches and measured G1 remain separate gates.

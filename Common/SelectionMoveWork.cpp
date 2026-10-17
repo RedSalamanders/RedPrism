@@ -57,6 +57,22 @@ std::optional<PreparedSelectionMoveClosure> DocumentSession::PrepareSelectionMov
                : std::nullopt;
 }
 
+DocumentHistory::ResidencyValidation PreparedSelectionMoveClosure::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_input._valid || !_history)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return permit.TryAcquire(*_history);
+}
+
+bool PreparedSelectionMoveClosure::RefreshHistoryResidency(CancelToken cancellation,
+                                                           DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_input._valid || !_history || !_input._document || cancellation.IsCancelled())
+        return false;
+    return DocumentHistory::RefreshPreparedResidency(*_history, _input._document, cancellation, observer);
+}
+
 bool DocumentSession::IsPreparedSelectionMoveClosureCurrent(const PreparedSelectionMoveClosure& prepared) const noexcept
 {
     const auto& input = prepared._input;

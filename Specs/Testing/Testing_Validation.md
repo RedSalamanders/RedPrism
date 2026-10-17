@@ -3008,3 +3008,23 @@ Pending transform without a generation/history change MUST refuse opaque Move an
 Run the full predecessor stream in Release and real ASan, including an actual UAF detection probe, source/
 dependency/product bookends, instrumented compiler records and exact binary/PDB identity. These CPU protocols
 establish no physical Win32 routing, whole caller admission, ordinary activation or measured G1 qualification.
+
+### Selected deferred-outline staged-residency controls
+
+`Document.Tests.SelectionGestureResidency` requires 47 independent controls across late Move, late Click,
+Busy/release, cancellation, joined Close and foreign-transform Move/Click. The late 64-by-64 BGRA cache grows
+by exactly 16,384 bytes; literal selection bounds, history count/revision/name, generation and trim order
+remain checked. An explicit worker inspection gate proves original reservation plus an independently admitted
+8,192-byte observer and the remaining worker partition before refresh can finish. Scarce-memory sampling
+proves no second admission or source/geometry preparation.
+
+The foreign editor opens during the gated refresh without changing generation/history; refusal must preserve
+its exact transform address/draft, selection root/opening and history. The independent endpoint observes exact
+live opening/final charges before final source/session release and the observer-only charge afterwards.
+Callback lease availability and cancellation/joined-Close release are checked separately. A watchdog expiration
+is a failure, never a passing release. All preceding assertions and goldens remain required; independent strict
+source-defined stream controls reject missing, duplicate, reordered, failed, unknown or miscounted output.
+
+Private Release and exact-source real-ASan proofs require complete archive, compiler/source/dependency/product
+bookends, matching PE/PDB, ISA and a real ASan UAF control. They do not substitute for native application/ARM64
+qualification, ordinary activation, other physical routes or measured G1.

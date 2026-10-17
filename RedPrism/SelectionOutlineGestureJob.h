@@ -19,7 +19,9 @@ class SelectionOutlineGestureJob final : public Job
         Open,
         Collect,
         Close,
-        Click
+        Click,
+        RefreshClose,
+        RefreshClick
     };
 
   public:
@@ -50,4 +52,5 @@ class SelectionOutlineGestureJob final : public Job
     std::optional<PreparedSelectionMoveClosure> _close;
     std::optional<SelectionCommandInput> _commandInput;
     std::optional<PreparedSelectionCommand> _command;
+    DocumentHistory::ResidencyPermit _residency;
 };

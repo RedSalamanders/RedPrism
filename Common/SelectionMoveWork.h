@@ -68,6 +68,10 @@ class PreparedSelectionMoveClosure final
     PreparedSelectionMoveClosure& operator=(const PreparedSelectionMoveClosure&) = delete;
     PreparedSelectionMoveClosure(PreparedSelectionMoveClosure&&) noexcept = default;
     PreparedSelectionMoveClosure& operator=(PreparedSelectionMoveClosure&&) noexcept = default;
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
 
   private:
     friend class DocumentSession;

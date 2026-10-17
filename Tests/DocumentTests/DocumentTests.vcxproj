@@ -591,6 +591,7 @@
     <ClCompile Include="Document.Tests.SelectionPhysicalPrefix.cpp" />
     <ClCompile Include="Document.Tests.SelectionGestureAdmission.cpp" />
     <ClCompile Include="Document.Tests.SelectionGestureAdmissionAuthority.cpp" />
+    <ClCompile Include="Document.Tests.SelectionGestureResidency.cpp" />
     <ClCompile Include="..\..\RedPrism\SelectionOutlineGestureJob.cpp" />
     <ClInclude Include="..\..\RedPrism\SelectionOutlineGestureState.h" />
     <ClInclude Include="..\..\RedPrism\SelectionOutlineGestureMemory.h" />
@@ -603,6 +604,7 @@
     <ClInclude Include="Document.Tests.SelectionPhysicalPrefix.h" />
     <ClInclude Include="Document.Tests.SelectionGestureAdmission.h" />
     <ClInclude Include="Document.Tests.SelectionGestureAdmissionAuthority.h" />
+    <ClInclude Include="Document.Tests.SelectionGestureResidency.h" />
     <ClInclude Include="Document.Tests.SelectionMoveGeometryLifetime.h" />
   </ItemGroup>
 </Project>

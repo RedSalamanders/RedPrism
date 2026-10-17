@@ -1596,3 +1596,17 @@ alone excludes allocator/control overhead. Admission also covers both publicatio
 peak. Checked arithmetic or insufficient output refuses before mutation. Opaque prepared gesture cleanup
 uses the exact prebuilt Begin-dependent End and latest own scalar authority, with no owner geometry/history
 construction or fresh admission. Physical callers, every display consumer and G1 still require qualification.
+
+## Selected deferred-outline live publication charges
+
+A settled selected outline publication keeps its original charge while live history or geometry still owns
+its data or shared controls. Move's history entry retains the charged opening snapshot and its final
+entry/after/translated geometry; neither charge may refund at terminal acknowledgement alone. A zero-offset
+End drops the unused opening before the separately charged Deselect publication. Exact-current abort returns
+to the original history. Stale refusal preserves any still-live original opening charge through its real last
+reader, including a foreign editor/session lifetime.
+
+Residency refresh shares the complete original admission and retains its original source, prepared payload
+and ticket. No owner wait, pixel read, index/geometry reconstruction, re-admission or unbounded temporary
+allocation is allowed. Test-only readiness callbacks borrow immutable rasters/events and never an Application,
+mutable document session, UI or GPU owner. The selected structural proof does not qualify ordinary input or G1.
