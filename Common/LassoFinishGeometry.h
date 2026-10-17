@@ -64,6 +64,14 @@ struct Result final
 // Kind-specific New marquee ceilings. Unsupported lasso kinds refuse; they never inherit default limits.
 [[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> NewMarqueeLimits(LassoKind kind) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> PlanNewMarquee(LassoKind kind) noexcept;
+// Preserving resource ceilings use cached source counts only; no geometry traversal or capture.
+// Every allocation/output ceiling is enforced by the worker. Complex geometry may refuse within the
+// admitted ceiling; this plan never promises that arbitrary input geometry must fit. New is unchanged.
+[[nodiscard]] std::optional<BoundedSelectionBoolean::Limits> MarqueeLimits(LassoKind kind, SelectionMode mode,
+                                                                           std::uint64_t sourcePoints = 0,
+                                                                           std::uint64_t sourceLoops = 0) noexcept;
+[[nodiscard]] std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints = 0,
+                                                    std::uint64_t sourceLoops = 0) noexcept;
 [[nodiscard]] std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                              const std::optional<DocumentSelection>& before,
                                              BoundedSelectionBoolean::Limits limits = {}) noexcept;

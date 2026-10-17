@@ -3,3 +3,5 @@
 int RunRectangleGestureParentTests();
 
 int RunEllipseGestureParentTests();
+
+int RunMarqueeModeParentTests();

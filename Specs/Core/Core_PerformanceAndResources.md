@@ -1638,3 +1638,16 @@ Physical Ellipse/New reads the cached typed plan before geometry/history capture
 charges retained source/history, opening, construction and retirement. The pointer callback captures
 only fixed settings and accepted document coordinates; it never builds an oval or changes the declared
 kind at a later header tick. This selected route supplies no ordinary-host or G1 timing qualification.
+
+## Cached preserving-marquee capacity policy
+
+Rectangle/Ellipse Add/Subtract describe a complete original admission from cached immutable source point
+and loop counts before capture. `MarqueeLimits(kind, mode, sourcePoints, sourceLoops)` and the worker
+`PlanMarquee` MUST use the same captured counts and derived limits. New retains its fixed existing bounds.
+For preserving modes, let P/L be source counts and NP/NL/NW the selected New output-point/output-loop/
+workspace ceilings. Input points/loops are P+NP and L+NL+1; output ceilings are min(8,000,000,8P+2NP+16)
+and min(2,666,667,P+L+NL+16); workspace is min(128 MiB,NW+512(P+NP)+256(L+NL+1)).
+Checked overflow, invalid counts or exhausted enforced capacities fail the original job without partial
+publication, owner fallback or new admission. These coefficients are capacity policy, not a theorem that
+every possible boolean result fits. The original reservation also covers retained source/history,
+construction, output owners, refresh and retirement; the geometry plan alone cannot cover those consumers.

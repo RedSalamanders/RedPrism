@@ -18,6 +18,8 @@
 struct SelectionOutlineDrawing final
 {
     LassoOpeningSettings settings;
+    BoundedSelectionBoolean::Limits geometryLimits;
+    SelectionMode mode = SelectionMode::New;
     std::optional<LassoIntent> openingIntent, finishIntent;
     std::optional<HistoryRestoreAuthority> editor;
     std::optional<DocumentHistory::Authority> history;
@@ -31,7 +33,8 @@ struct SelectionOutlineDrawing final
 namespace
 {
 std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const DocumentSession& session,
-                                                                   std::optional<LassoKind> newMarqueeKind) noexcept
+                                                                   std::optional<LassoKind> newMarqueeKind,
+                                                                   SelectionMode mode = SelectionMode::New) noexcept
 {
     const auto& document = session.Document();
     const auto source = session.CaptureDocumentReadAuthority();
@@ -76,7 +79,15 @@ std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const Documen
         return std::nullopt;
     if (newMarqueeKind)
     {
-        const auto marquee = LassoFinishGeometry::PlanNewMarquee(newMarqueeKind.value());
+        const auto sourcePoints = document->selection ? document->selection.value().loops.PointCount() : 0;
+        const auto sourceLoops = document->selection ? document->selection.value().loops.size() : 0;
+        const auto marquee = LassoFinishGeometry::PlanMarquee(newMarqueeKind.value(), mode, sourcePoints, sourceLoops);
+        const auto geometryLimits =
+            LassoFinishGeometry::MarqueeLimits(newMarqueeKind.value(), mode, sourcePoints, sourceLoops);
+        if (!geometryLimits || (mode != SelectionMode::New && document->selection &&
+                                (document->selection->loops.PointCount() > geometryLimits.value().outputPoints ||
+                                 document->selection->loops.size() >= geometryLimits.value().inputLoops)))
+            return std::nullopt;
         const auto arena = PreparedLassoOpening::MemoryBytes(1);
         // Keep both possible branch peaks admitted at the original Down. No hit-dependent re-admission.
         // The source R already retains old selection/history; New does not feed the old outline to Clipper.
@@ -88,7 +99,7 @@ std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const Documen
     std::uint64_t total = temporary;
     if (!add(total, 1, opening) || !add(total, 1, final))
         return std::nullopt;
-    return SelectionOutlineGestureMemory{{*source, editor, session.history.CaptureAuthority(), newMarqueeKind},
+    return SelectionOutlineGestureMemory{{*source, editor, session.history.CaptureAuthority(), newMarqueeKind, mode},
                                          {total, opening, final},
                                          retirement,
                                          history,
@@ -107,6 +118,15 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
     if (!LassoFinishGeometry::NewMarqueeLimits(newMarqueeKind))
         return std::nullopt;
     return DescribeMarqueeMemory(session, newMarqueeKind);
+}
+
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(const DocumentSession& session,
+                                                                                   LassoKind marqueeKind,
+                                                                                   SelectionMode mode) noexcept
+{
+    if (!LassoFinishGeometry::MarqueeLimits(marqueeKind, mode))
+        return std::nullopt;
+    return DescribeMarqueeMemory(session, marqueeKind, mode);
 }
 
 SelectionOutlineGestureJob::SelectionOutlineGestureJob(SelectionOutlineGestureState& state) : _state(state)
@@ -134,6 +154,11 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     }
     if (_phase == Phase::Open)
     {
+        if (_drawing && _drawing->mode != SelectionMode::New)
+        {
+            _drawing->chosen = true; // Add/Subtract always draw, including a Down inside the old outline.
+            return {};
+        }
         ++s.hits;
         const auto hit = ContainsSelectionForWork(_display, _point, context.cancellation);
         if (!hit)
@@ -172,10 +197,7 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         if (!_drawing || !_drawing->finishInput)
             return {JobStatus::Failed, E_UNEXPECTED};
         LassoFinishObserver observer;
-        const auto limits = LassoFinishGeometry::NewMarqueeLimits(_drawing->settings.kind);
-        if (!limits)
-            return {JobStatus::Failed, E_INVALIDARG};
-        observer.geometry.limits = limits.value();
+        observer.geometry.limits = _drawing->geometryLimits;
         auto prepared = DocumentSession::PrepareLassoFinishPublication(std::move(*_drawing->finishInput),
                                                                        context.cancellation, {}, &observer, _final);
         _drawing->finishInput.reset();
@@ -247,8 +269,15 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         const auto* arrival = s.prefix.CapturedContext(s.opening);
         const auto down = s.prefix.Peek(s.opening);
         if (!arrival || !down || down->action != HostSelectionPressInput::Action::Down ||
-            arrival->document.documentSerial != s.session.DocumentSerial() || arrival->mode != SelectionMode::New ||
+            arrival->document.documentSerial != s.session.DocumentSerial() ||
+            (arrival->mode != SelectionMode::New &&
+             (!s.allowPreservingMarquee ||
+              (arrival->mode != SelectionMode::Add && arrival->mode != SelectionMode::Subtract))) ||
             arrival->tool == HostSelectionPressInput::Tool::Wand || down->sample.modifiers.control)
+            return Refuse(E_ABORT);
+        if (arrival->mode != SelectionMode::New &&
+            (!_drawing || !((arrival->kind == LassoKind::Rectangle && s.allowNewRectangle) ||
+                            (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse))))
             return Refuse(E_ABORT);
         if (s.requireCapturedTarget &&
             (arrival->active != s.session.ActiveLayerID() || arrival->crop != s.session.CropFrame() ||
@@ -258,8 +287,10 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
                                   !s.session.CanApplyHistoryRestore(s.admissionSource->editor) ||
                                   !s.session.history.IsCurrent(s.admissionSource->history)))
             return Refuse(E_ABORT);
-        if (_drawing && s.admissionSource && s.admissionSource->newMarqueeKind != std::optional{arrival->kind})
-            return Refuse(E_ABORT); // Never prepare an oval under a rectangle-only admission.
+        if (_drawing && s.admissionSource &&
+            (s.admissionSource->newMarqueeKind != std::optional{arrival->kind} ||
+             s.admissionSource->marqueeMode != arrival->mode))
+            return Refuse(E_ABORT); // Never prepare a different kind or mode under a smaller admission.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
         if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
@@ -273,11 +304,19 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
                   (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse)))
                 return Refuse(E_ABORT);
             _drawing->settings = {arrival->kind, down->sample.antialiased};
+            _drawing->mode = arrival->mode;
+            const auto sourcePoints = _display.selection ? _display.selection.value().loops.PointCount() : 0;
+            const auto sourceLoops = _display.selection ? _display.selection.value().loops.size() : 0;
+            const auto geometryLimits =
+                LassoFinishGeometry::MarqueeLimits(arrival->kind, arrival->mode, sourcePoints, sourceLoops);
+            if (!geometryLimits)
+                return Refuse(E_OUTOFMEMORY);
+            _drawing->geometryLimits = geometryLimits.value();
             _drawing->constrainArmed = !down->sample.modifiers.shift;
             _drawing->editor = s.session.CaptureHistoryRestoreAuthority();
             _drawing->history = s.session.history.CaptureAuthority();
         }
-        if (_display.selection && !_display.selection->IsEmpty())
+        if (_display.selection && !_display.selection->IsEmpty() && (!_drawing || _drawing->mode == SelectionMode::New))
         {
             auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
             if (!input)
@@ -298,7 +337,7 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         if (!s.sourceCurrent || !_drawing->editor || !_drawing->history ||
             !s.session.CanApplyHistoryRestore(*_drawing->editor) || !s.session.history.IsCurrent(*_drawing->history))
             return Refuse(E_ABORT);
-        auto input = s.session.PrepareLassoOpeningInput(_point, SelectionMode::New, _drawing->settings);
+        auto input = s.session.PrepareLassoOpeningInput(_point, _drawing->mode, _drawing->settings);
         if (!input)
             return Refuse(E_ABORT);
         _drawing->openingIntent = s.session.CaptureLassoIntent(*input);

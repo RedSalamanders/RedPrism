@@ -12,7 +12,7 @@ class SelectionOutlineGestureJob;
 // Stable owner-side borrowing boundary. The application must join the scheduler before these references die.
 // The descriptor's complete admission is supplied before any immutable document/geometry capture.
 // The original parent handles an inside-selection New outline move and explicitly admitted New marquees.
-// Wand, lifted pixels and preserving modes require their own complete branches before ordinary activation.
+// Preserving marquees require their explicit additional gate. Wand and lifted pixels remain separate branches.
 struct SelectionOutlineGestureState
 {
     struct Limits final
@@ -25,6 +25,7 @@ struct SelectionOutlineGestureState
         HistoryRestoreAuthority editor;
         DocumentHistory::Authority history;
         std::optional<LassoKind> newMarqueeKind;
+        SelectionMode marqueeMode = SelectionMode::New;
     };
     enum class Event
     {
@@ -59,8 +60,9 @@ struct SelectionOutlineGestureState
     SelectionOutlineGestureJob* controller = nullptr;
     // Optional exact source of a cache-derived admission. Fixture-only callers may supply fixed limits.
     std::optional<Admission> admissionSource;
-    // Explicitly selected New marquee branches. Other kinds/modes retain their existing contract.
+    // Explicitly selected kind branches; preserving modes also require allowPreservingMarquee.
     bool allowNewRectangle = false, allowNewEllipse = false, drawing = false;
+    bool allowPreservingMarquee = false;
     bool requireCapturedTarget = false;
     JobTicket original;
     unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;

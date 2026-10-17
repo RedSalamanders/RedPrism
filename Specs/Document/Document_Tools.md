@@ -1878,3 +1878,14 @@ With its explicit test gate enabled, the physical caller routes Rectangle/New in
 ## Kind-bound New marquee preparation
 
 The typed New-marquee descriptor supports Rectangle and Ellipse. It captures the accepted kind before source capture; worker preparation must use that same kind and its admitted limits. Unsupported kinds and mismatched Rectangle-only admission refuse before capture or document/history mutation. Inside-outline movement retains the prior outline; outside Ellipse/New generates the legacy oval under the same original parent, accepted samples, terminal AA, history authority and retirement. Physical Alt never means centered drawing. The explicit physical caller routes both New kinds, including inside-outline movement; accepted Up supplies AA without an invented Move. Ordinary activation remains a separate gate.
+
+## Opted-in preserving marquee worker parent
+
+The typed marquee parent can explicitly opt into Rectangle/Ellipse Add/Subtract. These modes always draw,
+even when Down is inside the existing outline; only New may choose outline movement after containment.
+Captured Down kind/mode, ordered physical samples and terminal AA remain authoritative. Add unions and
+Subtract removes the worker shape using the existing clip-grid rules. Subtract with absent selection
+preserves absence/revision/history; explicit-empty subtraction retains its empty-selection edit semantics.
+A foreign target/editor/history change refuses without rolling back foreign state. Cancellation/loss
+preserves the original outline, and joined Close retains the original parent until worker acknowledgement.
+The new mode gate defaults off. This model protocol alone does not enable the ordinary physical caller.

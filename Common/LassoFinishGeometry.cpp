@@ -137,6 +137,54 @@ std::optional<MemoryPlan> PlanNewMarquee(LassoKind kind) noexcept
     return CalculatePlan(kind, 4, BoundedLassoPoints::MemoryBytes(1), 0, limits.value());
 }
 
+std::optional<BoundedSelectionBoolean::Limits> MarqueeLimits(LassoKind kind, SelectionMode mode,
+                                                             std::uint64_t sourcePoints,
+                                                             std::uint64_t sourceLoops) noexcept
+{
+    const auto base = NewMarqueeLimits(kind);
+    if (!base)
+        return std::nullopt;
+    if (mode == SelectionMode::New)
+        return base;
+    if (mode != SelectionMode::Add && mode != SelectionMode::Subtract)
+        return std::nullopt;
+    const BoundedSelectionBoolean::Limits maximum;
+    if (sourcePoints > maximum.outputPoints || sourceLoops >= maximum.inputLoops)
+        return std::nullopt;
+    ByteSum inputPoints;
+    ByteSum inputLoops;
+    ByteSum outputPoints;
+    ByteSum outputLoops;
+    ByteSum workspace;
+    if (!inputPoints.Add(sourcePoints) || !inputPoints.Add(base.value().outputPoints) || !inputLoops.Add(sourceLoops) ||
+        !inputLoops.Add(base.value().outputLoops) || !inputLoops.Add(1) || inputPoints.value > maximum.inputPoints ||
+        inputLoops.value > maximum.inputLoops || !outputPoints.Add(sourcePoints, 8) ||
+        !outputPoints.Add(base.value().outputPoints, 2) || !outputPoints.Add(16) || !outputLoops.Add(sourcePoints) ||
+        !outputLoops.Add(sourceLoops) || !outputLoops.Add(base.value().outputLoops) || !outputLoops.Add(16) ||
+        !workspace.Add(inputPoints.value, 512) || !workspace.Add(inputLoops.value, 256) ||
+        !workspace.Add(base.value().workspaceBytes))
+        return std::nullopt;
+    // These are enforced resource ceilings, not a complexity estimate or an unchecked output bound.
+    // Common small shapes do not reserve the full eight-million-point output graph. Larger inputs retain the existing
+    // absolute caps. Exhaustion fails the original job without publishing partial geometry.
+    BoundedSelectionBoolean::Limits limits;
+    limits.inputPoints = inputPoints.value;
+    limits.inputLoops = inputLoops.value;
+    limits.outputPoints = (std::min)(maximum.outputPoints, outputPoints.value);
+    limits.outputLoops = (std::min)(maximum.outputLoops, outputLoops.value);
+    limits.workspaceBytes =
+        static_cast<std::size_t>((std::min)(static_cast<std::uint64_t>(maximum.workspaceBytes), workspace.value));
+    return limits;
+}
+std::optional<MemoryPlan> PlanMarquee(LassoKind kind, SelectionMode mode, std::uint64_t sourcePoints,
+                                      std::uint64_t sourceLoops) noexcept
+{
+    const auto limits = MarqueeLimits(kind, mode, sourcePoints, sourceLoops);
+    if (!limits)
+        return std::nullopt;
+    return CalculatePlan(kind, 4, BoundedLassoPoints::MemoryBytes(1), 0, limits.value());
+}
+
 std::optional<MemoryPlan> Plan(const BoundedLassoGesture::Display& terminal,
                                const std::optional<DocumentSelection>& before,
                                BoundedSelectionBoolean::Limits limits) noexcept

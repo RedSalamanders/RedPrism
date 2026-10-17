@@ -3058,3 +3058,15 @@ source identity, summary and actual zero exit, then forwards every predecessor b
 Release evidence and the retained R1 fixture failure are in
 [`P1EllipseSelectionHost_2026-10-17.md`](../TestRuns/P1EllipseSelectionHost_2026-10-17.md).
 Complete adopted-source native ASan and ARM64 qualification remain due.
+
+## Preserving marquee CPU and capacity qualification
+
+`Document.Tests.MarqueeModePlan` adds 45 literal plan/refusal facts. The shared marquee-parent fixture adds
+268 original-ticket, geometry, authority and lifetime facts across both kinds and Add/Subtract. Preserve all
+22,693 predecessor facts (23,006 total) in Release and real ASan with actual UAF detection and complete
+source/command/ISA/PE/PDB/archive readback. Literal cached-limit tables cover zero, four and eight source
+vertices. A normal 2 GiB memory query must admit the small cases below 32 MiB and four 65,540-point
+collinear-rectangle cases below 512 MiB; those original counts must reach the worker. Independent winding
+probes and rectangle areas 42/12 validate union/difference. No RSS or G1 claim follows from admission.
+See [the scoped evidence](../TestRuns/P1PreservingMarquee_2026-10-17.md). Actual Win32 Add/Subtract routing,
+latest adopted-source native profiles, ordinary activation and G1 remain separate gates.

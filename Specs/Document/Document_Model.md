@@ -487,3 +487,11 @@ strong geometry release queues the complete node for worker destruction regardle
 buffers die before their opaque lifetime. A surviving weak storage control also retains that lifetime until
 its own control block dies. This does not change synchronous selection arithmetic or activate a worker
 boolean caller by itself. See the separate phase-retention contract in `Core_PerformanceAndResources.md`.
+
+## Preserving marquee source metadata
+
+Opted-in preserving marquee preparation uses the original immutable selection's cached point/loop counts
+for its admitted plan. The drawing payload retains that exact plan while holding the corresponding source
+root. A worker cannot substitute the default zero-source limits or mutate/materialize the shared source.
+Output and allocator/control owners remain charged through their final strong and weak reader release.
+This does not change the synchronous reference API or enable ordinary host activation.

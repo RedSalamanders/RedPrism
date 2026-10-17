@@ -18,3 +18,6 @@ struct SelectionOutlineGestureMemory final
 // Admit this exact captured kind before the original parent captures any source.
 [[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
     const DocumentSession& session, LassoKind newMarqueeKind) noexcept;
+// Mode is captured at Down; its complete boolean output/workspace envelope precedes source capture.
+[[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
+    const DocumentSession& session, LassoKind marqueeKind, SelectionMode mode) noexcept;

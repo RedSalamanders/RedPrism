@@ -6,6 +6,7 @@
 #include "LassoFinishGeometry.h"
 
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -58,11 +59,12 @@ struct Memory final
 {
     unsigned queries = 0;
     bool scarce = false;
+    std::uint64_t capacity = 2ull * 1024 * 1024 * 1024;
     static bool Sample(void* raw, MemorySnapshot& value) noexcept
     {
         auto& self = *static_cast<Memory*>(raw);
         ++self.queries;
-        const auto available = self.scarce ? 0 : kMemoryAdmissionHeadroomBytes + 2ull * 1024 * 1024 * 1024;
+        const auto available = self.scarce ? 0 : kMemoryAdmissionHeadroomBytes + self.capacity;
         value = {available, available};
         return true;
     }
@@ -160,29 +162,34 @@ struct Fixture final
     std::optional<SelectionOutlineGestureMemory> admitted;
     Probe probe;
     Fixture(Initial initial, bool scarce = false, LassoKind kind = LassoKind::Rectangle,
-            std::optional<LassoKind> admissionKind = std::nullopt)
+            std::optional<LassoKind> admissionKind = std::nullopt, SelectionMode mode = SelectionMode::New,
+            std::optional<SelectionMode> admissionMode = std::nullopt, Vec2 down = {20, 30},
+            bool preservingEnabled = true, HostSelectionPressInput::Modifiers downModifiers = {})
     {
         Install(*session, initial);
         probe.session = session.get();
         memory.scarce = scarce;
         if (jobs.Initialize(2, {}, {Memory::Sample, &memory}) != S_OK || !jobs.EnableDeferredRelease())
             Broken("scheduler");
-        admitted = DescribeSelectionOutlineGestureMemory(*session, admissionKind.value_or(kind));
+        admitted =
+            DescribeSelectionOutlineGestureMemory(*session, admissionKind.value_or(kind), admissionMode.value_or(mode));
         if (!admitted || !probe.entered || !probe.proceed)
             Broken("complete-admission");
         HostSelectionPressInput::Context arrival;
         arrival.document = admitted->source.document;
         arrival.ordinal = 1;
         arrival.kind = kind;
+        arrival.mode = mode;
         arrival.active = session->ActiveLayerID();
         arrival.crop = session->CropFrame();
         arrival.mask = session->IsMaskSelected();
-        if (!prefix->Begin(51, arrival, {20, 30}, {}, false))
+        if (!prefix->Begin(51, arrival, down, downModifiers, false))
             Broken("accepted-down");
         state = std::make_unique<SelectionOutlineGestureState>(jobs, *session, *prefix, 51, admitted->limits);
         state->admissionSource = admitted->source;
         state->allowNewRectangle = kind == LassoKind::Rectangle;
         state->allowNewEllipse = kind == LassoKind::Ellipse;
+        state->allowPreservingMarquee = preservingEnabled && mode != SelectionMode::New;
         state->requireCapturedTarget = true;
         state->observer = &probe;
         state->notify = Probe::Owner;
@@ -289,10 +296,11 @@ void Numeric(Initial initial, const char* name, Vec2 last = {70, 80}, HostSelect
     Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
            "last-readers-refund-original-ticket");
 }
-void CancelAndForeign(int mode, const char* name, LassoKind kind = LassoKind::Rectangle)
+void CancelAndForeign(int mode, const char* name, LassoKind kind = LassoKind::Rectangle,
+                      SelectionMode selectionMode = SelectionMode::New)
 {
     scenarioName = name;
-    auto f = std::make_unique<Fixture>(Initial::Old, false, kind);
+    auto f = std::make_unique<Fixture>(Initial::Old, false, kind, std::nullopt, selectionMode);
     const auto generation = f->session->Generation();
     const auto history = f->session->history.CaptureState();
     const auto revision = f->session->history.CurrentRevision();
@@ -356,6 +364,146 @@ void CancelAndForeign(int mode, const char* name, LassoKind kind = LassoKind::Re
     f->ReleaseReaders();
     Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
            "terminal-or-joined-last-readers-refund");
+}
+// Literal independent winding at probes deliberately far from clip-grid boundaries.
+bool ProbeFilled(const DocumentSelection& selection, Vec2 point)
+{
+    int winding = 0;
+    for (const auto& loop : selection.loops.Get())
+    {
+        if (loop.empty())
+            continue;
+        auto previous = loop.back();
+        for (const auto next : loop)
+        {
+            const double side =
+                (next.x - previous.x) * (point.y - previous.y) - (point.x - previous.x) * (next.y - previous.y);
+            if (previous.y <= point.y && next.y > point.y && side > 0)
+                ++winding;
+            else if (previous.y > point.y && next.y <= point.y && side < 0)
+                --winding;
+            previous = next;
+        }
+    }
+    return winding != 0;
+}
+void PreservingNumeric(LassoKind kind, SelectionMode mode, Initial initial, const char* name)
+{
+    scenarioName = name;
+    // (3,3) is inside the literal old rectangle. Add/Subtract must draw there, never move it.
+    auto f = std::make_unique<Fixture>(initial, false, kind, std::nullopt, mode, std::nullopt, Vec2{3, 3});
+    const auto generation = f->session->Generation();
+    const auto original = f->session->Selection();
+    const auto revision = f->session->history.CurrentRevision();
+    f->Move({9, 8}, {}, 2);
+    f->End();
+    f->Submit();
+    f->session->marqueeKind = kind == LassoKind::Rectangle ? LassoKind::Ellipse : LassoKind::Rectangle;
+    f->session->selectionModeChoice = SelectionMode::New;
+    f->session->selectionAntialiased = false;
+    Settle(f->jobs);
+    const auto& state = *f->state;
+    const auto reservationCeiling = initial == Initial::Large ? 512ull * 1024 * 1024 : 32ull * 1024 * 1024;
+    Expect(f->memory.capacity == 2ull * 1024 * 1024 * 1024 &&
+               f->admitted.value().limits.totalBytes < reservationCeiling &&
+               state.firstBudget == f->admitted.value().limits.totalBytes,
+           initial == Initial::Large ? "large-source-original-parent-under512mib-with-normal2gib-query"
+                                     : "small-source-original-parent-under32mib-with-normal2gib-query");
+    if (initial == Initial::Large)
+        Expect(original && original.value().loops.PointCount() == 65540 && original.value().loops.size() == 1,
+               "original-65540-point-collinear-rectangle-count-reaches-real-parent");
+    Expect(state.completed && state.outcome.status == JobStatus::Finished && state.drawing && state.opened &&
+               state.closed && state.sameTicket && state.captures == 1 && state.hits == 0 &&
+               state.closurePrepares == 1 && state.inputAcknowledged && !f->prefix->Busy(),
+           "captured-preserving-mode-always-draws-one-original-parent-without-hit-test");
+    const auto& selected = f->session->Selection();
+    const bool keep = mode == SelectionMode::Subtract && (initial == Initial::Absent || initial == Initial::NoLayers);
+    if (keep)
+    {
+        Expect(!selected && f->session->Generation() == generation &&
+                   f->session->history.CurrentRevision() == revision && !f->session->history.CanUndo(),
+               "subtract-absent-keeps-absence-and-exact-revision-with-no-history");
+    }
+    else
+    {
+        const bool empty = mode == SelectionMode::Subtract && initial == Initial::Empty;
+        const bool hasOld = initial == Initial::Old || initial == Initial::Large;
+        const SelectionBounds bounds =
+            hasOld ? (mode == SelectionMode::Add ? SelectionBounds{1, 2, 9, 8} : SelectionBounds{1, 2, 7, 6})
+                   : SelectionBounds{3, 3, 9, 8};
+        Expect(selected && selected->antialiased &&
+                   (empty ? selected->IsEmpty() : selected->Bounds() == std::optional(bounds)) &&
+                   !f->session->PendingLasso() && !f->session->IsMovingSelection(),
+               "literal-bounds-terminal-aa-and-present-empty-contract");
+        if (hasOld)
+        {
+            // Old-only (2,3), overlap (6,4), marquee-only (8,5.5), neither (8,2).
+            // These points work for the six-by-five rectangle and ellipse centered at (6,5.5).
+            Expect(selected && ProbeFilled(selected.value(), {2, 3}) &&
+                       ProbeFilled(selected.value(), {6, 4}) == (mode == SelectionMode::Add) &&
+                       ProbeFilled(selected.value(), {8, 5.5}) == (mode == SelectionMode::Add) &&
+                       !ProbeFilled(selected.value(), {8, 2}),
+                   "independent-four-region-union-or-difference-winding");
+            if (kind == LassoKind::Rectangle)
+            {
+                double twiceArea = 0;
+                for (const auto& loop : selected->loops.Get())
+                {
+                    if (loop.empty())
+                        continue;
+                    auto previous = loop.back();
+                    for (const auto next : loop)
+                    {
+                        twiceArea += previous.x * next.y - next.x * previous.y;
+                        previous = next;
+                    }
+                }
+                // Old 24 + new 30 - overlap12 =42; old24 - overlap12 =12.
+                Expect(std::abs(twiceArea) == (mode == SelectionMode::Add ? 84 : 24),
+                       "independent-literal-rectangle-area-42-or12");
+            }
+        }
+        Expect(f->session->Generation() == generation + 1 && f->session->history.UndoCount() == 1 &&
+                   f->session->history.UndoName() ==
+                       (kind == LassoKind::Rectangle ? L"Rectangular Marquee" : L"Elliptical Marquee"),
+               "one-atomic-named-edit-and-one-generation");
+        f->session->Undo();
+        Expect(f->session->Selection() == original && f->session->history.CanRedo(),
+               "undo-restores-absent-empty-or-original-selection");
+        f->session->Redo();
+        Expect(f->session->Selection() && f->session->Selection()->antialiased &&
+                   (empty ? f->session->Selection()->IsEmpty()
+                          : f->session->Selection()->Bounds() == std::optional(bounds)),
+               "redo-restores-complete-preserving-result");
+    }
+    Expect(f->memory.queries == 1 && state.firstBudget == f->admitted->limits.totalBytes && f->probe.opened == 1 &&
+               f->probe.moved == 1 && f->probe.terminal == 1,
+           "one-complete-admission-and-batched-move-presentation");
+    f->ReleaseReaders();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "last-readers-return-original-preserving-reservation");
+}
+void RefusePreserving(LassoKind kind, SelectionMode mode, bool wrongAdmission)
+{
+    scenarioName = wrongAdmission ? "new-only-admission" : "disabled-preserving-gate";
+    auto f = std::make_unique<Fixture>(Initial::Old, false, kind, std::nullopt, mode,
+                                       wrongAdmission ? std::optional{SelectionMode::New} : std::nullopt, Vec2{3, 3},
+                                       wrongAdmission);
+    const auto original = f->session->Selection();
+    const auto generation = f->session->Generation();
+    const auto history = f->session->history.CaptureState();
+    f->Move({9, 8}, {}, 2);
+    f->End();
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->completed && f->state->outcome.status == JobStatus::Failed && f->state->outcome.error == E_ABORT &&
+               !f->state->captures && !f->state->hits && !f->session->PendingLasso() && !f->prefix->Busy() &&
+               f->session->Selection() == original && f->session->Generation() == generation &&
+               f->session->history.IsCurrent(history),
+           "refuses-before-source-capture-and-preserves-exact-original");
+    f->ReleaseReaders();
+    Expect(f->jobs.ReservedMemoryBytes() == 0 && f->jobs.ReleasingMemoryBytes() == 0,
+           "refused-preserving-mode-fully-refunds-original-ticket");
 }
 } // namespace
 int RunRectangleGestureParentTests()
@@ -423,5 +571,31 @@ int RunEllipseGestureParentTests()
                "refused-kind-original-ticket-fully-refunds");
     }
     std::printf("SUMMARY ellipse-gesture-parent checks=%u failures=%u\n", checks, failures);
+    return failures ? 1 : 0;
+}
+
+int RunMarqueeModeParentTests()
+{
+    checks = failures = 0;
+    for (const auto kind : {LassoKind::Rectangle, LassoKind::Ellipse})
+        for (const auto mode : {SelectionMode::Add, SelectionMode::Subtract})
+        {
+            family = kind == LassoKind::Rectangle
+                         ? (mode == SelectionMode::Add ? "rectangle-add-parent" : "rectangle-subtract-parent")
+                         : (mode == SelectionMode::Add ? "ellipse-add-parent" : "ellipse-subtract-parent");
+            PreservingNumeric(kind, mode, Initial::Old, "inside-old");
+            PreservingNumeric(kind, mode, Initial::Large, "large-prior");
+            PreservingNumeric(kind, mode, Initial::Absent, "absent");
+            PreservingNumeric(kind, mode, Initial::Empty, "empty");
+            PreservingNumeric(kind, mode, Initial::NoLayers, "no-layers");
+            CancelAndForeign(0, "cancel-waiting", kind, mode);
+            CancelAndForeign(1, "joined-close", kind, mode);
+            CancelAndForeign(2, "foreign-history", kind, mode);
+            CancelAndForeign(3, "foreign-transform", kind, mode);
+            CancelAndForeign(4, "cancel-prepared", kind, mode);
+            RefusePreserving(kind, mode, true);
+            RefusePreserving(kind, mode, false);
+        }
+    std::printf("SUMMARY marquee-mode-parent checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }
