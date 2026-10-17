@@ -1,5 +1,9 @@
 # Ordered selection workers (P1.6)
 
+- [x] Private actual Win32 caller Release R7: 41 physical, 21 queued/active shutdown and 71 scalar checks plus every inherited Application record pass in 145 stages; 1,698 archive files and 340 exact command records independently qualified. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
+- [ ] Exact caller real ASan (340-source build running), native adoption, remaining physical branches, display/phase ownership and ordinary activation; these selected Release results do not close S5 or G1.
+
+
 ## Current delivery checklist (2026-10-16)
 
 - [x] Qualify cache-derived selection gesture admission in private Release R3: 26 memory/large-source checks, 12 metadata-authority regressions and all 22,296 predecessors (22,334 total); the fixture-only compile failure is retained.
