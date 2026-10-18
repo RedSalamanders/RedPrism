@@ -706,6 +706,8 @@
     <ClCompile Include="..\Common\SelectionMoveOpeningWork.cpp" />
     <ClInclude Include="..\Common\SelectionMoveOpeningWork.h" />
     <ClInclude Include="HostSelectionPressInput.h" />
+    <ClInclude Include="HostSelectionGestureInput.h" />
+    <ClInclude Include="HostPolygonalInputJournal.h" />
     <ClInclude Include="SelectionOutlineGestureJob.h" />
   </ItemGroup>
   <ItemGroup>

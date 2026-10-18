@@ -40,6 +40,8 @@ class SelectionOutlineGestureJob final : public Job
   private:
     bool NotifyMoves(bool changed) noexcept;
     bool ConsumeDrawing() noexcept;
+    bool ConsumePolygonal() noexcept;
+    bool FinishDrawing(const HostSelectionGestureInput::Sample& sample) noexcept;
     bool DrawingCurrent() const noexcept;
     void AbortDrawing() noexcept;
     bool Refuse(std::int32_t error) noexcept;
@@ -55,6 +57,8 @@ class SelectionOutlineGestureJob final : public Job
     std::uint64_t _geometryEnvelope = 0;
     std::int32_t _error = 0;
     bool _click = false, _terminal = false;
+    std::optional<HostSelectionGestureInput::Event> _lastInput;
+    std::uint64_t _lastPolygonalOrdinal = 0;
     std::optional<SelectionMoveOpeningInput> _input;
     std::optional<PreparedSelectionMoveOpening> _opening;
     std::optional<SelectionMoveClosureInput> _closeInput;

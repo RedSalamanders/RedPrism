@@ -33,6 +33,22 @@ struct SelectionOutlineDrawing final
 
 namespace
 {
+// The drag-Up public planner deliberately rejects Polygonal. This original parent's journal overload
+// admits the separate multi-click Polygonal arena and exact boolean/workspace ceilings before its hit.
+std::optional<LassoFinishGeometry::DrawingPlan> DescribeGestureDrawing(LassoKind kind, SelectionMode mode,
+                                                                       std::uint64_t sourcePoints = 0,
+                                                                       std::uint64_t sourceLoops = 0) noexcept
+{
+    if (kind != LassoKind::Polygonal)
+        return LassoFinishGeometry::PlanDrawing(kind, mode, sourcePoints, sourceLoops);
+    const auto geometry = LassoFinishGeometry::PolygonalLimits(mode, sourcePoints, sourceLoops);
+    const auto finish = LassoFinishGeometry::PlanPolygonal(mode, sourcePoints, sourceLoops);
+    if (!geometry || !finish)
+        return std::nullopt;
+    return LassoFinishGeometry::DrawingPlan{
+        kind,      mode,   LassoFinishGeometry::kPolygonalArenaBlocks, LassoFinishGeometry::kPolygonalMaximumPoints,
+        *geometry, *finish};
+}
 std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const DocumentSession& session,
                                                                    std::optional<LassoKind> newMarqueeKind,
                                                                    SelectionMode mode = SelectionMode::New) noexcept
@@ -83,7 +99,7 @@ std::optional<SelectionOutlineGestureMemory> DescribeMarqueeMemory(const Documen
     {
         const auto sourcePoints = document->selection ? document->selection.value().loops.PointCount() : 0;
         const auto sourceLoops = document->selection ? document->selection.value().loops.size() : 0;
-        drawing = LassoFinishGeometry::PlanDrawing(newMarqueeKind.value(), mode, sourcePoints, sourceLoops);
+        drawing = DescribeGestureDrawing(newMarqueeKind.value(), mode, sourcePoints, sourceLoops);
         const auto marquee = drawing ? std::optional{drawing.value().finish} : std::nullopt;
         const auto geometryLimits = drawing ? std::optional{drawing.value().geometry} : std::nullopt;
         if (!geometryLimits || (mode != SelectionMode::New && document->selection &&
@@ -127,7 +143,7 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
                                                                                    LassoKind marqueeKind,
                                                                                    SelectionMode mode) noexcept
 {
-    if (!LassoFinishGeometry::PlanDrawing(marqueeKind, mode))
+    if (!DescribeGestureDrawing(marqueeKind, mode))
         return std::nullopt;
     return DescribeMarqueeMemory(session, marqueeKind, mode);
 }
@@ -273,7 +289,7 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
     {
         const auto* arrival = s.prefix.CapturedContext(s.opening);
         const auto down = s.prefix.Peek(s.opening);
-        if (!arrival || !down || down->action != HostSelectionPressInput::Action::Down ||
+        if (!arrival || !down || down->action != HostSelectionGestureInput::Action::Down ||
             arrival->document.documentSerial != s.session.DocumentSerial() ||
             (arrival->mode != SelectionMode::New &&
              (!s.allowPreservingMarquee ||
@@ -283,11 +299,14 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         const bool typed =
             _drawingPolicy && _drawingPolicy.value().kind == arrival->kind &&
             _drawingPolicy.value().mode == arrival->mode &&
-            arrival->tool == (arrival->kind == LassoKind::Freehand ? HostSelectionPressInput::Tool::Lasso
-                                                                   : HostSelectionPressInput::Tool::Marquee);
+            arrival->tool == ((arrival->kind == LassoKind::Freehand || arrival->kind == LassoKind::Polygonal)
+                                  ? HostSelectionPressInput::Tool::Lasso
+                                  : HostSelectionPressInput::Tool::Marquee);
         const bool legacy = !_drawingPolicy && arrival->tool == HostSelectionPressInput::Tool::Marquee &&
                             ((arrival->kind == LassoKind::Rectangle && s.allowNewRectangle) ||
                              (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse));
+        if (arrival->kind == LassoKind::Polygonal && !s.prefix.IsJournal())
+            return Refuse(E_ABORT);
         if (_drawing && !typed && !legacy)
             return Refuse(E_ABORT);
         if (arrival->mode != SelectionMode::New && (!_drawing || (!typed && !legacy)))
@@ -306,7 +325,8 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             return Refuse(E_ABORT); // Never prepare a different kind or mode under a smaller admission.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
-        if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
+        if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity ||
+            (s.prefix.IsJournal() && !s.session.IsDocumentReadCurrent(arrival->document)))
             return Refuse(E_ABORT);
         _display = s.session.DisplayedSelectionValue();
         _point = down->sample.point;
@@ -461,6 +481,17 @@ bool SelectionOutlineGestureJob::NotifyInput() noexcept
     auto& s = _state;
     if (!s.waiting || s.prefix.PendingCount() == 0)
         return false;
+    const auto next = s.prefix.Peek(s.opening);
+    if (!next)
+        return false;
+    if (s.waitReason == SelectionOutlineGestureState::WaitReason::Ordinal && s.mayReplay &&
+        !s.mayReplay(s.hostObserver, next->sample.ordinal))
+        return false;
+    const bool cancelled = next->action == HostSelectionGestureInput::Action::Lost ||
+                           next->action == HostSelectionGestureInput::Action::Escape;
+    if (s.waitReason == SelectionOutlineGestureState::WaitReason::Terminal && s.mayFinish &&
+        !s.mayFinish(s.hostObserver, next->sample.ordinal, cancelled))
+        return false;
     s.waiting = false;
     if (s.scheduler.Resume(s.original))
         return true;
@@ -476,9 +507,9 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     s.outcome = result;
     if (_error && result.status == JobStatus::Finished)
         s.outcome = {JobStatus::Failed, _error};
-    if (s.drawing && s.terminalLost)
+    if (s.cancelled || (s.drawing && s.terminalLost))
         s.outcome = {JobStatus::Cancelled};
-    if (s.outcome.status == JobStatus::Finished && s.drawing)
+    if (s.outcome.status == JobStatus::Finished && s.drawing && !s.endedByBackspace)
     {
         const auto required = _drawing && _drawing->finish ? _drawing->finish->OutputAllocationBytes() : 0;
         if (!_drawing || !_drawing->finish || !s.session.IsPreparedLassoFinishCurrent(*_drawing->finish) ||
@@ -491,7 +522,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
         if (!s.closed && s.outcome.status == JobStatus::Finished)
             s.outcome = {JobStatus::Failed, E_ABORT};
     }
-    else if (s.outcome.status == JobStatus::Finished)
+    else if (s.outcome.status == JobStatus::Finished && !s.drawing)
     {
         const auto required = _command ? _command->OutputMemoryBytes()
                                        : _final->LocalAllocationBytes() +
@@ -508,7 +539,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
             s.outcome = {JobStatus::Failed, E_ABORT};
     }
     _residency.Reset(); // Before rollback, retirement binding, prefix acknowledgement or host callbacks.
-    if (s.outcome.status != JobStatus::Finished)
+    if (s.outcome.status != JobStatus::Finished || s.endedByBackspace)
     {
         AbortDrawing();
         if (s.opened && !s.closed && _opening)
@@ -518,9 +549,9 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     }
     s.overflowObserved = s.prefix.Overflowed();
     s.inputAcknowledged = _terminal ? s.prefix.Acknowledge(s.opening) : s.prefix.Drop(s.opening);
-    s.Notify(SelectionOutlineGestureState::Event::Terminal);
     s.controller = nullptr;
     s.parentAcknowledged.store(true, std::memory_order_release);
+    s.Notify(SelectionOutlineGestureState::Event::Terminal); // Final access: observer may retire its owned state.
 }
 
 void SelectionOutlineGestureJob::RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept
@@ -560,11 +591,35 @@ bool SelectionOutlineGestureJob::Consume() noexcept
     if (!_opening || !s.session.IsPreparedDeferredSelectionMoveGestureCurrent(_opening.value()))
         return Refuse(E_ABORT);
     bool changed = false;
-    while (auto event = s.prefix.Take(s.opening))
+    unsigned consumed = 0;
+    while (const auto next = s.prefix.Peek(s.opening))
     {
-        if (event->action == HostSelectionPressInput::Action::Down)
+        // A second raw Down can follow a lost release. Preserve it for the next parent; end only
+        // this inside drag using the existing pointer-loss policy and its last accepted sample.
+        const bool nextGesture =
+            s.prefix.IsJournal() && _lastInput && next->action == HostSelectionGestureInput::Action::Down;
+        const auto event = nextGesture ? std::optional{HostSelectionGestureInput::Event{
+                                             HostSelectionGestureInput::Action::Lost, _lastInput->sample, true}}
+                                       : s.prefix.Take(s.opening);
+        if (!event)
+            return Refuse(E_ABORT);
+        if (!nextGesture)
+            _lastInput = event;
+        ++consumed;
+        if (event->action == HostSelectionGestureInput::Action::Escape)
+        {
+            if (!s.prefix.SelectTerminal(s.opening, event->sample.ordinal))
+                return Refuse(E_ABORT);
+            _terminal = s.cancelled = true;
+            s.terminalOrdinal = event->sample.ordinal;
+            return false;
+        }
+        if (event->action == HostSelectionGestureInput::Action::Enter ||
+            event->action == HostSelectionGestureInput::Action::Backspace)
+            continue; // No lasso draft was selected; the ordered host key request owns its command.
+        if (event->action == HostSelectionGestureInput::Action::Down)
             continue;
-        if (event->action == HostSelectionPressInput::Action::Move)
+        if (event->action == HostSelectionGestureInput::Action::Move)
         {
             double dx = event->sample.point.x - _point.x, dy = event->sample.point.y - _point.y;
             if (event->sample.modifiers.shift)
@@ -579,10 +634,19 @@ bool SelectionOutlineGestureJob::Consume() noexcept
             _offset = {std::round(dx), std::round(dy)};
             ++s.moves;
             changed = true;
+            if (s.prefix.IsJournal() && consumed == 16 && s.prefix.PendingCount())
+            {
+                if (!NotifyMoves(changed))
+                    return Refuse(E_ABORT);
+                return Resume();
+            }
             continue;
         }
+        if (!s.prefix.SelectTerminal(s.opening, event->sample.ordinal))
+            return Refuse(E_ABORT);
         _terminal = true;
-        s.terminalLost = event->action == HostSelectionPressInput::Action::Lost;
+        s.terminalLost = event->action == HostSelectionGestureInput::Action::Lost ||
+                         event->action == HostSelectionGestureInput::Action::Leave;
         s.terminalOrdinal = event->sample.ordinal;
         _click = !s.terminalLost && _offset == Vec2{};
         if (!NotifyMoves(changed))
@@ -632,14 +696,16 @@ bool SelectionOutlineGestureJob::ConsumeDrawing() noexcept
     auto& s = _state;
     if (!DrawingCurrent())
         return Refuse(E_ABORT);
+    if (_drawingPolicy && _drawingPolicy.value().kind == LassoKind::Polygonal)
+        return ConsumePolygonal();
     const bool freehand = _drawingPolicy && _drawingPolicy.value().kind == LassoKind::Freehand;
     unsigned samples = 0;
     bool changed = false;
     while (auto event = s.prefix.Take(s.opening))
     {
-        if (event->action == HostSelectionPressInput::Action::Down)
+        if (event->action == HostSelectionGestureInput::Action::Down)
             continue;
-        if (event->action == HostSelectionPressInput::Action::Move)
+        if (event->action == HostSelectionGestureInput::Action::Move)
         {
             if (freehand)
             {
@@ -679,8 +745,10 @@ bool SelectionOutlineGestureJob::ConsumeDrawing() noexcept
             }
             continue;
         }
+        if (!s.prefix.SelectTerminal(s.opening, event->sample.ordinal))
+            return Refuse(E_ABORT);
         _terminal = true;
-        s.terminalLost = event->action == HostSelectionPressInput::Action::Lost;
+        s.terminalLost = event->action == HostSelectionGestureInput::Action::Lost;
         s.terminalOrdinal = event->sample.ordinal;
         if (changed)
             s.Notify(SelectionOutlineGestureState::Event::Moved);
@@ -691,18 +759,7 @@ bool SelectionOutlineGestureJob::ConsumeDrawing() noexcept
             s.aborted = s.session.AbortPreparedLassoGestureIfCurrent(*_drawing->opening);
             return s.aborted ? false : Refuse(E_ABORT);
         }
-        auto terminal = s.session.ClosePreparedLassoGestureForWork(*_drawing->opening, event->sample.antialiased);
-        if (!terminal)
-            return Refuse(E_ABORT);
-        auto input = s.session.PrepareClosedBoundedLassoFinishInput(std::move(*terminal));
-        if (!input)
-            return Refuse(E_ABORT);
-        _drawing->finishIntent = s.session.CaptureLassoIntent(*input);
-        if (!_drawing->finishIntent)
-            return Refuse(E_ABORT);
-        _drawing->finishInput.emplace(std::move(*input));
-        _phase = Phase::DrawFinish;
-        return Resume();
+        return FinishDrawing(event->sample);
     }
     if (changed)
         s.Notify(SelectionOutlineGestureState::Event::Moved);
@@ -710,4 +767,143 @@ bool SelectionOutlineGestureJob::ConsumeDrawing() noexcept
         return Refuse(E_ABORT);
     s.waiting = true;
     return true;
+}
+
+bool SelectionOutlineGestureJob::FinishDrawing(const HostSelectionGestureInput::Sample& sample) noexcept
+{
+    auto& s = _state;
+    auto terminal = s.session.ClosePreparedLassoGestureForWork(*_drawing->opening, sample.antialiased);
+    if (!terminal)
+        return Refuse(E_ABORT);
+    auto input = s.session.PrepareClosedBoundedLassoFinishInput(std::move(*terminal));
+    if (!input)
+        return Refuse(E_ABORT);
+    _drawing->finishIntent = s.session.CaptureLassoIntent(*input);
+    if (!_drawing->finishIntent)
+        return Refuse(E_ABORT);
+    _drawing->finishInput.emplace(std::move(*input));
+    _phase = Phase::DrawFinish;
+    return Resume();
+}
+
+bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
+{
+    auto& s = _state;
+    if (!DrawingCurrent() || !s.prefix.IsJournal())
+        return Refuse(E_ABORT);
+    s.waitReason = SelectionOutlineGestureState::WaitReason::None;
+    unsigned consumed = 0;
+    bool changed = false;
+    const auto park = [&](SelectionOutlineGestureState::WaitReason reason) noexcept
+    {
+        if (changed)
+            s.Notify(SelectionOutlineGestureState::Event::Moved);
+        if (!DrawingCurrent())
+            return Refuse(E_ABORT);
+        s.waitReason = reason;
+        s.waiting = true;
+        return true;
+    };
+    while (const auto next = s.prefix.Peek(s.opening))
+    {
+        const auto& sample = next->sample;
+        const bool emergency = next->action == HostSelectionGestureInput::Action::Lost && next->emergency;
+        if (!sample.ordinal ||
+            (sample.ordinal <= _lastPolygonalOrdinal && !(emergency && sample.ordinal == _lastPolygonalOrdinal)))
+            return Refuse(E_INVALIDARG);
+        const bool firstDown = !_lastPolygonalOrdinal;
+        if (firstDown && next->action != HostSelectionGestureInput::Action::Down)
+            return Refuse(E_INVALIDARG);
+        if (!firstDown && s.mayReplay && !s.mayReplay(s.hostObserver, sample.ordinal))
+            return park(SelectionOutlineGestureState::WaitReason::Ordinal);
+        bool closes = next->action == HostSelectionGestureInput::Action::Enter;
+        const bool cancelled = next->action == HostSelectionGestureInput::Action::Lost ||
+                               next->action == HostSelectionGestureInput::Action::Escape;
+        const auto& draft = s.session.PendingLasso();
+        if (!draft || draft->kind != LassoKind::Polygonal)
+            return Refuse(E_ABORT);
+        const bool endedByBackspace =
+            next->action == HostSelectionGestureInput::Action::Backspace && draft->PointCount() <= 1;
+        if (!firstDown && next->action == HostSelectionGestureInput::Action::Down)
+        {
+            const auto first = draft->FirstPoint();
+            const auto proximity = first ? HostPolygonalInputJournal::NearFirst(sample, first.value()) : std::nullopt;
+            if (!proximity)
+                return Refuse(E_INVALIDARG);
+            closes = sample.doubleClick || (draft->PointCount() >= 3 && proximity.value());
+        }
+        if ((closes || cancelled || endedByBackspace) && !emergency && s.mayFinish &&
+            !s.mayFinish(s.hostObserver, sample.ordinal, cancelled))
+            return park(SelectionOutlineGestureState::WaitReason::Terminal);
+        const auto event = s.prefix.Take(s.opening);
+        if (!event)
+            return Refuse(E_ABORT);
+        _lastPolygonalOrdinal = sample.ordinal;
+        ++consumed;
+        s.maximumDrawingSamples = (std::max)(s.maximumDrawingSamples, consumed);
+        if (closes || cancelled)
+        {
+            if (!s.prefix.SelectTerminal(s.opening, sample.ordinal))
+                return Refuse(E_ABORT);
+            _terminal = true;
+            s.terminalOrdinal = sample.ordinal;
+            s.terminalLost = cancelled;
+            s.cancelled = cancelled;
+            if (event->action == HostSelectionGestureInput::Action::Down && s.pressResolved)
+                s.pressResolved(s.hostObserver, sample.ordinal, true);
+            if (changed)
+                s.Notify(SelectionOutlineGestureState::Event::Moved);
+            if (!DrawingCurrent())
+                return Refuse(E_ABORT);
+            return cancelled ? false : FinishDrawing(sample);
+        }
+        std::optional<bool> updated = false;
+        if (event->action == HostSelectionGestureInput::Action::Down)
+        {
+            if (!firstDown)
+            {
+                updated = s.session.ExtendPreparedLassoPointIfCurrent(_drawing->opening.value(), sample.point);
+                if (!updated)
+                    return Refuse(DrawingCurrent() ? E_OUTOFMEMORY : E_ABORT);
+                if (s.pressResolved)
+                    s.pressResolved(s.hostObserver, sample.ordinal, false);
+            }
+        }
+        else if (event->action == HostSelectionGestureInput::Action::Move ||
+                 event->action == HostSelectionGestureInput::Action::Leave)
+        {
+            updated = s.session.MovePreparedPolygonCursorIfCurrent(
+                _drawing->opening.value(),
+                event->action == HostSelectionGestureInput::Action::Move ? std::optional{sample.point} : std::nullopt);
+        }
+        else if (event->action == HostSelectionGestureInput::Action::Backspace)
+        {
+            const auto removal = s.session.RemovePreparedPolygonPointIfCurrent(_drawing->opening.value());
+            if (!removal)
+                return Refuse(E_ABORT);
+            if (removal.value() == PreparedLassoRemoval::Ended)
+            {
+                if (!s.prefix.SelectTerminal(s.opening, sample.ordinal))
+                    return Refuse(E_ABORT);
+                _terminal = s.endedByBackspace = true;
+                s.terminalOrdinal = sample.ordinal;
+                return false;
+            }
+            updated = true;
+        }
+        else if (event->action != HostSelectionGestureInput::Action::Up)
+            return Refuse(E_INVALIDARG);
+        if (!updated)
+            return Refuse(DrawingCurrent() ? E_OUTOFMEMORY : E_ABORT);
+        changed = changed || updated.value();
+        if (!DrawingCurrent())
+            return Refuse(E_ABORT);
+        if (consumed == 16 && s.prefix.PendingCount())
+        {
+            if (changed)
+                s.Notify(SelectionOutlineGestureState::Event::Moved);
+            return DrawingCurrent() ? Resume() : Refuse(E_ABORT);
+        }
+    }
+    return park(SelectionOutlineGestureState::WaitReason::Input);
 }

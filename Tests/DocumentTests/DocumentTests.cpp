@@ -35,6 +35,7 @@
 #include "Document.Tests.LassoOpeningSettings.h"
 #include "Document.Tests.LassoSessionBridge.h"
 #include "Document.Tests.MarqueeModePlan.h"
+#include "Document.Tests.PolygonalDispatcher.h"
 #include "Document.Tests.PolygonalDrawingParent.h"
 #include "Document.Tests.PolygonalPlan.h"
 #include "Document.Tests.RectangleFinishPlan.h"
@@ -8478,6 +8479,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreparedPolygonAuthorityTests();
     gFailures += RunPolygonalPlanTests();
     gFailures += RunPolygonalDrawingParentTests();
+    gFailures += RunPolygonalDispatcherTests();
     gFailures += RunPolygonalPreRecordedTerminalTests();
     gFailures += RunPolygonalHostGateTests();
     if (gFailures != 0)

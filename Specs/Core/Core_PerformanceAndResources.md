@@ -1786,3 +1786,27 @@ Every sample owns its physical pointer position, document coordinates, document-
 Capacity loss preserves all 512 earlier records and adds exactly one emergency Lost at the last accepted ordinal; it cannot wrap the counter or replace an earlier successful parent boundary. Sealing refuses later records. Explicit owner CloseInput and a fully drained prefix/emergency loss are required before Finish; the owner must retain the journal until all borrowing parents and conditional host receipts are acknowledged. Stream identities cannot repeat or wrap. Generation/restore/target values are preserved per Down; the dispatcher validates their semantic authority after admission and branch/order selection without arbitrary generation rewriting.
 
 The helper and complete scoped HostTests proof do not implement the physical New/nonempty-prior dispatcher, choose a branch, reserve a job, change selection/history, or enable ordinary input. That dispatcher must admit both branch peaks before source capture, use one original containment/job and preserve younger gestures after an inside Up. Remaining caller, phase/retirement, ordinary-host and G1 gates stay mandatory.
+
+## Polygonal original-parent journal branch resources
+
+The original selection parent may borrow one journal family without owning or copying its ring.
+Its view and last accepted scalar event are covered by the cached state/job wrapper envelope.
+The journal overload admits the existing finite Polygonal opening/arena, complete worker geometry
+and Boolean workspace/output, inside movement, history refresh and strong/weak retirement peaks
+before retaining immutable source roots. Both branches stay on the same ticket/reservation.
+
+Each Polygonal owner continuation consumes at most sixteen accepted physical records, including
+Up/hover/keys; an unready ordinal or terminal remains unconsumed. Empty input and false readiness
+park without polling, retry admission, geometry allocation or idle wake-up. This journal quantum
+does not change the already qualified legacy press-stream batching. Conditional corner decisions
+report only scalars. Pixel/geometry/history work stays on admitted workers; publication is current-only.
+
+Acknowledging one borrowed parent never closes/drains the family. The owner must keep the ring
+alive through every borrowing original parent and conditional receipt. An inside Up that precedes
+full-ring overflow retains its successful outcome. Finish requires explicit owner close, drained
+prefix/emergency loss and joined borrowers. Normal terminal callback is the last state access;
+shutdown joins and retires without useful callbacks. A future owned-predecessor transition is an
+explicit caller authority gate, not permission to rewrite stored arrival generations.
+
+[Complete scoped CPU evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+Physical host activation, measured owner/apply budgets and final native matrix remain required.

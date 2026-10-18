@@ -2063,3 +2063,31 @@ and create no history for this short terminal. The native double-click requires 
 position criteria. Drawing mode is captured at Down; a later header-mode callback does not retarget its writer.
 These requirements do not enable the remaining New/nonempty or lifted-pixel dispatcher branches.
 [Selected native terminal evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+## Polygonal original-parent branch selection
+
+The explicit journal overload of `SelectionOutlineGestureState` permits Polygonal in the original
+`SelectionOutlineGestureJob`. It uses the existing finite Polygonal arena/geometry plans through a
+private descriptor mapping; generic drag-Up `PlanDrawing` still rejects Polygonal. Complete inside
+and outside peaks are admitted before immutable source/history capture. New with nonempty prior
+selection runs one exact cancellable worker hit; inside moves only the original outline and outside
+opens a Polygonal draft on that same ticket. Add/Subtract draw without containment.
+
+The scalar borrowing view preserves complete event-time journal samples and chooses its branch
+terminal only after consuming that exact record. Inside Up ends only the current original parent,
+leaving later Down records and contexts intact. Missing release before a later Down finishes only
+the old inside drag at its last sample. Later family overflow cannot cancel an already accepted Up.
+Outside Up is nonterminal; hover/Leave do not add corners. Deferred near-first uses the actual first
+point and captured physical view/DPI operands; double-click closes without appending its point.
+Escape and loss cancel only the draft; last-corner Backspace ends without publication/history.
+
+Journal arrival generation/restore and target authority must still be current at original capture.
+A later physical caller must explicitly validate any owned predecessor transition before accepting
+a younger original parent; this prerequisite grants no arbitrary rebasing. Owner readiness queries
+are scalar and nonreentrant. False preserves the unconsumed record; only a useful readiness event
+resumes the original reservation. Terminal callback is the final state access and observes cleared
+controller plus acknowledgement. Joined shutdown emits no useful terminal callback.
+
+This CPU branch qualification does not enable the physical dispatcher or ordinary input, settle
+Save/tool/lifetime arbitration, close lifted-pixel/Wand branches or establish G1.
+[Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).

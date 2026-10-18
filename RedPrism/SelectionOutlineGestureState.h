@@ -1,7 +1,7 @@
 #pragma once
 
 #include "HistoryRestoreWork.h"
-#include "HostSelectionPressInput.h"
+#include "HostSelectionGestureInput.h"
 #include "Jobs.h"
 #include "LassoFinishGeometry.h"
 
@@ -48,7 +48,7 @@ struct SelectionOutlineGestureState
     unsigned residencyTries = 0, residencyRefreshes = 0;
     JobScheduler& scheduler;
     DocumentSession& session;
-    HostSelectionPressInput& prefix;
+    HostSelectionGestureInput prefix;
     const std::uint64_t opening;
     const Limits limits;
     SelectionOutlineGestureState(JobScheduler& jobs, DocumentSession& document, HostSelectionPressInput& input,
@@ -56,6 +56,25 @@ struct SelectionOutlineGestureState
         : scheduler(jobs), session(document), prefix(input), opening(identity), limits(admitted)
     {
     }
+    SelectionOutlineGestureState(JobScheduler& jobs, DocumentSession& document, HostPolygonalInputJournal& input,
+                                 std::uint64_t identity, Limits admitted) noexcept
+        : scheduler(jobs), session(document), prefix(input, identity), opening(identity), limits(admitted)
+    {
+    }
+    enum class WaitReason : std::uint8_t
+    {
+        None,
+        Input,
+        Ordinal,
+        Terminal
+    };
+    WaitReason waitReason = WaitReason::None;
+    void* hostObserver = nullptr;
+    bool (*mayReplay)(void*, std::uint64_t) noexcept = nullptr;
+    bool (*mayFinish)(void*, std::uint64_t, bool cancelled) noexcept = nullptr;
+    void (*pressResolved)(void*, std::uint64_t, bool closes) noexcept = nullptr;
+    bool endedByBackspace = false;
+    bool cancelled = false;
     void* observer = nullptr;
     void (*notify)(void*, Event) noexcept = nullptr;
     SelectionOutlineGestureJob* controller = nullptr;

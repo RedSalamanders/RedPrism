@@ -3338,3 +3338,29 @@ complete new Application streams run. [Evidence](../TestRuns/P1PolygonalTerminal
 The numeric oracle is archived behavioral reference: the projected-first-point distance is at most eight view points. Windows fixtures use literal 144-DPI/12-physical-pixel and 192-DPI/16-pixel boundaries, one ULP outside the boundary, minimum zoom, invalid snapshots and an exact large-pan counterexample where rounded-document reconstruction would incorrectly reject closure. Later viewport changes cannot reinterpret a recorded click. Proximity alone does not decide whether a polygon has enough corners.
 
 Qualify the complete unchanged predecessor HostTests roster plus this module in Release and real ASan, with exact 136-TU compiler records, source bookends, matching native x64 executable/full-PDB identity, linked ISA and genuine UAF detection. The isolated resource fixture uses the exact qualified ARM64 executable only through data/resource loading and version-info APIs; it executes no ARM64 code. Preserve original project-import/configuration and missing-resource pre-build refusals; a reader or fixture correction never turns an earlier attempt into a pass. This scoped proof does not close the physical dispatcher, final native matrix, ordinary activation or G1. [Evidence](../TestRuns/P1PolygonalInputJournal_2026-10-18.md).
+
+## Polygonal original-parent branch validation
+
+`Document.Tests.PolygonalDispatcher.cpp` registers 105 independent CPU assertions over 24 scenarios.
+Preserve every 23,454 predecessor PASS record and the generic drag-Up planner's Polygonal refusal.
+Verify one original admission/capture/ticket and one New/nonempty worker hit; Add/Subtract skip hit.
+All 120 pixel centers use independent literal rectangle/union/subtraction predicates, with exact
+Undo/Redo/history and event-time terminal AA. Inside movement has the existing Move+End generation
+invalidations; short New clears once and short Add/Subtract preserve exact no-op history.
+
+Cover inside Up with a younger Down, missing Up, all 512 accepted records plus separate emergency
+loss after that Up, borrowed-family retention, forged generation/restore/active/crop/mask, real
+foreign pending History Begin, memory refusal before capture, Escape, parked/running cancellation,
+joined close, Backspace-to-zero, short double-click, physical view/DPI closure, terminal/ordinal
+readiness before Take and sixteen-record hover replay. Normal observer sees cleared controller
+and acknowledgement; final reader release refunds both reserved and releasing bytes.
+
+Qualify complete affected Release and real-ASan DocumentTests, all 285 source/command records,
+consistent private state headers, exact source/object lineage, full archived bytes, matching x64
+executable/full-PDB, linked ISA and genuine isolated UAF detection. Preserve the stale agent-project
+preparation, original macro compile failure, two legacy-batching regression predicates and four
+fixture predicates before correction. No predecessor assertion/golden is rebaselined.
+
+This proof excludes actual Win32 dispatcher/conditional receipts, owned-predecessor transitions,
+Save/tool/lifetime arbitration, ordinary activation, ARM64 runtime, G1 and the final latest-source
+full matrix. [Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
