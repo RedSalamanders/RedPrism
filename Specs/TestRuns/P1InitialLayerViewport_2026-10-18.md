@@ -41,3 +41,33 @@ Artifacts: D:\RedPrismBuildCaches\.build\p1-layer-header-layout-fix-native-r1 (c
 
 Minimized/zero-size restoration, later large-model scroll/resize, prepared-row/UIA activation, latest full x64 Debug/Release/ASan/analysis/ARM integration and measured G1 remain open. The earlier ARM64 Release/ASan receipts cover their own pre-fix source, and the full canonical ASan receipt covers its own 35-case source. No P1 Done or main merge.
 
+
+
+## Latest canonical ARM64 Release and ASan — r1139 / r1140
+
+Source commit `710bf4c5446f6c645a48bbc8f145ed701fadbb20` includes the production viewport change from
+`4d7fac8`, adopted 41-case / 420-fact dispatcher fixture and final scanner correction. The only compiled-source
+change from the qualified `9ce8b62` ARM baseline is `RedPrism/Application.cpp`. Both canonical builds run
+serially with one worker and finish with actual exit 0.
+
+| Profile / attempt | Actual PID | Archived files | Archive completion SHA256 |
+| --- | ---: | ---: | --- |
+| Release / r1139 | 55972 | 1,560 | `4D014AC564AA30C9BB06FB48B2AE4251D1A02264B1B9253DDC706AE2FA84B4D0` |
+| ASan Debug / r1140 | 58564 | 1,564 | `17CBD818F377749D5F83F9EBE5FB1D2A33BEF9CB5398FEAA541DB7C8485367D2` |
+
+Main independently verifies all 994 actual compiler records, required warnings/conformance/UTF-8 flags,
+CRT/optimization/defines, real ASan plus its forced header, all five AA64 executable/full-PDB identities and
+all archived bytes. Each profile has one fresh Application object and 993 byte-exact inherited objects;
+all 351 Application objects occur in its actual link. The current baseline maps check object sizes as well
+as hashes before preservation, avoiding the earlier stale-size reader defect.
+
+The immutable 1,487-input / 1,483-Root-input freeze is
+`571E376F26BCEC049E2F5B462278271C428DFE42144908CF202DAD90E9DA20D3`.
+Four positive and 31 negative source-only reader controls pass. Main corrects the cheaper helper's current
+source-commit attribution before preparation; both preflight and final receipts name the actual source commit.
+Existing storage mappings, original caches and all prior refusal evidence remain untouched.
+
+Cohort: `D:/RedPrismBuildCaches/.build/p1-layer-viewport-arm-native-r1`.
+Final receipts: `r1139-main-qualified.json`, `r1140-main-qualified.json`; all archive, PE/PDB, mandatory-profile
+and object-lineage readers exit 0. These are cross-builds. Native ARM64 execution is unavailable. Latest full
+x64 ASan, broader H4/ordinary activation, measured G1 and the remaining P1 delivery gates remain open.

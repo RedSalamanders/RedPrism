@@ -1,6 +1,6 @@
 # Direct RBX guarded terminal-table scanner regression — 2026-10-18
 
-Status: final 120-control and unchanged-image qualification passes; complete final scanner suite in progress.
+Status: complete final Release scanner suite, all 120 new controls and unchanged-image qualification pass.
 
 ## Captured failure and Main correction
 
@@ -27,8 +27,8 @@ remain gated. DxUi and the runtime allowlist are unchanged.
   new cases. This includes full-RBX writes, actual guard bypasses, missing/duplicate/unknown/PE-mismatched
   rows, PDB/terminal/target contradictions, and real body/adjacent VEX/EVEX beside successfully proved data.
 - The complete preceding scanner suite preserves **13,892 exact PASS records**, including compiled controls
-  and the 94 unsigned-tail controls. The full suite with the final stricter implementation is still running;
-  its exit and full record comparison will be appended after completion.
+  and the 94 unsigned-tail controls. At scoped adoption, the final stricter suite was still running;
+  its completed exit and record comparison are recorded below.
 - The **same original image** passes the final scanner: 1,487,931 instructions, 488 allowed runtime vectors,
   five proved data rows and zero violations. Original EXE, full PDB, report and decoder inputs remain exact.
   Independent PE/PDB identity: GUID `C616B600-76A5-459C-8175-48AA1594B521`, age 1.
@@ -53,3 +53,13 @@ Main receipts: `main-new120-qualified.json`, `main-original-final-qualified.json
 
 This tool correction makes no new native Application, native ARM64 runtime, G1, ordinary activation or
 P1-Done claim. Latest ARM64 and full-native qualification and the remaining P1 delivery gates stay open.
+
+
+## Complete final scanner qualification
+
+After the scoped adoption above, the complete stricter suite exits 0 on source commit `710bf4c`.
+Its **14,012 PASS records** are exactly the preceding 13,892 records plus the 120 new default controls:
+no missing, duplicated or extra record. Compiled positive/negative controls and every prior parser family pass.
+Final log SHA256: `C1DB912A57189724662E51806EFF7A32391FB32404D634BED8E892CCEC8C02B1`.
+Receipt: `main-final-scanner-qualified.json`. The final scanner/test hashes and original image/PDB above remain
+unchanged. This closes the tool regression; native Application and performance qualification have separate gates.
