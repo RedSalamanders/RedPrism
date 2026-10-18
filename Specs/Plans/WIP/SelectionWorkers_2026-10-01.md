@@ -51,6 +51,7 @@ This child plan and parent P1 remain **WIP**. Earlier dated notes are historical
 - [x] Qualify and adopt explicit owned-predecessor transitions: 34 new assertions over ten scenarios extend the module to 139, with all 23,594 PASS records in fresh 285-TU Release/real-ASan builds. Exact source/artifact/PE-PDB/ISA and genuine UAF checks pass. Opaque move-only receipts preserve immutable Down metadata through owned selection publications; actual Win32 integration remains open. [Evidence](../../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
 - [x] Qualify and adopt the selected original physical Polygonal dispatcher: fifteen actual Win32 cases / 139 new facts preserve all 999 prior Polygonal facts and every predecessor in complete 152-stage Release/real-ASan runs (10,721 stdout PASS records). Twenty CPU hook facts preserve the complete 23,614-record / 285-TU suites, exact 351-TU host object lineage, frozen sources, full artifact/PE-PDB/ISA and genuine CPU UAF proof. Temporary pan/capture loss and right selection input preserve the original writer; ordinary activation and the remaining native grid stay open. [Evidence](../../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).
 - [x] Qualify and adopt ten additional original-caller refusal/capacity scenarios (25 cases / 212 facts total): complete scoped Release/real-ASan 152-stage / 10,794-record streams, exact 351-object lineage, full artifacts/PE-PDB/ISA and unchanged predecessors pass. An unchanged-product control reproduces the stale raw-family orphan; the correction retires it on the existing no-active source path. Memory, counters, absent document, queue-eight/raw512 loss, earlier inside Up and missing release preserve exact documents/history and refunds. [Evidence](../../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md).
+- [ ] **Current validation:** canonical latest-source `9af34e4` ARM64 Release `r1128` and instrumented ASan `r1129` Rebuilds are in progress (994 translation units each). The private foreign-history guard and inside-Save regression await native qualification; they are not adopted or covered by those builds. Native ARM64 runtime remains unavailable.
 - [ ] Audit the retained inherited inverse-selection held-gate ASan exit 5 at final native qualification. It did not recur in the complete diagnostic run; failure-only state/error logging is now retained and no causal fix is claimed.
 - [ ] Complete the remaining original Polygonal native grid: shared-ordinal/scheduler-slot exhaustion, held-worker foreign editor/history/crop/mask, inside-Save interleaving, complete export/picker/header/Undo/Redo/Deselect/lifetime/DPI/device/hidden/restart cases and Ctrl/lift. The selected 25-case caller does not enable ordinary routing.
 
@@ -1307,48 +1308,54 @@ The opening checklist is authoritative for qualification; no ordinary activation
 
 ## Next Polygonal physical integration after the CPU branch
 
-Status: upcoming caller work; the CPU parent and generic borrowing view are qualified separately. Do not enable ordinary input from this prerequisite.
+Status: selected original physical caller implementation is adopted and has scoped x64 Release/real-ASan evidence. Original-caller native qualification remains partial. Ordinary activation remains off. Checked implementation and scoped-case boxes below use the [original-host](../../TestRuns/P1PolygonalOriginalHost_2026-10-18.md) and [admission-boundary](../../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md) receipts; broader acceptance boxes remain open.
 
 ### Ownership and input
 
-- [ ] Add a selected physical dispatcher route before `RouteSelectionPressOwner` in `Application::Pointer`; retain the existing selected drawing-only route as predecessor coverage until both modes have migrated.
-- [ ] Keep one owner-only `HostPolygonalInputJournal` per live family, with a nonrepeating family identity and fixed conditional-request bookkeeping. Each accepted Down reserves its own ordered host descriptor/receipt before being recorded. No Down can fall through to synchronous geometry after eligible refusal.
-- [ ] Capture the complete per-Down context and every sample's point, view point, origin, zoom, DPI, modifiers, AA, actual double-click decision and left-button state at physical arrival. Reuse the host descriptor's ordinal for Down; other records use the shared ordinal source.
-- [ ] Raw Up stays in the journal. Record right-button input separately; a right release must neither become a left terminal nor release an admitted left capture. Keep wheel/pan mapping usable without changing captured operands.
+- [x] Add the selected physical dispatcher route before `RouteSelectionPressOwner`; retain the selected drawing-only route as predecessor coverage.
+- [x] Keep one owner-only `HostPolygonalInputJournal` per live family, with nonrepeating family identity and fixed conditional-request bookkeeping. Reserve an ordered host descriptor/receipt before recording each accepted Down; eligible refusal cannot fall through to synchronous geometry.
+- [x] Capture per-Down context and event-time sample data (point/view point, origin, zoom, DPI, modifiers, AA, double-click decision and left-button state); reuse the Down descriptor ordinal and use the shared ordinal source for other records.
+- [x] Keep raw Up in the journal. Recognize and handle right selection input before synchronous lasso routing so it cannot become a left terminal or release left capture. Preserve temporary pan routing and captured operands.
 
 ### One original parent and ordered branch selection
 
-- [ ] On selection of the original Down descriptor, describe/reserve both branch peaks before immutable source/history/selection capture. Use the journal overload of `SelectionOutlineGestureState` and the same original `SelectionOutlineGestureJob`; do not submit a second hit-dependent Selection job.
-- [ ] New/nonempty runs one exact cancellable worker hit. Inside selects outline movement; outside selects the prepared Polygonal writer. Add/Subtract choose drawing without running containment.
-- [ ] Inside retains its original barrier through the selected Up/loss/cancel. Complete only that parent and receipt; leave the younger Down and complete scalar context intact. A missing release may finish only the old inside drag at its last accepted sample, without consuming the newer Down.
-- [ ] Outside Opened acknowledges only the creator descriptor and releases its interactive host barrier. Keep the admitted ticket/reservation and prepared writer alive. A save of committed document state must remain possible while the metadata-only writer parks.
-- [ ] Each later Down descriptor is conditional until the original worker's hit and older replay decide it. A corner completes only that receipt. A chosen close takes the matching terminal barrier, never appends its point, and lets the original job publish once. An Up cannot retire this family or close this writer.
-- [ ] The next original parent after a successful inside move needs an explicit validated owned-predecessor transition: retain the immutable arrival authority, prove the preceding original parent/receipt published the exact expected selection-only result, and validate the current document/editor/history/target. Do not rewrite captured generation/restore values or permit arbitrary intervening edits. The CPU opaque move-only transition is now qualified (139 assertions / 23,594 full-suite PASS records); this physical caller must move its exact one-shot receipt and still prove the native ordering/lifetime cases.
+- [x] On selection of the original Down descriptor, reserve both branch peaks before immutable source/history/selection capture. Use the journal overload and the same original `SelectionOutlineGestureJob`; do not submit a second hit-dependent Selection job.
+- [x] New/nonempty performs one cancellable worker hit. Inside selects outline movement; outside selects the prepared Polygonal writer. Add/Subtract select drawing without containment.
+- [x] Inside retains its original barrier through its selected Up/loss/cancel and completes only that parent/receipt. Outside Opened acknowledges only the creator and releases its interactive barrier while retaining the ticket/reservation and prepared writer; committed project Save can proceed while the metadata-only writer parks.
+- [x] Later Down descriptors remain conditional until hit/replay resolves them; corners complete only their own receipt; chosen close acquires its matching terminal barrier without appending its point; Up does not retire the family or close the writer.
+- [x] Implement the one-shot owned-predecessor handoff for the next original parent after a successful inside move.
+- [ ] Complete native ordering/lifetime proof for repeated inside-parent transitions and held-worker foreign authority at each boundary.
 
 ### Host ordering, keys and lifetime
 
-- [ ] Connect owner readiness to the exact front/active/lifetime host ordinals. An unready record remains unconsumed and does not wake/re-admit itself. Preserve Save/export/picker success/cancel/failure and the current writer through matching read-only work.
-- [ ] Qualify actual inside-Save interleaving under `SelectionMovePolicy(HostWriteInput) == Preserve`: retain the original atomic inside barrier through accepted Up and let those inside records progress while Save waits. Outside replay ordinal gating must not park that Up behind Save. The implementation follows this policy; its native interleaving case remains due. Do not synthesize a Save terminal.
-- [ ] Escape cancels only the selected current branch. Enter closes only a selected outside writer. Backspace is drawing metadata only when that branch exists. Keys accepted before hit resolution need their own conditional ordered receipt and cannot be reinterpreted from the current tool/header later.
-- [ ] Tool, Undo/Redo, Deselect, document replacement, close/end-session and shutdown must cancel/settle and join the exact original writer before their mutation. A cancelled close prompt preserves the live family.
-- [ ] Failure before hit/admission must settle all dependent conditional receipts explicitly and drain/drop accepted records in a bounded owner action. Keep journal/state alive until all borrowers and retirement callbacks join. Normal Terminal is the final state access; shutdown emits no useful terminal callback.
-- [ ] Finish a family only after explicit close, drained accepted prefix/emergency loss, no borrowing controller and no outstanding conditional receipts. Capacity loss after an already accepted inside Up must never cancel that older successful parent.
+- [x] Implement front/active/lifetime ordinal readiness, nonconsuming waits, and bounded progress/receipt delivery. The selected route preserves the writer through committed project Save.
+- [ ] Qualify Save/export/picker success, cancel and failure across the full caller grid, including actual inside-Save interleaving.
+- [x] Record Enter/Escape/Backspace with conditional ordered receipts and resolve them against the selected branch, not later tool/header state.
+- [ ] Complete held-worker/key-before-controller coverage, Backspace refill, Ctrl/lift, and all key timing/refusal cases.
+- [x] Join selected-route tool cancellation, document-replacement retirement and shutdown before releasing borrowed family state; settle conditional receipts and drain accepted records in bounded owner actions.
+- [ ] Qualify every mutation/lifetime path: Undo/Redo, Deselect, close/end-session, cancelled close prompt, parked original-owner lifetime and all dependent receipt outcomes.
+- [x] Implement explicit family retirement after closure/drain and joined borrowers; preserve an older successful inside parent on capacity loss after its accepted Up.
 
 ### Required actual host qualification
 
-- [ ] Held-worker New inside/outside, Add/Subtract, up-between-every-corner, move/hover/leave/reentry, short/double/near-first closure and Backspace refill.
-- [ ] Inside Up + at least two later accepted Down descriptors, including an owned predecessor generation transition; real foreign mutations at each authority boundary must refuse.
-- [ ] Older Save before younger move/corner, Save/PNG/JPEG/picker cancel/failure while outside, header callback, tool/Deselect/Undo/Redo/lifetime arbitration and key-before-controller.
-- [ ] Exact full512 accepted prefix plus emergency Lost, overflow after inside Up, stream/ordinal exhaustion, memory refusal before capture, foreign target/editor/history, running-worker cancellation, device/hidden readiness and joined shutdown.
-- [ ] Preserve the entire existing Application fixture roster, all CPU predecessor assertions and numeric legacy goldens. Qualify the affected Release and real-ASan host (genuine UAF control, actual command/object/source lineage, complete archived products, exact executable/full-PDB and ISA), then update contracts/checklists and commit/push the completed caller step. Ordinary routes, G1 and final latest-source full matrix remain mandatory.
-
+- [x] Qualify the selected subset: New/Add/Subtract; queued inside parents; close-then-next; Escape/Backspace before controller; hover/remove/refill; project Save; tool cancel; leave/zoom; Space-pan and actual capture loss; right input before first Down and during a live draft; joined shutdown. Preserve literal geometry/state, tickets/receipts, history/generation and refunds.
+- [ ] Complete held-worker New inside/outside and Add/Subtract; Up between every corner; short/double/near-first closure; full move/hover/leave/reentry and Backspace refill matrix.
+- [ ] Qualify inside Up followed by at least two later accepted Downs with the exact owned-predecessor generation transition and real foreign mutations at each authority boundary.
+- [ ] Qualify older Save before younger move/corner; actual inside-Save; PNG/JPEG/picker outcomes; header, Deselect, Undo/Redo and complete lifetime arbitration.
+- [x] Qualify the selected refusal/capacity subset: absent document; family/record identity exhaustion; memory refusal; all 512 records plus reserved loss; ninth host descriptor; missing release; and capacity loss after accepted inside Up, preserving exact state/history/refunds.
+- [ ] Qualify shared-ordinal/scheduler-slot exhaustion; held-worker foreign target/editor/history/crop/mask; parked lifetime; device/hidden readiness; and the remaining shutdown/cancellation grid.
+- [x] Preserve the prior 81-case/999-fact Polygonal fixture, CPU predecessor assertions and legacy numeric expectations in the scoped runs. The selected original caller passes the recorded scoped Release/real-ASan artifact, source/object, PE/PDB and ISA checks.
+- [x] Update authoritative contracts and opening checklists for the adopted original caller and admission-boundary fixes, with their committed evidence.
+- [ ] Complete ordinary routing, Ctrl/lift, G1 and the final latest-source native/analysis/ARM matrix before P1 closeout or merge.
 
 ## Next original-caller native boundary closure
 
-- [x] Record primary Down/key prefix before controller, then replace the document: unchanged-product control reproduces the raw orphan; corrected no-active `TakeReady` retirement passes with all receipts, new selection/target/document and final refunds preserved. See the admission-boundary evidence.
-- [ ] Refuse original admission with live available-memory/slot gates before immutable-root capture. Change target, crop, mask/editor or pending history at held-worker boundaries; preserve the foreign edit and settle every dependent receipt.
-- [x] Independently qualify absent document and family/record identity exhaustion: no capture, counter mutation/wrap, busy/overflow notice on an empty canvas or leaked work.
-- [ ] Qualify shared-ordinal and scheduler-slot exhaustion without adding a production bypass or accepting an unrecordable input.
-- [x] Fill all 512 records plus reserved loss; preserve the older accepted inside Up and exact Undo/Redo while cancelling only the younger parent. Ninth-host-descriptor and missing-release cases pass too.
-- [ ] Finish close/end-session/shutdown and cancellation with active and queued descriptors, not just successful or input-loss parents.
-- [ ] Hold project/PNG/JPEG writes and picker decisions through later corner/Up/key input, including actual inside-Save ordering. Complete header/Undo/Redo/Deselect/New/close/end-session, hidden/device/restart and OS-DPI cases before ordinary routing. Earlier drawing-only fixtures remain separate evidence.
+- [x] Record primary Down/key prefix before controller, then replace the document. The unchanged-product control reproduces the raw orphan; corrected no-active `TakeReady` retirement preserves receipts, replacement selection/target/document and final refunds.
+- [x] Refuse original admission on the qualified live-memory gate before capture; preserve explicit refusal/receipt outcomes.
+- [ ] Qualify all live slot gates and held-worker target, crop, mask/editor and pending-history changes; preserve each foreign edit and settle every dependent receipt.
+- [x] Qualify absent document and family/record identity exhaustion: no capture, counter mutation/wrap, empty-canvas busy/overflow notice or leaked work.
+- [ ] Qualify shared-ordinal and scheduler-slot exhaustion without a production bypass or unrecordable input.
+- [x] Fill all 512 records plus reserved loss; preserve the older accepted inside Up and exact Undo/Redo while cancelling only the younger parent. Ninth-host-descriptor and missing-release cases also pass.
+- [ ] Finish close/end-session/shutdown and cancellation with active and queued descriptors, beyond the successful and input-loss parents covered so far.
+- [x] Qualify committed project Save while the outside metadata writer remains live.
+- [ ] Hold project/PNG/JPEG writes and picker decisions through later corner/Up/key input, including actual inside-Save ordering. Complete header/Undo/Redo/Deselect/New/close/end-session, hidden/device/restart and OS-DPI cases before ordinary routing.
