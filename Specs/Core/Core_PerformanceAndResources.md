@@ -1775,3 +1775,14 @@ Input remains in the existing fixed ring and host descriptor queue. Unsupported 
 refuse before capture/mutation. Joined shutdown suppresses useful callbacks and refunds all retained
 strong/weak CPU/GPU ownership. Structural native cases do not establish the measured 2 ms/G1 budgets,
 complete view/device/scope qualification or ordinary activation.
+
+
+## Polygonal unresolved-branch input journal
+
+`HostPolygonalInputJournal` is an owner-only scalar prerequisite. It stores at most 512 accepted physical records plus one separate emergency Lost record. Each Down owns its complete event-time scalar context; Move/Up/Leave/Backspace/Enter/Escape preserve FIFO order and the shared nonzero monotonic ordinal. No record retains a document, history, raster, UI or GPU owner, and recording/replay performs no allocation or polling. An Up is not a journal-family terminal: it may end an inside drag while younger accepted Down records belong to later ordered parents.
+
+Every sample owns its physical pointer position, document coordinates, document-space view origin, physical-pixels-per-document-pixel scale and physical-pixels-per-DIP scale. Deferred near-first evaluation projects the replay-selected actual first point using those captured operands, then applies the legacy 8-DIP radius in physical view space. Reconstructing the radius from rounded document coordinates or using the current viewport is forbidden; large pan offsets can change that decision. `NearFirst` computes proximity only and grants no three-corner, double-click, close or history authority. Invalid/nonfinite sample operands or first points refuse locally.
+
+Capacity loss preserves all 512 earlier records and adds exactly one emergency Lost at the last accepted ordinal; it cannot wrap the counter or replace an earlier successful parent boundary. Sealing refuses later records. Explicit owner CloseInput and a fully drained prefix/emergency loss are required before Finish; the owner must retain the journal until all borrowing parents and conditional host receipts are acknowledged. Stream identities cannot repeat or wrap. Generation/restore/target values are preserved per Down; the dispatcher validates their semantic authority after admission and branch/order selection without arbitrary generation rewriting.
+
+The helper and complete scoped HostTests proof do not implement the physical New/nonempty-prior dispatcher, choose a branch, reserve a job, change selection/history, or enable ordinary input. That dispatcher must admit both branch peaks before source capture, use one original containment/job and preserve younger gestures after an inside Up. Remaining caller, phase/retirement, ordinary-host and G1 gates stay mandatory.

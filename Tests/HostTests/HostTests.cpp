@@ -30,6 +30,7 @@
 #include "Host.Tests.PathReadWaitCycleExhaustion.h"
 #include "Host.Tests.PersistentOutputMemory.h"
 #include "Host.Tests.PointerInputStreamPeek.h"
+#include "Host.Tests.PolygonalInputJournal.h"
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 #include "Host.Tests.PreservedContinuation.h"
 #include "Host.Tests.PublicationCallback.h"
@@ -1967,6 +1968,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPointerInputStreamTests();
     gFailures += RunHostPointerInputStreamPeekTests();
     gFailures += RunHostHueInputTests();
+    gFailures += RunHostPolygonalInputJournalTests();
     gFailures += RunSamplerInputTests();
     gFailures += RunSamplerIntentInputTests();
     gFailures += RunContinuationReceiptTests();

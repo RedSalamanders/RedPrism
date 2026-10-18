@@ -3329,3 +3329,12 @@ PE/PDB/ISA/archive identity and source-only malformed-input controls. Preserve t
 compile-warning and ISA refusals before correction. The exact unchanged CPU/UAF artifacts and ASan DLL
 closure are reused only under their recorded source/dependency/artifact/profile/scope mapping; both
 complete new Application streams run. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+
+## Polygonal unresolved-branch journal validation
+
+`Host.Tests.PolygonalInputJournal.cpp` runs in complete HostTests and adds 3,382 independent state/numeric facts plus one summary. Require FIFO and nonconsuming Peek, complete per-Down scalar authority and captured view operands, Up followed by a younger Down, invalid enums/coordinates/scales/ordinals, exact full-capacity prefix plus separate emergency Lost, ring wrap, seal/refusal/drain, explicit family close and monotonic stream/ordinal exhaustion. Rejected input must preserve the earlier prefix.
+
+The numeric oracle is archived behavioral reference: the projected-first-point distance is at most eight view points. Windows fixtures use literal 144-DPI/12-physical-pixel and 192-DPI/16-pixel boundaries, one ULP outside the boundary, minimum zoom, invalid snapshots and an exact large-pan counterexample where rounded-document reconstruction would incorrectly reject closure. Later viewport changes cannot reinterpret a recorded click. Proximity alone does not decide whether a polygon has enough corners.
+
+Qualify the complete unchanged predecessor HostTests roster plus this module in Release and real ASan, with exact 136-TU compiler records, source bookends, matching native x64 executable/full-PDB identity, linked ISA and genuine UAF detection. The isolated resource fixture uses the exact qualified ARM64 executable only through data/resource loading and version-info APIs; it executes no ARM64 code. Preserve original project-import/configuration and missing-resource pre-build refusals; a reader or fixture correction never turns an earlier attempt into a pass. This scoped proof does not close the physical dispatcher, final native matrix, ordinary activation or G1. [Evidence](../TestRuns/P1PolygonalInputJournal_2026-10-18.md).

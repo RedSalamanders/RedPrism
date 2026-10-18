@@ -123,6 +123,8 @@
     <ClInclude Include="JobRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
     <ClInclude Include="Host.Tests.PointerInputStreamPeek.h" />
+    <ClInclude Include="Host.Tests.PolygonalInputJournal.h" />
+    <ClInclude Include="..\..\RedPrism\HostPolygonalInputJournal.h" />
     <ClInclude Include="Host.Tests.HueInput.h" />
     <ClInclude Include="SamplerInputTests.h" />
     <ClInclude Include="SamplerIntentInputTests.h" />
@@ -285,6 +287,7 @@
     <ClCompile Include="OpacityInputOrderTests.cpp" />
     <ClCompile Include="PointerInputStreamTests.cpp" />
     <ClCompile Include="Host.Tests.PointerInputStreamPeek.cpp" />
+    <ClCompile Include="Host.Tests.PolygonalInputJournal.cpp" />
     <ClCompile Include="Host.Tests.HueInput.cpp" />
     <ClCompile Include="SamplerInputTests.cpp" />
     <ClCompile Include="SamplerIntentInputTests.cpp" />
