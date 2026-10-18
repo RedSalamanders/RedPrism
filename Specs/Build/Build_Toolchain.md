@@ -733,3 +733,27 @@ The observed ASan unsigned switch pair may end its exact PDB procedure with a DW
 Require known nonoverlapping decoded rows and matching PE bytes throughout the complete body through RET and its one-byte NOP. Both defaults and every table target stay after the second indirect jump and before RET. Direct edges cannot enter either guard/dispatch interior from outside, padding/data, or an instruction interior. Only the two proven indirect jumps are accepted; unproved indirect transfers refuse the data proof. A bounded candidate-procedure collection of at most 1 MiB grants no exemption by itself. Every claimed table-data row must match its actual PE bytes. Other vector instructions in the body, after the tables, or at a later anonymous symbol remain subject to the ordinary ISA gate. No object/function/runtime allowance changes.
 
 `IsaSplitTailUnsignedTests.ps1`, registered in `IsaScanTests.ps1`, has 94 encoded controls: valid joint proof, both dispatches' missing/duplicate/unknown/PE-mismatched rows, remap bounds and operands, PDB ownership/extents, actual direct guard-bypass edges, body/RET/NOP integrity, malformed targets and real VEX/EVEX gating. Synthetic inputs include the observed INT3 padding and later same-owner symbol in a distinct procedure; the old scanner rejects the valid form. Controls execute no encoded native instructions. [Qualification](../TestRuns/IsaSplitUnsignedTail_2026-10-18.md).
+
+
+## Direct EBX-guarded RBX terminal switch data
+
+A second observed Release form uses the contiguous 28-byte `CMP EBX,max; JA rel32; LEA RDX,imagebase;
+MOV ECX,[RDX+4*RBX+table]; ADD RCX,RDX; JMP RCX`. The unsigned maximum is 1–127. The DWORD-aligned
+anonymous same-owner table ends exactly at the containing PDB procedure end, within its contribution.
+Its executable body ends with an external direct CALL and INT3. All case/default targets are known decoded
+boundaries after the dispatch and before that CALL. The complete body is known, contiguous, nonoverlapping,
+PE-matched and bounded to 1 MiB; all six dispatcher rows and table bytes agree with the PE.
+
+The low-DWORD comparison alone MUST NOT prove the full-width RBX index. Require a reaching exact
+`MOVSXD RBX,[RBP+disp8]` within 4 KiB before CMP. Every later encoded effect through the dispatch must
+preserve a sign/zero-extended DWORD in RBX. Explicitly modeled 32-bit writes, byte/word writes, reads and
+ordinary Windows x64 ABI calls preserve that relation; a possible full-width clobber or unmodeled opcode
+refuses proof. No direct edge may bypass the reaching producer or enter the dispatcher after CMP. Known
+entries at the producer itself or from its protected region to CMP remain valid. Local calls, other unproved
+indirect jumps, far/system transfers and edges into data, trap padding or instruction interiors refuse.
+
+`IsaRbxDirectGuardTests.ps1` runs 120 encoded parser controls by default in the canonical ISA gate, including
+full-RBX clobbers, unmodeled register effects, actual guard-bypass branches, valid alternate producers and
+branch targets, exact row/PE/PDB/body/terminal refusals and genuine adjacent/body VEX/EVEX. Only table data
+is classified; executable vectors remain gated. Synthetic bytes never execute and no runtime allowlist entry
+is added. [Qualification](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).

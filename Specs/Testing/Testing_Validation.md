@@ -39,7 +39,7 @@ entries and adjacent genuine VEX/EVEX code MUST withhold data proof or remain or
 Synthetic parser controls never execute their bytes and grant no native runtime or performance qualification.
 
 The x64 ISA gate runs `IsaRbxLongGuardTests.ps1` with 132 independent encoded controls: four accepted
-and 136 refused. Its exact RBX/RDX terminal constructor dispatch must agree with the linked PE,
+and 128 refused. Its exact RBX/RDX terminal constructor dispatch must agree with the linked PE,
 decoded row boundaries, PDB contribution, anonymous symbol, procedure extent, RET/INT3 and every
 case/default target. Controls cover twelve setup/dispatch rows, terminal and target rows, conflicting
 duplicate extents, unknown/overlapping rows, corrupt listing bytes, invalid ownership/extents and
@@ -3448,3 +3448,17 @@ The canonical x64 ISA control suite includes IsaSplitTailUnsignedTests.ps1. Requ
 RunSelfTest checks the first row immediately after initial SyncChrome, before Render/Prepare and later model changes, then after the initial renderer preparation. Require a nonempty row whose top is at or below the title-band bottom (menu + tab + Layers title heights, 94 DIP); retain every existing failure gate. The unchanged-product focused control must fail this first assertion with row top69/bottom97/titleBottom94; the corrected ordering must pass both new facts. The full adopted Application stream now expects 152 stages / 11,004 stdout assertions with the 41/420 dispatcher extension; focused startup evidence does not qualify that full stream.
 
 Qualify Release and real ASan with exact command/source/object/PE-PDB/ISA and artifact records. Four real application-harness captures (empty/brush/adjust at96, brush at144 DPI) must have independent PNG integrity and post-arrange geometry showing row0 top TreeTop+2, and be visually reviewed for separation. Preserve the private ASan C4702 driver-only failure and its correction. If a launcher wait expires while the child continues, join that same owned process through its verified handle and retain the actual eventual exit; never kill/replay it to manufacture a result. [Evidence](../TestRuns/P1InitialLayerViewport_2026-10-18.md).
+
+
+## Direct RBX terminal-table scanner controls
+
+The canonical `IsaScanTests.ps1` MUST run `IsaRbxDirectGuardTests.ps1` with 120 distinct encoded cases;
+fixture generation alone is insufficient. Each case checks its exact table-data/vector/EVEX/violation tuple.
+Independent literal PE/listing/PDB oracles cover the 32-bit producer versus full-width index, register width
+and extension bits, modeled/unknown effects, dispatch-interior and producer-bypass branches, row byte and
+boundary integrity, ownership/extents, terminal CALL/INT3 and case/default targets. Valid alternate producer
+slots, body starts and guard-preserving entries remain valid. Genuine body/adjacent VEX/EVEX remain actual
+violations beside successfully proved table data. Preserve unsuccessful drafts and original image reports;
+qualification uses the same original executable/full PDB and decoder bytes, with unchanged runtime allowlist.
+These parser controls supply no Application runtime, ARM64 runtime, G1 or ordinary activation qualification.
+[Evidence](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).

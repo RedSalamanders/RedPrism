@@ -2131,6 +2131,183 @@ namespace RedPrismBuild
         // the intervening ordinary ABI call preserves RBX. Corroborate every setup/dispatch row,
         // full-width index, guard count, PDB terminal extent, RET/INT3 and every case/default target.
         // Only the exact DWORD data range is exempted from linear disassembly; executable rows remain gated.
+        // Preserve a previously proved sign/zero-extended DWORD in RBX. Encoded 32-bit writes
+        // zero the upper half and byte/word writes cannot alter bit31. Unknown 64-bit effects refuse.
+        private static bool PreservesInt32Rbx(byte[] b)
+        {
+            if (b.Length == 1 && b[0] == 0xf0) return true; // LLVM's separate LOCK prefix row.
+            int at = 0;
+            while (at < b.Length && IsLegacyPrefix(b[at])) ++at;
+            if (at >= b.Length) return false;
+            byte rex = 0;
+            if (b[at] >= 0x40 && b[at] <= 0x4f) rex = b[at++];
+            if (at >= b.Length) return false;
+            byte op = b[at++];
+            if (op >= 0x40 && op <= 0x4f) return false;
+            if (op == 0xc4 || op == 0xc5 || op == 0x62)
+                return b.Length == 4 && StartsWith(b, 0xc5, 0xf8, 0x10, 0x00); // Pure XMM body control.
+            if (op >= 0x58 && op <= 0x5f) return (rex & 1) != 0 || (op & 7) != 3;
+            if (op >= 0x50 && op <= 0x57) return true;
+            bool wide = (rex & 8) != 0;
+            if (op >= 0x90 && op <= 0x97) return !wide || (rex & 1) != 0 || (op & 7) != 3;
+            if (op >= 0xb0 && op <= 0xbf) return !wide || (rex & 1) != 0 || (op & 7) != 3;
+            if (op == 0xe8 || op == 0xe9 || op == 0xeb || op == 0xc2 || op == 0xc3 || op == 0xcc ||
+                (op >= 0x70 && op <= 0x7f) || (op >= 0xe0 && op <= 0xe3) || op == 0xa1 || op == 0xa3)
+                return true;
+            if (at >= b.Length) return false;
+            if (op == 0x0f)
+            {
+                byte second = b[at++];
+                if (at >= b.Length) return false;
+                byte m = b[at];
+                bool reg = (rex & 4) == 0 && ((m >> 3) & 7) == 3;
+                bool rm = (rex & 1) == 0 && (m & 0xc7) == 0xc3;
+                if (second == 0x20 || second == 0x21) return !rm; // Control/debug-register MOV defaults to 64 bits.
+                bool known = second == 0x1f || (second >= 0x10 && second <= 0x17) ||
+                    second == 0x28 || second == 0x29 || second == 0x2c || second == 0x2d ||
+                    second == 0x2e || second == 0x2f || (second >= 0x40 && second <= 0x4f) ||
+                    (second >= 0x51 && second <= 0x6f) || second == 0x7e || second == 0x7f ||
+                    (second >= 0x80 && second <= 0x8f) || second == 0xaf || second == 0xb1 ||
+                    second == 0xb6 || second == 0xb7 || second == 0xbc || second == 0xbd ||
+                    second == 0xbe || second == 0xbf || second == 0xc1 || second == 0xef;
+                if (!known) return false;
+                if (!wide) return true;
+                if (second == 0x38 || second == 0x3a) return false; // Unmodelled multi-map effects.
+                if (second == 0x1f || (second >= 0x80 && second <= 0x8f)) return true;
+                if (second == 0xb6 || second == 0xb7 || second == 0xbe || second == 0xbf) return true;
+                if ((second >= 0x10 && second <= 0x17) || second == 0x28 || second == 0x29 ||
+                    second == 0x2e || second == 0x2f || (second >= 0x51 && second <= 0x6f) ||
+                    second == 0x7f || second == 0xef || second == 0x6e) return true; // Pure SIMD/GPR reads.
+                if ((second >= 0x40 && second <= 0x4f) || second == 0xaf || second == 0xbc ||
+                    second == 0xbd || second == 0x2c || second == 0x2d) return !reg;
+                if (second == 0xc1) return !reg && !rm; // XADD writes both operands.
+                if (second == 0xb1 || second == 0x7e) return !rm;
+                return false;
+            }
+            byte modrm = b[at];
+            bool dstReg = (rex & 4) == 0 && ((modrm >> 3) & 7) == 3;
+            bool dstRm = (rex & 1) == 0 && (modrm & 0xc7) == 0xc3;
+            int group = (modrm >> 3) & 7;
+            if (op == 0x8f) return group == 0 && !dstRm; // POP defaults to a full-width destination.
+            bool knownOp = (op <= 0x3b && (op & 7) <= 3) || op == 0x63 || op == 0x69 || op == 0x6b ||
+                op == 0x81 || op == 0x83 || op == 0x84 || op == 0x85 || op == 0x87 ||
+                op == 0x88 || op == 0x89 || op == 0x8a || op == 0x8b || op == 0x8d ||
+                op == 0xc1 || (op == 0xc6 && group == 0) || (op == 0xc7 && group == 0) ||
+                op == 0xd1 || op == 0xd3 || op == 0xf7 || (op == 0xff && group <= 6) || op == 0x80;
+            if (!knownOp) return false;
+            if (!wide) return true;
+            if (op == 0x63) return true;
+            if (op == 0xc7) return group == 0; // Sign-extended DWORD source or imm32.
+            if (op == 0x89) return !dstRm;
+            if (op == 0x8b || op == 0x8d || op == 0x69 || op == 0x6b) return !dstReg;
+            if (op == 0x88 || op == 0x8a || op == 0x84 || op == 0x85 || (op >= 0x38 && op <= 0x3b)) return true;
+            if (op <= 0x3b && (op & 7) <= 3)
+                return (op & 1) == 0 || ((op & 2) != 0 ? !dstReg : !dstRm);
+            if (op == 0x87) return !dstReg && !dstRm;
+            if (op == 0x81 || op == 0x83) return group == 7 || !dstRm;
+            if (op == 0xff) return group >= 2 || !dstRm;
+            if (op == 0xf7) return (group != 2 && group != 3) || !dstRm;
+            if (op == 0xc1 || op == 0xd1 || op == 0xd3) return !dstRm;
+            return false;
+        }
+
+        // Direct EBX near-JA switch after a proved full-width signed producer. CALL/INT3, not
+        // RET, closes its executable body. Both the complete body and the protected producer window
+        // must be known, PE-matched and free of entry edges that bypass the producer/guard.
+        private static InlineTable ReadGuardedRbxDirectTable(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> symbols, List<Function> procedures,
+            ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
+            Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
+            Dictionary<ulong, byte[]> rows)
+        {
+            if (dispatch < imageBase + 9 || afterJump != dispatch + 19) return null;
+            ulong prefix = dispatch - 9, begin = checked(imageBase + tableRva);
+            int index = FindContribution(contributions, prefix);
+            if (index < 0 || FindContribution(contributions, dispatch) != index) return null;
+            Contribution owner = contributions[index];
+            if ((begin & 3) != 0 || begin <= afterJump + 6 ||
+                !symbols.TryGetValue(begin, out int module) || module != owner.Module) return null;
+            int raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length));
+            if (raw > pe.Length - 28 || !StartsWithAt(pe, raw, 0x83, 0xfb) ||
+                !StartsWithAt(pe, raw + 3, 0x0f, 0x87) || !StartsWithAt(pe, raw + 9, 0x48, 0x8d, 0x15) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 12) != (long)imageBase ||
+                !StartsWithAt(pe, raw + 16, 0x8b, 0x8c, 0x9a) || BitConverter.ToUInt32(pe, raw + 19) != tableRva ||
+                !StartsWithAt(pe, raw + 23, 0x48, 0x03, 0xca, 0xff, 0xe1)) return null;
+            uint maximum = pe[raw + 2];
+            if (maximum == 0 || maximum >= 128) return null;
+            ulong end = checked(begin + 4 * (maximum + 1));
+            Function function = null;
+            foreach (Function f in procedures)
+                if (f.Module == owner.Module && f.ContributionBegin == owner.Begin && f.ContributionEnd == owner.End &&
+                    f.Begin <= prefix && f.End == end && f.End - f.Begin <= 1024 * 1024) { function = f; break; }
+            if (function == null || end > owner.End) return null;
+            foreach (KeyValuePair<ulong, int> symbol in symbols)
+                if (symbol.Key >= function.Begin && symbol.Key < end && symbol.Key != begin) return null;
+            ulong producer = 0;
+            for (int at = decodedStarts.BinarySearch(function.Begin); at >= 0 && at < decodedStarts.Count; ++at)
+            {
+                ulong address = decodedStarts[at];
+                if (address >= prefix) break;
+                if (rows.TryGetValue(address, out byte[] r) && r.Length == 4 && StartsWith(r, 0x48, 0x63, 0x5d))
+                    producer = address;
+            }
+            if (producer == 0 || prefix - producer > 4096) return null;
+            int[] starts = { 0, 3, 9, 16, 23, 26 };
+            int[] lengths = { 3, 6, 7, 7, 3, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+                if (!rows.TryGetValue(prefix + (ulong)starts[i], out byte[] r) || r.Length != lengths[i] ||
+                    !MatchesDecodedPe(pe, sections, imageBase, prefix + (ulong)starts[i], r,
+                        contributions, decoded, decodedStarts)) return null;
+            if (!rows.TryGetValue(begin - 6, out byte[] call) || call.Length != 5 || call[0] != 0xe8 ||
+                !rows.TryGetValue(begin - 1, out byte[] trap) || trap.Length != 1 || trap[0] != 0xcc) return null;
+            long terminalTarget = (long)begin - 1 + BitConverter.ToInt32(call, 1);
+            if (terminalTarget >= (long)function.Begin && terminalTarget < (long)end) return null;
+            long fallback = (long)prefix + 9 + BitConverter.ToInt32(pe, raw + 5);
+            if (fallback < (long)afterJump || fallback >= (long)begin - 6 ||
+                !IsDecodedBoundary((ulong)fallback, module, contributions, decoded, decodedStarts)) return null;
+            for (ulong address = function.Begin; address < begin;)
+            {
+                if (!rows.TryGetValue(address, out byte[] r) || r.Length == 0 || r.Length > 15 ||
+                    address + (ulong)r.Length > begin || !MatchesDecodedPe(pe, sections, imageBase, address, r,
+                        contributions, decoded, decodedStarts)) return null;
+                if (address > producer && address < afterJump && !PreservesInt32Rbx(r)) return null;
+                int at = 0;
+                while (at < r.Length && (IsLegacyPrefix(r[at]) || (r[at] >= 0x40 && r[at] <= 0x4f))) ++at;
+                if (at == r.Length && !(r.Length == 1 && r[0] == 0xf0)) return null;
+                long target = -1; bool localCall = false;
+                if (at < r.Length && (r[at] == 0xeb || (r[at] >= 0x70 && r[at] <= 0x7f) || (r[at] >= 0xe0 && r[at] <= 0xe3)))
+                { if (r.Length != at + 2) return null; target = (long)address + r.Length + unchecked((sbyte)r[at + 1]); }
+                else if (at < r.Length && (r[at] == 0xe9 || r[at] == 0xe8))
+                { if (r.Length != at + 5) return null; target = (long)address + r.Length + BitConverter.ToInt32(r, at + 1); localCall = r[at] == 0xe8; }
+                else if (at + 1 < r.Length && r[at] == 0x0f && r[at + 1] >= 0x80 && r[at + 1] <= 0x8f)
+                { if (r.Length != at + 6) return null; target = (long)address + r.Length + BitConverter.ToInt32(r, at + 2); }
+                else if (at + 1 < r.Length && r[at] == 0xff)
+                { int group = (r[at + 1] >> 3) & 7; if ((group == 4 && address != afterJump - 2) || group == 3 || group == 5) return null; }
+                else if (at < r.Length && (r[at] == 0xca || r[at] == 0xcb || r[at] == 0xcf || r[at] == 0xea ||
+                    r[at] == 0x9a || (r[at] == 0xc7 && at + 1 < r.Length && r[at + 1] == 0xf8))) return null;
+                if (at + 1 < r.Length && r[at] == 0x0f &&
+                    (r[at + 1] == 0x05 || r[at + 1] == 0x07 || r[at + 1] == 0x34 || r[at + 1] == 0x35)) return null;
+                if ((target > (long)prefix && target < (long)afterJump) ||
+                    (target > (long)producer && target < (long)afterJump && (address < producer || address >= afterJump)) ||
+                    (target >= (long)begin - 1 && target < (long)end) ||
+                    (target >= (long)function.Begin && target < (long)begin &&
+                        (localCall || !IsDecodedBoundary((ulong)target, module, contributions, decoded, decodedStarts)))) return null;
+                address += (ulong)r.Length;
+            }
+            int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
+            if (tableRaw > pe.Length - checked((int)(end - begin))) return null;
+            var table = new InlineTable { Begin = begin, End = end, Module = module,
+                ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+            for (uint i = 0; i <= maximum; ++i)
+            {
+                ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(i * 4))));
+                if (target < afterJump || target >= begin - 6 ||
+                    !IsDecodedBoundary(target, module, contributions, decoded, decodedStarts)) return null;
+                table.Targets.Add(target);
+            }
+            return table;
+        }
+
         private static InlineTable ReadGuardedRbxRdxTerminalTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
@@ -4121,6 +4298,27 @@ namespace RedPrismBuild
                         catch (InvalidDataException) { /* Unmapped candidate grants no body proof. */ }
                     }
                 }
+                if (candidateBytes.Length == 7 && candidateBytes[0] == "48" && candidateBytes[1] == "8d" && candidateBytes[2] == "15")
+                {
+                    ulong address = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
+                    if (address >= imageBase + 9 && address - imageBase <= UInt32.MaxValue)
+                    {
+                        int owner = FindContribution(contributions, address);
+                        try
+                        {
+                            int raw = checked((int)Offset(checked((uint)(address - imageBase - 9)), sections, pe.Length));
+                            if (owner >= 0 && raw <= pe.Length - 28 && StartsWithAt(pe, raw, 0x83, 0xfb) &&
+                                StartsWithAt(pe, raw + 3, 0x0f, 0x87) && StartsWithAt(pe, raw + 16, 0x8b, 0x8c, 0x9a))
+                                foreach (Function f in procedures)
+                                    if (f.Module == contributions[owner].Module && f.ContributionBegin == contributions[owner].Begin &&
+                                        f.ContributionEnd == contributions[owner].End && f.Begin <= address - 9 &&
+                                        address < f.End && f.End - f.Begin <= 1024 * 1024 &&
+                                        !r9BodyRanges.Exists(range => range.Begin == f.Begin && range.End == f.End))
+                                        r9BodyRanges.Add(new InlineTable { Begin = f.Begin, End = f.End });
+                        }
+                        catch (InvalidDataException) { /* Candidate collection grants no proof. */ }
+                    }
+                }
                 if (candidateBytes.Length == 8 && candidateBytes[0] == "41" && candidateBytes[1] == "8b" &&
                     candidateBytes[2] == "8c" && candidateBytes[3] == "86")
                 {
@@ -4752,6 +4950,8 @@ namespace RedPrismBuild
                                 decoded, decodedStarts, guardRows)
                             : rdxRbxIndex
                             ? ReadGuardedRbxRdxTerminalTable(pe, sections, contributions, dataSymbols, procedures, imageBase,
+                                dispatchBegin, checked(address + (ulong)encoded.Length), tableRva, decoded, decodedStarts, guardRows) ??
+                                ReadGuardedRbxDirectTable(pe, sections, contributions, dataSymbols, procedures, imageBase,
                                 dispatchBegin, checked(address + (ulong)encoded.Length), tableRva, decoded, decodedStarts, guardRows)
                             : rdxSignedRemap
                             ? ReadSignedBiasedByteIndexTables(pe, sections, contributions, dataSymbols, procedures, imageBase,
