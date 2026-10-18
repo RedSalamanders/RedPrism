@@ -1,6 +1,6 @@
 # P1 worktree preservation and storage recovery — 2026-10-18
 
-Status: approved S5 cache relocation and all four complete preservation/readback gates pass; managed archive requests remain unconfirmed in the app.
+Status: approved S5 cache relocation, all four preservation/readback gates and all four worktree archival/removal checks pass. The current opacity checkout stays active.
 Source checkout: `codex/p1-opacity-host-proof` at `f51ef753f8054e5733ffa0742e17ed41cbb15cbd`.
 This evidence does not close P1 or qualify a native build.
 
@@ -60,3 +60,14 @@ The user reports that the app's I/O removal action shows an error. The installed
 Main independently verifies the saved commit, observes that the checkout is absent from Git's worktree roster and that only its empty directory remains, checks its exact absolute path and absence of a reparse point, then removes that empty directory from `Z:/src/RedPrism`. This succeeds. No recursive deletion, process termination, current-checkout modification or application-state/database edit occurs. The independent D: TAR, binary patch, manifest and bundle remain preserved.
 
 A subsequent managed archive call refuses with “This worktree is owned by another task.” Its read-only owner lookup now fails because the checkout no longer exists; this is not evidence of an actual ownership transfer. The app still lists the I/O attachment, so managed archive completion remains unchecked. Main requests a retry from the card's Archive action, records the distinction between physical removal and sidebar recovery metadata, and continues the existing ARM64 cohort. The other three checkouts retain their original current-chat ownership metadata and are preserved; another Wand archive request still returns `queued`.
+### Completed managed archival
+
+Read-only attachment ownership checks identify duplicate references on this chat's closed child agents: 35 stale attachment records across the four approved old roots. The normal reassociation tool twice returns “Server overloaded”; the installed app-server control proxy also refuses its socket connection. These failures are retained.
+
+Main generates the installed app's experimental protocol schema, backs up every affected child attachment, verifies that each child belongs to this parent and has `closed` spawn status, then removes only those 35 duplicate references through supported `thread/attachment/remove` requests on a temporary local stdio app-server. All four parent attachments and the active opacity checkout are preserved. Owner lookup then confirms exactly this parent remains for each approved root. No SQLite or application-state file is edited directly, and no chat or agent is restarted.
+
+The normal managed archive tool then archives Wand, sampler-callers and sampler successfully. The large sampler physical deletion completes separately. For I/O, the app's already-saved snapshot and absent checkout are independently reverified; Main backs up its stale active payload, uses supported attachment add/remove requests to retain that exact payload as archived recovery metadata, and removes the obsolete active attachment. This completes the app's interrupted metadata transition without recreating or deleting another checkout.
+
+Live `list_artifacts` now reports all four as `archived_worktree`; all four physical directories and Git worktree registrations are absent. The user independently confirms the I/O card disappeared. `p1-opacity-host-proof` is the sole active attached worktree and remains clean. All D: preservation cohorts, unique-commit bundles and ignored test evidence remain retained. The earlier queued/EBUSY failures above describe the preserved failure path, not the final state.
+
+Supported-API receipts and exact request/response journals are retained under `P1ArchivedWorktrees-2026-10-18-r2`: `closed-child-api-cleanup-r1.complete.json`, its attachment backup/journal, and `io-parent-api-recovery-r1.complete.json` with its original payload backup/journal. This closes only the requested cleanup; P1's implementation and validation checklist remains WIP.
