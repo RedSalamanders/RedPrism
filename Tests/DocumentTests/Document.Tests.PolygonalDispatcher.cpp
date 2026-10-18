@@ -8,9 +8,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <type_traits>
 #include <vector>
 #include <wil/resource.h>
 #include <windows.h>
+
+static_assert(!std::is_default_constructible_v<SelectionOutlineGestureTransition>);
+static_assert(!std::is_copy_constructible_v<SelectionOutlineGestureTransition>);
+static_assert(std::is_nothrow_move_constructible_v<SelectionOutlineGestureTransition>);
 
 namespace
 {
@@ -247,6 +252,29 @@ struct Fixture final
         Record(A::Up, {left, 5}, 10);
         if (terminal)
             Record(A::Enter, {left, 5}, 11);
+    }
+    void NextParent(std::optional<SelectionOutlineGestureTransition> predecessor = std::nullopt,
+                    HostPolygonalInputJournal* input = nullptr)
+    {
+        state.reset();
+        admitted = DescribeSelectionOutlineGestureMemory(*session, LassoKind::Polygonal, SelectionMode::New);
+        if (!admitted)
+            Broken("successor-admission-description");
+        auto& source = input ? *input : *journal;
+        state =
+            std::make_unique<SelectionOutlineGestureState>(jobs, *session, source, source.Stream(), admitted->limits);
+        state->admissionSource = admitted->source;
+        state->drawingPlan = admitted->drawing;
+        state->requireCapturedTarget = true;
+        state->observer = state->hostObserver = state->workObserver = &probe;
+        state->notify = Probe::Owner;
+        state->mayReplay = Probe::Replay;
+        state->mayFinish = Probe::Finish;
+        state->pressResolved = Probe::Press;
+        state->workCheckpoint = Probe::Work;
+        if (predecessor)
+            state->predecessor.emplace(std::move(*predecessor));
+        probe.state = state.get();
     }
     void Submit()
     {
@@ -532,6 +560,213 @@ void ReplayQuantum()
                f->journal->PendingCount() == 0,
            "ninety-nine-hovers-never-add-corners-and-original-short-terminal-clears-once");
 }
+bool RectanglePixels(const DocumentSession& session, int left, int top, int right, int bottom)
+{
+    if (!session.Selection())
+        return false;
+    for (int y = 0; y < 10; ++y)
+        for (int x = 0; x < 12; ++x)
+        {
+            const bool expected = x >= left && x < right && y >= top && y < bottom;
+            const auto actual =
+                ContainsSelectionForWork(SelectionDisplayValue{session.Selection()}, {x + 0.5, y + 0.5}, {});
+            if (!actual || actual.value() != expected)
+                return false;
+        }
+    return true;
+}
+void QueueInsideSuccessor(Fixture& f, bool third = false)
+{
+    using A = HostPolygonalInputJournal::Action;
+    f.Record(A::Move, {5, 4}, 2);
+    f.Record(A::Up, {5, 4}, 3);
+    f.Down({5, 4}, 4);
+    f.Record(A::Move, {7, 5}, 5);
+    f.Record(A::Up, {7, 5}, 6);
+    if (third)
+    {
+        f.Down({7, 5}, 7);
+        f.Record(A::Move, {6, 4}, 8);
+        f.Record(A::Up, {6, 4}, 9);
+    }
+}
+void OwnedChain()
+{
+    scenario = "three-owned-original-parents";
+    auto f = std::make_unique<Fixture>(Vec2{2, 2});
+    const auto generation = f->session->Generation();
+    const auto captured = f->arrival.document;
+    Expect(!f->state->TakeSuccessor(), "uncompleted-parent-cannot-issue-transition");
+    QueueInsideSuccessor(*f, true);
+    f->Submit();
+    Settle(f->jobs);
+    auto first = f->state->TakeSuccessor();
+    Expect(first && !f->state->TakeSuccessor() && f->state->closed &&
+               f->journal->Peek(81)->down->document == captured && f->journal->Peek(81)->sample.ordinal == 4,
+           "completed-original-issues-one-transition-with-immutable-younger-authority");
+    f->NextParent(std::move(first));
+    f->Submit();
+    Settle(f->jobs);
+    auto second = f->state->TakeSuccessor();
+    Expect(second && f->state->closed && f->state->captures == 1 && f->state->sameTicket &&
+               f->state->terminalOrdinal == 6 && !f->state->predecessor && RectanglePixels(*f->session, 6, 4, 10, 8) &&
+               f->session->Generation() == generation + 4 && f->session->history.UndoCount() == 2,
+           "second-original-consumes-transition-before-capture-and-publishes-exact-move");
+    Expect(f->journal->Peek(81)->down->document == captured && f->journal->Peek(81)->sample.ordinal == 7,
+           "second-parent-never-rewrites-third-physical-arrival");
+    f->NextParent(std::move(second));
+    f->Submit();
+    Settle(f->jobs);
+    auto third = f->state->TakeSuccessor();
+    Expect(third && f->state->closed && f->state->sameTicket && f->state->captures == 1 &&
+               RectanglePixels(*f->session, 5, 3, 9, 7) && f->session->Generation() == generation + 6 &&
+               f->session->history.UndoCount() == 3 && f->memory.queries == 3,
+           "third-original-retains-contiguous-owned-lineage-with-three-independent-admissions");
+    f->session->Undo();
+    Expect(RectanglePixels(*f->session, 6, 4, 10, 8), "third-undo-restores-second-literal-result");
+    f->session->Undo();
+    Expect(RectanglePixels(*f->session, 4, 3, 8, 7), "second-undo-restores-first-literal-result");
+    f->session->Undo();
+    Expect(RectanglePixels(*f->session, 1, 1, 5, 5), "first-undo-restores-original-literal-outline");
+    f->session->Redo();
+    f->session->Redo();
+    f->session->Redo();
+    Expect(RectanglePixels(*f->session, 5, 3, 9, 7), "three-redos-restore-complete-result");
+    third.reset();
+    f->Release();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "entire-chain-final-readers-refund");
+}
+void DrawingSuccessor()
+{
+    scenario = "owned-close-then-new-original";
+    auto f = std::make_unique<Fixture>();
+    const auto generation = f->session->Generation();
+    f->Rectangle();
+    f->Down({8, 2}, 12);
+    f->Record(HostPolygonalInputJournal::Action::Move, {9, 3}, 13);
+    f->Record(HostPolygonalInputJournal::Action::Up, {9, 3}, 14);
+    f->Submit();
+    Settle(f->jobs);
+    auto token = f->state->TakeSuccessor();
+    Expect(token && f->state->drawing && f->state->closed && f->journal->Peek(81)->sample.ordinal == 12 &&
+               f->journal->Peek(81)->down->document == f->arrival.document,
+           "chosen-close-issues-scalar-credit-and-preserves-accepted-next-down");
+    f->NextParent(std::move(token));
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->closed && !f->state->drawing && f->state->captures == 1 && f->state->sameTicket &&
+               RectanglePixels(*f->session, 8, 2, 12, 6) && f->session->Generation() == generation + 3 &&
+               f->session->history.UndoCount() == 2,
+           "next-original-hit-uses-owned-committed-polygon-without-rebasing-down");
+}
+void PreviewArrival()
+{
+    scenario = "arrival-during-owned-preview";
+    auto f = std::make_unique<Fixture>(Vec2{2, 2});
+    const auto generation = f->session->Generation();
+    f->Record(HostPolygonalInputJournal::Action::Move, {5, 4}, 2);
+    f->Submit();
+    Until(f->jobs, [&] { return f->state->waiting; });
+    auto context = f->arrival;
+    context.document = f->session->CaptureDocumentReadAuthority().value();
+    context.ordinal = 4;
+    f->Record(HostPolygonalInputJournal::Action::Up, {5, 4}, 3);
+    if (f->journal->Down(81, context, Fixture::Sample({5, 4}, 4)) != HostPolygonalInputJournal::Admission::Recorded)
+        Broken("preview-down");
+    f->Record(HostPolygonalInputJournal::Action::Move, {7, 5}, 5);
+    f->Record(HostPolygonalInputJournal::Action::Up, {7, 5}, 6);
+    f->Wake();
+    Settle(f->jobs);
+    auto token = f->state->TakeSuccessor();
+    Expect(token && context.document.generation == generation + 1 &&
+               f->journal->Peek(81)->down->document == context.document && f->session->Generation() == generation + 2,
+           "younger-down-captures-real-intermediate-owned-generation");
+    f->NextParent(std::move(token));
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->closed && f->state->captures == 1 && RectanglePixels(*f->session, 6, 4, 10, 8) &&
+               f->session->history.UndoCount() == 2,
+           "contiguous-owned-preview-authority-validates-without-rewriting-event");
+}
+void TransitionRefusal(unsigned kind, const char* name)
+{
+    scenario = name;
+    auto f = std::make_unique<Fixture>(Vec2{2, 2});
+    QueueInsideSuccessor(*f);
+    f->Submit();
+    Settle(f->jobs);
+    const auto generation = f->session->Generation();
+    const auto revision = f->session->history.CurrentRevision();
+    auto token = f->state->TakeSuccessor();
+    if (!token)
+        Broken("issued-transition");
+    std::unique_ptr<HostPolygonalInputJournal> other;
+    if (kind == 1)
+    {
+        other = std::make_unique<HostPolygonalInputJournal>();
+        auto context = f->arrival;
+        context.ordinal = 4;
+        if (!other->Begin(81, context, Fixture::Sample({5, 4}, 4)))
+            Broken("foreign-family");
+    }
+    if (kind == 2)
+    {
+        while (f->journal->Take(81))
+        {
+        }
+        if (!f->journal->CloseInput(81) || !f->journal->Finish(81))
+            Broken("retired-family");
+        auto context = f->arrival;
+        context.ordinal = 4;
+        if (!f->journal->Begin(82, context, Fixture::Sample({5, 4}, 4)))
+            Broken("new-family");
+    }
+    if (kind == 3)
+        f->session->history.Begin(L"Foreign after publication", f->session->Document(), f->session->ActiveLayerID());
+    if (kind == 4)
+        f->session->SetCropFrame(CropRect{0, 0, 4, 4});
+    if (kind == 5)
+        f->session->SelectLayer(std::nullopt);
+    if (kind == 0)
+        token.reset();
+    f->NextParent(std::move(token), other.get());
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->outcome.status == JobStatus::Failed && f->state->outcome.error == E_ABORT &&
+               f->state->captures == 0 && !f->state->opened && !f->state->TakeSuccessor(),
+           "missing-stale-or-foreign-transition-refuses-before-roots");
+    Expect(RectanglePixels(*f->session, 4, 3, 8, 7) && f->session->Generation() == generation &&
+               f->session->history.CurrentRevision() == revision && f->session->history.UndoCount() == 1 &&
+               (kind != 3 || f->session->history.CaptureState().Depth() == 1),
+           "refusal-preserves-exact-predecessor-result-and-foreign-history");
+    f->Release();
+    other.reset();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "refused-transition-final-refund");
+}
+void MoveOnlyTransition()
+{
+    scenario = "move-only-transition";
+    auto f = std::make_unique<Fixture>(Vec2{2, 2});
+    QueueInsideSuccessor(*f);
+    f->Submit();
+    Settle(f->jobs);
+    auto issued = f->state->TakeSuccessor();
+    if (!issued)
+        Broken("move-issued");
+    SelectionOutlineGestureTransition carried{std::move(*issued)};
+    f->NextParent(std::move(issued));
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->outcome.status == JobStatus::Failed && f->state->captures == 0 &&
+               f->journal->Peek(81)->sample.ordinal == 4,
+           "moved-from-receipt-cannot-authorize-or-consume-younger-down");
+    f->NextParent(std::optional<SelectionOutlineGestureTransition>{std::move(carried)});
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->closed && RectanglePixels(*f->session, 6, 4, 10, 8) && !f->state->predecessor &&
+               f->session->history.UndoCount() == 2,
+           "single-valid-move-authorizes-the-same-untouched-younger-down");
+}
 void PhysicalView()
 {
     scenario = "event-time-view-close";
@@ -579,6 +814,16 @@ int RunPolygonalDispatcherTests()
     ShortClose(SelectionMode::Add, "short-double-click-add");
     ShortClose(SelectionMode::Subtract, "short-double-click-subtract");
     ReplayQuantum();
+    OwnedChain();
+    DrawingSuccessor();
+    PreviewArrival();
+    TransitionRefusal(0, "missing-transition");
+    TransitionRefusal(1, "foreign-journal-transition");
+    TransitionRefusal(2, "reused-family-transition");
+    TransitionRefusal(3, "foreign-history-after-transition");
+    TransitionRefusal(4, "foreign-crop-after-transition");
+    TransitionRefusal(5, "foreign-active-after-transition");
+    MoveOnlyTransition();
     PhysicalView();
     std::printf("%s polygonal-dispatcher (%u assertions)\n", failures ? "FAIL" : "PASS", checks);
     return static_cast<int>(failures);

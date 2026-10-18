@@ -52,6 +52,7 @@ class SelectionOutlineGestureJob final : public Job
     Phase _phase = Phase::Allocate;
     std::shared_ptr<SharedPublicationMemory> _output, _final, _temporary;
     std::optional<DocumentReadAuthority> _source;
+    std::optional<std::uint64_t> _lineageMinimum;
     SelectionDisplayValue _display;
     Vec2 _point{}, _offset{};
     std::uint64_t _geometryEnvelope = 0;

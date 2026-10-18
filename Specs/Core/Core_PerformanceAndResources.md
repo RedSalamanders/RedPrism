@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-18
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -1805,8 +1805,25 @@ Acknowledging one borrowed parent never closes/drains the family. The owner must
 alive through every borrowing original parent and conditional receipt. An inside Up that precedes
 full-ring overflow retains its successful outcome. Finish requires explicit owner close, drained
 prefix/emergency loss and joined borrowers. Normal terminal callback is the last state access;
-shutdown joins and retires without useful callbacks. A future owned-predecessor transition is an
-explicit caller authority gate, not permission to rewrite stored arrival generations.
+shutdown joins and retires without useful callbacks. An owned-predecessor transition uses the
+explicit scalar receipt below; stored arrival generations remain immutable.
 
 [Complete scoped CPU evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
 Physical host activation, measured owner/apply budgets and final native matrix remain required.
+
+
+## Owned selection transition resources
+
+A transition receipt stores only fixed journal/family/ordinal metadata, a minimum generation and
+opaque post-document/editor/history authority. It owns no document/history/raster/UI/GPU roots.
+The original state/job wrapper envelope includes its two inline optional receipt slots and cached
+minimum generation through `sizeof`; cached admission precedes all immutable-root capture.
+Validation, move/consume, issue and `TakeSuccessor` perform no allocation, traversal, pixel copy,
+wait or wake. Chaining three or more completed original parents costs constant metadata, rather
+than a growing receipt/root list. The existing sixteen-record replay and retirement bounds apply.
+
+Only acknowledged successful selection publication may issue a receipt. Its exact post authority
+rejects foreign edits even when generation is unchanged (for example a pending History Begin).
+The caller retains the stable journal until all borrowed parents and issued receipts are retired.
+This core authority primitive does not reserve physical host conditional descriptors or establish
+ordinary/G1/frame budgets. [Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).

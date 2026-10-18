@@ -119,6 +119,10 @@ class HostSelectionGestureInput final
     {
         return _press ? _press->Overflowed() : Current(_opening) && _journal->Overflowed();
     }
+    [[nodiscard]] const HostPolygonalInputJournal* Family() const noexcept
+    {
+        return _journal;
+    }
     [[nodiscard]] bool IsJournal() const noexcept
     {
         return _journal != nullptr;

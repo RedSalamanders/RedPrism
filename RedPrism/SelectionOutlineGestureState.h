@@ -8,8 +8,42 @@
 #include <atomic>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 class SelectionOutlineGestureJob;
+// Issued only after a successful original journal parent publishes its selection-only result.
+// Scalar authority only: no document/history roots. The journal owner outlives all issued receipts.
+// Moving consumes the source; the next original parent consumes its receipt before retaining roots.
+class SelectionOutlineGestureTransition final
+{
+  public:
+    SelectionOutlineGestureTransition(const SelectionOutlineGestureTransition&) = delete;
+    SelectionOutlineGestureTransition& operator=(const SelectionOutlineGestureTransition&) = delete;
+    SelectionOutlineGestureTransition& operator=(SelectionOutlineGestureTransition&&) = delete;
+    SelectionOutlineGestureTransition(SelectionOutlineGestureTransition&& source) noexcept
+        : _family(std::exchange(source._family, nullptr)), _opening(source._opening), _terminal(source._terminal),
+          _minimumGeneration(source._minimumGeneration), _after(source._after), _editor(source._editor),
+          _history(source._history)
+    {
+    }
+
+  private:
+    friend class SelectionOutlineGestureJob;
+    SelectionOutlineGestureTransition(const HostPolygonalInputJournal* family, std::uint64_t opening,
+                                      std::uint64_t terminal, std::uint64_t minimumGeneration,
+                                      DocumentReadAuthority after, HistoryRestoreAuthority editor,
+                                      DocumentHistory::Authority history) noexcept
+        : _family(family), _opening(opening), _terminal(terminal), _minimumGeneration(minimumGeneration), _after(after),
+          _editor(editor), _history(history)
+    {
+    }
+    const HostPolygonalInputJournal* _family;
+    std::uint64_t _opening, _terminal, _minimumGeneration;
+    DocumentReadAuthority _after;
+    HistoryRestoreAuthority _editor;
+    DocumentHistory::Authority _history;
+};
+
 // Stable owner-side borrowing boundary. The application must join the scheduler before these references die.
 // The descriptor's complete admission is supplied before any immutable document/geometry capture.
 // The original parent handles an inside-selection New outline move and explicitly admitted New marquees.
@@ -85,6 +119,9 @@ struct SelectionOutlineGestureState
     bool allowNewRectangle = false, allowNewEllipse = false, drawing = false;
     bool allowPreservingMarquee = false;
     bool requireCapturedTarget = false;
+    // Caller moves only the exact preceding completed parent's issued transition. Worker admission
+    // validates and consumes it; it does not rewrite the journal's immutable per-Down authority.
+    std::optional<SelectionOutlineGestureTransition> predecessor;
     JobTicket original;
     unsigned runs = 0, captures = 0, hits = 0, collectAcks = 0, closurePrepares = 0, clickPrepares = 0, moves = 0;
     unsigned maximumDrawingSamples = 0;
@@ -105,4 +142,16 @@ struct SelectionOutlineGestureState
         if (notify)
             notify(observer, event);
     }
+    [[nodiscard]] std::optional<SelectionOutlineGestureTransition> TakeSuccessor() noexcept
+    {
+        if (!completed || controller || !parentAcknowledged.load(std::memory_order_acquire))
+            return std::nullopt;
+        auto result = std::move(_successor);
+        _successor.reset();
+        return result;
+    }
+
+  private:
+    friend class SelectionOutlineGestureJob;
+    std::optional<SelectionOutlineGestureTransition> _successor;
 };

@@ -307,6 +307,8 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
                              (arrival->kind == LassoKind::Ellipse && s.allowNewEllipse));
         if (arrival->kind == LassoKind::Polygonal && !s.prefix.IsJournal())
             return Refuse(E_ABORT);
+        if (s.predecessor && !s.prefix.IsJournal())
+            return Refuse(E_ABORT);
         if (_drawing && !typed && !legacy)
             return Refuse(E_ABORT);
         if (arrival->mode != SelectionMode::New && (!_drawing || (!typed && !legacy)))
@@ -325,9 +327,34 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             return Refuse(E_ABORT); // Never prepare a different kind or mode under a smaller admission.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
-        if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity ||
-            (s.prefix.IsJournal() && !s.session.IsDocumentReadCurrent(arrival->document)))
+        if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
             return Refuse(E_ABORT);
+        if (s.prefix.IsJournal())
+        {
+            const auto& physical = arrival->document;
+            if (s.predecessor)
+            {
+                const auto& transition = *s.predecessor;
+                const auto& after = transition._after;
+                if (transition._family != s.prefix.Family() || transition._opening != s.opening ||
+                    arrival->ordinal <= transition._terminal || physical.sessionIdentity != after.sessionIdentity ||
+                    physical.documentSerial != after.documentSerial || physical.restoreSerial != after.restoreSerial ||
+                    physical.canvasWidth != after.canvasWidth || physical.canvasHeight != after.canvasHeight ||
+                    physical.generation < transition._minimumGeneration || physical.generation > after.generation ||
+                    !s.session.IsDocumentReadCurrent(after) || !s.session.CanApplyHistoryRestore(transition._editor) ||
+                    !s.session.history.IsCurrent(transition._history) || arrival->active != s.session.ActiveLayerID() ||
+                    arrival->crop != s.session.CropFrame() || arrival->mask != s.session.IsMaskSelected())
+                    return Refuse(E_ABORT);
+                _lineageMinimum = transition._minimumGeneration;
+                s.predecessor.reset(); // Consume the opaque receipt before retaining any geometry/history roots.
+            }
+            else
+            {
+                if (!s.session.IsDocumentReadCurrent(physical))
+                    return Refuse(E_ABORT);
+                _lineageMinimum = physical.generation;
+            }
+        }
         _display = s.session.DisplayedSelectionValue();
         _point = down->sample.point;
         if (_drawing)
@@ -549,6 +576,25 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     }
     s.overflowObserved = s.prefix.Overflowed();
     s.inputAcknowledged = _terminal ? s.prefix.Acknowledge(s.opening) : s.prefix.Drop(s.opening);
+    if (s.prefix.IsJournal() && s.closed && s.inputAcknowledged && s.outcome.status == JobStatus::Finished && _source &&
+        _lineageMinimum)
+    {
+        const auto after = s.session.CaptureDocumentReadAuthority();
+        if (after && after->sessionIdentity == _source->sessionIdentity &&
+            after->documentSerial == _source->documentSerial && after->restoreSerial == _source->restoreSerial &&
+            after->canvasWidth == _source->canvasWidth && after->canvasHeight == _source->canvasHeight &&
+            after->generation >= _source->generation && after->generation >= *_lineageMinimum)
+        {
+            SelectionOutlineGestureTransition transition{s.prefix.Family(),
+                                                         s.opening,
+                                                         s.terminalOrdinal,
+                                                         *_lineageMinimum,
+                                                         *after,
+                                                         s.session.CaptureHistoryRestoreAuthority(),
+                                                         s.session.history.CaptureAuthority()};
+            s._successor.emplace(std::move(transition));
+        }
+    }
     s.controller = nullptr;
     s.parentAcknowledged.store(true, std::memory_order_release);
     s.Notify(SelectionOutlineGestureState::Event::Terminal); // Final access: observer may retire its owned state.

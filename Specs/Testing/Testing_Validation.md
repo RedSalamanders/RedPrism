@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-11
+Last reviewed: 2026-10-18
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -3364,3 +3364,27 @@ fixture predicates before correction. No predecessor assertion/golden is rebasel
 This proof excludes actual Win32 dispatcher/conditional receipts, owned-predecessor transitions,
 Save/tool/lifetime arbitration, ordinary activation, ARM64 runtime, G1 and the final latest-source
 full matrix. [Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+
+
+## Owned Polygonal predecessor transition validation
+
+Extend `Document.Tests.PolygonalDispatcher.cpp` by 34 independent assertions over ten scenarios,
+retaining all 105 original assertions (139 total). Three already queued original parents compare
+all 120 centers against literal successive rectangles, three separate history entries, existing
+six Move/End invalidations, three exact Undo/Redo results and final refunds. Verify a new original
+inside parent after a chosen Polygonal close, and a Down captured during a genuine owned preview.
+The stored Down authorities must remain byte-identical. Each parent retains its own admission/ticket.
+
+Require one-shot extraction after completed/cleared/acknowledged state, no public default/copy
+construction and no-throw move construction. Missing receipt, another journal, retired/reused
+family, foreign history/crop/target and moved-from receipt must refuse before retained-root capture
+and preserve predecessor selection/history. A single valid moved receipt can consume that same
+untouched younger Down. Opaque history validation must catch a foreign Begin without generation change.
+
+Fresh complete Release and real-ASan profiles each compile all 285 TUs and pass 23,594 PASS lines.
+Preserve every 23,559 matching-profile predecessor assertion record; replace only the old module's
+105-count summary with its 139-count summary. Require frozen source/command/byte manifests,
+consistent private headers, exact x64 executable/full-PDB identity, linked ISA and genuine UAF
+detection. No cached objects or prior runtime result qualifies this new component. Actual Win32
+conditional dispatch, Save/key/lifetime order, ordinary activation, G1 and final latest-source
+native qualification remain open. [Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).

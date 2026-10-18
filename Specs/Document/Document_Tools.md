@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-18
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `Common/LayerCopyWork.*`, `Common/WandLayerSelectionWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
@@ -2081,9 +2081,9 @@ Outside Up is nonterminal; hover/Leave do not add corners. Deferred near-first u
 point and captured physical view/DPI operands; double-click closes without appending its point.
 Escape and loss cancel only the draft; last-corner Backspace ends without publication/history.
 
-Journal arrival generation/restore and target authority must still be current at original capture.
-A later physical caller must explicitly validate any owned predecessor transition before accepting
-a younger original parent; this prerequisite grants no arbitrary rebasing. Owner readiness queries
+Journal arrival restore/target authority must still be current at original capture. Generation must
+also be current except when covered by the explicit owned transition below. The physical caller must
+move and validate that exact receipt; no stored arrival metadata is rewritten. Owner readiness queries
 are scalar and nonreentrant. False preserves the unconsumed record; only a useful readiness event
 resumes the original reservation. Terminal callback is the final state access and observes cleared
 controller plus acknowledgement. Joined shutdown emits no useful terminal callback.
@@ -2091,3 +2091,27 @@ controller plus acknowledgement. Joined shutdown emits no useful terminal callba
 This CPU branch qualification does not enable the physical dispatcher or ordinary input, settle
 Save/tool/lifetime arbitration, close lifted-pixel/Wand branches or establish G1.
 [Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+
+
+## Owned selection predecessor receipts
+
+Only the original journal job can construct `SelectionOutlineGestureTransition`, after successful
+selection-only publication. Both inside outline movement and a chosen Polygonal close may issue it;
+failed, cancelled or unclosed parents issue none. `TakeSuccessor` yields its private receipt once,
+after completion, controller clearance and parent acknowledgement. Default/copy construction and
+move assignment are unavailable; moving invalidates its source. The journal owner must outlive every
+issued receipt. This metadata is owner-only and never becomes persisted document content.
+
+A later original journal parent validates and consumes the receipt after its complete admission and
+before retaining geometry/history roots. Require the exact journal/family, a later Down ordinal,
+same session/document/restore/dimensions, captured generation inside the contiguous owned range,
+current exact post-document/editor/history authority and current captured target. The legacy press
+protocol refuses this receipt. Missing, moved-from, retired-family, foreign or stale authority
+cannot grant a generation transition. Each successful chain step retains only its proven minimum
+generation and latest exact post authority; it never walks or rewrites earlier events. An actual
+intermediate owned-preview generation may be covered, while generation wrap grants no credit.
+
+These CPU receipts preserve separate original admissions, numeric selection results and Undo/Redo
+for already accepted later Down events. Actual conditional host descriptors, older Save ordering,
+keys, tool/lifetime settlement, ordinary activation and measured G1 remain required.
+[Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
