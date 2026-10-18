@@ -1,6 +1,6 @@
 # P1 Polygonal terminal native cross-build qualification — 2026-10-18
 
-Status: ARM64 Debug and Release pass; instrumented ARM64 ASan Debug is running. P1 stays WIP.
+Status: ARM64 Debug, Release and instrumented ASan Debug all pass for the terminal source cohort. Native ARM64 runtime is unavailable. P1 stays WIP.
 
 ## Exact source and scope
 
@@ -15,7 +15,7 @@ Five projects contain exactly 990 compiler records: Application 349, HostTests 1
 | --- | --- | ---: | ---: | ---: | --- | --- |
 | ARM64 Debug | `r1127` | 0 | 1,550 | 990 | exact | qualified |
 | ARM64 Release | `r1125` | 0 | 1,550 | 990 | exact | qualified |
-| ARM64 ASan Debug | `r1126` | pending | pending | pending | pending | running |
+| ARM64 ASan Debug | `r1126` | 0 | 1,554 | 990 | exact; instrumented | qualified |
 
 Debug runs canonical `build.ps1 -Platform ARM64 -Configuration Debug -MaxCpuCount 1 -Rebuild`, 2026-10-18T08:16:58Z–08:51:10Z, actual PowerShell child PID 92288. Independent archive/artifact/PE-PDB readers complete at 08:53:20Z. No build/runtime is repeated to repair a reader.
 
@@ -36,3 +36,12 @@ Canonical `build.ps1 -Platform ARM64 -Configuration Release -MaxCpuCount 1 -Rebu
 Independent archive, artifact and PE/PDB readers all exit 0, completing at 09:35:18Z. Main rechecks the three exact reader-log hashes and five recorded pairs without repeating compilation. All 1,550 archive files pass; archive completion SHA-256 is `62DFCCEB0DD26A6230B36A45EF0362AE9626F572183559FABEB2EBAA670C9E42`. Main receipt: `.build/P1Integration/PolygonalTerminalNativeProfiles-r1-Main/r1125-main-qualified.json`.
 
 The existing serial orchestrator starts canonical instrumented ARM64 ASan `r1126` only after Release qualifies. Its fixed-source build and independent archive/readback remain pending. This Release result establishes cross-build correctness only; native ARM64 execution, the complete dispatcher, ordinary activation, G1 and P1 completion remain separate.
+## Instrumented ARM64 ASan and cohort closeout
+
+Canonical `build.ps1 -Platform ARM64 -Configuration "ASan Debug" -MaxCpuCount 1 -Rebuild` completes on 2026-10-18, 11:35:25–12:13:36 Europe/Paris, actual PowerShell child PID 79024, exit 0. Independent archive/artifact/PE-PDB readers finish at 12:14:01. Main rechecks all three reader-log hashes and their actual exits; the instrumentation reader verifies all 990 compiler records against the exact five project source sets, `/fsanitize=address`, sanitizer CRT configuration and forced instrumentation header. All five AA64 executable/full-PDB pairs match.
+
+The complete 1,554-file archive passes independent byte/source/profile readback. Archive completion SHA-256: `97F2C98BCC9602E0B719C19F9EAAC7FED35881724447551330011082C3FE95E8`. Main receipt: `.build/P1Integration/PolygonalTerminalNativeProfiles-r1-Main/r1126-main-qualified.json`; qualification HEAD is docs-only `9a276cd4a741d78269fd450c751f29878fdb2c42`.
+
+The serial orchestrator joins successfully with `remaining-native-r1/all-three-cross-builds-qualified.json`: Debug 1,550 / Release 1,550 / ASan 1,554 archived files, 990 compiler records and five verified pairs per profile, with the same 1,477-row source freeze throughout. This closes the requested terminal-cohort ARM64 Release/ASan work. The initial disk receipt failure and every earlier failed reader remain preserved.
+
+No native ARM64 execution or ARM64 sanitizer runtime detection is claimed. The separate x64 HostTests journal work is private and is excluded from this terminal source cohort; adopting later code changes does not inherit this cohort's latest-source status. Complete physical dispatcher, ordinary activation, all remaining P1 delivery areas and G1 remain open.
