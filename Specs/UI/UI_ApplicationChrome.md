@@ -1122,3 +1122,9 @@ under an open adjustment panel (the digit, the stepper and a typed preview; Canc
 a key the layout does not name (VK_E7), and show the layout's key names, the STRINGTABLE modifiers and replacements in
 the Command List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string
 table (every command caption's column is its first default chord), the key names, the catalog and the binding table.
+
+### Initial Layers viewport publication
+
+During an ordinary initial startup with a positive client extent, SyncChrome arranges the existing controls at the actual extent/DPI before publishing direct or prepared layer rows. Tree selection scrolls immediately; selecting into the initial zero-width/negative-height layout can retain a one-row scroll offset after painting. The first row must remain below the Layers title/opacity band before the first preparation and after rendering. Reuse the existing single Layout call per sync; add no geometry traversal, extra preparation, pixel work or frame submission. Model ownership, interaction epochs and prepared-row activation keep their existing contracts.
+
+The initial-positive-extent correction is qualified separately from minimized/zero-size restoration, later large-model scrolling/resize, prepared-consumer activation, UIA and H4/G1. [Evidence](../TestRuns/P1InitialLayerViewport_2026-10-18.md).

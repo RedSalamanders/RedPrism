@@ -785,6 +785,19 @@ int Application::RunSelfTest() noexcept
 
     BindCompositionDevice();
     SyncChrome();
+    // The first model publication must use the real viewport before Tree selects/scrolls its first row.
+    const float initialLayerTitleBottom =
+        ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kLayersTitleDip;
+    const auto initialLayerRow = _chrome->LayerRowBoundsDip(0);
+    if (initialLayerRow.bottom <= initialLayerRow.top || initialLayerRow.top < initialLayerTitleBottom)
+    {
+        std::fprintf(stderr, "DIAG initial-layer-row before-prepare top=%.2f bottom=%.2f titleBottom=%.2f\n",
+                     static_cast<double>(initialLayerRow.top), static_cast<double>(initialLayerRow.bottom),
+                     static_cast<double>(initialLayerTitleBottom));
+        SelfTestFailure(L"The first layer row overlaps the title/opacity band before preparation.\n");
+        return 5;
+    }
+    std::puts("PASS layers.initial-row-below-header-before-prepare");
     const CanvasDocument* document = _session.DisplayDocument();
     result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result))
@@ -792,6 +805,13 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"Self-test Present failed.\n");
         return 5;
     }
+    const auto preparedLayerRow = _chrome->LayerRowBoundsDip(0);
+    if (preparedLayerRow.bottom <= preparedLayerRow.top || preparedLayerRow.top < initialLayerTitleBottom)
+    {
+        SelfTestFailure(L"The first layer row overlaps the title/opacity band after preparation.\n");
+        return 5;
+    }
+    std::puts("PASS layers.initial-row-below-header-after-prepare");
     const DxUi::EmbeddedStatistics visible = _chrome->Statistics();
     if (visible.surfaceBytes == 0 || visible.composites == 0)
     {
@@ -3284,10 +3304,6 @@ void Application::SyncChrome() noexcept
     const ImageLayer* maskOwner = _session.ActiveLayer();
     const bool hasMask = maskOwner != nullptr && maskOwner->mask.has_value();
     const bool maskTargeted = hasMask && _session.IsMaskSelected();
-    if (_preparedLayerRowsEnabled)
-        SyncPreparedLayerRows();
-    else
-        _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked,
                              !hasMask || maskOwner->mask->enabled);
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
@@ -3319,6 +3335,12 @@ void Application::SyncChrome() noexcept
     // Command dispatch and completed-result publication must not paint a chrome surface here.
     const float dpi = ChromeDpi();
     _chrome->Layout(_renderer.Width(), _renderer.Height(), dpi);
+    // Tree selection scrolls immediately. Publish rows only after its actual viewport is arranged;
+    // publication into the initial zero-size bounds leaves a stale one-row scroll offset.
+    if (_preparedLayerRowsEnabled)
+        SyncPreparedLayerRows();
+    else
+        _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     const CanvasHole hole = _chrome->HolePixels();
     _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
                      DocumentSize());
