@@ -33,3 +33,8 @@ Main independently copies and reloads both actual `live.prism` and `inside-befor
 The [canonical ARM64 rebuilds](P1PolygonalLatestArm_2026-10-18.md) qualify earlier `9af34e4` source, not these subsequent two changes. Affected current-source ARM64 builds remain required after adoption. Native ARM64 runtime is unavailable.
 
 Remaining native scope includes shared-ordinal/scheduler-slot exhaustion, held-worker foreign editor/history/crop/mask, parked original-owner lifetime, held project/export/picker interleavings, complete header/Undo/Redo/Deselect/lifetime/DPI/device/hidden/restart cases and Ctrl/lift. Ordinary activation, all nine P1 delivery areas, measured G1 and final latest-source Debug/Release/real-ASan/analysis/ARM qualification remain open. This scoped receipt does not move P1 to Done or authorize its conditional main merge.
+
+
+## ARM64 follow-up
+
+The adopted `2cb0b64` guard/fixture now also passes affected canonical ARM64 Release `r1133` and ASan `r1132`, with two fresh and 992 byte-exact inherited objects per profile. The [current-source ARM64 section](P1PolygonalLatestArm_2026-10-18.md) preserves the exact source/artifact identity, original dependency failure and reader-only correction. Native ARM64 runtime remains unavailable.

@@ -29,3 +29,21 @@ Durable records: `D:\RedPrismBuildCaches\.build\p1-polygonal-latest-arm-native-r
 These are ARM64 compilation/link/artifact/source qualifications. They establish no native ARM64 runtime, UAF detection on ARM64, ordinary activation, performance/G1 result or P1 closeout. Debug still has the earlier 990-TU terminal-cohort evidence and needs the final latest-source gate.
 
 The private foreign-history guard and inside-Save fixture are subsequent source changes and are not covered by these two rebuilds. Their x64 functional qualification is separate. A later affected canonical ARM64 build must prove every changed source and unchanged reused object before its current-source claim is made.
+
+
+## Adopted guard source `2cb0b64`: affected canonical builds
+
+Current caller and fixture source `2cb0b6458dc4d553bada97283081a97b5b64920c` now qualifies in both ARM64 profiles. These runs use canonical `build.ps1 -Platform ARM64 -Configuration <profile> -MaxCpuCount 1` Build. A prelaunch comparison proves exactly two C++ changes and three owning-contract updates from the full-rebuild baseline; headers, projects, kernels, dependency pin, toolchain and other compile inputs remain exact. Expectations are fixed before either current build, with the same four positive and 22 negative reader controls.
+
+| Profile | Attempt | Actual child PID | Fresh + byte-exact inherited objects | Verified archived files | Archive completion SHA256 |
+| --- | --- | ---: | ---: | ---: | --- |
+| Release | r1133 | 105036 | 2 + 992 | 1,558 | `18102F07ACA43E99851F545E3A54D6942632A8600DA385CB7B80CEA043389851` |
+| ASan Debug | r1132 | 15548 | 2 + 992 | 1,562 | `CE97DAE9572F088E9C65FBA24D1F66B1A5A8B51838C767BB63306F0BA5E39132` |
+
+Both actual build exits are zero. Main checks all 994 actual source/command/profile records, every current source/header/flag identity, changed-source object bytes and 992 unchanged object hashes per profile. All 351 application objects occur in the actual link. The two freshly compiled objects are exactly `ApplicationPolygonalPressJobs.cpp` and `Application.Tests.PolygonalDispatch.cpp`. Every mandatory C++ flag, real ASan instrumentation, full archive/inventory/source bookend and five exact AA64 PE/full-PDB pairs pass. This is an affected-build qualification with explicit inheritance, not a claim that all 994 objects were freshly compiled again.
+
+Preserve Release `r1131` separately: actual child 91976 exits 1 during DxUi's shared vcpkg setup because concurrent configuration startup cannot acquire its filesystem lock (error 16). It reaches no C++/MSBuild stage. Main verifies all 1,558 archived files, completion SHA256 `BE301DD929C94D32622B6C0CAE4CF6896464416BB5B2A862CE277DCEFBAC937C`, and every diagnostic. The separate serial `r1133` passes with unchanged product/dependency source; no lock is deleted and no process is terminated. Serialize canonical dependency setup for future configuration runs.
+
+Also preserve the first object-reader refusal: the console banner contains non-UTF8 bytes, so decoding the entire stdout as UTF8 fails after the successful archive/artifact/PDB/C++ checks. Main retains the original reader and corrects only the exact ASCII compiler-name check to operate on unchanged bytes. The same completed ASan products pass; no build or runtime is replayed for that reader correction.
+
+Current durable proof adds `D:\RedPrismBuildCaches\.build\p1-polygonal-guard-arm-native-r1` (ASan and retained failure) and `D:\RedPrismBuildCaches\.build\p1-polygonal-guard-arm-release-r2` (serial Release), with prelaunch source pins, baseline object maps, manifests, independent readers and final `r113x-object-lineage-qualified.json` records. Native ARM64 runtime, latest Debug/full x64/analysis, ordinary activation, measured G1 and P1 closeout remain open.
