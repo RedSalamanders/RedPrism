@@ -652,6 +652,9 @@ void Application::RunHostContinuation() noexcept
             _activeHostRequest = std::move(taken.ready);
         if (!_activeHostRequest)
         {
+            // TakeReady can retire every stale descriptor without selecting a request/worker callback.
+            // Retire its scalar family here too; its accepted raw prefix must not remain orphaned.
+            RetirePolygonalPressOwner();
             return;
         }
     }

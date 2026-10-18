@@ -79,11 +79,18 @@ bool Application::QueuePolygonalPressOwner(const DxUi::PointerEvent& event, UINT
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
         return true; // Eligible unsupported lift has no synchronous containment fallback.
     }
+    if (!_session.Document())
+    {
+        _polygonalPressLastReceipt = ContinuationReceipt::Failure(E_ABORT);
+        LosePolygonalPressOwner();
+        return true; // An empty canvas has no input source; do not misreport it as counter overflow.
+    }
     const auto authority = _session.CaptureDocumentReadAuthority();
     constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     if (!authority || _polygonalPressRecord == maximum || (!existing && _polygonalPressFamily == maximum))
     {
-        ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW)));
+        _polygonalPressLastReceipt = ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW));
+        ReportHostAdmission(_polygonalPressLastReceipt);
         LosePolygonalPressOwner();
         return true;
     }

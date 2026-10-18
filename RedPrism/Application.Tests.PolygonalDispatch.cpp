@@ -5,9 +5,11 @@
 #include "KeyboardState.h"
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -91,7 +93,17 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "leave-zoom-live",
                                "space-pan-live",
                                "right-ignore-first",
+                               "family-counter-exhausted",
+                               "record-counter-exhausted",
+                               "absent-document",
                                "right-ignore-live",
+                               "prefix-replaced-document",
+                               "prefix-target-refusal",
+                               "prefix-memory-refusal",
+                               "host-descriptor-exhaustion",
+                               "outside-prefix-overflow",
+                               "inside-up-prefix-overflow",
+                               "inside-missing-up-successor",
                                "joined-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
@@ -102,15 +114,18 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
     for (const std::string_view name : cases)
     {
         scenario = name.data();
+        std::atomic<bool> scarce{false};
         ApplicationProcessingTestProbe probe;
         probe.workerCount = 2;
-        probe.memory = {[](void*, MemorySnapshot& value) noexcept
+        probe.memory = {[](void* raw, MemorySnapshot& value) noexcept
                         {
-                            const auto bytes = kMemoryAdmissionHeadroomBytes + 2ull * 1024 * 1024 * 1024;
+                            const auto bytes = static_cast<std::atomic<bool>*>(raw)->load(std::memory_order_relaxed)
+                                                   ? 0
+                                                   : kMemoryAdmissionHeadroomBytes + 2ull * 1024 * 1024 * 1024;
                             value = {bytes, bytes};
                             return true;
                         },
-                        nullptr};
+                        &scarce};
         auto owner = std::make_unique<Application>(instance, true, L"", 0, nullptr, nullptr);
         auto cleanup = wil::scope_exit(
             [&]() noexcept
@@ -235,6 +250,243 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
                             !owner->_jobs.ReleasingMemoryBytes(),
                         "ignored-right-first-press-has-no-admitted-or-retained-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (name == "family-counter-exhausted" || name == "record-counter-exhausted")
+        {
+            constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+            if (name == "family-counter-exhausted")
+                owner->_polygonalPressFamily = maximum;
+            else
+                owner->_polygonalPressRecord = maximum;
+            click({2, 2});
+            const auto receipt = owner->_polygonalPressLastReceipt.Read();
+            if (!expect(receipt.outcome == HostOutcome::Failed &&
+                            receipt.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW)),
+                        "first-left-press-refuses-exhausted-counter-with-arithmetic-overflow"))
+                return 5;
+            if (!expect(!owner->_polygonalPressInput.Busy() && !owner->_polygonalPressState &&
+                            !owner->_polygonalPressLeftDown && owner->_polygonalPressParents == 0 &&
+                            !owner->_activeHostRequest && !owner->_hostRequests.Size() && !owner->_historyWork.Busy() &&
+                            !owner->_session.PendingLasso() && !owner->_session.IsMovingSelection() &&
+                            owner->_polygonalPressFamily == (name == "family-counter-exhausted" ? maximum : 0) &&
+                            owner->_polygonalPressRecord == (name == "record-counter-exhausted" ? maximum : 0) &&
+                            owner->_polygonalPressDownOrdinal == 0 && owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            owner->_session.history.UndoCount() == 0 &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "overflow-refusal-does-no-journal-controller-host-history-or-document-work"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "overflow-refusal-and-joined-close-refund-all-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (name == "absent-document")
+        {
+            owner->_session.ClearDocument();
+            owner->DocumentChanged();
+            if (!expect(settle(), "cleared-document-and-display-settled-before-canvas-press"))
+                return 5;
+            const auto emptyGeneration = owner->_session.Generation();
+            const auto emptyRevision = owner->_session.history.CurrentRevision();
+            const auto family = owner->_polygonalPressFamily;
+            const auto record = owner->_polygonalPressRecord;
+            const auto downOrdinal = owner->_polygonalPressDownOrdinal;
+            const auto undoCount = owner->_session.history.UndoCount();
+            const auto emptyHole = owner->_chrome->HolePixels();
+            const LPARAM point = MAKELPARAM(static_cast<int>(std::lround(emptyHole.left + emptyHole.width / 2.0)),
+                                            static_cast<int>(std::lround(emptyHole.top + emptyHole.height / 2.0)));
+            owner->_lastPressTick = 0;
+            SendMessageW(owner->_window.get(), WM_LBUTTONDOWN, MK_LBUTTON, point);
+            SendMessageW(owner->_window.get(), WM_LBUTTONUP, 0, point);
+            const auto receipt = owner->_polygonalPressLastReceipt.Read();
+            if (!expect(receipt.outcome == HostOutcome::Failed && receipt.error == E_ABORT,
+                        "canvas-press-without-document-is-handled-quietly-with-abort-receipt"))
+                return 5;
+            if (!expect(!owner->_polygonalPressInput.Busy() && !owner->_polygonalPressState &&
+                            !owner->_polygonalPressLeftDown && owner->_polygonalPressParents == 0 &&
+                            !owner->_activeHostRequest && !owner->_hostRequests.Size() && !owner->_historyWork.Busy() &&
+                            !owner->_session.PendingLasso() && !owner->_session.IsMovingSelection() &&
+                            owner->_polygonalPressFamily == family && owner->_polygonalPressRecord == record &&
+                            owner->_polygonalPressDownOrdinal == downOrdinal &&
+                            owner->_session.Generation() == emptyGeneration &&
+                            owner->_session.history.CurrentRevision() == emptyRevision &&
+                            owner->_session.history.UndoCount() == undoCount && !owner->_session.Document().has_value(),
+                        "absent-document-refusal-does-not-admit-or-mutate-session-or-counters"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "absent-document-refusal-and-joined-close-refund-all-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        const bool replaced = name == "prefix-replaced-document";
+        const bool targetRefusal = name == "prefix-target-refusal";
+        const bool memoryRefusal = name == "prefix-memory-refusal";
+        const bool capacity = name == "host-descriptor-exhaustion";
+        const bool outsideOverflow = name == "outside-prefix-overflow";
+        const bool insideOverflow = name == "inside-up-prefix-overflow";
+        const bool missingUp = name == "inside-missing-up-successor";
+        if (replaced || targetRefusal || memoryRefusal || capacity || outsideOverflow || insideOverflow || missingUp)
+        {
+            if (memoryRefusal)
+                scarce.store(true, std::memory_order_relaxed);
+            if (capacity)
+            {
+                for (unsigned i = 0; i < receipts.size(); ++i)
+                    click({7.0 + i * 4.0, 1});
+                click({43, 1}); // Ninth descriptor must fail while all eight accepted records remain paired.
+                const auto refused = owner->_polygonalPressLastReceipt.Read();
+                if (!expect(receiptCount == 8 && refused.outcome == HostOutcome::Failed &&
+                                refused.error == HRESULT_FROM_WIN32(ERROR_BUSY) &&
+                                owner->_polygonalPressInput.Closed() &&
+                                owner->_polygonalPressInput.PendingCount() == 17,
+                            "ninth-host-descriptor-refuses-and-seals-only-the-accepted-eight-record-pairs"))
+                    return 5;
+            }
+            else if (insideOverflow || missingUp)
+            {
+                send(WM_LBUTTONDOWN, {2, 2}, MK_LBUTTON);
+                receipts[receiptCount++] = owner->_polygonalPressLastReceipt;
+                send(WM_MOUSEMOVE, {5, 4}, MK_LBUTTON);
+                if (insideOverflow)
+                    send(WM_LBUTTONUP, {5, 4});
+                owner->_lastPressTick = 0;
+                send(WM_LBUTTONDOWN, {20, 20}, MK_LBUTTON);
+                receipts[receiptCount++] = owner->_polygonalPressLastReceipt;
+                if (missingUp)
+                {
+                    send(WM_LBUTTONUP, {20, 20});
+                    key(VK_ESCAPE);
+                }
+            }
+            else
+            {
+                click({7, 1});
+                if (!outsideOverflow)
+                {
+                    click({11, 1});
+                    key(VK_RETURN);
+                }
+            }
+            if (outsideOverflow || insideOverflow)
+            {
+                const auto accepted = owner->_polygonalPressInput.PendingCount();
+                for (std::size_t i = accepted; i < HostPolygonalInputJournal::kCapacity; ++i)
+                    send(WM_MOUSEMOVE, {21, 21}, insideOverflow ? MK_LBUTTON : 0);
+                send(WM_MOUSEMOVE, {22, 22}, insideOverflow ? MK_LBUTTON : 0);
+                send(WM_LBUTTONUP, {22, 22});
+                if (!expect(owner->_polygonalPressInput.Closed() && owner->_polygonalPressInput.Overflowed() &&
+                                owner->_polygonalPressInput.PendingCount() == HostPolygonalInputJournal::kCapacity + 1,
+                            "all512-physical-records-plus-one-reserved-loss-are-present-before-controller"))
+                    return 5;
+            }
+            if (!expect(receiptCount && receipts[0].Read().outcome == HostOutcome::Pending &&
+                            owner->_polygonalPressInput.Busy() && !owner->_polygonalPressState &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision,
+                        "boundary-prefix-reserves-only-scalars-before-any-original-controller-or-capture"))
+                return 5;
+            std::optional<Guid> foreignActive;
+            if (replaced)
+            {
+                DocumentFixture foreign;
+                foreign.width = foreign.height = 64;
+                foreign.id = Guid::Generate();
+                auto foreignLayer = ImageLayer::Blank(L"Foreign replacement", {64, 64});
+                foreignActive = foreignLayer.id;
+                foreign.layers.push_back(std::move(foreignLayer));
+                foreign.selection = DocumentSelection{
+                    false, SelectionLoops{std::vector<SelectionLoop>{{{20, 20}, {24, 20}, {24, 24}, {20, 24}}}}};
+                owner->_session.ReplaceDocument(std::move(foreign).Seal(), foreignActive);
+                owner->DocumentChanged();
+            }
+            else if (targetRefusal)
+            {
+                owner->_session.SelectLayer(std::nullopt);
+                owner->SelectionChanged();
+            }
+            const auto postMutationGeneration = owner->_session.Generation();
+            const auto postMutationRevision = owner->_session.history.CurrentRevision();
+            if (!expect(settle(), "boundary-completions-source-actions-and-retirement-settle-without-polling"))
+                return 5;
+            scarce.store(false, std::memory_order_relaxed);
+            bool outcomes = true;
+            for (unsigned i = 0; i < receiptCount; ++i)
+            {
+                const auto result = receipts[i].Read();
+                outcomes = outcomes &&
+                           result.outcome == (memoryRefusal               ? HostOutcome::Failed
+                                              : replaced || targetRefusal ? HostOutcome::Stale
+                                                                          : HostOutcome::Succeeded) &&
+                           (!memoryRefusal || result.error == E_OUTOFMEMORY);
+            }
+            const bool overflowJoined = !(outsideOverflow || insideOverflow) ||
+                                        (owner->_polygonalPressState && owner->_polygonalPressState->completed &&
+                                         owner->_polygonalPressState->overflowObserved &&
+                                         owner->_polygonalPressState->outcome.status == JobStatus::Cancelled &&
+                                         owner->_polygonalPressState->maximumDrawingSamples <= 16);
+            if (!expect(outcomes && overflowJoined && !owner->_polygonalPressInput.Busy() &&
+                            !owner->_activeHostRequest && !owner->_hostRequests.Size() && !owner->_historyWork.Busy() &&
+                            (!owner->_polygonalPressState || !owner->_polygonalPressState->controller) &&
+                            !owner->_session.PendingLasso() && !owner->_session.IsMovingSelection(),
+                        "every-dependent-receipt-and-family-joins-with-no-orphan-raw-prefix-or-writer"))
+                return 5;
+            if (memoryRefusal)
+            {
+                // Submit returns one original ticket even when AdmitWaiting queues an immediate memory failure.
+                // That failed record must execute no worker, capture no roots and open no writer.
+                if (!owner->_polygonalPressState || owner->_polygonalPressState->captures ||
+                    owner->_polygonalPressState->runs || owner->_polygonalPressState->opened ||
+                    owner->_polygonalPressParents != 1)
+                    std::printf("DIAG memory-refusal state=%d parents=%llu captures=%u runs=%u opened=%d\n",
+                                owner->_polygonalPressState.has_value(),
+                                static_cast<unsigned long long>(owner->_polygonalPressParents),
+                                owner->_polygonalPressState ? owner->_polygonalPressState->captures : 0,
+                                owner->_polygonalPressState ? owner->_polygonalPressState->runs : 0,
+                                owner->_polygonalPressState && owner->_polygonalPressState->opened);
+                if (!expect(owner->_polygonalPressState && owner->_polygonalPressState->captures == 0 &&
+                                owner->_polygonalPressState->runs == 0 && !owner->_polygonalPressState->opened &&
+                                owner->_polygonalPressParents == 1,
+                            "memory-refusal-precedes-original-worker-immutable-capture-and-writer"))
+                    return 5;
+            }
+            const bool moved = insideOverflow || missingUp;
+            const bool pixels = replaced ? DispatcherPixels(owner->_session, SelectionMode::New, true, 20, 20, 24, 24)
+                                : moved  ? DispatcherPixels(owner->_session, SelectionMode::New, true, 4, 3, 8, 7)
+                                         : DispatcherPixels(owner->_session, SelectionMode::New, true);
+            if (!expect(pixels && owner->_session.Generation() == postMutationGeneration + (moved ? 2u : 0u) &&
+                            owner->_session.history.UndoCount() == (moved ? 1 : 0) &&
+                            (moved || owner->_session.history.CurrentRevision() == postMutationRevision) &&
+                            (!replaced || owner->_session.ActiveLayerID() == foreignActive) &&
+                            (!targetRefusal || !owner->_session.ActiveLayerID()) &&
+                            (!(replaced || targetRefusal) || owner->_polygonalPressParents == 0) &&
+                            (!moved || owner->_polygonalPressParents == 2),
+                        "boundary-keeps-exact-foreign-or-prior-document-and-only-the-older-owned-inside-move"))
+                return 5;
+            if (moved)
+            {
+                owner->_session.Undo();
+                if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true),
+                            "older-success-undo-survives-younger-loss"))
+                    return 5;
+                owner->_session.Redo();
+                if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true, 4, 3, 8, 7),
+                            "older-success-redo-survives-younger-loss"))
+                    return 5;
+            }
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "boundary-joined-shutdown-refunds-original-cpu-gpu-and-weak-owners"))
                 return 5;
             ++reached;
             continue;
