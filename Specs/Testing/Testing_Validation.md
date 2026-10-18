@@ -3428,3 +3428,13 @@ Fill the actual scheduler's 128 owned records without draining completions, keep
 Sampler-capacity diagnostics retain every original predicate and the 10-second failure bound. Failure logs report settlement/time, exact receipt/error/color, capture/authority/history, opening slots and owner/resource states. Preserve the original nonzero run; passing repeats establish no historical cause or causal fix.
 
 [Evidence](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+
+## Original Polygonal typed commands and prepared-worker foreign authority
+
+The selected dispatcher adds six cases / 82 facts over 35/338: 41 cases / 420 facts. Focused Release and real ASan execute the entire selected fixture, preserve all 338 predecessor names, and independently qualify exact source/object/artifact/PE-PDB/ISA and Save/export readback. These focused runs do not qualify the full Application stream. Integration must retain all 152 stages and the expected 11,002 stdout facts with every existing matching-profile assertion; actual keyboard/menu widgets remain separately due.
+
+Deselect, Undo and Redo enter the real typed HostCommandInput queue. Construct genuine before/after history entries and exact revisions independently of the operation under test. While the old Polygonal original is parked, one owner continuation must hold the command behind cancellation acknowledgment with no early selection/history change. After join, require the same cancelled original ticket, fixed successful corner receipts, no new worker/capture/admission, literal command result/history/revision/generation and full refunds.
+
+For foreign history Begin, crop frame or selected-mask target, hold the actual original worker at DrawingPrepared using borrowed events/scalars only. Verify unchanged document generation/revision and all 4,096 literal prior selection centers before changing authority. Release then require exact Failed/E_ABORT, no publication, no orphan raw family or old writer, unchanged successful corners and the exact foreign transaction/crop/mask identity. Only the foreign owner may close its no-op transaction, cancel its crop or restore its image target. Every early exit releases the event and joins the scheduler before borrowed gate state dies.
+
+Preserve the optional-comparison compile failure and signed-depth warning-as-error as failed builds with no runtime. Preserve the crop ASan ISA rejection independently of later mask-layout scanner success; do not widen the instruction allowlist or claim a passing link layout repairs a scanner gap. [Evidence](../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).

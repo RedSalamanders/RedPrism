@@ -2151,3 +2151,9 @@ On documentSerial replacement or Clear, an existing selected original Polygonal 
 PNG/JPEG export from a parked outside draft must retain the original ticket/draft/corners, selection, revision, path and dirty marker; exporting must not close that draft. Quiet no-selected-path cancellation has exact ERROR_CANCELLED and writes no file. Later real Enter still commits one exact history entry with valid Undo/Redo. This test seam establishes no actual OS-picker qualification. Scheduler-record exhaustion refuses the new parent with ERROR_NOT_ENOUGH_QUOTA while preserving every accepted prior job, the committed document/history and the raw-prefix terminal acknowledgement.
 
 [Qualification](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+
+## Selected Polygonal ordered commands and prepared-result refusal
+
+Typed Deselect/Undo/Redo waits for cancellation acknowledgment of the existing outside Polygonal original before its own document/history change. Previously successful corner receipts stay fixed and the command creates no replacement original or repeated source capture. Real seed Undo/Redo entries retain their exact saved revisions.
+
+A prepared original result that loses history/editor authority through a foreign pending transaction, crop frame or mask-target change fails with E_ABORT. It removes only its own pending writer/family; committed selection, generation/revision, foreign transaction depth/authority, exact crop or selected mask identity remain with the foreign owner. Borrowed test-gate state must outlive joined work. This selected-route qualification does not activate ordinary input. [Focused evidence](../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).

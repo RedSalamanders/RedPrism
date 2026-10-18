@@ -2,6 +2,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ChromeHost.h"
+#include "ColorWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
 
@@ -157,7 +158,13 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "jpeg-export-original-outside",
                                "png-picker-cancel-original-outside-seam",
                                "jpeg-picker-cancel-original-outside-seam",
-                               "joined-close"};
+                               "joined-close",
+                               "deselect-live",
+                               "undo-live",
+                               "redo-live",
+                               "held-foreign-history-close",
+                               "held-foreign-crop-close",
+                               "held-foreign-mask-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -214,12 +221,69 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             layer.asset =
                 RasterAsset{Raster::Make(64, 64, RasterFormat::Bgra8888, pixels.data(), pixels.size()), {}, layer.name};
         }
+        if (name == "held-foreign-mask-close")
+        {
+            const auto mask = Raster::MakeSparse(64, 64, RasterFormat::Gray8, {}, 0, 0, {}, 255);
+            layer.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Held original white mask"}};
+        }
         const auto active = layer.id;
         fixture.layers.push_back(std::move(layer));
         fixture.selection =
             DocumentSelection{false, SelectionLoops{std::vector<SelectionLoop>{{{1, 1}, {5, 1}, {5, 5}, {1, 5}}}}};
         owner->_session.ReplaceDocument(std::move(fixture).Seal(), active);
         owner->_session.history.Reset();
+        const bool heldMask = name == "held-foreign-mask-close";
+        const bool heldCrop = name == "held-foreign-crop-close";
+        const bool heldTarget = heldCrop || heldMask;
+        const bool heldHistory = name == "held-foreign-history-close" || heldTarget;
+        const bool commandDeselect = name == "deselect-live";
+        const bool commandUndo = name == "undo-live";
+        const bool commandRedo = name == "redo-live";
+        std::optional<DocumentSelection> commandBaseSelection, commandSeedSelection;
+        Guid commandBaseRevision{}, commandSeedRevision{};
+        const auto commandBaseGeneration = owner->_session.Generation();
+        if (commandDeselect || commandUndo || commandRedo)
+        {
+            commandBaseSelection = owner->_session.Selection();
+            commandBaseRevision = owner->_session.history.CurrentRevision();
+            commandSeedSelection = DocumentSelection{
+                false, SelectionLoops{std::vector<SelectionLoop>{{{20, 20}, {24, 20}, {24, 24}, {20, 24}}}}};
+        }
+        if (commandUndo || commandRedo)
+        {
+            owner->_session.SetSelection(commandSeedSelection, L"Polygonal command seed");
+            commandSeedRevision = owner->_session.history.CurrentRevision();
+            if (!expect(owner->_session.Selection() == commandSeedSelection &&
+                            owner->_session.history.UndoCount() == 1 &&
+                            owner->_session.history.UndoName() == L"Polygonal command seed" &&
+                            owner->_session.Generation() == commandBaseGeneration + 1,
+                        "genuine-seed-edit-records-literal-before-after-history-and-generation"))
+                return 5;
+            owner->_session.Undo();
+            if (!expect(owner->_session.Selection() == commandBaseSelection &&
+                            owner->_session.history.UndoCount() == 0 && owner->_session.history.CanRedo() &&
+                            owner->_session.history.RedoName() == L"Polygonal command seed" &&
+                            owner->_session.Generation() == commandBaseGeneration + 2,
+                        "seed-undo-restores-literal-original-selection-and-redo-entry"))
+                return 5;
+            owner->_session.Redo();
+            if (!expect(
+                    owner->_session.Selection() == commandSeedSelection && owner->_session.history.UndoCount() == 1 &&
+                        owner->_session.history.UndoName() == L"Polygonal command seed" &&
+                        !owner->_session.history.CanRedo() && owner->_session.Generation() == commandBaseGeneration + 3,
+                    "seed-redo-restores-literal-edited-selection-and-undo-entry"))
+                return 5;
+            if (commandRedo)
+            {
+                owner->_session.Undo();
+                if (!expect(owner->_session.Selection() == commandBaseSelection &&
+                                owner->_session.history.UndoCount() == 0 && owner->_session.history.CanRedo() &&
+                                owner->_session.history.RedoName() == L"Polygonal command seed" &&
+                                owner->_session.Generation() == commandBaseGeneration + 4,
+                            "redo-command-fixture-returns-to-literal-before-state-with-real-redo-entry"))
+                    return 5;
+            }
+        }
         owner->_tool = EditorTool::Lasso;
         owner->_session.lassoKind = LassoKind::Polygonal;
         const auto mode = name == "add-enter"        ? SelectionMode::Add
@@ -360,7 +424,8 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool zero = name == "backspace-before-controller";
         const bool joined = name == "joined-close";
         const bool live = name == "save-live" || name == "tool-live" || name == "leave-zoom-live" ||
-                          name == "space-pan-live" || name == "right-ignore-live" || originalExport;
+                          name == "space-pan-live" || name == "right-ignore-live" || originalExport ||
+                          commandDeselect || commandUndo || commandRedo || heldHistory;
         const double left = mode == SelectionMode::Subtract ? 3 : 7;
         if (name == "outside-replaced-parked" || name == "outside-cleared-parked")
         {
@@ -897,9 +962,285 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                 return 5;
             if (!expect(owner->_polygonalPressState->controller && owner->_polygonalPressState->drawing &&
                             owner->_polygonalPressParents == 1 && !owner->_historyWork.Busy() &&
-                            owner->_session.Generation() == generation && owner->_session.history.UndoCount() == 0,
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.UndoCount() == (commandUndo ? 1 : 0),
                         "interactive-draft-releases-host-barrier-and-keeps-original-admission"))
                 return 5;
+        }
+        if (heldHistory)
+        {
+            struct Gate final
+            {
+                wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+                wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+                std::atomic<unsigned> visits{0};
+                std::atomic<DWORD> waited{WAIT_FAILED};
+            } gate;
+            // The worker borrows only event/scalar state. Join before destroying that stack state on every exit.
+            const auto joinGate = wil::scope_exit(
+                [&]() noexcept
+                {
+                    (void)SetEvent(gate.release.get());
+                    owner->Shutdown();
+                });
+            const bool parked = until(
+                [&]() noexcept
+                {
+                    return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                           owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                           owner->_hostRequests.Size() == 0;
+                });
+            bool corners = receiptCount == 4;
+            for (unsigned i = 0; i < receiptCount; ++i)
+                corners = corners && receipts[i].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(gate.entered && gate.release && parked && corners && owner->_polygonalPressState->controller &&
+                            owner->_session.PendingLasso() && owner->_session.PendingLasso()->PointCount() == 4 &&
+                            owner->_polygonalPressParents == 1 && !owner->_historyWork.Busy(),
+                        "four-corners-and-up-park-before-worker-preparation-gate"))
+                return 5;
+            const auto ticket = owner->_polygonalPressState->original;
+            owner->_polygonalPressState->workObserver = &gate;
+            owner->_polygonalPressState->workCheckpoint =
+                [](void* raw, SelectionOutlineGestureState::WorkStage stage) noexcept
+            {
+                if (stage != SelectionOutlineGestureState::WorkStage::DrawingPrepared)
+                    return;
+                auto& held = *static_cast<Gate*>(raw);
+                held.visits.fetch_add(1, std::memory_order_release);
+                (void)SetEvent(held.entered.get());
+                held.waited.store(WaitForSingleObject(held.release.get(), 10000), std::memory_order_release);
+            };
+            key(VK_RETURN);
+            const auto terminal = receipts[receiptCount - 1];
+            if (!expect(
+                    WaitForColorWorkTestEvent(owner->_jobs, gate.entered.get(), DispatchMessageThunk, owner.get()) &&
+                        gate.visits.load(std::memory_order_acquire) == 1 &&
+                        terminal.Read().outcome == HostOutcome::Pending && owner->_historyWork.Busy() &&
+                        owner->_polygonalPressState->original == ticket && owner->_polygonalPressState->captures == 1 &&
+                        owner->_session.Generation() == generation &&
+                        owner->_session.history.CurrentRevision() == revision,
+                    "actual-original-worker-holds-prepared-close-before-any-selection-publication"))
+                return 5;
+            const auto previousHistory = owner->_session.history.CaptureAuthority();
+            const auto previousEditor = owner->_session.CaptureHistoryRestoreAuthority();
+            const auto previousCrop = owner->_session.CropFrame();
+            const std::optional<CropRect> foreignCrop{CropRect{2, 3, 59, 57}};
+            const Raster originalMask = heldMask ? owner->_session.ActiveLayer()->mask->asset.image : Raster{};
+            if (heldMask)
+                owner->_session.SelectLayerTarget(active, true);
+            else if (heldCrop)
+                owner->_session.SetCropFrame(foreignCrop);
+            else
+                owner->_session.history.Begin(L"Foreign Begin while Polygonal prepares", owner->_session.Document(),
+                                              active);
+            const auto foreign = owner->_session.history.CaptureAuthority();
+            const bool changedAuthority =
+                heldTarget
+                    ? !owner->_session.CanApplyHistoryRestore(previousEditor) &&
+                          owner->_session.history.IsCurrent(previousHistory) &&
+                          (heldMask ? owner->_session.IsMaskSelected() && owner->_session.ActiveLayerID() == active &&
+                                          owner->_session.ActiveLayer()->mask->asset.image == originalMask
+                                    : owner->_session.CropFrame() == foreignCrop)
+                    : !owner->_session.history.IsCurrent(previousHistory);
+            if (!expect(changedAuthority && owner->_session.history.IsCurrent(foreign) &&
+                            owner->_session.history.CaptureState().Depth() == (heldTarget ? 0 : 1) &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        heldMask ? "foreign-mask-target-changes-editor-authority-with-exact-pixels-history-and-document"
+                        : heldCrop
+                            ? "foreign-crop-changes-editor-authority-with-exact-history-and-document-preserved"
+                            : "foreign-pending-history-changes-authority-without-document-generation-or-revision"))
+                return 5;
+            (void)SetEvent(gate.release.get());
+            const bool completed = until([&]() noexcept { return terminal.Read().outcome != HostOutcome::Pending; });
+            const auto result = terminal.Read();
+            if (!completed || result.outcome != HostOutcome::Failed || result.error != E_ABORT)
+                std::fprintf(stderr,
+                             "DIAG held-polygonal-history complete=%d outcome=%d error=0x%08X status=%d "
+                             "stateError=0x%08X depth=%u pending=%d family=%d\n",
+                             completed, static_cast<int>(result.outcome), static_cast<unsigned>(result.error),
+                             static_cast<int>(owner->_polygonalPressState->outcome.status),
+                             static_cast<unsigned>(owner->_polygonalPressState->outcome.error),
+                             static_cast<unsigned>(owner->_session.history.CaptureState().Depth()),
+                             static_cast<bool>(owner->_session.PendingLasso()), owner->_polygonalPressInput.Busy());
+            if (!expect(completed && result.outcome == HostOutcome::Failed && result.error == E_ABORT &&
+                            gate.waited.load(std::memory_order_acquire) == WAIT_OBJECT_0,
+                        heldMask   ? "late-foreign-mask-refuses-original-prepared-result-with-exact-abort"
+                        : heldCrop ? "late-foreign-crop-refuses-original-prepared-result-with-exact-abort"
+                                   : "late-foreign-history-refuses-original-prepared-result-with-exact-abort"))
+                return 5;
+            corners = true;
+            for (unsigned i = 0; i < 4; ++i)
+                corners = corners && receipts[i].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(settle() && corners && owner->_polygonalPressState->original == ticket &&
+                            owner->_polygonalPressState->completed && !owner->_polygonalPressState->controller &&
+                            owner->_polygonalPressParents == 1 && !owner->_session.PendingLasso() &&
+                            !owner->_polygonalPressInput.Busy() && !owner->_activeHostRequest &&
+                            owner->_hostRequests.Size() == 0 && !owner->_historyWork.Busy(),
+                        "exact-old-ticket-and-successful-corners-join-without-old-draft-or-orphan-family"))
+                return 5;
+            if (!expect(owner->_session.history.IsCurrent(foreign) &&
+                            owner->_session.history.CaptureState().Depth() == (heldTarget ? 0 : 1) &&
+                            (!heldCrop || owner->_session.CropFrame() == foreignCrop) &&
+                            (!heldMask || owner->_session.IsMaskSelected() &&
+                                              owner->_session.ActiveLayerID() == active &&
+                                              owner->_session.ActiveLayer()->mask->asset.image == originalMask) &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            owner->_session.history.UndoCount() == 0 &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        heldMask   ? "refusal-preserves-foreign-mask-target-and-literal-selection-history-pixels"
+                        : heldCrop ? "refusal-preserves-exact-foreign-crop-history-and-all4096-prior-selection-centers"
+                                   : "refusal-preserves-foreign-transaction-and-all4096-original-selection-centers"))
+                return 5;
+            if (heldMask)
+                owner->_session.SelectLayerTarget(active, false);
+            else if (heldCrop)
+                owner->_session.CancelCrop();
+            else
+                owner->_session.history.End(owner->_session.Document(), active);
+            if (!expect(owner->_session.history.CaptureState().Depth() == 0 &&
+                            owner->_session.history.UndoCount() == 0 &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            (!heldCrop || owner->_session.CropFrame() == previousCrop) &&
+                            (!heldMask || !owner->_session.IsMaskSelected()),
+                        heldMask   ? "foreign-owner-alone-restores-image-target-without-editor-history-entry"
+                        : heldCrop ? "foreign-owner-alone-clears-its-crop-without-editor-history-entry"
+                                   : "foreign-owner-still-closes-its-exact-noop-transaction-with-no-editor-entry"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "held-worker-and-foreign-history-joined-close-refund-all-original-owners"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (commandDeselect || commandUndo || commandRedo)
+        {
+            const bool parked = until(
+                [&]() noexcept
+                {
+                    return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                           owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                           owner->_hostRequests.Size() == 0;
+                });
+            const auto originalTicket = owner->_polygonalPressState->original;
+            const auto originalRuns = owner->_polygonalPressState->runs;
+            const auto originalCaptures = owner->_polygonalPressState->captures;
+            const auto originalParents = owner->_polygonalPressParents;
+            std::array<ContinuationReceipt::Result, 4> cornerResults{};
+            bool cornersSucceeded = receiptCount == cornerResults.size();
+            for (std::size_t index = 0; index < cornerResults.size() && cornersSucceeded; ++index)
+            {
+                cornerResults[index] = receipts[index].Read();
+                cornersSucceeded = cornerResults[index].outcome == HostOutcome::Succeeded;
+            }
+            if (!expect(parked && cornersSucceeded && owner->_polygonalPressState->controller &&
+                            owner->_polygonalPressState->waiting && owner->_polygonalPressState->drawing &&
+                            owner->_polygonalPressParents == 1 && !owner->_historyWork.Busy(),
+                        "parked-outside-draft-has-four-already-successful-corner-receipts"))
+                return 5;
+
+            const int command = commandDeselect ? ChromeHost::kCommandDeselect
+                                : commandUndo   ? ChromeHost::kCommandUndo
+                                                : ChromeHost::kCommandRedo;
+            const auto commandSelectionBefore = owner->_session.Selection();
+            const auto commandRevisionBefore = owner->_session.history.CurrentRevision();
+            const auto commandGenerationBefore = owner->_session.Generation();
+            const int commandUndoCountBefore = owner->_session.history.UndoCount();
+            const auto commandUndoNameBefore = owner->_session.history.UndoName();
+            const auto commandRedoNameBefore = owner->_session.history.RedoName();
+            const auto receipt = owner->QueueHostInput(HostCommandInput{command});
+            if (!expect(receipt.Read().outcome == HostOutcome::Pending,
+                        "real-host-command-dispatch-admits-ordered-request"))
+                return 5;
+            owner->_continuationAction.Run();
+            if (!expect(owner->_polygonalPressStopping && owner->_polygonalPressStamp &&
+                            owner->_hostCommitStamp == owner->_polygonalPressStamp &&
+                            owner->_polygonalPressState->controller && !owner->_polygonalPressState->completed &&
+                            owner->_polygonalPressState->original == originalTicket && owner->_historyWork.Busy() &&
+                            receipt.Read().outcome == HostOutcome::Pending &&
+                            owner->_session.Selection() == commandSelectionBefore &&
+                            owner->_session.history.CurrentRevision() == commandRevisionBefore &&
+                            owner->_session.history.UndoCount() == commandUndoCountBefore &&
+                            owner->_session.history.UndoName() == commandUndoNameBefore &&
+                            owner->_session.history.RedoName() == commandRedoNameBefore &&
+                            owner->_session.Generation() == commandGenerationBefore,
+                        "dispatcher-stops-same-original-ticket-and-holds-command-behind-cancel-ack"))
+                return 5;
+            if (!expect(until([&]() noexcept { return receipt.Read().outcome != HostOutcome::Pending; }) &&
+                            receipt.Read().outcome == HostOutcome::Succeeded &&
+                            owner->_polygonalPressState->completed && owner->_polygonalPressState->sameTicket &&
+                            owner->_polygonalPressState->original == originalTicket &&
+                            owner->_polygonalPressState->outcome.status == JobStatus::Cancelled &&
+                            !owner->_polygonalPressState->controller && !owner->_session.PendingLasso() &&
+                            !owner->_polygonalPressInput.Busy() && !owner->_historyWork.Busy() &&
+                            !owner->_activeHostRequest && owner->_hostRequests.Size() == 0,
+                        "ordered-command-resolves-only-after-original-writer-cancellation-joins"))
+                return 5;
+            bool cornersUntouched = true;
+            for (std::size_t index = 0; index < cornerResults.size(); ++index)
+            {
+                const auto after = receipts[index].Read();
+                cornersUntouched = cornersUntouched && after.outcome == cornerResults[index].outcome &&
+                                   after.error == cornerResults[index].error;
+            }
+            if (!expect(cornersUntouched && owner->_polygonalPressState->original == originalTicket &&
+                            owner->_polygonalPressState->runs == originalRuns &&
+                            owner->_polygonalPressState->captures == originalCaptures &&
+                            owner->_polygonalPressParents == originalParents,
+                        "successful-corner-receipts-stay-fixed-with-no-new-writer-or-capture"))
+                return 5;
+
+            const bool expectedSelection = commandDeselect ? !owner->_session.Selection()
+                                           : commandRedo   ? owner->_session.Selection() == commandSeedSelection
+                                                           : owner->_session.Selection() == commandBaseSelection;
+            const bool expectedHistory =
+                commandDeselect
+                    ? owner->_session.history.UndoCount() == 1 && owner->_session.history.UndoName() == L"Deselect" &&
+                          !owner->_session.history.CanRedo()
+                : commandUndo ? owner->_session.history.UndoCount() == 0 && owner->_session.history.CanRedo() &&
+                                    owner->_session.history.RedoName() == L"Polygonal command seed"
+                              : owner->_session.history.UndoCount() == 1 &&
+                                    owner->_session.history.UndoName() == L"Polygonal command seed" &&
+                                    !owner->_session.history.CanRedo();
+            const bool expectedRevision =
+                commandDeselect ? owner->_session.history.CurrentRevision() != commandRevisionBefore
+                : commandUndo   ? owner->_session.history.CurrentRevision() == commandBaseRevision
+                                : owner->_session.history.CurrentRevision() == commandSeedRevision;
+            if (!expectedSelection || !expectedHistory || !expectedRevision ||
+                owner->_session.Generation() != commandGenerationBefore + 1)
+                std::fprintf(
+                    stderr,
+                    "DIAG polygonal-command name=%s selection=%d history=%d revision=%d generation=%llu before=%llu "
+                    "undo=%d beforeUndo=%d redo=%d receipt=%d ticket=%d parents=%llu captures=%u runs=%u\n",
+                    name.data(), expectedSelection, expectedHistory, expectedRevision,
+                    static_cast<unsigned long long>(owner->_session.Generation()),
+                    static_cast<unsigned long long>(commandGenerationBefore), owner->_session.history.UndoCount(),
+                    commandUndoCountBefore, owner->_session.history.CanRedo(), static_cast<int>(receipt.Read().outcome),
+                    owner->_polygonalPressState->original == originalTicket,
+                    static_cast<unsigned long long>(owner->_polygonalPressParents),
+                    owner->_polygonalPressState->captures, owner->_polygonalPressState->runs);
+            if (!expect(expectedSelection && expectedHistory && expectedRevision &&
+                            owner->_session.Generation() == commandGenerationBefore + 1 &&
+                            (commandDeselect ? commandUndoCountBefore == 0 && commandUndoNameBefore.empty() &&
+                                                   commandRedoNameBefore.empty()
+                             : commandUndo
+                                 ? commandUndoCountBefore == 1 && commandUndoNameBefore == L"Polygonal command seed" &&
+                                       commandRedoNameBefore.empty()
+                                 : commandUndoCountBefore == 0 && commandUndoNameBefore.empty() &&
+                                       commandRedoNameBefore == L"Polygonal command seed"),
+                        "literal-command-selection-history-revision-and-generation-match"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes() && !owner->_polygonalPressInput.Busy(),
+                        "ordered-command-joined-close-refunds-original-and-command-work"))
+                return 5;
+            ++reached;
+            continue;
         }
         if (originalExport)
         {
