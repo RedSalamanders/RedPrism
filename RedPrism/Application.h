@@ -179,6 +179,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneSelectionCursorSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneFreehandPressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind kind) noexcept;
     static int RunStandaloneUiCancellationCanvasSelfTest(HINSTANCE instance) noexcept;
@@ -566,6 +567,38 @@ class Application final : public ChromeEvents,
     std::uint64_t _selectionPressOpening = 0;
     std::uint64_t _selectionPressMovePresentations = 0;
     bool _selectionPressTestEnabled = false;
+
+    // Selected full physical dispatcher candidate. Stable journal outlives every parent/receipt/token.
+    bool _polygonalPressTestEnabled = false;
+    HostPolygonalInputJournal _polygonalPressInput;
+    std::optional<SelectionOutlineGestureState> _polygonalPressState;
+    std::optional<HistoryWorkStamp> _polygonalPressStamp;
+    HostPolygonalInputJournal::Sample _polygonalPressLast;
+    ContinuationReceipt _polygonalPressLastReceipt;
+    std::uint64_t _polygonalPressFamily = 0, _polygonalPressRecord = 0, _polygonalPressDownOrdinal = 0;
+    std::uint64_t _polygonalPressParents = 0;
+    bool _polygonalPressLeftDown = false, _polygonalPressFailed = false, _polygonalPressStopping = false;
+    ContinuationReceipt::Result _polygonalPressFailure{HostOutcome::Failed, E_ABORT};
+    [[nodiscard]] bool QueuePolygonalPressOwner(const DxUi::PointerEvent&, UINT message, Vec2 view,
+                                                POINT client) noexcept;
+    [[nodiscard]] bool RoutePolygonalPressOwner(const DxUi::PointerEvent&, UINT message, POINT client) noexcept;
+    [[nodiscard]] bool QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action) noexcept;
+    [[nodiscard]] HostPolygonalInputJournal::Sample PolygonalPhysicalSample(const DxUi::PointerEvent&, Vec2 view,
+                                                                            std::uint64_t ordinal,
+                                                                            bool doubleClick = false) const noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> QueuePolygonalRecordOwner(HostCanvasInputKind,
+                                                                         std::uint64_t record) noexcept;
+    [[nodiscard]] HRESULT PreparePolygonalRecordOwner(std::uint64_t ordinal) noexcept;
+    [[nodiscard]] HRESULT StartPolygonalPressOwner(std::uint64_t family) noexcept;
+    [[nodiscard]] HRESULT StartPolygonalConditionalOwner(std::uint64_t family) noexcept;
+    [[nodiscard]] HRESULT StopPolygonalPressForHost() noexcept;
+    [[nodiscard]] bool PolygonalPressMayReplay(std::uint64_t ordinal) const noexcept;
+    [[nodiscard]] bool PolygonalPressMayFinish(std::uint64_t ordinal, bool cancelled) const noexcept;
+    [[nodiscard]] bool AdmitPolygonalPressTerminal(std::uint64_t ordinal, bool cancelled) noexcept;
+    void PolygonalPressEventOwner(SelectionOutlineGestureState::Event) noexcept;
+    void PumpPolygonalPressOwner() noexcept;
+    void LosePolygonalPressOwner() noexcept;
+    void RetirePolygonalPressOwner() noexcept;
 
     // Selected private qualification route; ordinary activation retains the P1 gates.
     bool _polygonalDrawingTestEnabled = false;
@@ -1506,6 +1539,7 @@ class Application final : public ChromeEvents,
         Sampler,
         PolygonalOpening,
         PolygonalTerminal,
+        PolygonalConditional,
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,

@@ -3991,6 +3991,21 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(*_selectionPressStamp);
     _selectionPressStamp.reset();
     // Joined Close suppresses useful Polygonal notifications too; only its acknowledgement releases this stamp.
+    assert(!_polygonalPressState || !_polygonalPressState->controller);
+    if (_polygonalPressStamp)
+        (void)_historyWork.Finish(*_polygonalPressStamp);
+    _polygonalPressStamp.reset();
+    _polygonalPressState.reset(); // Joined producer/retirement acknowledgement precedes borrowed-family destruction.
+    if (_polygonalPressInput.Busy())
+    {
+        while (_polygonalPressInput.Take(_polygonalPressFamily))
+        {
+        }
+        if (!_polygonalPressInput.Closed())
+            (void)_polygonalPressInput.CloseInput(_polygonalPressFamily);
+        if (!_polygonalPressInput.Finish(_polygonalPressFamily))
+            std::terminate();
+    }
     assert(!_polygonalDrawing || !_polygonalDrawing->controller);
     if (_polygonalStamp)
         (void)_historyWork.Finish(_polygonalStamp.value());
@@ -4247,7 +4262,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         event.action = DxUi::PointerAction::Up;
         if (GetCapture() == _window.get() &&
             !(message == WM_RBUTTONUP &&
-              (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling())))
+              (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling() ||
+               (_polygonalPressInput.Busy() && _polygonalPressLeftDown))))
         {
             // A refused right gesture cannot release an admitted left path's capture. Its own left release
             // below ends that path; this release is not a capture loss.
@@ -4272,6 +4288,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     event.yPixels = static_cast<float>(point.y);
     if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    if (RoutePolygonalPressOwner(event, message, point))
+        return;
     if (RouteSelectionPressOwner(event, message))
         return;
     if (RouteDeferredCanvasPan(event, message))
@@ -4390,8 +4408,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 
 bool Application::PointerBusy() const noexcept
 {
-    return !std::holds_alternative<std::monostate>(_drag) || _session.PendingBrush() != nullptr ||
-           _session.HasPendingWarp() || _session.PendingShape().has_value();
+    return (_polygonalPressInput.Busy() && _polygonalPressLeftDown) || !std::holds_alternative<std::monostate>(_drag) ||
+           _session.PendingBrush() != nullptr || _session.HasPendingWarp() || _session.PendingShape().has_value();
 }
 
 void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept
@@ -4431,6 +4449,8 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         SelectionPress(view, event.modifiers, client);
         return;
     }
+    if (left && QueuePolygonalPressOwner(event, message, view, client))
+        return;
     if (left && EditorToolIsSelection(_tool) && QueueSelectionPressOwner(pixel, event.modifiers))
         return;
     if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
@@ -4685,6 +4705,17 @@ void Application::HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool i
 
 void Application::EndPointerDrag(PointerEnd end) noexcept
 {
+    if (_polygonalPressInput.Busy())
+    {
+        if (std::holds_alternative<PanDrag>(_drag))
+        {
+            _drag = PointerDrag{};
+            return; // A temporary view drag ends without generic settlement of the prepared Polygonal writer.
+        }
+        if (end == PointerEnd::Lost || _polygonalPressLeftDown)
+            LosePolygonalPressOwner();
+        return; // Outside leave is cursor metadata, not a lost multi-click family.
+    }
     if (_selectionPressInput.Busy() || (_selectionPressState && _selectionPressState.value().controller))
     {
         // The original admitted parent owns loss, rollback and its writer/history acknowledgement.

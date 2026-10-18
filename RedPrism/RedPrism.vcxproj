@@ -676,6 +676,8 @@
     <ClCompile Include="ApplicationLassoInput.cpp" />
     <ClCompile Include="ApplicationSelectionPressJobs.cpp" />
     <ClCompile Include="ApplicationPolygonalJobs.cpp" />
+    <ClCompile Include="ApplicationPolygonalPressJobs.cpp" />
+    <ClCompile Include="Application.Tests.PolygonalDispatch.cpp" />
     <ClCompile Include="Application.Tests.PolygonalPress.cpp" />
     <ClCompile Include="PolygonalDrawingJob.cpp" />
     <ClCompile Include="ApplicationSelectionCursorJobs.cpp" />

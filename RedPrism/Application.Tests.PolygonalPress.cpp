@@ -895,5 +895,5 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
     family = scenario = "close";
     if (!expect(reached == 81 && !failures, "all45-native-mode-order-write-and-lifetime-cases-reached"))
         return 5;
-    return failures ? 5 : 0;
+    return failures ? 5 : RunStandalonePolygonalDispatcherSelfTest(instance);
 }

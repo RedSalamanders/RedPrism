@@ -397,7 +397,7 @@ KeyState Application::CurrentKeyState() const noexcept
                                                                  : KeyFocus::Chrome;
     state.tool = _tool;
     state.selection = _session.Selection().has_value() && !_session.Selection()->IsEmpty();
-    state.lassoDraft = _session.PendingLasso().has_value() || _lassoInput.Busy();
+    state.lassoDraft = _session.PendingLasso().has_value() || _lassoInput.Busy() || _polygonalPressInput.Busy();
     return state;
 }
 
@@ -474,6 +474,15 @@ bool Application::HandleKey(const KeyPress& press) noexcept
 bool Application::HandleEditGesture(const KeyPress& press) noexcept
 {
     const UINT key = press.virtualKey;
+    if (_polygonalPressInput.Busy() && !SizeCardOpen() && !_session.HasColorEdit())
+    {
+        if (key == VK_RETURN)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Enter);
+        if (key == VK_ESCAPE)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Escape);
+        if (key == VK_BACK || key == VK_DELETE)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Backspace);
+    }
     if (key == VK_RETURN || key == VK_ESCAPE)
     {
         // Enter applies and Escape cancels the first edit under way that takes the key, in the one order Undo and a

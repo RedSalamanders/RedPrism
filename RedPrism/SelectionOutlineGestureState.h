@@ -106,6 +106,12 @@ struct SelectionOutlineGestureState
     void* hostObserver = nullptr;
     bool (*mayReplay)(void*, std::uint64_t) noexcept = nullptr;
     bool (*mayFinish)(void*, std::uint64_t, bool cancelled) noexcept = nullptr;
+    // Owner-only selected-host admission, distinct from the pure readiness query. It may acquire only
+    // the matching host barrier; no session/input mutation, source capture, UI dispatch or reentry.
+    bool (*admitTerminal)(void*, std::uint64_t, bool cancelled) noexcept = nullptr;
+    // Once per consumed owner batch, including no-change input. Signal readiness only, never dispatch UI.
+    void (*inputProgress)(void*, std::uint64_t) noexcept = nullptr;
+    std::uint64_t lastConsumedOrdinal = 0;
     void (*pressResolved)(void*, std::uint64_t, bool closes) noexcept = nullptr;
     bool endedByBackspace = false;
     bool cancelled = false;

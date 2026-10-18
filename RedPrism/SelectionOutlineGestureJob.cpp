@@ -640,10 +640,27 @@ bool SelectionOutlineGestureJob::Consume() noexcept
     unsigned consumed = 0;
     while (const auto next = s.prefix.Peek(s.opening))
     {
+        if (s.prefix.IsJournal() && consumed == 16)
+        {
+            NotifyInputProgress();
+            if (!NotifyMoves(changed))
+                return Refuse(E_ABORT);
+            return Resume(); // Every journal record counts, including keys; legacy batching is unchanged.
+        }
         // A second raw Down can follow a lost release. Preserve it for the next parent; end only
         // this inside drag using the existing pointer-loss policy and its last accepted sample.
         const bool nextGesture =
             s.prefix.IsJournal() && _lastInput && next->action == HostSelectionGestureInput::Action::Down;
+        const bool terminal = nextGesture || next->action == HostSelectionGestureInput::Action::Up ||
+                              next->action == HostSelectionGestureInput::Action::Lost ||
+                              next->action == HostSelectionGestureInput::Action::Leave ||
+                              next->action == HostSelectionGestureInput::Action::Escape;
+        const auto terminalOrdinal = nextGesture ? _lastInput->sample.ordinal : next->sample.ordinal;
+        const bool cancelled = next->action == HostSelectionGestureInput::Action::Escape;
+        if (terminal && s.admitTerminal && !s.admitTerminal(s.hostObserver, terminalOrdinal, cancelled))
+            return Refuse(E_ABORT);
+        if (!_opening || !s.session.IsPreparedDeferredSelectionMoveGestureCurrent(*_opening))
+            return Refuse(E_ABORT);
         const auto event = nextGesture ? std::optional{HostSelectionGestureInput::Event{
                                              HostSelectionGestureInput::Action::Lost, _lastInput->sample, true}}
                                        : s.prefix.Take(s.opening);
@@ -658,13 +675,21 @@ bool SelectionOutlineGestureJob::Consume() noexcept
                 return Refuse(E_ABORT);
             _terminal = s.cancelled = true;
             s.terminalOrdinal = event->sample.ordinal;
+            s.lastConsumedOrdinal = event->sample.ordinal;
+            NotifyInputProgress();
             return false;
         }
         if (event->action == HostSelectionGestureInput::Action::Enter ||
             event->action == HostSelectionGestureInput::Action::Backspace)
+        {
+            s.lastConsumedOrdinal = event->sample.ordinal;
             continue; // No lasso draft was selected; the ordered host key request owns its command.
+        }
         if (event->action == HostSelectionGestureInput::Action::Down)
+        {
+            s.lastConsumedOrdinal = event->sample.ordinal;
             continue;
+        }
         if (event->action == HostSelectionGestureInput::Action::Move)
         {
             double dx = event->sample.point.x - _point.x, dy = event->sample.point.y - _point.y;
@@ -679,13 +704,8 @@ bool SelectionOutlineGestureJob::Consume() noexcept
                 return Refuse(E_ABORT);
             _offset = {std::round(dx), std::round(dy)};
             ++s.moves;
+            s.lastConsumedOrdinal = event->sample.ordinal;
             changed = true;
-            if (s.prefix.IsJournal() && consumed == 16 && s.prefix.PendingCount())
-            {
-                if (!NotifyMoves(changed))
-                    return Refuse(E_ABORT);
-                return Resume();
-            }
             continue;
         }
         if (!s.prefix.SelectTerminal(s.opening, event->sample.ordinal))
@@ -694,7 +714,9 @@ bool SelectionOutlineGestureJob::Consume() noexcept
         s.terminalLost = event->action == HostSelectionGestureInput::Action::Lost ||
                          event->action == HostSelectionGestureInput::Action::Leave;
         s.terminalOrdinal = event->sample.ordinal;
+        s.lastConsumedOrdinal = event->sample.ordinal;
         _click = !s.terminalLost && _offset == Vec2{};
+        NotifyInputProgress();
         if (!NotifyMoves(changed))
             return Refuse(E_ABORT);
         auto input = s.session.PrepareSelectionMoveClosureInput(false, s.session.SelectionMoveOpening());
@@ -704,10 +726,22 @@ bool SelectionOutlineGestureJob::Consume() noexcept
         _phase = Phase::Close;
         return Resume();
     }
+    NotifyInputProgress();
     if (!NotifyMoves(changed))
         return Refuse(E_ABORT);
     s.waiting = true;
     return true; // No self-rearm or periodic work. The next accepted input supplies readiness.
+}
+
+void SelectionOutlineGestureJob::NotifyInputProgress(bool parked) noexcept
+{
+    auto& s = _state;
+    if (s.lastConsumedOrdinal && (parked || s.lastConsumedOrdinal != _reportedInputOrdinal))
+    {
+        _reportedInputOrdinal = s.lastConsumedOrdinal;
+        if (s.inputProgress)
+            s.inputProgress(s.hostObserver, s.lastConsumedOrdinal);
+    }
 }
 
 bool SelectionOutlineGestureJob::NotifyMoves(bool changed) noexcept
@@ -842,6 +876,7 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
     bool changed = false;
     const auto park = [&](SelectionOutlineGestureState::WaitReason reason) noexcept
     {
+        NotifyInputProgress(true); // Report the newly parked rendezvous even if no record changed.
         if (changed)
             s.Notify(SelectionOutlineGestureState::Event::Moved);
         if (!DrawingCurrent())
@@ -881,6 +916,11 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
         if ((closes || cancelled || endedByBackspace) && !emergency && s.mayFinish &&
             !s.mayFinish(s.hostObserver, sample.ordinal, cancelled))
             return park(SelectionOutlineGestureState::WaitReason::Terminal);
+        if ((closes || cancelled || endedByBackspace) && s.admitTerminal &&
+            !s.admitTerminal(s.hostObserver, sample.ordinal, cancelled))
+            return Refuse(E_ABORT);
+        if (!DrawingCurrent())
+            return Refuse(E_ABORT);
         const auto event = s.prefix.Take(s.opening);
         if (!event)
             return Refuse(E_ABORT);
@@ -895,6 +935,8 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
             s.terminalOrdinal = sample.ordinal;
             s.terminalLost = cancelled;
             s.cancelled = cancelled;
+            s.lastConsumedOrdinal = sample.ordinal;
+            NotifyInputProgress();
             if (event->action == HostSelectionGestureInput::Action::Down && s.pressResolved)
                 s.pressResolved(s.hostObserver, sample.ordinal, true);
             if (changed)
@@ -933,6 +975,8 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
                     return Refuse(E_ABORT);
                 _terminal = s.endedByBackspace = true;
                 s.terminalOrdinal = sample.ordinal;
+                s.lastConsumedOrdinal = sample.ordinal;
+                NotifyInputProgress();
                 return false;
             }
             updated = true;
@@ -944,8 +988,10 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
         changed = changed || updated.value();
         if (!DrawingCurrent())
             return Refuse(E_ABORT);
+        s.lastConsumedOrdinal = sample.ordinal;
         if (consumed == 16 && s.prefix.PendingCount())
         {
+            NotifyInputProgress();
             if (changed)
                 s.Notify(SelectionOutlineGestureState::Event::Moved);
             return DrawingCurrent() ? Resume() : Refuse(E_ABORT);

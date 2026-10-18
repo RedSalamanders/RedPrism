@@ -1827,3 +1827,12 @@ rejects foreign edits even when generation is unchanged (for example a pending H
 The caller retains the stable journal until all borrowed parents and issued receipts are retired.
 This core authority primitive does not reserve physical host conditional descriptors or establish
 ordinary/G1/frame budgets. [Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
+
+
+## Original physical Polygonal caller resources
+
+The stable inline journal stores only the existing bounded physical metadata. Each accepted Down/key uses the existing eight-entry host descriptor queue; original parent/job allocation is a cold admitted operation and allocation failure is explicit. Journal recording/replay, predecessor handoff and pure readiness perform no geometry walk, document/history copy, pixel work or GPU ownership. Owner replay and orphan draining consume at most sixteen scalar records per action. The all-record bound includes ignored inside Enter/Backspace events.
+
+Selected terminal admission is separate from pure readiness and precedes Take/source capture. Its only side effect is acquiring the exact host history barrier; it cannot reenter, dispatch UI or mutate session/input. Progress only signals the existing continuation source once per consumed batch or newly parked rendezvous, including no-change corners. An unready record stays unconsumed and cannot resume itself. These hooks add fixed scalar state included by the existing sizeof-based wrapper admission.
+
+Outside Opened releases the interactive host barrier without another reservation or writer. Inside remains atomic through Up while Save waits. Temporary view pan and right selection input cannot acquire a second selection writer or invoke synchronous lasso geometry. Parent terminal clears controller/acknowledges before its final callback; joined shutdown retires borrowed state after producer join. Complete Release/real-ASan CPU and selected host rosters, exact ancestor-object/command lineage, linked ISA, full PE/PDB/artifact and genuine CPU UAF checks qualify this component. This does not establish ordinary activation, complete display/lifetime phase bounds or G1. [Evidence](../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).

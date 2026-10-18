@@ -125,6 +125,26 @@ struct Probe final
         self.finishOrdinal = ordinal;
         return self.finish;
     }
+    bool terminalAdmission = true, admissionBeforeCapture = true, progressOnOwner = true, progressMonotonic = true;
+    unsigned terminalAdmissions = 0, progressNotifications = 0;
+    std::uint64_t admissionOrdinal = 0, progressOrdinal = 0;
+    static bool Admit(void* raw, std::uint64_t ordinal, bool) noexcept
+    {
+        auto& self = *static_cast<Probe*>(raw);
+        ++self.terminalAdmissions;
+        self.admissionOrdinal = ordinal;
+        self.admissionBeforeCapture = self.admissionBeforeCapture && self.state && !self.state->closurePrepares &&
+                                      !self.state->terminalOrdinal && GetCurrentThreadId() == self.owner;
+        return self.terminalAdmission;
+    }
+    static void Progress(void* raw, std::uint64_t ordinal) noexcept
+    {
+        auto& self = *static_cast<Probe*>(raw);
+        ++self.progressNotifications;
+        self.progressOnOwner = self.progressOnOwner && GetCurrentThreadId() == self.owner;
+        self.progressMonotonic = self.progressMonotonic && ordinal >= self.progressOrdinal;
+        self.progressOrdinal = ordinal;
+    }
     static void Press(void* raw, std::uint64_t ordinal, bool closes) noexcept
     {
         auto& self = *static_cast<Probe*>(raw);
@@ -787,6 +807,104 @@ void PhysicalView()
                Pixels(*f->session, SelectionMode::New),
            "actual-event-view-and-dpi-close-radius-survive-borrow-and-delayed-hit");
 }
+void TerminalAdmission(bool refuse)
+{
+    scenario = refuse ? "selected-terminal-admission-refusal" : "selected-terminal-readiness-then-admission";
+    auto f = std::make_unique<Fixture>();
+    const auto generation = f->session->Generation();
+    const auto revision = f->session->history.CurrentRevision();
+    f->Rectangle();
+    f->state->admitTerminal = Probe::Admit;
+    f->state->inputProgress = Probe::Progress;
+    f->probe.finish = false;
+    f->probe.terminalAdmission = !refuse;
+    f->Submit();
+    Until(f->jobs, [&]()
+          { return f->state->waiting && f->state->waitReason == SelectionOutlineGestureState::WaitReason::Terminal; });
+    Expect(!f->probe.terminalAdmissions && f->journal->Peek(81)->sample.ordinal == 11 && !f->state->terminalOrdinal &&
+               f->state->lastConsumedOrdinal == 10 && f->session->Generation() == generation &&
+               f->session->history.CurrentRevision() == revision,
+           "pure-terminal-readiness-parks-without-admission-consumption-or-history");
+    Expect(f->probe.progressNotifications && f->probe.progressOrdinal == 10 && f->probe.progressOnOwner &&
+               f->probe.progressMonotonic,
+           "park-signals-exact-consumed-prefix-on-owner");
+    f->probe.finish = true;
+    f->Wake();
+    Settle(f->jobs);
+    Expect(f->probe.terminalAdmissions == 1 && f->probe.admissionOrdinal == 11 && f->probe.admissionBeforeCapture &&
+               f->probe.acknowledgementVisible,
+           "selected-admission-runs-once-before-terminal-consumption-capture-and-ack");
+    if (refuse)
+    {
+        Expect(f->state->outcome.status == JobStatus::Failed && f->state->outcome.error == E_ABORT &&
+                   !f->state->closurePrepares && !f->state->terminalOrdinal && f->state->lastConsumedOrdinal == 10 &&
+                   f->journal->Peek(81)->sample.ordinal == 11,
+               "refused-admission-keeps-exact-terminal-unconsumed-and-captures-no-closure");
+        Expect(f->session->Generation() == generation && f->session->history.CurrentRevision() == revision &&
+                   !f->session->history.UndoCount() && !f->session->PendingLasso(),
+               "refused-selected-terminal-preserves-prior-selection-and-history");
+    }
+    else
+    {
+        Expect(f->state->closed && f->state->terminalOrdinal == 11 && f->state->lastConsumedOrdinal == 11 &&
+                   f->probe.progressOrdinal == 11 && Pixels(*f->session, SelectionMode::New),
+               "admitted-terminal-publishes-exact-shape-and-progress-after-replay");
+        Expect(f->session->Generation() == generation + 1 && f->session->history.UndoCount() == 1,
+               "admitted-terminal-records-one-atomic-selection");
+    }
+    f->Release();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "selected-admission-final-refund");
+}
+void NoChangeProgress()
+{
+    scenario = "duplicate-corner-progress";
+    auto f = std::make_unique<Fixture>();
+    const auto generation = f->session->Generation();
+    f->state->admitTerminal = Probe::Admit;
+    f->state->inputProgress = Probe::Progress;
+    f->Record(HostPolygonalInputJournal::Action::Up, {7, 1}, 2);
+    f->Down({7, 1}, 3);
+    f->Record(HostPolygonalInputJournal::Action::Up, {7, 1}, 4);
+    f->Submit();
+    Until(f->jobs, [&]() { return f->state->waiting && f->state->lastConsumedOrdinal == 4; });
+    Expect(f->state->drawing && f->probe.corners == 1 && !f->probe.closes && !f->probe.terminalAdmissions &&
+               f->probe.progressNotifications && f->probe.progressOrdinal == 4 && f->probe.progressOnOwner,
+           "duplicate-corner-and-up-acknowledge-progress-without-closing-or-admitting-history");
+    Expect(f->session->Generation() == generation && !f->session->history.UndoCount(),
+           "no-change-prefix-does-not-publish-selection");
+    f->Record(HostPolygonalInputJournal::Action::Escape, {7, 1}, 5);
+    f->Wake();
+    Settle(f->jobs);
+    Expect(f->state->cancelled && f->state->terminalOrdinal == 5 && f->probe.terminalAdmissions == 1 &&
+               f->probe.admissionBeforeCapture && f->probe.progressOrdinal == 5 && f->probe.progressMonotonic,
+           "later-escape-admits-and-acknowledges-exact-original-parent");
+    f->Release();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "duplicate-progress-final-refund");
+}
+void InsideKeyQuantum()
+{
+    scenario = "inside-ignored-key-quantum";
+    auto f = std::make_unique<Fixture>(Vec2{2, 2});
+    f->state->admitTerminal = Probe::Admit;
+    f->state->inputProgress = Probe::Progress;
+    for (std::uint64_t ordinal = 2; ordinal <= 34; ++ordinal)
+        f->Record(ordinal % 2 ? HostPolygonalInputJournal::Action::Enter : HostPolygonalInputJournal::Action::Backspace,
+                  {2, 2}, ordinal);
+    f->Record(HostPolygonalInputJournal::Action::Move, {5, 4}, 35);
+    f->Record(HostPolygonalInputJournal::Action::Up, {5, 4}, 36);
+    f->Submit();
+    Settle(f->jobs);
+    Expect(f->state->closed && !f->state->drawing && f->state->terminalOrdinal == 36 &&
+               f->state->lastConsumedOrdinal == 36 && Pixels(*f->session, SelectionMode::New, 3, 2),
+           "ignored-keys-preserve-atomic-inside-move-and-physical-up");
+    Expect(f->probe.progressNotifications >= 3 && f->probe.progressNotifications <= 5 &&
+               f->probe.progressOrdinal == 36 && f->probe.progressOnOwner && f->probe.progressMonotonic,
+           "all-key-records-count-toward-sixteen-record-owner-quantum");
+    Expect(f->probe.terminalAdmissions == 1 && f->probe.admissionOrdinal == 36 && f->probe.admissionBeforeCapture,
+           "ignored-inside-keys-never-admit-a-terminal");
+    f->Release();
+    Expect(!f->jobs.ReservedMemoryBytes() && !f->jobs.ReleasingMemoryBytes(), "inside-key-quantum-final-refund");
+}
 } // namespace
 int RunPolygonalDispatcherTests()
 {
@@ -825,6 +943,10 @@ int RunPolygonalDispatcherTests()
     TransitionRefusal(5, "foreign-active-after-transition");
     MoveOnlyTransition();
     PhysicalView();
+    TerminalAdmission(false);
+    TerminalAdmission(true);
+    NoChangeProgress();
+    InsideKeyQuantum();
     std::printf("%s polygonal-dispatcher (%u assertions)\n", failures ? "FAIL" : "PASS", checks);
     return static_cast<int>(failures);
 }

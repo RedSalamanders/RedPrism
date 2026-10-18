@@ -526,7 +526,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     }
     _pathClassifications = {};
     _historyResidencySource.RetryDeferred();
-    if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime ||
+    if (!_shutdownStarted && (_polygonalPressInput.Busy() || _hostRequests.Size() != 0 || _canvasLifetime ||
                               (_hueInput.Busy() && _hueAcquiredOpening == _hueInput.Opening() &&
                                (_hueInput.Peek(_hueInput.Opening()) || _hueCloseAfterPrefix)) ||
                               (_lassoInput.Busy() && _lassoAcquiredOpening == _lassoInput.Opening() &&
@@ -547,6 +547,7 @@ void Application::RunHostContinuation() noexcept
     RunCanvasLifetimePreflight();
     if (_shutdownStarted)
         return;
+    PumpPolygonalPressOwner();
     PumpSelectionPressOwner();
     PumpPolygonalDrawing();
     SweepSamplerOpenings();
@@ -736,6 +737,18 @@ void Application::RunHostContinuation() noexcept
         switch (_hostStage)
         {
         case HostStage::Begin:
+        {
+            const auto* physical = std::get_if<HostCanvasBrushInput>(&input);
+            const bool ownPolygonal = physical && physical->opening == _polygonalPressFamily &&
+                                      (physical->kind == HostCanvasInputKind::PolygonalPress ||
+                                       physical->kind == HostCanvasInputKind::PolygonalKey);
+            if (_polygonalPressState && _polygonalPressState->controller && !ownPolygonal &&
+                !PolygonalHostInputSupported(input))
+            {
+                FinishHostContinuation({HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)});
+                return;
+            }
+        }
             if (_polygonalDrawing && _polygonalDrawing->controller && !PolygonalHostInputSupported(input))
             {
                 FinishHostContinuation({HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)});
@@ -1089,6 +1102,19 @@ void Application::RunHostContinuation() noexcept
         case HostStage::CanvasBrush:
             ReplayCanvasBrush();
             return; // One sample per owner action; pending physical input rearms an otherwise idle stream.
+        case HostStage::PolygonalConditional:
+        {
+            const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+            const auto result = canvas ? StartPolygonalConditionalOwner(canvas->opening) : E_INVALIDARG;
+            if (FAILED(result))
+            {
+                _polygonalPressFailed = true;
+                _polygonalPressFailure = {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result};
+                LosePolygonalPressOwner();
+                FinishHostContinuation(_polygonalPressFailure);
+            }
+            return;
+        }
         case HostStage::PolygonalOpening:
             return; // The original job's acknowledged Opened event completes only the creator receipt.
         case HostStage::PolygonalTerminal:
@@ -1436,6 +1462,13 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
+            if (_polygonalPressState && _polygonalPressState->controller && PolygonalHostInputStops(input))
+            {
+                const auto result = StopPolygonalPressForHost();
+                if (FAILED(result))
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
             if (_polygonalDrawing && _polygonalDrawing->controller && PolygonalHostInputStops(input))
             {
                 const auto result = StartPolygonalHostCancel();
@@ -1534,6 +1567,21 @@ void Application::RunHostContinuation() noexcept
                 if (canvas->kind == HostCanvasInputKind::Sampler)
                 {
                     ReplaySamplerOpening(canvas->opening);
+                    return;
+                }
+                if (canvas->kind == HostCanvasInputKind::PolygonalPress ||
+                    canvas->kind == HostCanvasInputKind::PolygonalKey)
+                {
+                    const auto result = canvas->kind == HostCanvasInputKind::PolygonalPress
+                                            ? StartPolygonalPressOwner(canvas->opening)
+                                            : StartPolygonalConditionalOwner(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        _polygonalPressFailed = true;
+                        _polygonalPressFailure = {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result};
+                        LosePolygonalPressOwner();
+                        FinishHostContinuation(_polygonalPressFailure);
+                    }
                     return;
                 }
                 if (canvas->kind == HostCanvasInputKind::SelectionPress)
@@ -1739,7 +1787,15 @@ void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_selectionPressState && _selectionPressState->controller)
+        if (_polygonalPressState && _polygonalPressState->controller && _polygonalPressStamp == _hostCommitStamp)
+        {
+            (void)_historyWork.RequestCancel();
+            LosePolygonalPressOwner();
+            (void)_jobs.Cancel(_polygonalPressState->original);
+            if (_polygonalPressState->waiting)
+                (void)_jobs.Resume(_polygonalPressState->original);
+        }
+        else if (_selectionPressState && _selectionPressState->controller)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionPressState->original);
