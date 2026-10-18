@@ -2169,3 +2169,15 @@ Successful corner receipts remain fixed and no replacement original is captured.
 queries only the bounded journal scalar; the older legacy Polygonal producer cannot stand in for it.
 This selected-route requirement does not activate ordinary input or establish measured G1.
 [Qualification](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+
+
+## Original Polygonal selection-header boundary
+
+The selected original Polygonal journal MUST also be recognized at the selection-header callback.
+Deselect queues its exact existing host command and waits for original cancellation acknowledgment.
+Expand/Contract refuse before geometry, capture or a second producer and post the existing localized
+Busy notice, preserving the original draft, selection/history, receipts and reservation. They cannot
+fall through the older producer's guard into synchronous selection work. Later Enter/Undo/Redo retain
+the original literal semantics. Header-kind/captured-setting settlement remains separate selected-route
+qualification; ordinary input is not activated by this callback fix.
+[Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).

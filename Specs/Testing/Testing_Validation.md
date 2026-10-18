@@ -3479,3 +3479,18 @@ Release and real ASan. Focused execution is not a full Application result. Lates
 expects 152 stages / 11,053 stdout facts; old 41/420 integration evidence cannot qualify changed code.
 Actual menu widgets, physical keyboard hardware, ordinary activation and G1 remain separate.
 [Evidence](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+
+
+## Original Polygonal header callback validation
+
+The selected fixture requires47 cases /508 facts, retaining all469 matching-profile predecessors.
+Header Deselect must expose one actual matching later queued command; retain its own Pending receipt
+and reuse the existing intermediate cancellation and exact result/history/ticket/corner/refund checks.
+Expand/Contract require a last-Up-quiescent original, exactly one localized Busy notice, unchanged
+literal selection/identity/history/revision/generation and exact original job/reservation/corner state,
+with no new host descriptor or history producer. Real Enter then commits the same original rectangle
+once, with literal Undo/Redo and joined refunds. The test-only Prompts delegate must outlive all borrowed
+callbacks and restore the owner before its destruction. Preserve the unchanged-product Deselect failure.
+Latest full integration expects152 stages /11,092 stdout facts; focused runs grant no full stream,
+actual-widget, ordinary-activation, performance or native-ARM64-runtime qualification.
+[Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).

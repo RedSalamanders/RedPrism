@@ -7039,7 +7039,7 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
-    if (!_hostExecuting && PolygonalInputOwner(_lassoInput.Opening()))
+    if (!_hostExecuting && (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening())))
     {
         if (action == SelectionAction::Deselect)
         {

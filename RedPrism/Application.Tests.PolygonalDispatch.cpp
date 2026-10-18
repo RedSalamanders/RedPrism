@@ -5,6 +5,8 @@
 #include "ColorWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
+#include "Prompts.h"
+#include "resource.h"
 
 #include <array>
 #include <atomic>
@@ -15,6 +17,7 @@
 #include <limits>
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -58,6 +61,52 @@ class PolygonalSchedulerCapacityJob final : public Job
   private:
     PolygonalSchedulerCapacityGate& _gate;
     bool _block;
+};
+
+class PolygonalHeaderPrompts final : public Prompts
+{
+  public:
+    explicit PolygonalHeaderPrompts(const Prompts& delegate) noexcept : _delegate(delegate) {}
+
+    bool ShowNotice(ChromeHost* chrome, std::wstring text) const noexcept override
+    {
+        return _delegate.ShowNotice(chrome, std::move(text));
+    }
+
+    void PostNotice(HWND window, UINT message, UINT stringId, int formatValue = 0) const noexcept override
+    {
+        ++postNoticeCount;
+        lastStringId = stringId;
+        _delegate.PostNotice(window, message, stringId, formatValue);
+    }
+
+    void ShowError(HWND window, UINT stringId) const noexcept override
+    {
+        _delegate.ShowError(window, stringId);
+    }
+
+    void ShowFormattedError(HWND window, const std::wstring& text) const noexcept override
+    {
+        _delegate.ShowFormattedError(window, text);
+    }
+
+    void ShowInfo(HWND window, const std::wstring& text, const std::wstring& caption) const noexcept override
+    {
+        _delegate.ShowInfo(window, text, caption);
+    }
+
+    [[nodiscard]] Answer AskThreeWay(HWND window, const std::wstring& title, const std::wstring& text,
+                                     const std::wstring& first, const std::wstring& second, bool warning,
+                                     Answer forced) const noexcept override
+    {
+        return _delegate.AskThreeWay(window, title, text, first, second, warning, forced);
+    }
+
+    mutable unsigned postNoticeCount = 0;
+    mutable UINT lastStringId = 0;
+
+  private:
+    const Prompts& _delegate;
 };
 
 bool DispatcherFilled(const DocumentSelection& selection, Vec2 point) noexcept
@@ -167,7 +216,10 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "held-foreign-mask-close",
                                "deselect-keyboard-live",
                                "undo-keyboard-live",
-                               "redo-keyboard-live"};
+                               "redo-keyboard-live",
+                               "deselect-header-live",
+                               "expand-header-live",
+                               "contract-header-live"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -239,7 +291,9 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool heldCrop = name == "held-foreign-crop-close";
         const bool heldTarget = heldCrop || heldMask;
         const bool heldHistory = name == "held-foreign-history-close" || heldTarget;
-        const bool commandDeselect = name == "deselect-live" || name == "deselect-keyboard-live";
+        const bool headerDeselect = name == "deselect-header-live";
+        const bool headerOffset = name == "expand-header-live" || name == "contract-header-live";
+        const bool commandDeselect = name == "deselect-live" || name == "deselect-keyboard-live" || headerDeselect;
         const bool commandUndo = name == "undo-live" || name == "undo-keyboard-live";
         const bool commandRedo = name == "redo-live" || name == "redo-keyboard-live";
         const bool keyboardCommand =
@@ -430,7 +484,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool joined = name == "joined-close";
         const bool live = name == "save-live" || name == "tool-live" || name == "leave-zoom-live" ||
                           name == "space-pan-live" || name == "right-ignore-live" || originalExport ||
-                          commandDeselect || commandUndo || commandRedo || heldHistory;
+                          commandDeselect || commandUndo || commandRedo || heldHistory || headerOffset;
         const double left = mode == SelectionMode::Subtract ? 3 : 7;
         if (name == "outside-replaced-parked" || name == "outside-cleared-parked")
         {
@@ -1158,7 +1212,20 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             const auto commandUndoNameBefore = owner->_session.history.UndoName();
             const auto commandRedoNameBefore = owner->_session.history.RedoName();
             ContinuationReceipt receipt;
-            if (keyboardCommand)
+            if (headerDeselect)
+            {
+                owner->OnSelectionAction(SelectionAction::Deselect, 0.0);
+                const auto* queued = owner->_hostRequests.PendingAt(0);
+                const auto* input = queued ? std::get_if<HostCommandInput>(&queued->input.Input()) : nullptr;
+                const bool queuedCommand = owner->_hostRequests.Size() == 1 && !owner->_activeHostRequest && queued &&
+                                           input && input->command == ChromeHost::kCommandDeselect &&
+                                           queued->documentSerial == owner->_session.DocumentSerial() &&
+                                           queued->ordinal > owner->_polygonalPressState->lastConsumedOrdinal;
+                if (!expect(queuedCommand, "header-deselect-callback-admits-one-matching-later-host-command-receipt"))
+                    return 5;
+                receipt = queued->input.Receipt(); // Retain this exact admission; do not enqueue a second command.
+            }
+            else if (keyboardCommand)
             {
                 const UINT virtualKey = commandDeselect ? 'D' : 'Z';
                 const UINT modifiers = commandRedo ? MK_CONTROL | MK_SHIFT : MK_CONTROL;
@@ -1289,6 +1356,110 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
                             !owner->_jobs.ReleasingMemoryBytes() && !owner->_polygonalPressInput.Busy(),
                         "ordered-command-joined-close-refunds-original-and-command-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (headerOffset)
+        {
+            const bool parked = until(
+                [&]() noexcept
+                {
+                    return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                           owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                           owner->_hostRequests.Size() == 0;
+                });
+            std::array<ContinuationReceipt::Result, 4> cornerResults{};
+            bool cornersSucceeded = receiptCount == cornerResults.size();
+            for (std::size_t index = 0; index < cornerResults.size() && cornersSucceeded; ++index)
+            {
+                cornerResults[index] = receipts[index].Read();
+                cornersSucceeded = cornerResults[index].outcome == HostOutcome::Succeeded;
+            }
+            if (!expect(parked && owner->_polygonalPressState && cornersSucceeded &&
+                            owner->_polygonalPressState->waiting && owner->_polygonalPressState->drawing &&
+                            owner->_polygonalPressState->controller != nullptr && owner->_polygonalPressParents == 1 &&
+                            !owner->_historyWork.Busy() && !owner->_activeHostRequest && !owner->_hostRequests.Size() &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "header-offset-starts-from-parked-four-corner-original-with-literal4096-selection-centers"))
+                return 5;
+            const auto originalSelection = owner->_session.Selection();
+            const auto originalRevision = owner->_session.history.CurrentRevision();
+            const auto originalGeneration = owner->_session.Generation();
+            const auto originalTicket = owner->_polygonalPressState->original;
+            const auto* const originalController = owner->_polygonalPressState->controller;
+            const auto originalRuns = owner->_polygonalPressState->runs;
+            const auto originalCaptures = owner->_polygonalPressState->captures;
+            const auto originalParents = owner->_polygonalPressParents;
+            const auto originalReservedBytes = owner->_jobs.ReservedMemoryBytes();
+
+            PolygonalHeaderPrompts headerPrompts(QuietPrompts());
+            owner->_prompts = &headerPrompts;
+            const auto restorePrompts = wil::scope_exit(
+                [&]() noexcept
+                {
+                    owner->Shutdown();
+                    owner->_prompts = &QuietPrompts();
+                });
+            const auto action = name == "expand-header-live" ? SelectionAction::Expand : SelectionAction::Contract;
+            owner->OnSelectionAction(action, 0.0);
+            if (!expect(headerPrompts.postNoticeCount == 1 && headerPrompts.lastStringId == IDS_STATUS_BUSY,
+                        "header-offset-posts-exactly-one-localized-busy-notice"))
+                return 5;
+            bool cornersUnchanged = true;
+            for (std::size_t index = 0; index < cornerResults.size(); ++index)
+            {
+                const auto after = receipts[index].Read();
+                cornersUnchanged = cornersUnchanged && after.outcome == cornerResults[index].outcome &&
+                                   after.error == cornerResults[index].error;
+            }
+            if (!expect(owner->_session.Selection() == originalSelection &&
+                            owner->_session.history.CurrentRevision() == originalRevision &&
+                            owner->_session.history.UndoCount() == 0 && !owner->_session.history.CanRedo() &&
+                            owner->_session.Generation() == originalGeneration && !owner->_historyWork.Busy() &&
+                            owner->_polygonalPressInput.Busy() &&
+                            owner->_polygonalPressState->controller == originalController &&
+                            owner->_polygonalPressState->original == originalTicket &&
+                            owner->_polygonalPressState->runs == originalRuns &&
+                            owner->_polygonalPressState->captures == originalCaptures &&
+                            owner->_polygonalPressParents == originalParents &&
+                            owner->_jobs.ReservedMemoryBytes() == originalReservedBytes && cornersUnchanged &&
+                            owner->_session.PendingLasso() && owner->_session.PendingLasso()->PointCount() == 4 &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "busy-header-offset-preserves-selection-geometry-ticket-admission-and-corner-receipts"))
+                return 5;
+            if (!expect(!owner->_activeHostRequest && owner->_hostRequests.Size() == 0 && !owner->_historyWork.Busy(),
+                        "busy-header-offset-admits-no-host-descriptor-or-history-producer"))
+                return 5;
+
+            key(VK_RETURN);
+            if (!expect(settle() && owner->_polygonalPressState && owner->_polygonalPressState->completed &&
+                            owner->_polygonalPressState->sameTicket &&
+                            owner->_polygonalPressState->original == originalTicket &&
+                            owner->_polygonalPressParents == originalParents &&
+                            owner->_session.Generation() == originalGeneration + 1 &&
+                            owner->_session.history.UndoCount() == 1 &&
+                            owner->_session.history.CurrentRevision() != originalRevision &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true, 7, 1, 11, 5),
+                        "enter-commits-exact-outside-rectangle-through-original-ticket-with-one-history-entry"))
+                return 5;
+            owner->_session.Undo();
+            if (!expect(owner->_session.Selection() == originalSelection && owner->_session.history.UndoCount() == 0 &&
+                            owner->_session.history.CanRedo() &&
+                            owner->_session.Generation() == originalGeneration + 2 &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "undo-restores-literal-prior-selection-after-header-refusal"))
+                return 5;
+            owner->_session.Redo();
+            if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true, 7, 1, 11, 5) &&
+                            owner->_session.history.UndoCount() == 1 && !owner->_session.history.CanRedo() &&
+                            owner->_session.Generation() == originalGeneration + 3,
+                        "redo-restores-literal-outside-selection-after-header-refusal"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes() && !owner->_polygonalPressInput.Busy(),
+                        "header-offset-enter-undo-redo-join-refunds-original-ticket-reservation"))
                 return 5;
             ++reached;
             continue;
