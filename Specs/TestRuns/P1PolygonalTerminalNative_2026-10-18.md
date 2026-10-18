@@ -1,6 +1,6 @@
 # P1 Polygonal terminal native cross-build qualification — 2026-10-18
 
-Status: ARM64 Debug passes; Release is running; instrumented ARM64 ASan Debug remains due. P1 stays WIP.
+Status: ARM64 Debug and Release pass; instrumented ARM64 ASan Debug is running. P1 stays WIP.
 
 ## Exact source and scope
 
@@ -14,8 +14,8 @@ Five projects contain exactly 990 compiler records: Application 349, HostTests 1
 | Profile | Attempt | Actual parent exit | Archived files | Compiler records | Five AA64 PE/full-PDB pairs | Result |
 | --- | --- | ---: | ---: | ---: | --- | --- |
 | ARM64 Debug | `r1127` | 0 | 1,550 | 990 | exact | qualified |
-| ARM64 Release | `r1125` | pending | pending | pending | pending | running |
-| ARM64 ASan Debug | `r1126` | not launched | pending | pending | pending | due |
+| ARM64 Release | `r1125` | 0 | 1,550 | 990 | exact | qualified |
+| ARM64 ASan Debug | `r1126` | pending | pending | pending | pending | running |
 
 Debug runs canonical `build.ps1 -Platform ARM64 -Configuration Debug -MaxCpuCount 1 -Rebuild`, 2026-10-18T08:16:58Z–08:51:10Z, actual PowerShell child PID 92288. Independent archive/artifact/PE-PDB readers complete at 08:53:20Z. No build/runtime is repeated to repair a reader.
 
@@ -28,3 +28,11 @@ Preserved products and archives live under `D:/RedPrismBuildCaches/.build/p1-pol
 The original `r1124` disk-space failure occurred while creating its receipt, before MSBuild. It has a zero-byte roster and no successful native child claim. The approved S5 cache relocation restores the unchanged disk guard; fresh attempt `r1127` is used. [Storage and worktree evidence](P1WorktreeStorageRecovery_2026-10-18.md).
 
 These are cross-build claims only. Native ARM64 runtime is unavailable. Complete latest-source x64 suites/analysis, ordinary-route activation, complete Polygonal dispatcher, G1 measurements and remaining P1 delivery areas stay open. The separate focused journal module is generated/private and excluded from this compiled Root cohort.
+
+## Release qualification
+
+Canonical `build.ps1 -Platform ARM64 -Configuration Release -MaxCpuCount 1 -Rebuild` completes 2026-10-18T08:54:43Z–09:35:04Z with actual PowerShell child PID 98128, exit 0. Source base, 1,477-row freeze and all 990 compiler records match the Debug cohort. Qualification is at docs-only `5ecbd7534789863dbc468d3741e37956256c7b1e`.
+
+Independent archive, artifact and PE/PDB readers all exit 0, completing at 09:35:18Z. Main rechecks the three exact reader-log hashes and five recorded pairs without repeating compilation. All 1,550 archive files pass; archive completion SHA-256 is `62DFCCEB0DD26A6230B36A45EF0362AE9626F572183559FABEB2EBAA670C9E42`. Main receipt: `.build/P1Integration/PolygonalTerminalNativeProfiles-r1-Main/r1125-main-qualified.json`.
+
+The existing serial orchestrator starts canonical instrumented ARM64 ASan `r1126` only after Release qualifies. Its fixed-source build and independent archive/readback remain pending. This Release result establishes cross-build correctness only; native ARM64 execution, the complete dispatcher, ordinary activation, G1 and P1 completion remain separate.
