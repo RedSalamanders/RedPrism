@@ -1160,15 +1160,48 @@ int Application::RunSamplerCallerSelfTest() noexcept
             L"The physical sampler overflow dropped accepted points, captured inline, or invented its release point.\n",
             "sampler-caller.capacity.full-prefix-seals-on-rejected-point"))
         return 5;
-    if (!check(settle() && overflowReceipt.Read().outcome == HostOutcome::Failed &&
-                   overflowReceipt.Read().error ==
-                       static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
-                   _session.ForegroundColor() == 0xFF804020u && overflowSourceCaptures == 1 && overflowAuthority &&
-                   _session.IsDocumentReadCurrent(overflowAuthority.value()) &&
-                   _session.history.CurrentRevision() == overflowRevision &&
-                   _session.history.UndoCount() == overflowUndo && samplerSlotsClear() && !_samplerHostTicket &&
-                   !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
-                   !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
+    const auto overflowStarted = GetTickCount64();
+    const auto overflowSettlement = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+    const bool overflowSettled = overflowSettlement == SettleResult::Settled;
+    const bool overflowComplete =
+        overflowSettled && overflowReceipt.Read().outcome == HostOutcome::Failed &&
+        overflowReceipt.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+        _session.ForegroundColor() == 0xFF804020u && overflowSourceCaptures == 1 && overflowAuthority &&
+        _session.IsDocumentReadCurrent(overflowAuthority.value()) &&
+        _session.history.CurrentRevision() == overflowRevision && _session.history.UndoCount() == overflowUndo &&
+        samplerSlotsClear() && !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest &&
+        !_hostRequests.Size() && !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 &&
+        _composition.UtilitySurfaceBytes() == 0;
+    if (!overflowComplete)
+    {
+        const auto result = overflowReceipt.Read();
+        std::fprintf(stderr,
+                     "DIAG sampler-caller.capacity settle=%d elapsed=%llu outcome=%d error=0x%08X "
+                     "foreground=0x%08X captures=%u authority=%d current=%d revision=%d undo=%d slots=%d "
+                     "ticket=%d stamp=%d job=%d active=%d queue=%llu history=%d reserved=%llu releasing=%llu "
+                     "utility=%llu idle=%d\n",
+                     static_cast<int>(overflowSettlement),
+                     static_cast<unsigned long long>(GetTickCount64() - overflowStarted),
+                     static_cast<int>(result.outcome), static_cast<unsigned int>(result.error),
+                     static_cast<unsigned int>(_session.ForegroundColor()), overflowSourceCaptures,
+                     overflowAuthority.has_value(),
+                     overflowAuthority && _session.IsDocumentReadCurrent(overflowAuthority.value()),
+                     _session.history.CurrentRevision() == overflowRevision,
+                     _session.history.UndoCount() == overflowUndo, samplerSlotsClear(), _samplerHostTicket.has_value(),
+                     _samplerHostStamp.has_value(), _samplerHostJob != nullptr, _activeHostRequest.has_value(),
+                     static_cast<unsigned long long>(_hostRequests.Size()), _historyWork.Busy(),
+                     static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                     static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()),
+                     static_cast<unsigned long long>(_composition.UtilitySurfaceBytes()), _jobs.IsIdle());
+        for (const auto& slot : _samplerState->openings)
+            if (slot.opening != 0)
+                std::fprintf(
+                    stderr,
+                    "DIAG sampler-caller.slot opening=%llu alive=%d terminal=%d overflow=%d consumers=%u pending=%u\n",
+                    static_cast<unsigned long long>(slot.opening), slot.jobAlive, slot.terminal, slot.overflow,
+                    slot.consumers, slot.points.PendingCount());
+    }
+    if (!check(overflowComplete,
                L"Sampler overflow lost its accepted brown prefix, recaptured the source, or failed exact terminal "
                L"retirement.\n",
                "sampler-caller.capacity.overflow-retains-brown-one-source-and-exact-failure"))

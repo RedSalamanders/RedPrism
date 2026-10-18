@@ -2,11 +2,13 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ChromeHost.h"
+#include "ImageCodecs.h"
 #include "KeyboardState.h"
 
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <limits>
@@ -16,6 +18,47 @@
 
 namespace
 {
+struct PolygonalSchedulerCapacityGate final
+{
+    HANDLE lastStarted = nullptr;
+    HANDLE release = nullptr;
+    std::atomic<unsigned> started{0};
+    std::atomic<unsigned> completed{0};
+    std::atomic<unsigned> failed{0};
+};
+
+class PolygonalSchedulerCapacityJob final : public Job
+{
+  public:
+    PolygonalSchedulerCapacityJob(PolygonalSchedulerCapacityGate& gate, bool block) noexcept
+        : _gate(gate), _block(block)
+    {
+    }
+
+    JobResult Run(JobContext&) override
+    {
+        _gate.started.fetch_add(1, std::memory_order_relaxed);
+        if (_block)
+        {
+            (void)SetEvent(_gate.lastStarted);
+            if (WaitForSingleObject(_gate.release, 10000) != WAIT_OBJECT_0)
+                return {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+        }
+        return {};
+    }
+
+    void Completed(JobResult result) noexcept override
+    {
+        _gate.completed.fetch_add(1, std::memory_order_relaxed);
+        if (result.status != JobStatus::Finished)
+            _gate.failed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+  private:
+    PolygonalSchedulerCapacityGate& _gate;
+    bool _block;
+};
+
 bool DispatcherFilled(const DocumentSelection& selection, Vec2 point) noexcept
 {
     int winding = 0;
@@ -80,7 +123,9 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             std::printf("SUMMARY polygonal-dispatch-host checks=%u failures=%u reached=%u\n", checks, failures,
                         reached);
         });
-    constexpr std::array cases{"outside-foreign-history",
+    constexpr std::array cases{"outside-replaced-parked",
+                               "outside-cleared-parked",
+                               "outside-foreign-history",
                                "inside-foreign-history",
                                "inside-save-before-up",
                                "inside-queued",
@@ -104,9 +149,14 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "prefix-target-refusal",
                                "prefix-memory-refusal",
                                "host-descriptor-exhaustion",
+                               "scheduler-job-slot-exhaustion",
                                "outside-prefix-overflow",
                                "inside-up-prefix-overflow",
                                "inside-missing-up-successor",
+                               "png-export-original-outside",
+                               "jpeg-export-original-outside",
+                               "png-picker-cancel-original-outside-seam",
+                               "jpeg-picker-cancel-original-outside-seam",
                                "joined-close"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
@@ -153,6 +203,17 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         fixture.width = fixture.height = 64;
         auto layer = ImageLayer::Blank(L"Physical Polygonal dispatcher", {64, 64});
         layer.asset = RasterAsset{Raster::MakeSparse(64, 64, RasterFormat::Bgra8888, {}, 0, 0, {}, 0), {}, layer.name};
+        const bool originalExport = name == "png-export-original-outside" || name == "jpeg-export-original-outside" ||
+                                    name == "png-picker-cancel-original-outside-seam" ||
+                                    name == "jpeg-picker-cancel-original-outside-seam";
+        if (originalExport)
+        {
+            // Same literal white output as the established default-quality JPEG white-matte golden.
+            // Keep cold fixture bytes off the native test function's bounded stack.
+            const std::vector<std::uint8_t> pixels(64u * 64u * 4u, 255);
+            layer.asset =
+                RasterAsset{Raster::Make(64, 64, RasterFormat::Bgra8888, pixels.data(), pixels.size()), {}, layer.name};
+        }
         const auto active = layer.id;
         fixture.layers.push_back(std::move(layer));
         fixture.selection =
@@ -230,13 +291,166 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         };
         const auto generation = owner->_session.Generation();
         const auto revision = owner->_session.history.CurrentRevision();
+        if (name == "scheduler-job-slot-exhaustion")
+        {
+            wil::unique_handle lastStarted{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            if (!expect(lastStarted && release, "scheduler-capacity-events-created"))
+                return 5;
+            PolygonalSchedulerCapacityGate gate{lastStarted.get(), release.get()};
+            // Join the borrowed gate on every early exit before its stack lifetime ends.
+            const auto joinOnExit = wil::scope_exit(
+                [&]() noexcept
+                {
+                    (void)SetEvent(release.get());
+                    owner->Shutdown();
+                });
+            std::array<JobTicket, JobScheduler::kCapacity> acceptedTickets{};
+            bool admittedAll = true;
+            for (std::size_t index = 0; index < JobScheduler::kCapacity; ++index)
+            {
+                std::unique_ptr<Job> job =
+                    std::make_unique<PolygonalSchedulerCapacityJob>(gate, index + 1 == JobScheduler::kCapacity);
+                if (owner->_jobs.Submit(job, {}, acceptedTickets[index]) < 0 || job)
+                {
+                    admittedAll = false;
+                    break;
+                }
+            }
+            const bool blockerEntered = admittedAll && WaitForSingleObject(lastStarted.get(), 10000) == WAIT_OBJECT_0;
+            if (!expect(blockerEntered && gate.started.load(std::memory_order_relaxed) >= 1,
+                        "128-accepted-jobs-fill-owned-slots-with-last-worker-event-gated"))
+                return 5;
+            click({7, 1});
+            const bool acceptedPrefixPending = receiptCount == 1 && receipts[0].Read().outcome == HostOutcome::Pending;
+            // Run the already registered owner continuation while the accepted completions remain undrained.
+            // The ordinary fixture pump drains completions before running UI actions and would free capacity.
+            owner->_continuationAction.Run();
+            const auto refused = owner->_polygonalPressLastReceipt.Read();
+            if (!expect(acceptedPrefixPending && refused.outcome == HostOutcome::Failed &&
+                            refused.error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA),
+                        "accepted-prefix-source-slot-exhaustion-returns-exact-not-enough-quota"))
+                return 5;
+            if (!expect(owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            owner->_session.history.UndoCount() == 0 && !owner->_historyWork.Busy() &&
+                            !owner->_session.PendingLasso() && owner->_polygonalPressState &&
+                            !owner->_polygonalPressState->controller && owner->_polygonalPressState->runs == 0 &&
+                            owner->_polygonalPressState->captures == 0 && !owner->_polygonalPressState->opened &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true) &&
+                            owner->_polygonalPressParents == 0,
+                        "refusal-preserves-document-history-and-admits-no-polygonal-source-or-writer"))
+                return 5;
+            (void)SetEvent(release.get());
+            if (!expect(settle() && owner->_jobs.IsIdle() &&
+                            gate.completed.load(std::memory_order_relaxed) == JobScheduler::kCapacity &&
+                            gate.failed.load(std::memory_order_relaxed) == 0,
+                        "accepted-predecessor-jobs-survive-refusal-and-event-gated-settlement-refunds-slots"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "scheduler-exhaustion-joined-close-refunds-all-owned-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
         const bool inside = name == "inside-queued";
         const bool escape = name == "escape-before-controller";
         const bool zero = name == "backspace-before-controller";
         const bool joined = name == "joined-close";
         const bool live = name == "save-live" || name == "tool-live" || name == "leave-zoom-live" ||
-                          name == "space-pan-live" || name == "right-ignore-live";
+                          name == "space-pan-live" || name == "right-ignore-live" || originalExport;
         const double left = mode == SelectionMode::Subtract ? 3 : 7;
+        if (name == "outside-replaced-parked" || name == "outside-cleared-parked")
+        {
+            click({7, 1});
+            click({11, 1});
+            click({11, 5});
+            click({7, 5});
+            if (!expect(receiptCount == 4 && receipts[0].Read().outcome == HostOutcome::Pending &&
+                            !owner->_polygonalPressState,
+                        "physical-corner-prefix-is-recorded-before-original-controller"))
+                return 5;
+            if (!expect(until(
+                            [&]() noexcept
+                            {
+                                return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                                       owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                                       owner->_hostRequests.Size() == 0;
+                            }),
+                        "all-accepted-corners-and-up-park-with-no-remaining-input-or-host-descriptor"))
+                return 5;
+            const auto originalTicket = owner->_polygonalPressState->original;
+            const auto originalSerial = owner->_session.DocumentSerial();
+            bool acknowledged = true;
+            for (unsigned i = 0; i < receiptCount; ++i)
+                acknowledged = acknowledged && receipts[i].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(acknowledged && owner->_polygonalPressState->controller && owner->_session.PendingLasso() &&
+                            owner->_session.PendingLasso()->PointCount() == 4 && owner->_polygonalPressParents == 1 &&
+                            !owner->_historyWork.Busy(),
+                        "one-live-original-and-four-corner-receipts-are-stable-before-foreign-document"))
+                return 5;
+            const bool cleared = name == "outside-cleared-parked";
+            std::optional<Guid> foreignActive;
+            if (cleared)
+                owner->_session.ClearDocument();
+            else
+            {
+                DocumentFixture foreign;
+                foreign.width = foreign.height = 64;
+                auto foreignLayer = ImageLayer::Blank(L"Foreign parked replacement", {64, 64});
+                foreignActive = foreignLayer.id;
+                foreign.layers.push_back(std::move(foreignLayer));
+                foreign.selection = DocumentSelection{
+                    false, SelectionLoops{std::vector<SelectionLoop>{{{20, 20}, {24, 20}, {24, 24}, {20, 24}}}}};
+                owner->_session.ReplaceDocument(std::move(foreign).Seal(), foreignActive);
+            }
+            owner->_session.history.Reset();
+            const auto foreignGeneration = owner->_session.Generation();
+            const auto foreignRevision = owner->_session.history.CurrentRevision();
+            owner->DocumentChanged();
+            if (!expect(owner->_session.DocumentSerial() != originalSerial &&
+                            owner->_polygonalPressInput.PendingCount() == 0,
+                        "foreign-document-change-adds-no-raw-input-to-the-parked-family"))
+                return 5;
+            if (!expect(until(
+                            [&]() noexcept
+                            {
+                                return owner->_polygonalPressState && !owner->_polygonalPressState->controller &&
+                                       !owner->_polygonalPressInput.Busy();
+                            }),
+                        "document-notification-alone-joins-original-and-family-without-another-pointer-event"))
+                return 5;
+            if (!expect(settle(), "cancelled-original-and-new-display-retirement-settle-on-existing-events"))
+                return 5;
+            acknowledged = true;
+            for (unsigned i = 0; i < receiptCount; ++i)
+                acknowledged = acknowledged && receipts[i].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(acknowledged && owner->_polygonalPressState->original == originalTicket &&
+                            owner->_polygonalPressState->completed &&
+                            owner->_polygonalPressState->outcome.status == JobStatus::Cancelled &&
+                            owner->_polygonalPressParents == 1 && !owner->_session.PendingLasso() &&
+                            !owner->_session.IsMovingSelection() && !owner->_historyWork.Busy() &&
+                            owner->_session.Generation() == foreignGeneration &&
+                            owner->_session.history.CurrentRevision() == foreignRevision &&
+                            owner->_session.history.UndoCount() == 0 &&
+                            owner->_session.history.CaptureState().Depth() == 0,
+                        "exact-old-ticket-cancels-without-rewriting-new-history-or-acknowledged-receipts"))
+                return 5;
+            if (!expect(cleared ? !owner->_session.Document() && !owner->_session.ActiveLayerID()
+                                : owner->_session.ActiveLayerID() == foreignActive &&
+                                      DispatcherPixels(owner->_session, SelectionMode::New, true, 20, 20, 24, 24),
+                        "absent-or-foreign-document-and-all4096-selection-centers-remain-exact"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "document-replacement-and-joined-close-refund-every-original-owner"))
+                return 5;
+            ++reached;
+            continue;
+        }
         if (name == "inside-save-before-up")
         {
             send(WM_LBUTTONDOWN, {2, 2}, MK_LBUTTON);
@@ -685,6 +899,109 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                             owner->_polygonalPressParents == 1 && !owner->_historyWork.Busy() &&
                             owner->_session.Generation() == generation && owner->_session.history.UndoCount() == 0,
                         "interactive-draft-releases-host-barrier-and-keeps-original-admission"))
+                return 5;
+        }
+        if (originalExport)
+        {
+            // A corner receipt can acknowledge before its later raw Up resumes and parks the parent.
+            // Select the export/picker only after that exact accepted input is consumed, without weakening
+            // the post-operation parked-writer assertion (quiet picker cancellation completes inline).
+            if (!expect(until(
+                            [&]() noexcept
+                            {
+                                return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                                       owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                                       owner->_hostRequests.Size() == 0;
+                            }),
+                        "last-corner-and-real-up-are-parked-before-original-export-or-picker-seam"))
+                return 5;
+            const bool jpeg =
+                name == "jpeg-export-original-outside" || name == "jpeg-picker-cancel-original-outside-seam";
+            const bool pickerCancel =
+                name == "png-picker-cancel-original-outside-seam" || name == "jpeg-picker-cancel-original-outside-seam";
+            const auto format = jpeg ? HostWriteFormat::Jpeg : HostWriteFormat::Png;
+            const auto path = output / (std::wstring(name.begin(), name.end()) + (jpeg ? L".jpg" : L".png"));
+            const std::wstring priorProjectPath = L"before-original-export.prism";
+            owner->_documentPath = priorProjectPath;
+            owner->_session.history.MarkSaved(Guid::Generate());
+            const bool priorDirtyMarker = owner->_session.history.IsModified();
+            const auto ticket = owner->_polygonalPressState->original;
+            std::optional<std::wstring> selectedPath;
+            if (!pickerCancel)
+                selectedPath = path.wstring();
+            const auto write = owner->QueueHostInput(HostWriteInput{format, false, std::move(selectedPath)});
+            const auto wanted = pickerCancel ? HostOutcome::Cancelled : HostOutcome::Succeeded;
+            const auto wantedError = pickerCancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+            if (!expect(until([&]() noexcept { return write.Read().outcome != HostOutcome::Pending; }) &&
+                            write.Read().outcome == wanted && write.Read().error == wantedError,
+                        "original-outside-native-export-or-picker-test-seam-resolves-exact-receipt"))
+                return 5;
+            if (!owner->_polygonalPressState->controller || !owner->_polygonalPressState->waiting ||
+                !owner->_session.PendingLasso() || owner->_session.Generation() != generation ||
+                owner->_historyWork.Busy() || !owner->_session.history.IsModified() ||
+                owner->_documentPath != priorProjectPath)
+                std::printf("DIAG original-export controller=%d waiting=%d pending=%zu lasso=%d points=%zu "
+                            "parents=%llu history=%d generation=%llu expected=%llu dirty=%d path=%d\n",
+                            owner->_polygonalPressState->controller != nullptr, owner->_polygonalPressState->waiting,
+                            owner->_polygonalPressInput.PendingCount(), owner->_session.PendingLasso().has_value(),
+                            owner->_session.PendingLasso() ? owner->_session.PendingLasso()->PointCount() : 0,
+                            static_cast<unsigned long long>(owner->_polygonalPressParents), owner->_historyWork.Busy(),
+                            static_cast<unsigned long long>(owner->_session.Generation()),
+                            static_cast<unsigned long long>(generation), owner->_session.history.IsModified(),
+                            owner->_documentPath == priorProjectPath);
+            if (!expect(owner->_polygonalPressState->controller && owner->_polygonalPressState->waiting &&
+                            owner->_polygonalPressState->original == ticket && owner->_session.PendingLasso() &&
+                            owner->_session.PendingLasso()->PointCount() == 4 && owner->_polygonalPressParents == 1 &&
+                            !owner->_historyWork.Busy() &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true) &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision && priorDirtyMarker &&
+                            owner->_session.history.IsModified() && owner->_documentPath == priorProjectPath,
+                        "export-or-picker-cancel-preserves-original-ticket-selection-revision-path-and-dirty-marker"))
+                return 5;
+            if (pickerCancel)
+            {
+                if (!expect(!std::filesystem::exists(path), "picker-test-seam-cancellation-publishes-no-file"))
+                    return 5;
+            }
+            else
+            {
+                DecodedImage decoded;
+                const auto decode = ImportImageFile(path.c_str(), kMaxLayerPixels, decoded);
+                if (!expect(std::filesystem::is_regular_file(path) && decode == ImageCodecStatus::Ok &&
+                                decoded.image.Format() == RasterFormat::Bgra8888 && decoded.image.Width() == 64 &&
+                                decoded.image.Height() == 64 && decoded.image.HasStorage(),
+                            "published-original-export-independently-decodes-as64x64-bgra"))
+                    return 5;
+                bool matches = true;
+                const auto* bytes = decoded.image.Data();
+                for (std::size_t pixel = 0; pixel < 64u * 64u && matches; ++pixel)
+                {
+                    const auto* bgra = bytes + pixel * 4;
+                    if (jpeg)
+                    {
+                        constexpr int kJpegChannelTolerance =
+                            6; // Existing default-quality jpeg.flatten-white-matte reference.
+                        matches = bgra[3] == 255 &&
+                                  std::abs(static_cast<int>(bgra[0]) - 255) <= kJpegChannelTolerance &&
+                                  std::abs(static_cast<int>(bgra[1]) - 255) <= kJpegChannelTolerance &&
+                                  std::abs(static_cast<int>(bgra[2]) - 255) <= kJpegChannelTolerance;
+                    }
+                    else
+                        matches = bgra[0] == 255 && bgra[1] == 255 && bgra[2] == 255 && bgra[3] == 255;
+                }
+                if (!expect(matches, jpeg ? "jpeg-decoded-literal-bgra-within-spec-channel-tolerance"
+                                          : "png-decoded-literal-bgra-exactly-matches-source"))
+                    return 5;
+            }
+            key(VK_RETURN);
+            if (!expect(settle() && owner->_polygonalPressState && owner->_polygonalPressState->completed &&
+                            owner->_polygonalPressState->sameTicket && owner->_polygonalPressParents == 1 &&
+                            owner->_session.Generation() == generation + 1 &&
+                            owner->_session.history.UndoCount() == 1 && owner->_session.history.IsModified() &&
+                            owner->_session.history.CurrentRevision() != revision &&
+                            owner->_documentPath == priorProjectPath,
+                        "one-real-enter-commits-through-original-ticket-with-one-dirty-history-entry"))
                 return 5;
         }
         if (name == "save-live")

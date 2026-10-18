@@ -3225,6 +3225,17 @@ Vec2 Application::DocumentSize() const noexcept
 
 void Application::DocumentChanged() noexcept
 {
+    if (!_shutdownStarted && _polygonalPressState && _polygonalPressState->controller &&
+        _polygonalPressState->admissionSource &&
+        _polygonalPressState->admissionSource->document.documentSerial != _session.DocumentSerial())
+    {
+        // A replaced/cleared document supplies readiness even when no further raw input can reach
+        // this parked original. Cancel and resume its existing ticket; never mutate the new session
+        // through the old writer or wait for another pointer event to release its retained owners.
+        (void)_jobs.Cancel(_polygonalPressState->original);
+        if (_polygonalPressState->waiting)
+            (void)_jobs.Resume(_polygonalPressState->original);
+    }
     if (_committedDisplayInitialized)
         _committedDisplay.RequestOwner();
     _historyResidencySource.RetryDeferred();

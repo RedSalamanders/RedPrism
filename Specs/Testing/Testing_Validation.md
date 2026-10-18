@@ -3416,3 +3416,15 @@ The actual native fixture adds outside/inside foreign pending-history refusal an
 The real Up/Save case must first park the original inside drag; queue Save and verify it remains pending with no output or synthetic terminal; deliver actual WM_LBUTTONUP and require one original ticket, one exact move/history entry, the successful saved revision, Undo/Redo and final refunds. Independently preserve/read both live.prism and inside-before-up.prism with ZIP CRC/manifest/PNG dimensions; the project schema intentionally omits selection outlines. The unchanged-product Release control must retain its actual single refusal-before-admission failure, exact executable/PDB and source/artifact records; do not infer unobserved downstream mutations or an ASan control outcome.
 
 [Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+
+## Original Polygonal lifetime, export and scheduler-capacity cases
+
+The actual native dispatcher fixture adds seven cases / 96 facts over 28/242, requiring 35/338 total, all 152 Application stages and 10,920 stdout PASS records in selected Release/real ASan. Preserve every matching-profile predecessor stdout/stderr assertion. Require real PNG/JPEG files, all 4,096 literal opaque-white pixels (PNG exact; JPEG existing earlier host default-quality white reference 6/255), exact active writer/draft/corner receipts/history/path/dirty marker, and later one-entry Enter/Undo/Redo. The quality 1 IoTests jpeg.flatten-white-matte fixture is not a default-quality golden. Quiet missing-output-path cancellation covers its real ERROR_CANCELLED seam only; actual OS dialogs and held-write interleavings remain open.
+
+Two no-more-input cases replace/Clear only after every accepted corner/Up and host descriptor has parked on the original. Require document notification alone to cancel/join that exact ticket, unchanged successful receipts, exact foreign 4,096-center mask/absent document, history/generation and reservations. Retain the unchanged-product focused failure and both focused candidate rosters as focused evidence, distinct from full-suite qualification.
+
+Fill the actual scheduler's 128 owned records without draining completions, keep one accepted job on an event, and invoke the registered owner continuation. Require exact slot-refusal HRESULT, zero original worker/capture/writer admissions, unchanged literal document/history and 128 successful prior completions after release. Every early exit releases/joins the borrowed gate before its stack lifetime ends. Concurrent workers need not all start before the final-index job signals. Shared history ordinal exhaustion remains open; it has no current seed seam.
+
+Sampler-capacity diagnostics retain every original predicate and the 10-second failure bound. Failure logs report settlement/time, exact receipt/error/color, capture/authority/history, opening slots and owner/resource states. Preserve the original nonzero run; passing repeats establish no historical cause or causal fix.
+
+[Evidence](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).

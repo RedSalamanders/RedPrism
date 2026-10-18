@@ -2143,3 +2143,11 @@ Before describing/submitting a first selected original Down, refuse a pre-existi
 An inside move is atomic through real Up. If ordered project Save arrives after Move but before Up, keep both receipts pending on the original barrier, with no synthetic terminal, child parent or early write. A later actual Up must progress on that same admitted parent despite the waiting Save. Publish exactly one move/history entry, release the original barrier and only then capture/write/mark the saved revision. Exact Undo/Redo and joined refunds must remain valid. This requirement does not add selection persistence to the .prism schema.
 
 [Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+
+## Original Polygonal document lifetime and export
+
+On documentSerial replacement or Clear, an existing selected original Polygonal controller MUST receive cancellation independently of further pointer input. If parked, resume its existing ticket to acknowledge cancellation. Never create another parent or apply old geometry/history into the replacement session. Already successful corner receipts remain successful; original and family retirement must preserve the exact foreign selection or absent document and refund all retained ownership. Same-document editor/history/crop/mask changes remain separately qualified requirements.
+
+PNG/JPEG export from a parked outside draft must retain the original ticket/draft/corners, selection, revision, path and dirty marker; exporting must not close that draft. Quiet no-selected-path cancellation has exact ERROR_CANCELLED and writes no file. Later real Enter still commits one exact history entry with valid Undo/Redo. This test seam establishes no actual OS-picker qualification. Scheduler-record exhaustion refuses the new parent with ERROR_NOT_ENOUGH_QUOTA while preserving every accepted prior job, the committed document/history and the raw-prefix terminal acknowledgement.
+
+[Qualification](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).

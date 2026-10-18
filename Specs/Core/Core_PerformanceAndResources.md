@@ -1851,3 +1851,9 @@ The selected Polygonal first-parent guard reads transaction depth from the exist
 An inside drag retains its original reservation/ticket/barrier while ordered Save waits. Real Up records only bounded scalar input and resumes that original job; no synthetic terminal, competing selection parent, extra admission or busy polling is permitted. Save starts after the exact move/history acknowledgement. Final Release/real-ASan checks require unchanged prior assertions, exact source/object/profile lineage, final ISA/PE-PDB/artifact checks and independent readback of both actual saved pixel packages.
 
 [Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+
+## Parked Polygonal document lifetime resources
+
+DocumentChanged compares only the cached original admission documentSerial before existing display work. Replacement/Clear cancels the same original and resumes it only when parked. This constant-size readiness path performs no root/geometry/pixel traversal, new job admission or foreign-session mutation; joined original retirement remains responsible for its complete existing reservation. A full 128-record scheduler refuses the selected original before worker/root capture or writer opening; the scalar constructed diagnostic state may remain, with no controller/runs/captures/parent admissions. Accepted predecessor jobs must still complete and refund.
+
+Actual PNG/JPEG and quiet picker-seam cases retain the existing writer reservation across export/cancellation. Full selected Release/real-ASan Application rosters, exact source/header/object lineage, PE/PDB/ISA/artifacts and real file readback qualify this component. They establish no ordinary activation, complete phase bounds or G1. [Evidence](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
