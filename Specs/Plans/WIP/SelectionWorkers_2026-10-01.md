@@ -221,7 +221,7 @@ Debug r9; no native offset activation follows from private core qualification.
 
 - [x] Authenticate native real ASan r909 and private offset engine r5/core r8 against exact same-profile predecessors.
 - [x] Authenticate private offset core Debug r6 and Release r7 with all9,112 previous assertions and87 additions.
-- [ ] Finish current-source analysis/ARM64, then commit/push the Inverse/scanner checkpoint.
+- [x] Qualify the historical Inverse/scanner checkpoint's analysis/ARM64 and commit/push it as `a70a2f2`; see [native qualification](../../TestRuns/P1SelectionOffsetPrivate_2026-10-11.md). The latest-source matrix remains open above.
 - [x] Qualify the repaired offset host's 433 records/three stages, large output/capacity and native integration.
   Current-source native Debug/Release/real ASan, Release analysis and three ARM64 r104 cross-builds pass;
   [exact report](../../TestRuns/P1SelectionOffsetPrivate_2026-10-11.md). Ordinary activation, S5 and G1 remain separate.
