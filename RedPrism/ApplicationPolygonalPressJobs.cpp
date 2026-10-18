@@ -289,6 +289,7 @@ HRESULT Application::StartPolygonalPressOwner(std::uint64_t family) noexcept
     const auto& context = *first->down;
     if (context.document.documentSerial != _session.DocumentSerial() || context.active != _session.ActiveLayerID() ||
         context.crop != _session.CropFrame() || context.mask != _session.IsMaskSelected() ||
+        _session.history.CaptureState().Depth() != 0 ||
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return E_ABORT;
     const auto admitted = DescribeSelectionOutlineGestureMemory(_session, LassoKind::Polygonal, context.mode);

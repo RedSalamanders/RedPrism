@@ -1842,3 +1842,12 @@ Outside Opened releases the interactive host barrier without another reservation
 A stale queue entry can retire without selecting a job, so there may be no worker completion available to rearm cleanup. The no-active TakeReady path explicitly retires its raw family on the existing source. Orphan draining remains limited to 16 scalar records per owner action; no new pool, polling or large owner destruction is introduced.
 
 Raw512/emergency and host-eight-descriptor limits are independent. Queue refusal seals the accepted paired prefix; overflow preserves an older accepted inside Up and moves cancellation to the younger parent. One failed scheduler record is permitted for memory admission failure, while worker runs, immutable-root captures and opened writers must remain zero. Complete selected Release/real-ASan native checks compare exact receipts, literals/history and final reservation/CPU/GPU/weak-owner refunds. The shared headers and CPU job implementation are unchanged from the prior qualification, so unchanged CPU/HostTests are not redundantly rebuilt for this caller-only correction. [Evidence](../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md).
+
+
+## First-parent foreign-history admission and inside-Save ownership
+
+The selected Polygonal first-parent guard reads transaction depth from the existing bounded history root snapshot before memory description/submission. It walks no entries, pixels or points and allocates nothing; the live history retains every shared root through destruction of the temporary view. Refusal creates no original, source capture or writer and cannot close a foreign transaction. A live original's conditional path bypasses this first-parent guard.
+
+An inside drag retains its original reservation/ticket/barrier while ordered Save waits. Real Up records only bounded scalar input and resumes that original job; no synthetic terminal, competing selection parent, extra admission or busy polling is permitted. Save starts after the exact move/history acknowledgement. Final Release/real-ASan checks require unchanged prior assertions, exact source/object/profile lineage, final ISA/PE-PDB/artifact checks and independent readback of both actual saved pixel packages.
+
+[Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).

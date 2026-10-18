@@ -80,7 +80,10 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             std::printf("SUMMARY polygonal-dispatch-host checks=%u failures=%u reached=%u\n", checks, failures,
                         reached);
         });
-    constexpr std::array cases{"inside-queued",
+    constexpr std::array cases{"outside-foreign-history",
+                               "inside-foreign-history",
+                               "inside-save-before-up",
+                               "inside-queued",
                                "new-enter",
                                "add-enter",
                                "subtract-enter",
@@ -234,6 +237,135 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool live = name == "save-live" || name == "tool-live" || name == "leave-zoom-live" ||
                           name == "space-pan-live" || name == "right-ignore-live";
         const double left = mode == SelectionMode::Subtract ? 3 : 7;
+        if (name == "inside-save-before-up")
+        {
+            send(WM_LBUTTONDOWN, {2, 2}, MK_LBUTTON);
+            const auto dragReceipt = owner->_polygonalPressLastReceipt;
+            send(WM_MOUSEMOVE, {5, 4}, MK_LBUTTON);
+            if (!expect(until(
+                            [&]() noexcept
+                            {
+                                return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                                       owner->_session.IsMovingSelection();
+                            }),
+                        "original-inside-drag-opens-and-parks-before-release"))
+                return 5;
+            const auto original = owner->_polygonalPressState->original;
+            if (!expect(dragReceipt.Read().outcome == HostOutcome::Pending && owner->_historyWork.Busy() &&
+                            owner->_polygonalPressParents == 1 && owner->_polygonalPressState->moves == 1 &&
+                            owner->_session.history.CaptureState().Depth() == 1 &&
+                            owner->_session.Generation() == generation + 1 &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "one-original-parent-holds-history-with-only-scalar-preview-offset"))
+                return 5;
+            const auto file = output / L"inside-before-up.prism";
+            const auto save = owner->QueueHostInput(HostWriteInput{HostWriteFormat::Project, false, file.wstring()});
+            if (!expect(save.Read().outcome == HostOutcome::Pending && owner->_hostRequests.Size() == 1,
+                        "save-accepted-after-move-before-release-on-same-host-order"))
+                return 5;
+            (void)RunUiActions(owner->_jobs);
+            if (!expect(save.Read().outcome == HostOutcome::Pending &&
+                            dragReceipt.Read().outcome == HostOutcome::Pending &&
+                            owner->_polygonalPressState->original == original && owner->_polygonalPressState->waiting &&
+                            !std::filesystem::exists(file),
+                        "save-waits-original-atomic-drag-with-no-synthetic-terminal-or-write"))
+                return 5;
+            const auto pending = owner->_polygonalPressInput.PendingCount();
+            send(WM_LBUTTONUP, {5, 4});
+            if (!expect(owner->_polygonalPressInput.PendingCount() == pending + 1 &&
+                            save.Read().outcome == HostOutcome::Pending && owner->_polygonalPressParents == 1,
+                        "later-real-up-is-recorded-without-second-parent-while-save-waits"))
+                return 5;
+            if (!expect(settle(), "real-up-releases-original-barrier-then-complete-save-and-retirement"))
+                return 5;
+            if (!expect(dragReceipt.Read().outcome == HostOutcome::Succeeded &&
+                            save.Read().outcome == HostOutcome::Succeeded && std::filesystem::is_regular_file(file) &&
+                            DispatcherPixels(owner->_session, SelectionMode::New, true, 4, 3, 8, 7) &&
+                            owner->_session.Generation() == generation + 2 &&
+                            owner->_session.history.UndoCount() == 1 && !owner->_session.history.IsModified() &&
+                            owner->_session.history.CaptureState().Depth() == 0 &&
+                            !owner->_polygonalPressInput.Busy() && !owner->_historyWork.Busy() &&
+                            !owner->_session.IsMovingSelection() && owner->_polygonalPressParents == 1 &&
+                            owner->_polygonalPressState->completed && owner->_polygonalPressState->sameTicket,
+                        "save-publishes-only-after-exact-move-with-one-history-entry-and-original-ticket"))
+                return 5;
+            owner->_session.Undo();
+            if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "saved-inside-move-undo-restores-original-literal-selection"))
+                return 5;
+            owner->_session.Redo();
+            if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true, 4, 3, 8, 7),
+                        "saved-inside-move-redo-restores-complete-literal-result"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "save-drag-and-joined-shutdown-refund-original-cpu-gpu-and-weak-owners"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (name == "outside-foreign-history" || name == "inside-foreign-history")
+        {
+            if (name == "inside-foreign-history")
+            {
+                send(WM_LBUTTONDOWN, {2, 2}, MK_LBUTTON);
+                receipts[receiptCount++] = owner->_polygonalPressLastReceipt;
+                send(WM_MOUSEMOVE, {5, 4}, MK_LBUTTON);
+                send(WM_LBUTTONUP, {5, 4});
+            }
+            else
+            {
+                click({7, 1});
+                click({11, 1});
+                click({11, 5});
+                click({7, 5});
+                key(VK_RETURN);
+            }
+            if (!expect(receiptCount && receipts[0].Read().outcome == HostOutcome::Pending &&
+                            !owner->_polygonalPressState && owner->_polygonalPressInput.Busy(),
+                        "prefix-recorded-before-foreign-transaction-and-first-controller"))
+                return 5;
+            owner->_session.history.Begin(L"Foreign transaction", owner->_session.Document(), active);
+            const auto foreignHistory = owner->_session.history.CaptureAuthority();
+            if (!expect(owner->_session.history.CaptureState().Depth() == 1 &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision,
+                        "foreign-opening-changes-history-authority-without-changing-document-generation"))
+                return 5;
+            if (!expect(settle(), "queued-dependent-receipts-and-retirement-settle"))
+                return 5;
+            bool stale = true;
+            for (unsigned i = 0; i < receiptCount; ++i)
+                stale = stale && receipts[i].Read().outcome == HostOutcome::Stale;
+            if (!expect(stale && owner->_polygonalPressParents == 0 && !owner->_polygonalPressState &&
+                            !owner->_polygonalPressInput.Busy() && !owner->_activeHostRequest &&
+                            !owner->_hostRequests.Size() && !owner->_historyWork.Busy() &&
+                            !owner->_session.PendingLasso() && !owner->_session.IsMovingSelection(),
+                        "foreign-pending-history-refuses-before-original-admission-source-or-writer"))
+                return 5;
+            if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true) &&
+                            owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            owner->_session.history.CaptureState().Depth() == 1 &&
+                            owner->_session.history.IsCurrent(foreignHistory) &&
+                            owner->_session.history.UndoCount() == 0,
+                        "refusal-preserves-exact-foreign-history-and-all4096-prior-selection-centers"))
+                return 5;
+            owner->_session.history.End(owner->_session.Document(), active);
+            if (!expect(owner->_session.history.CaptureState().Depth() == 0 &&
+                            owner->_session.history.UndoCount() == 0 &&
+                            owner->_session.history.CurrentRevision() == revision,
+                        "foreign-owner-closes-original-noop-without-editor-entry-or-revision"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "refused-prefix-and-joined-shutdown-refund-all-original-and-display-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
         if (name == "right-ignore-first")
         {
             send(WM_RBUTTONDOWN, {2, 2}, MK_RBUTTON);
