@@ -670,6 +670,184 @@ namespace RedPrismBuild
         // terminal dispatch with a long JA; EndCanvasEdit uses its disp32 stack form. Prove only these
         // exact stack guards and RCX dispatches, every reported/PE byte and the exact terminal procedure end.
         // WindowHost also emits a disp8 MOV EAX index (zero extended), short JA and RET directly before data.
+        // Near unsigned stack guard, followed by a terminal DWORD table after an already-proved
+        // remap/table pair. Require complete PE/PDB/body/edge proof; never exempt an object or name.
+        private static InlineTable ReadGuardedSplitUnsignedTail(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
+            Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
+            Dictionary<ulong, byte[]> guardRows, out InlineTable firstTable, out InlineTable remapTable)
+        {
+            firstTable = null; remapTable = null;
+            const int prefixLength = 15;
+            if (dispatch < imageBase + prefixLength || dispatch - imageBase > UInt32.MaxValue ||
+                afterJump != dispatch + 19) return null;
+            ulong prefix = dispatch - prefixLength, begin = checked(imageBase + tableRva);
+            int ownerIndex = FindContribution(contributions, prefix);
+            if (ownerIndex < 0 || FindContribution(contributions, dispatch) != ownerIndex) return null;
+            Contribution owner = contributions[ownerIndex];
+            if ((begin & 3) != 0 || begin <= afterJump || !dataSymbols.TryGetValue(begin, out int symbolOwner) ||
+                symbolOwner != owner.Module) return null;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return null; }
+            if (raw > pe.Length - 34 || !StartsWithAt(pe, raw, 0x83, 0x7c, 0x24) ||
+                !StartsWithAt(pe, raw + 5, 0x0f, 0x87) || !StartsWithAt(pe, raw + 11, 0x8b, 0x44, 0x24) ||
+                pe[raw + 3] != pe[raw + 14] || !StartsWithAt(pe, raw + 15, 0x48, 0x8d, 0x0d) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 18) != (long)imageBase ||
+                !StartsWithAt(pe, raw + 22, 0x8b, 0x84, 0x81) || BitConverter.ToUInt32(pe, raw + 25) != tableRva ||
+                !StartsWithAt(pe, raw + 29, 0x48, 0x03, 0xc1) || !StartsWithAt(pe, raw + 32, 0xff, 0xe0)) return null;
+            uint maximum = pe[raw + 4];
+            if (maximum == 0 || maximum >= 128) return null;
+            ulong end = checked(begin + 4 * (maximum + 1));
+            if (end > owner.End) return null;
+            int[] starts = { 0, 5, 11, 15, 22, 29, 32 };
+            int[] lengths = { 5, 6, 4, 7, 7, 3, 2 };
+            for (int index = 0; index < starts.Length; ++index)
+                if (!guardRows.TryGetValue(prefix + (ulong)starts[index], out byte[] row) ||
+                    row.Length != lengths[index] || !MatchesDecodedPe(pe, sections, imageBase,
+                        prefix + (ulong)starts[index], row, contributions, decoded, decodedStarts)) return null;
+            Function containing = null;
+            foreach (Function procedure in procedures)
+                if (procedure.Module == owner.Module && procedure.ContributionBegin == owner.Begin &&
+                    procedure.ContributionEnd == owner.End && procedure.Begin <= prefix && procedure.End == end)
+                { containing = procedure; break; }
+            if (containing == null) return null;
+            ulong tail = begin;
+            foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+            {
+                if (symbol.Value == owner.Module && symbol.Key >= containing.Begin && symbol.Key < tail)
+                    tail = symbol.Key;
+                if (symbol.Key > begin && symbol.Key < end) return null;
+            }
+            if (tail >= begin || tail < afterJump + 2) return null;
+            ulong firstPrefix = 0, firstAfterJump = 0, remap = 0;
+            InlineTable first = null;
+            // The earlier switch has its own unsigned stack guard and byte remap. Prove both tables
+            // jointly, since neither a neighboring anonymous symbol nor a known indirect opcode proves flow.
+            for (int at = decodedStarts.BinarySearch(containing.Begin); at >= 0 && at < decodedStarts.Count; ++at)
+            {
+                ulong candidate = decodedStarts[at];
+                if (candidate >= prefix) break;
+                if (!guardRows.TryGetValue(candidate, out byte[] comparison) || comparison.Length != 5 ||
+                    !StartsWith(comparison, 0x83, 0x7c, 0x24) || comparison[4] == 0 || comparison[4] >= 128) continue;
+                int firstRaw = checked((int)Offset(checked((uint)(candidate - imageBase)), sections, pe.Length));
+                if (firstRaw > pe.Length - 42 || !StartsWithAt(pe, firstRaw + 5, 0x0f, 0x87) ||
+                    !StartsWithAt(pe, firstRaw + 11, 0x8b, 0x44, 0x24) || pe[firstRaw + 3] != pe[firstRaw + 14] ||
+                    !StartsWithAt(pe, firstRaw + 15, 0x48, 0x8d, 0x0d) ||
+                    (long)candidate + 22 + BitConverter.ToInt32(pe, firstRaw + 18) != (long)imageBase ||
+                    !StartsWithAt(pe, firstRaw + 22, 0x0f, 0xb6, 0x84, 0x01) ||
+                    !StartsWithAt(pe, firstRaw + 30, 0x8b, 0x84, 0x81) ||
+                    checked(imageBase + BitConverter.ToUInt32(pe, firstRaw + 33)) != tail ||
+                    !StartsWithAt(pe, firstRaw + 37, 0x48, 0x03, 0xc1) ||
+                    !StartsWithAt(pe, firstRaw + 40, 0xff, 0xe0)) continue;
+                ulong byteBegin = checked(imageBase + BitConverter.ToUInt32(pe, firstRaw + 26));
+                if (byteBegin <= tail || (byteBegin - tail) % 4 != 0 || (byteBegin - tail) / 4 > 128 ||
+                    byteBegin + comparison[4] + 1 != begin ||
+                    !dataSymbols.TryGetValue(byteBegin, out int remapOwner) || remapOwner != owner.Module) continue;
+                bool rowsValid = true;
+                int[] firstStarts = { 0, 5, 11, 15, 22, 30, 37, 40 };
+                int[] firstLengths = { 5, 6, 4, 7, 8, 7, 3, 2 };
+                for (int i = 0; i < firstStarts.Length; ++i)
+                    if (!guardRows.TryGetValue(candidate + (ulong)firstStarts[i], out byte[] row) ||
+                        row.Length != firstLengths[i] || !MatchesDecodedPe(pe, sections, imageBase,
+                            candidate + (ulong)firstStarts[i], row, contributions, decoded, decodedStarts))
+                    { rowsValid = false; break; }
+                long firstDefault = (long)candidate + 11 + BitConverter.ToInt32(pe, firstRaw + 7);
+                if (!rowsValid || firstDefault < (long)afterJump || firstDefault >= (long)tail - 2 ||
+                    !IsDecodedBoundary((ulong)firstDefault, owner.Module, contributions, decoded, decodedStarts)) continue;
+                int dataRaw = checked((int)Offset(checked((uint)(tail - imageBase)), sections, pe.Length));
+                if (begin - tail > (ulong)(pe.Length - dataRaw)) continue;
+                var candidateTable = new InlineTable { Begin = tail, End = byteBegin, Module = owner.Module,
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+                for (ulong item = tail; item < byteBegin; item += 4)
+                {
+                    ulong target = checked(imageBase + BitConverter.ToUInt32(pe, dataRaw + checked((int)(item - tail))));
+                    if (target < afterJump || target >= tail - 2 ||
+                        !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts))
+                    { rowsValid = false; break; }
+                    candidateTable.Targets.Add(target);
+                }
+                for (ulong item = byteBegin; item < begin && rowsValid; ++item)
+                    if (pe[dataRaw + checked((int)(item - tail))] >= candidateTable.Targets.Count) rowsValid = false;
+                foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                    if (symbol.Key > tail && symbol.Key < begin &&
+                        (symbol.Key != byteBegin || symbol.Value != owner.Module)) rowsValid = false;
+                if (!rowsValid || first != null) return null;
+                first = candidateTable; firstPrefix = candidate; firstAfterJump = candidate + 42; remap = byteBegin;
+            }
+            if (first == null || firstAfterJump > prefix) return null;
+            if (!guardRows.TryGetValue(tail - 2, out byte[] terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
+                !MatchesDecodedPe(pe, sections, imageBase, tail - 2, terminal, contributions, decoded, decodedStarts) ||
+                !guardRows.TryGetValue(tail - 1, out byte[] padding) || padding.Length != 1 || padding[0] != 0x90 ||
+                !MatchesDecodedPe(pe, sections, imageBase, tail - 1, padding, contributions, decoded, decodedStarts)) return null;
+            long fallback = (long)prefix + 11 + BitConverter.ToInt32(pe, raw + 7);
+            if (fallback < (long)afterJump || fallback >= (long)tail - 2 ||
+                !IsDecodedBoundary((ulong)fallback, owner.Module, contributions, decoded, decodedStarts)) return null;
+            // Walk the complete executable body, including both dispatches and the epilogue. Every
+            // instruction boundary/listed byte must agree with the PE. Direct and proven indirect edges
+            // may neither bypass this guard nor land in padding/data or the middle of an instruction.
+            for (ulong cursor = containing.Begin; cursor < tail;)
+            {
+                if (!guardRows.TryGetValue(cursor, out byte[] body) || body.Length == 0 || body.Length > 15 ||
+                    cursor + (ulong)body.Length > tail || !MatchesDecodedPe(pe, sections, imageBase,
+                        cursor, body, contributions, decoded, decodedStarts)) return null;
+                int op = 0;
+                while (op < body.Length && (IsLegacyPrefix(body[op]) || (body[op] >= 0x40 && body[op] <= 0x4f))) ++op;
+                if (op == body.Length) return null;
+                long destination = -1;
+                if (body[op] == 0xeb || (body[op] >= 0x70 && body[op] <= 0x7f) ||
+                    (body[op] >= 0xe0 && body[op] <= 0xe3))
+                {
+                    if (body.Length != op + 2) return null;
+                    destination = (long)cursor + body.Length + unchecked((sbyte)body[op + 1]);
+                }
+                else if (body[op] == 0xe9 || body[op] == 0xe8)
+                {
+                    if (body.Length != op + 5) return null;
+                    destination = (long)cursor + body.Length + BitConverter.ToInt32(body, op + 1);
+                }
+                else if (op + 1 < body.Length && body[op] == 0x0f && body[op + 1] >= 0x80 && body[op + 1] <= 0x8f)
+                {
+                    if (body.Length != op + 6) return null;
+                    destination = (long)cursor + body.Length + BitConverter.ToInt32(body, op + 2);
+                }
+                else if (body[op] == 0xff && op + 1 < body.Length)
+                {
+                    int group = (body[op + 1] >> 3) & 7;
+                    if (group >= 2 && group <= 5 && cursor != afterJump - 2)
+                    {
+                        if (group != 4 || cursor != firstAfterJump - 2) return null;
+                    }
+                }
+                else if (body[op] == 0x9a || body[op] == 0xea || body[op] == 0xca || body[op] == 0xcb || body[op] == 0xcf ||
+                    (body[op] == 0xc7 && op + 1 < body.Length && body[op + 1] == 0xf8)) return null;
+                if ((destination > (long)prefix && destination < (long)afterJump &&
+                     (cursor < prefix || cursor >= afterJump)) ||
+                    (destination > (long)firstPrefix && destination < (long)firstAfterJump &&
+                     (cursor < firstPrefix || cursor >= firstAfterJump)) ||
+                    (destination >= (long)tail - 1 && destination < (long)end) ||
+                    (destination >= (long)containing.Begin && destination < (long)tail &&
+                     !IsDecodedBoundary((ulong)destination, owner.Module, contributions, decoded, decodedStarts))) return null;
+                cursor += (ulong)body.Length;
+            }
+            int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
+            if (tableRaw > pe.Length - checked((int)(end - begin))) return null;
+            var result = new InlineTable { Begin = begin, End = end, Module = owner.Module,
+                ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+            for (uint index = 0; index <= maximum; ++index)
+            {
+                ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * index))));
+                if (target < afterJump || target >= tail - 2 ||
+                    !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts)) return null;
+                result.Targets.Add(target);
+            }
+            firstTable = first;
+            remapTable = new InlineTable { Begin = remap, End = begin, Module = owner.Module,
+                ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+            return result;
+        }
+
         private static InlineTable ReadGuardedTerminalDwordTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
@@ -3917,6 +4095,32 @@ namespace RedPrismBuild
                         catch (InvalidDataException) { /* Unmapped candidate has no body proof. */ }
                     }
                 }
+                // Collect a bounded owning procedure for the near-JA unsigned disp8 stack pair.
+                // Candidate collection proves nothing; every retained row is later checked against the PE.
+                if (candidateBytes.Length == 7 && candidateBytes[0] == "8b" &&
+                    candidateBytes[1] == "84" && candidateBytes[2] == "81")
+                {
+                    ulong load = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
+                    if (load >= imageBase + 22 && load - imageBase <= UInt32.MaxValue)
+                    {
+                        int index = FindContribution(contributions, load);
+                        try
+                        {
+                            int raw = checked((int)Offset(checked((uint)(load - imageBase - 22)), sections, pe.Length));
+                            if (index >= 0 && raw <= pe.Length - 29 && StartsWithAt(pe, raw, 0x83, 0x7c, 0x24) &&
+                                StartsWithAt(pe, raw + 5, 0x0f, 0x87) && StartsWithAt(pe, raw + 11, 0x8b, 0x44, 0x24))
+                                foreach (Function procedure in procedures)
+                                    if (procedure.Module == contributions[index].Module &&
+                                        procedure.ContributionBegin == contributions[index].Begin &&
+                                        procedure.ContributionEnd == contributions[index].End &&
+                                        procedure.Begin <= load - 22 && load < procedure.End &&
+                                        procedure.End - procedure.Begin <= 1024 * 1024 &&
+                                        !r9BodyRanges.Exists(range => range.Begin == procedure.Begin && range.End == procedure.End))
+                                        r9BodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = procedure.End });
+                        }
+                        catch (InvalidDataException) { /* Unmapped candidate grants no body proof. */ }
+                    }
+                }
                 if (candidateBytes.Length == 8 && candidateBytes[0] == "41" && candidateBytes[1] == "8b" &&
                     candidateBytes[2] == "8c" && candidateBytes[3] == "86")
                 {
@@ -4519,6 +4723,7 @@ namespace RedPrismBuild
                             contributions, decoded, decodedStarts)))))
                     {
                         InlineTable provenByteIndexTable = null;
+                        InlineTable splitDwordTable = null, splitRemapTable = null;
                         bool shortStackRetNop = false;
                         if (!r8Base && !raxBase && !rdxBase && !r9Base && !dlByteIndex &&
                             !hasByteIndexTable && !signedByteIndex && dispatchBegin >= imageBase + 12)
@@ -4581,7 +4786,10 @@ namespace RedPrismBuild
                                 decoded, decodedStarts, guardRows) ??
                                 ReadGuardedTerminalDwordTable(pe, sections, contributions, dataSymbols, procedures,
                                 imageBase, dispatchBegin, checked(address + (ulong)encoded.Length), tableRva,
-                                decoded, decodedStarts, guardRows);
+                                decoded, decodedStarts, guardRows) ??
+                                ReadGuardedSplitUnsignedTail(pe, sections, contributions, dataSymbols, procedures,
+                                imageBase, dispatchBegin, checked(address + (ulong)encoded.Length), tableRva,
+                                decoded, decodedStarts, guardRows, out splitDwordTable, out splitRemapTable);
                         if (table != null && preludeStep != 0)
                         {
                             ulong afterJump = checked(address + 2);
@@ -4615,6 +4823,8 @@ namespace RedPrismBuild
                         if (table != null) table.PendingTargets.Clear();
                         if (table != null)
                         {
+                            if (splitDwordTable != null) inlineTables.Add(splitDwordTable);
+                            if (splitRemapTable != null) inlineTables.Add(splitRemapTable);
                             if (provenByteIndexTable != null) inlineTables.Add(provenByteIndexTable);
                             inlineTables.Add(table);
                         }

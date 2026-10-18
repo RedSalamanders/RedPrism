@@ -39,6 +39,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.
 if ($LASTEXITCODE -ne 0) { throw 'R10 ECX terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaShortStackRetNopTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Short-stack RET/one-byte NOP parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaSplitTailUnsignedTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Joint unsigned split-tail parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaWideUnsignedGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Wide unsigned guarded DWORD parser controls failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
