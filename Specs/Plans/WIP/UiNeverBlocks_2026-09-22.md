@@ -1,10 +1,12 @@
 # P1 — Responsive raster editor delivery milestone
 
-## Current delivery checklist — 2026-10-18
+## Current delivery checklist — 2026-10-19
 
 P1 is **WIP**. The checklist below is the current status; older dated integration notes retain historical
 results and do not override these remaining gates.
 
+- [x] Fix actual keyboard command ordering for the selected original Polygonal route: Ctrl+D/Ctrl+Z/Ctrl+Shift+Z now wait behind the same original cancellation acknowledgment. Focused Release and real ASan pass all 44 cases / 469 facts, preserving all 420 predecessors; exact 351-object lineage, frozen sources, PE/PDB/ISA and saved/exported output readback pass. Retain the unchanged-product failure, diagnostic reproduction and compile failures. [Evidence](../../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+- [ ] Qualify this keyboard barrier and 44/469 fixture in latest full native integration and ARM64 Release/ASan. Earlier r1141 qualifies only its original 41/420 source; ordinary activation and all nine delivery areas remain open.
 - [x] Qualify latest viewport code (`4d7fac8`, source `710bf4c`) in ARM64 Release `r1139` and instrumented ASan `r1140`: actual exits 0; all 994 compiler records, five AA64 PE/PDB pairs, 1 fresh / 993 exact inherited objects and 1,560 / 1,564 archived files per profile pass independent readback. All 1,487 frozen inputs and four positive / 31 negative controls pass. Native ARM64 runtime remains unavailable. [Evidence](../../TestRuns/P1InitialLayerViewport_2026-10-18.md).
 - [x] Qualify current 41-case / 420-fact dispatcher tests and both Layers startup assertions in full canonical x64 ASan `r1141`: actual exit 0; all five suites, 994 real-ASan compiler records, five PE/PDB pairs, 152 Application stages / 11,004 stdout facts, 256-round raster / 64-worker stress, genuine UAF and both crash probes, all nine fresh captures and 1,766 archive files independently pass. Private keyboard extensions are not included. [Evidence](../../TestRuns/P1LatestFullNativeAsan_2026-10-18.md).
 - [x] Resolve the earlier private geometry diagnostic's direct RBX switch-table ISA rejection: the complete final suite passes all 14,012 records (13,892 exact predecessors plus 120 new controls), the same original image/full PDB, strict unknown-effect refusals and preserved real vectors. Main corrects and retains the cheaper fixture refusals. No DxUi/allowlist change. [Evidence](../../TestRuns/IsaRbxDirectGuard_2026-10-18.md).

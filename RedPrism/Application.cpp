@@ -5028,9 +5028,9 @@ void Application::OnCommand(int command) noexcept
         return;
     }
     if (!_hostExecuting && !view && !file &&
-        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() ||
-         _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest ||
-         _hostRequests.Size()))
+        (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
+         _activeHostRequest || _hostRequests.Size()))
     {
         if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             _duplicateGesture->pointerDown = false;

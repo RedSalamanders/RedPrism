@@ -2157,3 +2157,15 @@ PNG/JPEG export from a parked outside draft must retain the original ticket/draf
 Typed Deselect/Undo/Redo waits for cancellation acknowledgment of the existing outside Polygonal original before its own document/history change. Previously successful corner receipts stay fixed and the command creates no replacement original or repeated source capture. Real seed Undo/Redo entries retain their exact saved revisions.
 
 A prepared original result that loses history/editor authority through a foreign pending transaction, crop frame or mask-target change fails with E_ABORT. It removes only its own pending writer/family; committed selection, generation/revision, foreign transaction depth/authority, exact crop or selected mask identity remain with the foreign owner. Borrowed test-gate state must outlive joined work. This selected-route qualification does not activate ordinary input. [Focused evidence](../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).
+
+
+## Original Polygonal keyboard command barrier
+
+While the selected original Polygonal journal is busy, non-view/non-file commands MUST enter the
+existing ordered host queue before any synchronous editor mutation. Ctrl+D, Ctrl+Z and Ctrl+Shift+Z
+use the same command/ordinal/cancellation path as typed requests. The original outside writer must
+acknowledge cancellation before Deselect/Undo/Redo changes selection, generation or history.
+Successful corner receipts remain fixed and no replacement original is captured. The command barrier
+queries only the bounded journal scalar; the older legacy Polygonal producer cannot stand in for it.
+This selected-route requirement does not activate ordinary input or establish measured G1.
+[Qualification](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).

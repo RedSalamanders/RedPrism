@@ -164,7 +164,10 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "redo-live",
                                "held-foreign-history-close",
                                "held-foreign-crop-close",
-                               "held-foreign-mask-close"};
+                               "held-foreign-mask-close",
+                               "deselect-keyboard-live",
+                               "undo-keyboard-live",
+                               "redo-keyboard-live"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -236,9 +239,11 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool heldCrop = name == "held-foreign-crop-close";
         const bool heldTarget = heldCrop || heldMask;
         const bool heldHistory = name == "held-foreign-history-close" || heldTarget;
-        const bool commandDeselect = name == "deselect-live";
-        const bool commandUndo = name == "undo-live";
-        const bool commandRedo = name == "redo-live";
+        const bool commandDeselect = name == "deselect-live" || name == "deselect-keyboard-live";
+        const bool commandUndo = name == "undo-live" || name == "undo-keyboard-live";
+        const bool commandRedo = name == "redo-live" || name == "redo-keyboard-live";
+        const bool keyboardCommand =
+            name == "deselect-keyboard-live" || name == "undo-keyboard-live" || name == "redo-keyboard-live";
         std::optional<DocumentSelection> commandBaseSelection, commandSeedSelection;
         Guid commandBaseRevision{}, commandSeedRevision{};
         const auto commandBaseGeneration = owner->_session.Generation();
@@ -1152,7 +1157,53 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             const int commandUndoCountBefore = owner->_session.history.UndoCount();
             const auto commandUndoNameBefore = owner->_session.history.UndoName();
             const auto commandRedoNameBefore = owner->_session.history.RedoName();
-            const auto receipt = owner->QueueHostInput(HostCommandInput{command});
+            ContinuationReceipt receipt;
+            if (keyboardCommand)
+            {
+                const UINT virtualKey = commandDeselect ? 'D' : 'Z';
+                const UINT modifiers = commandRedo ? MK_CONTROL | MK_SHIFT : MK_CONTROL;
+                KeyPress diagnosticPress;
+                diagnosticPress.virtualKey = static_cast<std::uint16_t>(virtualKey);
+                diagnosticPress.ctrl = true;
+                diagnosticPress.shift = commandRedo;
+                const auto diagnosticState = owner->CurrentKeyState();
+                const auto diagnosticMatch = owner->_bindings.Match(diagnosticPress, diagnosticState);
+                if (!expect(owner->HandleAccelerator(virtualKey, modifiers),
+                            "window-keydown-keyup-routes-configured-default-command"))
+                    return 5;
+                const auto* queued = owner->_hostRequests.PendingAt(0);
+                const auto* input = queued ? std::get_if<HostCommandInput>(&queued->input.Input()) : nullptr;
+                const bool queuedCommand = owner->_hostRequests.Size() == 1 && !owner->_activeHostRequest && queued &&
+                                           input && input->command == command &&
+                                           queued->documentSerial == owner->_session.DocumentSerial() &&
+                                           queued->ordinal > owner->_polygonalPressState->lastConsumedOrdinal &&
+                                           queued->input.Receipt().Read().outcome == HostOutcome::Pending;
+                if (!queuedCommand)
+                    std::fprintf(stderr,
+                                 "DIAG polygonal-keyboard name=%s match=%d matchedCommand=%d expected=%d focus=%d "
+                                 "size=%zu active=%d queued=%d input=%d command=%d serial=%llu currentSerial=%llu "
+                                 "ordinal=%llu consumed=%llu receipt=%d executing=%d registered=%d completed=%d "
+                                 "stopping=%d generationBefore=%llu generation=%llu pendingLasso=%d historyBusy=%d\n",
+                                 name.data(), static_cast<int>(diagnosticMatch.result), diagnosticMatch.command,
+                                 command, static_cast<int>(diagnosticState.focus), owner->_hostRequests.Size(),
+                                 static_cast<bool>(owner->_activeHostRequest), queued != nullptr, input != nullptr,
+                                 input ? input->command : -1,
+                                 static_cast<unsigned long long>(queued ? queued->documentSerial : 0),
+                                 static_cast<unsigned long long>(owner->_session.DocumentSerial()),
+                                 static_cast<unsigned long long>(queued ? queued->ordinal : 0),
+                                 static_cast<unsigned long long>(owner->_polygonalPressState->lastConsumedOrdinal),
+                                 queued ? static_cast<int>(queued->input.Receipt().Read().outcome) : -1,
+                                 owner->_hostExecuting, owner->_hostSourceRegistered,
+                                 owner->_polygonalPressState->completed, owner->_polygonalPressStopping,
+                                 static_cast<unsigned long long>(commandGenerationBefore),
+                                 static_cast<unsigned long long>(owner->_session.Generation()),
+                                 owner->_session.PendingLasso().has_value(), owner->_historyWork.Busy());
+                if (!expect(queuedCommand, "routed-keyboard-command-has-matching-queued-receipt-and-later-ordinal"))
+                    return 5;
+                receipt = queued->input.Receipt(); // Own the observer before any queue mutation; never dispatch twice.
+            }
+            else
+                receipt = owner->QueueHostInput(HostCommandInput{command});
             if (!expect(receipt.Read().outcome == HostOutcome::Pending,
                         "real-host-command-dispatch-admits-ordered-request"))
                 return 5;

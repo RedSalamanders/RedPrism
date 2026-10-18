@@ -3462,3 +3462,20 @@ violations beside successfully proved table data. Preserve unsuccessful drafts a
 qualification uses the same original executable/full PDB and decoder bytes, with unchanged runtime allowlist.
 These parser controls supply no Application runtime, ARM64 runtime, G1 or ordinary activation qualification.
 [Evidence](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).
+
+
+## Original Polygonal window-key command validation
+
+Extend the selected original dispatcher to 44 cases / 469 facts, preserving all 420 predecessors.
+Ctrl+D, Ctrl+Z and Ctrl+Shift+Z MUST execute through actual window key down/up and scoped synthetic
+keyboard state. Before pumping, require the one actual matching queued command, document serial,
+later physical-input ordinal, no active request and Pending receipt. Retain that owning receipt before
+queue mutation; injecting another typed request cannot substitute for the real key route. Reuse every
+intermediate original-cancellation barrier and literal result/history/revision/generation/corner/refund
+assertion. Failure diagnostics must expose queue and binding operands.
+
+Require the unchanged-product failure and source/profile/object/PE-PDB/ISA/output readback for focused
+Release and real ASan. Focused execution is not a full Application result. Latest full integration
+expects 152 stages / 11,053 stdout facts; old 41/420 integration evidence cannot qualify changed code.
+Actual menu widgets, physical keyboard hardware, ordinary activation and G1 remain separate.
+[Evidence](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
