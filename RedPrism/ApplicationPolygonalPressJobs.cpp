@@ -154,6 +154,10 @@ bool Application::RoutePolygonalPressOwner(const DxUi::PointerEvent& event, UINT
                (busy && _polygonalPressLeftDown); // Right selection input never reaches synchronous lasso edits.
     if (!busy)
         return false;
+    // A parked draft owns its canvas gestures, not the release of a chrome press. Retain the
+    // original owner for a canvas release outside the hole; let the matching chrome Up reach DxUi.
+    if (message == WM_LBUTTONUP && !inside && !_polygonalPressLeftDown)
+        return false;
     if (event.action == DxUi::PointerAction::Down)
         return message == WM_LBUTTONDOWN && inside ? QueuePolygonalPressOwner(event, message, view, client)
                                                    : _polygonalPressLeftDown;

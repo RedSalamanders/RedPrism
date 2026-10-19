@@ -16,6 +16,7 @@ evidence; successful later runs do not establish a causal fix for historical sam
 Adopted next: original Polygonal header-kind cancellation, focused Release/real ASan 48 cases / 518 facts.
 [Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
 
+- [x] Actual Polygonal header-widget release routing is adopted (49 cases / 534 facts, focused Release/real ASan); [evidence](../../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under
 `Specs/<Domain>/`. This index remains routing only.

@@ -6,6 +6,7 @@
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
 #include "Prompts.h"
+#include "Resources.h"
 #include "resource.h"
 
 #include <array>
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -108,6 +110,51 @@ class PolygonalHeaderPrompts final : public Prompts
   private:
     const Prompts& _delegate;
 };
+
+[[nodiscard]] bool IsNamedEnabledButton(IRawElementProviderFragment* fragment, std::wstring_view name) noexcept
+{
+    if (!fragment)
+        return false;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> simple;
+    wil::unique_variant label, type, enabled;
+    if (FAILED(fragment->QueryInterface(IID_PPV_ARGS(simple.put()))) ||
+        FAILED(simple->GetPropertyValue(UIA_NamePropertyId, &label)) || label.vt != VT_BSTR || !label.bstrVal ||
+        FAILED(simple->GetPropertyValue(UIA_ControlTypePropertyId, &type)) || type.vt != VT_I4 ||
+        type.lVal != UIA_ButtonControlTypeId || FAILED(simple->GetPropertyValue(UIA_IsEnabledPropertyId, &enabled)) ||
+        enabled.vt != VT_BOOL || enabled.boolVal != VARIANT_TRUE)
+        return false;
+    return std::wstring_view(label.bstrVal, SysStringLen(label.bstrVal)) == name;
+}
+
+[[nodiscard]] wil::com_ptr_nothrow<IRawElementProviderFragment> FindNamedEnabledButton(
+    IRawElementProviderFragment* parent, std::wstring_view name, unsigned& remaining, unsigned depth = 0) noexcept
+{
+    wil::com_ptr_nothrow<IRawElementProviderFragment> found;
+    if (!parent || remaining == 0)
+        return found;
+    --remaining;
+    if (depth > 32)
+        return found;
+    if (IsNamedEnabledButton(parent, name))
+    {
+        (void)parent->QueryInterface(IID_PPV_ARGS(found.put()));
+        return found;
+    }
+    wil::com_ptr_nothrow<IRawElementProviderFragment> child;
+    if (FAILED(parent->Navigate(NavigateDirection_FirstChild, child.put())))
+        return found;
+    while (child && remaining != 0)
+    {
+        found = FindNamedEnabledButton(child.get(), name, remaining, depth + 1);
+        if (found)
+            return found;
+        wil::com_ptr_nothrow<IRawElementProviderFragment> next;
+        if (FAILED(child->Navigate(NavigateDirection_NextSibling, next.put())))
+            break;
+        child = std::move(next);
+    }
+    return found;
+}
 
 bool DispatcherFilled(const DocumentSelection& selection, Vec2 point) noexcept
 {
@@ -220,7 +267,8 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "deselect-header-live",
                                "expand-header-live",
                                "contract-header-live",
-                               "lasso-kind-header-live"};
+                               "lasso-kind-header-live",
+                               "deselect-header-widget-live"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -293,7 +341,8 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool heldTarget = heldCrop || heldMask;
         const bool heldHistory = name == "held-foreign-history-close" || heldTarget;
         const bool headerKind = name == "lasso-kind-header-live";
-        const bool headerDeselect = name == "deselect-header-live";
+        const bool headerWidget = name == "deselect-header-widget-live";
+        const bool headerDeselect = name == "deselect-header-live" || headerWidget;
         const bool headerOffset = name == "expand-header-live" || name == "contract-header-live";
         const bool commandDeselect = name == "deselect-live" || name == "deselect-keyboard-live" || headerDeselect;
         const bool commandUndo = name == "undo-live" || name == "undo-keyboard-live";
@@ -1216,7 +1265,43 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             ContinuationReceipt receipt;
             if (headerDeselect)
             {
-                owner->OnSelectionAction(SelectionAction::Deselect, 0.0);
+                if (headerWidget)
+                {
+                    owner->RenderFrame(); // Normal arranged frame supplies lazy UIA, not a new chrome accessor.
+                    auto* rawRoot = owner->_chrome->AccessibilityRoot();
+                    wil::com_ptr_nothrow<IRawElementProviderFragment> root;
+                    if (!expect(rawRoot && SUCCEEDED(rawRoot->QueryInterface(IID_PPV_ARGS(root.put()))) && root,
+                                "real-header-widget-has-normal-window-accessibility-root"))
+                        return 5;
+                    const auto caption = LoadStringResource(nullptr, IDS_SELECTION_DESELECT);
+                    unsigned remaining = 512;
+                    auto button = FindNamedEnabledButton(root.get(), caption, remaining);
+                    UiaRect bounds{};
+                    POINT client{};
+                    const bool rectangle = button && SUCCEEDED(button->get_BoundingRectangle(&bounds)) &&
+                                           bounds.width > 0 && bounds.height > 0;
+                    if (rectangle)
+                        client = {static_cast<LONG>(std::lround(bounds.left + bounds.width * 0.5)),
+                                  static_cast<LONG>(std::lround(bounds.top + bounds.height * 0.5))};
+                    const POINT screen = client;
+                    const bool mapped = rectangle && ScreenToClient(owner->_window.get(), &client);
+                    if (!expect(!caption.empty() && remaining > 0 && mapped &&
+                                    !owner->_chrome->IsCanvasPoint(static_cast<float>(client.x),
+                                                                   static_cast<float>(client.y)),
+                                "bounded-uia-tree-finds-enabled-localized-header-button-outside-canvas"))
+                        return 5;
+                    wil::com_ptr_nothrow<IRawElementProviderFragment> hit;
+                    if (!expect(SUCCEEDED(rawRoot->ElementProviderFromPoint(screen.x, screen.y, hit.put())) &&
+                                    IsNamedEnabledButton(hit.get(), caption),
+                                "uia-point-hit-confirms-real-enabled-deselect-widget"))
+                        return 5;
+                    (void)SendMessageW(owner->_window.get(), WM_LBUTTONDOWN, MK_LBUTTON,
+                                       MAKELPARAM(client.x, client.y));
+                    (void)SendMessageW(owner->_window.get(), WM_LBUTTONUP, 0, MAKELPARAM(client.x, client.y));
+                    // All owned providers die before command pumping or owner shutdown below.
+                }
+                else
+                    owner->OnSelectionAction(SelectionAction::Deselect, 0.0);
                 const auto* queued = owner->_hostRequests.PendingAt(0);
                 const auto* input = queued ? std::get_if<HostCommandInput>(&queued->input.Input()) : nullptr;
                 const bool queuedCommand = owner->_hostRequests.Size() == 1 && !owner->_activeHostRequest && queued &&

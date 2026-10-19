@@ -275,3 +275,12 @@ The DPI fixture uses a screenshot-DPI override plus native `WM_DPICHANGED`, rest
 bounds, and verifies that the same writer survives with unchanged committed state. This is harness-DPI
 message-path evidence; actual monitor transitions, widget interaction and ordinary activation remain
 separate gates. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+
+### Polygonal draft and chrome pointer release
+
+A parked selected Polygonal journal cannot consume the Up belonging to an outside-canvas chrome press. Forward it
+to DxUi before reserving any Polygonal ordinal/raw input, unless the original owns a canvas left press. A canvas
+press released outside retains its original capture/terminal rules. This changes no DxUi dependency or API.
+The actual header-button regression uses the public UIA tree and real HWND Down/Up dispatch; the selected gate
+remains disabled for ordinary input. [Evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).

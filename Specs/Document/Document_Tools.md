@@ -2191,3 +2191,12 @@ may clear immediately. Pointer leave with keep-draft intent retains the original
 committed selection, history, generation and already successful corner receipts while keeping the new preference.
 Joined cleanup refunds every retained owner. This selected callback does not activate ordinary input or qualify the
 complete captured-setting/geometry/device grid. [Evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+
+
+### Original Polygonal chrome release ownership
+
+A parked original Polygonal journal MUST let an outside-canvas left Up reach chrome when it owns no canvas left
+press. This release consumes no Polygonal ordinal or raw record. A captured canvas press released outside remains
+with its original owner. A real header Deselect click then enters the existing ordered host-command barrier; it
+MUST wait for the original cancellation acknowledgment before changing committed selection/history.
+[Evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).

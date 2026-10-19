@@ -3503,3 +3503,13 @@ completed corner receipts. Before pumping, assert the same ticket/controller/cha
 four-corner draft and no second producer. After acknowledgment, require the new preference, all 4,096 prior selection
 centers, exact generation/revision/history, fixed successful receipts and complete joined refunds. Preserve the
 unchanged-product control failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+
+
+## Original Polygonal header widget dispatch regression
+
+Use the normal hidden WARP window and the public ChromeHost accessibility root. A bounded 512-node/depth-32 search
+MUST find the localized enabled Deselect button; its rectangle is outside the canvas and a UIA point hit confirms
+the same enabled button. Release owned COM providers before pumping/destruction. Send HWND left Down/Up, without
+direct callbacks or command injection, and require one exact later Pending command, unchanged original authority
+before acknowledgment, original cancellation, exact selection/history and joined refunds. Retain the unchanged
+product's lost-Up failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
