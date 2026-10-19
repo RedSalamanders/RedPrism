@@ -228,6 +228,15 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
             const auto legacyComposes = owner->_composition.CompositeCount();
             const auto start = target == GradientTarget::MaskPlaced ? Vec2{1.5, 0.5} : Vec2{0.5, 0.5};
             const auto end = target == GradientTarget::MaskPlaced ? Vec2{2.5, 0.5} : Vec2{3.5, 0.5};
+            auto targetCapture = std::make_shared<GradientWorkTestGate>();
+            targetCapture->kind = GradientWorkTestKind::Preview;
+            targetCapture->afterPreparation = true;
+            // This fixture deliberately allows every redrag visit through the same observed gate.
+            targetCapture->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!expect(targetCapture->release && SetEvent(targetCapture->release.get()),
+                        "gradient-target-capture-prepaid-gate-opens-before-request"))
+                return 5;
+            owner->_gradientWorkTestGate = targetCapture;
             owner->BeginGradientDrag(owner->_viewport.ViewFromDocument(start, owner->DocumentSize()));
             expect(owner->_session.PendingGradient() && !owner->_session.PendingGradient()->HasLine() &&
                        !owner->_pendingDisplay.GraphForFrameOwner() && !owner->_composition.HasStroke(),
@@ -236,6 +245,9 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
             owner->EndGradientDrag();
             if (!expect(settle(), "gradient-original-worker-and-GPU-acks-settle"))
                 return 5;
+            expect(targetCapture->rootOnlyCapturedOnOwner && targetCapture->targetCapturesOnOwner.load() == 0 &&
+                       targetCapture->targetCapturesOnWorker.load() >= 1,
+                   "gradient-full-target-captured-on-worker-from-charged-root");
             const auto* pending = owner->_session.PendingGradient();
             PendingDisplaySource descriptor;
             expect(pending && pending->display && pending->display->memory && pending->display->memory->IsBound() &&
@@ -384,6 +396,13 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
             };
             expect(originalPathCount != 0 && outlineMatches(0) && fixedStyleAndPath(),
                    "outline-original-four-corners-and-fixed-DIP-inks-render");
+            auto targetCapture = std::make_shared<PixelMoveWorkTestGate>();
+            targetCapture->kind = PixelMoveWorkTestKind::Preview;
+            targetCapture->afterPreparation = true;
+            if (!expect(targetCapture->release && SetEvent(targetCapture->release.get()),
+                        "move-target-capture-prepaid-gate-opens-before-request"))
+                return 5;
+            owner->_pixelMoveWorkTestGate = targetCapture;
             owner->BeginPixelDrag(Vec2{1.5, 0.5}, duplicate);
             expect(owner->_session.PendingPixelMove() && !owner->_session.PendingPixelMove()->HasOffset() &&
                        !owner->_pendingDisplay.GraphForFrameOwner() && !owner->_composition.HasStroke(),
@@ -425,6 +444,9 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
             owner->_renderer.SetLayoutDpi(static_cast<float>(originalDpi));
             owner->_viewport = originalViewport;
             owner->SyncView();
+            expect(targetCapture->rootOnlyCapturedOnOwner && targetCapture->targetCapturesOnOwner.load() == 0 &&
+                       targetCapture->targetCapturesOnWorker.load() >= 1,
+                   "move-full-target-captured-on-worker-from-charged-root");
             const auto* pending = owner->_session.PendingPixelMove();
             PendingDisplaySource descriptor;
             expect(pending && pending->display && pending->display->memory && pending->display->memory->IsBound() &&

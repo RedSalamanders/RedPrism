@@ -37,6 +37,11 @@ struct PixelMoveWorkTestGate final
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadReleaseRequired{true};
     std::atomic<bool> payloadRetiredOffOwner{false};
+    std::atomic<unsigned int> targetCapturesOnOwner{0};
+    std::atomic<unsigned int> targetCapturesOnWorker{0};
+    std::atomic<std::uint64_t> capturedImageNameUnits{0};
+    std::atomic<std::uint64_t> capturedMaskNameUnits{0};
+    bool rootOnlyCapturedOnOwner = false;
     bool captureReservationHeld = false;
     std::uint64_t reservationBytes = 0;
 };

@@ -93,18 +93,20 @@ namespace
             return RasterEditStatus::Invalid;
         if (std::round(input.offset.x) == 0 && std::round(input.offset.y) == 0)
             return RasterEditStatus::Unchanged;
-        BrushStroke probe(input.layer, false, BrushSettings{}, input.canvasWidth, input.canvasHeight, nullptr);
-        if (!probe.IsValid())
+        const auto plan =
+            BrushStroke::PlanGrid(input.layer, false, BrushSettings{}, input.canvasWidth, input.canvasHeight);
+        if (!plan)
             return RasterEditStatus::Invalid;
-        const auto inverse = probe.PixelToDocument().Inverted();
+        const auto& grid = plan.value();
+        const auto inverse = grid.pixelToDocument.Inverted();
         const auto zero = inverse.Apply({0, 0});
         const auto shifted = inverse.Apply({std::round(input.offset.x), std::round(input.offset.y)});
-        const double landingX = probe.SourceRect().x + shifted.x - zero.x;
-        const double landingY = probe.SourceRect().y + shifted.y - zero.y;
+        const double landingX = grid.sourceRect.x + shifted.x - zero.x;
+        const double landingY = grid.sourceRect.y + shifted.y - zero.y;
         // MoveLifted converts the landing box to a signed grid rectangle. Bound it before floor/cast/addition;
         // an off-canvas move may still clear the hole, but cannot overflow the grid representation.
-        for (const double coordinate : {landingX, landingY, landingX + probe.SourceRect().width + 1.0,
-                                        landingY + probe.SourceRect().height + 1.0})
+        for (const double coordinate :
+             {landingX, landingY, landingX + grid.sourceRect.width + 1.0, landingY + grid.sourceRect.height + 1.0})
             if (!std::isfinite(coordinate) || coordinate < -BrushStroke::kMaxGridSide ||
                 coordinate > BrushStroke::kMaxGridSide)
                 return RasterEditStatus::Invalid;
@@ -288,10 +290,11 @@ std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional
 {
     if (!InputGeometryValid(layer, canvasWidth, canvasHeight, pixelLimit, mask))
         return 0;
-    // A geometry-only CPU probe owns no pixel/coverage allocations and never reaches a graphics device.
-    BrushStroke probe(layer, mask, BrushSettings{}, canvasWidth, canvasHeight, nullptr);
-    if (!probe.IsValid())
+    // Scalar planning creates no stroke, hash containers, source owner or engine lifetime before admission.
+    const auto plan = BrushStroke::PlanGrid(layer, mask, BrushSettings{}, canvasWidth, canvasHeight);
+    if (!plan)
         return 0;
+    const auto& grid = plan.value();
     std::uint64_t bytes = 1024 * 1024;
     if (!AddProduct(bytes, layer.name.size(), 8 * sizeof(wchar_t)) ||
         (layer.asset && !AddProduct(bytes, layer.asset->name.size(), 4 * sizeof(wchar_t))) ||
@@ -303,14 +306,14 @@ std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional
             if (channel.size() > 32 || !AddProduct(bytes, channel.size(), 8 * sizeof(CurvePoint)))
                 return 0;
 
-    const auto gridPixels = static_cast<std::uint64_t>(probe.Width()) * probe.Height();
+    const auto gridPixels = static_cast<std::uint64_t>(grid.width) * grid.height;
     const auto outputPixels = (std::min)(gridPixels, static_cast<std::uint64_t>(pixelLimit));
     const auto channels = mask ? 1ull : 4ull;
     // Private bases and result tile images coexist; current tile/vector/copy scratch fits the fixed allowance.
     if (!AddProduct(bytes, outputPixels, 2 * channels))
         return 0;
-    const auto columns = (static_cast<std::uint64_t>((std::min)(probe.Width(), kMaxCanvasSide)) + 255) / 256 + 1;
-    const auto rows = (static_cast<std::uint64_t>((std::min)(probe.Height(), kMaxCanvasSide)) + 255) / 256 + 1;
+    const auto columns = (static_cast<std::uint64_t>((std::min)(grid.width, kMaxCanvasSide)) + 255) / 256 + 1;
+    const auto rows = (static_cast<std::uint64_t>((std::min)(grid.height, kMaxCanvasSide)) + 255) / 256 + 1;
     if (!AddProduct(bytes, columns * rows, 4 * sizeof(BrushStroke::Tile) + 8 * sizeof(RasterTile) + 256))
         return 0;
     const Raster& source = mask ? layer.mask->asset.image : layer.asset ? layer.asset->image : Raster{};
@@ -351,9 +354,12 @@ std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelect
         !AddProduct(bytes, selection.loops.size(), 2 * sizeof(SelectionLoop)))
         return 0;
     // Tile keys for landing, hole, current/previous landing and merged uniqueness coexist with tile storage.
-    BrushStroke probe(layer, false, BrushSettings{}, canvasWidth, canvasHeight, nullptr);
-    const auto columns = (static_cast<std::uint64_t>((std::min)(probe.Width(), kMaxCanvasSide)) + 255) / 256 + 1;
-    const auto rows = (static_cast<std::uint64_t>((std::min)(probe.Height(), kMaxCanvasSide)) + 255) / 256 + 1;
+    const auto plan = BrushStroke::PlanGrid(layer, false, BrushSettings{}, canvasWidth, canvasHeight);
+    if (!plan)
+        return 0;
+    const auto& grid = plan.value();
+    const auto columns = (static_cast<std::uint64_t>((std::min)(grid.width, kMaxCanvasSide)) + 255) / 256 + 1;
+    const auto rows = (static_cast<std::uint64_t>((std::min)(grid.height, kMaxCanvasSide)) + 255) / 256 + 1;
     return AddProduct(bytes, columns * rows, 8 * sizeof(std::uint64_t)) &&
                    AddBytes(bytes, sizeof(OwnedPixelMoveOpening) + 256)
                ? bytes

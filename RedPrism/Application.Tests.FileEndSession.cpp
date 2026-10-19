@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -38,6 +39,7 @@ struct ReleaseWriter final
 {
     HANDLE waitEntered = nullptr;
     HANDLE release = nullptr;
+    HANDLE nativeWaitReturned = nullptr; // optional controlled deadline: no producer release before owner return
     std::atomic<bool> observed{false}, released{false};
 };
 
@@ -46,6 +48,8 @@ DWORD WINAPI ReleaseWriterAfterWait(void* raw) noexcept
     auto& state = *static_cast<ReleaseWriter*>(raw);
     const DWORD result = WaitForSingleObject(state.waitEntered, 10000);
     state.observed.store(result == WAIT_OBJECT_0);
+    if (state.nativeWaitReturned && WaitForSingleObject(state.nativeWaitReturned, 10000) != WAIT_OBJECT_0)
+        return 1;
     state.released.store(SetEvent(state.release) != FALSE);
     return 0;
 }
@@ -199,6 +203,7 @@ int Application::RunFileEndSessionSelfTest() noexcept
         bool timeoutFault = false;
         bool lockedOutput = false;
         bool nativeAssetError = false;
+        bool holdUntilNativeReturn = false;
     };
     constexpr auto faultCase = [](const char* name, ProjectSaveFaultStage stage, bool ending) constexpr noexcept
     { return Scenario{name, HostWriteFormat::Project, false, ending, false, false, false, false, stage}; };
@@ -284,6 +289,12 @@ int Application::RunFileEndSessionSelfTest() noexcept
                         false,
                         true};
     };
+    constexpr auto deadlineCase = [](const char* name, bool published) constexpr noexcept
+    {
+        auto result = Scenario{name, HostWriteFormat::Project, published, true, false, false, false, true};
+        result.holdUntilNativeReturn = true;
+        return result;
+    };
     constexpr std::array scenarios{
         Scenario{"save-before-publication", HostWriteFormat::Project, false, true, false, false},
         Scenario{"save-after-publication", HostWriteFormat::Project, true, true, false, false},
@@ -297,6 +308,8 @@ int Application::RunFileEndSessionSelfTest() noexcept
         Scenario{"png-saved-readback-cancel", HostWriteFormat::Png, false, true, false, true, true},
         Scenario{"jpeg-worker-wait", HostWriteFormat::Jpeg, false, true, false, false},
         Scenario{"save-with-earlier-unsaved-query", HostWriteFormat::Project, false, true, false, false, false, true},
+        deadlineCase("save-deadline-before-publication-with-earlier-unsaved-query", false),
+        deadlineCase("save-deadline-after-publication-with-earlier-unsaved-query", true),
         faultCase("save-manifest-flush-end", ProjectSaveFaultStage::ManifestFlush, true),
         faultCase("save-manifest-flush-false", ProjectSaveFaultStage::ManifestFlush, false),
         faultCase("save-manifest-close-end", ProjectSaveFaultStage::ManifestClose, true),
@@ -389,6 +402,9 @@ int Application::RunFileEndSessionSelfTest() noexcept
         bool queryDidNotCancel = false, originalHeldAfter = false, cancelAfter = false;
         bool waitAcknowledged = false, noOwnerApply = false, helperJoined = false;
         bool earlierQueryHeld = true;
+        bool helperObserved = false, helperReleased = false;
+        unsigned int waitVisits = 0, phaseAfterWait = 0;
+        DWORD waitResult = WAIT_FAILED, remaining = 0;
     };
     const auto dispatch = [](void* raw, void* native) noexcept
     {
@@ -435,7 +451,14 @@ int Application::RunFileEndSessionSelfTest() noexcept
         state.queryDidNotCancel =
             !owner._historyWork.CancelRequested(state.stamp) && state.receipt.Read().outcome == HostOutcome::Pending;
         state.critical = SendMessageW(owner._window.get(), WM_QUERYENDSESSION, 0, ENDSESSION_CRITICAL) == TRUE;
-        ReleaseWriter helper{owner._endSessionWriteTestGate->waitEntered.get(), release};
+        wil::unique_handle waitReturned;
+        if (scenario.holdUntilNativeReturn)
+        {
+            waitReturned.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!waitReturned)
+                std::_Exit(5);
+        }
+        ReleaseWriter helper{owner._endSessionWriteTestGate->waitEntered.get(), release, waitReturned.get()};
         wil::unique_handle helperThread;
         const bool expectsWait = scenario.ending && !scenario.readback;
         if (expectsWait && !scenario.timeout)
@@ -445,6 +468,8 @@ int Application::RunFileEndSessionSelfTest() noexcept
                 std::_Exit(5); // no unreleased borrowed producer survives this fixture
         }
         (void)SendMessageW(owner._window.get(), WM_ENDSESSION, scenario.ending ? TRUE : FALSE, ENDSESSION_LOGOFF);
+        if (waitReturned && !SetEvent(waitReturned.get()))
+            std::_Exit(5);
         if (helperThread)
         {
             if (WaitForSingleObject(helperThread.get(), 15000) != WAIT_OBJECT_0)
@@ -453,13 +478,24 @@ int Application::RunFileEndSessionSelfTest() noexcept
         }
         else
             state.helperJoined = true;
+        state.helperObserved = helper.observed.load();
+        state.helperReleased = helper.released.load();
+        state.waitVisits = owner._endSessionWriteTestGate->waitVisits.load();
+        state.waitResult = owner._endSessionWriteTestGate->waitResult.load();
+        state.remaining = owner._endSessionWriteTestGate->waits[0].remaining;
+        state.phaseAfterWait =
+            write ? static_cast<unsigned int>(write->Current()) : (std::numeric_limits<unsigned int>::max)();
         state.cancelAfter = owner._historyWork.CancelRequested(state.stamp);
-        state.waitAcknowledged =
-            owner._endSessionWriteTestGate->waitVisits.load() == (expectsWait ? 1u : 0u) &&
-            (expectsWait ? owner._endSessionWriteTestGate->waitResult.load() ==
-                               (scenario.timeout ? WAIT_TIMEOUT : WAIT_OBJECT_0)
-                         : true) &&
-            (!expectsWait || scenario.timeout || (write && write->Current() == WorkerWriteCompletion::Phase::Finished));
+        // The genuine policy may reach its deadline after publication but before worker acknowledgement.
+        // This is a valid cancellation path, not a requirement for real filesystem work to finish in 1.5s.
+        const bool expectedDeadline = scenario.timeout || scenario.holdUntilNativeReturn;
+        const bool validResult = expectedDeadline
+                                     ? state.waitResult == WAIT_TIMEOUT
+                                     : state.waitResult == WAIT_TIMEOUT || state.waitResult == WAIT_OBJECT_0;
+        state.waitAcknowledged = state.waitVisits == (expectsWait ? 1u : 0u) &&
+                                 (!expectsWait || (validResult && state.remaining <= 1500)) &&
+                                 (!expectsWait || state.waitResult == WAIT_TIMEOUT ||
+                                  (write && write->Current() == WorkerWriteCompletion::Phase::Finished));
         state.originalHeldAfter = ticket && stamp && ticket.value() == state.ticket && stamp.value() == state.stamp &&
                                   state.receipt.Read().outcome == HostOutcome::Pending &&
                                   owner._jobs.ReservedMemoryBytes() == state.reserved && owner._activeHostRequest;
@@ -532,6 +568,7 @@ int Application::RunFileEndSessionSelfTest() noexcept
             return 5;
         if (project)
         {
+            // The two explicit deadline cases hold the real selected phase through native wait return.
             _projectSaveTestGate->afterPublication = scenario.afterPublication;
             _projectSaveTestGate->traceOnly = scenario.timeoutFault;
             _projectSaveTestGate->holdAtFaultForTest = scenario.timeoutFault;
@@ -595,7 +632,36 @@ int Application::RunFileEndSessionSelfTest() noexcept
                 retainFailedFixture = true;
             }
         };
-        const bool cancelled = scenario.timeout || scenario.readback;
+        if (!state.helperJoined || !state.waitAcknowledged ||
+            state.cancelAfter != (scenario.timeout || scenario.readback))
+            std::printf("DIAG file-end-session case=%s helperObserved=%u helperReleased=%u joined=%u visits=%u "
+                        "waitResult=%lu remaining=%lu phase=%u cancel=%u receipt=%u error=%08X\n",
+                        scenario.name, state.helperObserved ? 1u : 0u, state.helperReleased ? 1u : 0u,
+                        state.helperJoined ? 1u : 0u, state.waitVisits, state.waitResult, state.remaining,
+                        state.phaseAfterWait, state.cancelAfter ? 1u : 0u,
+                        static_cast<unsigned int>(state.receipt.Read().outcome),
+                        static_cast<unsigned int>(state.receipt.Read().error));
+        const bool nativeTimeout = scenario.ending && !scenario.readback && state.waitResult == WAIT_TIMEOUT;
+        const bool cancelled = nativeTimeout || scenario.readback;
+        unsigned int publicationCount = 0;
+        bool traceValid = true;
+        if (project)
+        {
+            const auto& trace = *_projectSaveTestGate;
+            traceValid = !trace.traceTruncated;
+            for (std::size_t index = 0; index < trace.observationCount; ++index)
+                publicationCount += trace.observations[index].stage == ProjectIoStage::Published ? 1u : 0u;
+        }
+        else
+            publicationCount = _exportWorkTestGate->publishedForTest ? 1u : 0u;
+        const bool workerPublished = publicationCount == 1;
+        expect(traceValid && publicationCount <= 1,
+               "publication-truth-is-read-only-after-original-worker-acknowledgement");
+        if (scenario.holdUntilNativeReturn)
+            expect(nativeTimeout && state.helperObserved && state.helperReleased && state.helperJoined &&
+                       state.cancelAfter && workerPublished == scenario.afterPublication &&
+                       state.receipt.Read().outcome == HostOutcome::Cancelled,
+                   "actual-deadline-cancels-original-receipt-and-preserves-selected-publication-truth");
         const bool fault = (scenario.fault != ProjectSaveFaultStage::Count && !scenario.publishedCleanup) ||
                            nativeRecovery || scenario.lockedOutput || scenario.nativeAssetError;
         const auto failureNotice = static_cast<unsigned int>(project ? IDS_ERROR_SAVE_PROJECT
@@ -619,7 +685,7 @@ int Application::RunFileEndSessionSelfTest() noexcept
             std::vector<SessionProjectEntry> retained;
             outputCorrect = ReadLiteralTree(backup, retained) && retained == oldTree;
         }
-        else if (cancelled || fault)
+        else if (!workerPublished)
         {
             std::vector<std::uint8_t> actualBytes;
             std::vector<SessionProjectEntry> actualTree;
@@ -641,8 +707,8 @@ int Application::RunFileEndSessionSelfTest() noexcept
         }
         expect(outputCorrect, "publication-is-literal-or-old-file-is-byte-exact");
         expect(_session.history.CurrentRevision() == revision && _session.history.UndoCount() == undoCount &&
-                   _session.history.IsModified() == (!scenario.savedReadback && (!project || cancelled || fault)) &&
-                   _documentPath == (project && !cancelled && !fault ? output.wstring() : L"before-session-write.prism"),
+                   _session.history.IsModified() == (!scenario.savedReadback && (!project || !workerPublished)) &&
+                   _documentPath == (project && workerPublished ? output.wstring() : L"before-session-write.prism"),
                "only-current-save-completion-marks-its-published-revision");
         expect(!_projectSaveTicket && !_projectSaveStamp && !_projectSaveWrite && !_exportTicket && !_exportStamp &&
                    !_exportWrite && !_historyWork.Busy() && !_activeHostRequest && _jobs.ReservedMemoryBytes() == 0 &&

@@ -6,10 +6,12 @@
 #include "GradientWorkTestGate.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <string>
 
 int Application::RunGradientWorkSelfTest() noexcept
 {
@@ -211,7 +213,7 @@ int Application::RunGradientWorkSelfTest() noexcept
                !_activeHostRequest && _hostRequests.Size() == 0 && !_hostInputBudget.Used() &&
                _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0;
     };
-    const auto startLine = [&](bool mask, bool restorable) noexcept
+    const auto startLine = [&](bool mask, bool restorable, bool longAssetNames = false) noexcept
     {
         _session.CreateDocument(4, 1);
         const Guid layer = InsertPaintedLayer(_session, L"Gradient source", 4, 1, Vec2{0, 0}, 0.0, 0xFF000000u);
@@ -238,6 +240,28 @@ int Application::RunGradientWorkSelfTest() noexcept
         }
         else
             _session.SelectLayerTarget(layer, false);
+        std::wstring imageAssetName;
+        std::wstring maskAssetName;
+        constexpr std::size_t kAssetNameUnits = 1'048'576;
+        if (longAssetNames)
+        {
+            imageAssetName.assign(kAssetNameUnits, L'P');
+            maskAssetName.assign(kAssetNameUnits, L'M');
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (ImageLayer& candidate : document.layers)
+                                        {
+                                            if (candidate.id == layer)
+                                            {
+                                                candidate.asset->name = imageAssetName;
+                                                if (candidate.mask)
+                                                    candidate.mask->asset.name = maskAssetName;
+                                                break;
+                                            }
+                                        }
+                                    });
+        }
         _session.SetForegroundColor(0xFF000000u);
         _session.SetBackgroundColor(0xFFFFFFFFu);
         _session.gradientSettings = GradientSettings{};
@@ -284,7 +308,8 @@ int Application::RunGradientWorkSelfTest() noexcept
         CancelGradient();
         CancelGradientJobs();
         if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            !setGate(GradientWorkTestKind::Preview, Mode::Success, true) || !startLine(mask, mode == Mode::Restore))
+            !setGate(GradientWorkTestKind::Preview, Mode::Success, true) ||
+            !startLine(mask, mode == Mode::Restore, mode == Mode::Success))
             return 5;
         const auto source = _session.ActiveLayer()->asset->image;
         auto revision = _session.history.CurrentRevision();
@@ -360,6 +385,18 @@ int Application::RunGradientWorkSelfTest() noexcept
             }
             correct = correct && state.changedPalette && _session.history.UndoCount() == count + 1 &&
                       _session.history.UndoName() == L"Gradient";
+            const auto& gate = *_gradientWorkTestGate;
+            const bool rootOnlyCaptured = gate.rootOnlyCapturedOnOwner;
+            const bool targetCopiedOnWorker =
+                gate.targetCapturesOnOwner.load() == 0 && gate.targetCapturesOnWorker.load() == 1;
+            const bool fullMetadataCaptured =
+                gate.capturedImageNameUnits.load() == 1'048'576 && gate.capturedMaskNameUnits.load() == 0;
+            std::printf("%s gradient-host.capture.root-only-owner.image-commit\n", rootOnlyCaptured ? "PASS" : "FAIL");
+            std::printf("%s gradient-host.capture.target-worker-only.image-commit\n",
+                        targetCopiedOnWorker ? "PASS" : "FAIL");
+            std::printf("%s gradient-host.capture.full-image-name.image-commit\n",
+                        fullMetadataCaptured ? "PASS" : "FAIL");
+            correct = correct && rootOnlyCaptured && targetCopiedOnWorker && fullMetadataCaptured;
             _session.Undo();
             std::array<std::uint8_t, 16> restored{};
             _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 4, 1, restored.data(), 16, 0);
@@ -419,7 +456,7 @@ int Application::RunGradientWorkSelfTest() noexcept
     CancelGradient();
     CancelGradientJobs();
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled ||
-        !setGate(GradientWorkTestKind::Preview, Mode::Mask, true) || !startLine(true, false))
+        !setGate(GradientWorkTestKind::Preview, Mode::Mask, true) || !startLine(true, false, true))
         return 5;
     State maskPreview{*this,
                       Mode::Mask,
@@ -446,6 +483,22 @@ int Application::RunGradientWorkSelfTest() noexcept
         maskCommit.receipt.Read().outcome != HostOutcome::Succeeded || !maskCommit.visited || !maskCommit.held ||
         !terminal() || !_session.ActiveLayer()->mask || _session.history.UndoName() != L"Gradient Mask")
         return 5;
+    const auto& maskGate = *_gradientWorkTestGate;
+    const bool maskRootOnlyCaptured = maskGate.rootOnlyCapturedOnOwner;
+    const bool maskTargetCopiedOnWorker =
+        maskGate.targetCapturesOnOwner.load() == 0 && maskGate.targetCapturesOnWorker.load() == 1;
+    const bool maskFullMetadataCaptured =
+        maskGate.capturedImageNameUnits.load() == 1'048'576 && maskGate.capturedMaskNameUnits.load() == 1'048'576;
+    std::printf("%s gradient-host.capture.root-only-owner.mask-commit\n", maskRootOnlyCaptured ? "PASS" : "FAIL");
+    std::printf("%s gradient-host.capture.target-worker-only.mask-commit\n",
+                maskTargetCopiedOnWorker ? "PASS" : "FAIL");
+    std::printf("%s gradient-host.capture.full-image-and-mask-names.mask-commit\n",
+                maskFullMetadataCaptured ? "PASS" : "FAIL");
+    if (!maskRootOnlyCaptured || !maskTargetCopiedOnWorker || !maskFullMetadataCaptured)
+    {
+        SelfTestFailure(L"Gradient mask target capture did not remain worker-owned or preserve full metadata.\n");
+        return 5;
+    }
     std::array<std::uint8_t, 4> maskPixels{};
     _session.ActiveLayer()->mask->asset.image.ReadRegion(0, 0, 4, 1, maskPixels.data(), 4, 255);
     if (maskPixels != std::array<std::uint8_t, 4>{0, 85, 170, 255})

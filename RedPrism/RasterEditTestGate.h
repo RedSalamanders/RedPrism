@@ -4,6 +4,7 @@
 #include "RasterEditWork.h"
 
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <windows.h>
 
@@ -21,12 +22,17 @@ struct RasterEditTestGate final
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadRetiredOffOwner{false};
     std::atomic<unsigned int> historyFaultHits{0};
+    std::atomic<unsigned int> targetCapturesOnOwner{0};
+    std::atomic<unsigned int> targetCapturesOnWorker{0};
+    std::atomic<std::uint64_t> capturedImageNameUnits{0};
+    std::atomic<std::uint64_t> capturedMaskNameUnits{0};
     bool afterPreparation = false;
     bool throwAllocationFailure = false;
     bool throwAdmissionFailure = false;
     bool throwCaptureFailure = false;
     std::optional<DocumentHistory::PrepareStage> historyFailure;
     bool captureReservationHeld = false;
+    bool rootOnlyCapturedOnOwner = false;
     std::uint64_t reservationBytes = 0;
     std::optional<RasterEditStatus> status;
     JobResult result{};

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
@@ -14,6 +15,10 @@
 #include <span>
 #include <utility>
 #include <vector>
+#if defined(_DEBUG) && !defined(__SANITIZE_ADDRESS__)
+#include <atomic>
+#include <crtdbg.h>
+#endif
 
 namespace
 {
@@ -24,6 +29,56 @@ void Expect(bool condition, const char* name)
     std::printf("%s rastereditwork.%s\n", condition ? "PASS" : "FAIL", name);
     gFailures += condition ? 0 : 1;
 }
+
+#if defined(_DEBUG) && !defined(__SANITIZE_ADDRESS__)
+thread_local bool gTrackCrtAllocations = false;
+thread_local std::size_t gTrackedCrtAllocationCount = 0;
+std::atomic<_CRT_ALLOC_HOOK> gPreviousCrtAllocationHook = nullptr;
+
+int AllocationHook(int allocationType, void* userData, std::size_t size, int blockUse, long requestNumber,
+                   const unsigned char* fileName, int lineNumber) noexcept
+{
+    if (gTrackCrtAllocations && (allocationType == _HOOK_ALLOC || allocationType == _HOOK_REALLOC))
+        ++gTrackedCrtAllocationCount;
+    const _CRT_ALLOC_HOOK previous = gPreviousCrtAllocationHook.load(std::memory_order_acquire);
+    return previous != nullptr ? previous(allocationType, userData, size, blockUse, requestNumber, fileName, lineNumber)
+                               : 1;
+}
+
+class ScopedCrtAllocationHook final
+{
+  public:
+    ScopedCrtAllocationHook() noexcept : _previous(_CrtGetAllocHook())
+    {
+        // This test is the sole hook installer. Publish the chain before exposing our callback.
+        gPreviousCrtAllocationHook.store(_previous, std::memory_order_release);
+        (void)_CrtSetAllocHook(&AllocationHook);
+    }
+    ~ScopedCrtAllocationHook()
+    {
+        gTrackCrtAllocations = false;
+        (void)_CrtSetAllocHook(_previous);
+        // Keep the chain valid for an already-entered callback on another thread after restoration.
+    }
+    ScopedCrtAllocationHook(const ScopedCrtAllocationHook&) = delete;
+    ScopedCrtAllocationHook& operator=(const ScopedCrtAllocationHook&) = delete;
+
+  private:
+    _CRT_ALLOC_HOOK _previous;
+};
+
+void BeginCrtAllocationMeasurement() noexcept
+{
+    gTrackedCrtAllocationCount = 0;
+    gTrackCrtAllocations = true;
+}
+
+std::size_t EndCrtAllocationMeasurement() noexcept
+{
+    gTrackCrtAllocations = false;
+    return gTrackedCrtAllocationCount;
+}
+#endif
 
 Raster Bgra(int width, int height, std::span<const std::uint8_t> bytes)
 {
@@ -1195,6 +1250,134 @@ void InvalidOptionsAndResourceFloors()
                RasterEditMemoryBytes(layer, std::nullopt, 0, 2, 4, false) == 0,
            "memory.invalid-inputs-have-no-admissible-reservation");
 }
+
+void PreflightAllocationControls()
+{
+    constexpr std::array<std::uint8_t, 16> imageBytes{3, 7, 11, 255, 13, 17, 19, 255, 23, 29, 31, 255, 37, 41, 43, 255};
+    constexpr std::array<std::uint8_t, 4> maskBytes{17, 73, 151, 239};
+    const Raster image = Bgra(2, 2, imageBytes);
+    const Raster mask = Gray(2, 2, maskBytes);
+    if (!image.HasStorage() || !mask.HasStorage())
+    {
+        Expect(false, "preflight.fixtures-have-storage");
+        return;
+    }
+
+    const ImageLayer imageLayer = Image(image, 2, 2);
+    if (!imageLayer.asset || !imageLayer.asset->thumbnail.HasStorage())
+    {
+        Expect(false, "preflight.image-thumbnail-fixture");
+        return;
+    }
+    ImageLayer unplacedMaskLayer = imageLayer;
+    const Raster maskThumbnail = Raster::MakeThumbnail(mask);
+    if (!maskThumbnail.HasStorage())
+    {
+        Expect(false, "preflight.mask-thumbnail-fixture");
+        return;
+    }
+    unplacedMaskLayer.mask = LayerMask{RasterAsset{mask, maskThumbnail, L"Preflight mask"}};
+    ImageLayer placedMaskLayer = unplacedMaskLayer;
+    LayerTransform placement;
+    placement.origin = Vec2{0.5, 0};
+    placement.size = Vec2{2, 2};
+    placedMaskLayer.mask->placement = placement;
+    const ImageLayer blankLayer = ImageLayer::Blank(L"Blank preflight", Vec2{2, 2});
+    const DocumentSelection selection = Rect(0, 0, 1, 1);
+    const std::uint8_t* const imageDataBefore = imageLayer.asset->image.Data();
+    const std::uint8_t* const maskDataBefore = unplacedMaskLayer.mask->asset.image.Data();
+    const std::uint8_t* const placedMaskDataBefore = placedMaskLayer.mask->asset.image.Data();
+    const auto imageIdentityBefore = imageLayer.asset->image.Identity();
+    const auto maskIdentityBefore = unplacedMaskLayer.mask->asset.image.Identity();
+    const auto placedMaskIdentityBefore = placedMaskLayer.mask->asset.image.Identity();
+
+    // The measured budget functions have not run on these fixtures. A one-time lazy allocation must count.
+    Expect(image.HasStorage() && mask.HasStorage() && imageLayer.asset && unplacedMaskLayer.mask &&
+               placedMaskLayer.mask && !blankLayer.asset,
+           "preflight.cold-source-fixtures-ready-before-first-memory-query");
+
+    std::uint64_t imageBudget = 0;
+    std::uint64_t moveBudget = 0;
+    std::uint64_t unplacedMaskBudget = 0;
+    std::uint64_t placedMaskBudget = 0;
+    std::uint64_t blankBudget = 0;
+    std::uint64_t invalidBudget = 0;
+    std::uint64_t blankMoveBudget = 0;
+#if defined(_DEBUG) && !defined(__SANITIZE_ADDRESS__)
+    std::size_t hookProbeAllocations = 0;
+    std::size_t imageAllocations = 0;
+    std::size_t moveAllocations = 0;
+    std::size_t unplacedMaskAllocations = 0;
+    std::size_t placedMaskAllocations = 0;
+    std::size_t blankAllocations = 0;
+    std::size_t invalidAllocations = 0;
+    std::size_t blankMoveAllocations = 0;
+    {
+        ScopedCrtAllocationHook hook;
+        std::vector<int> hookProbe;
+        BeginCrtAllocationMeasurement();
+        hookProbe.reserve(32);
+        hookProbeAllocations = EndCrtAllocationMeasurement();
+
+        BeginCrtAllocationMeasurement();
+        imageBudget = RasterEditMemoryBytes(imageLayer, std::nullopt, 2, 2, 4, false);
+        imageAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        moveBudget = PixelMoveMemoryBytes(imageLayer, selection, 2, 2, 4);
+        moveAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        unplacedMaskBudget = RasterEditMemoryBytes(unplacedMaskLayer, std::nullopt, 2, 2, 4, true);
+        unplacedMaskAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        placedMaskBudget = RasterEditMemoryBytes(placedMaskLayer, std::nullopt, 2, 2, 4, true);
+        placedMaskAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        blankBudget = RasterEditMemoryBytes(blankLayer, std::nullopt, 2, 2, 4, false);
+        blankAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        invalidBudget = RasterEditMemoryBytes(imageLayer, std::nullopt, 0, 2, 4, false);
+        invalidAllocations = EndCrtAllocationMeasurement();
+        BeginCrtAllocationMeasurement();
+        blankMoveBudget = PixelMoveMemoryBytes(blankLayer, selection, 2, 2, 4);
+        blankMoveAllocations = EndCrtAllocationMeasurement();
+    }
+#else
+    imageBudget = RasterEditMemoryBytes(imageLayer, std::nullopt, 2, 2, 4, false);
+    moveBudget = PixelMoveMemoryBytes(imageLayer, selection, 2, 2, 4);
+    unplacedMaskBudget = RasterEditMemoryBytes(unplacedMaskLayer, std::nullopt, 2, 2, 4, true);
+    placedMaskBudget = RasterEditMemoryBytes(placedMaskLayer, std::nullopt, 2, 2, 4, true);
+    blankBudget = RasterEditMemoryBytes(blankLayer, std::nullopt, 2, 2, 4, false);
+    invalidBudget = RasterEditMemoryBytes(imageLayer, std::nullopt, 0, 2, 4, false);
+    blankMoveBudget = PixelMoveMemoryBytes(blankLayer, selection, 2, 2, 4);
+#endif
+
+    Expect(imageBudget > 0 && moveBudget > 0 && unplacedMaskBudget > 0 && placedMaskBudget > 0 && blankBudget > 0,
+           "preflight.valid-image-masks-and-blank-geometry-have-positive-budgets");
+    Expect(invalidBudget == 0 && blankMoveBudget == 0, "preflight.invalid-and-blank-pixel-move-geometry-refuse-budget");
+    Expect(imageLayer.asset->image.Data() == imageDataBefore &&
+               unplacedMaskLayer.mask->asset.image.Data() == maskDataBefore &&
+               placedMaskLayer.mask->asset.image.Data() == placedMaskDataBefore &&
+               imageLayer.asset->image.Identity() == imageIdentityBefore &&
+               unplacedMaskLayer.mask->asset.image.Identity() == maskIdentityBefore &&
+               placedMaskLayer.mask->asset.image.Identity() == placedMaskIdentityBefore &&
+               std::equal(imageBytes.begin(), imageBytes.end(), imageLayer.asset->image.Data()) &&
+               std::equal(maskBytes.begin(), maskBytes.end(), unplacedMaskLayer.mask->asset.image.Data()) &&
+               std::equal(maskBytes.begin(), maskBytes.end(), placedMaskLayer.mask->asset.image.Data()),
+           "preflight.source-raster-storage-and-pixels-unchanged");
+#if defined(_DEBUG) && !defined(__SANITIZE_ADDRESS__)
+    Expect(hookProbeAllocations > 0, "preflight.debug-hook-observes-vector-reserve");
+    Expect(hookProbeAllocations > 0 && imageAllocations == 0,
+           "preflight.debug-image-budget-window-has-no-crt-allocations");
+    Expect(hookProbeAllocations > 0 && moveAllocations == 0,
+           "preflight.debug-pixel-move-budget-window-has-no-crt-allocations");
+    Expect(hookProbeAllocations > 0 && unplacedMaskAllocations == 0,
+           "preflight.debug-unplaced-mask-budget-window-has-no-crt-allocations");
+    Expect(hookProbeAllocations > 0 && placedMaskAllocations == 0,
+           "preflight.debug-placed-mask-budget-window-has-no-crt-allocations");
+    Expect(hookProbeAllocations > 0 && blankAllocations == 0 && invalidAllocations == 0 && blankMoveAllocations == 0,
+           "preflight.debug-blank-and-invalid-budget-windows-have-no-crt-allocations");
+#endif
+}
 } // namespace
 
 int RunRasterEditWorkTests()
@@ -1216,5 +1399,6 @@ int RunRasterEditWorkTests()
     OwnerPendingOperationRefusals();
     OwnerCandidateValidationRefusals();
     InvalidOptionsAndResourceFloors();
+    PreflightAllocationControls();
     return gFailures;
 }

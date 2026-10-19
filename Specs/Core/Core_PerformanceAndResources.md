@@ -410,7 +410,10 @@ wait registration or periodic wake. Processing startup alone does not activate o
 GPU charges remain held on the owner until actual final worker cleanup returns. Application's retry source adds
 eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
 pressure uses two). Clipboard Inspect/Copy retries retain their admitted record, reservation and receiver while
-waiting; Paste shares a limit of six total Inspect plus owned-Copy acquisitions. A busy transfer MUST release its
+waiting within each admitted phase; Paste shares a limit of six total Inspect plus owned-Copy acquisitions.
+Successful metadata inspection and the separately admitted full read keep the same selected request ordinal
+and history stamp while using their own job tickets. Count successful acquisitions as well as Busy attempts;
+a wait ordinal must not replace the native acquisition count. A busy transfer MUST release its
 compute callback while retaining that state. Relative deadlines and cancellation share one event wait; no extra
 pool, periodic timer, sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published
 acknowledgement. Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not
@@ -588,6 +591,14 @@ Publication swaps replaced document, lasso and selection-move owners into the re
 bound includes retained draft capacities before capture. Token, active-layer and history-epoch validation precede
 publication. The full native configuration matrix passes ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)). This removes history construction from size apply;
 value metadata capture, exact incremental accounting, chrome and uploads remain unqualified costs.
+
+Pixel Move commits and prepared-display previews MUST hold the complete existing phase reservation before
+owner capture. That capture retains only the bounded immutable document root and a targetless job token;
+the worker resolves and copies the full layer and target identity, including mask and adjustment metadata,
+before preparing raster output. Prepared previews release their extra document root on the worker after target
+capture; commits keep the root for history publication. Failed/cancelled capture cannot publish a successful
+targetless result. The existing unprepared-preview route still copies its layer on the owner and remains an
+open capture cost before ordinary activation. Initial physical Ctrl/lift and G1 qualification remain separate.
 
 Gradient events retain primitive endpoints/colors/settings in a one-active/latest-pending mailbox. Pixel/selection
 capture follows full admission in the same suspended/resumed record; no published stroke is borrowed by a worker.
@@ -1857,3 +1868,18 @@ An inside drag retains its original reservation/ticket/barrier while ordered Sav
 DocumentChanged compares only the cached original admission documentSerial before existing display work. Replacement/Clear cancels the same original and resumes it only when parked. This constant-size readiness path performs no root/geometry/pixel traversal, new job admission or foreign-session mutation; joined original retirement remains responsible for its complete existing reservation. A full 128-record scheduler refuses the selected original before worker/root capture or writer opening; the scalar constructed diagnostic state may remain, with no controller/runs/captures/parent admissions. Accepted predecessor jobs must still complete and refund.
 
 Actual PNG/JPEG and quiet picker-seam cases retain the existing writer reservation across export/cancellation. Full selected Release/real-ASan Application rosters, exact source/header/object lineage, PE/PDB/ISA/artifacts and real file readback qualify this component. They establish no ordinary activation, complete phase bounds or G1. [Evidence](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+
+
+## Scalar raster preflight and worker target capture
+
+Raster edit validation and memory estimates, including Gradient and Pixel Move, MUST use the scalar
+`BrushStroke::PlanGrid` geometry. Constructing a full BrushStroke merely to inspect its extent is forbidden
+before admission: its containers can allocate even when no pixel data is painted. This includes invalid,
+empty and outside-selection queries. Preserve the existing grid, byte-budget, overflow and status rules.
+
+RasterEdit commits and Gradient commits/prepared-display previews capture the admitted immutable document
+root and targetless token on the owner. A worker resolves the full layer and target identity, including mask
+metadata. Assetless and mask-only targets retain the existing operation-specific validation. Prepared previews
+drop their extra document-root owner on that worker; commits retain the source for prepared history.
+Unprepared Gradient/Pixel Move previews still require a complete admission envelope before their remaining
+owner capture can be removed. This component does not enable those ordinary display routes.

@@ -177,9 +177,29 @@ int Application::RunPanelWandHostSelfTest() noexcept
                            names[panelIndex], composite, actionName,
                            "physical-admission-preserves-panel-and-selection"))
                     return 5;
-                if (!check(settled() && receipt.Read().outcome == HostOutcome::Succeeded &&
-                               !_session.IsMovingSelection() && !_wandLayerHostTicket && !_historyWork.Busy(),
-                           names[panelIndex], composite, actionName, "original-request-joins-and-finishes"))
+                const bool didSettle = settled();
+                const auto observed = receipt.Read();
+                const bool originalCondition = didSettle && observed.outcome == HostOutcome::Succeeded &&
+                                               !_session.IsMovingSelection() && !_wandLayerHostTicket &&
+                                               !_historyWork.Busy();
+                if (!originalCondition)
+                    std::printf("INFO panel-wand-diagnostic panel=%s composite=%u action=%s settled=%u outcome=%u "
+                                "error=%08X moving=%u wand=%u history-busy=%u idle=%u reserved=%llu releasing=%llu "
+                                "generation=%llu color-sequence=%llu host-stage=%u queued=%zu\n",
+                                names[panelIndex], static_cast<unsigned int>(composite), actionName,
+                                static_cast<unsigned int>(didSettle), static_cast<unsigned int>(observed.outcome),
+                                static_cast<unsigned int>(observed.error),
+                                static_cast<unsigned int>(_session.IsMovingSelection()),
+                                static_cast<unsigned int>(_wandLayerHostTicket.has_value()),
+                                static_cast<unsigned int>(_historyWork.Busy()),
+                                static_cast<unsigned int>(_jobs.IsIdle()),
+                                static_cast<unsigned long long>(_jobs.ReservedMemoryBytes()),
+                                static_cast<unsigned long long>(_jobs.ReleasingMemoryBytes()),
+                                static_cast<unsigned long long>(_session.Generation()),
+                                static_cast<unsigned long long>(_session.ColorEditSequence()),
+                                static_cast<unsigned int>(_hostStage), _hostRequests.Size());
+                if (!check(originalCondition, names[panelIndex], composite, actionName,
+                           "original-request-joins-and-finishes"))
                     return 5;
                 const double x = action == 1 || action == 2 ? 0 : 1;
                 const double width = action == 1 ? 2 : 1;

@@ -500,9 +500,11 @@ bool Run(D3D_DRIVER_TYPE driver)
     if (FAILED(jobs.Submit(next, nextOptions, follower)))
         std::terminate();
     Expect("same-key-follower-queued-behind-original-publication-record", !observation.followerStarted);
-    if (!Until(jobs, routes, [&]() noexcept
-               { return observation.finished && observation.followerFinished && !display.HasPending(); }))
+    if (!Until(
+            jobs, routes, [&]() noexcept
+            { return observation.finished && observation.followerFinished && !display.HasPending() && jobs.IsIdle(); }))
         std::terminate();
+    Expect("original-and-prior-cache-retirement-acknowledgements-join-before-charge-observation", jobs.IsIdle());
     Expect("all-useful-stages-and-final-payload-retirement-run-on-real-workers",
            observation.usefulWorkersOffOwner && observation.streamRetiredOffOwner &&
                observation.payloadRetiredOffOwner && observation.runs == 5 && observation.acknowledgements == 5);

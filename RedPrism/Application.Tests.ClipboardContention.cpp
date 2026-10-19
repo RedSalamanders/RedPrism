@@ -7,6 +7,8 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,6 +17,334 @@
 
 namespace
 {
+
+// TEST-ONLY state witness for one clipboard Paste's cross-stage native acquisition retry accounting.
+// It observes metadata only: it never follows HistoryWorkStamp::owner and owns no resources.
+class ClipboardRetryWitness final
+{
+  public:
+    struct Diagnostics final
+    {
+        JobTicket firstTicket{};
+        JobTicket lastTicket{};
+        HistoryWorkStamp stamp{};
+        std::uint64_t selectedOrdinal = 0;
+        unsigned int lastAttempt = 0;
+        unsigned int handoffCount = 0;
+        bool initialized = false;
+        bool fullCaptured = false;
+    };
+
+    // actualOpens and attempt represent Paste's cumulative Inspect/Copy acquisition number across
+    // metadata-probe and full-read stages. A handoff is a new admitted full-read ticket while the
+    // selected history stamp and ordinal remain exact.
+    [[nodiscard]] bool Observe(JobTicket ticket, HistoryWorkStamp stamp, std::uint64_t selectedOrdinal,
+                               unsigned int attempt, unsigned int actualOpens, std::uint32_t delay,
+                               std::uint32_t expectedDelay, bool fullCaptured, bool allowProbeToReadHandoff) noexcept
+    {
+        if (ticket.slot >= 128 || ticket.generation == 0 || stamp.owner == nullptr || stamp.documentSerial == 0 ||
+            stamp.ordinal == 0 || stamp.acquisition == 0 || selectedOrdinal == 0 || stamp.ordinal != selectedOrdinal ||
+            attempt == 0 || attempt > 5 || actualOpens != attempt || expectedDelay == 0 || delay != expectedDelay)
+        {
+            return false;
+        }
+
+        if (!_state.initialized)
+        {
+            _state.firstTicket = ticket;
+            _state.lastTicket = ticket;
+            _state.stamp = stamp;
+            _state.selectedOrdinal = selectedOrdinal;
+            _state.lastAttempt = attempt;
+            _state.handoffCount = 0;
+            _state.initialized = true;
+            _state.fullCaptured = fullCaptured;
+            return true;
+        }
+
+        if (!(stamp == _state.stamp) || selectedOrdinal != _state.selectedOrdinal || attempt <= _state.lastAttempt ||
+            (_state.fullCaptured && !fullCaptured))
+        {
+            return false;
+        }
+
+        if (!(ticket == _state.lastTicket))
+        {
+            // Exactly one probe-to-read record transition is permitted. The attempt gap proves at
+            // least one successful Inspect acquisition elapsed between the two observed waits.
+            if (_state.handoffCount != 0 || !allowProbeToReadHandoff || !fullCaptured || _state.fullCaptured ||
+                attempt < _state.lastAttempt + 2)
+            {
+                return false;
+            }
+            ++_state.handoffCount;
+            _state.lastTicket = ticket;
+        }
+
+        _state.lastAttempt = attempt;
+        _state.fullCaptured = fullCaptured;
+        return true;
+    }
+
+    [[nodiscard]] const Diagnostics& GetDiagnostics() const noexcept
+    {
+        return _state;
+    }
+
+    [[nodiscard]] unsigned int HandoffCount() const noexcept
+    {
+        return _state.handoffCount;
+    }
+
+    [[nodiscard]] unsigned int LastAttempt() const noexcept
+    {
+        return _state.lastAttempt;
+    }
+
+    [[nodiscard]] JobTicket LastTicket() const noexcept
+    {
+        return _state.lastTicket;
+    }
+
+  private:
+    Diagnostics _state{};
+};
+
+struct ClipboardRetryWitnessTestFact final
+{
+    const char* name = "";
+    bool passed = false;
+};
+
+struct ClipboardRetryWitnessTestResults final
+{
+    static constexpr std::size_t kFactCapacity = 20;
+    ClipboardRetryWitnessTestFact facts[kFactCapacity]{};
+    std::size_t factCount = 0;
+    int failures = 0;
+};
+
+namespace ClipboardRetryWitnessTests
+{
+inline constexpr std::uint32_t kDelay = 23;
+
+[[nodiscard]] inline JobTicket Ticket(std::size_t slot, std::uint64_t generation = 1) noexcept
+{
+    return JobTicket{slot, generation};
+}
+
+[[nodiscard]] inline HistoryWorkStamp Stamp(const void* owner, std::uint64_t documentSerial = 17,
+                                            std::uint64_t ordinal = 41, std::uint64_t acquisition = 3) noexcept
+{
+    return HistoryWorkStamp{owner, documentSerial, ordinal, HistoryWorkKind::Import, acquisition};
+}
+
+[[nodiscard]] inline bool SameDiagnostics(const ClipboardRetryWitness::Diagnostics& left,
+                                          const ClipboardRetryWitness::Diagnostics& right) noexcept
+{
+    return left.firstTicket == right.firstTicket && left.lastTicket == right.lastTicket && left.stamp == right.stamp &&
+           left.selectedOrdinal == right.selectedOrdinal && left.lastAttempt == right.lastAttempt &&
+           left.handoffCount == right.handoffCount && left.initialized == right.initialized &&
+           left.fullCaptured == right.fullCaptured;
+}
+
+inline void Record(ClipboardRetryWitnessTestResults& results, const char* name, bool passed) noexcept
+{
+    if (results.factCount == ClipboardRetryWitnessTestResults::kFactCapacity)
+    {
+        ++results.failures;
+        return;
+    }
+    results.facts[results.factCount++] = ClipboardRetryWitnessTestFact{name, passed};
+    if (!passed)
+    {
+        ++results.failures;
+    }
+}
+
+[[nodiscard]] inline bool RejectedWithoutMutation(ClipboardRetryWitness& witness, JobTicket ticket,
+                                                  HistoryWorkStamp stamp, std::uint64_t ordinal, unsigned int attempt,
+                                                  unsigned int actualOpens, std::uint32_t delay,
+                                                  std::uint32_t expectedDelay, bool fullCaptured,
+                                                  bool allowHandoff) noexcept
+{
+    const auto before = witness.GetDiagnostics();
+    const bool rejected = !witness.Observe(ticket, stamp, ordinal, attempt, actualOpens, delay, expectedDelay,
+                                           fullCaptured, allowHandoff);
+    return rejected && SameDiagnostics(before, witness.GetDiagnostics());
+}
+
+// This runner is independent of Win32 and the application fixture. It returns fixed-storage facts;
+// callers decide how to print each PASS/FAIL line. No test execution constitutes a native clipboard claim.
+[[nodiscard]] inline ClipboardRetryWitnessTestResults Run() noexcept
+{
+    ClipboardRetryWitnessTestResults results{};
+    int ownerToken = 0;
+    const auto stamp = Stamp(&ownerToken);
+
+    {
+        ClipboardRetryWitness witness;
+        const bool probe = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool read = witness.Observe(Ticket(5), stamp, 41, 3, 3, kDelay, kDelay, true, true);
+        Record(results, "probe-attempt-1-to-full-read-attempt-3-handoff",
+               probe && read && witness.HandoffCount() == 1 && witness.LastAttempt() == 3 &&
+                   witness.LastTicket() == Ticket(5));
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool first = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool retry = witness.Observe(Ticket(2), stamp, 41, 2, 2, kDelay, kDelay, false, true);
+        Record(results, "same-ticket-retry-increments-global-acquisition",
+               first && retry && witness.HandoffCount() == 0 && witness.LastAttempt() == 2);
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool first = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool later = witness.Observe(Ticket(2), stamp, 41, 4, 4, kDelay, kDelay, false, true);
+        Record(results, "same-ticket-acquisition-gaps-are-allowed", first && later && witness.LastAttempt() == 4);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "ticket-change-during-probe-refused-without-mutation",
+               RejectedWithoutMutation(witness, Ticket(5), stamp, 41, 3, 3, kDelay, kDelay, false, true));
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "copy-or-exhaustion-cannot-authorize-handoff",
+               RejectedWithoutMutation(witness, Ticket(5), stamp, 41, 3, 3, kDelay, kDelay, true, false));
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool first = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool handoff = witness.Observe(Ticket(5), stamp, 41, 3, 3, kDelay, kDelay, true, true);
+        Record(results, "second-ticket-handoff-refused-without-mutation",
+               first && handoff &&
+                   RejectedWithoutMutation(witness, Ticket(7), stamp, 41, 5, 5, kDelay, kDelay, true, true));
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool duplicate =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool regression =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "duplicate-and-regressing-attempts-refused-unchanged", duplicate && regression);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool wrongOpens =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 2, 1, kDelay, kDelay, false, true);
+        const bool wrongDelay =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 2, 2, kDelay + 1, kDelay, false, true);
+        const bool zeroExpected = RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 2, 2, 0, 0, false, true);
+        Record(results, "cumulative-open-count-and-positive-exact-delay-enforced",
+               wrongOpens && wrongDelay && zeroExpected);
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool badSlot =
+            RejectedWithoutMutation(witness, Ticket(128), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool badGeneration =
+            RejectedWithoutMutation(witness, Ticket(2, 0), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool defaultStamp =
+            RejectedWithoutMutation(witness, Ticket(2), HistoryWorkStamp{}, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "out-of-range-or-default-ticket-and-default-stamp-refused",
+               badSlot && badGeneration && defaultStamp && !witness.GetDiagnostics().initialized);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const auto changedDoc = Stamp(&ownerToken, 18, 41, 3);
+        const auto changedAcquisition = Stamp(&ownerToken, 17, 41, 4);
+        const auto changedKind = HistoryWorkStamp{&ownerToken, 17, 41, HistoryWorkKind::Open, 3};
+        const bool doc = RejectedWithoutMutation(witness, Ticket(2), changedDoc, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool acquisition =
+            RejectedWithoutMutation(witness, Ticket(2), changedAcquisition, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool kind =
+            RejectedWithoutMutation(witness, Ticket(2), changedKind, 41, 2, 2, kDelay, kDelay, false, true);
+        Record(results, "changed-document-acquisition-or-kind-stamp-refused", doc && acquisition && kind);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "changed-selected-ordinal-refused-without-mutation",
+               RejectedWithoutMutation(witness, Ticket(2), stamp, 42, 2, 2, kDelay, kDelay, false, true));
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const auto nullOwner = Stamp(nullptr);
+        const auto zeroDocument = Stamp(&ownerToken, 0);
+        const auto zeroAcquisition = Stamp(&ownerToken, 17, 41, 0);
+        const bool owner =
+            RejectedWithoutMutation(witness, Ticket(2), nullOwner, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool document =
+            RejectedWithoutMutation(witness, Ticket(2), zeroDocument, 41, 2, 2, kDelay, kDelay, false, true);
+        const bool acquisition =
+            RejectedWithoutMutation(witness, Ticket(2), zeroAcquisition, 41, 2, 2, kDelay, kDelay, false, true);
+        Record(results, "null-owner-and-zero-source-identities-refused", owner && document && acquisition);
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool ordinalZero =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 0, 1, 1, kDelay, kDelay, false, true);
+        const bool stampOrdinalZero = RejectedWithoutMutation(witness, Ticket(2), Stamp(&ownerToken, 17, 0, 3), 0, 1, 1,
+                                                              kDelay, kDelay, false, true);
+        Record(results, "zero-selected-or-stamp-ordinal-refused", ordinalZero && stampOrdinalZero);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool full = witness.Observe(Ticket(2), stamp, 41, 2, 2, kDelay, kDelay, true, true);
+        const bool revert = RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 3, 3, kDelay, kDelay, false, true);
+        Record(results, "full-captured-state-is-monotonic", full && revert && witness.GetDiagnostics().fullCaptured);
+    }
+    {
+        ClipboardRetryWitness witness;
+        (void)witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "ticket-handoff-requires-one-successful-acquisition-gap",
+               RejectedWithoutMutation(witness, Ticket(5), stamp, 41, 2, 2, kDelay, kDelay, true, true));
+    }
+    {
+        ClipboardRetryWitness witness;
+        const auto wrongOrdinalStamp = Stamp(&ownerToken, 17, 42, 3);
+        Record(results, "stamp-ordinal-must-equal-selected-ordinal",
+               RejectedWithoutMutation(witness, Ticket(2), wrongOrdinalStamp, 41, 1, 1, kDelay, kDelay, false, true));
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool attemptZero =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 0, 0, kDelay, kDelay, false, true);
+        const bool attemptSix =
+            RejectedWithoutMutation(witness, Ticket(2), stamp, 41, 6, 6, kDelay, kDelay, false, true);
+        Record(results, "attempt-range-one-through-five-enforced", attemptZero && attemptSix);
+    }
+    {
+        ClipboardRetryWitness witness;
+        const bool first = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        const bool gap = witness.Observe(Ticket(2), stamp, 41, 3, 3, kDelay, kDelay, false, true);
+        Record(results, "same-record-global-attempt-gap-is-valid", first && gap && witness.HandoffCount() == 0);
+    }
+    {
+        ClipboardRetryWitness witness;
+        int foreignOwner = 0;
+        const bool first = witness.Observe(Ticket(2), stamp, 41, 1, 1, kDelay, kDelay, false, true);
+        Record(results, "different-live-history-owner-refused",
+               first && RejectedWithoutMutation(witness, Ticket(2), Stamp(&foreignOwner), 41, 2, 2, kDelay, kDelay,
+                                                false, true));
+    }
+    return results;
+}
+} // namespace ClipboardRetryWitnessTests
+
+[[nodiscard]] inline ClipboardRetryWitnessTestResults RunClipboardRetryWitnessTests() noexcept
+{
+    return ClipboardRetryWitnessTests::Run();
+}
+
 struct ClipboardHolder final
 {
     wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -264,6 +594,12 @@ int VerifyClipboardHolderSetup() noexcept
 
 int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) noexcept
 {
+    const auto witnessControls = RunClipboardRetryWitnessTests();
+    for (std::size_t i = 0; i < witnessControls.factCount; ++i)
+        std::printf("%s clipboard-retry-witness.%s\n", witnessControls.facts[i].passed ? "PASS" : "FAIL",
+                    witnessControls.facts[i].name);
+    if (witnessControls.factCount != 19 || witnessControls.failures)
+        return 5;
     if (const int failed = VerifyClipboardHolderSetup(); failed != 0)
         return failed;
     unsigned checks = 0;
@@ -291,22 +627,36 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
     {
         scenario = item.name;
         ClipboardHolder holder;
+        ClipboardHolder secondHolder;
         holder.installDib = item.paste;
         struct Retry final
         {
             ClipboardHolder& holder;
+            ClipboardHolder& secondHolder;
+            wil::unique_handle secondThread;
+            ClipboardWorkTestGate* gate = nullptr; // borrowed until both jobs and threads have joined
+            bool forceHandoff = false;
+            bool secondStarted = false;
+            bool secondReady = false;
+            bool secondHeld = false;
+            std::atomic<bool> secondBusyObserved{false};
+            std::uint64_t selectedOrdinal = 0;
+            std::uint64_t selectedDocumentSerial = 0;
             Application* owner = nullptr; // accessed only by the owner-side armed callback
             bool releaseOnArm = false;
             unsigned armed = 0;
             unsigned heldWaits = 0, closedWaits = 0;
-            std::optional<JobTicket> ticket;
+            ClipboardRetryWitness witness;
+            bool paste = false;
             bool sameTicket = true;
             bool actualHolder = true;
             bool originalBarrier = true;
             bool signalSucceeded = true;
             std::atomic<bool> callbackFailed{false};
-        } retry{holder};
+        } retry{holder, secondHolder};
+        retry.forceHandoff = item.paste && item.release;
         retry.releaseOnArm = item.release;
+        retry.paste = item.paste;
         ApplicationProcessingTestProbe probe;
         probe.workerCount = 2;
         probe.retryWait.context = &retry;
@@ -315,13 +665,23 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             auto& observed = *static_cast<Retry*>(raw);
             auto& app = *observed.owner;
             ++observed.armed;
-            if (!observed.ticket)
-                observed.ticket = ticket;
-            observed.sameTicket = observed.sameTicket && observed.ticket.value() == ticket &&
-                                  number == observed.armed && delay == RetryWaitQueue::DelayMs(number);
-            // Only the first release wait is caused by our held clipboard. Inspect and Copy share
-            // six native acquisitions; an unrelated desktop owner may deny a later acquisition after
-            // our holder has closed. Every later wait must still retain the same ticket and barriers.
+            const auto* gate = app._clipboardWorkTestGate.get();
+            const auto stamp = app._clipboardStamp.value_or(HistoryWorkStamp{});
+            const auto ordinal = app._activeHostRequest ? app._activeHostRequest->ordinal : 0;
+            const bool fullCaptured = gate && gate->captureReservationHeld && gate->reservationBytes &&
+                                      app._jobs.ReservedMemoryBytes() >= gate->reservationBytes;
+            observed.sameTicket =
+                observed.sameTicket &&
+                observed.witness.Observe(ticket, stamp, ordinal, number, gate ? gate->openAttempts.load() : 0, delay,
+                                         RetryWaitQueue::DelayMs(number), fullCaptured,
+                                         observed.paste && observed.releaseOnArm);
+            observed.originalBarrier =
+                observed.originalBarrier && app._historyWork.IsCurrent(stamp) && app._activeHostRequest &&
+                stamp.documentSerial == app._activeHostRequest->documentSerial && ordinal == observed.selectedOrdinal &&
+                stamp.documentSerial == observed.selectedDocumentSerial;
+            // Every Busy retains its admitted phase's ticket and reservation. Paste may hand off
+            // once from metadata inspection to a fully reserved read under the same selected request.
+            // A second actual OS owner forces Busy after the successful inspection, without injection.
             const bool expectHeld = !observed.releaseOnArm || observed.armed == 1;
             const bool held = observed.holder.acquired.load() &&
                               GetOpenClipboardWindow() == observed.holder.window.load() &&
@@ -336,6 +696,15 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
                                        app._jobs.ReservedMemoryBytes() > 0 && app._retryWait.HasPending();
             if (observed.releaseOnArm && observed.armed == 1)
                 observed.signalSucceeded = SetEvent(observed.holder.release.get()) != FALSE && observed.signalSucceeded;
+            if (observed.forceHandoff && fullCaptured && !observed.secondBusyObserved.load())
+            {
+                observed.secondHeld = observed.secondReady && observed.secondHolder.acquired.load() &&
+                                      !observed.secondHolder.closedCleanly.load() &&
+                                      GetOpenClipboardWindow() == observed.secondHolder.window.load();
+                observed.secondBusyObserved.store(true);
+                observed.signalSucceeded =
+                    SetEvent(observed.secondHolder.release.get()) != FALSE && observed.signalSucceeded;
+            }
             // Exhaustion keeps the real holder locked and accelerates only the registered deadline event.
             // Release uses the genuine native backoff so the desktop clipboard can finish its handoff.
             if (!observed.releaseOnArm)
@@ -348,6 +717,34 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             if (observed.releaseOnArm && (WaitForSingleObject(observed.holder.closed.get(), 10000) != WAIT_OBJECT_0 ||
                                           !observed.holder.closedCleanly.load()))
                 observed.callbackFailed.store(true);
+            if (observed.secondBusyObserved.load() &&
+                (WaitForSingleObject(observed.secondHolder.closed.get(), 10000) != WAIT_OBJECT_0 ||
+                 !observed.secondHolder.closedCleanly.load()))
+                observed.callbackFailed.store(true);
+        };
+        const auto dispatch = [](void* raw, void* nativeMessage) noexcept
+        {
+            auto& observed = *static_cast<Retry*>(raw);
+            const auto& message = *static_cast<MSG*>(nativeMessage);
+            if (observed.forceHandoff && !observed.secondStarted && !message.hwnd &&
+                message.message == ClipboardWorkTestGate::kMessage)
+            {
+                // PasteInspected has closed the original native inspection before posting this event.
+                // Keep that worker gated until the second independent native thread owns the clipboard.
+                observed.secondStarted = true;
+                observed.secondThread.reset(
+                    CreateThread(nullptr, 0, HoldClipboard, &observed.secondHolder, 0, nullptr));
+                const auto ready =
+                    observed.secondThread ? WaitForSingleObject(observed.secondHolder.ready.get(), 10000) : WAIT_FAILED;
+                observed.secondReady = ready == WAIT_OBJECT_0 && observed.secondHolder.acquired.load() &&
+                                       observed.secondHolder.error.load() == ERROR_SUCCESS &&
+                                       GetOpenClipboardWindow() == observed.secondHolder.window.load() &&
+                                       observed.holder.closedCleanly.load();
+                observed.signalSucceeded =
+                    observed.gate && SetEvent(observed.gate->release.get()) != FALSE && observed.signalSucceeded;
+                return;
+            }
+            Application::DispatchMessageThunk(observed.owner, nativeMessage);
         };
         auto owner = std::make_unique<Application>(instance, true, L"", 0, nullptr, nullptr);
         retry.owner = owner.get();
@@ -359,8 +756,11 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             {
                 (void)SetEvent(holder.release.get());
                 (void)SetEvent(holder.stop.get());
-                if (thread && WaitForSingleObject(thread.get(), 10000) != WAIT_OBJECT_0)
-                    std::_Exit(5); // borrowed thread context must not die after a failed join
+                (void)SetEvent(secondHolder.release.get());
+                (void)SetEvent(secondHolder.stop.get());
+                if ((thread && WaitForSingleObject(thread.get(), 10000) != WAIT_OBJECT_0) ||
+                    (retry.secondThread && WaitForSingleObject(retry.secondThread.get(), 10000) != WAIT_OBJECT_0))
+                    std::_Exit(5); // borrowed thread contexts must not die after a failed join
                 if (owner)
                 {
                     if (savedReady && owner->_window)
@@ -372,7 +772,8 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
                     }
                 }
             });
-        if (!expect(owner && holder.ready && holder.release && holder.closed && holder.stop,
+        if (!expect(owner && holder.ready && holder.release && holder.closed && holder.stop && secondHolder.ready &&
+                        secondHolder.release && secondHolder.closed && secondHolder.stop,
                     "owned-window-thread-events-and-probe-context"))
             return 5;
         owner->_processingTestProbe = &probe;
@@ -403,8 +804,10 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             return 5;
         owner->_clipboardWorkTestGate = std::make_shared<ClipboardWorkTestGate>();
         const auto gate = owner->_clipboardWorkTestGate;
-        gate->phase = ClipboardWorkPhase::CopyPublicationSucceeded;
-        if (!gate->release || !SetEvent(gate->release.get()))
+        retry.gate = gate.get();
+        gate->phase =
+            retry.forceHandoff ? ClipboardWorkPhase::PasteInspected : ClipboardWorkPhase::CopyPublicationSucceeded;
+        if (!gate->release || (!retry.forceHandoff && !SetEvent(gate->release.get())))
             return 5;
         thread.reset(CreateThread(nullptr, 0, HoldClipboard, &holder, 0, nullptr));
         const auto ready = thread ? WaitForSingleObject(holder.ready.get(), 10000) : WAIT_FAILED;
@@ -428,7 +831,12 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             owner->QueueHostInput(HostCommandInput{item.paste ? ChromeHost::kCommandPaste : ChromeHost::kCommandCopy});
         if (!expect(receipt.Read().outcome == HostOutcome::Pending, "original-public-command-descriptor-pending"))
             return 5;
-        if (!expect(SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) == SettleResult::Settled,
+        if (const auto* queued = owner->_hostRequests.PendingAt(0))
+        {
+            retry.selectedOrdinal = queued->ordinal;
+            retry.selectedDocumentSerial = queued->documentSerial;
+        }
+        if (!expect(SettleJobs(owner->_jobs, 15000, dispatch, &retry) == SettleResult::Settled,
                     "production-job-and-real-event-wait-acknowledged"))
             return 5;
         if (!((item.release ? retry.armed >= 1 && retry.armed <= 5 && retry.heldWaits == 1 &&
@@ -437,10 +845,11 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
               retry.sameTicket && retry.actualHolder && retry.originalBarrier && retry.signalSucceeded &&
               !retry.callbackFailed.load()))
             std::printf("DIAG clipboard-holder-retry scenario=%s armed=%u same=%u holder=%u barrier=%u signals=%u "
-                        "callback=%u opens=%u\n",
+                        "callback=%u opens=%u handoffs=%u lastAttempt=%u\n",
                         scenario, retry.armed, retry.sameTicket ? 1u : 0u, retry.actualHolder ? 1u : 0u,
                         retry.originalBarrier ? 1u : 0u, retry.signalSucceeded ? 1u : 0u,
-                        retry.callbackFailed.load() ? 1u : 0u, gate->openAttempts.load());
+                        retry.callbackFailed.load() ? 1u : 0u, gate->openAttempts.load(), retry.witness.HandoffCount(),
+                        retry.witness.LastAttempt());
         expect((item.release ? retry.armed >= 1 && retry.armed <= 5 && retry.heldWaits == 1 &&
                                    retry.closedWaits + 1 == retry.armed
                              : retry.armed == 5 && retry.heldWaits == 5 && retry.closedWaits == 0) &&
@@ -497,6 +906,30 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
                    GetExitCodeThread(thread.get(), &threadExit) && threadExit == 0 && holder.closedCleanly.load() &&
                    holder.error.load() == ERROR_SUCCESS && !holder.window.load(),
                "external-window-thread-and-open-scope-joined-cleanly");
+        if (retry.forceHandoff)
+        {
+            const auto nativeFact = [&](bool value, const char* name) noexcept
+            {
+                failures += value ? 0u : 1u;
+                std::printf("%s clipboard-real-contention.paste-read-handoff.%s\n", value ? "PASS" : "FAIL", name);
+            };
+            nativeFact(retry.secondStarted && retry.secondReady && retry.secondHeld &&
+                           retry.secondBusyObserved.load() && retry.armed >= 2 && retry.witness.HandoffCount() == 1 &&
+                           retry.witness.LastAttempt() >= 3 && gate->openAttempts.load() >= 4 &&
+                           gate->visits.load() == 1,
+                       "second-native-owner-forces-read-busy-after-successful-inspection");
+            nativeFact(retry.sameTicket && retry.originalBarrier && retry.selectedOrdinal != 0 &&
+                           retry.selectedDocumentSerial != 0 && gate->captureReservationHeld,
+                       "new-read-ticket-preserves-selected-ordinal-history-and-full-reservation");
+            (void)SetEvent(secondHolder.release.get());
+            (void)SetEvent(secondHolder.stop.get());
+            DWORD secondExit = STILL_ACTIVE;
+            nativeFact(retry.secondThread && WaitForSingleObject(retry.secondThread.get(), 10000) == WAIT_OBJECT_0 &&
+                           GetExitCodeThread(retry.secondThread.get(), &secondExit) && secondExit == 0 &&
+                           secondHolder.closedCleanly.load() && secondHolder.error.load() == ERROR_SUCCESS &&
+                           !secondHolder.window.load(),
+                       "second-owned-window-thread-and-native-open-scope-joined");
+        }
         const bool restored = SystemClipboard::RestoreContents(owner->_window.get(), saved);
         savedReady = !restored;
         owner->Shutdown();

@@ -334,7 +334,11 @@ exact acknowledged-hook identity, success-only one-time complete reservation tra
 failure/cancellation refusal and charge retention through final weak-control release.
 
 `CompositionTests` registers the original-parent publication controls on WARP and available hardware. These
-check held seeds, exact private publication, foreign GPU-ledger refusal and literal pixel results. Their
+check held seeds, exact private publication, foreign GPU-ledger refusal and literal pixel results. The exact
+post-retirement charge assertion MUST wait for scheduler idle as well as final parent/follower callbacks and
+display retirement: a cache's worker-retired notification can precede the release sink's byte/count refund.
+Require the real event-driven acknowledgment without changing expected bytes, pixels or the failure timeout.
+[Retirement boundary evidence](../TestRuns/P1PublicationParentRetirement_2026-10-19.md). Their
 document swap uses a test editor; it does not qualify application history or rows. The application additionally
 runs `RunPreparedLayerRowsAccessibilitySelfTest` (17 controls) and `RunPreparedRowPublicationTests` (34 controls).
 The accessibility controls require the complete original admission to remain charged after row data retires while
@@ -785,6 +789,23 @@ cancelled preparation and exact complete-node release ownership. Actual host con
 preparation across two coalesced previews plus commit, check latest literal pixels/outline and one undo entry,
 and invalidate/rebuild on gesture reopen. Every terminal commit clears the cache and returns reservations;
 weak-owner controls check final retirement. These additions enter native qualification and make no drag-time claim.
+
+The detached Pixel Move numeric oracle additionally uses the 100×40 red-left/blue-right fixture from
+`retained numeric golden cases–287,331–345`. From selection(10,10,10,10), updates(30.4,0)
+then(60.2,5) give the final absolute rounded offset(60,5). Preview and commit require BGRA hole[0,0,0,0] at
+(15,15), red[0,0,255,255] at(75,20), unchanged blue[255,0,0,255] at(85,20) and red at(5,5), final selection
+bounds(70,15,80,25), one named history entry and one Undo restoring pixels and original selection. Duplicate
+preserves the source while landing red over blue; its final selection translates under the owning tool contract.
+A separate(30,0) outline case requires bounds(40,10,50,20) in the displayed preview, while CPU output awaits
+owner application, and after application. These literal references must not be rebaselined to an implementation.
+
+Pixel Move target-capture host controls observe actual worker/owner thread IDs after full reservation. Commit
+and prepared-display preview require bounded root/token owner capture and complete worker target capture.
+The commit fixture gives image and mask asset names 1,048,576 UTF-16 units each, checks both sizes on the worker,
+the existing output image-name normalization, exact mask-name preservation, literal pixels, history and Undo.
+The unprepared-preview owner-copy route remains explicitly separate. Private component proof and canonical
+integration receipts are recorded in `Specs/TestRuns/P1PixelTargetCapture_2026-10-19.md`; focused model proof
+does not qualify a full Document suite, initial physical Ctrl/lift or ordinary activation.
 
 ### Retained selection and history ownership
 
@@ -3534,3 +3555,43 @@ captured mode, all 4,096 independent expected selection centers, exact one-entry
 and joined refunds. Preserve every predecessor and the unchanged-product refusal. The 15 new
 cases contribute 195 facts (64 cases / 729 facts total at adoption); initial Ctrl/lift is outside
 this qualification. [Focused Release/ASan evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
+
+## Scalar preflight, target metadata and native clipboard handoff controls
+
+Native Debug calibrates the CRT allocation event observer with a known vector allocation before asserting
+that cold image, Pixel Move, two mask-grid, blank and invalid preflight queries allocate nothing. Preserve and chain any
+existing observer, and restore it after the bounded observation. ASan/Release retain the functional grid,
+budget, source-immutability and pixel checks; their CRT hooks are not allocation-event evidence.
+
+RasterEdit and Gradient capture tests use large image/mask names and actual native thread identities.
+They verify complete admission before owner-root capture, worker-only full target capture, assetless/mask-only
+behavior, the established name policy, literal pixels, prepared-preview Apply/Cancel and joined retirement.
+
+The real clipboard contention fixture MUST force a second native holder after successful Paste inspection
+and before the full read. Verify actual Busy without injected failure, one permitted inspection/read ticket
+handoff, unchanged selected ordinal/history stamp, the retained full read reservation, the six-total-acquisition
+cap, literal DIB pixels, exact history/outcome, restored user clipboard and both holder threads/windows joined.
+Pure witness controls reject changed authorities, counters, tickets or reservations. The old global-ticket/
+armed-wait predicate must fail this deterministic native control. Focused passes remain distinct from full
+Application and final canonical matrix qualification.
+
+
+### Confirmed session-end native deadline truth
+
+The file fixture validates the actual native wait result within the single1500ms policy budget from
+`UI_Windowing`. It MUST NOT require real filesystem work to finish inside that allowance. WAIT_TIMEOUT
+requests cancellation of the original ticket/stamp; ordinary acknowledgement may truthfully report a cancelled
+receipt after publication already succeeded. After acknowledgement, the independent worker publication trace,
+literal output bytes and saved-revision/path checks must agree. A receipt alone confers no publication truth.
+Event-controlled before/after-publication cases hold the actual producer through native wait return; they
+fabricate no wait status and change no production deadline. Both retain the earlier unsaved-query generation,
+verify cancellation, original receiver/reservation ownership and final joined refunds.
+
+
+### Panel/Wand completion failure diagnostics
+
+The preserving-panel native Wand fixture reports the actual settlement result, receipt outcome/error,
+selection-move/ticket/history state, scheduler reservation/release bytes and host queue state only when its
+existing completion predicate fails. Its15000ms deadlock bound and all selection/panel/history expectations
+remain unchanged. A passing diagnostic repeat alone does not establish the cause of an earlier failure.

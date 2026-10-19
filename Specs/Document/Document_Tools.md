@@ -1031,7 +1031,11 @@ formats and copy bytes only while their source scope is held. No offered image p
 malformed/over-budget offered images fail locally. A valid owned receipt and exact fingerprints can retain private
 origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
 owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
-The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+Within each admitted phase, its original job, reservation and receiver survive acknowledged event waits.
+Successful metadata inspection may hand off once to the separately admitted full read/decode phase under the
+same selected request ordinal and history stamp. Its acquisition counter includes successful native inspections
+and continues into Copy; the number of armed waits is not that counter. A read retry must retain the full capture
+reservation. Failed/cancelled/stale work publishes no Paste.
 Each admitted native Inspect/Copy attempt uses its own invisible, worker-owned message window for
 `OpenClipboard`. It MUST NOT use a null window or share an opener between simultaneous scopes. Window
 creation failure is a local native failure with empty output; contention remains Busy with the original sealed
@@ -1172,6 +1176,15 @@ retired CPU aggregate is released off owner.
 These settled-source controls do not qualify settlement of a live brush, warp, selection outline/move or transform;
 that remains P1.4/A6/S3 work. Owner metadata capture remains H2, and history/chrome/display costs and the full G1
 measurements remain open. Functional controls establish no G1 bound.
+
+### Detached Pixel Move target metadata
+
+For Pixel Move commits and prepared-display previews, complete reservation precedes owner capture of the
+immutable document root and targetless token. The worker captures the full layer and target identity from that
+root, including mask metadata. A failed capture publishes no pixels/history. The unprepared-preview owner copy
+remains a separate open host cost. The existing raster-edit naming policy applies: the resulting image asset
+name equals the layer name; a carried mask asset name is preserved. This ownership change does not activate
+the initial physical Ctrl/lift route.
 
 ## Color adjustments and filters (C12)
 
@@ -2212,3 +2225,13 @@ and replays its accepted branch. Exact geometry, one final history entry, Undo/R
 refunds retain the existing contract. An initial Ctrl press, including Ctrl pixel lift, remains
 unsupported by this partial selected route. Ordinary activation is still a separate gate.
 [Evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
+
+### RasterEdit and Gradient target metadata
+
+After full memory admission, RasterEdit commits and Gradient commits/prepared-display previews retain only
+an immutable document root and a targetless token on the owner. A worker copies the full target layer and
+identity from that root. Image edits keep the existing output image-name normalization to the layer name;
+mask edits preserve the source image asset name, and carried mask names remain intact. Assetless or mask-only
+targets are validated by the existing raster operation. A failed worker capture publishes no pixels/history.
+This does not complete initial physical Ctrl/lift handling or enable ordinary prepared display policy.

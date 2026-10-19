@@ -21,6 +21,7 @@ struct PixelMovePayload final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory; // All captured/output owners retire first.
     bool preparedDisplay = false;
+    bool workerTargetCapture = false;
     RasterEditInput input;
     std::optional<JobToken> token;
     RasterEditResult committed;
@@ -131,6 +132,31 @@ class Application::PixelMoveJob final : public Job
         }
         if (_gate && _gate->throwAllocationFailure)
             throw std::bad_alloc{};
+        if (_payload->workerTargetCapture)
+        {
+            // Commits and prepared previews already hold the complete document phase envelope.
+            // Resolve and copy all potentially large layer/mask metadata on this worker only.
+            if (!_payload->source || !_payload->token)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            const auto* layer = _payload->source->layers.FindKey(_request.target);
+            if (!layer || !layer->asset)
+                return {JobStatus::Failed, E_ABORT};
+            _payload->input.layer = *layer;
+            _payload->token->target = TargetIdentity{layer->id,   layer->asset->image, layer->transform,
+                                                     layer->mask, layer->isGroup,      layer->adjustment};
+            if (!_commit)
+                _payload->source.reset(); // Drop the extra whole-document owner on the worker after target capture.
+            _payload->workerTargetCapture = false;
+            if (_gate)
+            {
+                const bool onOwner = GetCurrentThreadId() == _ownerThread;
+                _gate->targetCapturesOnOwner.fetch_add(onOwner ? 1u : 0u);
+                _gate->targetCapturesOnWorker.fetch_add(onOwner ? 0u : 1u);
+                _gate->capturedImageNameUnits.store(_payload->input.layer.asset->name.size());
+                _gate->capturedMaskNameUnits.store(
+                    _payload->input.layer.mask ? _payload->input.layer.mask->asset.name.size() : 0);
+            }
+        }
         _payload->input.progressContext = &context;
         _payload->input.progress = [](void* value, std::size_t completed, std::size_t total) noexcept
         {
@@ -214,7 +240,21 @@ class Application::PixelMoveJob final : public Job
             input.prepareDisplay = _prepareDisplay;
             input.ownerThread = _ownerIdentity;
             _original = ticket;
-            input.layer = *layer;
+            _payload->workerTargetCapture = _commit.has_value() || _prepareDisplay;
+            if (_payload->workerTargetCapture)
+            {
+                // This immutable root is included in the pre-capture commit/prepared-preview bound.
+                _payload->source = _owner._session.Document();
+                if (_gate)
+                    _gate->rootOnlyCapturedOnOwner = GetCurrentThreadId() == _ownerThread;
+            }
+            else
+            {
+                // The unprepared-preview fixture path has no complete document-source envelope yet.
+                input.layer = *layer;
+                if (_gate)
+                    _gate->targetCapturesOnOwner.fetch_add(1);
+            }
             input.selection = _owner._session.Selection();
             input.canvasWidth = _owner._session.Document()->width;
             input.canvasHeight = _owner._session.Document()->height;
@@ -228,11 +268,11 @@ class Application::PixelMoveJob final : public Job
                 input.pixelMoveOpening = _owner._pixelMoveOpening;
             // Acquisition and pixelMove settings are separate clocks. A continued selected ordinal has a fresh
             // acquisition; a preview has a mailbox sequence. Neither is compared with the metadata sequence.
+            const auto target = _payload->workerTargetCapture ? std::optional<Guid>{} : std::optional(_request.target);
             _payload->token =
-                _owner._session.CaptureJobToken(_request.target, _commit ? _commit->acquisition : _preview->sequence);
+                _owner._session.CaptureJobToken(target, _commit ? _commit->acquisition : _preview->sequence);
             if (_commit)
             {
-                _payload->source = _owner._session.Document();
                 _payload->historyState = _owner._session.history.CaptureState();
             }
             if (_payload->token && _owner._jobs.Resume(ticket))

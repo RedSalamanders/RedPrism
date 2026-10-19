@@ -36,6 +36,11 @@ struct GradientWorkTestGate final
     std::atomic<unsigned int> visits{0};
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadRetiredOffOwner{false};
+    std::atomic<unsigned int> targetCapturesOnOwner{0};
+    std::atomic<unsigned int> targetCapturesOnWorker{0};
+    std::atomic<std::uint64_t> capturedImageNameUnits{0};
+    std::atomic<std::uint64_t> capturedMaskNameUnits{0};
     bool captureReservationHeld = false;
+    bool rootOnlyCapturedOnOwner = false;
     std::uint64_t reservationBytes = 0;
 };

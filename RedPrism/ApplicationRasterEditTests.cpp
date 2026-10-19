@@ -8,10 +8,12 @@
 #include "resource.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <string>
 
 int Application::RunRasterEditSelfTest() noexcept
 {
@@ -155,6 +157,9 @@ int Application::RunRasterEditSelfTest() noexcept
                     _session.CreateDocument(width, height);
                     const auto target =
                         InsertPaintedLayer(_session, L"Raster source", width, height, {0, 0}, 0, 0xFFFF0000);
+                    constexpr std::size_t kAssetNameUnits = 1'048'576;
+                    std::wstring imageAssetName;
+                    std::wstring maskAssetName;
                     EditLayerRecordsForTest(_session,
                                             [&](DocumentFixture& document)
                                             {
@@ -167,6 +172,18 @@ int Application::RunRasterEditSelfTest() noexcept
                                                 if (large)
                                                     document.selection.reset();
                                             });
+                    if (mode == Mode::Success)
+                    {
+                        imageAssetName.assign(kAssetNameUnits, L'P');
+                        maskAssetName.assign(kAssetNameUnits, L'M');
+                        EditLayerRecordsForTest(_session,
+                                                [&](DocumentFixture& document)
+                                                {
+                                                    auto& layer = document.layers.back();
+                                                    layer.asset->name = imageAssetName;
+                                                    layer.mask->asset.name = maskAssetName;
+                                                });
+                    }
                     _session.SelectLayer(target);
                     if (mask)
                         _session.SelectLayerTarget(target, true);
@@ -285,6 +302,29 @@ int Application::RunRasterEditSelfTest() noexcept
                                                       : (mask ? L"Fill Mask" : L"Fill");
                         correct = correct && _session.history.UndoCount() == count + 1 &&
                                   _session.history.UndoName() == expectedName;
+
+                        const auto& gate = *_rasterEditTestGate;
+                        const bool rootOnlyCaptured = gate.rootOnlyCapturedOnOwner;
+                        const bool targetCopiedOnWorker =
+                            gate.targetCapturesOnOwner.load() == 0 && gate.targetCapturesOnWorker.load() == 1;
+                        const bool fullMetadataCaptured = gate.capturedImageNameUnits.load() == kAssetNameUnits &&
+                                                          gate.capturedMaskNameUnits.load() == kAssetNameUnits;
+                        const bool publishedMetadataPreserved =
+                            layer && layer->asset && layer->mask &&
+                            layer->asset->name == (mask ? imageAssetName : layer->name) &&
+                            layer->mask->asset.name == maskAssetName;
+                        std::printf("%s rasteredit-host.capture.root-only-owner.command-%d.mask-%u.after-%u\n",
+                                    rootOnlyCaptured ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf("%s rasteredit-host.capture.target-worker-only.command-%d.mask-%u.after-%u\n",
+                                    targetCopiedOnWorker ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf(
+                            "%s rasteredit-host.capture.full-image-and-mask-names.command-%d.mask-%u.after-%u\n",
+                            fullMetadataCaptured ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf("%s rasteredit-host.capture.published-name-semantics.command-%d.mask-%u.after-%u\n",
+                                    publishedMetadataPreserved ? "PASS" : "FAIL", command, mask ? 1U : 0U,
+                                    after ? 1U : 0U);
+                        correct = correct && rootOnlyCaptured && targetCopiedOnWorker && fullMetadataCaptured &&
+                                  publishedMetadataPreserved;
                         _session.Undo();
                         correct = correct && _session.ActiveLayer()->asset->image == source;
                         _session.Redo();
