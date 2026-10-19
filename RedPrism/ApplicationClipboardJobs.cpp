@@ -23,6 +23,18 @@
 
 namespace
 {
+void TraceClipboardOwnerForTest(const char* boundary) noexcept
+{
+    const DWORD saved = GetLastError();
+    DWORD process = 0;
+    const HWND owner = GetClipboardOwner();
+    const DWORD thread = owner ? GetWindowThreadProcessId(owner, &process) : 0;
+    std::printf("DIAG clipboard-owner boundary=%s sequence=%lu owner=%p pid=%lu thread=%lu self_pid=%lu\n", boundary,
+                static_cast<unsigned long>(GetClipboardSequenceNumber()), static_cast<void*>(owner),
+                static_cast<unsigned long>(process), static_cast<unsigned long>(thread),
+                static_cast<unsigned long>(GetCurrentProcessId()));
+    SetLastError(saved);
+}
 JobResult PassClipboardGate(const std::shared_ptr<ClipboardWorkTestGate>& gate, DWORD ownerThread,
                             ClipboardWorkPhase phase, JobContext& context)
 {
@@ -1098,6 +1110,8 @@ class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitRe
             return result;
         // Preserve the current private preference on a pre-Empty mirror failure. This worker samples the
         // source before any transfer, never a later owner completion sequence.
+        if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)
+            TraceClipboardOwnerForTest("before-inspect");
         const auto sampledSequence = _gate && _gate->forceUnavailableProbeSequence ? 0u : GetClipboardSequenceNumber();
         if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)
             std::printf(
@@ -1116,6 +1130,8 @@ class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitRe
         ++_attempts;
         _status = ClipboardTransfer::Inspect(_pixelBudget, _inspection, context.cancellation, ClipboardObserver(_gate),
                                              &_availability);
+        if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)
+            TraceClipboardOwnerForTest("after-inspect");
         if (_status == ClipboardTransfer::Status::Cancelled)
             return {JobStatus::Cancelled};
         if (_gate && _gate->phase == ClipboardWorkPhase::PasteProbe)

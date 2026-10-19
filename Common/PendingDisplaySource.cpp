@@ -15,34 +15,55 @@ bool DocumentSession::DescribePendingDisplaySource(PendingDisplaySource& output)
     {
         const auto* gradient = _gradient ? &_gradient.value() : nullptr;
         const auto* move = _pixelMove ? &_pixelMove.value() : nullptr;
-        bool mask = false;
-        if (gradient)
+        if (!gradient && move && move->proceduralOpening)
         {
-            if (!gradient->deferred || !gradient->HasLine() || !gradient->raster || !gradient->publishedSequence ||
-                gradient->publishedGeneration != Generation())
-                return false;
-            result.kind = PendingDisplaySource::Kind::Gradient;
-            result.opening = gradient->opening;
-            result.publication = gradient->publishedSequence;
-            result.target = gradient->target;
-            result.rasterPreview = &gradient->display;
-            mask = gradient->mask;
-        }
-        else
-        {
-            if (!move || !move->deferred || !move->HasOffset() || !move->raster || !move->publishedSequence ||
-                move->openingGeneration != Generation() || move->publishedGeneration != Generation())
+            if (!move->deferred || !move->HasOffset() || move->openingGeneration != Generation() ||
+                !move->proceduralMemory || !move->proceduralMemory->IsBound() || move->proceduralWidth < 1 ||
+                move->proceduralHeight < 1 || !move->proceduralOwnershipBytes)
                 return false;
             result.kind = PendingDisplaySource::Kind::PixelMove;
             result.opening = move->opening;
-            result.publication = move->publishedSequence;
+            result.publication = move->sequence;
             result.target = move->target;
-            result.rasterPreview = &move->display;
+            result.pixelOpening = &move->proceduralOpening;
+            result.pixelMemory = &move->proceduralMemory;
+            result.pixelOffset = move->offset;
+            result.pixelDuplicate = move->duplicate;
+            result.pixelWidth = move->proceduralWidth;
+            result.pixelHeight = move->proceduralHeight;
+            result.pixelOwnershipBytes = move->proceduralOwnershipBytes;
         }
-        const auto& preview = *result.rasterPreview;
-        if (!preview || !preview->memory || !preview->memory->IsBound() || !preview->ownershipBytes ||
-            preview->target != result.target || preview->mask != mask)
-            return false;
+        else
+        {
+            bool mask = false;
+            if (gradient)
+            {
+                if (!gradient->deferred || !gradient->HasLine() || !gradient->raster || !gradient->publishedSequence ||
+                    gradient->publishedGeneration != Generation())
+                    return false;
+                result.kind = PendingDisplaySource::Kind::Gradient;
+                result.opening = gradient->opening;
+                result.publication = gradient->publishedSequence;
+                result.target = gradient->target;
+                result.rasterPreview = &gradient->display;
+                mask = gradient->mask;
+            }
+            else
+            {
+                if (!move || !move->deferred || !move->HasOffset() || !move->raster || !move->publishedSequence ||
+                    move->openingGeneration != Generation() || move->publishedGeneration != Generation())
+                    return false;
+                result.kind = PendingDisplaySource::Kind::PixelMove;
+                result.opening = move->opening;
+                result.publication = move->publishedSequence;
+                result.target = move->target;
+                result.rasterPreview = &move->display;
+            }
+            const auto& preview = *result.rasterPreview;
+            if (!preview || !preview->memory || !preview->memory->IsBound() || !preview->ownershipBytes ||
+                preview->target != result.target || preview->mask != mask)
+                return false;
+        }
         result.document = &_document.value();
     }
     else if (_transformEdit)

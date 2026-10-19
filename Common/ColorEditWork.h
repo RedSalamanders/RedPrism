@@ -13,6 +13,11 @@ struct ColorEditJobInput final
     std::optional<LayerAdjustment> liveAdjustment;
 };
 
+// Scalar/shared-handle opening descriptor. Full semantic mask/name data stays in sourceLayers and is
+// materialized by the worker before a result can carry it to history. No asset string is copied here.
+[[nodiscard]] TargetIdentity DescribeColorEditTarget(const ImageLayer& layer);
+[[nodiscard]] const LayerMask* ColorEditSourceMask(const ColorEdit& edit) noexcept;
+
 enum class ColorEditJobStatus
 {
     Ready,

@@ -207,6 +207,48 @@ void OwnerPreparationRefusalAndWorkerImmutability(int& failures)
            "worker-preparation-leaves-document-history-redo-generation-and-pending-unchanged", failures);
 }
 
+void FinalDocumentPublicationView(int& failures)
+{
+    DocumentSession session;
+    Expect(Initialize(session), "final-view.valid-source-and-redo", failures);
+    auto opening = PrepareOpeningOnWorker(session);
+    auto closure = opening && OpenAndMove(session, *opening) ? PrepareClosureOnWorker(session, *opening) : std::nullopt;
+    Expect(closure.has_value(), "final-view.worker-prepares-private-closure", failures);
+    if (!closure)
+        return;
+
+    const auto source = session.Document().value();
+    const auto generation = session.Generation();
+    const auto undo = session.history.UndoCount();
+    const auto redo = session.history.RedoName();
+    const auto* final = closure->FinalDocument();
+    Expect(final && final->layers.size() == 1 && final->layers[0].asset && final->selection &&
+               final->selection->Bounds() && final->selection->Bounds()->minX == 70 &&
+               final->selection->Bounds()->minY == 15 && PixelIs(final->layers[0].asset->image, 10, 10, kTransparent) &&
+               PixelIs(final->layers[0].asset->image, 70, 15, kRed),
+           "final-view.immutable-borrow-has-independent-final-pixels-and-selection", failures);
+    Expect(session.Document().value() == source && session.Generation() == generation &&
+               session.history.UndoCount() == undo && session.history.RedoName() == redo &&
+               !session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(*closure),
+           "final-view.borrow-grants-no-early-history-document-or-apply-authority", failures);
+    if (!final)
+        return;
+    const CanvasDocument held = *final;
+    PreparedPixelMoveClosure moved(std::move(*closure));
+    Expect(!closure->FinalDocument() && moved.FinalDocument() && *moved.FinalDocument() == held,
+           "final-view.moved-from-closure-refuses-and-new-owner-retains-source", failures);
+    const bool applied = ApplyClosure(session, moved, failures);
+    Expect(applied && !moved.FinalDocument() && session.Document().value() == held &&
+               session.Generation() == generation + 1 && session.history.UndoCount() == undo + 1,
+           "final-view.apply-hides-retired-predecessor-and-adopts-the-prepared-source-once", failures);
+    Expect(applied && !session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(moved) && !moved.FinalDocument(),
+           "final-view.repeated-apply-never-exposes-the-retired-document", failures);
+    session.ClearDocument();
+    Expect(held.layers[0].asset && PixelIs(held.layers[0].asset->image, 70, 15, kRed) &&
+               PixelIs(held.layers[0].asset->image, 10, 10, kTransparent),
+           "final-view.immutable-consumer-survives-session-retirement", failures);
+}
+
 void ApplyMoveUndoRedoAndDuplicate(int& failures)
 {
     {
@@ -313,6 +355,8 @@ void ZeroCancellationAndStaleness(int& failures)
         const auto generationBefore = session.Generation();
         auto closure = PrepareClosureOnWorker(session, opening.value());
         Expect(closure && !closure->ChangesDocument(), "zero.worker-builds-no-history-publication", failures);
+        Expect(closure && !closure->FinalDocument(), "final-view.zero-offset-has-no-final-upload-or-row-source",
+               failures);
         const bool applied = closure && session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(closure.value());
         Expect(applied && !session.PendingPixelMove() && session.Document().value() == documentBefore &&
                    session.history.CurrentRevision() == revisionBefore && session.history.UndoCount() == undoBefore &&
@@ -543,6 +587,7 @@ void ForeignOwnerAndMetadata(int& failures)
 void Run(int& failures)
 {
     OwnerPreparationRefusalAndWorkerImmutability(failures);
+    FinalDocumentPublicationView(failures);
     ApplyMoveUndoRedoAndDuplicate(failures);
     ZeroCancellationAndStaleness(failures);
     ForeignOwnerAndMetadata(failures);

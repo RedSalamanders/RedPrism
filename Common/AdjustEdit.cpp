@@ -213,7 +213,13 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
     edit.original = layer->asset->image;
     edit.transform = layer->transform;
     edit.selection = _document->selection;
-    edit.sourceToken = CaptureJobToken(layer->id);
+    edit.sourceToken = CaptureJobToken(deferred ? std::nullopt : std::optional{layer->id});
+    if (deferred)
+    {
+        edit.sourceLayers = _document->layers;
+        if (edit.sourceToken)
+            edit.sourceToken->target = DescribeColorEditTarget(*layer);
+    }
     // The last applied settings; Levels and Hue/Saturation start at identity and a Gradient Map from the foreground
     // and background colors, as in Photoshop.
     edit.settings = filterSettings.Normalized();
@@ -649,6 +655,14 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     edit.settings = Adjust::AdjustmentSettings(original);
     edit.seed = original.Grain().seed;
     edit.openingSequence = ++_colorEditSequence;
+    if (deferred)
+    {
+        edit.sourceToken = CaptureJobToken(std::nullopt, edit.openingSequence);
+        if (!edit.sourceToken)
+            return false;
+        edit.sourceLayers = _document->layers;
+        edit.sourceToken->target = DescribeColorEditTarget(*layer);
+    }
     _colorEdit = std::move(edit);
     _adjustmentOriginal = original;
     BeginEdit(L"Edit " + std::wstring(FilterKindName(AdjustmentFilterKind(original.kind))) + L" Adjustment");

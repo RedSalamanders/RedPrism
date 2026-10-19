@@ -1,5 +1,6 @@
 #include "PixelMoveOpeningWork.h"
 
+#include "BrushStroke.h"
 #include "SharedPublicationMemory.h"
 
 #include <cmath>
@@ -79,6 +80,16 @@ PreparedPixelMoveOpeningResult DocumentSession::PrepareDeferredPixelMoveOpening(
                                       true,
                                       result._input._opening});
     result._pending->openingGeneration = result._input._read.generation;
+    const auto grid = BrushStroke::PlanGrid(*layer, false, BrushSettings{}, raster.canvasWidth, raster.canvasHeight);
+    if (!grid)
+        return {};
+    result._pending->proceduralOpening = result._lift;
+    result._pending->proceduralMemory = result._memory;
+    result._pending->proceduralWidth = grid->width;
+    result._pending->proceduralHeight = grid->height;
+    result._pending->proceduralOwnershipBytes = PixelMoveOpeningMemoryBytes(result._lift);
+    if (!result._pending->proceduralOwnershipBytes)
+        return {};
     if (cancellation.IsCancelled())
         return {PixelMoveLiftStatus::Cancelled};
     return {PixelMoveLiftStatus::Ready, std::move(result)};

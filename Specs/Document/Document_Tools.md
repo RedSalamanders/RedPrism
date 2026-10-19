@@ -2268,3 +2268,38 @@ sparse result storage, painted tile, translated selection, carried mask and sema
 copied handles and their last weak controls. Other raster-edit kinds refuse this new lifetime option. Default
 inputs preserve their numeric behavior. This core qualification does not activate Ctrl in the native host or
 establish complete large-document phase bounds, typed journal lineage, frame admission or G1.
+
+### Opted-in fixed-press Ctrl host
+
+The explicit selection-press host captures Ctrl and Alt at the accepted Down and selects the complete pixel
+gesture admission before source capture. Later input remains on that original parent. A pending procedural
+opening bypasses the legacy per-tick PixelMove CPU preview job. Its frame consumer separately admits the
+immutable lift, metadata, complete GPU preview and real-use retirement before capture/recording. Zero offset
+excludes the pending pixel frame; redrag cannot inherit an obsolete landing.
+
+Successful pixel closure invalidates the committed document display; outline-only terminals retain their
+selection notification. This component still requests a separate committed frame after final CPU/history
+closure. Original-parent atomic final rows/GPU publication, journal/Wand, complete phase bounds, ordinary
+activation and G1 remain open. [Implementation and private evidence](../TestRuns/P1CtrlPixelHost_2026-10-19.md).
+
+### Typed pixel journal successors
+
+The explicitly enabled Polygonal pixel route admits the complete initial Ctrl branch before capture.
+Its successful closure may issue an opaque `PixelGesture` successor after final CPU/history application
+and input acknowledgment. A younger physical Down recorded before that application uses the original
+family/ordinal and full after-document/editor/history authority. A different family, restore, target,
+canvas or foreign mutation refuses; no fresh token or smaller outline admission blesses the old prefix.
+Every raw record, including ignored Enter/Backspace, counts toward the16-record owner quantum. Missing Up
+cancels the old pixel drag at its last accepted sample and preserves the younger Down. These selected
+routes remain disabled in ordinary startup pending the complete S5/H4/G1 delivery gates.
+
+### Deferred destructive colour metadata
+
+Deferred destructive colour panels retain their immutable opening layer root. The opening token keeps
+mask pixel/thumbnail handles, enabled/linked flags and placement; its mask asset-name string is empty.
+Owner preview/commit input capture shares that root and copies the bounded descriptor/settings only.
+Workers verify the descriptor against the captured opening record before using it. A ready commit copies
+the original complete mask metadata into its carried mask; preview/histogram validation needs no name copy.
+No current-document lookup can refresh a stale opening's authority. Original pixel, selection, mask,
+history, undo/redo and cancellation semantics remain required. Direct inline and adjustment-layer capture
+paths retain their existing behavior; this component establishes no whole-UI or G1 completion claim.

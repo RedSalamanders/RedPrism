@@ -76,6 +76,12 @@ std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit& edit) noexcept
     };
     const auto raster = [&](const Raster& image) noexcept
     { return !image.HasStorage() || (image.RetirementMemoryBytes() && add(1, image.RetirementMemoryBytes())); };
+    if (edit.sourceLayers.Identity())
+    {
+        const auto source = edit.sourceLayers.OwnershipBounds();
+        if (!source || !add(1, source->ownershipBytes))
+            return 0;
+    }
     if (!raster(edit.original) || !raster(edit.grownImage) || !raster(edit.retiredGrownImage) ||
         !raster(edit.previewSource) || !raster(edit.previewRaster) || !raster(edit.previewCoverage) ||
         (edit.selection && !add(1, edit.selection->loops.StorageBytes())))

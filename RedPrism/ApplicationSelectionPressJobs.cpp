@@ -15,10 +15,10 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
     const bool freehand = _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Freehand;
     const auto kind = marquee ? _session.marqueeKind : _session.lassoKind;
     const auto mode = _session.SelectionModeFor((modifiers & MK_SHIFT) != 0, KeyboardState::Held(VK_MENU));
+    const bool control = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
     if (!_selectionPressTestEnabled || (!marquee && !freehand) ||
         (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse && kind != LassoKind::Freehand) ||
-        (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract) ||
-        (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))
+        (mode != SelectionMode::New && mode != SelectionMode::Add && mode != SelectionMode::Subtract))
         return false;
     if (_selectionPressInput.Busy() || (_selectionPressState && _selectionPressState->controller))
     {
@@ -57,10 +57,9 @@ bool Application::QueueSelectionPressOwner(Vec2 pixel, UINT modifiers) noexcept
             break;
         }
     }
-    if (!_selectionPressInput.Begin(
-            opening, context, pixel,
-            {(modifiers & MK_SHIFT) != 0, (modifiers & MK_CONTROL) != 0, KeyboardState::Held(VK_MENU)},
-            _session.selectionAntialiased))
+    if (!_selectionPressInput.Begin(opening, context, pixel,
+                                    {(modifiers & MK_SHIFT) != 0, control, KeyboardState::Held(VK_MENU)},
+                                    _session.selectionAntialiased))
     {
         ReportHostAdmission(ContinuationReceipt::Failure(E_INVALIDARG));
         return true; // The exact queued descriptor fails without source capture.
@@ -145,7 +144,14 @@ void Application::SelectionPressEventOwner(SelectionOutlineGestureState::Event e
         ResumeHostHistory(stamp, outcome, result.error);
     }
     if (!_shutdownStarted)
-        SelectionChanged();
+    {
+        if (event == SelectionOutlineGestureState::Event::Terminal && _selectionPressState &&
+            _selectionPressState->pixelMove && _selectionPressState->closed &&
+            _selectionPressState->outcome.status == JobStatus::Finished)
+            DocumentChanged(); // Pixel closure changed the committed raster, including its first display.
+        else
+            SelectionChanged();
+    }
 }
 HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
 {
@@ -159,7 +165,12 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) ||
         (_selectionPressState && _selectionPressState->controller))
         return E_ABORT;
-    const auto memory = DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
+    const auto down = _selectionPressInput.Peek(opening);
+    if (!down || down->action != HostSelectionPressInput::Action::Down || down->sample.ordinal != arrival->ordinal)
+        return E_ABORT;
+    const bool pixels = down->sample.modifiers.control;
+    const auto memory = pixels ? DescribeSelectionPixelGestureMemory(_session, arrival->kind, arrival->mode)
+                               : DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
     if (!memory)
         return E_OUTOFMEMORY;
     _selectionPressStamp =
@@ -175,6 +186,7 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     _selectionPressState->allowNewEllipse = arrival->kind == LassoKind::Ellipse;
     _selectionPressState->allowPreservingMarquee = arrival->mode != SelectionMode::New;
     _selectionPressState->requireCapturedTarget = true;
+    _selectionPressState->allowInitialPixelMove = pixels;
     _selectionPressState->observer = this;
     _selectionPressState->notify = [](void* raw, SelectionOutlineGestureState::Event event) noexcept
     { static_cast<Application*>(raw)->SelectionPressEventOwner(event); };

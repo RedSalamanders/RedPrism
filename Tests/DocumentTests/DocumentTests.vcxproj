@@ -220,6 +220,9 @@
     <ClInclude Include="PixelMoveOpeningWorkTests.h" />
     <ClInclude Include="Document.Tests.DeferredPixelMoveOpening.h" />
     <ClInclude Include="Document.Tests.PixelMoveClosure.h" />
+    <ClInclude Include="Document.Tests.SelectionPixelJournal.h" />
+    <ClInclude Include="Document.Tests.ColorTargetCapture.h" />
+    <ClInclude Include="Document.Tests.LiveAdjustmentTargetCapture.h" />
     <ClInclude Include="Document.Tests.PixelMoveLiftPrelude.h" />
     <ClInclude Include="Document.Tests.PixelMoveOutputLifetime.h" />
     <ClInclude Include="Document.Tests.PixelMovePreview.h" />
@@ -376,6 +379,9 @@
     <ClCompile Include="PixelMoveOpeningWorkTests.cpp" />
     <ClCompile Include="Document.Tests.DeferredPixelMoveOpening.cpp" />
     <ClCompile Include="Document.Tests.PixelMoveClosure.cpp" />
+    <ClCompile Include="Document.Tests.SelectionPixelJournal.cpp" />
+    <ClCompile Include="Document.Tests.ColorTargetCapture.cpp" />
+    <ClCompile Include="Document.Tests.LiveAdjustmentTargetCapture.cpp" />
     <ClCompile Include="Document.Tests.PixelMoveLiftPrelude.cpp" />
     <ClCompile Include="Document.Tests.PixelMoveOutputLifetime.cpp" />
     <ClCompile Include="Document.Tests.PixelMovePreview.cpp" />

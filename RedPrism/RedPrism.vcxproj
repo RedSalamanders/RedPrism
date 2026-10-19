@@ -691,6 +691,8 @@
     <ClInclude Include="SelectionOutlineGestureState.h" />
     <ClInclude Include="SelectionOutlineGestureMemory.h" />
     <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
+    <ClCompile Include="Application.Tests.CtrlPixelPress.cpp" />
+    <ClCompile Include="Application.Tests.DisplayOpeningRetirement.cpp" />
     <ClCompile Include="Application.Tests.RectanglePress.cpp" />
     <ClCompile Include="Application.Tests.ClipboardContention.cpp" />
     <ClCompile Include="Application.Tests.MarqueeModes.cpp" />

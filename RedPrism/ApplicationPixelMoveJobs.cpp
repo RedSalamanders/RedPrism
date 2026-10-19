@@ -477,6 +477,9 @@ void Application::CancelPixelMoveJobs(bool keepOpening) noexcept
 void Application::RefreshPixelMoveJobs() noexcept
 {
     const auto* pending = _session.PendingPixelMove();
+    if (pending && pending->proceduralOpening)
+        return; // The original physical parent owns all CPU work; the separately admitted frame consumer reads its
+                // lift.
     if (!_pixelMoveCommitTicket && pending && pending->deferred && pending->openingGeneration != _session.Generation())
     {
         _session.CancelPixelMove();

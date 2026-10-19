@@ -65,6 +65,13 @@ class PreparedPixelMoveClosure final
     {
         return _history.has_value();
     }
+    // Immutable lifetime-bound final source for worker rows/residency/recording preparation.
+    // Borrow only while this closure is stable; this grants no history or document apply authority.
+    // Apply swaps _after to the retired predecessor, which must never be reported as the final image.
+    [[nodiscard]] const CanvasDocument* FinalDocument() const noexcept
+    {
+        return !_applied && _input._valid && _after && _history ? &*_after : nullptr;
+    }
     [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
         DocumentHistory::ResidencyPermit& permit) noexcept;
     [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},

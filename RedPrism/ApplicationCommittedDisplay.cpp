@@ -111,8 +111,10 @@ bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedD
     descriptor.key.publication = source.publication;
     descriptor.key.sourceIdentity = source.sourceIdentity;
     descriptor.key.lookupIdentity = source.lookup && *source.lookup ? source.lookup->get() : nullptr;
-    descriptor.key.rasterPreviewIdentity =
-        source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get() : nullptr;
+    descriptor.key.rasterPreviewIdentity = source.pixelOpening && *source.pixelOpening
+                                               ? static_cast<const void*>(source.pixelOpening->get())
+                                           : source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get()
+                                                                                           : nullptr;
     descriptor.document = source.document;
     descriptor.device = _owner._renderer.Device();
     descriptor.immediate = _owner._renderer.Context();

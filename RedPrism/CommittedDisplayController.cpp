@@ -1,7 +1,12 @@
 #include "CommittedDisplayController.h"
 
 #include "AdjustmentDisplayAdmission.h"
+#include "PixelMovePreviewWork.h"
 #include "PreparedRasterPreview.h"
+
+#include <cmath>
+#include <span>
+#include <thread>
 
 #include <exception>
 #include <limits>
@@ -55,8 +60,22 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
     if (source.kind == PendingDisplaySource::Kind::Transform &&
         (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.previewScale != 1))
         return false;
-    const bool raster =
-        source.kind == PendingDisplaySource::Kind::Gradient || source.kind == PendingDisplaySource::Kind::PixelMove;
+    const bool procedural = source.pixelOpening != nullptr;
+    if (procedural &&
+        (source.kind != PendingDisplaySource::Kind::PixelMove || !*source.pixelOpening || !source.pixelMemory ||
+         !*source.pixelMemory || !(*source.pixelMemory)->IsBound() || source.rasterPreview || source.lookup ||
+         source.adjustmentSource || source.adjustmentCoverage || source.original || source.previewScale != 1 ||
+         !source.pixelOwnershipBytes || source.pixelWidth < 1 || source.pixelHeight < 1 ||
+         source.pixelWidth > kMaxCanvasSide || source.pixelHeight > kMaxCanvasSide ||
+         !std::isfinite(source.pixelOffset.x) || !std::isfinite(source.pixelOffset.y) ||
+         source.pixelOffset.x != std::round(source.pixelOffset.x) ||
+         source.pixelOffset.y != std::round(source.pixelOffset.y) || source.pixelOffset == Vec2{}))
+        return false;
+    if (!procedural && (source.pixelMemory || source.pixelOwnershipBytes || source.pixelWidth || source.pixelHeight ||
+                        source.pixelOffset != Vec2{} || source.pixelDuplicate))
+        return false;
+    const bool raster = !procedural && (source.kind == PendingDisplaySource::Kind::Gradient ||
+                                        source.kind == PendingDisplaySource::Kind::PixelMove);
     if (raster != (source.rasterPreview && *source.rasterPreview))
         return false;
     if (raster && (source.lookup || source.adjustmentSource || source.adjustmentCoverage || source.original ||
@@ -74,14 +93,44 @@ bool DescriptorMatches(const CommittedDisplayDescriptor& descriptor, bool pendin
            source.sourceIdentity == descriptor.key.sourceIdentity &&
            descriptor.document->layers.Identity() == source.sourceIdentity &&
            (source.lookup && *source.lookup ? source.lookup->get() : nullptr) == descriptor.key.lookupIdentity &&
-           (source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get() : nullptr) ==
-               descriptor.key.rasterPreviewIdentity;
+           (procedural                                      ? static_cast<const void*>(source.pixelOpening->get())
+            : source.rasterPreview && *source.rasterPreview ? source.rasterPreview->get()
+                                                            : nullptr) == descriptor.key.rasterPreviewIdentity;
 }
 
 bool PreviewEnvelope(const CommittedDisplayDescriptor& descriptor, AdjustmentDisplayAdmission::Envelope& result,
                      std::uint64_t& heldBytes) noexcept
 {
     heldBytes = 0;
+    if (descriptor.pending && descriptor.pending->pixelOpening)
+    {
+        const auto& source = descriptor.pending.value();
+        if (!source.pixelOpening || !*source.pixelOpening || source.pixelWidth < 1 || source.pixelHeight < 1 ||
+            source.pixelWidth > kMaxCanvasSide || source.pixelHeight > kMaxCanvasSide || !source.pixelOwnershipBytes)
+            return false;
+        heldBytes = source.pixelOwnershipBytes;
+        auto width = static_cast<std::uint64_t>(source.pixelWidth),
+             height = static_cast<std::uint64_t>(source.pixelHeight);
+        std::uint64_t texels = 0;
+        for (;;)
+        {
+            if (!Add(texels, width * height))
+                return false;
+            ++result.mipLevels;
+            if (width == 1 && height == 1)
+                break;
+            width = width > 1 ? width / 2 : 1;
+            height = height > 1 ? height / 2 : 1;
+        }
+        result.textureCount = 1;
+        result.logicalGpuBytes = texels * 4;
+        result.additionalGpuBytes = result.logicalGpuBytes + 4ull * 65536;
+        result.logicalCpuBytes = 1024ull * 1024 + static_cast<std::uint64_t>(source.pixelWidth) * 4 * 8;
+        result.additionalCpuBytes = result.logicalCpuBytes;
+        return Add(result.additionalCpuBytes,
+                   sizeof(PreparedPixelMovePreview) + 1024 + SharedPublicationMemory::OwnershipAllowance()) &&
+               (!descriptor.software || Add(result.additionalCpuBytes, result.logicalGpuBytes));
+    }
     if (descriptor.pending && descriptor.pending->rasterPreview)
     {
         const auto& source = *descriptor.pending->rasterPreview;
@@ -165,9 +214,10 @@ JobResult Result(HRESULT status) noexcept
 #pragma warning(disable : 4324)
 struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
 {
-    explicit Storage(std::uint32_t originalOwner = 0) noexcept
-        : ownerThread(originalOwner ? originalOwner : GetCurrentThreadId()), graph(ownerThread)
+    explicit Storage(std::uint32_t originalOwner) noexcept : ownerThread(originalOwner), graph(ownerThread)
     {
+        if (GetCurrentThreadId() == ownerThread)
+            std::terminate(); // The admitted opening worker constructs every frame root.
     }
     const std::uint32_t ownerThread;
     std::shared_ptr<const SharedPublicationMemory> publicationMemory;
@@ -176,6 +226,14 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
     std::optional<CanvasRenderer::AdjustmentPreview> adjustment;
     std::shared_ptr<const PreparedRasterPreview> rasterPreview;
     std::optional<CanvasRenderer::StrokePreview> stroke;
+    std::shared_ptr<const PixelMoveOpening> pixelOpening;
+    std::shared_ptr<const SharedPublicationMemory> pixelOriginalMemory;
+    std::shared_ptr<SharedPublicationMemory> pixelDescriptorMemory;
+    std::thread::id pixelOwner;
+    Guid pixelTarget;
+    Vec2 pixelOffset{};
+    int pixelWidth = 0, pixelHeight = 0;
+    bool pixelDuplicate = false;
     AdjustmentDisplayAdmission::Envelope previewEnvelope;
     RasterResidencyManifestWork::Handle manifest;
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -205,6 +263,9 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
         adjustment.reset();
         stroke.reset();
         rasterPreview.reset();
+        pixelOpening.reset();
+        pixelOriginalMemory.reset();
+        pixelDescriptorMemory.reset();
         manifest.reset();
         source = {};
         captured = {};
@@ -233,6 +294,8 @@ class CommittedDisplayController::DisplayJob final : public Job
     }
     ~DisplayJob() override
     {
+        if (_preparedRoot)
+            std::terminate(); // The joined hook must transfer even an unexposed empty root for worker retirement.
         // Normal final callback or actual Close producer join excludes the worker. A completed cleanup stage
         // may be queued but not drained when Close starts; never leave its deleted payload in the owner cell.
         if (_rootDeleted)
@@ -241,11 +304,44 @@ class CommittedDisplayController::DisplayJob final : public Job
     }
     JobResult Run(JobContext& context) override
     {
-        if (_stage == Stage::Opening || _stage == Stage::TransportRetirement || _stage == Stage::Cleanup)
+        if (_stage == Stage::Opening)
+        {
+            _preparedRoot = std::make_unique<Root>(_owner._ownerThread);
+            _preparedRoot->cell = &_cell;
+            _preparedRoot->bytes = _cpuBytes;
+            _preparedRoot->destroy = &CommittedDisplayController::DestroyRootForWork;
+            return {};
+        }
+        if (_stage == Stage::TransportRetirement || _stage == Stage::Cleanup)
             return {};
         auto& root = *_cell.root;
         if (_stage == Stage::Planning)
         {
+            if (root.pixelOpening)
+            {
+                root.pixelDescriptorMemory = SharedPublicationMemory::CreateForWork(root.bytes);
+                root.publicationMemory = root.pixelDescriptorMemory;
+                auto metadata = PixelMovePreviewReader::PrepareDisplayForWork(
+                    root.pixelOpening, root.pixelOffset, root.pixelDuplicate, root.pixelOwner,
+                    root.pixelDescriptorMemory, context.cancellation);
+                if (!metadata)
+                    return Result(context.cancellation.IsCancelled() ? E_ABORT : E_OUTOFMEMORY);
+                const auto& layout = metadata->Layout();
+                if (layout.target != root.pixelTarget || layout.width != root.pixelWidth ||
+                    layout.height != root.pixelHeight || layout.canvasWidth != root.source.width ||
+                    layout.canvasHeight != root.source.height)
+                    return Result(E_INVALIDARG);
+                root.stroke.emplace();
+                auto& preview = root.stroke.value();
+                preview.layerID = layout.target;
+                preview.width = layout.width;
+                preview.height = layout.height;
+                preview.transform = layout.paintTransform;
+                preview.source = layout.source;
+                preview.sourceX = layout.sourceRect.x;
+                preview.sourceY = layout.sourceRect.y;
+                preview.pixelSource = std::move(metadata);
+            }
             root.manifest =
                 RasterResidencyManifestWork::Prepare(std::move(root.source), _admission, context.cancellation);
             return root.manifest ? JobResult{} : Result(context.cancellation.IsCancelled() ? E_ABORT : E_FAIL);
@@ -261,9 +357,11 @@ class CommittedDisplayController::DisplayJob final : public Job
             });
         // Each raster publication describes ALL touched tiles from its original opening. Inheriting the old
         // stroke grid would retain a previous pixel-move landing when it is absent from the new tile set.
-        status = root.stroke ? root.graph.PrepareStrokeForWork(root.device.get(), root.manifest->Plan().Source(),
-                                                               root.stroke.value(), root.rasterPreview->tiles,
-                                                               root.stream, context.cancellation, nullptr)
+        status = root.stroke ? root.graph.PrepareStrokeForWork(
+                                   root.device.get(), root.manifest->Plan().Source(), root.stroke.value(),
+                                   root.rasterPreview ? std::span<const RasterTile>{root.rasterPreview->tiles}
+                                                      : std::span<const RasterTile>{},
+                                   root.stream, context.cancellation, nullptr)
                  : root.adjustment
                      ? root.graph.PrepareAdjustmentForWork(root.device.get(), root.manifest->Plan().Source(),
                                                            root.adjustment.value(), root.stream, context.cancellation,
@@ -274,6 +372,11 @@ class CommittedDisplayController::DisplayJob final : public Job
     }
     void RetireWorkerStage(JobContext&, JobResult result) noexcept override
     {
+        if (_stage == Stage::Opening && result.status != JobStatus::Finished && _preparedRoot)
+        {
+            _preparedRoot->RetireForWork();
+            _preparedRoot.reset();
+        }
         auto* root = _cell.root;
         if (!root)
             return;
@@ -312,19 +415,35 @@ class CommittedDisplayController::DisplayJob final : public Job
         if (_stage == Stage::Opening)
         {
             if (FAILED(_cell.terminal))
+            {
+                // Cancellation can arrive after the worker's stage hook returned, before this owner
+                // acknowledgement. Its empty root still belongs to the original ticket and must retire
+                // on a worker; neither the callback nor the job destructor may destroy it here.
+                if (_preparedRoot)
+                {
+                    _cell.root = _preparedRoot.release();
+                    BeginCleanupOwner();
+                    return true;
+                }
                 return false;
+            }
+            if (!_preparedRoot)
+            {
+                _cell.terminal = E_UNEXPECTED;
+                return false;
+            }
             CommittedDisplayDescriptor descriptor;
             if (!_owner.CurrentOwner(_cell, &descriptor))
             {
                 _cell.terminal = E_ABORT;
-                return false;
+                _cell.root = _preparedRoot.release();
+                BeginCleanupOwner();
+                return true;
             }
+            _cell.root = _preparedRoot.release();
             try
             {
-                auto root = std::make_unique<Root>();
-                root->cell = &_cell;
-                root->bytes = _cpuBytes;
-                root->destroy = &CommittedDisplayController::DestroyRootForWork;
+                auto* root = _cell.root;
                 root->source = *descriptor.document;
                 std::uint64_t heldBytes = 0;
                 if (!PreviewEnvelope(descriptor, root->previewEnvelope, heldBytes))
@@ -363,11 +482,22 @@ class CommittedDisplayController::DisplayJob final : public Job
                     preview.sourceHeight = metadata.source.HasStorage() ? metadata.sourceRect.height : 0;
                     preview.fill = metadata.fill;
                 }
+                if (descriptor.pending && descriptor.pending->pixelOpening)
+                {
+                    const auto& source = descriptor.pending.value();
+                    root->pixelOpening = *source.pixelOpening;
+                    root->pixelOriginalMemory = *source.pixelMemory;
+                    root->pixelOwner = std::this_thread::get_id();
+                    root->pixelTarget = source.target;
+                    root->pixelOffset = source.pixelOffset;
+                    root->pixelDuplicate = source.pixelDuplicate;
+                    root->pixelWidth = source.pixelWidth;
+                    root->pixelHeight = source.pixelHeight;
+                }
                 root->device = descriptor.device;
                 root->immediate = descriptor.immediate;
                 root->software = descriptor.software;
-                _cell.root = root.release();
-                if (!_cell.root->stroke && _owner._published &&
+                if (!_cell.root->stroke && !_cell.root->pixelOpening && _owner._published &&
                     _owner._published->key.deviceGeneration == _cell.key.deviceGeneration)
                 {
                     const auto& seed = *_owner._published->root;
@@ -382,8 +512,10 @@ class CommittedDisplayController::DisplayJob final : public Job
             }
             catch (const std::bad_alloc&)
             {
-                _cell.terminal = E_OUTOFMEMORY; // Explicit admitted capture boundary; the whole operation fails.
-                return false;
+                _cell.terminal =
+                    E_OUTOFMEMORY; // Explicit admitted capture boundary; preserve worker-only root retirement.
+                BeginCleanupOwner();
+                return true;
             }
         }
         if (_stage == Stage::Recording)
@@ -437,7 +569,11 @@ class CommittedDisplayController::DisplayJob final : public Job
         if (_stage == Stage::TransportRetirement && result.status == JobStatus::Finished && SUCCEEDED(_cell.terminal) &&
             _owner.CurrentOwner(_cell))
         {
-            const HRESULT retained = _owner._jobs->RetainMemory(_cell.ticket, _cell.retained);
+            const HRESULT retained =
+                _cell.root->pixelDescriptorMemory
+                    ? static_cast<HRESULT>(
+                          _cell.root->pixelDescriptorMemory->BindAfterCompletedWork(*_owner._jobs, _cell.ticket))
+                    : _owner._jobs->RetainMemory(_cell.ticket, _cell.retained);
             if (FAILED(retained))
                 std::terminate(); // Descriptor preclaimed the slot; exact successful callback is its sole transfer.
             _owner.PublishedOwner(_cell);
@@ -457,7 +593,20 @@ class CommittedDisplayController::DisplayJob final : public Job
         _owner.WakeOwner();
     }
 
+    void RetainJoinedRetirement(JobScheduler&, JobTicket) noexcept override
+    {
+        if (_preparedRoot)
+        {
+            if (_cell.root)
+                std::terminate();
+            _cell.root =
+                _preparedRoot
+                    .release(); // Actual producer joined; existing controller shutdown retires it on its worker.
+        }
+    }
+
   private:
+    std::unique_ptr<Root> _preparedRoot;
     CommittedDisplayController& _owner;
     Cell& _cell;
     const RasterResidencyCpuAdmission _admission;

@@ -172,6 +172,8 @@ class Application final : public ChromeEvents,
     static int RunStandaloneLassoDraftDisplaySelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLassoHostInputSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionPressGestureSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneDisplayOpeningRetirementSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionPressShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneEllipsePressSelfTest(HINSTANCE instance) noexcept;
@@ -570,6 +572,8 @@ class Application final : public ChromeEvents,
 
     // Selected full physical dispatcher candidate. Stable journal outlives every parent/receipt/token.
     bool _polygonalPressTestEnabled = false;
+    bool _polygonalPixelPressEnabled =
+        false; // Complete pixel admission/typed lineage opt-in; ordinary activation remains gated.
     HostPolygonalInputJournal _polygonalPressInput;
     std::optional<SelectionOutlineGestureState> _polygonalPressState;
     std::optional<HistoryWorkStamp> _polygonalPressStamp;

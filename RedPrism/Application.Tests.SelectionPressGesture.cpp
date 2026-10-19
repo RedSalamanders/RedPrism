@@ -2,6 +2,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ChromeHost.h"
+#include "KeyboardState.h"
 
 #include <array>
 #include <cmath>
@@ -27,6 +28,7 @@ bool PressLiteral(const std::optional<DocumentSelection>& selection, bool moved,
 } // namespace
 int Application::RunStandaloneSelectionPressGestureSelfTest(HINSTANCE instance) noexcept
 {
+    KeyboardState::ScopedSynthetic keyboard; // Physical keys cannot change this standalone driver's input.
     unsigned checks = 0, failures = 0;
     const char* scenario = "setup";
     const auto expect = [&](bool value, const char* label) noexcept

@@ -1900,3 +1900,26 @@ independent final raster/tile/selection owners and expired weak controls; only l
 actual release acknowledgement refund it. Owner operations copy handles or swap prepared owners; failure
 cannot acknowledge or discard a newer opening. The later frame consumer separately admits its full CPU/GPU
 source, metadata, upload and actual-use retirement before producing a display graph.
+
+### Procedural Ctrl host frame ownership
+
+The opted-in physical Ctrl route MUST keep hit/lift/closure on its original fully admitted selection job.
+Pointer moves describe scalar offsets; they MUST NOT schedule a legacy per-tick CPU PixelMove preview.
+Each frame consumer admits its own declared CPU/GPU envelope before capturing the original immutable lift.
+Frame roots are constructed and finally retired on workers, including failed, stale and undrained openings.
+The frame's original complete CPU charge remains bound through surviving strong and expired weak metadata
+controls after actual GPU/root retirement. A newer device or consumer cannot acknowledge an older use.
+
+The current allowances are conservative declarations. Small-fixture accounting and actual-use tests do not
+prove production peak/phase bounds or visible latency. Final original-parent rows/GPU publication and G1
+remain separate qualification gates before ordinary activation.
+
+### Colour capture cost and retained opening records
+
+The selected deferred destructive and live adjustment-layer opening and preview/commit capture MUST NOT copy mask asset-name
+strings. Valid mask asset names are not bounded by the layer-name limit. Capture shares the immutable
+opening records and keeps only scalar/shared-handle target authority. Commit preparation copies carried
+metadata on its worker. `ColorEditHeldMemoryBytes` includes the complete cached source-root ownership;
+commit planning reads the original mask name size rather than the descriptor's empty string. Source,
+temporary, history and display aliases still require complete operation admission and real retirement.
+The declared bounds remain conservative; final production phase bounds and G1 are separate gates.

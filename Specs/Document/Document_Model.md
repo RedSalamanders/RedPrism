@@ -509,3 +509,24 @@ it without the previous extra tile copy. New translated `SelectionLoops` use cha
 masks and newly allocated semantic thumbnails, including small dense copies of sparse Gray8 masks, keep the
 same output lifetime. Private reads do not assemble the source cache. The original producer binds accounting
 before publication/refund. These options create neither new admission nor document/GPU publication authority.
+
+## Original procedural pixel opening metadata
+
+An admitted fixed-press PixelMove may retain its original immutable `PixelMoveOpening`, bound CPU memory
+owner and worker-cached grid dimensions/ownership bound. These handles describe the original lift; offsets
+and duplication remain scalar gesture metadata. They do not create a second CPU producer or permit capture
+without the consumer's own admission. Missing/zero bounds refuse publication. The descriptor and its weak
+controls retain the frame's separately bound original charge until their real release acknowledgment.
+
+## Colour opening source records and final pixel views
+
+A deferred destructive or live adjustment-layer `ColorEdit` owns `sourceLayers` from its opening document. This immutable root
+retains the original asset strings without owner-side copies. Its complete cached ownership bound stays
+part of retirement accounting even after document replacement. The separate small target token is a
+validation descriptor, not a ready carried-mask record. Worker commit preparation reconstructs full mask
+metadata from the captured root only after validating all target fields. It never captures a newer target.
+
+`PreparedPixelMoveClosure::FinalDocument()` provides a lifetime-bound immutable view for final display/row
+preparation. It grants no publication, history-residency or session-mutation authority. Zero offset, moved-
+from and already-applied closures return null. In particular, the retired predecessor swapped into the
+closure after apply must never be exposed as a final source. A copied immutable document keeps its owners.

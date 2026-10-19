@@ -11,19 +11,28 @@
 #include <utility>
 
 class SelectionOutlineGestureJob;
-// Issued only after a successful original journal parent publishes its selection-only result.
+// Issued only after a successful original journal parent closes its selection or pixel gesture.
 // Scalar authority only: no document/history roots. The journal owner outlives all issued receipts.
 // Moving consumes the source; the next original parent consumes its receipt before retaining roots.
 class SelectionOutlineGestureTransition final
 {
   public:
+    enum class ResultKind : std::uint8_t
+    {
+        SelectionOnly,
+        PixelGesture,
+    };
+    [[nodiscard]] ResultKind Kind() const noexcept
+    {
+        return _kind;
+    }
     SelectionOutlineGestureTransition(const SelectionOutlineGestureTransition&) = delete;
     SelectionOutlineGestureTransition& operator=(const SelectionOutlineGestureTransition&) = delete;
     SelectionOutlineGestureTransition& operator=(SelectionOutlineGestureTransition&&) = delete;
     SelectionOutlineGestureTransition(SelectionOutlineGestureTransition&& source) noexcept
         : _family(std::exchange(source._family, nullptr)), _opening(source._opening), _terminal(source._terminal),
           _minimumGeneration(source._minimumGeneration), _after(source._after), _editor(source._editor),
-          _history(source._history)
+          _history(source._history), _kind(source._kind)
     {
     }
 
@@ -32,9 +41,9 @@ class SelectionOutlineGestureTransition final
     SelectionOutlineGestureTransition(const HostPolygonalInputJournal* family, std::uint64_t opening,
                                       std::uint64_t terminal, std::uint64_t minimumGeneration,
                                       DocumentReadAuthority after, HistoryRestoreAuthority editor,
-                                      DocumentHistory::Authority history) noexcept
+                                      DocumentHistory::Authority history, ResultKind kind) noexcept
         : _family(family), _opening(opening), _terminal(terminal), _minimumGeneration(minimumGeneration), _after(after),
-          _editor(editor), _history(history)
+          _editor(editor), _history(history), _kind(kind)
     {
     }
     const HostPolygonalInputJournal* _family;
@@ -42,6 +51,7 @@ class SelectionOutlineGestureTransition final
     DocumentReadAuthority _after;
     HistoryRestoreAuthority _editor;
     DocumentHistory::Authority _history;
+    const ResultKind _kind;
 };
 
 // Stable owner-side borrowing boundary. The application must join the scheduler before these references die.
@@ -127,8 +137,8 @@ struct SelectionOutlineGestureState
     std::optional<LassoFinishGeometry::DrawingPlan> drawingPlan;
     bool allowNewRectangle = false, allowNewEllipse = false, drawing = false;
     bool allowPreservingMarquee = false;
-    // Selected CPU-only initial Ctrl branch for the fixed press stream. Journal/Wand require their
-    // distinct typed pixel lineage and renderer phases; this flag does not authorize those routes.
+    // Explicit CPU initial Ctrl branch. A journal additionally carries the exact typed predecessor receipt.
+    // This does not authorize Wand, host GPU publication or ordinary activation.
     bool allowInitialPixelMove = false, pixelMove = false;
     bool requireCapturedTarget = false;
     // Caller moves only the exact preceding completed parent's issued transition. Worker admission

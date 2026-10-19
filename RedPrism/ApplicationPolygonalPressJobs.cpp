@@ -75,9 +75,9 @@ bool Application::QueuePolygonalPressOwner(const DxUi::PointerEvent& event, UINT
         return true;
     }
     // Once admitted, a later Ctrl Down belongs to the existing raw journal. Its original
-    // outside-draft branch ignores changed modifiers; a later inside/lift parent still refuses.
-    if (_polygonalPressFailed ||
-        (!existing && ((event.modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))))
+    // outside-draft branch ignores changed modifiers; a later inside/lift parent needs its separate pixel opt-in.
+    if (_polygonalPressFailed || (!existing && !_polygonalPixelPressEnabled &&
+                                  ((event.modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))))
     {
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
         return true; // Eligible unsupported lift has no synchronous containment fallback.
@@ -299,7 +299,9 @@ HRESULT Application::StartPolygonalPressOwner(std::uint64_t family) noexcept
         _session.history.CaptureState().Depth() != 0 ||
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return E_ABORT;
-    const auto admitted = DescribeSelectionOutlineGestureMemory(_session, LassoKind::Polygonal, context.mode);
+    const bool pixels = _polygonalPixelPressEnabled && first->sample.modifiers.control;
+    const auto admitted = pixels ? DescribeSelectionPixelGestureMemory(_session, LassoKind::Polygonal, context.mode)
+                                 : DescribeSelectionOutlineGestureMemory(_session, LassoKind::Polygonal, context.mode);
     if (!admitted)
         return E_OUTOFMEMORY;
     auto predecessor = _polygonalPressState ? _polygonalPressState->TakeSuccessor()
@@ -315,6 +317,7 @@ HRESULT Application::StartPolygonalPressOwner(std::uint64_t family) noexcept
     state.drawingPlan = admitted->drawing;
     state.allowPreservingMarquee = context.mode != SelectionMode::New;
     state.requireCapturedTarget = true;
+    state.allowInitialPixelMove = pixels;
     if (predecessor)
         state.predecessor.emplace(std::move(*predecessor));
     state.observer = state.hostObserver = this;
@@ -531,7 +534,13 @@ void Application::PolygonalPressEventOwner(SelectionOutlineGestureState::Event e
             std::terminate();
     }
     if (!_shutdownStarted)
-        SelectionChanged();
+    {
+        if (event == SelectionOutlineGestureState::Event::Terminal && state.pixelMove && state.closed &&
+            state.outcome.status == JobStatus::Finished)
+            DocumentChanged();
+        else
+            SelectionChanged();
+    }
 }
 
 void Application::PumpPolygonalPressOwner() noexcept

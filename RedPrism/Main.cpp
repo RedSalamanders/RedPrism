@@ -268,6 +268,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         std::printf("BEGIN self-test.RunStandaloneLassoDraftDisplaySelfTest\n");
         if (const int failed = Application::RunStandaloneLassoDraftDisplaySelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandaloneDisplayOpeningRetirementSelfTest\n");
+        if (const int failed = Application::RunStandaloneDisplayOpeningRetirementSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCtrlPixelPressSelfTest\n");
+        if (const int failed = Application::RunStandaloneCtrlPixelPressSelfTest(instance); failed != 0)
+            return failed;
         std::printf("BEGIN self-test.RunStandaloneSelectionPressGestureSelfTest\n");
         if (const int failed = Application::RunStandaloneSelectionPressGestureSelfTest(instance); failed != 0)
             return failed;

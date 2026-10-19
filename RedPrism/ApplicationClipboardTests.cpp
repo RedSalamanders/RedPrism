@@ -43,11 +43,16 @@ bool ClearClipboardFixture(HWND owner) noexcept
     const auto close = wil::scope_exit([]() noexcept { (void)CloseClipboard(); });
     return EmptyClipboard() != FALSE;
 }
-bool InstallForeignClipboard(HWND owner, bool malformed = false) noexcept
+bool InstallForeignClipboard(HWND owner, bool malformed = false, bool replacementPixel = false) noexcept
 {
-    constexpr std::array<std::uint8_t, 44> literal{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0,  0,  1,  0,  32,
-                                                   0,  0, 0, 0, 0, 4, 0, 0, 0, 0, 0,  0,  0,  0,  0,
-                                                   0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 33, 65, 255};
+    std::array<std::uint8_t, 44> literal{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 32, 0, 0, 0, 0,  0,  4,  0,
+                                         0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 17, 33, 65, 255};
+    if (replacementPixel)
+    {
+        literal[40] = 9;
+        literal[41] = 19;
+        literal[42] = 39;
+    }
     wil::unique_hglobal block(GlobalAlloc(GMEM_MOVEABLE, literal.size()));
     if (!block)
         return false;
@@ -190,6 +195,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Empty,
         Malformed,
         Retry,
+        ReplacedBeforeInspect,
         UnavailableSequence,
         Exhaust,
         EncodeFailure,
@@ -255,6 +261,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"paste-empty", paste, Mode::Empty, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
         Scenario{"paste-malformed", paste, Mode::Malformed, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-retry", paste, Mode::Retry, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
+        Scenario{"paste-replaced-before-inspect", paste, Mode::ReplacedBeforeInspect, ClipboardWorkPhase::PasteProbe,
+                 HostOutcome::Succeeded},
         Scenario{"paste-unavailable-sequence", paste, Mode::UnavailableSequence, ClipboardWorkPhase::PasteProbe,
                  HostOutcome::Succeeded},
         Scenario{"paste-exhaust", paste, Mode::Exhaust, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
@@ -345,6 +353,9 @@ int Application::RunClipboardWorkSelfTest() noexcept
             owner._session.ReplaceDocument(owner._session.Document().value(), owner._session.ActiveLayerID());
             state.replacementRevision = owner._session.history.CurrentRevision();
             break;
+        case Mode::ReplacedBeforeInspect:
+            state.foreignReplacementInstalled = InstallForeignClipboard(owner._window.get(), false, true);
+            break;
         case Mode::ForeignReplacement:
             state.replacementWhilePendingAfterClose = state.held && state.gate->publications.load() == 1 &&
                                                       state.receipt.Read().outcome == HostOutcome::Pending;
@@ -392,7 +403,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         _session.history.Reset();
         _session.history.MarkSaved();
         _clipboardBinding.reset();
-        const bool retry = scenario.mode == Mode::Retry || scenario.mode == Mode::UnavailableSequence;
+        const bool retry = scenario.mode == Mode::Retry || scenario.mode == Mode::UnavailableSequence ||
+                           scenario.mode == Mode::ReplacedBeforeInspect;
         const bool foreign =
             scenario.mode == Mode::Foreign || scenario.mode == Mode::ForeignNewCopy ||
             (scenario.command == paste && (retry || scenario.mode == Mode::Exhaust ||
@@ -402,6 +414,20 @@ int Application::RunClipboardWorkSelfTest() noexcept
         {
             std::printf("FAIL clipboard-host.%s.fixture-clipboard-install error=%lu\n", scenario.name, GetLastError());
             return 5;
+        }
+        {
+            const DWORD traceLastError = GetLastError();
+            DWORD process = 0;
+            const HWND installedOwner = GetClipboardOwner();
+            if (installedOwner)
+                (void)GetWindowThreadProcessId(installedOwner, &process);
+            std::printf("DIAG clipboard-fixture case=%s expected_foreign=%d sequence=%lu owner=%p pid=%lu self_pid=%lu "
+                        "canvas=%dx%d\n",
+                        scenario.name, foreign, static_cast<unsigned long>(GetClipboardSequenceNumber()),
+                        static_cast<void*>(installedOwner), static_cast<unsigned long>(process),
+                        static_cast<unsigned long>(GetCurrentProcessId()), _session.Document()->width,
+                        _session.Document()->height);
+            SetLastError(traceLastError);
         }
         _clipboardSequence = foreign || scenario.mode == Mode::NoFormats || scenario.mode == Mode::Empty
                                  ? 0
@@ -518,10 +544,16 @@ int Application::RunClipboardWorkSelfTest() noexcept
                             _session.Document()->layers.size(), _session.Selection().has_value(),
                             _session.history.UndoName().c_str(), pasted ? pasted->transform.origin.x : -1.0,
                             pasted ? pasted->transform.origin.y : -1.0, pixel[0], pixel[1], pixel[2], pixel[3]);
+            if (scenario.mode == Mode::Retry && pasted && pasted->asset)
+                std::printf("DIAG clipboard-paste-size width=%d height=%d canvas=%dx%d sequence=%lu\n",
+                            pasted->asset->image.Width(), pasted->asset->image.Height(), _session.Document()->width,
+                            _session.Document()->height, static_cast<unsigned long>(GetClipboardSequenceNumber()));
             expect(pasted && pasted->asset && _session.Document()->layers.size() == 2 && !_session.Selection() &&
                        _session.history.UndoName() == L"Paste" &&
                        pasted->transform.origin == (foreign ? Vec2{4, 3} : Vec2{1, 0}) &&
-                       pixel == (foreign ? std::array<std::uint8_t, 4>{17, 33, 65, 255}
+                       pixel == (foreign ? (scenario.mode == Mode::ReplacedBeforeInspect
+                                                ? std::array<std::uint8_t, 4>{9, 19, 39, 255}
+                                                : std::array<std::uint8_t, 4>{17, 33, 65, 255})
                                          : std::array<std::uint8_t, 4>{20, 40, 80, 255}),
                    scenario.name, "complete-paste-origin-pixels-history");
         }
@@ -532,6 +564,12 @@ int Application::RunClipboardWorkSelfTest() noexcept
                            (scenario.mode == Mode::Replacement ? state.replacementRevision : revision) &&
                        _session.history.UndoCount() == 0,
                    scenario.name, "refusal-preserves-source-history");
+        if (scenario.mode == Mode::ReplacedBeforeInspect)
+            expect(state.foreignReplacementInstalled && gate->forcedBusyAttempts.load() == 2 &&
+                       gate->openAttempts.load() >= 4 && gate->openAttempts.load() <= 6 && _session.Clipboard() &&
+                       _session.Clipboard()->image.Width() == 1 && _session.Clipboard()->image.Data()[0] == 20,
+                   scenario.name,
+                   "actual-replacement-before-first-inspect-is-authoritative-with-private-copy-unchanged");
         if (scenario.mode == Mode::UnavailableSequence)
             expect(_clipboardSequence == 0 && gate->forceUnavailableProbeSequence &&
                        gate->forcedBusyAttempts.load() == 2 && gate->openAttempts.load() >= 4 &&

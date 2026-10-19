@@ -3616,3 +3616,53 @@ unchanged seed/source caches, actual offscreen blits, original command/completio
 retirement. Keep all existing recorded Warp controls. Harness/readback success is not visible-frame timing.
 The [component record](../TestRuns/P1CtrlPixelFoundation_2026-10-19.md) separates private scope and fresh
 canonical integration; ordinary host, journal/Wand and G1 gates remain open.
+
+### Fixed-press Ctrl host and opening retirement
+
+`RunStandaloneCtrlPixelPressSelfTest` uses actual WndProc input and independently specified 5x3 BGRA bytes:
+Move, Down-Alt duplicate, Ctrl/Shift precedence, later modifiers, Up before pumping, zero, loss and refusal.
+Require the same original hit/lift/ticket, no legacy per-tick pixel job, correct pending/final WARP pixels,
+zero/redrag exclusion, actual device rebuild, exactly one Undo/Redo, and independent strong/expired weak
+frame/memory accounting. Drive production readiness rather than repeatedly requesting replacement frames.
+Every fixture exit releases Win32 thread modifiers as well as its scoped synthetic keyboard. The existing
+standalone selection-press driver uses its own scoped synthetic keyboard and keeps its original assertions.
+
+`RunStandaloneDisplayOpeningRetirementSelfTest` retains the actual single undrained opening completion
+after its worker hook, then tests late cancellation, source staleness and real joined Close. Require no early
+publication/refund and eventual worker retirement with zero reserved/releasing bytes.
+
+Clipboard tests also replace an actual foreign DIB while PasteProbe is held, before successful inspection.
+Require the new literal payload under the original six-acquisition budget and unchanged private copy. Keep
+all existing clipboard assertions. Test-gated owner/sequence/dimension diagnostics preserve GetLastError
+and add no clipboard acquisition. A passing repeat does not identify a historical external publisher.
+
+The [host record](../TestRuns/P1CtrlPixelHost_2026-10-19.md) separates private artifacts, causal controls and
+combined-source validation. These tests do not substitute for ordinary activation, phase bounds or G1.
+
+### Typed pixel journal and colour target capture
+
+`Document.Tests.SelectionPixelJournal` tests chained pixel/outline and pixel/pixel parents, Down-Ctrl
+precedence, ignored keys, missing Up, cancellation/loss/leave, wrong family/generation, overflow and complete
+admission. The actual native Ctrl fixture mirrors its eight fixed-press cases through Polygonal and holds
+the first worker closure while queuing the younger Down/Move/Up. Require both original tickets, all four
+conditional receipts, independent final CPU/WARP bytes and exactly two undo entries.
+
+`Document.Tests.ColorTargetCapture` validates large-name documents, shared original roots, name-free owner
+descriptors, actual worker preview/histogram/commit and independent legacy gamma pixels. Require full mask
+metadata in the ready commit, prepared history/undo, corrupted-target refusal, cancellation, stale completion
+after replacement and complete name/source-retirement bounds. Preserve every existing colour/panel/Wand fact.
+The pixel closure tests additionally require final-source refusal after zero, move and apply, original literal
+pixels before publication, no early history authority and a surviving immutable consumer after session clear.
+
+The [colour capture record](../TestRuns/P1ColorTargetCapture_2026-10-19.md) distinguishes private CPU tests,
+same-source capture measurements and pending combined native qualification. Model-call timing is not visible
+UI latency, RAW decode speed, a Photoshop comparison or measured G1.
+
+### Deferred live adjustment target capture
+
+`Document.Tests.LiveAdjustmentTargetCapture` covers direct deferred and real worker-prepared openings of
+an assetless adjustment layer with a valid 1Mi-WCHAR mask name. Require shared original roots and name-free
+descriptors, full mask placement/flags, repeated worker lookup previews, unchanged literal source pixels,
+pending history, corrupted descriptor refusal, pre-cancelled worker acknowledgment and stale-session refusal.
+The opening input remains its original whole-document token; preview target authority comes from that exact
+opening. Preserve all existing colour/panel/Wand facts. Focused private proof does not qualify the full suite.

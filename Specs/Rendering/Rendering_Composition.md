@@ -924,3 +924,29 @@ mandatory. Numeric WARP/hardware controls compare complete move/duplicate and sp
 literal pixels and the CPU commit, submit actual offscreen blits, and retire under the real original ticket.
 These component controls do not qualify the normal host display consumer, visible Present, failure/recovery,
 ordinary activation, complete production phase bounds or G1.
+
+### Opted-in procedural pixel frame consumer
+
+The pending frame controller may borrow the original fixed-press pixel opening and scalar rounded offset,
+duplication and cached grid bounds. Its admitted opening worker constructs the frame root. Only after that
+worker joins may the owner capture immutable handles/device references into it. Descriptor/row preparation
+and recording execute on their workers; the complete preview supplies no previous moved-stroke seed.
+
+The exact successful transport completion binds the frame's complete original CPU charge to its shared
+publication owner before graph publication. Strong and expired weak descriptor/memory controls retain that
+charge after graph/GPU retirement. Last-control release plus the actual release acknowledgment refunds it.
+
+Cancellation or staleness after an opening worker hook but before owner completion still retires the empty
+root on a worker. Actual joined Close transfers undrained roots into the existing joined owner/worker
+retirement path. Neither a completion callback nor job destructor may destroy such a root on the UI thread.
+
+The selected native Ctrl fixture checks WARP pixels, real device rebuild, zero/redrag, Undo/Redo and charges.
+Its separate final committed-frame request is not original-parent atomic CPU/history/rows/GPU publication.
+Ordinary activation, complete phase bounds and visible G1 remain unqualified.
+
+### Pixel journal integration boundary
+
+Typed pixel successors preserve the original lift/source through their conditional physical journal.
+The current selected native implementation still publishes final CPU/history before requesting a separate
+committed frame. This is not atomic final CPU/history/rows/GPU publication. The original-parent publication
+service, complete device/hidden/failure retirement and ordinary activation remain required before H4 closes.

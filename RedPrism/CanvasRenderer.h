@@ -158,6 +158,11 @@ class CanvasRenderer final
     {
         return _stroke.has_value();
     }
+    // Harness borrow after the original recorder joined; no device commands, upload or source creation.
+    [[nodiscard]] std::shared_ptr<const PreparedPixelMovePreview> PixelPreviewForTestOwner() const noexcept
+    {
+        return _stroke ? _stroke->pixelSource : nullptr;
+    }
     // The layer and target (its mask or its image) the preview draws for, while one is live.
     [[nodiscard]] std::optional<Guid> StrokeLayerID() const noexcept
     {

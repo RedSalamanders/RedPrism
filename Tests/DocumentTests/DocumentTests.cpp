@@ -56,6 +56,7 @@
 
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
+#include "Document.Tests.ColorTargetCapture.h"
 #include "Document.Tests.CopyPixelsLifetime.h"
 #include "Document.Tests.CropLifetime.h"
 #include "Document.Tests.DeferredPixelMoveOpening.h"
@@ -67,6 +68,7 @@
 #include "Document.Tests.HistoryTopologyDelta.h"
 #include "Document.Tests.InverseSelection.h"
 #include "Document.Tests.LayerIndex.h"
+#include "Document.Tests.LiveAdjustmentTargetCapture.h"
 #include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.OwnedMetadataJobsR4.h"
 #include "Document.Tests.OwnedRecordRoot.h"
@@ -101,6 +103,7 @@
 #include "Document.Tests.SelectionOutlineAllocation.h"
 #include "Document.Tests.SelectionOutlineRaster.h"
 #include "Document.Tests.SelectionOutlineRasterViews.h"
+#include "Document.Tests.SelectionPixelJournal.h"
 #include "Document.Tests.SelectionPixelParent.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
@@ -8362,6 +8365,9 @@ int wmain(int argc, wchar_t** argv)
     DeferredPixelMoveOpeningTests::Run(gFailures);
     PixelMovePreviewTests::Run(gFailures);
     PixelMoveClosureTests::Run(gFailures);
+    ColorTargetCaptureTests::Run(gFailures);
+    LiveAdjustmentTargetCaptureTests::Run(gFailures);
+    gFailures += RunSelectionPixelJournalTests();
     PixelMoveOutputLifetimeTests::Run(gFailures);
     PixelPreviewDescriptorTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();

@@ -28,4 +28,10 @@ struct PendingDisplaySource final
     const LayerAdjustment* original = nullptr;
     double previewScale = 1;
     const std::shared_ptr<const PreparedRasterPreview>* rasterPreview = nullptr;
+    const std::shared_ptr<const PixelMoveOpening>* pixelOpening = nullptr;
+    const std::shared_ptr<const SharedPublicationMemory>* pixelMemory = nullptr;
+    Vec2 pixelOffset{};
+    bool pixelDuplicate = false;
+    int pixelWidth = 0, pixelHeight = 0;
+    std::uint64_t pixelOwnershipBytes = 0;
 };

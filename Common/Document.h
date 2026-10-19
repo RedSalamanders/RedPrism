@@ -1328,6 +1328,9 @@ enum class FillSource : std::uint8_t
     Background,
 };
 
+class PixelMoveOpening;
+class SharedPublicationMemory;
+
 // Selected pixels being dragged (C9b): the lifted raster plus the outline it started from.
 struct PixelMove
 {
@@ -1343,6 +1346,11 @@ struct PixelMove
     std::uint64_t publishedSequence = 0;
     std::uint64_t publishedGeneration = 0;
     std::uint64_t openingGeneration = 0;
+    // Original fixed-press CPU opening. Later frame consumers capture these handles only after their own admission.
+    std::shared_ptr<const PixelMoveOpening> proceduralOpening;
+    std::shared_ptr<const SharedPublicationMemory> proceduralMemory;
+    int proceduralWidth = 0, proceduralHeight = 0;
+    std::uint64_t proceduralOwnershipBytes = 0;
     [[nodiscard]] bool HasOffset() const noexcept
     {
         return offset.x != 0 || offset.y != 0;
@@ -1572,6 +1580,9 @@ struct ColorEdit
     std::optional<DocumentSelection> selection;
     FilterSettings settings;
     std::optional<JobToken> sourceToken; // Opening inputs; absent for adjustment-layer panels.
+    // Deferred destructive panels borrow the opening records. Their token keeps mask pixel/placement
+    // authority, while complete asset-name metadata is copied only by admitted worker preparation.
+    RecordRoot<ImageLayer> sourceLayers;
     bool deferred = false; // Host captures metadata; its jobs run the same graph as direct inline callers.
     std::uint64_t openingSequence = 0;
     std::uint64_t previewSequence = 0;            // Exact settings/seed/grid sequence of the published preview.
