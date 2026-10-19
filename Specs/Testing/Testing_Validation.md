@@ -3523,3 +3523,14 @@ ownership, target and terminal proof in `Build_Toolchain.md`. Missing/duplicate/
 listing-versus-PE differences, altered guards/flow/extents/targets and real VEX/EVEX instructions
 retain their independent refusal or violation oracle. Never execute synthetic parser fixture bytes
 or widen the runtime allowlist to make a table control pass. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).
+
+
+## Existing Polygonal drawing Ctrl-corner regression
+
+The selected dispatcher fixture covers New/Add/Subtract with Ctrl, Ctrl+Shift, Ctrl+Alt and
+Ctrl+Shift+Alt corners, and modified corners queued before original controller admission. Require
+each distinct Pending receipt, exactly one original/capture, no lifted-pixel writer, unchanged
+captured mode, all 4,096 independent expected selection centers, exact one-entry history, Undo/Redo
+and joined refunds. Preserve every predecessor and the unchanged-product refusal. The 15 new
+cases contribute 195 facts (64 cases / 729 facts total at adoption); initial Ctrl/lift is outside
+this qualification. [Focused Release/ASan evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).

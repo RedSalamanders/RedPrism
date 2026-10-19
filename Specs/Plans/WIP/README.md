@@ -20,6 +20,9 @@ Adopted next: original Polygonal header-kind cancellation, focused Release/real 
 The strict AL/RCX scanner repair is adopted: all 14,133 default records and the unchanged original
 Release image/PDB pass; [evidence](../../TestRuns/IsaAlNearRcx_2026-10-19.md).
 
+Existing-draft Ctrl corners are adopted after focused Release/real-ASan qualification (64 cases /
+729 facts); initial Ctrl/lift remains open. [Evidence](../../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under
 `Specs/<Domain>/`. This index remains routing only.

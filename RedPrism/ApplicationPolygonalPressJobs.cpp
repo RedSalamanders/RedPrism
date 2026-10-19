@@ -74,7 +74,10 @@ bool Application::QueuePolygonalPressOwner(const DxUi::PointerEvent& event, UINT
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
         return true;
     }
-    if (_polygonalPressFailed || (event.modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))
+    // Once admitted, a later Ctrl Down belongs to the existing raw journal. Its original
+    // outside-draft branch ignores changed modifiers; a later inside/lift parent still refuses.
+    if (_polygonalPressFailed ||
+        (!existing && ((event.modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL))))
     {
         ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
         return true; // Eligible unsupported lift has no synchronous containment fallback.

@@ -2123,7 +2123,7 @@ The selected Win32 journal route admits one original exact-hit parent for the fi
 
 Pure replay/finish readiness never admits or mutates. A separate selected terminal admission hook obtains only the exact matching history barrier after readiness and before terminal consumption/source capture. Admission refusal preserves that raw terminal and prior document/history. Consumed-ordinal progress signals the existing owner source for partial/no-change input too; all records, including ignored inside keys, count toward the sixteen-record owner quantum. Input, state and scalar transition receipts survive all borrowers and outstanding host receipts. Failure retires dependent receipts explicitly and bounded orphan metadata drains before family retirement. Joined Shutdown joins producers before destroying borrowed state and emits no useful terminal callback.
 
-HostWrite preserves an inside drag as one atomic gesture: accepted Up must progress while Save waits, without the outside replay ordinal gate. Outside Save reads committed project content and preserves the original unfinished writer. A stopping tool command joins its cancellation before applying the tool. Temporary Space-pan retains the Polygonal writer; normal Up or actual pan capture loss ends only the view drag. Right selection input cannot enter the synchronous selection/lasso fallback. This is a Win32 routing state-machine requirement; the legacy canvas routes right input through its separate brush-only handler (`EditorCanvas.swift::rightMouseDown`). Ctrl/lift is explicitly refused by this selected partial route.
+HostWrite preserves an inside drag as one atomic gesture: accepted Up must progress while Save waits, without the outside replay ordinal gate. Outside Save reads committed project content and preserves the original unfinished writer. A stopping tool command joins its cancellation before applying the tool. Temporary Space-pan retains the Polygonal writer; normal Up or actual pan capture loss ends only the view drag. Right selection input cannot enter the synchronous selection/lasso fallback. This is a Win32 routing state-machine requirement; the legacy canvas routes right input through its separate brush-only handler (`EditorCanvas.swift::rightMouseDown`). An initial Ctrl/lift press is explicitly refused by this selected partial route; later Ctrl corners of an already admitted drawing family retain their original journal.
 
 This qualification covers fifteen named hidden-WARP native cases / 139 independent facts, the full 152-stage Application roster, and twenty additional CPU owner-hook facts (159 module assertions). Held-worker/foreign/admission limits, full512/emergency/after-Up overflow, inside-Save interleaving, all export/picker/header/Undo/Redo/Deselect/lifetime/DPI/device/hidden/restart cases, Ctrl/lift, ordinary activation and measured G1 remain open. Earlier drawing-only caller receipts do not qualify those cases for this new dispatcher. [Evidence](../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).
 
@@ -2200,3 +2200,15 @@ press. This release consumes no Polygonal ordinal or raw record. A captured canv
 with its original owner. A real header Deselect click then enters the existing ordered host-command barrier; it
 MUST wait for the original cancellation acknowledgment before changing committed selection/history.
 [Evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
+
+
+### Ctrl corners in an existing original Polygonal drawing
+
+Once the selected original Polygonal drawing family is admitted, a later Ctrl corner MUST enter its
+existing bounded raw journal and receive its own conditional receipt. Ctrl/Shift/Alt combinations
+cannot replace captured New/Add/Subtract mode, open a pixel writer or create another original parent.
+This also applies when later corners arrive before controller admission: the original worker chooses
+and replays its accepted branch. Exact geometry, one final history entry, Undo/Redo and joined owner
+refunds retain the existing contract. An initial Ctrl press, including Ctrl pixel lift, remains
+unsupported by this partial selected route. Ordinary activation is still a separate gate.
+[Evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).

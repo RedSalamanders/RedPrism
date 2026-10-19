@@ -2,13 +2,14 @@
 
 ## Current delivery checklist — 2026-10-19
 
+- [x] Adopt existing original Polygonal Ctrl corners, including before controller admission: focused Release / real ASan pass all 64 cases / 729 facts (534 exact predecessors plus 195 new facts). The retained unchanged-product failure, source/object/PE-PDB/ISA/artifacts and saved/exported output qualify. Initial Ctrl/lift remains open. [Evidence](../../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
 - [x] Fix strict AL/RCX guarded switch-table data recognition: all 14,133 default scanner records pass (14,012 exact predecessors plus 121 new controls), as does the same original Release image/full PDB. Preserve the failed scan and fixture/launcher refusals; actual vectors remain gated and the allowlist is unchanged. [Evidence](../../TestRuns/IsaAlNearRcx_2026-10-19.md).
 - [x] Adopt actual Polygonal header-widget release routing: focused Release / real ASan pass 49 cases / 534 facts, including bounded public-UIA lookup and HWND Down/Up without callback injection. Original captured canvas Up semantics and every 518 predecessor remain exact. [Evidence](../../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
 - [x] Adopt original header-kind callback cancellation through the same prepaid loss and acknowledged writer: focused Release / real ASan pass 48 cases / 518 facts, with original failure and exact artifacts retained. [Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
 - [x] Adopted keyboard/header source `57d6631`: canonical full x64 real ASan r1144 passes all five suites, 994 instrumented TUs, 152 Application stages / 11,092 stdout facts and 47 dispatcher cases / 508 facts; all probes, stress, nine captures and 1,768 archive files independently qualify. [Evidence](../../TestRuns/P1PolygonalKeyboardFullAsan_2026-10-19.md).
 - [x] Same adopted source: ARM64 Release r1142 and instrumented ASan r1143 cross-builds qualify all 994 compiler records and five AA64 PE/PDB pairs per profile. Native ARM64 runtime is unavailable. [Evidence](../../TestRuns/P1PolygonalKeyboardNative_2026-10-19.md).
 - [ ] Repair the retained canonical Release analysis r1145 failure (12 warnings in six test files) and qualify the latest complete native matrix after the queued fixes.
-- [ ] Adopt and qualify original header-kind cancellation, actual header-widget release and existing-draft Ctrl corners; focused proofs do not activate ordinary input.
+- [x] Adopt original header-kind cancellation, actual header-widget release and existing-draft Ctrl corners after focused Release/real-ASan qualification; ordinary input remains disabled.
 - [ ] Complete initial Ctrl/lift, full caller/admission/display/retirement and remaining native/device/geometry branches, then ordinary activation and measured S5/G1.
 
 The dated checkpoints below are historical; this opening checklist and the [P1 milestone checklist](UiNeverBlocks_2026-09-22.md) govern remaining work. P1 remains WIP.

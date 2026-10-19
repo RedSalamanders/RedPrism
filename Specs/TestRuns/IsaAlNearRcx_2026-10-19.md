@@ -1,6 +1,6 @@
 # Exact AL/RCX guarded switch-table scanner — 2026-10-19
 
-**Evidence date:** 2026-10-19  
+**Evidence date:** 2026-10-19
 **Scope:** strict scanner and fixture qualification against the unchanged original x64 Release image/PDB.
 
 ## Result

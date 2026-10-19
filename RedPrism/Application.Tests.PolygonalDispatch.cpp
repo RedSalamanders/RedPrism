@@ -268,7 +268,22 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "expand-header-live",
                                "contract-header-live",
                                "lasso-kind-header-live",
-                               "deselect-header-widget-live"};
+                               "deselect-header-widget-live",
+                               "ctrl-corner-new",
+                               "ctrl-corner-new-shift",
+                               "ctrl-corner-new-alt",
+                               "ctrl-corner-new-shift-alt",
+                               "ctrl-corner-new-pending-shift-alt",
+                               "ctrl-corner-add",
+                               "ctrl-corner-add-shift",
+                               "ctrl-corner-add-alt",
+                               "ctrl-corner-add-shift-alt",
+                               "ctrl-corner-add-pending-shift-alt",
+                               "ctrl-corner-subtract",
+                               "ctrl-corner-subtract-shift",
+                               "ctrl-corner-subtract-alt",
+                               "ctrl-corner-subtract-shift-alt",
+                               "ctrl-corner-subtract-pending-shift-alt"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -396,9 +411,11 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         }
         owner->_tool = EditorTool::Lasso;
         owner->_session.lassoKind = LassoKind::Polygonal;
-        const auto mode = name == "add-enter"        ? SelectionMode::Add
-                          : name == "subtract-enter" ? SelectionMode::Subtract
-                                                     : SelectionMode::New;
+        const bool ctrlCorner = name.starts_with("ctrl-corner-");
+        const auto mode = name == "add-enter" || name.starts_with("ctrl-corner-add") ? SelectionMode::Add
+                          : name == "subtract-enter" || name.starts_with("ctrl-corner-subtract")
+                              ? SelectionMode::Subtract
+                              : SelectionMode::New;
         owner->_session.selectionModeChoice = mode;
         owner->_session.selectionAntialiased = false;
         owner->_viewport.followsFit = false;
@@ -465,6 +482,120 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         };
         const auto generation = owner->_session.Generation();
         const auto revision = owner->_session.history.CurrentRevision();
+        if (ctrlCorner)
+        {
+            // EditorCanvas.swift::lassoMouseDown chooses an existing Polygonal draft before modifiers.
+            // Cover both already-open and fully queued drafts; fixed mode comes from the first Down.
+            const bool pending = name.find("pending") != std::string_view::npos;
+            const bool shift = name.find("shift") != std::string_view::npos;
+            const bool alt = name.find("alt") != std::string_view::npos;
+            const double left = mode == SelectionMode::Subtract ? 3 : 7;
+            click({left, 1});
+            if (!expect(receiptCount == 1 && receipts[0].Read().outcome == HostOutcome::Pending &&
+                            owner->_polygonalPressInput.Busy() && !owner->_session.PendingLasso() &&
+                            owner->_session.Generation() == generation && owner->_session.history.UndoCount() == 0,
+                        "initial-outside-down-admits-only-scalars-before-worker-choice"))
+                return 5;
+            const bool parked =
+                pending || until(
+                               [&]() noexcept
+                               {
+                                   return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                                          owner->_polygonalPressInput.PendingCount() == 0 &&
+                                          !owner->_activeHostRequest && owner->_hostRequests.Size() == 0;
+                               });
+            if (!expect(parked &&
+                            (pending ? !owner->_session.PendingLasso()
+                                     : owner->_session.PendingLasso() &&
+                                           owner->_session.PendingLasso()->PointCount() == 1 &&
+                                           receipts[0].Read().outcome == HostOutcome::Succeeded &&
+                                           owner->_polygonalPressState->drawing && owner->_polygonalPressParents == 1),
+                        "captured-first-mode-draft-is-either-queued-or-parked-before-modified-corners"))
+                return 5;
+            const auto original = owner->_polygonalPressState ? owner->_polygonalPressState->original : JobTicket{};
+            auto keys = clearKeys;
+            keys[VK_CONTROL] = 0x80;
+            if (shift)
+                keys[VK_SHIFT] = 0x80;
+            if (alt)
+                keys[VK_MENU] = 0x80;
+            KeyboardState::Write(keys);
+            const WPARAM modifiers = MK_CONTROL | (shift ? MK_SHIFT : 0);
+            for (const Vec2 corner : std::array<Vec2, 3>{{{left + 4, 1}, {left + 4, 5}, {left, 5}}})
+            {
+                owner->_lastPressTick = 0;
+                send(WM_LBUTTONDOWN, corner, MK_LBUTTON | modifiers);
+                receipts[receiptCount++] = owner->_polygonalPressLastReceipt;
+                send(WM_LBUTTONUP, corner, modifiers);
+            }
+            KeyboardState::Write(clearKeys);
+            bool modifiedPending = receiptCount == 4;
+            for (unsigned index = 1; index < receiptCount; ++index)
+                modifiedPending = modifiedPending && receipts[index].Read().outcome == HostOutcome::Pending;
+            if (!expect(
+                    modifiedPending && !owner->_polygonalPressInput.Closed() &&
+                        owner->_polygonalPressInput.PendingCount() >= 6 && owner->_session.Generation() == generation &&
+                        owner->_session.history.CurrentRevision() == revision && !owner->_session.PendingPixelMove(),
+                    "every-modified-corner-has-distinct-pending-descriptor-with-no-pixel-writer-or-inline-edit"))
+                return 5;
+            if (!expect(
+                    until(
+                        [&]() noexcept
+                        {
+                            return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                                   owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                                   owner->_hostRequests.Size() == 0;
+                        }) &&
+                        owner->_session.PendingLasso() && owner->_session.PendingLasso()->PointCount() == 4 &&
+                        owner->_session.PendingLasso()->mode == mode && owner->_polygonalPressState->drawing &&
+                        owner->_polygonalPressParents == 1 && owner->_polygonalPressState->captures == 1 &&
+                        (pending || owner->_polygonalPressState->original == original) &&
+                        !owner->_session.PendingPixelMove() && !owner->_session.IsMovingSelection() &&
+                        !owner->_historyWork.Busy() && DispatcherPixels(owner->_session, SelectionMode::New, true),
+                    "modified-corners-extend-one-original-draft-with-captured-mode-and-unchanged-committed-selection"))
+                return 5;
+            bool successful = true;
+            for (unsigned index = 0; index < receiptCount; ++index)
+                successful = successful && receipts[index].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(successful && owner->_session.Generation() == generation &&
+                            owner->_session.history.CurrentRevision() == revision &&
+                            owner->_session.history.UndoCount() == 0,
+                        "all-four-corner-receipts-succeed-before-any-selection-history-commit"))
+                return 5;
+            const auto ticket = owner->_polygonalPressState->original;
+            key(VK_RETURN);
+            if (!expect(receiptCount == 5 && receipts[4].Read().outcome == HostOutcome::Pending &&
+                            owner->_polygonalPressState->original == ticket && owner->_session.PendingLasso(),
+                        "actual-enter-keeps-original-ticket-until-terminal-acknowledgement"))
+                return 5;
+            if (!expect(settle(), "modified-corners-original-terminal-and-retirement-settle"))
+                return 5;
+            successful = true;
+            for (unsigned index = 0; index < receiptCount; ++index)
+                successful = successful && receipts[index].Read().outcome == HostOutcome::Succeeded;
+            if (!expect(
+                    successful && DispatcherPixels(owner->_session, mode) &&
+                        owner->_session.Generation() == generation + 1 && owner->_session.history.UndoCount() == 1 &&
+                        owner->_session.history.UndoName() == L"Polygonal Lasso" && !owner->_session.PendingLasso() &&
+                        !owner->_session.PendingPixelMove() && owner->_polygonalPressParents == 1 &&
+                        !owner->_polygonalPressInput.Busy() && !owner->_historyWork.Busy(),
+                    "all4096-literal-centers-use-first-mode-with-one-polygonal-history-entry"))
+                return 5;
+            owner->_session.Undo();
+            if (!expect(DispatcherPixels(owner->_session, SelectionMode::New, true),
+                        "modified-corner-undo-restores-original-selection"))
+                return 5;
+            owner->_session.Redo();
+            if (!expect(DispatcherPixels(owner->_session, mode), "modified-corner-redo-restores-literal-result"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes(),
+                        "modified-corner-joined-shutdown-refunds-original-strong-and-weak-owners"))
+                return 5;
+            ++reached;
+            continue;
+        }
         if (name == "scheduler-job-slot-exhaustion")
         {
             wil::unique_handle lastStarted{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
