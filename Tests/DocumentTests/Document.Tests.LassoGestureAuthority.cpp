@@ -641,7 +641,8 @@ void CheckRetention(JobScheduler& scheduler)
         return witness && witness->Bytes() == kAdmissionBytes && witness->ResidentBytes() == kAdmissionBytes &&
                witness->LocalAllocationBytes() == localBytes;
     };
-    Expect(opened && aborted && !f->session.PendingLasso() && f->state.prepared && envelope > 0 &&
+    static_assert(envelope > 0, "memory.original-envelope-positive");
+    Expect(opened && aborted && !f->session.PendingLasso() && f->state.prepared &&
                PreparedLassoOpening::MemoryBytes(kBlocks) == envelope &&
                envelope + SharedPublicationMemory::OwnershipAllowance() < kAdmissionBytes && localBytes > 0 &&
                localBytes <= envelope && Settle(scheduler) && scheduler.IsIdle() &&
@@ -705,7 +706,7 @@ bool StoppedOriginal(const OpeningState& state, bool cancelled) noexcept
            state.intent && !state.prepared && state.bindResult == S_OK && state.boundOriginal && state.memory &&
            state.memory->Bytes() == kAdmissionBytes &&
            state.terminal.status == (cancelled ? JobStatus::Cancelled : JobStatus::Failed) &&
-           state.terminal.error == (cancelled ? E_ABORT : E_FAIL);
+           state.terminal.error == static_cast<std::int32_t>(cancelled ? E_ABORT : E_FAIL);
 }
 
 bool StopFinish(Fixture& f, OpeningState& state, const LassoFinishTerminal& terminal, bool reference = false)

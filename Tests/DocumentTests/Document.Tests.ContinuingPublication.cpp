@@ -370,7 +370,8 @@ void TestAllSlotsPreclaimed()
     auto overflowOptions = options;
     overflowOptions.continuingOutputLimit = 0;
     const auto before = queries;
-    Expect(scheduler.Submit(overflow, overflowOptions, refusedTicket) == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) &&
+    const auto overflowStatus = scheduler.Submit(overflow, overflowOptions, refusedTicket);
+    Expect(overflowStatus == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
                overflow.get() == untouched && queries == before,
            "sixty-fifth-slot-refuses-without-query-or-original-ticket-mutation");
     SharedRetainedMemoryLease refused;

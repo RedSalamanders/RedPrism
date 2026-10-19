@@ -633,7 +633,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             owner->_continuationAction.Run();
             const auto refused = owner->_polygonalPressLastReceipt.Read();
             if (!expect(acceptedPrefixPending && refused.outcome == HostOutcome::Failed &&
-                            refused.error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA),
+                            refused.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)),
                         "accepted-prefix-source-slot-exhaustion-returns-exact-not-enough-quota"))
                 return 5;
             if (!expect(owner->_session.Generation() == generation &&
@@ -998,7 +998,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                 click({43, 1}); // Ninth descriptor must fail while all eight accepted records remain paired.
                 const auto refused = owner->_polygonalPressLastReceipt.Read();
                 if (!expect(receiptCount == 8 && refused.outcome == HostOutcome::Failed &&
-                                refused.error == HRESULT_FROM_WIN32(ERROR_BUSY) &&
+                                refused.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_BUSY)) &&
                                 owner->_polygonalPressInput.Closed() &&
                                 owner->_polygonalPressInput.PendingCount() == 17,
                             "ninth-host-descriptor-refuses-and-seals-only-the-accepted-eight-record-pairs"))
@@ -1789,7 +1789,8 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             const auto wanted = pickerCancel ? HostOutcome::Cancelled : HostOutcome::Succeeded;
             const auto wantedError = pickerCancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
             if (!expect(until([&]() noexcept { return write.Read().outcome != HostOutcome::Pending; }) &&
-                            write.Read().outcome == wanted && write.Read().error == wantedError,
+                            write.Read().outcome == wanted &&
+                            write.Read().error == static_cast<std::int32_t>(wantedError),
                         "original-outside-native-export-or-picker-test-seam-resolves-exact-receipt"))
                 return 5;
             if (!owner->_polygonalPressState->controller || !owner->_polygonalPressState->waiting ||

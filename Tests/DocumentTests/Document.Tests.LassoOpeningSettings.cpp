@@ -646,7 +646,8 @@ int RunLassoOpeningSettingsTests()
         scheduler->Initialize(1, {}, {SampleMemory, nullptr}) == S_OK && scheduler->EnableDeferredRelease();
     Expect(started, "scheduler.one-worker-original-admission");
     const auto envelope = BoundedLassoPoints::MemoryBytes(1) + LocallyOwnedPublicationAllowance<BoundedLassoGesture>();
-    Expect(envelope > 0 && PreparedLassoOpening::MemoryBytes(1) == envelope &&
+    static_assert(envelope > 0, "memory.one-block-metadata-envelope-positive");
+    Expect(PreparedLassoOpening::MemoryBytes(1) == envelope &&
                envelope + SharedPublicationMemory::OwnershipAllowance() < kAdmissionBytes,
            "memory.one-block-metadata-envelope");
     if (started)

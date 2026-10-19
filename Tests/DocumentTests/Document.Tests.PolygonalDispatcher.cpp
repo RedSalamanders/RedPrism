@@ -888,7 +888,8 @@ void InsideKeyQuantum()
     f->state->admitTerminal = Probe::Admit;
     f->state->inputProgress = Probe::Progress;
     for (std::uint64_t ordinal = 2; ordinal <= 34; ++ordinal)
-        f->Record(ordinal % 2 ? HostPolygonalInputJournal::Action::Enter : HostPolygonalInputJournal::Action::Backspace,
+        f->Record((ordinal % 2) ? HostPolygonalInputJournal::Action::Enter
+                                : HostPolygonalInputJournal::Action::Backspace,
                   {2, 2}, ordinal);
     f->Record(HostPolygonalInputJournal::Action::Move, {5, 4}, 35);
     f->Record(HostPolygonalInputJournal::Action::Up, {5, 4}, 36);

@@ -1,5 +1,7 @@
 # Active plan index
 
+Current repair checkpoint: full Release r1153 and affected Debug/ASan Document validation, raster stress and refreshed ARM64 Release/ASan cross-builds qualify. Interrupted r1154 and storage-failed r1158 remain retained. [Latest evidence](../../TestRuns/P1AnalysisRepairLatest_2026-10-19.md). Latest full analysis, subsequent worker-capture integration and all P1 delivery gates remain open.
+
 P1 remains **ACTIVE/WIP**. Adopted keyboard/header source `57d6631` qualifies canonical full x64
 real ASan r1144: all five suites, 994 instrumented TUs, 152 Application stages / 11,092 stdout facts,
 47 dispatcher cases / 508 facts, genuine UAF/crash probes, stress and nine fresh captures.
@@ -22,6 +24,8 @@ Release image/PDB pass; [evidence](../../TestRuns/IsaAlNearRcx_2026-10-19.md).
 
 Existing-draft Ctrl corners are adopted after focused Release/real-ASan qualification (64 cases /
 729 facts); initial Ctrl/lift remains open. [Evidence](../../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
+Earlier checkpoint: the 12-warning candidate qualified full ASan r1148, full Debug r1152 and ARM64 r1150/r1151 before the final status cast. The completed affected repair evidence above supersedes the earlier pending readback status. [Earlier native evidence](../../TestRuns/P1AnalysisRepairsNative_2026-10-19.md).
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under

@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -427,7 +428,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                                        : name == "save-failed" ? E_FAIL
                                                                : S_OK;
                     if (!expect(until([&]() noexcept { return write.Read().outcome != HostOutcome::Pending; }) &&
-                                    write.Read().outcome == wanted && write.Read().error == error,
+                                    write.Read().outcome == wanted &&
+                                    write.Read().error == static_cast<std::int32_t>(error),
                                 "actual-write-or-dialog-cancel-has-exact-receipt-outcome"))
                         return 5;
                     if (!expect(owner->_polygonalDrawing->controller && owner->_polygonalDrawing->original == ticket &&
@@ -474,7 +476,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                     const auto wanted = exportCancel ? HostOutcome::Cancelled : HostOutcome::Succeeded;
                     const auto error = exportCancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
                     if (!expect(until([&]() noexcept { return write.Read().outcome != HostOutcome::Pending; }) &&
-                                    write.Read().outcome == wanted && write.Read().error == error,
+                                    write.Read().outcome == wanted &&
+                                    write.Read().error == static_cast<std::int32_t>(error),
                                 "actual-png-or-jpeg-host-write-resolves-exact-outcome"))
                         return 5;
                     if (!expect(owner->_polygonalDrawing->controller && owner->_polygonalDrawing->waiting &&
@@ -548,7 +551,8 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                     if (!expect(queued &&
                                     until([&]() noexcept { return refused.Read().outcome != HostOutcome::Pending; }) &&
                                     refused.Read().outcome == HostOutcome::Failed &&
-                                    refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) &&
+                                    refused.Read().error ==
+                                        static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)) &&
                                     owner->_session.ActiveLayerID() == std::optional(active) &&
                                     owner->_polygonalDrawing->controller,
                                 "unsupported-direct-layer-callback-queues-and-refuses-before-source-mutation"))
