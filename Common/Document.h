@@ -209,14 +209,16 @@ class Raster
     // A sparse raster: `base` (contiguous; may be empty) with its top-left at (baseX, baseY) of the new grid, under
     // `tiles` (clipped to the grid, later tiles over earlier ones). Pixels no base or tile reaches read `fill`.
     [[nodiscard]] static Raster MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX,
-                                           int baseY, std::vector<RasterTile> tiles, std::uint8_t fill);
+                                           int baseY, std::vector<RasterTile> tiles, std::uint8_t fill,
+                                           const std::shared_ptr<const void>& outputLifetime = {});
     // `source` (its top-left at (sourceX, sourceY) of a working grid) with `tiles` of that grid written over it,
     // cropped to the given rectangle of the grid. Older tiles are split around newer ones so the tile list stays
     // disjoint; the base and untouched tiles are shared, never copied. `fill` is what the crop reads beyond the
     // source; a sparse source keeps its own fill over its own extent (a painted hide-all mask stays hidden).
     [[nodiscard]] static Raster Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles,
                                           int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill,
-                                          CancelToken cancellation = {});
+                                          CancelToken cancellation = {},
+                                          const std::shared_ptr<const void>& outputLifetime = {});
     // A contiguous copy of the region (pixels outside this raster read `fill`).
     [[nodiscard]] Raster Crop(int x, int y, int width, int height, std::uint8_t fill) const;
     // This raster resampled to `width` × `height` by the nearest pixel (grid pixel x reads x · Width() / width), as
@@ -1459,6 +1461,11 @@ struct WandLayerSelectionObserver;
 struct WandLayerSelectionMemoryPlan;
 class SelectionMoveOpeningInput;
 class PreparedSelectionMoveOpening;
+class PixelMoveOpeningInput;
+class PreparedPixelMoveOpening;
+class PixelMoveClosureInput;
+class PreparedPixelMoveClosure;
+struct PreparedPixelMoveOpeningResult;
 class SelectionMoveClosureInput;
 class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
@@ -2992,6 +2999,29 @@ class DocumentSession
     // Ctrl-drag / Ctrl-arrow: the selected pixels (or a copy) move with the outline as one entry (`Move Pixels`,
     // `Duplicate Pixels`); false when there is nothing to move (no selection, a mask target, no pixels).
     bool BeginPixelMove(bool duplicate = false);
+    // Complete original admission precedes capture. All source metadata/coverage/lift preparation is worker-only.
+    [[nodiscard]] std::optional<PixelMoveOpeningInput> PrepareDeferredPixelMoveOpeningInput(
+        bool duplicate = false) const;
+    [[nodiscard]] static PreparedPixelMoveOpeningResult PrepareDeferredPixelMoveOpening(
+        PixelMoveOpeningInput input, CancelToken cancellation = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {});
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveOpeningCurrent(
+        const PreparedPixelMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedDeferredPixelMoveOpeningIfCurrent(PreparedPixelMoveOpening& prepared) noexcept;
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveGestureCurrent(
+        const PreparedPixelMoveOpening& prepared) const noexcept;
+    [[nodiscard]] bool MovePreparedDeferredPixelMoveIfCurrent(PreparedPixelMoveOpening& prepared, double dx,
+                                                              double dy) noexcept;
+    [[nodiscard]] bool AbortPreparedDeferredPixelMoveIfCurrent(PreparedPixelMoveOpening& prepared) noexcept;
+    [[nodiscard]] std::optional<PixelMoveClosureInput> PrepareDeferredPixelMoveClosureInput(
+        const PreparedPixelMoveOpening& opening) const;
+    [[nodiscard]] static std::optional<PreparedPixelMoveClosure> PrepareDeferredPixelMoveClosure(
+        PixelMoveClosureInput input, CancelToken cancellation = {},
+        std::shared_ptr<const SharedPublicationMemory> memory = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedDeferredPixelMoveClosureCurrent(
+        const PreparedPixelMoveClosure& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedDeferredPixelMoveClosureIfCurrent(PreparedPixelMoveClosure& prepared) noexcept;
+
     // Metadata-only production opening. Its workers own all lifted pixels/coverage and prepared previews.
     [[nodiscard]] bool BeginDeferredPixelMove(bool duplicate = false);
     [[nodiscard]] bool PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,

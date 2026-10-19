@@ -1883,3 +1883,20 @@ metadata. Assetless and mask-only targets retain the existing operation-specific
 drop their extra document-root owner on that worker; commits retain the source for prepared history.
 Unprepared Gradient/Pixel Move previews still require a complete admission envelope before their remaining
 owner capture can be removed. This component does not enable those ordinary display routes.
+
+
+## Initial Ctrl pixel CPU foundation
+
+The selected fixed-press CPU parent admits both the old selection/drawing envelope and its possible pixel
+branch before source capture. Its current conservative extension is nine times `PixelMoveMemoryBytes` plus
+three16KiB wrapper allowances: three units for continuing opening, four for final output and two temporary.
+All additions use checked arithmetic; unavailable/overflowing bounds refuse. This declaration and small-fixture
+proof are not a measured large-document phase bound or authorization for ordinary activation.
+
+Hit, lift, full layer/mask/name capture, final pixels/outline/history and residency refresh execute on workers
+under the same original ticket. Source, scalar offset and captured duplication remain fixed to that gesture.
+No second per-tick PixelMove job is part of this CPU protocol. The real original output reservation survives
+independent final raster/tile/selection owners and expired weak controls; only last-control destruction and
+actual release acknowledgement refund it. Owner operations copy handles or swap prepared owners; failure
+cannot acknowledge or discard a newer opening. The later frame consumer separately admits its full CPU/GPU
+source, metadata, upload and actual-use retirement before producing a display graph.

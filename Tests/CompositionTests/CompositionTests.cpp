@@ -30,6 +30,7 @@
 #include "Composition.Tests.RecordedParentCancellation.h"
 #include "Composition.Tests.RecordedParentPixels.h"
 #include "Composition.Tests.RecordedParentSampler.h"
+#include "Composition.Tests.RecordedPixelPreview.h"
 #include "Composition.Tests.RecordedUtilityRegions.h"
 #include "Composition.Tests.RecordedWarpPreview.h"
 #include "Composition.Tests.RestartDeviceOwnerControls.h"
@@ -2265,6 +2266,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRecordedBrushCoverageTests();
     gFailures += RunWarpReplayComputeTests();
     gFailures += RunRecordedWarpPreviewParentTests();
+    gFailures += RunRecordedPixelPreviewParentTests();
     gFailures += RunEmptyJoinedShutdownTests();
     gFailures += RunVideoMemorySnapshotTests();
     gFailures += RunBrushDensityClearTests();

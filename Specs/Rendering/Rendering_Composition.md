@@ -904,3 +904,23 @@ CPU and WARP numeric/lifetime tests plus actual harness draw/replacement/cancel/
 The 64 MiB private Direct2D headroom is planning policy, not a proved opaque allocation/cancellation bound.
 Complete caller bounds, unsupported/failing driver acquisition, ordinary activation and visible S5/G1 remain
 P1 qualification requirements; the test acquisition entrypoint is not ordinary startup authorization.
+
+
+### Procedural immutable pixel preview foundation
+
+`PreparedPixelMovePreview` is a worker-created immutable certificate for the exact opening, source identity,
+source/grid placement, target and document grid. It holds the original coverage/lift and accounting owner.
+Its row reader writes only caller-admitted regions, with bounded private source reads and no shared sparse
+assembly, tile snapshot construction or full preview raster allocation. Zero offset has no such pending preview.
+
+A recorded stroke may use this complete `pixelSource` only on the recording worker. Both graph and composition
+validate the same certificate before creating resources; mask targets, mixed Warp/pixel sources, changed source,
+grid/placement or changed-tile overlays refuse. The original recording cancellation reaches source-region reads
+as well as checks between256-square regions. A complete pixel preview never inherits a previous moved stroke
+grid; otherwise an omitted old landing would remain visible. Original source residency may still be reused.
+
+The declared recording/transport/graphics source bounds and actual GPU/last-blit acknowledgements remain
+mandatory. Numeric WARP/hardware controls compare complete move/duplicate and sparse previews with independent
+literal pixels and the CPU commit, submit actual offscreen blits, and retire under the real original ticket.
+These component controls do not qualify the normal host display consumer, visible Present, failure/recovery,
+ordinary activation, complete production phase bounds or G1.

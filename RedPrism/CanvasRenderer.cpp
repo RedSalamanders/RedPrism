@@ -3,6 +3,7 @@
 
 #include "Adjust.h"
 #include "Jobs.h"
+#include "RecordedPixelPreview.h"
 #include "Shaders/CompositionShared.h"
 #include "UiTiming.h"
 #include "WarpPreviewWork.h"
@@ -1119,7 +1120,9 @@ HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noe
 
 HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
 {
-    if (preview.width < 1 || preview.height < 1 || (preview.warpSource && !_recordingCommands))
+    if (preview.width < 1 || preview.height < 1 ||
+        ((preview.warpSource || preview.pixelSource) && !_recordingCommands) ||
+        (preview.warpSource && preview.pixelSource))
     {
         return E_INVALIDARG;
     }
@@ -1151,6 +1154,8 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
         preview.sourceHeight < 0 || preview.sourceWidth > kMaxCanvasSide || preview.sourceHeight > kMaxCanvasSide ||
         ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) ||
         (!preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
+        return E_INVALIDARG;
+    if (preview.pixelSource && (!changed.empty() || !RecordedPixelPreviewMatchesForWork(document, preview)))
         return E_INVALIDARG;
     if (preview.warpSource)
     {
@@ -1184,7 +1189,7 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
     _documentHeight = document.height;
     _displayScale = ScaleToFit(document.width, document.height);
     bool compatibleStroke = false;
-    if (publishedSeed && publishedSeed->_stroke)
+    if (publishedSeed && publishedSeed->_stroke && !preview.pixelSource)
     {
         const auto& old = *publishedSeed->_stroke;
         compatibleStroke = publishedSeed->_device == _device && publishedSeed->_recordedDisplaySealed &&
@@ -1196,8 +1201,9 @@ HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& docum
                            old.sourceX == preview.sourceX && old.sourceY == preview.sourceY && old.fill == preview.fill;
         compatibleStroke =
             compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
-        compatibleStroke =
-            compatibleStroke && static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource);
+        compatibleStroke = compatibleStroke &&
+                           static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource) &&
+                           static_cast<bool>(old.pixelSource) == static_cast<bool>(preview.pixelSource);
         if (compatibleStroke && preview.warpSource)
         {
             const auto& previous = old.warpSource->source;
@@ -1249,7 +1255,7 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     const int sourceHeight = stroke.sourceHeight ? stroke.sourceHeight : stroke.source.Height();
     const bool stretched =
         stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
-    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && !stroke.warpSource)
+    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && !stroke.warpSource && !stroke.pixelSource)
     {
         // The whole grid, assembled on the GPU from the source's own texture and the tiles.
         const HRESULT result =
@@ -1296,7 +1302,33 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     gpu.sourceHeight = stroke.height;
     gpu.scale = scale;
     const int channels = gray ? 1 : 4;
-    if (stroke.warpSource)
+    if (stroke.pixelSource)
+    {
+        if (!_recordingCommands || !stroke.pixelSource->IsValidForWork())
+            return E_INVALIDARG;
+        result = UploadRows(
+            gpu,
+            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
+            {
+                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+                const std::span<std::uint8_t> band{out, bytes};
+                for (int row = 0; row < height; row += 256)
+                    for (int column = 0; column < width; column += 256)
+                    {
+                        const HRESULT status = _recordingCommands->StatusForWork();
+                        if (FAILED(status))
+                            return status;
+                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                        const auto offset =
+                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                        if (!stroke.pixelSource->Read({x + column, y + row, columns, rows}, band.subspan(offset),
+                                                      stride, _recordingCommands->CancellationForWork()))
+                            return E_ABORT;
+                    }
+                return _recordingCommands->StatusForWork();
+            });
+    }
+    else if (stroke.warpSource)
     {
         if (!_recordingCommands)
             return E_INVALIDARG; // Warp sampling must never run on the application owner.

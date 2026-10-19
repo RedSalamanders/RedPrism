@@ -2235,3 +2235,36 @@ identity from that root. Image edits keep the existing output image-name normali
 mask edits preserve the source image asset name, and carried mask names remain intact. Assetless or mask-only
 targets are validated by the existing raster operation. A failed worker capture publishes no pixels/history.
 This does not complete initial physical Ctrl/lift handling or enable ordinary prepared display policy.
+
+
+## Original Ctrl pixel opening and closure foundation
+
+The explicit fixed-press `SelectionOutlineGestureJob` CPU path may opt into initial pixel movement only after
+`DescribeSelectionPixelGestureMemory` admits the source/history, hit-dependent branch, immutable lift, final
+output and retirement overlap. An outline-only admission cannot authorize pixels. Ordinary physical input,
+Wand and the journal pixel successor remain separate activation requirements.
+
+For this opted-in fixed press, Ctrl plus an inside hit attempts image-pixel lift before New/Add/Subtract
+branch selection. Alt captured at Down fixes duplication; later Shift/Alt changes do not constrain or change
+that pixel drag. An inside failure (including a mask target, invisible ancestry or no selected source region)
+refuses without outline/drawing fallback. Transparent pixels within the selected source grid remain eligible.
+An outside hit uses the captured drawing mode. An existing Polygonal draft retains its established modifier rule.
+
+`PrepareDeferredPixelMoveOpeningInput` captures immutable roots, targetless token and bounded authority/scalars
+under admission. The worker checks ancestry and prepares complete target/mask metadata, selection coverage,
+lifted pixels and the pending record. Apply validates source, editor, history and opening authority, then swaps
+that record without pixels, history construction or geometry traversal. Movement is finite rounded scalar metadata.
+
+Terminal preparation captures that exact opening/sequence and uses its original immutable lift to prepare the
+final raster, carried mask/eager semantic thumbnail, translated outline and history on a worker. Publication
+requires current document/session/editor/history/target/opening/offset authority and a real history-residency
+attempt/permit; a changed residency topology refreshes on the same original job. A rounded zero closes only
+the pending gesture: it changes no document generation, history revision, redo or selection. Nonzero completion
+publishes one `Move Pixels` or `Duplicate Pixels` undo. Loss cancels this pixel gesture. Abort cannot clear a
+newer opening. Prepared owners retain replaced pending/display/history graphs for worker retirement.
+
+The optional final PixelMove `RasterEditInput::outputMemory` retains original accounting through each new
+sparse result storage, painted tile, translated selection, carried mask and semantic thumbnail, including
+copied handles and their last weak controls. Other raster-edit kinds refuse this new lifetime option. Default
+inputs preserve their numeric behavior. This core qualification does not activate Ctrl in the native host or
+establish complete large-document phase bounds, typed journal lineage, frame admission or G1.

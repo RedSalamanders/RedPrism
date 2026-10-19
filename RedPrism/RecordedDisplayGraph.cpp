@@ -1,4 +1,5 @@
 #include "RecordedDisplayGraph.h"
+#include "RecordedPixelPreview.h"
 #include "WarpPreviewWork.h"
 
 #include <cmath>
@@ -118,6 +119,8 @@ HRESULT RecordedDisplayGraph::PrepareInternalForWork(ID3D11Device* device, Canva
         return E_INVALIDARG;
     if (cancellation.IsCancelled())
         return E_ABORT;
+    if (preview && preview->pixelSource && (!tiles.empty() || !RecordedPixelPreviewMatchesForWork(source, *preview)))
+        return E_INVALIDARG; // Before any context/resource prefix or source ownership acquisition.
     if (preview && preview->warpSource)
     {
         // Reject an invalid immutable Warp descriptor before creating a private resource prefix.

@@ -22,3 +22,8 @@ struct SelectionOutlineGestureMemory final
 // Mode is captured at Down; its complete boolean output/workspace envelope precedes source capture.
 [[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemory(
     const DocumentSession& session, LassoKind marqueeKind, SelectionMode mode) noexcept;
+
+// Complete original CPU hit/drawing/outline/lift/final/history envelope for a fixed initial press stream.
+// GPU/display consumers need their separate bounded admission. No journal or Wand activation is granted.
+[[nodiscard]] std::optional<SelectionOutlineGestureMemory> DescribeSelectionPixelGestureMemory(
+    const DocumentSession& session, LassoKind kind, SelectionMode mode) noexcept;

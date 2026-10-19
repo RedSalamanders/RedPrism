@@ -495,3 +495,17 @@ for its admitted plan. The drawing payload retains that exact plan while holding
 root. A worker cannot substitute the default zero-source limits or mutate/materialize the shared source.
 Output and allocator/control owners remain charged through their final strong and weak reader release.
 This does not change the synchronous reference API or enable ordinary host activation.
+
+
+## Explicit pixel output lifetime
+
+`MakeSparse` and `Replacing` may receive an already admitted opaque output lifetime for newly constructed
+sparse metadata and any newly created uniform padding block. Existing source/base/tile storage keeps its
+own identity and previous accounting. A copied root or expired weak control retains the new metadata's
+lifetime; a child tile's independent accounting cannot depend only on the containing root.
+
+The final worker PixelMove path writes each new painted tile into one initialized `PixelBuffer` and adopts
+it without the previous extra tile copy. New translated `SelectionLoops` use charged worker adoption. Carried
+masks and newly allocated semantic thumbnails, including small dense copies of sparse Gray8 masks, keep the
+same output lifetime. Private reads do not assemble the source cache. The original producer binds accounting
+before publication/refund. These options create neither new admission nor document/GPU publication authority.

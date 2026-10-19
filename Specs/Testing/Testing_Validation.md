@@ -3595,3 +3595,24 @@ The preserving-panel native Wand fixture reports the actual settlement result, r
 selection-move/ticket/history state, scheduler reservation/release bytes and host queue state only when its
 existing completion predicate fails. Its15000ms deadlock bound and all selection/panel/history expectations
 remain unchanged. A passing diagnostic repeat alone does not establish the cause of an earlier failure.
+
+
+### Ctrl pixel opening, closure and procedural preview foundation
+
+DocumentTests runs the named prelude, deferred opening, procedural reader, closure, original fixed-press parent,
+output lifetime and immutable descriptor modules. Preserve the100×40 literal move/duplicate/outline reference,
+inside Ctrl/Shift/Alt precedence, outside drawing modes, mask/unsupported-envelope refusal, rounded zero/redo,
+source/history/editor mismatch, cancellation, residency and exact original-ticket ownership expectations.
+
+Independent storage cases retain a copied strong owner, then an expired weak control, then release it. Cover
+new sparse roots, painted tiles, translated geometry, carried masks and both resized and small sparse semantic
+thumbnails. Separate real-parent cases require the exact declared final-output charge through independent root,
+tile and selection strong/weak survivors, with zero refund until actual release acknowledgement. Unbound CPU
+lifetime observations alone are not reservation proof.
+
+CompositionTests adds `RunRecordedPixelPreviewParentTests`: WARP plus available hardware, move/duplicate and
+sparse variants, independent literal bytes, CPU commit parity, invalid descriptors before resource prefix,
+unchanged seed/source caches, actual offscreen blits, original command/completion context, barrier and worker
+retirement. Keep all existing recorded Warp controls. Harness/readback success is not visible-frame timing.
+The [component record](../TestRuns/P1CtrlPixelFoundation_2026-10-19.md) separates private scope and fresh
+canonical integration; ordinary host, journal/Wand and G1 gates remain open.

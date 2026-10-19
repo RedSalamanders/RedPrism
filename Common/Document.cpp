@@ -1036,7 +1036,8 @@ void Raster::ForEachStorage(const std::function<void(const Raster&)>& visit) con
 }
 
 Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX, int baseY,
-                          std::vector<RasterTile> tiles, std::uint8_t fill)
+                          std::vector<RasterTile> tiles, std::uint8_t fill,
+                          const std::shared_ptr<const void>& outputLifetime)
 {
     if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
@@ -1046,7 +1047,7 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
     {
         return {};
     }
-    auto storage = AllocateStorage();
+    auto storage = outputLifetime ? AllocateChargedStorage(outputLifetime) : AllocateStorage();
     if (!storage)
         return {};
     storage->width = width;
@@ -1096,7 +1097,8 @@ namespace
 // The part of `area` outside `inside`, as windows of one shared block of `value` no larger than a brush tile, so
 // padding a grown grid costs one small allocation however much area it adds.
 [[nodiscard]] std::vector<RasterTile> UniformTiles(const IntRect& area, const IntRect& inside, RasterFormat format,
-                                                   std::uint8_t value, const CancelToken& cancellation)
+                                                   std::uint8_t value, const CancelToken& cancellation,
+                                                   const std::shared_ptr<const void>& outputLifetime)
 {
     constexpr int kBlock = 256;
     std::vector<IntRect> pieces;
@@ -1122,10 +1124,13 @@ namespace
         return tiles;
     }
     const int channels = format == RasterFormat::Gray8 ? 1 : 4;
-    const std::vector<std::uint8_t> bytes(static_cast<std::size_t>(blockWidth) * static_cast<std::size_t>(blockHeight) *
-                                              static_cast<std::size_t>(channels),
-                                          value);
-    const Raster block = Raster::Make(blockWidth, blockHeight, format, bytes.data(), bytes.size());
+    auto bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(blockWidth) * blockHeight * channels);
+    if (!bytes)
+        throw std::bad_alloc{};
+    std::fill_n(bytes.Data(), bytes.Size(), value);
+    const Raster block = Raster::Adopt(blockWidth, blockHeight, format, std::move(bytes), outputLifetime);
+    if (!block.HasStorage())
+        return {};
     for (const IntRect& piece : pieces)
     {
         for (int y = piece.y; y < piece.y + piece.height; y += blockHeight)
@@ -1144,7 +1149,8 @@ namespace
 } // namespace
 
 Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles, int cropX,
-                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill, CancelToken cancellation)
+                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill, CancelToken cancellation,
+                         const std::shared_ptr<const void>& outputLifetime)
 {
     if (cropWidth < 1 || cropHeight < 1 || cancellation.IsCancelled())
     {
@@ -1168,9 +1174,9 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         gridFill = source.Fill();
         if (gridFill != fill)
         {
-            older =
-                UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
-                             IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill, cancellation);
+            older = UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
+                                 IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill, cancellation,
+                                 outputLifetime);
         }
         for (RasterTile tile : source.Tiles())
         {
@@ -1238,8 +1244,8 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         tile.x -= cropX;
         tile.y -= cropY;
     }
-    Raster prepared =
-        MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), gridFill);
+    Raster prepared = MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result),
+                                 gridFill, outputLifetime);
     return cancellation.IsCancelled() ? Raster{} : prepared;
 }
 

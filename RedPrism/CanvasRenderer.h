@@ -31,6 +31,7 @@
 // device for a texture it cannot create (Decision D1, Rendering_Composition.md "Documents larger than the device").
 class GpuRecordingCommands;
 struct PreparedWarpPreview;
+class PreparedPixelMovePreview;
 
 class CanvasRenderer final
 {
@@ -136,6 +137,8 @@ class CanvasRenderer final
         int sourceWidth = 0;
         int sourceHeight = 0;
         std::uint8_t fill = 0; // pixels beyond the source (255 reveals for masks)
+        // Complete immutable lifted-pixel reader; accepted only by the private recording path.
+        std::shared_ptr<const PreparedPixelMovePreview> pixelSource;
     };
     HRESULT BeginStroke(const StrokePreview& preview) noexcept;
     // Exclusive private recorder only. Establish document/proxy geometry before any oversize grid upload.

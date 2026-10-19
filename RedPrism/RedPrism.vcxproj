@@ -132,6 +132,9 @@
     <ClInclude Include="..\Common\InputRevision.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
+    <ClInclude Include="..\Common\PixelMoveOpeningWork.h" />
+    <ClInclude Include="..\Common\PixelMoveClosureWork.h" />
+    <ClInclude Include="..\Common\PixelMovePreviewWork.h" />
     <ClInclude Include="..\Common\RasterUploadReductionWork.h" />
     <ClInclude Include="..\Common\RasterUploadWork.h" />
     <ClInclude Include="..\Common\RasterUploadLayout.h" />
@@ -285,6 +288,8 @@
     <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\Common\PixelMoveOpeningWork.cpp" />
+    <ClCompile Include="..\Common\PixelMoveClosureWork.cpp" />
     <ClCompile Include="..\Common\PreparedRasterPreview.cpp" />
     <ClInclude Include="..\Common\PreparedRasterPreview.h" />
     <ClInclude Include="..\Common\PublicationGraphAllocator.h" />
@@ -616,6 +621,7 @@
     <ClCompile Include="Application.Tests.StrokeSampleParity.cpp" />
     <ClInclude Include="StrokeFinishTestGate.h" />
     <ClInclude Include="RecordedDisplayGraph.h" />
+    <ClInclude Include="RecordedPixelPreview.h" />
     <ClInclude Include="CommittedDisplayController.h" />
   </ItemGroup>
   <ItemGroup>

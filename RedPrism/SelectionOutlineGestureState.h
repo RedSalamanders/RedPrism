@@ -61,6 +61,7 @@ struct SelectionOutlineGestureState
         DocumentHistory::Authority history;
         std::optional<LassoKind> newMarqueeKind;
         SelectionMode marqueeMode = SelectionMode::New;
+        bool initialPixels = false;
     };
     enum class Event
     {
@@ -73,7 +74,9 @@ struct SelectionOutlineGestureState
         ClosePrepared,
         ClickPrepared,
         ResidencyRefreshStarted,
-        DrawingPrepared
+        DrawingPrepared,
+        PixelOpeningPrepared,
+        PixelClosurePrepared
     };
     // Optional worker readiness probe for event-gated fixtures. Its context may hold immutable rasters
     // and events, never an Application, mutable session, UI or GPU owner.
@@ -124,6 +127,9 @@ struct SelectionOutlineGestureState
     std::optional<LassoFinishGeometry::DrawingPlan> drawingPlan;
     bool allowNewRectangle = false, allowNewEllipse = false, drawing = false;
     bool allowPreservingMarquee = false;
+    // Selected CPU-only initial Ctrl branch for the fixed press stream. Journal/Wand require their
+    // distinct typed pixel lineage and renderer phases; this flag does not authorize those routes.
+    bool allowInitialPixelMove = false, pixelMove = false;
     bool requireCapturedTarget = false;
     // Caller moves only the exact preceding completed parent's issued transition. Worker admission
     // validates and consumes it; it does not rewrite the journal's immutable per-Down authority.

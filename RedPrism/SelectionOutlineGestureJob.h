@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PixelMoveClosureWork.h"
 #include "SelectionCommandWork.h"
 #include "SelectionHitWork.h"
 #include "SelectionMoveOpeningWork.h"
@@ -26,7 +27,9 @@ class SelectionOutlineGestureJob final : public Job
         RefreshClick,
         DrawOpen,
         DrawFinish,
-        DrawRefresh
+        DrawRefresh,
+        PixelFinish,
+        PixelRefresh
     };
 
   public:
@@ -41,6 +44,8 @@ class SelectionOutlineGestureJob final : public Job
     bool NotifyMoves(bool changed) noexcept;
     void NotifyInputProgress(bool parked = false) noexcept;
     bool ConsumeDrawing() noexcept;
+    bool ConsumePixels() noexcept;
+    void AbortPixels() noexcept;
     bool ConsumePolygonal() noexcept;
     bool FinishDrawing(const HostSelectionGestureInput::Sample& sample) noexcept;
     bool DrawingCurrent() const noexcept;
@@ -58,11 +63,15 @@ class SelectionOutlineGestureJob final : public Job
     Vec2 _point{}, _offset{};
     std::uint64_t _geometryEnvelope = 0;
     std::int32_t _error = 0;
-    bool _click = false, _terminal = false;
+    bool _click = false, _terminal = false, _control = false;
     std::optional<HostSelectionGestureInput::Event> _lastInput;
     std::uint64_t _lastPolygonalOrdinal = 0, _reportedInputOrdinal = 0;
     std::optional<SelectionMoveOpeningInput> _input;
     std::optional<PreparedSelectionMoveOpening> _opening;
+    std::optional<PixelMoveOpeningInput> _pixelInput;
+    std::optional<PreparedPixelMoveOpening> _pixelOpening;
+    std::optional<PixelMoveClosureInput> _pixelCloseInput;
+    std::optional<PreparedPixelMoveClosure> _pixelClose;
     std::optional<SelectionMoveClosureInput> _closeInput;
     std::optional<PreparedSelectionMoveClosure> _close;
     std::optional<SelectionCommandInput> _commandInput;

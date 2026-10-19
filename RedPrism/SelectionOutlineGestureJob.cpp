@@ -148,6 +148,45 @@ std::optional<SelectionOutlineGestureMemory> DescribeSelectionOutlineGestureMemo
     return DescribeMarqueeMemory(session, marqueeKind, mode);
 }
 
+std::optional<SelectionOutlineGestureMemory> DescribeSelectionPixelGestureMemory(const DocumentSession& session,
+                                                                                 LassoKind kind,
+                                                                                 SelectionMode mode) noexcept
+{
+    if (kind != LassoKind::Rectangle && kind != LassoKind::Ellipse && kind != LassoKind::Freehand)
+        return std::nullopt;
+    auto memory = DescribeMarqueeMemory(session, kind, mode);
+    if (!memory)
+        return std::nullopt;
+    const auto& document = session.Document();
+    const auto* layer = session.ActiveLayer();
+    std::uint64_t pixels = 0;
+    if (!session.IsMaskSelected() && layer && layer->asset && document && document->selection &&
+        !document->selection->IsEmpty())
+    {
+        pixels = PixelMoveMemoryBytes(*layer, document->selection.value(), document->width, document->height,
+                                      session.RasterEditPixelLimit(*layer, false));
+        if (!pixels)
+            return std::nullopt;
+    }
+    // Cover the immutable lift, full target/token copies, private final tiles/outline and final document
+    // overlap in addition to the existing source/history/drawing envelope. Cached scalar queries only.
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    constexpr std::uint64_t wrappers = 16384;
+    if (pixels > (maximum - 3 * wrappers) / 9)
+        return std::nullopt;
+    const auto opening = 3 * pixels + wrappers;
+    const auto final = 4 * pixels + wrappers;
+    const auto total = 9 * pixels + 3 * wrappers;
+    if (opening > maximum - memory->limits.continuingOutputBytes || final > maximum - memory->limits.finalOutputBytes ||
+        total > maximum - memory->limits.totalBytes)
+        return std::nullopt;
+    memory->limits.continuingOutputBytes += opening;
+    memory->limits.finalOutputBytes += final;
+    memory->limits.totalBytes += total;
+    memory->source.initialPixels = true;
+    return memory;
+}
+
 SelectionOutlineGestureJob::SelectionOutlineGestureJob(SelectionOutlineGestureState& state)
     : _state(state), _drawingPolicy(state.drawingPlan)
 {
@@ -174,7 +213,7 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     }
     if (_phase == Phase::Open)
     {
-        if (_drawing && _drawing->mode != SelectionMode::New)
+        if (_drawing && _drawing->mode != SelectionMode::New && !_control)
         {
             _drawing->chosen = true; // Add/Subtract always draw, including a Down inside the old outline.
             return {};
@@ -183,6 +222,21 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         const auto hit = ContainsSelectionForWork(_display, _point, context.cancellation);
         if (!hit)
             return {JobStatus::Failed, E_INVALIDARG};
+        if (hit.value() && _control)
+        {
+            if (!_pixelInput)
+                return {JobStatus::Failed, E_INVALIDARG}; // Inside failure never falls back to drawing/outline.
+            auto prepared = DocumentSession::PrepareDeferredPixelMoveOpening(std::move(*_pixelInput),
+                                                                             context.cancellation, _output);
+            _pixelInput.reset();
+            if (prepared.status != PixelMoveLiftStatus::Ready || !prepared.prepared)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_FAIL};
+            _pixelOpening.emplace(std::move(*prepared.prepared));
+            s.pixelMove = true;
+            s.NotifyWork(SelectionOutlineGestureState::WorkStage::PixelOpeningPrepared);
+            return {};
+        }
         if (!hit.value() && _drawing)
         {
             _drawing->chosen = true;
@@ -199,6 +253,30 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
         return {};
     }
     s.remainingBudget = context.reservedMemoryBytes;
+    if (_phase == Phase::PixelFinish)
+    {
+        if (!_pixelCloseInput)
+            return {JobStatus::Failed, E_UNEXPECTED};
+        auto prepared = DocumentSession::PrepareDeferredPixelMoveClosure(std::move(*_pixelCloseInput),
+                                                                         context.cancellation, _final);
+        _pixelCloseInput.reset();
+        if (!prepared)
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        _pixelClose.emplace(std::move(*prepared));
+        ++s.closurePrepares;
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::PixelClosurePrepared);
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+    }
+    if (_phase == Phase::PixelRefresh)
+    {
+        ++s.residencyRefreshes;
+        s.NotifyWork(SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted);
+        const bool ready = _pixelClose && _pixelClose->RefreshHistoryResidency(context.cancellation);
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+               : ready                            ? JobResult{}
+                                                  : JobResult{JobStatus::Failed, E_FAIL};
+    }
     if (_phase == Phase::DrawOpen)
     {
         if (!_drawing || !_drawing->openingInput)
@@ -294,7 +372,8 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             (arrival->mode != SelectionMode::New &&
              (!s.allowPreservingMarquee ||
               (arrival->mode != SelectionMode::Add && arrival->mode != SelectionMode::Subtract))) ||
-            arrival->tool == HostSelectionPressInput::Tool::Wand || down->sample.modifiers.control)
+            arrival->tool == HostSelectionPressInput::Tool::Wand ||
+            (down->sample.modifiers.control && (!s.allowInitialPixelMove || s.prefix.IsJournal())))
             return Refuse(E_ABORT);
         const bool typed =
             _drawingPolicy && _drawingPolicy.value().kind == arrival->kind &&
@@ -325,6 +404,9 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             (s.admissionSource->newMarqueeKind != std::optional{arrival->kind} ||
              s.admissionSource->marqueeMode != arrival->mode))
             return Refuse(E_ABORT); // Never prepare a different kind or mode under a smaller admission.
+        _control = down->sample.modifiers.control;
+        if (_control && s.admissionSource && !s.admissionSource->initialPixels)
+            return Refuse(E_ABORT); // An outline-only envelope never authorizes a pixel lift.
         // Geometry/history and full source authority are captured only here, after this original admission.
         _source = s.session.CaptureDocumentReadAuthority();
         if (!_source || arrival->document.sessionIdentity != _source->sessionIdentity)
@@ -357,6 +439,14 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
         }
         _display = s.session.DisplayedSelectionValue();
         _point = down->sample.point;
+        if (_control)
+        {
+            auto input = s.session.PrepareDeferredPixelMoveOpeningInput(down->sample.modifiers.alt);
+            if (input)
+                _pixelInput.emplace(std::move(*input));
+            // Ineligible images/masks remain candidates for outside drawing. The worker must hit first;
+            // an inside failed lift returns an operation failure, never an outline/drawing fallback.
+        }
         if (_drawing)
         {
             if (!typed && !legacy)
@@ -376,7 +466,8 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             _drawing->editor = s.session.CaptureHistoryRestoreAuthority();
             _drawing->history = s.session.history.CaptureAuthority();
         }
-        if (_display.selection && !_display.selection->IsEmpty() && (!_drawing || _drawing->mode == SelectionMode::New))
+        if (!_control && _display.selection && !_display.selection->IsEmpty() &&
+            (!_drawing || _drawing->mode == SelectionMode::New))
         {
             auto input = s.session.PrepareDeferredSelectionMoveOpeningInput();
             if (!input)
@@ -385,11 +476,46 @@ bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket tic
             const auto& loops = _display.selection->loops;
             _geometryEnvelope = loops.StorageBytes() + SelectionLoops::WorkOwnershipAllowance(loops.size());
         }
-        else if (!_drawing)
+        else if (!_drawing && !_control)
             return Refuse(E_ABORT);
         ++s.captures;
         _phase = Phase::Open;
         return Resume();
+    }
+    if (_phase == Phase::Open && s.pixelMove)
+    {
+        s.sourceCurrent = _source && s.session.IsDocumentReadCurrent(*_source);
+        if (!s.sourceCurrent || !_pixelOpening)
+            return Refuse(E_ABORT);
+        s.openingBytes = _output->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
+        if (_output->BindContinuingOutputForPublication(s.scheduler, ticket, s.openingBytes) != S_OK)
+            return Refuse(E_FAIL);
+        s.partition = s.scheduler.ReservedMemoryBytes() >= s.limits.totalBytes && _output->BoundTo(s.scheduler, ticket);
+        s.opened = s.session.ApplyPreparedDeferredPixelMoveOpeningIfCurrent(*_pixelOpening);
+        if (!s.opened)
+            return Refuse(E_ABORT);
+        s.Notify(SelectionOutlineGestureState::Event::Opened);
+        _phase = Phase::Collect;
+        return ConsumePixels();
+    }
+    if (_phase == Phase::PixelRefresh)
+        _phase = Phase::PixelFinish;
+    if (_phase == Phase::PixelFinish)
+    {
+        if (!_pixelOpening || !_pixelClose || !s.session.IsPreparedDeferredPixelMoveGestureCurrent(*_pixelOpening) ||
+            !s.session.IsPreparedDeferredPixelMoveClosureCurrent(*_pixelClose))
+            return Refuse(E_ABORT);
+        ++s.residencyTries;
+        const auto decision = _pixelClose->TryAcquireHistoryResidency(_residency);
+        if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            return Refuse(E_ABORT);
+        if (decision != DocumentHistory::ResidencyValidation::Ready)
+        {
+            _residency.Reset();
+            _phase = Phase::PixelRefresh;
+            return Resume();
+        }
+        return false;
     }
     if (_phase == Phase::Open && _drawing && _drawing->chosen)
     {
@@ -536,7 +662,20 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
         s.outcome = {JobStatus::Failed, _error};
     if (s.cancelled || (s.drawing && s.terminalLost))
         s.outcome = {JobStatus::Cancelled};
-    if (s.outcome.status == JobStatus::Finished && s.drawing && !s.endedByBackspace)
+    if (s.outcome.status == JobStatus::Finished && s.pixelMove)
+    {
+        const auto required = _final->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
+        if (!_pixelClose || !s.session.IsPreparedDeferredPixelMoveClosureCurrent(*_pixelClose) ||
+            required > s.limits.finalOutputBytes ||
+            _final->BindPersistentOutputAfterCompletedWork(s.scheduler, s.original, s.limits.finalOutputBytes,
+                                                           *_temporary) != S_OK)
+            s.outcome = {JobStatus::Failed, E_FAIL};
+        else
+            s.closed = s.session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(*_pixelClose);
+        if (!s.closed && s.outcome.status == JobStatus::Finished)
+            s.outcome = {JobStatus::Failed, E_ABORT};
+    }
+    else if (s.outcome.status == JobStatus::Finished && s.drawing && !s.endedByBackspace)
     {
         const auto required = _drawing && _drawing->finish ? _drawing->finish->OutputAllocationBytes() : 0;
         if (!_drawing || !_drawing->finish || !s.session.IsPreparedLassoFinishCurrent(*_drawing->finish) ||
@@ -569,6 +708,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     if (s.outcome.status != JobStatus::Finished || s.endedByBackspace)
     {
         AbortDrawing();
+        AbortPixels();
         if (s.opened && !s.closed && _opening)
             s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
         if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, s.original) != S_OK)
@@ -576,8 +716,8 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
     }
     s.overflowObserved = s.prefix.Overflowed();
     s.inputAcknowledged = _terminal ? s.prefix.Acknowledge(s.opening) : s.prefix.Drop(s.opening);
-    if (s.prefix.IsJournal() && s.closed && s.inputAcknowledged && s.outcome.status == JobStatus::Finished && _source &&
-        _lineageMinimum)
+    if (!s.pixelMove && s.prefix.IsJournal() && s.closed && s.inputAcknowledged &&
+        s.outcome.status == JobStatus::Finished && _source && _lineageMinimum)
     {
         const auto after = s.session.CaptureDocumentReadAuthority();
         if (after && after->sessionIdentity == _source->sessionIdentity &&
@@ -607,6 +747,7 @@ void SelectionOutlineGestureJob::RetainJoinedRetirement(JobScheduler&, JobTicket
     s.sameTicket = s.sameTicket && ticket == s.original;
     s.waiting = false;
     AbortDrawing();
+    AbortPixels();
     if (s.opened && !s.closed && _opening)
         s.aborted = s.session.AbortPreparedDeferredSelectionMoveIfCurrent(_opening.value());
     if (_temporary && !_temporary->IsBound() && _temporary->BindForRetirement(s.scheduler, ticket) != S_OK)
@@ -631,6 +772,8 @@ bool SelectionOutlineGestureJob::Resume() noexcept
 
 bool SelectionOutlineGestureJob::Consume() noexcept
 {
+    if (_state.pixelMove)
+        return ConsumePixels();
     if (_drawing && _drawing->chosen)
         return ConsumeDrawing();
     auto& s = _state;
@@ -998,4 +1141,78 @@ bool SelectionOutlineGestureJob::ConsumePolygonal() noexcept
         }
     }
     return park(SelectionOutlineGestureState::WaitReason::Input);
+}
+
+void SelectionOutlineGestureJob::AbortPixels() noexcept
+{
+    auto& s = _state;
+    if (s.pixelMove && s.opened && !s.closed && _pixelOpening)
+        s.aborted = s.session.AbortPreparedDeferredPixelMoveIfCurrent(*_pixelOpening);
+}
+
+bool SelectionOutlineGestureJob::ConsumePixels() noexcept
+{
+    auto& s = _state;
+    if (!_pixelOpening || s.prefix.IsJournal() || !s.session.IsPreparedDeferredPixelMoveGestureCurrent(*_pixelOpening))
+        return Refuse(E_ABORT);
+    bool changed = false;
+    while (const auto next = s.prefix.Peek(s.opening))
+    {
+        const bool terminal = next->action == HostSelectionGestureInput::Action::Up ||
+                              next->action == HostSelectionGestureInput::Action::Lost ||
+                              next->action == HostSelectionGestureInput::Action::Leave ||
+                              next->action == HostSelectionGestureInput::Action::Escape;
+        const bool cancel = next->action != HostSelectionGestureInput::Action::Up;
+        if (terminal && s.admitTerminal && !s.admitTerminal(s.hostObserver, next->sample.ordinal, cancel))
+            return Refuse(E_ABORT);
+        if (!s.session.IsPreparedDeferredPixelMoveGestureCurrent(*_pixelOpening))
+            return Refuse(E_ABORT);
+        const auto event = s.prefix.Take(s.opening);
+        if (!event)
+            return Refuse(E_ABORT);
+        s.lastConsumedOrdinal = event->sample.ordinal;
+        _lastInput = event;
+        if (event->action == HostSelectionGestureInput::Action::Down)
+            continue;
+        if (event->action == HostSelectionGestureInput::Action::Move)
+        {
+            // Legacy lifted pixels use complete document delta; later Shift/Alt/Control never reinterpret it.
+            const double dx = event->sample.point.x - _point.x, dy = event->sample.point.y - _point.y;
+            if (!s.session.MovePreparedDeferredPixelMoveIfCurrent(*_pixelOpening, dx, dy))
+                return Refuse(E_ABORT);
+            _offset = {std::round(dx), std::round(dy)};
+            ++s.moves;
+            changed = true;
+            continue;
+        }
+        if (!terminal || !s.prefix.SelectTerminal(s.opening, event->sample.ordinal))
+            return Refuse(E_ABORT);
+        _terminal = true;
+        s.terminalOrdinal = event->sample.ordinal;
+        s.terminalLost = event->action == HostSelectionGestureInput::Action::Lost ||
+                         event->action == HostSelectionGestureInput::Action::Leave;
+        NotifyInputProgress();
+        if (changed)
+            s.Notify(SelectionOutlineGestureState::Event::Moved);
+        if (!s.session.IsPreparedDeferredPixelMoveGestureCurrent(*_pixelOpening))
+            return Refuse(E_ABORT);
+        if (cancel)
+        {
+            s.cancelled = true; // Pixel capture loss cancels, matching EndSelectionInteraction/CancelPixelDrag.
+            return false;
+        }
+        auto input = s.session.PrepareDeferredPixelMoveClosureInput(*_pixelOpening);
+        if (!input)
+            return Refuse(E_ABORT);
+        _pixelCloseInput.emplace(std::move(*input));
+        _phase = Phase::PixelFinish;
+        return Resume();
+    }
+    NotifyInputProgress();
+    if (changed)
+        s.Notify(SelectionOutlineGestureState::Event::Moved);
+    if (!s.session.IsPreparedDeferredPixelMoveGestureCurrent(*_pixelOpening))
+        return Refuse(E_ABORT);
+    s.waiting = true;
+    return true; // Input event wakes the same original. No per-tick job admission or polling.
 }

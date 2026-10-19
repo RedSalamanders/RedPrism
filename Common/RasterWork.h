@@ -30,6 +30,8 @@ inline constexpr std::size_t kRasterWorkDepthLimit = 64;
 [[nodiscard]] Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation = {});
 // Worker equivalents of Raster::MakeThumbnail and CarriedMask. They check cancellation before returning even
 // shared/no-op results and never publish partially initialized pixels.
-[[nodiscard]] Raster ThumbnailRasterForWork(const Raster& source, int maxSide = 96, CancelToken cancellation = {});
+[[nodiscard]] Raster ThumbnailRasterForWork(const Raster& source, int maxSide = 96, CancelToken cancellation = {},
+                                            const std::shared_ptr<const void>& outputLifetime = {});
 [[nodiscard]] Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width,
-                                        int height, std::uint8_t outside, CancelToken cancellation = {});
+                                        int height, std::uint8_t outside, CancelToken cancellation = {},
+                                        const std::shared_ptr<const void>& outputLifetime = {});

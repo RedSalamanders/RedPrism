@@ -21,6 +21,11 @@ class GpuRecordingCommands final
     [[nodiscard]] HRESULT RestartForWork(ID3D11DeviceContext* context, GpuCommandStream& original,
                                          CancelToken cancellation) noexcept;
     [[nodiscard]] HRESULT StatusForWork() const noexcept;
+    // Synchronous worker reads borrow the original cancellation; no token or callback escapes recording.
+    [[nodiscard]] const CancelToken& CancellationForWork() const noexcept
+    {
+        return _cancellation;
+    }
     // Same private context/device, on the initialized producer thread; numeric generations are insufficient.
     [[nodiscard]] HRESULT ContextStatusForWork(ID3D11Device* device, ID3D11DeviceContext* context) const noexcept;
     void CheckpointForWork() noexcept;

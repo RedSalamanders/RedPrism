@@ -1256,10 +1256,11 @@ void BrushStroke::RefreshTileOwnership(Tile& tile) noexcept
 
 bool BrushStroke::ConfigureWorkerRasterEdit(CancelToken cancellation,
                                             void (*progress)(void*, std::size_t, std::size_t) noexcept,
-                                            void* progressContext) noexcept
+                                            void* progressContext, std::shared_ptr<const void> outputLifetime) noexcept
 {
     if (!_valid || _engine != &CpuBrushCoverage::Shared() || !_tiles.empty() || !_samples.empty())
         return false;
+    _workOutputLifetime = std::move(outputLifetime);
     _workerRasterEdit = true;
     _workCancellation = std::move(cancellation);
     _workProgress = progress;
@@ -1827,7 +1828,7 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
         }
     }
     commit.image = Raster::Replacing(base, _sourceRect.x, _sourceRect.y, Patches(), crop.x, crop.y, crop.width,
-                                     crop.height, fill, _workCancellation);
+                                     crop.height, fill, _workCancellation, _workOutputLifetime);
     if (!commit.image.HasStorage())
     {
         return std::nullopt;
@@ -3774,7 +3775,22 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         }
         const std::size_t count =
             static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
-        std::vector<std::uint8_t> bytes(base, base + count * 4u);
+        std::vector<std::uint8_t> bytes;
+        PixelBuffer ownedPixels;
+        std::uint8_t* pixels = nullptr;
+        if (_workerRasterEdit)
+        {
+            ownedPixels = PixelBuffer::TryAllocate(count * 4u);
+            if (!ownedPixels)
+                throw std::bad_alloc{};
+            pixels = ownedPixels.Data();
+            std::copy_n(base, count * 4u, pixels);
+        }
+        else
+        {
+            bytes.assign(base, base + count * 4u);
+            pixels = bytes.data();
+        }
         for (std::size_t index = 0; index < count; ++index)
         {
             if (_workerRasterEdit && index % static_cast<std::size_t>(tile.rect.width) == 0 &&
@@ -3784,7 +3800,7 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
             const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
             const int gx = tile.rect.x + px;
             const int gy = tile.rect.y + py;
-            std::uint8_t* out = bytes.data() + index * 4u;
+            std::uint8_t* out = pixels + index * 4u;
             if (!duplicate)
             {
                 // The selection becomes a hole.
@@ -3833,8 +3849,12 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
                     std::clamp(sample[static_cast<std::size_t>(channel)] + out[channel] * hold, 0.0, 255.0)));
             }
         }
-        tile.image =
-            Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        tile.image = _workerRasterEdit ? Raster::Adopt(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888,
+                                                       std::move(ownedPixels), _workOutputLifetime)
+                                       : Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888,
+                                                      bytes.data(), bytes.size());
+        if (!tile.image.HasStorage())
+            return false;
         RefreshTileOwnership(tile);
         tile.touched = true;
         tile.changed = true;

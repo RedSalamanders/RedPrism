@@ -2,6 +2,10 @@
 
 ## Current delivery checklist — 2026-10-19
 
+- [x] Integrate the initial Ctrl CPU opening/closure, procedural pixel GPU foundation and original strong/weak output accounting after all3,232 private assertions pass in Debug/Release/real-ASan; register every new module in the actual suites. [Component evidence](../../TestRuns/P1CtrlPixelFoundation_2026-10-19.md).
+- [x] Qualify this 1,006-TU foundation in full canonical x64 Debug/Release/real ASan and ARM64 Debug/Release/instrumented-ASan cross-builds. Every profile has five matching executable/full-PDB pairs. Native ARM64 runtime remains unavailable. [Current evidence](../../TestRuns/P1CtrlPixelFoundation_2026-10-19.md#canonical-foundation-qualification).
+- [ ] Integrate the actual Ctrl/frame and typed journal consumers. Private CPU journal qualification passes 993 facts, including 42 new cases; the combined private native ASan host passes154 stages /11,814 facts. Current ordinary routing remains unchanged. Final atomic document/history/rows/GPU publication, Wand, ordinary activation and all nine delivery gates remain open.
+
 - [x] Qualify the latest combined capture/preflight source in full x64 Debug/Release/real-ASan and all three ARM64 cross-build profiles:994 compiler records and five PE/full-PDB pairs/profile;152 Application stages /11,527 facts, all probes/stress/captures pass in their actual profiles. Native ARM64 runtime remains unavailable. [Current canonical matrix](../../TestRuns/P1CaptureMatrix_2026-10-19.md).
 
 - [x] Qualify combined capture/preflight source in all three ARM64 cross-builds (c2armd1/c2armr1/c2arma1):994 compiler records/profile,13 fresh/981 exact inherited objects and five AA64/full-PDB pairs. Native ARM64 runtime remains unavailable; the subsequent composition fixture correction qualifies in the latest matrix above.

@@ -151,6 +151,7 @@ class BrushStrokeOpening
 
   private:
     friend class BrushStroke;
+    friend class PixelMovePreviewReader;
     BrushStrokeOpening() noexcept = default;
 
     Raster _source;
@@ -358,7 +359,8 @@ class BrushStroke
     // buffers, uses cancellable private reads and propagates allocation failure to the worker runner.
     [[nodiscard]] bool ConfigureWorkerRasterEdit(CancelToken cancellation,
                                                  void (*progress)(void*, std::size_t, std::size_t) noexcept = nullptr,
-                                                 void* progressContext = nullptr) noexcept;
+                                                 void* progressContext = nullptr,
+                                                 std::shared_ptr<const void> outputLifetime = {}) noexcept;
     [[nodiscard]] bool PixelLimitRefused() const noexcept
     {
         return _pixelLimitRefused;
@@ -507,7 +509,8 @@ class BrushStroke
     [[nodiscard]] bool PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                                    const std::function<bool(Vec2, std::array<double, 4>&)>& shade);
 
-    SharedRetainedMemoryLease _openingMemory; // last CPU admission acknowledgement
+    SharedRetainedMemoryLease _openingMemory;        // last CPU admission acknowledgement
+    std::shared_ptr<const void> _workOutputLifetime; // outlives all newly produced pixel owners
     bool _privateWorkerOwner = false;
     Guid _layerID;
     bool _mask = false;

@@ -2,6 +2,8 @@
 
 Latest combined capture/preflight source qualifies full x64 Debug, Release and real ASan plus all three ARM64 cross-build profiles. All994 compiler records/profile, five PE/full-PDB pairs,152 Application stages /11,527 facts and profile-specific probes/stress/captures independently pass. Native ARM64 execution is unavailable. The retained c3 panel/Wand failure has no established cause; ordinary activation and all nine P1 delivery areas remain open. [Current canonical matrix](../../TestRuns/P1CaptureMatrix_2026-10-19.md).
 
+Initial Ctrl CPU/procedural pixel GPU and output-lifetime foundations are now integrated after private three-profile3,232-assertion qualification. Canonical full x64 Debug/Release/real-ASan and all three ARM64 cross-builds pass with 1,006 compiler records/profile. Native ARM64 execution remains unavailable. Physical Ctrl/frame integration, typed journal/Wand, ordinary activation and G1 remain open. [Component evidence](../../TestRuns/P1CtrlPixelFoundation_2026-10-19.md).
+
 ### Earlier checkpoints
 
 Latest combined capture/preflight source qualifies all three ARM64 cross-builds; native ARM64 execution is unavailable. Canonical Release c2r1 stops at one composition charge observation. The real release-worker boundary reproduces the old assertion failure on WARP and hardware; its fixture now waits for full scheduler retirement before checking the unchanged exact charge. Corrected x64/affected ARM64 qualification and commit/push remain due. [Current failure and correction](../../TestRuns/P1PublicationParentRetirement_2026-10-19.md). P1 remains WIP.

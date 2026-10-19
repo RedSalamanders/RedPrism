@@ -57,6 +57,9 @@ struct RasterEditInput final
     // Immutable opening coverage/lift owners only. Worker validation includes selection identity/AA and exact
     // source grid/placement; mutable stroke state and cancellation never cross between jobs.
     std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
+    // PixelMove final publication only; other kinds refuse. New output storage and weak controls retain this
+    // precreated original publication owner. Existing source storage retains its original owner.
+    std::shared_ptr<const SharedPublicationMemory> outputMemory;
     // Borrowed only during RunRasterEdit, never retained by its result. Observe completed tile checkpoints;
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
@@ -169,3 +172,29 @@ struct RasterEditPreviewResult final
 // Source owners, tiles and coverage retire together through the release sink. No caller may mutate a stroke
 // while a worker borrows it. Commit preparation uses RunRasterEdit and returns a complete target layer instead.
 [[nodiscard]] RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation = {});
+
+enum class PixelMoveLiftStatus : std::uint8_t
+{
+    Ready,
+    NoPixels,
+    Invalid,
+    TooLarge,
+    Memory,
+    Cancelled,
+};
+
+struct PixelMoveLiftResult final
+{
+    PixelMoveLiftStatus status = PixelMoveLiftStatus::Invalid;
+    std::shared_ptr<const PixelMoveOpening> opening;
+};
+
+// Admitted CPU worker prelude for an initial Ctrl lift. It validates and lifts even at zero offset;
+// it never moves pixels, builds a preview, edits a session/history or owns a device. Offset/duplicate
+// are applied only when a later raster operation consumes the opening. Existing opening input refuses.
+// NoPixels means no selected source region, not transparent source pixels (legacy BrushStroke.swift:681).
+// The caller settles eligibility/prerequisites and admits PixelMoveMemoryBytes plus source/history/
+// display/retirement peaks before capturing input. A supplied memory owner retains opening allocations.
+[[nodiscard]] PixelMoveLiftResult PreparePixelMoveLiftForWork(
+    const RasterEditInput& input, CancelToken cancellation = {},
+    std::shared_ptr<const SharedPublicationMemory> memory = {});

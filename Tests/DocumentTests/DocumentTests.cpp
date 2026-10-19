@@ -58,6 +58,7 @@
 #include "Document.Tests.CapturedCloneOffset.h"
 #include "Document.Tests.CopyPixelsLifetime.h"
 #include "Document.Tests.CropLifetime.h"
+#include "Document.Tests.DeferredPixelMoveOpening.h"
 #include "Document.Tests.HealWork.h"
 #include "Document.Tests.HistoryOriginalTicket.h"
 #include "Document.Tests.HistoryPublicationLifetime.h"
@@ -75,6 +76,11 @@
 #include "Document.Tests.PendingDisplaySource.h"
 #include "Document.Tests.PersistentHistory.h"
 #include "Document.Tests.PersistentOwnerIndex.h"
+#include "Document.Tests.PixelMoveClosure.h"
+#include "Document.Tests.PixelMoveLiftPrelude.h"
+#include "Document.Tests.PixelMoveOutputLifetime.h"
+#include "Document.Tests.PixelMovePreview.h"
+#include "Document.Tests.PixelPreviewDescriptor.h"
 #include "Document.Tests.PlacedRasterWork.h"
 #include "Document.Tests.PreparedRasterPreview.h"
 #include "Document.Tests.PreviewMetadataAdmission.h"
@@ -95,6 +101,7 @@
 #include "Document.Tests.SelectionOutlineAllocation.h"
 #include "Document.Tests.SelectionOutlineRaster.h"
 #include "Document.Tests.SelectionOutlineRasterViews.h"
+#include "Document.Tests.SelectionPixelParent.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
@@ -8351,6 +8358,12 @@ int wmain(int argc, wchar_t** argv)
     PixelMoveWorkTests::Run(gFailures);
     PixelMoveOpeningTests::Run(gFailures);
     PixelMoveOpeningWorkTests::Run(gFailures);
+    PixelMoveLiftPreludeTests::Run(gFailures);
+    DeferredPixelMoveOpeningTests::Run(gFailures);
+    PixelMovePreviewTests::Run(gFailures);
+    PixelMoveClosureTests::Run(gFailures);
+    PixelMoveOutputLifetimeTests::Run(gFailures);
+    PixelPreviewDescriptorTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
     gFailures += RunClipboardCommandTests();
@@ -8469,6 +8482,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRectangleFinishPlanTests();
     gFailures += RunLassoIntentCleanupTests();
     gFailures += RunRectangleGestureParentTests();
+    gFailures += RunSelectionPixelParentTests();
     gFailures += RunEllipseFinishPlanTests();
     gFailures += RunEllipseGestureParentTests();
     gFailures += RunMarqueeModePlanTests();

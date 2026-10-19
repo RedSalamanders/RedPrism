@@ -96,6 +96,8 @@
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
+    <ClInclude Include="..\..\Common\PixelMovePreviewWork.h" />
+    <ClInclude Include="..\..\RedPrism\RecordedPixelPreview.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
@@ -138,6 +140,8 @@
     <ClCompile Include="CompositionTests.cpp" />
     <ClCompile Include="Composition.Tests.WarpReplayCompute.cpp" />
     <ClCompile Include="Composition.Tests.RecordedWarpPreview.cpp" />
+    <ClCompile Include="Composition.Tests.RecordedPixelPreview.cpp" />
+    <ClInclude Include="Composition.Tests.RecordedPixelPreview.h" />
     <ClInclude Include="Composition.Tests.RecordedWarpPreview.h" />
     <ClInclude Include="Composition.Tests.WarpReplayCompute.h" />
     <ClCompile Include="Composition.Tests.GpuCommandStream.cpp" />
