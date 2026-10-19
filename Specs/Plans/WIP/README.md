@@ -13,6 +13,9 @@ remain open. Follow the opening [P1 checklist](UiNeverBlocks_2026-09-22.md) and
 [lasso checklist](LassoWorkers_2026-10-12.md). Original failures and scoped receipts remain historical
 evidence; successful later runs do not establish a causal fix for historical sampler/inverse ASan failures.
 
+Adopted next: original Polygonal header-kind cancellation, focused Release/real ASan 48 cases / 518 facts.
+[Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under
 `Specs/<Domain>/`. This index remains routing only.

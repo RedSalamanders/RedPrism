@@ -2178,6 +2178,16 @@ Deselect queues its exact existing host command and waits for original cancellat
 Expand/Contract refuse before geometry, capture or a second producer and post the existing localized
 Busy notice, preserving the original draft, selection/history, receipts and reservation. They cannot
 fall through the older producer's guard into synchronous selection work. Later Enter/Undo/Redo retain
-the original literal semantics. Header-kind/captured-setting settlement remains separate selected-route
-qualification; ordinary input is not activated by this callback fix.
+the original literal semantics. Ordinary input is not activated by these selected-route callbacks.
 [Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).
+
+
+### Original Polygonal header-kind settlement
+
+A selection-kind change while the original journal is busy MUST seal that journal's existing reserved loss record.
+It MUST retain the same admitted ticket and prepared writer until the original acknowledges cancellation; it cannot
+call synchronous lasso cancellation, allocate a second producer or invent an arrival ordinal. The transient host drag
+may clear immediately. Pointer leave with keep-draft intent retains the original draft. Cancellation preserves prior
+committed selection, history, generation and already successful corner receipts while keeping the new preference.
+Joined cleanup refunds every retained owner. This selected callback does not activate ordinary input or qualify the
+complete captured-setting/geometry/device grid. [Evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).

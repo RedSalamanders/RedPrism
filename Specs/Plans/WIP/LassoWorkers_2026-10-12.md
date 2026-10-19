@@ -2,6 +2,7 @@
 
 ## Current delivery checklist — 2026-10-19
 
+- [x] Adopt original header-kind callback cancellation through the same prepaid loss and acknowledged writer: focused Release / real ASan pass 48 cases / 518 facts, with original failure and exact artifacts retained. [Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
 - [x] Adopted keyboard/header source `57d6631`: canonical full x64 real ASan r1144 passes all five suites, 994 instrumented TUs, 152 Application stages / 11,092 stdout facts and 47 dispatcher cases / 508 facts; all probes, stress, nine captures and 1,768 archive files independently qualify. [Evidence](../../TestRuns/P1PolygonalKeyboardFullAsan_2026-10-19.md).
 - [x] Same adopted source: ARM64 Release r1142 and instrumented ASan r1143 cross-builds qualify all 994 compiler records and five AA64 PE/PDB pairs per profile. Native ARM64 runtime is unavailable. [Evidence](../../TestRuns/P1PolygonalKeyboardNative_2026-10-19.md).
 - [ ] Repair the retained canonical Release analysis r1145 failure (12 warnings in six test files) and qualify the latest complete native matrix after the queued fixes.

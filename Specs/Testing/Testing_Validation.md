@@ -3494,3 +3494,12 @@ callbacks and restore the owner before its destruction. Preserve the unchanged-p
 Latest full integration expects152 stages /11,092 stdout facts; focused runs grant no full stream,
 actual-widget, ordinary-activation, performance or native-ARM64-runtime qualification.
 [Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).
+
+
+## Original Polygonal header-kind cancellation regression
+
+The selected dispatcher fixture MUST exercise the actual SetLassoKind callback with a parked original writer and
+completed corner receipts. Before pumping, assert the same ticket/controller/charge, prepaid loss record, unchanged
+four-corner draft and no second producer. After acknowledgment, require the new preference, all 4,096 prior selection
+centers, exact generation/revision/history, fixed successful receipts and complete joined refunds. Preserve the
+unchanged-product control failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).

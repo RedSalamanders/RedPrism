@@ -7384,6 +7384,14 @@ void Application::SelectionRelease(Vec2 view) noexcept
 
 void Application::EndSelectionInteraction(bool keepDraft) noexcept
 {
+    if (_polygonalPressInput.Busy())
+    {
+        if (!keepDraft)
+            LosePolygonalPressOwner();
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return; // The original's acknowledgment alone clears its prepared writer; leave preserves the draft.
+    }
     if (PolygonalInputOwner(_lassoInput.Opening()))
     {
         if (!keepDraft)

@@ -219,7 +219,8 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
                                "redo-keyboard-live",
                                "deselect-header-live",
                                "expand-header-live",
-                               "contract-header-live"};
+                               "contract-header-live",
+                               "lasso-kind-header-live"};
     const auto output =
         std::filesystem::current_path() / L".build" / L"P1PolygonalDispatcherFixture" / Guid::Generate().ToString();
     std::error_code directoryError;
@@ -291,6 +292,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool heldCrop = name == "held-foreign-crop-close";
         const bool heldTarget = heldCrop || heldMask;
         const bool heldHistory = name == "held-foreign-history-close" || heldTarget;
+        const bool headerKind = name == "lasso-kind-header-live";
         const bool headerDeselect = name == "deselect-header-live";
         const bool headerOffset = name == "expand-header-live" || name == "contract-header-live";
         const bool commandDeselect = name == "deselect-live" || name == "deselect-keyboard-live" || headerDeselect;
@@ -484,7 +486,7 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
         const bool joined = name == "joined-close";
         const bool live = name == "save-live" || name == "tool-live" || name == "leave-zoom-live" ||
                           name == "space-pan-live" || name == "right-ignore-live" || originalExport ||
-                          commandDeselect || commandUndo || commandRedo || heldHistory || headerOffset;
+                          commandDeselect || commandUndo || commandRedo || heldHistory || headerOffset || headerKind;
         const double left = mode == SelectionMode::Subtract ? 3 : 7;
         if (name == "outside-replaced-parked" || name == "outside-cleared-parked")
         {
@@ -1356,6 +1358,81 @@ int Application::RunStandalonePolygonalDispatcherSelfTest(HINSTANCE instance) no
             if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
                             !owner->_jobs.ReleasingMemoryBytes() && !owner->_polygonalPressInput.Busy(),
                         "ordered-command-joined-close-refunds-original-and-command-work"))
+                return 5;
+            ++reached;
+            continue;
+        }
+        if (headerKind)
+        {
+            const bool parked = until(
+                [&]() noexcept
+                {
+                    return owner->_polygonalPressState && owner->_polygonalPressState->waiting &&
+                           owner->_polygonalPressInput.PendingCount() == 0 && !owner->_activeHostRequest &&
+                           owner->_hostRequests.Size() == 0;
+                });
+            std::array<ContinuationReceipt::Result, 4> corners{};
+            bool succeeded = receiptCount == corners.size();
+            for (std::size_t index = 0; index < corners.size() && succeeded; ++index)
+            {
+                corners[index] = receipts[index].Read();
+                succeeded = corners[index].outcome == HostOutcome::Succeeded;
+            }
+            if (!expect(parked && succeeded && owner->_session.lassoKind == LassoKind::Polygonal &&
+                            owner->_session.PendingLasso() && owner->_session.PendingLasso()->PointCount() == 4 &&
+                            owner->_polygonalPressState->controller && owner->_polygonalPressState->drawing &&
+                            owner->_polygonalPressParents == 1 && !owner->_historyWork.Busy(),
+                        "header-kind-starts-with-four-acknowledged-corners-on-parked-original"))
+                return 5;
+            const auto original = owner->_polygonalPressState->original;
+            const auto* controller = owner->_polygonalPressState->controller;
+            const auto captures = owner->_polygonalPressState->captures;
+            const auto runs = owner->_polygonalPressState->runs;
+            const auto reserved = owner->_jobs.ReservedMemoryBytes();
+            const auto selection = owner->_session.Selection();
+            owner->OnSelectionAction(SelectionAction::SetLassoKind, 0.0);
+            if (!expect(
+                    owner->_session.lassoKind == LassoKind::Freehand && owner->_polygonalPressInput.Closed() &&
+                        owner->_polygonalPressInput.PendingCount() == 1 &&
+                        owner->_polygonalPressState->controller == controller &&
+                        owner->_polygonalPressState->original == original && !owner->_polygonalPressState->completed &&
+                        owner->_session.PendingLasso() && owner->_session.PendingLasso()->PointCount() == 4 &&
+                        owner->_session.Selection() == selection && owner->_session.Generation() == generation &&
+                        owner->_session.history.CurrentRevision() == revision &&
+                        owner->_session.history.UndoCount() == 0 && !owner->_historyWork.Busy() &&
+                        owner->_polygonalPressState->captures == captures &&
+                        owner->_polygonalPressState->runs == runs && owner->_jobs.ReservedMemoryBytes() == reserved &&
+                        !owner->_activeHostRequest && !owner->_hostRequests.Size(),
+                    "kind-callback-seals-existing-loss-slot-with-no-owner-draft-discard-or-second-job"))
+                return 5;
+            if (!expect(
+                    until([&]() noexcept
+                          { return owner->_polygonalPressState->completed && !owner->_polygonalPressInput.Busy(); }) &&
+                        owner->_polygonalPressState->sameTicket && owner->_polygonalPressState->original == original &&
+                        owner->_polygonalPressState->outcome.status == JobStatus::Cancelled &&
+                        !owner->_polygonalPressState->controller && !owner->_session.PendingLasso() &&
+                        owner->_session.Selection() == selection && owner->_session.Generation() == generation &&
+                        owner->_session.history.CurrentRevision() == revision &&
+                        owner->_session.history.UndoCount() == 0 && !owner->_session.history.CanRedo() &&
+                        !owner->_historyWork.Busy() && owner->_polygonalPressParents == 1 &&
+                        owner->_polygonalPressState->captures == captures &&
+                        owner->_session.lassoKind == LassoKind::Freehand &&
+                        DispatcherPixels(owner->_session, SelectionMode::New, true),
+                    "same-original-loss-ack-clears-draft-preserving-all4096-selection-centers-and-new-header"))
+                return 5;
+            bool fixed = true;
+            for (std::size_t index = 0; index < corners.size(); ++index)
+            {
+                const auto after = receipts[index].Read();
+                fixed = fixed && after.outcome == corners[index].outcome && after.error == corners[index].error;
+            }
+            if (!expect(fixed && !owner->_activeHostRequest && !owner->_hostRequests.Size(),
+                        "kind-cancellation-keeps-successful-corner-receipts-fixed-with-no-new-descriptor"))
+                return 5;
+            owner->Shutdown();
+            if (!expect(owner->_jobs.IsIdle() && !owner->_jobs.ReservedMemoryBytes() &&
+                            !owner->_jobs.ReleasingMemoryBytes() && !owner->_polygonalPressInput.Busy(),
+                        "kind-cancellation-joined-close-refunds-all-original-strong-and-weak-owners"))
                 return 5;
             ++reached;
             continue;
