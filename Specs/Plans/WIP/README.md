@@ -1,21 +1,17 @@
 # Active plan index
 
-P1 remains **ACTIVE/WIP**. The cursor caller adopted in `b7cc8dd` qualifies full x64 Debug r1114 and
-real ASan r1110, plus ARM64 Debug/Release/instrumented-ASan cross-builds r1111–r1113
-(982 compiler records per profile; 1,459 frozen code/policy/domain inputs). Native ARM64 runtime
-is unavailable. The latest milestone full native matrix/analysis, ordinary activation, all nine
-delivery areas and measured G1 remain open. Follow the opening [P1 checklist](UiNeverBlocks_2026-09-22.md)
-and [native receipt](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+P1 remains **ACTIVE/WIP**. Adopted keyboard/header source `57d6631` qualifies canonical full x64
+real ASan r1144: all five suites, 994 instrumented TUs, 152 Application stages / 11,092 stdout facts,
+47 dispatcher cases / 508 facts, genuine UAF/crash probes, stress and nine fresh captures.
+ARM64 Release r1142 and instrumented ASan r1143 qualify cross-builds only; native ARM64 runtime
+is unavailable. [Full ASan evidence](../../TestRuns/P1PolygonalKeyboardFullAsan_2026-10-19.md),
+[ARM64 evidence](../../TestRuns/P1PolygonalKeyboardNative_2026-10-19.md).
 
-The Freehand original parent and actual selected caller are adopted after scoped Release/real-ASan
-qualification: all 23,233 Document assertions, 151 Application stages and 472 new host facts pass.
-The original geometry, live-loss, clipboard-oracle and ISA failures remain retained.
-[Freehand evidence](../../TestRuns/P1FreehandHost_2026-10-17.md),
-[scanner correction](../../TestRuns/IsaR9Direct_2026-10-17.md).
-These component receipts do not replace latest full native integration, remaining branches or G1.
-Polygonal finite-plan and guarded metadata prerequisites now qualify all 23,307 Document assertions
-in scoped Release/real ASan; [evidence](../../TestRuns/P1PolygonalPrimitives_2026-10-17.md).
-The multi-click original parent and physical integration remain open.
+Canonical Release analysis r1145 failed with 12 test diagnostics and is retained. Later functional
+fixes, latest full matrix/analysis, ordinary activation, all nine delivery areas and measured G1
+remain open. Follow the opening [P1 checklist](UiNeverBlocks_2026-09-22.md) and
+[lasso checklist](LassoWorkers_2026-10-12.md). Original failures and scoped receipts remain historical
+evidence; successful later runs do not establish a causal fix for historical sampler/inverse ASan failures.
 
 Files in this directory are non-normative execution or decision records. Current requirements remain in the
 owning domain spec under `Specs/<Domain>/` once those contracts exist. Domain contracts created with C0–C7 live under
