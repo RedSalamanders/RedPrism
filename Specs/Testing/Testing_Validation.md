@@ -3513,3 +3513,13 @@ the same enabled button. Release owned COM providers before pumping/destruction.
 direct callbacks or command injection, and require one exact later Pending command, unchanged original authority
 before acknowledgment, original cancellation, exact selection/history and joined refunds. Retain the unchanged
 product's lost-Up failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
+
+
+## AL/RCX terminal switch ISA regression
+
+The default ISA build-process suite MUST run all 121 AL/RCX encoded controls in addition to every
+predecessor control. Valid table bytes require the exact guard, complete PE-matching body, PDB
+ownership, target and terminal proof in `Build_Toolchain.md`. Missing/duplicate/unknown rows,
+listing-versus-PE differences, altered guards/flow/extents/targets and real VEX/EVEX instructions
+retain their independent refusal or violation oracle. Never execute synthetic parser fixture bytes
+or widen the runtime allowlist to make a table control pass. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).

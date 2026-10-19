@@ -41,6 +41,8 @@ if ($LASTEXITCODE -ne 0) { throw 'R10 ECX terminal DWORD parser controls failed.
 if ($LASTEXITCODE -ne 0) { throw 'Short-stack RET/one-byte NOP parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRbxDirectGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Direct RBX guarded terminal-table parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaAlNearRcxTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'AL near-JA RCX byte guarded terminal-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaSplitTailUnsignedTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Joint unsigned split-tail parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaWideUnsignedGuardTests.ps1')

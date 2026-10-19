@@ -757,3 +757,27 @@ full-RBX clobbers, unmodeled register effects, actual guard-bypass branches, val
 branch targets, exact row/PE/PDB/body/terminal refusals and genuine adjacent/body VEX/EVEX. Only table data
 is classified; executable vectors remain gated. Synthetic bytes never execute and no runtime allowlist entry
 is added. [Qualification](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).
+
+
+### Exact AL/RCX guarded terminal DWORD switch
+
+The observed Release stroke-finish table is recognized only after the contiguous exact sequence
+`MOVZX EAX,byte [RCX+disp32]; CMP AL,max; JA rel32; LEA RDX,imagebase;
+MOV EAX,[RDX+4*RAX+tableRva]; ADD RAX,RDX; JMP RAX`. The unsigned maximum is 1–127.
+Every guard/dispatch row must have known nonoverlapping boundaries and match the PE bytes.
+The exact same-owner anonymous PDB symbol starts the aligned DWORD table; `max+1` entries end
+at the exact containing procedure end within its executable contribution. Every case/default
+target is a decoded body boundary after dispatch and before the terminal external CALL.
+
+The complete owning body is capped at 1 MiB, known, contiguous, nonoverlapping and PE-matching.
+Its exact tail is external `CALL rel32; INT3; NOP 0F 1F 00` immediately before the table. Refuse
+guard-bypass branches, trap/padding/table entries, unknown effects, other indirect dispatches,
+far/system flow and local calls into this body. Bounded candidate-body row collection grants no
+exemption without this complete proof. Reported vector bytes must match the PE before table-data
+classification; genuine vector instructions in the body or adjacent code remain gated.
+
+`IsaAlNearRcxTests.ps1` supplies 121 default encoded controls for valid forms and independent
+guard, flow, ownership, extent, target, terminal-row and PE/listing corruptions. The encoded bytes
+are never executed. The same originally rejected Release image/full PDB passes after correction;
+the original failed scan remains retained and the native Application is not replayed for a scanner
+repair. The runtime allowlist is unchanged. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).

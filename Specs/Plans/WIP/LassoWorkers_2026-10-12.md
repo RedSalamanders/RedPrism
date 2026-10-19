@@ -2,6 +2,7 @@
 
 ## Current delivery checklist — 2026-10-19
 
+- [x] Fix strict AL/RCX guarded switch-table data recognition: all 14,133 default scanner records pass (14,012 exact predecessors plus 121 new controls), as does the same original Release image/full PDB. Preserve the failed scan and fixture/launcher refusals; actual vectors remain gated and the allowlist is unchanged. [Evidence](../../TestRuns/IsaAlNearRcx_2026-10-19.md).
 - [x] Adopt actual Polygonal header-widget release routing: focused Release / real ASan pass 49 cases / 534 facts, including bounded public-UIA lookup and HWND Down/Up without callback injection. Original captured canvas Up semantics and every 518 predecessor remain exact. [Evidence](../../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
 - [x] Adopt original header-kind callback cancellation through the same prepaid loss and acknowledged writer: focused Release / real ASan pass 48 cases / 518 facts, with original failure and exact artifacts retained. [Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
 - [x] Adopted keyboard/header source `57d6631`: canonical full x64 real ASan r1144 passes all five suites, 994 instrumented TUs, 152 Application stages / 11,092 stdout facts and 47 dispatcher cases / 508 facts; all probes, stress, nine captures and 1,768 archive files independently qualify. [Evidence](../../TestRuns/P1PolygonalKeyboardFullAsan_2026-10-19.md).
