@@ -12,7 +12,7 @@
 
 - [x] Qualify monitor-specific refresh/continuity, the shared normal/cancellation endpoint check and independent ordinary cursor startup in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source `m1an2` Release analysis with strict SAL:
   1,022 TUs, 155 Application stages and 12,251 Application facts. Preserve `m1r1`'s fixture sequencing failures, the ASan reader-only footer refusal/recovery, and the failed `m1an1` disk-exhaustion receipt and approved fixture-storage transition ([preserved analysis refusal](../../TestRuns/P1MonitorAndCursor_2026-10-20.md#preserved-failed-analysis-and-recovery-boundary)).
-  [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Native ARM64 runtime for this source, complete ordinary prepared activation and G1 remain open. Commit/push of this qualified step is pending.
+  [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Native ARM64 runtime for this source, complete ordinary prepared activation and G1 remain open. Commit/push verified as `76b7af0bea0f5f4a1a2f087baf6b65fa0bb65866` on `codex/p1-opacity-host-proof`. The parent P1 delivery gates remain open.
 - [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
 
 ## Remaining gates before P1 Done

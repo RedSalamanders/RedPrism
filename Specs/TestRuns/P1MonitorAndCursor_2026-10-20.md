@@ -105,3 +105,8 @@ The approved storage transition preserves all 16,814 original fixture folders in
 `GENERATED_FIXTURES_REDIRECTED_ORIGINALS_RETAINED`, `filesDeleted: 0`, and `sourceCodeChanged: false`.
 The original verification, branch/diff, CI-only fast-forward, tested C++ and ISA allowlist guards remain
 required for publication. The hosted timeout remains unqualified; G1 and P1 Done remain open.
+
+
+## Qualified code publication
+
+The code/test/spec step is committed as `76b7af0bea0f5f4a1a2f087baf6b65fa0bb65866` and pushed to `codex/p1-opacity-host-proof`. Main verified the destination ref and unchanged tested C++ bytes after the push. This publication closes this integration step; the opening P1 delivery gates remain open.
