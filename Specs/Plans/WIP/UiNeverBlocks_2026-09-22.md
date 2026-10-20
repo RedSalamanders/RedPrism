@@ -22,14 +22,14 @@
 - [x] Qualify the adopted event-publication fixture repair in the complete latest-source local matrix, preserving all 41 original assertions. [Current repair evidence](../../TestRuns/P1CapturedBindingRepair_2026-10-20.md). The earlier failed native attempt remains separate evidence.
 - [ ] Rerun native ARM64 validation on the repaired source. Cross-builds establish no ARM64 runtime or G1 qualification.
 
-- [x] Preserve and diagnose the latest-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
+- [x] Preserve and diagnose the preceding-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
   and the exact dump/PDB resolves `PreparedCommittedDisplay::PrepareForWork` querying the live immediate context
   on a worker. The earlier Release run passes; the ASan attempt and later unstarted profiles remain unqualified.
 - [x] Qualify the captured-binding repair and ten independent immutable binding controls in complete latest-source
   x64 Debug/Release/real ASan, analysis and all three ARM64 cross-builds. Worker preparation compares owner-captured
   identities without invoking the immediate context. No current-generation or completion authority is inferred
   from that comparison. Original failed receipts remain retained.
-- [ ] Commit/push this qualified repair step and verify its remote SHA; then run repaired-source native ARM64 validation.
+- [x] Commit/push the qualified repair as `202c52be8043cd532ab0b33d1751a034009e362c`; the approved branch destination SHA is verified. Repaired-source native ARM64 validation remains open above.
 
 ## Remaining gates before P1 Done
 

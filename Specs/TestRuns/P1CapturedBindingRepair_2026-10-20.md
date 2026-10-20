@@ -54,7 +54,7 @@ No timing threshold, golden, ISA exception or dependency pin changes.
 - [x] Qualify latest-source real x64 ASan, including the originally failing Size smoke.
 - [x] Qualify latest-source complete x64 Debug/Release, analysis and all three ARM64 cross-builds.
 - [ ] Run the repaired source on the hosted native ARM64 worker; retain the earlier fixture failure separately.
-- [ ] Commit/push this qualified step and verify its remote SHA.
+- [x] Commit/push this qualified step as `202c52be8043cd532ab0b33d1751a034009e362c`; the approved branch destination SHA is verified.
 
 Ordinary route activation, measured G1 and the parent plan's other remaining areas are
 separate delivery obligations. These controls and a successful repeat cannot qualify them.
@@ -92,3 +92,6 @@ Existing clipboard/file functional controls are also independently reconciled in
 facts and 770 file-session-end facts. Their archived bytes and original expectations are unchanged. This closes
 no complete phase/admission, performance or historical-save-cause obligation and requires no duplicate test or
 implementation. Local reconciliation: `.build/P1Drafts/P1FileCurrentMatrixMap-Main-r1.json`.
+
+Qualified code/spec commit: `202c52be8043cd532ab0b33d1751a034009e362c` on `codex/p1-opacity-host-proof`.
+The remote SHA is independently verified. Native ARM64 runtime, ordinary full activation and G1 remain separate.
