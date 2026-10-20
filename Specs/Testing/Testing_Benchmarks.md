@@ -185,6 +185,10 @@ window, message, job-completion and frame loop. It uses the selected D3D device,
 prints `BENCH MACHINE`, one `UI BENCH` row per operation, and a final `UI BENCH REPORT` status. Every operation
 must reach its expected state; a failed setup, command, frame, clock, or timeout fails the run.
 
+Every `BENCH MACHINE` row for a UI benchmark MUST identify the actual window monitor by its device name, and MUST report that monitor's configured target refresh as the exact rational numerator/denominator returned by the display configuration query. This is configured mode metadata; it is not measured scanout or Present cadence. Do not substitute another output's refresh, infer a nominal integer rate, or treat unavailable metadata as known.
+
+A full performance run MUST capture its display authority after setup and before measured operations. It MUST refuse performance qualification if monitor identity, device name, or rational refresh is unknown, or if window/display continuity is invalidated during the run. Continuity invalidation is monotonic through the run; later return to the original display does not restore qualification. The final report MUST distinguish a continuity/authority refusal from successful performance measurement. Correctness smoke MAY complete when display authority is unknown or changes, but MUST label its report `smokeCorrectnessOnly=1` and expose whether authority was known and continuity changed. Smoke durations are never performance evidence.
+
 Only this opt-in benchmark holds a continuous display/system execution request, restoring the thread's previous
 request on exit. It uses no periodic keep-alive. A hidden, suspended, display-off or occluded performance run fails with
 the observed host states. The bounded `ui-smoke` correctness harness alone may render with session display power
@@ -409,3 +413,17 @@ completed frame/latency observations, valid percentile buckets and zero clock/ab
 three exact two-publication records. The sampler keeps its existing two boundary records. Smoke is correctness
 only, including its display-power exception; full modes retain presentation/input guards. Qualified Release
 measurements and the complete P1 G1 matrix remain necessary before performance or ordinary activation claims.
+
+The benchmark route marker `ordinaryActivation=0` still denotes the complete experimental prepared
+display/stroke route. Independent ordinary CPU cursor activation does not activate that complete route.
+
+## Optional Size phase attribution
+
+`REDPRISM_UI_TIMING_ATTRIBUTION=1` enables bounded diagnostic attribution for the selected Size UI
+benchmark modes. It records at most 32 owner intervals of at least 1,000 microseconds per boundary,
+with QPC wall time, available thread-cycle deltas and static source/function/line identity. Initial
+display, excluded warmup and scored samples retain separate reports; overflow and clock failures are
+reported explicitly. Renderer phases and command-list execution/completion registration use the same
+opt-in sink. Disabled scopes read no clock and allocate nothing; enabling attribution adds no timer
+or wakeup source. Rows marked `diagnostic=1` locate costs and do not qualify G1. Performance evidence
+requires a separately qualified run with attribution disabled.

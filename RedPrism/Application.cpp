@@ -312,6 +312,9 @@ int Application::Run(int showCommand) noexcept
         (_processingTestProbe->responsiveSourcesForTest || _processingTestProbe->responsiveSelectionSourcesForTest) &&
         !InitializeResponsiveSourcesOwner(false, _processingTestProbe->responsiveSelectionSourcesForTest))
         return 5;
+    // Cursor containment is independently admitted by the compute scheduler. It needs neither prepared GPU
+    // display nor stroke activation; every ordinary input path uses its latest-request worker after startup.
+    _asyncSelectionCursorEnabled = true;
     if (_processingTestProbe && _processingTestProbe->afterRuntimeSources &&
         FAILED(static_cast<HRESULT>(_processingTestProbe->afterRuntimeSources(_processingTestProbe->context))))
         return 5;
@@ -5929,6 +5932,13 @@ LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM 
 
 LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->displayContinuityCaptured)
+    {
+        const bool monitorIdentityChanged =
+            message == WM_MOVE && reinterpret_cast<std::uintptr_t>(MonitorFromWindow(window, MONITOR_DEFAULTTONULL)) !=
+                                      _uiBenchmark->initialMonitorIdentity;
+        _uiBenchmark->displayContinuity.ObserveMessage(message, monitorIdentityChanged);
+    }
     switch (message)
     {
     case kUiBenchmarkMessage:

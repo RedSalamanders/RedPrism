@@ -132,7 +132,7 @@ function Parse-UiCancellationFull([string[]] $Lines, [ValidateSet('direct','prep
     for ($i=0; $i -lt $Lines.Count; ++$i) { if ($Lines[$i] -cmatch '^UI CANCEL(?:\s|$)') { $namespaceIndexes.Add($i) } }
     for ($i=1; $i -lt $namespaceIndexes.Count; ++$i) { if ($namespaceIndexes[$i] -ne $namespaceIndexes[$i-1]+1) { throw 'UI CANCEL namespace rows and final report must be contiguous.' } }
     $namespace = @($namespaceIndexes | ForEach-Object { $Lines[$_] })
-    $expectedReport = "UI CANCEL REPORT status=ok operations=10 width=$($profile.Width) height=$($profile.Height) smoke=0 g1=0"
+    $expectedReport = "UI CANCEL REPORT status=ok operations=10 width=$($profile.Width) height=$($profile.Height) smoke=0 g1=0 smokeCorrectnessOnly=0 displayAuthorityKnown=1 displayChanged=0"
     $expectedRefusals = if ($SelectedProfile -ceq '3840x2160') { 0 } else { 22 }
     $expectedActive = 110 - $expectedRefusals
     if ($namespace.Count -ne ($expectedActive+$expectedRefusals+1) -or $namespace[-1] -cne $expectedReport) { throw "Expected $expectedActive active rows, $expectedRefusals refusals and the exact final report '$expectedReport'." }

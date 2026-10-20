@@ -46,6 +46,46 @@ int Application::RunStandaloneSelectionCursorSelfTest(HINSTANCE instance) noexce
     };
     auto summary = wil::scope_exit(
         [&]() noexcept { std::printf("SUMMARY selection-cursor-host checks=%u failures=%u\n", checks, failures); });
+    // Exercise ordinary Run startup without opting in the prepared display/selection test engines.
+    // The later held-worker cases exercise the same admitted cursor handler and joined lifetime.
+    {
+        struct Startup final
+        {
+            Application* owner = nullptr;
+            bool visited = false;
+            bool cursorOnly = false;
+        } startup;
+        ApplicationProcessingTestProbe ordinaryProbe;
+        ordinaryProbe.workerCount = 2;
+        ordinaryProbe.context = &startup;
+        ordinaryProbe.afterRuntimeSources = [](void* raw) noexcept -> std::int32_t
+        {
+            auto& observed = *static_cast<Startup*>(raw);
+            observed.visited = true;
+            observed.cursorOnly =
+                observed.owner->_asyncSelectionCursorEnabled && !observed.owner->_committedDisplayInitialized &&
+                !observed.owner->_preparedLayerRowsEnabled && !observed.owner->_selectionOutlineInitialized;
+            return E_ABORT; // Stop before showing a window or accepting ordinary user input.
+        };
+        auto ordinary = std::make_unique<Application>(instance, true, nullptr, 0);
+        startup.owner = ordinary.get();
+        ordinary->_quietUi = true;
+        ordinary->_prompts = &QuietPrompts();
+        ordinary->_processingTestProbe = &ordinaryProbe;
+        const auto joined = wil::scope_exit(
+            [&]() noexcept
+            {
+                ordinary->Shutdown();
+                ordinary.reset();
+                while (PumpMessages().quit)
+                {
+                }
+            });
+        if (!expect(SUCCEEDED(ordinary->InitializeProcessing()), "ordinary-cursor-startup-processing"))
+            return 5;
+        expect(ordinary->Run(SW_HIDE) == 5 && startup.visited && startup.cursorOnly,
+               "ordinary-run-enables-independent-cursor-worker-before-input");
+    }
     CursorGate gate;
     if (!expect(SUCCEEDED(gate.reached.create(wil::EventOptions::ManualReset)) &&
                     SUCCEEDED(gate.release.create(wil::EventOptions::ManualReset)),

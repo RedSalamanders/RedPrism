@@ -226,3 +226,18 @@ WPR was initially idle. Starting the repository's `RedPrism` profile failed with
 "Failed to enable the policy to profile system performance." The original `start.log` is preserved; there is
 no ETW capture or successful profiling claim. Actual in-process timing remains available. Release ETW and
 complete visible-frame G1 qualification remain open.
+
+
+## Current functional receipt reconciliation — 2026-10-20
+
+The corrected [monitor/cursor integration](P1MonitorAndCursor_2026-10-20.md) has the same 1,885-input
+source freeze in full native x64 Debug, Release and real ASan. Main independently reads each exact archived
+Application log and its successful profile/runtime receipts. All three contain the same 70 existing named
+prepared-row controls and five separate zero-failure summaries: accessibility 17, retained capacity 12,
+client notifications 11, stable identity 21 and grouping 9. Every predecessor Application fact is retained.
+These are executed functional results; the earlier source-only/unexecuted descriptions are historical.
+
+The cross-build/analysis rows and complete source/archive identities are recorded in that integration's table.
+No new layer-row preparation timing, external-client RPC latency, ordinary activation or G1 result is measured
+by this reconciliation. The older measured preparation misses above remain unresolved; they are not replaced
+by passing functional assertions.

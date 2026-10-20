@@ -38,7 +38,7 @@ function New-ValidCancellationLines {
             $lines.Add('UI CANCEL ' + ($tokens -join ' '))
         }
     }
-    $lines.Add('UI CANCEL REPORT status=ok operations=10 width=64 height=48 smoke=1 g1=0')
+    $lines.Add('UI CANCEL REPORT status=ok operations=10 width=64 height=48 smoke=1 g1=0 smokeCorrectnessOnly=1 displayAuthorityKnown=1 displayChanged=0')
     return ,$lines.ToArray()
 }
 
@@ -53,6 +53,14 @@ $valid = New-ValidCancellationLines
 $result = Parse-UiCancellationSmoke $valid 'direct'
 if ($result.Rows.Count -ne 30 -or $result.Rows[1].RawStatus -ne 1 -or $result.Rows[1].ApplyError -ne [uint32]2147500036) { throw 'Valid fixture did not preserve typed raw/apply receipt data.' }
 
+# Smoke is correctness-only: either display authority value is accepted independently.
+foreach ($known in 0,1) { foreach ($changed in 0,1) {
+    $authority = [string[]]$valid.Clone()
+    $authority[-1] = "UI CANCEL REPORT status=ok operations=10 width=64 height=48 smoke=1 g1=0 smokeCorrectnessOnly=1 displayAuthorityKnown=$known displayChanged=$changed"
+    $accepted = Parse-UiCancellationSmoke $authority 'direct'
+    if ($accepted.Report -cne $authority[-1]) { throw "Smoke authority combination $known/$changed was not preserved." }
+} }
+
 $case = [System.Collections.Generic.List[string]]::new(); $case.AddRange($valid); $case.RemoveAt(2); Assert-Rejected 'missing row' $case.ToArray()
 $case = [System.Collections.Generic.List[string]]::new(); $case.AddRange($valid); $case.Insert(3,$valid[2]); Assert-Rejected 'duplicate row' $case.ToArray()
 $case = [System.Collections.Generic.List[string]]::new(); $case.AddRange($valid); $tmp=$case[2]; $case[2]=$case[3]; $case[3]=$tmp; Assert-Rejected 'wrong order' $case.ToArray()
@@ -63,6 +71,13 @@ function Replace-RowField([string[]] $Source, [int] $Index, [string] $Pattern, [
     $copy[$Index] = [regex]::Replace($copy[$Index], $Pattern, $Replacement, [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
     return ,$copy
 }
+Assert-Rejected 'report missing correctness-only marker' (Replace-RowField $valid 32 ' smokeCorrectnessOnly=1' '')
+Assert-Rejected 'report correctness-only marker false' (Replace-RowField $valid 32 'smokeCorrectnessOnly=1' 'smokeCorrectnessOnly=0')
+Assert-Rejected 'report missing display authority known' (Replace-RowField $valid 32 ' displayAuthorityKnown=1' '')
+Assert-Rejected 'report invalid display authority known' (Replace-RowField $valid 32 'displayAuthorityKnown=1' 'displayAuthorityKnown=2')
+Assert-Rejected 'report missing display changed' (Replace-RowField $valid 32 ' displayChanged=0' '')
+Assert-Rejected 'report invalid display changed' (Replace-RowField $valid 32 'displayChanged=0' 'displayChanged=-1')
+Assert-Rejected 'report extra authority field' (Replace-RowField $valid 32 '$' ' authorityExtra=0')
 $bucketCase = Replace-RowField $valid 3 'actionP99UpperUs=1 actionMaxUs=1' 'actionP99UpperUs=4 actionMaxUs=3'
 $null = Parse-UiCancellationSmoke $bucketCase 'direct'
 Assert-Rejected 'unknown outcome' (Replace-RowField $valid 3 'outcome=returned-after-stop' 'outcome=worker-failed')
@@ -129,7 +144,7 @@ Assert-Rejected 'after-acceptance latency unknown' (Replace-RowField $valid 3 'c
 Assert-Rejected 'check after body return' (Replace-RowField $valid 3 'acceptedToCheckUs=0' 'acceptedToCheckUs=141')
 Assert-Rejected 'canonical preview field order' (Replace-RowField $valid 3 'previewEnabled=1 outcome=returned-after-stop measured=1' 'outcome=returned-after-stop measured=1 previewEnabled=1')
 Assert-Rejected 'check tail field order' (Replace-RowField $valid 3 'checkKnown=1 checkOutcome=after-acceptance' 'checkOutcome=after-acceptance checkKnown=1')
-if ($script:UiCancelRefusals -ne 48) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
-Write-Host 'PASS UI cancellation parser pure controls: 6 positive models and 48 refusal cases; no native execution'
+if ($script:UiCancelRefusals -ne 55) { throw "Incorrect fixed refusal count: $script:UiCancelRefusals" }
+Write-Host 'PASS UI cancellation parser pure controls: 10 positive models and 55 refusal cases; no native execution'
 
 

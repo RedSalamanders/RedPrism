@@ -56,6 +56,80 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
             return 5;
         }
         owner->BindCompositionDevice();
+        // Exercise real display messages before constructing the explicit shutdown overlay/draft payload.
+        // Normal DPI chrome synchronization is allowed to refresh that payload from the document.
+        owner->_uiBenchmark = std::make_unique<UiBenchmarkState>();
+        {
+            UiBenchmarkState& continuity = *owner->_uiBenchmark;
+            const HWND benchmarkWindow = owner->_window.get();
+            const HMONITOR initialMonitor = MonitorFromWindow(benchmarkWindow, MONITOR_DEFAULTTONULL);
+            MONITORINFOEXW monitorInfo{};
+            monitorInfo.cbSize = sizeof(monitorInfo);
+            DEVMODEW currentMode{};
+            currentMode.dmSize = sizeof(currentMode);
+            RECT suggested{};
+            const UINT currentDpi = GetDpiForWindow(benchmarkWindow);
+            POINT clientOrigin{};
+            const bool validMove = ClientToScreen(benchmarkWindow, &clientOrigin) != FALSE;
+            const bool validDpi = currentDpi != 0 && GetWindowRect(benchmarkWindow, &suggested) != FALSE;
+            const bool actualDisplayModeAvailable =
+                initialMonitor && GetMonitorInfoW(initialMonitor, reinterpret_cast<MONITORINFO*>(&monitorInfo)) &&
+                EnumDisplaySettingsW(monitorInfo.szDevice, ENUM_CURRENT_SETTINGS, &currentMode) &&
+                currentMode.dmBitsPerPel != 0 && currentMode.dmPelsWidth != 0 && currentMode.dmPelsHeight != 0 &&
+                currentMode.dmPelsWidth <= 0xffff && currentMode.dmPelsHeight <= 0xffff;
+            const DWORD displayBitsPerPixel = actualDisplayModeAvailable ? currentMode.dmBitsPerPel : 32;
+            const DWORD displayWidth = actualDisplayModeAvailable ? currentMode.dmPelsWidth : 1024;
+            const DWORD displayHeight = actualDisplayModeAvailable ? currentMode.dmPelsHeight : 768;
+            const bool validDisplayPayload = displayBitsPerPixel != 0 && displayWidth != 0 && displayHeight != 0 &&
+                                             displayWidth <= 0xffff && displayHeight <= 0xffff;
+            if (validMove)
+                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0,
+                                   MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
+            if (validDpi)
+                (void)SendMessageW(benchmarkWindow, WM_DPICHANGED, MAKELPARAM(currentDpi, currentDpi),
+                                   reinterpret_cast<LPARAM>(&suggested));
+            if (validDisplayPayload)
+                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel,
+                                   MAKELPARAM(displayWidth, displayHeight));
+            expect(validMove && validDpi && validDisplayPayload && !continuity.displayContinuityCaptured &&
+                       !continuity.displayContinuity.invalidated && !continuity.RejectPerformanceForDisplayChange(),
+                   "actual-window-messages-before-capture-do-not-invalidate", after);
+            expect(!actualDisplayModeAvailable ||
+                       (displayBitsPerPixel == currentMode.dmBitsPerPel && displayWidth == currentMode.dmPelsWidth &&
+                        displayHeight == currentMode.dmPelsHeight),
+                   "actual-current-mode-payload-preserved-when-available", after);
+
+            const HMONITOR capturedMonitor = MonitorFromWindow(benchmarkWindow, MONITOR_DEFAULTTONULL);
+            continuity.displayContinuity = {};
+            continuity.initialMonitorIdentity = reinterpret_cast<std::uintptr_t>(capturedMonitor);
+            continuity.displayContinuityCaptured = true;
+            expect(capturedMonitor == initialMonitor && continuity.displayContinuityCaptured,
+                   "actual-window-monitor-capture-attempted-even-when-unknown", after);
+            continuity.displayAuthorityKnown = false;
+            continuity.smoke = false;
+            expect(continuity.RejectPerformanceForUnknownDisplayAuthority(),
+                   "unknown-display-authority-refuses-full-performance", after);
+            continuity.smoke = true;
+            expect(!continuity.RejectPerformanceForUnknownDisplayAuthority(),
+                   "unknown-display-authority-keeps-smoke-correctness-only", after);
+            continuity.smoke = false;
+            if (validMove)
+                (void)SendMessageW(benchmarkWindow, WM_MOVE, 0,
+                                   MAKELPARAM(static_cast<WORD>(clientOrigin.x), static_cast<WORD>(clientOrigin.y)));
+            expect(validMove && !continuity.displayContinuity.invalidated &&
+                       !continuity.RejectPerformanceForDisplayChange(),
+                   "actual-same-window-move-preserves-performance-authority", after);
+            if (validDisplayPayload)
+                (void)SendMessageW(benchmarkWindow, WM_DISPLAYCHANGE, displayBitsPerPixel,
+                                   MAKELPARAM(displayWidth, displayHeight));
+            expect(validDisplayPayload && continuity.displayContinuity.invalidated &&
+                       continuity.RejectPerformanceForDisplayChange(),
+                   "actual-display-change-refuses-performance-run", after);
+            (void)SendMessageW(benchmarkWindow, WM_NULL, 0, 0);
+            expect(continuity.displayContinuity.invalidated && continuity.RejectPerformanceForDisplayChange(),
+                   "actual-unrelated-message-cannot-clear-invalidation", after);
+        }
+        owner->_uiBenchmark.reset();
         expect(DeferredReleaseDetail::sink.enqueue && owner->_jobs.WorkerCount() != 0,
                "actual-application-owns-sink-and-pool", after);
         expect(owner->_renderer.IsWarp() && owner->_brushEngine.Ready() && owner->_window && owner->_chrome,

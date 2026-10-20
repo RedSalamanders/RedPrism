@@ -778,6 +778,8 @@ void Application::AdvanceUiCancellationTrial() noexcept
     auto& trial = *state.cancellation;
     if (++state.trial > state.runs)
     {
+        if (state.operation + 1 == kCancelOperations.size() && !ValidateUiBenchmarkDisplayAuthority())
+            return;
         state.trial = 0;
         if (++state.operation == kCancelOperations.size())
         {
@@ -785,8 +787,10 @@ void Application::AdvanceUiCancellationTrial() noexcept
             state.phase = UiBenchmarkState::Phase::Done;
             state.complete = true;
             (void)KillTimer(_window.get(), kUiBenchmarkTimerId);
-            std::printf("UI CANCEL REPORT status=ok operations=10 width=%d height=%d smoke=%d g1=0\n",
-                        state.fixture.width, state.fixture.height, state.smoke);
+            std::printf("UI CANCEL REPORT status=ok operations=10 width=%d height=%d smoke=%d g1=0 "
+                        "smokeCorrectnessOnly=%d displayAuthorityKnown=%d displayChanged=%d\n",
+                        state.fixture.width, state.fixture.height, state.smoke, state.smoke,
+                        state.displayAuthorityKnown, state.displayContinuity.invalidated);
             std::fflush(stdout);
             PostQuitMessage(0);
             return;

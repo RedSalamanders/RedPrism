@@ -1,6 +1,7 @@
 #include "GpuCommandPump.h"
 
 #include "OwnerWorkMultiplexer.h"
+#include "UiTiming.h"
 
 #include <exception>
 #include <limits>
@@ -237,9 +238,18 @@ void GpuCommandPump::Pump() noexcept
         if (!source.stream->BeginExecuteOwner(ready.lease))
             std::terminate();
         source.executing = ready.lease;
-        source.captured._context->ExecuteCommandList(ready.command, FALSE);
-        const HRESULT barrier = FAILED(_completionRefusal) ? std::exchange(_completionRefusal, S_OK)
-                                                           : _queue->EnqueueCompletion(source.ticket, source);
+        {
+            const ScopedUiTimingAttribution executeTiming{UiTimingKind::CompletionDrain,
+                                                          UiTimingAttributionPhase::Operation, 2000};
+            source.captured._context->ExecuteCommandList(ready.command, FALSE);
+        }
+        const HRESULT barrier = [&]() noexcept
+        {
+            const ScopedUiTimingAttribution completionTiming{UiTimingKind::CompletionDrain,
+                                                             UiTimingAttributionPhase::Operation, 2001};
+            return FAILED(_completionRefusal) ? std::exchange(_completionRefusal, S_OK)
+                                              : _queue->EnqueueCompletion(source.ticket, source);
+        }();
         if (SUCCEEDED(barrier))
             source.waiting = true;
         else

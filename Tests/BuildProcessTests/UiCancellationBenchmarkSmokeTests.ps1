@@ -166,9 +166,9 @@ function Parse-UiCancellationSmoke([string[]] $Lines, [ValidateSet('direct','pre
         }
     }
     $reports = @($Lines | Where-Object { $_ -cmatch '^UI CANCEL REPORT\b' })
-    $expectedReport = 'UI CANCEL REPORT status=ok operations=10 width=64 height=48 smoke=1 g1=0'
-    if ($reports.Count -ne 1 -or $reports[0] -cne $expectedReport) { throw "Expected exactly one successful UI CANCEL REPORT: $expectedReport" }
-    if ($namespace.Count -ne 31 -or $namespace[-1] -cne $expectedReport) { throw 'Cancellation report must follow exactly the complete 30-row namespace.' }
+    $expectedReportPrefix = 'UI CANCEL REPORT status=ok operations=10 width=64 height=48 smoke=1 g1=0 smokeCorrectnessOnly=1 displayAuthorityKnown='
+    if ($reports.Count -ne 1 -or $reports[0] -cnotmatch ('^' + [regex]::Escape($expectedReportPrefix) + '[01] displayChanged=[01]$')) { throw "Expected exactly one successful correctness-only UI CANCEL REPORT with independently valid display authority fields." }
+    if ($namespace.Count -ne 31 -or $namespace[-1] -cne $reports[0]) { throw 'Cancellation report must follow exactly the complete 30-row namespace.' }
     [pscustomobject]@{ Route=$Route; Machine=$machineRows[0]; Rows=$parsed.ToArray(); Report=$reports[0] }
 }
 

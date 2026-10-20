@@ -4,17 +4,22 @@
 
 - [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
 - [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
-- [x] Qualify the exact current integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
-- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. Native ARM64 execution is unavailable; cross-builds establish no runtime result.
+- [x] Qualify the preceding Size integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
+- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. No local ARM64 host is available. The hosted Release attempt timed out before suites; cross-builds establish no runtime result.
 - [x] Record the six selected Release Size profiles: inclusive Apply maxima 40–554 µs. Retain all initial-display, warmup, frame and drain misses; these samples do not qualify complete G1.
 - [x] Commit/push the qualified Size recovery step as `aa8dd94`; verify the branch destination SHA `aa8dd945c023549f17aefe82396cef0b086f1e51`.
 - [ ] Resolve remaining owner/frame costs, complete phase admission and ordinary activation, and close every delivery gate below before P1 Done.
+
+- [x] Qualify monitor-specific refresh/continuity, the shared normal/cancellation endpoint check and independent ordinary cursor startup in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source `m1an2` Release analysis with strict SAL:
+  1,022 TUs, 155 Application stages and 12,251 Application facts. Preserve `m1r1`'s fixture sequencing failures, the ASan reader-only footer refusal/recovery, and the failed `m1an1` disk-exhaustion receipt and approved fixture-storage transition ([preserved analysis refusal](../../TestRuns/P1MonitorAndCursor_2026-10-20.md#preserved-failed-analysis-and-recovery-boundary)).
+  [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Native ARM64 runtime for this source, complete ordinary prepared activation and G1 remain open. Commit/push of this qualified step is pending.
+- [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
 
 ## Remaining gates before P1 Done
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
 - [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and the remaining large-outline cursor containment walk and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove remaining owner geometry/coverage/outline construction and complete deferred transform settlement. Ordinary CPU cursor startup is qualified above; remaining selection input/display activation and S5/G1 stay open (P1.5–P1.6, S5).
 - [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
 - [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
 - [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).

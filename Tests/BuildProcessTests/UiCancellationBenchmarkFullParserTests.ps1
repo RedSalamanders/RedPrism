@@ -48,7 +48,7 @@ function New-FullOutput([string] $Profile='3840x2160', [string] $Route='direct',
             } else { $lines.Add((New-ActiveLine $name $trial $dimensions[0] $dimensions[1] $AllExcluded)) }
         }
     }
-    $lines.Add("UI CANCEL REPORT status=ok operations=10 width=$($dimensions[0]) height=$($dimensions[1]) smoke=0 g1=0")
+    $lines.Add("UI CANCEL REPORT status=ok operations=10 width=$($dimensions[0]) height=$($dimensions[1]) smoke=0 g1=0 smokeCorrectnessOnly=0 displayAuthorityKnown=1 displayChanged=0")
     ,$lines.ToArray()
 }
 
@@ -78,7 +78,7 @@ foreach ($profileCase in @(
         $fixture = New-FullOutput $profileCase.Profile $route
         $result = Parse-UiCancellationFull $fixture $route $profileCase.Profile
         if ($result.Rows.Count -ne $profileCase.Active -or $result.RefusalRows.Count -ne $profileCase.Refusals -or $result.Summary.activeRows -ne $profileCase.Active -or $result.Summary.recordedActiveRows -ne $profileCase.RecordedActive -or $result.Summary.measuredRows -ne $profileCase.Measured -or $result.Summary.refusalRows -ne $profileCase.Refusals -or $result.Summary.refusalRecordedRows -ne $profileCase.RecordedRefusals -or $result.Summary.refusalWarmupRows -ne $profileCase.WarmupRefusals) { throw "Independent roster oracle failed for $($profileCase.Profile)/$route." }
-        if ($result.Report -cne "UI CANCEL REPORT status=ok operations=10 width=$($profileCase.Width) height=$($profileCase.Height) smoke=0 g1=0" -or $result.Summary.nativeQualification -or $result.Summary.g1 -or $result.Summary.ordinaryActivation -or $result.Summary.p1DoneClaim) { throw "Report/qualification oracle failed for $($profileCase.Profile)/$route." }
+        if ($result.Report -cne "UI CANCEL REPORT status=ok operations=10 width=$($profileCase.Width) height=$($profileCase.Height) smoke=0 g1=0 smokeCorrectnessOnly=0 displayAuthorityKnown=1 displayChanged=0" -or $result.Summary.nativeQualification -or $result.Summary.g1 -or $result.Summary.ordinaryActivation -or $result.Summary.p1DoneClaim) { throw "Report/qualification oracle failed for $($profileCase.Profile)/$route." }
         if ($result.Rows.Count + $result.RefusalRows.Count -ne 110 -or $result.OrderedRows.Count -ne 110) { throw 'Active-only Rows and separate RefusalRows shape changed.' }
         if ($result.Summary.recordedOwnerDistributions.actionMaxUs.count -ne $profileCase.RecordedActive -or $result.Summary.recordedOwnerDistributions.applyMaxUs.count -ne $profileCase.RecordedActive) { throw 'Recorded active owner distributions lost rows or included refusals.' }
         if ($profileCase.Refusals -gt 0 -and $result.Summary.refusedOwnerCost -cne 'unmeasured') { throw 'Refused owner-cost projection must remain explicitly unmeasured.' }
@@ -181,6 +181,12 @@ $reordered = [string[]]$fourK.Clone(); $temp=$reordered[2]; $reordered[2]=$reord
 Assert-Rejected 'context-order' $reordered
 $wrongReport = Replace-Line $fourK ($fourK.Count-1) 'operations=10' 'operations=9'
 Assert-Rejected 'report-count' $wrongReport
+Assert-Rejected 'report missing correctness-only field' (Replace-Line $fourK ($fourK.Count-1) ' smokeCorrectnessOnly=0' '')
+Assert-Rejected 'report correctness-only mismatch' (Replace-Line $fourK ($fourK.Count-1) 'smokeCorrectnessOnly=0' 'smokeCorrectnessOnly=1')
+Assert-Rejected 'report missing known field' (Replace-Line $fourK ($fourK.Count-1) ' displayAuthorityKnown=1' '')
+Assert-Rejected 'report unknown display authority' (Replace-Line $fourK ($fourK.Count-1) 'displayAuthorityKnown=1' 'displayAuthorityKnown=0')
+Assert-Rejected 'report missing changed field' (Replace-Line $fourK ($fourK.Count-1) ' displayChanged=0' '')
+Assert-Rejected 'report changed display mismatch' (Replace-Line $fourK ($fourK.Count-1) 'displayChanged=0' 'displayChanged=1')
 $duplicateReport = [Collections.Generic.List[string]]::new(); $duplicateReport.AddRange($fourK); $duplicateReport.Add($fourK[-1])
 Assert-Rejected 'duplicate-report' $duplicateReport.ToArray()
 $wrongRoute = New-FullOutput '3840x2160' 'prepared'
@@ -196,5 +202,5 @@ Assert-Rejected 'invented ordinary activation headline' (Replace-Line $preparedR
 $wrongStageProfile = New-FullOutput '10000x10000'
 Assert-Rejected '100mp-opening-stage' (Replace-Line $wrongStageProfile (Find-Refusal $wrongStageProfile) 'stage=opening' 'stage=settings') 'direct' '10000x10000'
 
-if ($script:Rejected -ne 49) { throw "Expected 49 independent negative controls; observed $script:Rejected." }
+if ($script:Rejected -ne 55) { throw "Expected 55 independent negative controls; observed $script:Rejected." }
 Write-Host "PASS UI cancellation full parser pure controls: six profile/route positives, check boundary models, independent distributions, empty-statistics control and $script:Rejected negative controls; no native execution."

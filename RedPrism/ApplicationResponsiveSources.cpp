@@ -44,6 +44,6 @@ bool Application::InitializeResponsiveSourcesOwner(bool allowHidden, bool includ
     _asyncStrokeFinishEnabled = true;
     _asyncStrokeSamplesEnabled = true;
     _asyncWarpLiveEnabled = true;
-    _asyncSelectionCursorEnabled = includeSelection;
+    _asyncSelectionCursorEnabled = _asyncSelectionCursorEnabled || includeSelection;
     return true;
 }

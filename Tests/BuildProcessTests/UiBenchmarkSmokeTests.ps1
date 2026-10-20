@@ -242,8 +242,8 @@ if ($DisplayRoute -ceq 'size-prepared') {
 
 $reports = @($lines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
 if ($reports.Count -ne 1 -or
-    $reports[0] -notmatch "^UI BENCH REPORT status=ok width=64 height=48 operations=$expectedOperationCount(?:\s+.*)?$") {
-    throw "UI benchmark smoke did not print exactly one valid completion report ($stdoutPath)."
+    $reports[0] -notmatch "^UI BENCH REPORT status=ok width=64 height=48 operations=$expectedOperationCount smokeCorrectnessOnly=1 displayAuthorityKnown=[01] displayChanged=[01]$") {
+    throw "UI benchmark smoke did not print exactly one correctness-only completion report ($stdoutPath)."
 }
 
 Write-Host "PASS UI benchmark smoke: route=$DisplayRoute, $expectedOperationCount operations, 64x48, 2 samples after one warmup"
@@ -348,8 +348,8 @@ if (-not $samplerBoundaries.Contains('initial-display') -or -not $samplerBoundar
 
 $samplerReports = @($samplerLines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
 if ($samplerReports.Count -ne 1 -or
-    $samplerReports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=1(?:\s+.*)?$') {
-    throw "UI sampler smoke did not print exactly one successful one-operation report ($samplerStdoutPath)."
+    $samplerReports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=1 smokeCorrectnessOnly=1 displayAuthorityKnown=[01] displayChanged=[01]$') {
+    throw "UI sampler smoke did not print exactly one correctness-only one-operation report ($samplerStdoutPath)."
 }
 
 Write-Host 'PASS UI sampler smoke: sampler-accepted-prefix only, 64x48, 2 samples after one warmup'

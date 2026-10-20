@@ -5,6 +5,7 @@
 #include "CanvasViewport.h"
 #include "ChromeHost.h"
 #include "Document.h"
+#include "UiTiming.h"
 
 #include <array>
 #include <cstring>
@@ -511,8 +512,11 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     }
 
     ID3D11RenderTargetView* renderTargets[] = {_renderTarget.get()};
-    _context->OMSetRenderTargets(1, renderTargets, nullptr);
-    _context->ClearRenderTargetView(_renderTarget.get(), _clearColor.data());
+    {
+        const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1000};
+        _context->OMSetRenderTargets(1, renderTargets, nullptr);
+        _context->ClearRenderTargetView(_renderTarget.get(), _clearColor.data());
+    }
 
     // Order: chrome layout (the hole), then the document into the hole, then the chrome surface over it. The DxUi
     // surface is transparent where no control paints, so tooltips and popups that overlap the canvas stay visible.
@@ -522,10 +526,14 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     viewportDx.MaxDepth = 1.0f;
     if (chrome)
     {
-        const HRESULT chromeResult =
-            StageResult(Stage::ChromePrepare,
-                        chrome->Prepare(_width, _height,
-                                        _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window))));
+        const HRESULT chromeResult = [&]() noexcept
+        {
+            const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1001};
+            return StageResult(
+                Stage::ChromePrepare,
+                chrome->Prepare(_width, _height,
+                                _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window))));
+        }();
         if (FAILED(chromeResult))
         {
             _failedStage = Stage::ChromePrepare;
@@ -538,11 +546,15 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         // A sealed, originally acknowledged graph has no owner Compose/upload/create stage. Validate both
         // actual interfaces before any command: a recovered renderer cannot blit a retired device's graph.
         const CanvasHole hole = chrome->HolePixels();
-        const HRESULT canvasResult = StageResult(
-            Stage::Blit, acknowledgedDisplay->IsPublishedOnOwner(_device.get(), _context.get())
-                             ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport,
-                                                              hole.left, hole.top, hole.width, hole.height)
-                             : E_ABORT);
+        const HRESULT canvasResult = [&]() noexcept
+        {
+            const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1003};
+            return StageResult(Stage::Blit,
+                               acknowledgedDisplay->IsPublishedOnOwner(_device.get(), _context.get())
+                                   ? acknowledgedDisplay->BlitOwner(_renderTarget.get(), _width, _height, *viewport,
+                                                                    hole.left, hole.top, hole.width, hole.height)
+                                   : E_ABORT);
+        }();
         _canvasDrawn = canvasResult == S_OK;
         if (FAILED(canvasResult))
         {
@@ -554,13 +566,21 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     }
     else if (composition && composition->HasDevice() && document && viewport && chrome)
     {
-        HRESULT canvasResult = StageResult(Stage::Compose, composition->Compose(*document));
+        HRESULT canvasResult = [&]() noexcept
+        {
+            const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1002};
+            return StageResult(Stage::Compose, composition->Compose(*document));
+        }();
         if (SUCCEEDED(canvasResult))
         {
             const CanvasHole hole = chrome->HolePixels();
-            canvasResult =
-                StageResult(Stage::Blit, composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport,
-                                                                  hole.left, hole.top, hole.width, hole.height));
+            canvasResult = [&]() noexcept
+            {
+                const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1003};
+                return StageResult(Stage::Blit,
+                                   composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left,
+                                                            hole.top, hole.width, hole.height));
+            }();
             _canvasDrawn = canvasResult == S_OK;
         }
         if (FAILED(canvasResult))
@@ -623,7 +643,11 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
 
     if (chrome)
     {
-        const HRESULT chromeResult = StageResult(Stage::ChromeComposite, chrome->Composite(_context.get(), viewportDx));
+        const HRESULT chromeResult = [&]() noexcept
+        {
+            const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1004};
+            return StageResult(Stage::ChromeComposite, chrome->Composite(_context.get(), viewportDx));
+        }();
         if (FAILED(chromeResult))
         {
             _failedStage = Stage::ChromeComposite;
@@ -639,7 +663,11 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
             return captured;
     }
     ++_presentAttemptCount;
-    const HRESULT presentResult = StageResult(Stage::Present, _swapChain->Present(1, 0));
+    const HRESULT presentResult = [&]() noexcept
+    {
+        const ScopedUiTimingAttribution phase{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 1005};
+        return StageResult(Stage::Present, _swapChain->Present(1, 0));
+    }();
     _lastPresentResult = presentResult;
     if (FAILED(presentResult) && DeviceLostAfter(presentResult))
     {

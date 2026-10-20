@@ -281,6 +281,7 @@ class Application final : public ChromeEvents,
     int RunUiBenchmark() noexcept;
     int RunLayerRowsBenchmark() noexcept;
     HRESULT InitializeUiBenchmark() noexcept;
+    bool ValidateUiBenchmarkDisplayAuthority() noexcept;
     void AdvanceUiBenchmark() noexcept;
     void ExecuteUiBenchmarkStep() noexcept;
     void PrepareUiBenchmarkStep() noexcept;

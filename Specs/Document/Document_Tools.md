@@ -1932,11 +1932,12 @@ admission, retirement, native profiles or G1.
 
 ## Selected cursor containment worker
 
-The explicitly selected Application route returns a neutral containment result while exact work is
-pending or unavailable. It reads only finite scalar bounds and the model plan before original whole-job
+Ordinary Application startup enables the admitted cursor containment worker independently of prepared
+GPU display, stroke or selection-outline activation. The cursor returns a neutral containment result while
+exact work is pending or unavailable. It reads only finite scalar bounds and the model plan before original whole-job
 admission; it captures immutable geometry only in the admitted owner continuation. Exact containment
-runs on a worker with the existing per-vertex translation and cancellation checkpoints. Ordinary pointer
-activation retains the separate complete-consumer and G1 gates.
+runs on a worker with the existing per-vertex translation and cancellation checkpoints. Other ordinary
+pointer/selection consumers retain their separate complete-consumer and G1 gates.
 
 At most one useful probe and one replaceable latest scalar request are retained. Document serial,
 document generation, cursor epoch and query coordinates bind cached replies. In particular, equal

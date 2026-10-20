@@ -489,21 +489,23 @@ one rename undo preserving the reorder, exact stored BGRA/Gray8 bytes, worker re
 cleanup. Its registry and complete identical-source normal matrix must preserve all earlier controls/stages.
 Client-reentrant UIA and largest-count/name owner cost remain separate gates; these functional tests do not
 activate production prepared rows or establish their G1 latency.
-The source-only `application-prepared-layer-rows-accessibility.*` draft adds a real hidden-WARP provider scenario:
+The `application-prepared-layer-rows-accessibility.*` fixture exercises a real hidden-WARP provider scenario:
 the 10,000-row epoch retains its original admitted reservation, indexed reads expose literal full offscreen names,
 the actual Tree captures the same owner, and provider child/sibling navigation preserves the name and order. A
 replacement epoch keeps both original charges alive while the old provider exists; releasing that provider retires
 the complete old graph before acknowledgement. A fresh MTA reader then holds and reads the final graph across
-Application shutdown and scheduler destruction before its final release. These are draft expectations, not a
-passed consumer test result. The consumer full matrix, reentrant UIA notifications, actual UIA latency, largest-row
-owner cost, production activation and G1 remain open; these draft checks do not close P1.
-The unexecuted `RunStandalonePreparedLayerRowsCapacitySelfTest` fixture
+Application shutdown and scheduler destruction before its final release. The current coherent x64
+Debug/Release/real-ASan integration passes all 17 named checks and its summary.
+Actual UIA latency, largest-row owner cost, complete consumer admission, production activation and G1 remain
+open; these functional checks do not close P1.
+The `RunStandalonePreparedLayerRowsCapacitySelfTest` fixture
 (`application-prepared-layer-rows-capacity.*`) retains 64 actual published epochs, then requires the 65th
 publication to refuse its exhausted slot while preserving the old Chrome rows and full original charges. Releasing
 one old graph cannot uncharge it before whole-graph retirement and owner acknowledgement. Neither that capacity
 return nor a memory event may automatically retry the unchanged key; one explicit retry must submit a fresh ticket
-and reuse the acknowledged slot. This fixture is required but has not been run or qualified.
-The unexecuted `RunStandalonePreparedLayerRowsNotificationSelfTest` fixture has 11 named
+and reuse the acknowledged slot. The current coherent x64 Debug/Release/real-ASan integration passes all
+12 capacity checks and its summary.
+The `RunStandalonePreparedLayerRowsNotificationSelfTest` fixture has 11 named
 `application-prepared-layer-rows-notification.*` state expectations and its separate summary. A fresh MTA UIA
 client subscribes through the real hidden window provider, holds a same-count/same-ID structure callback, reads
 the complete replacement Unicode name, and invokes the standard selection pattern through COM marshalling.
@@ -511,7 +513,8 @@ The owner must return from publication and process view input while delivery is 
 exactly once without changing literal pixels or adding history. The client unsubscribes while the owner pumps
 messages before joining; shutdown then retires every admitted epoch. Failure bounds detect blocked publication
 or teardown and establish no latency target. Raw embedded providers stay on their STA. Exact registration,
-predecessor preservation and the full identical-source configuration matrix remain required before qualification.
+predecessor preservation and the identical-source x64 Debug/Release/real-ASan matrix now qualify all 11 checks
+and its summary. These same-process MTA-client checks establish no external-client latency target.
 The stable-identity extension adds 21 named `application-prepared-layer-rows-identity.*` expectations and its
 separate summary, registered as `RunStandalonePreparedLayerRowsIdentitySelfTest` before accessibility tests.
 The independent reference is a literal four-layer hierarchy and BGRA bytes, exercised through actual pinned
@@ -1220,6 +1223,10 @@ The test override changes only the queried sequence; actual Open/Inspect/Copy/De
 Actual run inventories and failure receipts belong in `Specs/TestRuns/`. Qualify the full required x64
 Debug/Release/real-ASan matrix and ARM64 cross-builds before declaring this component complete. Native ARM64
 runtime needs a native host. Functional fixtures and capacity bounds do not close ordinary activation or G1.
+
+## UI benchmark qualification evidence
+
+For UI benchmark qualification, retain the machine row with the actual window-monitor device name and exact rational configured refresh, together with the captured continuity outcome. A full performance report is acceptable only when those fields are known and the run's window/display continuity stayed valid; unknown authority or any continuity invalidation is a refusal, including when the window later returns to its starting monitor. UI smoke reports MUST be explicitly marked `smokeCorrectnessOnly=1`; their durations and successful completion establish correctness-harness behavior only. Unbuilt or unexecuted candidate controls are not passing runtime evidence, and a smoke pass does not close performance qualification or mark P1 Done.
 
 ## Gates
 
@@ -3145,7 +3152,10 @@ Application routing and latest native qualification remain distinct gates.
 
 ## Cursor worker and clipboard setup validation
 
-`Application.Tests.SelectionCursor` adds 50 facts through an actual hidden Application, WARP device
+`Application.Tests.SelectionCursor` retains its 50 worker/host facts and adds two ordinary-startup controls.
+The startup control invokes the actual Run initialization path without prepared-source opt-ins, verifies
+cursor-only activation before input, then stops before showing a window and performs joined shutdown.
+The remaining facts run through an actual hidden Application, WARP device
 and two-worker scheduler. It invokes the production cursor containment function and sends actual
 leave/focus messages; it does not move the user's pointer or claim visible `WM_SETCURSOR` latency.
 Require literal interior/hole/edge/corner results, cache reuse, latest-only dispatch, same-point/same-bounds

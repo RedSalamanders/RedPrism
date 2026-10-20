@@ -1698,7 +1698,9 @@ model bounds do not establish physical caller activation, complete lifetime acco
 
 ## Selected cursor probe scheduling and retirement
 
-The optional cursor consumer submits one bounded Background record with the complete cached geometry
+Ordinary Run startup enables the CPU cursor consumer after runtime-source setup and before startup paths
+or ordinary input. It does not require prepared GPU display/stroke activation, and later prepared source
+setup cannot disable it. The cursor consumer submits one bounded Background record with the complete cached geometry
 envelope plus fixed wrapper/control allowance. Pending queries replace scalar metadata rather than
 allocating or traversing path vectors. Source acquisition and useful work reuse the original record;
 no extra admission is taken. Failed memory admission and cancellation before the first successful stage
@@ -1707,8 +1709,8 @@ still acknowledge that exact record: the success-only completion hook cannot sup
 Captured geometry readers retire on the worker, including cancelled/skipped useful stages. Shutdown
 closes publication authority, cancels the original ticket, joins workers and only then acknowledges
 owner state; normal completion callbacks remain suppressed during joined Close. Source, reservation
-and wrapper lifetimes cannot be shortened by a neutral cursor result. This route alone establishes no
-ordinary activation, complete-operation G1 result or Photoshop comparison.
+and wrapper lifetimes cannot be shortened by a neutral cursor result. Enabling this cursor consumer does
+not qualify other ordinary prepared consumers, complete-operation G1 or a Photoshop comparison.
 
 ## Selected Freehand whole-gesture envelope
 

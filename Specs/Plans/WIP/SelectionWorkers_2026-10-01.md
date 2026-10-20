@@ -1,8 +1,10 @@
 # Ordered selection workers (P1.6)
 
-## Current delivery checklist — 2026-10-19
+## Current delivery checklist — 2026-10-20
 
 This child plan and parent P1 remain **WIP**. Earlier dated notes are historical.
+
+- [x] Qualify independent ordinary cursor startup and its two actual Run controls in full x64 Debug/Release/real ASan, preserving all 50 worker/host predecessors. All three ARM64 cross-builds and canonical Release analysis also pass. [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Only the CPU cursor route is ordinarily enabled; native ARM64 runtime for this source, other prepared consumers and measured S5/G1 remain open.
 
 - [x] Qualify adopted keyboard/header code57d6631 in canonical ARM64 Release r1142 and instrumented ASan r1143: actual exits0, all994 compiler records/profile, five AA64 PE/PDB pairs,2 fresh/992 exact inherited objects and1881/1885 archived files independently pass. All1808 frozen inputs and4 positive/31 negative reader controls pass; original prep refusal retained. Native ARM64 runtime unavailable. [Evidence](../../TestRuns/P1PolygonalKeyboardNative_2026-10-19.md).
 - [x] Fix the selected original Polygonal header Deselect/Expand/Contract boundary: unchanged-product Deselect control fails; focused Release/real ASan pass all 47 cases / 508 facts and every 469 predecessor, exact source/351-object/PE-PDB/ISA/artifact and Save/export readback. Main corrects the cheaper fixture and static count; original refusals are retained. [Evidence](../../TestRuns/P1PolygonalHeader_2026-10-19.md).
