@@ -169,9 +169,11 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     if (!down || down->action != HostSelectionPressInput::Action::Down || down->sample.ordinal != arrival->ordinal)
         return E_ABORT;
     const bool pixels = down->sample.modifiers.control;
-    const auto memory = pixels ? DescribeSelectionPixelGestureMemory(_session, arrival->kind, arrival->mode)
-                               : DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
-    if (!memory)
+    auto memory = pixels ? DescribeSelectionPixelGestureMemory(_session, arrival->kind, arrival->mode)
+                         : DescribeSelectionOutlineGestureMemory(_session, arrival->kind, arrival->mode);
+    std::uint64_t finalDisplayCpu = 0, finalDisplayGpu = 0;
+    if (!memory || (pixels && _selectionPixelFinalPublicationEnabled &&
+                    !AddPixelFinalAdmissionOwner(*memory, finalDisplayCpu, finalDisplayGpu)))
         return E_OUTOFMEMORY;
     _selectionPressStamp =
         _historyWork.Begin(_session.DocumentSerial(), _activeHostRequest->ordinal, HistoryWorkKind::Selection);
@@ -187,6 +189,14 @@ HRESULT Application::StartSelectionPressGesture(std::uint64_t opening) noexcept
     _selectionPressState->allowPreservingMarquee = arrival->mode != SelectionMode::New;
     _selectionPressState->requireCapturedTarget = true;
     _selectionPressState->allowInitialPixelMove = pixels;
+    if (pixels && _selectionPixelFinalPublicationEnabled)
+    {
+        _selectionPressState->pixelFinalCpuBytes = finalDisplayCpu;
+        _selectionPressState->pixelFinalGpuBytes = finalDisplayGpu;
+        _selectionPressState->pixelFinalFactory = MakePixelFinalForWork;
+        _selectionPressState->pixelFinalHost = this;
+        _selectionPressState->pixelFinalOwnerThread = GetCurrentThreadId();
+    }
     _selectionPressState->observer = this;
     _selectionPressState->notify = [](void* raw, SelectionOutlineGestureState::Event event) noexcept
     { static_cast<Application*>(raw)->SelectionPressEventOwner(event); };

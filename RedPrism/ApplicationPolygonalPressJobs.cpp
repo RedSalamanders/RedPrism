@@ -300,9 +300,11 @@ HRESULT Application::StartPolygonalPressOwner(std::uint64_t family) noexcept
         !_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
         return E_ABORT;
     const bool pixels = _polygonalPixelPressEnabled && first->sample.modifiers.control;
-    const auto admitted = pixels ? DescribeSelectionPixelGestureMemory(_session, LassoKind::Polygonal, context.mode)
-                                 : DescribeSelectionOutlineGestureMemory(_session, LassoKind::Polygonal, context.mode);
-    if (!admitted)
+    auto admitted = pixels ? DescribeSelectionPixelGestureMemory(_session, LassoKind::Polygonal, context.mode)
+                           : DescribeSelectionOutlineGestureMemory(_session, LassoKind::Polygonal, context.mode);
+    std::uint64_t finalDisplayCpu = 0, finalDisplayGpu = 0;
+    if (!admitted || (pixels && _selectionPixelFinalPublicationEnabled &&
+                      !AddPixelFinalAdmissionOwner(*admitted, finalDisplayCpu, finalDisplayGpu)))
         return E_OUTOFMEMORY;
     auto predecessor = _polygonalPressState ? _polygonalPressState->TakeSuccessor()
                                             : std::optional<SelectionOutlineGestureTransition>{};
@@ -318,6 +320,14 @@ HRESULT Application::StartPolygonalPressOwner(std::uint64_t family) noexcept
     state.allowPreservingMarquee = context.mode != SelectionMode::New;
     state.requireCapturedTarget = true;
     state.allowInitialPixelMove = pixels;
+    if (pixels && _selectionPixelFinalPublicationEnabled)
+    {
+        state.pixelFinalCpuBytes = finalDisplayCpu;
+        state.pixelFinalGpuBytes = finalDisplayGpu;
+        state.pixelFinalFactory = MakePixelFinalForWork;
+        state.pixelFinalHost = this;
+        state.pixelFinalOwnerThread = GetCurrentThreadId();
+    }
     if (predecessor)
         state.predecessor.emplace(std::move(*predecessor));
     state.observer = state.hostObserver = this;

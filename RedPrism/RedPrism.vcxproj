@@ -723,4 +723,10 @@
   <ItemGroup>
     <ClCompile Include="Application.Tests.ScalarSelectionClosure.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ApplicationPixelFinalPublication.cpp" />
+    <ClCompile Include="OriginalDisplayPublication.cpp" />
+    <ClInclude Include="OriginalDisplayPublication.h" />
+    <ClInclude Include="SelectionPixelFinalWork.h" />
+  </ItemGroup>
 </Project>

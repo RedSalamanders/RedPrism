@@ -2200,6 +2200,7 @@ class DocumentSession
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
     [[nodiscard]] bool ApplyDocumentSizeIfCurrent(CanvasDocument document, std::wstring name, const JobToken& token);
+    [[nodiscard]] bool IsPreparedDocumentSizeCurrent(const PreparedDocumentSize& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedDocumentSizeIfCurrent(PreparedDocumentSize& prepared) noexcept;
     [[nodiscard]] std::uint64_t DocumentSizeRetirementMemoryBytes() const noexcept;
     // Installs a validated import assembled from this document as one entry. A different document or invalid

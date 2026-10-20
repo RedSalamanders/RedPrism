@@ -33,6 +33,44 @@ struct SelectionOutlineDrawing final
 
 namespace
 {
+// Materialize the final work directly in its by-value factory argument. A named work local plus
+// its moved argument duplicated the large prepared-history value in the caller's worker frame.
+SelectionPixelFinalWork TakePixelFinalWork(SelectionOutlineGestureState& state,
+                                           std::optional<PreparedPixelMoveClosure>& closure,
+                                           const std::shared_ptr<SharedPublicationMemory>& final,
+                                           const std::shared_ptr<SharedPublicationMemory>& temporary,
+                                           std::uint64_t remainingBytes)
+{
+    struct ClearSource final
+    {
+        std::optional<PreparedPixelMoveClosure>& value;
+        ~ClearSource()
+        {
+            value.reset();
+        }
+    } clear{closure};
+    // Guaranteed prvalue elision builds one argument. ClearSource preserves the previous protocol:
+    // the moved source is disengaged before the factory starts, including a throwing factory.
+    return SelectionPixelFinalWork{std::move(closure.value()),
+                                   final,
+                                   temporary,
+                                   remainingBytes,
+                                   state.limits.finalOutputBytes,
+                                   state.pixelFinalOwnerThread,
+                                   state.pixelFinalCpuBytes,
+                                   state.pixelFinalGpuBytes};
+}
+// Keep this phase-specific argument outside the general Run frame. The factory still receives
+// one elided value and the parent owns the returned stage; there is no extra job or heap wrapper.
+__declspec(noinline) std::unique_ptr<Job> MakePixelFinalDelegateForWork(
+    SelectionOutlineGestureState& state, std::optional<PreparedPixelMoveClosure>& closure,
+    const std::shared_ptr<SharedPublicationMemory>& final, const std::shared_ptr<SharedPublicationMemory>& temporary,
+    std::uint64_t remainingBytes)
+{
+    return state.pixelFinalFactory(state.pixelFinalHost, state,
+                                   TakePixelFinalWork(state, closure, final, temporary, remainingBytes));
+}
+
 // The drag-Up public planner deliberately rejects Polygonal. This original parent's journal overload
 // admits the separate multi-click Polygonal arena and exact boolean/workspace ceilings before its hit.
 std::optional<LassoFinishGeometry::DrawingPlan> DescribeGestureDrawing(LassoKind kind, SelectionMode mode,
@@ -198,6 +236,8 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
 {
     auto& s = _state;
     ++s.runs;
+    if (_phase == Phase::PixelFinalDelegate)
+        return _pixelFinalJob ? _pixelFinalJob->Run(context) : JobResult{JobStatus::Failed, E_UNEXPECTED};
     if (_phase == Phase::Allocate)
     {
         s.firstBudget = context.reservedMemoryBytes;
@@ -258,16 +298,29 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     {
         if (!_pixelCloseInput)
             return {JobStatus::Failed, E_UNEXPECTED};
-        auto prepared = DocumentSession::PrepareDeferredPixelMoveClosure(std::move(*_pixelCloseInput),
-                                                                         context.cancellation, _final);
-        _pixelCloseInput.reset();
-        if (!prepared)
-            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
-                                                      : JobResult{JobStatus::Failed, E_FAIL};
-        _pixelClose.emplace(std::move(*prepared));
+        {
+            // End the large moved-from preparation before constructing the final-stage work argument.
+            // These immutable owners never need overlapping stack storage or an extra heap allocation.
+            auto prepared = DocumentSession::PrepareDeferredPixelMoveClosure(std::move(_pixelCloseInput.value()),
+                                                                             context.cancellation, _final);
+            _pixelCloseInput.reset();
+            if (!prepared)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_FAIL};
+            _pixelClose.emplace(std::move(prepared.value()));
+        }
         ++s.closurePrepares;
         s.NotifyWork(SelectionOutlineGestureState::WorkStage::PixelClosurePrepared);
-        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (s.pixelFinalFactory && _pixelClose->ChangesDocument())
+        {
+            _pixelFinalJob =
+                MakePixelFinalDelegateForWork(s, _pixelClose, _final, _temporary, context.reservedMemoryBytes);
+            if (!_pixelFinalJob)
+                return {JobStatus::Failed, E_OUTOFMEMORY}; // The selected route never falls back after refusal.
+        }
+        return {};
     }
     if (_phase == Phase::PixelRefresh)
     {
@@ -331,20 +384,32 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     if (_phase == Phase::Collect)
         return {}; // Event-triggered acknowledgement only; never read mutable input/session on workers.
     if (_phase == Phase::Close)
-    {
-        ++s.closurePrepares;
-        if (!_closeInput)
-            return {JobStatus::Failed, E_UNEXPECTED};
-        auto memory = _click ? std::shared_ptr<const SharedPublicationMemory>{} : _final;
-        auto prepared = DocumentSession::PrepareSelectionMoveClosurePublication(
-            std::move(_closeInput.value()), context.cancellation, {}, nullptr, {}, memory);
-        _closeInput.reset();
-        if (!prepared)
-            return {JobStatus::Failed, E_FAIL};
-        _close.emplace(std::move(prepared.value()));
-        s.NotifyWork(SelectionOutlineGestureState::WorkStage::ClosePrepared);
-        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
-    }
+        return RunCloseForWork(context);
+    return RunClickForWork(context);
+}
+
+// Keep large prepared-history values local to their exclusive worker stage. The dispatcher has no
+// reason to reserve both of these preparation frames while running another phase.
+__declspec(noinline) JobResult SelectionOutlineGestureJob::RunCloseForWork(JobContext& context)
+{
+    auto& s = _state;
+    ++s.closurePrepares;
+    if (!_closeInput)
+        return {JobStatus::Failed, E_UNEXPECTED};
+    auto memory = _click ? std::shared_ptr<const SharedPublicationMemory>{} : _final;
+    auto prepared = DocumentSession::PrepareSelectionMoveClosurePublication(
+        std::move(_closeInput.value()), context.cancellation, {}, nullptr, {}, memory);
+    _closeInput.reset();
+    if (!prepared)
+        return {JobStatus::Failed, E_FAIL};
+    _close.emplace(std::move(prepared.value()));
+    s.NotifyWork(SelectionOutlineGestureState::WorkStage::ClosePrepared);
+    return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+}
+
+__declspec(noinline) JobResult SelectionOutlineGestureJob::RunClickForWork(JobContext& context)
+{
+    auto& s = _state;
     ++s.clickPrepares;
     if (!_commandInput)
         return {JobStatus::Failed, E_UNEXPECTED};
@@ -358,10 +423,32 @@ JobResult SelectionOutlineGestureJob::Run(JobContext& context)
     return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
 }
 
+void SelectionOutlineGestureJob::RetireWorkerStage(JobContext& context, JobResult result) noexcept
+{
+    // Construction may have completed just before cancellation suppressed its first owner acknowledgement.
+    if (_pixelFinalJob)
+        _pixelFinalJob->RetireWorkerStage(context, result);
+}
+
+bool SelectionOutlineGestureJob::DeferRetirement(JobResult result, JobTicket ticket) noexcept
+{
+    if (_pixelFinalJob)
+    {
+        _phase = Phase::PixelFinalDelegate;
+        return _pixelFinalJob->DeferRetirement(result, ticket);
+    }
+    return false;
+}
+
 bool SelectionOutlineGestureJob::DeferCompletion(JobResult result, JobTicket ticket) noexcept
 {
     auto& s = _state;
     s.sameTicket = s.sameTicket && ticket == s.original;
+    if (_pixelFinalJob)
+    {
+        _phase = Phase::PixelFinalDelegate;
+        return _pixelFinalJob->DeferCompletion(result, ticket);
+    }
     if (result.status != JobStatus::Finished)
         return false;
     if (_phase == Phase::Allocate)
@@ -656,14 +743,26 @@ bool SelectionOutlineGestureJob::NotifyInput() noexcept
 void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
 {
     auto& s = _state;
+    if (_pixelFinalJob)
+    {
+        _pixelFinalJob->Completed(result);
+        if (!s.pixelFinalOutcome)
+            std::terminate();
+        result = s.pixelFinalOutcome.value();
+        s.closed = s.pixelFinalClosed;
+        if (s.closed && result.status != JobStatus::Finished)
+            std::terminate(); // An already published edit cannot be reported as cancelled/failed.
+        if (!s.closed && result.status == JobStatus::Finished)
+            result = {JobStatus::Failed, E_UNEXPECTED};
+    }
     s.completed = true;
     s.waiting = false;
     s.outcome = result;
     if (_error && result.status == JobStatus::Finished)
         s.outcome = {JobStatus::Failed, _error};
-    if (s.cancelled || (s.drawing && s.terminalLost))
+    if ((s.cancelled || (s.drawing && s.terminalLost)) && !(_pixelFinalJob && s.closed))
         s.outcome = {JobStatus::Cancelled};
-    if (s.outcome.status == JobStatus::Finished && s.pixelMove)
+    if (s.outcome.status == JobStatus::Finished && s.pixelMove && !_pixelFinalJob)
     {
         const auto required = _final->LocalAllocationBytes() + SharedPublicationMemory::OwnershipAllowance();
         if (!_pixelClose || !s.session.IsPreparedDeferredPixelMoveClosureCurrent(*_pixelClose) ||
@@ -676,7 +775,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
         if (!s.closed && s.outcome.status == JobStatus::Finished)
             s.outcome = {JobStatus::Failed, E_ABORT};
     }
-    else if (s.outcome.status == JobStatus::Finished && s.drawing && !s.endedByBackspace)
+    else if (s.outcome.status == JobStatus::Finished && s.drawing && !s.endedByBackspace && !_pixelFinalJob)
     {
         const auto required = _drawing && _drawing->finish ? _drawing->finish->OutputAllocationBytes() : 0;
         if (!_drawing || !_drawing->finish || !s.session.IsPreparedLassoFinishCurrent(*_drawing->finish) ||
@@ -689,7 +788,7 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
         if (!s.closed && s.outcome.status == JobStatus::Finished)
             s.outcome = {JobStatus::Failed, E_ABORT};
     }
-    else if (s.outcome.status == JobStatus::Finished && !s.drawing)
+    else if (s.outcome.status == JobStatus::Finished && !s.drawing && !_pixelFinalJob)
     {
         const auto required = _command ? _command->OutputMemoryBytes()
                                        : _final->LocalAllocationBytes() +
@@ -747,6 +846,11 @@ void SelectionOutlineGestureJob::Completed(JobResult result) noexcept
 void SelectionOutlineGestureJob::RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept
 {
     auto& s = _state;
+    if (_pixelFinalJob)
+    {
+        _pixelFinalJob->RetainJoinedRetirement(s.scheduler, ticket);
+        s.closed = s.pixelFinalClosed;
+    }
     _residency.Reset();
     s.sameTicket = s.sameTicket && ticket == s.original;
     s.waiting = false;

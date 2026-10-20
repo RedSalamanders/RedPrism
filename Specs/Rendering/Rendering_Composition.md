@@ -941,12 +941,44 @@ root on a worker. Actual joined Close transfers undrained roots into the existin
 retirement path. Neither a completion callback nor job destructor may destroy such a root on the UI thread.
 
 The selected native Ctrl fixture checks WARP pixels, real device rebuild, zero/redrag, Undo/Redo and charges.
-Its separate final committed-frame request is not original-parent atomic CPU/history/rows/GPU publication.
-Ordinary activation, complete phase bounds and visible G1 remain unqualified.
+The separate final committed-frame request remains the CPU reference route. The explicitly selected original-parent
+publication below integrates the final rows/GPU stages. Ordinary activation, complete phase bounds and visible G1 remain unqualified.
 
 ### Pixel journal integration boundary
 
 Typed pixel successors preserve the original lift/source through their conditional physical journal.
-The current selected native implementation still publishes final CPU/history before requesting a separate
-committed frame. This is not atomic final CPU/history/rows/GPU publication. The original-parent publication
-service, complete device/hidden/failure retirement and ordinary activation remain required before H4 closes.
+The CPU reference route publishes final CPU/history before requesting a separate committed frame. The native
+final-publication selector uses the original-parent service below. Complete device/hidden/failure retirement,
+consumer bounds, ordinary activation and measured G1 remain required before H4 closes.
+
+### Original-ticket final display and row adoption
+
+`OriginalDisplayPublication` creates no device, scheduler job or owner pump. Its original caller admits all
+CPU/output/retired/rows/command/WARP overlap before capture. Allocation/manifest/row construction/recording
+and final graph destruction run on workers. The exact successful original acknowledgement captures the
+existing application device/context and claims one of the controller's two cells; partial capture still
+requires original retirement. An occupied recovery cell is readiness to wait for, not permission to weaken
+the claim guard or add another cell. The existing final-work owner source services the original wait.
+
+Recording is joined even when useful Run is skipped. Original GPU acknowledgements and owner transport
+detachment precede worker transport retirement. Before the CPU swap, the service binds original output
+memory, seals private rows and validates private publication against the exact final source/device/slot.
+Rows and their scalar cached keys move before the committed graph observer can run. All remaining fallible
+work precedes CPU/history mutation. Actual joined Close detaches without publication, keeps GPU charges
+in a preexisting owner, retires resources on its final worker and refunds after that worker joins.
+
+The component controls cover WARP/available hardware and acquired/active-worker Close prefixes; the native
+Ctrl/Polygonal controls cover final callbacks, recovery/refusal/retry and cancellation. These are functional
+and lifetime evidence. Full current integration, remaining driver/hidden grids, complete production bounds,
+ordinary activation and visible G1 are independently required.
+
+A committed display failure is keyed to the exact document authority and device generation that failed.
+Current-source failure checks and canvas notices must ignore a retained error from another key, including while
+its replacement source is suspended. The actual current device-binding error also refuses useful publication;
+absence of a ready source alone is not failure or publication authority.
+
+
+Final publication updates the actual Chrome prepared-row consumer to the same current epoch before the
+GPU adoption callback, as well as the application's cached row handle. An unchanged-key sync cannot admit
+a younger row job. A pending first-row producer keeps the final original suspended until its exact current
+epoch succeeds or fails; cancellation and Close retain their original retirement authority.

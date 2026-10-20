@@ -263,7 +263,7 @@ void ZeroAndKeys()
     }
     Fixture keys;
     for (std::uint64_t ordinal = 2; ordinal <= 33; ++ordinal)
-        keys.Record(ordinal % 2 ? Action::Enter : Action::Backspace, {1.5, 1.5}, ordinal);
+        keys.Record((ordinal % 2) ? Action::Enter : Action::Backspace, {1.5, 1.5}, ordinal);
     keys.Record(Action::Move, {3.5, 2.5}, 34, true);
     keys.Record(Action::Up, {999, 999}, 35);
     keys.Submit();

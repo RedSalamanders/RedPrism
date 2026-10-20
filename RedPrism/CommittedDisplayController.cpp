@@ -569,11 +569,15 @@ class CommittedDisplayController::DisplayJob final : public Job
         if (_stage == Stage::TransportRetirement && result.status == JobStatus::Finished && SUCCEEDED(_cell.terminal) &&
             _owner.CurrentOwner(_cell))
         {
-            const HRESULT retained =
-                _cell.root->pixelDescriptorMemory
-                    ? static_cast<HRESULT>(
-                          _cell.root->pixelDescriptorMemory->BindAfterCompletedWork(*_owner._jobs, _cell.ticket))
-                    : _owner._jobs->RetainMemory(_cell.ticket, _cell.retained);
+            // Cleanup clears the root only after its original worker acknowledgement. A successful
+            // transport publication must still own that root; refuse protocol corruption before use.
+            auto* root = _cell.root;
+            if (_rootDeleted || !root)
+                std::terminate();
+            const HRESULT retained = root->pixelDescriptorMemory
+                                         ? static_cast<HRESULT>(root->pixelDescriptorMemory->BindAfterCompletedWork(
+                                               *_owner._jobs, _cell.ticket))
+                                         : _owner._jobs->RetainMemory(_cell.ticket, _cell.retained);
             if (FAILED(retained))
                 std::terminate(); // Descriptor preclaimed the slot; exact successful callback is its sole transfer.
             _owner.PublishedOwner(_cell);

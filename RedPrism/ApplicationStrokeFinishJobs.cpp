@@ -1965,16 +1965,21 @@ bool Application::StrokeFinishSource::Start() noexcept
 }
 bool Application::StrokeFinishSource::HasPending() const noexcept
 {
-    return _attached && _owner._strokeFinishCurrent != nullptr;
+    return _attached && (_owner._strokeFinishCurrent != nullptr || _owner.PixelFinalPublicationPendingOwner());
 }
 bool Application::StrokeFinishSource::HasReady() const noexcept
 {
-    return _attached && _owner._strokeFinishCurrent && _owner._strokeFinishCurrent->HasReadyOwner();
+    return _attached && ((_owner._strokeFinishCurrent && _owner._strokeFinishCurrent->HasReadyOwner()) ||
+                         _owner.PixelFinalPublicationReadyOwner());
 }
 void Application::StrokeFinishSource::Pump() noexcept
 {
-    if (HasReady())
+    if (!_attached)
+        return;
+    if (_owner._strokeFinishCurrent && _owner._strokeFinishCurrent->HasReadyOwner())
         _owner._strokeFinishCurrent->PumpOwner();
+    else if (_owner.PixelFinalPublicationReadyOwner())
+        _owner.PumpPixelFinalPublicationOwner();
 }
 void Application::StrokeFinishSource::DeviceChangedOwner() noexcept
 {

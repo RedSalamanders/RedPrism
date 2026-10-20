@@ -78,6 +78,7 @@
 #include "Document.Tests.PendingDisplaySource.h"
 #include "Document.Tests.PersistentHistory.h"
 #include "Document.Tests.PersistentOwnerIndex.h"
+#include "Document.Tests.PixelFinalDelegate.h"
 #include "Document.Tests.PixelMoveClosure.h"
 #include "Document.Tests.PixelMoveLiftPrelude.h"
 #include "Document.Tests.PixelMoveOutputLifetime.h"
@@ -105,6 +106,7 @@
 #include "Document.Tests.SelectionOutlineRasterViews.h"
 #include "Document.Tests.SelectionPixelJournal.h"
 #include "Document.Tests.SelectionPixelParent.h"
+#include "Document.Tests.SizeFinalSource.h"
 #include "Document.Tests.SparseRegionReads.h"
 #include "Document.Tests.SparseWindowBounds.h"
 #include "Document.Tests.StrokeFinalCoverage.h"
@@ -8367,6 +8369,8 @@ int wmain(int argc, wchar_t** argv)
     PixelMoveClosureTests::Run(gFailures);
     ColorTargetCaptureTests::Run(gFailures);
     LiveAdjustmentTargetCaptureTests::Run(gFailures);
+    PixelFinalDelegateTests::Run(gFailures);
+    SizeFinalSourceTests::Run(gFailures);
     gFailures += RunSelectionPixelJournalTests();
     PixelMoveOutputLifetimeTests::Run(gFailures);
     PixelPreviewDescriptorTests::Run(gFailures);

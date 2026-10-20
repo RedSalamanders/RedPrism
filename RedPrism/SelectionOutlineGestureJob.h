@@ -29,18 +29,23 @@ class SelectionOutlineGestureJob final : public Job
         DrawFinish,
         DrawRefresh,
         PixelFinish,
-        PixelRefresh
+        PixelRefresh,
+        PixelFinalDelegate
     };
 
   public:
     explicit SelectionOutlineGestureJob(SelectionOutlineGestureState& state);
     JobResult Run(JobContext& context) override;
+    void RetireWorkerStage(JobContext&, JobResult result) noexcept override;
+    bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override;
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override;
     bool NotifyInput() noexcept;
     void Completed(JobResult result) noexcept override;
     void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override;
 
   private:
+    JobResult RunCloseForWork(JobContext& context);
+    JobResult RunClickForWork(JobContext& context);
     bool NotifyMoves(bool changed) noexcept;
     void NotifyInputProgress(bool parked = false) noexcept;
     bool ConsumeDrawing() noexcept;
@@ -54,6 +59,7 @@ class SelectionOutlineGestureJob final : public Job
     bool Resume() noexcept;
     bool Consume() noexcept;
     SelectionOutlineGestureState& _state;
+    std::unique_ptr<Job> _pixelFinalJob;
     const std::optional<LassoFinishGeometry::DrawingPlan> _drawingPolicy;
     Phase _phase = Phase::Allocate;
     std::shared_ptr<SharedPublicationMemory> _output, _final, _temporary;

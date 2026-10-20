@@ -505,3 +505,17 @@ PNG/JPEG export during a selected live Polygonal draft leaves the project path, 
 marker unchanged on success and picker cancellation. Closing that draft still creates only its one changed
 selection entry; Undo restores the original committed selection and its previously dirty marker, and Redo
 restores the new selection. Export never marks the committed revision as saved.
+
+## Final edit source and original publication ownership
+
+Prepared Size final-source access is valid only before Apply; moves invalidate their sources. Current-only
+validation checks the original full token, active layer and history epoch. Residency refresh keeps that same
+prepared intent. Its supplied original output owner remains behind the candidate, prepared history and
+retired metadata, including last immutable history readers.
+
+The selected native pixel final publication swaps its prepared CPU/history before rows and GPU adoption in
+one nonreentrant original acknowledgement. A busy residency permit resumes the same original worker for
+refresh rather than blocking the owner or dropping an otherwise current edit. A changed source/history
+refuses before mutation. Replaced owners retire under the original temporary account on workers; terminal
+receipt notification follows complete publication/retirement. Size-card host integration and final G1 remain
+separate P1 gates.

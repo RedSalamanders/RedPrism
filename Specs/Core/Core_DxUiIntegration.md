@@ -177,3 +177,11 @@ Computer Use and desktop screenshot tools are not evidence.
 `Tests/BuildProcessTests/DxUiProvenanceTests.ps1` MUST reject a wrong pin.
 `Tests/BuildProcessTests/DxUiOutputPathTests.ps1` MUST prove full identity retention, idempotence, collision refusal,
 unmarked cache refusal and props-based path resolution, including malformed, relative and escaping roots.
+
+## Test-only public row interface
+
+CompositionTests imports the existing `Build/RedPrism.DxUi.props` to compile the application's prepared-row adapter
+against the exact restored public `IPreparedTreeAccessibilityRows` declaration. It imports no consumer library
+targets or library source files and links no DxUi implementation. The product's single pinned library reference,
+archive/provenance, CRT/profile and ABI policies remain required. Solution entrypoints restore and validate that
+same pin before compiling either consumer.

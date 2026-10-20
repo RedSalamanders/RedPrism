@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -223,7 +224,8 @@ void ApplyKeepsHistoryThenRasterEditHasLiteralPixels(int& failures)
 void DuplicateAndRefusals(int& failures)
 {
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "duplicate.fixture", failures);
         auto prepared = PrepareOnWorker(session, true);
         const bool applied = prepared && session.ApplyPreparedDeferredPixelMoveOpeningIfCurrent(prepared.value());
@@ -251,8 +253,10 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession first;
-        DocumentSession second;
+        auto firstOwner = std::make_unique<DocumentSession>();
+        auto& first = *firstOwner;
+        auto secondOwner = std::make_unique<DocumentSession>();
+        auto& second = *secondOwner;
         Expect(Initialize(first) && Initialize(second), "cross-session.fixture", failures);
         auto prepared = PrepareOnWorker(first);
         Expect(prepared && !second.ApplyPreparedDeferredPixelMoveOpeningIfCurrent(prepared.value()) &&
@@ -261,7 +265,8 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "stale.fixture", failures);
         auto prepared = PrepareOnWorker(session);
         if (!prepared)
@@ -275,7 +280,8 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "foreign.fixture", failures);
         auto prepared = PrepareOnWorker(session);
         if (!prepared)
@@ -292,7 +298,8 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "cancelled.fixture", failures);
         auto input = session.PrepareDeferredPixelMoveOpeningInput();
         CancelSource cancellation;
@@ -311,7 +318,8 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "moved-from.fixture", failures);
         auto input = session.PrepareDeferredPixelMoveOpeningInput();
         if (!input)
@@ -330,7 +338,8 @@ void DuplicateAndRefusals(int& failures)
     }
 
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
         Expect(Initialize(session), "assetless.fixture", failures);
         EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().asset.reset(); });
         Expect(!session.PrepareDeferredPixelMoveOpeningInput(), "assetless-active-layer-refuses-owner-capture",

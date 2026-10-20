@@ -1,6 +1,7 @@
 // Opt-in committed display route. Normal startup remains on the existing path until pending edits,
 // strokes, utilities, rows and complete resource admission have also been migrated and qualified.
 #include "Application.h"
+#include "ApplicationProcessingTestProbe.h"
 #include "PreparedRasterPreview.h"
 
 HRESULT Application::InitializeRecordedCommandsOwner() noexcept
@@ -75,13 +76,30 @@ void Application::CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) no
 {
     _acknowledgedCommittedDisplay = graph;
     _committedDisplayFailure = S_OK;
+    _committedDisplayFailureKey.reset();
+    if (_processingTestProbe && _processingTestProbe->committedDisplayPublished)
+        _processingTestProbe->committedDisplayPublished(_processingTestProbe->context, graph);
     InvalidateFrame();
 }
 
-void Application::CommittedDisplayFailedOwner(CommittedDisplayKey, HRESULT failure) noexcept
+void Application::CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept
 {
     _committedDisplayFailure = failure;
+    _committedDisplayFailureKey = key;
     InvalidateFrame(); // Existing canvas-error notice runs outside scheduler/owner-pump callbacks.
+}
+
+HRESULT Application::CurrentCommittedDisplayFailureOwner() const noexcept
+{
+    if (FAILED(_gpuBindingError))
+        return _gpuBindingError;
+    if (SUCCEEDED(_committedDisplayFailure) || !_committedDisplayFailureKey)
+        return S_OK;
+    const auto authority = _session.CaptureDocumentReadAuthority();
+    if (!authority)
+        return S_OK;
+    const CommittedDisplayKey current{authority.value(), _gpuWork.DeviceGeneration()};
+    return current == _committedDisplayFailureKey.value() ? _committedDisplayFailure : S_OK;
 }
 
 bool Application::PendingDisplayClient::DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept

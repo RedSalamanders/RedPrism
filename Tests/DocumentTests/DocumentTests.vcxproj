@@ -659,4 +659,11 @@
     <ClCompile Include="Document.Tests.PolygonalDispatcher.cpp" />
     <ClInclude Include="Document.Tests.PolygonalDispatcher.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Document.Tests.PixelFinalDelegate.cpp" />
+    <ClCompile Include="Document.Tests.SizeFinalSource.cpp" />
+    <ClInclude Include="Document.Tests.PixelFinalDelegate.h" />
+    <ClInclude Include="Document.Tests.SizeFinalSource.h" />
+    <ClInclude Include="..\..\RedPrism\SelectionPixelFinalWork.h" />
+  </ItemGroup>
 </Project>

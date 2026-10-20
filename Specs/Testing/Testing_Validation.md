@@ -3666,3 +3666,32 @@ descriptors, full mask placement/flags, repeated worker lookup previews, unchang
 pending history, corrupted descriptor refusal, pre-cancelled worker acknowledgment and stale-session refusal.
 The opening input remains its original whole-document token; preview target authority comes from that exact
 opening. Preserve all existing colour/panel/Wand facts. Focused private proof does not qualify the full suite.
+
+### Original-parent final display and sizing-source controls
+
+`Composition.Tests.OriginalDisplayPublication` runs independent literal move/duplicate bytes on WARP and
+available hardware, full original-ticket/accounting/rows callback ordering, CPU/GPU/row-epoch refusal and
+post-record cancellation. Exercise actual Close after allocated/captured/prepared/admitted/joined/retired/private
+publication prefixes and while allocation/preparation/recording/transport-retirement workers are held.
+
+The actual Ctrl/Polygonal host additionally observes final CPU/history/rows before terminal and GPU callbacks.
+Hold real final workers for cancellation/Close. Refuse current-source memory after real device recovery and
+original admission; require the exact original error, unchanged source/history/rows, explicit source retry and
+a successful fresh original. Hold a real global residency lease on another thread; require original worker
+refresh without owner wait, unchanged source while held and one successful final history/GPU publication.
+Suspend the real display before final capture: require a dormant original, then actual visibility resume,
+cancel or joined Close with exact receipts and final zero charges. No private Main selector ships.
+
+`Document.Tests.PixelFinalDelegate` tests original worker delegation, literal CPU publication and original
+retirement/accounting, Undo/Redo, zero bypass and factory refusal without fallback.
+`Document.Tests.SizeFinalSource` tests literal 2x1 to 4x2 nearest output, moved/applied source invalidation,
+staleness/cancel, one Undo/Redo, provided output ownership and a separately allocated semantic mask thumbnail
+after its parent root dies. Last immutable history readers retain accounting after prepared aggregate retirement.
+Small-fixture functional proof does not establish production phase bounds, complete 2 ms Apply or G1.
+
+
+First-row publication controls hold the actual row worker while the current GPU source is ready. Ctrl and
+Polygonal each cover resume, cancellation, current-epoch failure and joined Close, preserving one original
+and all prior CPU/history/row/GPU state until publication. The atomic GPU observer compares Chrome's real
+prepared accessibility-row owner with the published application owner. A control using the previous
+handoff must fail that assertion. All sizing fault modes also require first-worker payload allocation.

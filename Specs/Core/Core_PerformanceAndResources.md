@@ -1923,3 +1923,24 @@ metadata on its worker. `ColorEditHeldMemoryBytes` includes the complete cached 
 commit planning reads the original mask name size rather than the descriptor's empty string. Source,
 temporary, history and display aliases still require complete operation admission and real retirement.
 The declared bounds remain conservative; final production phase bounds and G1 are separate gates.
+
+### Original-parent final publication admission and waits
+
+The selected Ctrl/Polygonal final display envelope is included before the original Submit. Cached current
+source plus final pixel/selection bounds cover future source ownership; rows/collapse controls, command
+shadows, WARP storage, final output and positive temporary overlap also belong to that descriptor. All sums
+and ID bounds are checked. Continuing-output transfer forbids later reservation growth. These conservative
+declarations require complete production phase qualification before ordinary activation.
+
+First-row epoch, recovery-slot, visibility and history-residency waits preserve the original ticket/admission/FIFO. Readiness
+uses the existing final-work source and acknowledged stages, with no polling timer or extra mux leaf.
+Current-source failure, cancel and Close must not leave accepted work dormant indefinitely. Shared final
+publication retains all old rows/graphs and charges until worker retirement and actual GPU last use.
+Output-aware resize APIs retain the caller's original accounting through new pixels, semantic thumbnails,
+sealed roots and prepared history; their adoption is not a complete Size host/2 ms or G1 qualification.
+
+
+The sizing job constructs its large source/history/result payload on its first admitted worker. The owner
+acknowledgement captures into that existing payload; it must not allocate a replacement wrapper. Capture
+failure, stale completion and Close still retire the complete payload on a worker. This structural rule
+does not qualify Size final GPU/chrome publication or its complete 2 ms Apply target.

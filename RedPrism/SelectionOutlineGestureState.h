@@ -4,6 +4,7 @@
 #include "HostSelectionGestureInput.h"
 #include "Jobs.h"
 #include "LassoFinishGeometry.h"
+#include "SelectionPixelFinalWork.h"
 
 #include <atomic>
 #include <cstdint>
@@ -140,6 +141,19 @@ struct SelectionOutlineGestureState
     // Explicit CPU initial Ctrl branch. A journal additionally carries the exact typed predecessor receipt.
     // This does not authorize Wand, host GPU publication or ordinary activation.
     bool allowInitialPixelMove = false, pixelMove = false;
+    // Optional host final-publication stages; null preserves the explicit CPU reference route.
+    // Complete final-display ceilings are admitted before Submit; continuing output forbids growth.
+    std::uint64_t pixelFinalCpuBytes = 0, pixelFinalGpuBytes = 0;
+    // Optional worker-only reached-resource fixture. Configured before the original resumes;
+    // borrows only an event gate through workObserver, never an Application/session/device.
+    void (*pixelFinalPreparedForTest)(void*, void* shutdownEvent) noexcept = nullptr;
+    SelectionPixelFinalFactory pixelFinalFactory = nullptr;
+    void* pixelFinalHost = nullptr;
+    std::uint32_t pixelFinalOwnerThread = 0; // Factory configuration is immutable from Submit through completion.
+    std::optional<JobResult> pixelFinalOutcome;
+    bool pixelFinalClosed = false;
+    bool pixelFinalWaitingForDisplay = false; // Owner-only phase observation; never publication authority.
+
     bool requireCapturedTarget = false;
     // Caller moves only the exact preceding completed parent's issued transition. Worker admission
     // validates and consumes it; it does not rewrite the journal's immutable per-Down authority.

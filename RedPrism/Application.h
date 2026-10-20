@@ -5,6 +5,7 @@
 #include "PolygonalDrawingJob.h"
 #include "SelectionCursorRequests.h"
 #include "SelectionHitWork.h"
+#include "SelectionOutlineGestureMemory.h"
 #include "SelectionOutlineGestureState.h"
 
 #include "BrushCompute.h"
@@ -254,6 +255,7 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool DescribeCommittedDisplayOwner(CommittedDisplayDescriptor& descriptor) noexcept override;
     void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
     void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
+    [[nodiscard]] HRESULT CurrentCommittedDisplayFailureOwner() const noexcept;
     struct PendingDisplayClient final : CommittedDisplayClient
     {
         explicit PendingDisplayClient(Application& owner) noexcept : _owner(owner) {}
@@ -559,6 +561,15 @@ class Application final : public ChromeEvents,
     [[nodiscard]] bool RouteSelectionPressOwner(const DxUi::PointerEvent&, UINT message) noexcept;
     void LoseSelectionPressOwner() noexcept;
     void PumpSelectionPressOwner() noexcept;
+    [[nodiscard]] bool AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory&, std::uint64_t& cpu,
+                                                   std::uint64_t& gpu) const noexcept;
+    class PixelFinalJob;
+    static std::unique_ptr<Job> MakePixelFinalForWork(void*, SelectionOutlineGestureState&, SelectionPixelFinalWork);
+    void PumpPixelFinalPublicationOwner() noexcept;
+    [[nodiscard]] bool PixelFinalPublicationPendingOwner() const noexcept;
+    [[nodiscard]] bool PixelFinalPublicationReadyOwner() const noexcept;
+    bool _selectionPixelFinalPublicationEnabled = false;
+    PixelFinalJob* _pixelFinalCurrent = nullptr;
     void SelectionPressEventOwner(SelectionOutlineGestureState::Event) noexcept;
     [[nodiscard]] HRESULT StartSelectionPressGesture(std::uint64_t opening) noexcept;
 
@@ -1360,6 +1371,7 @@ class Application final : public ChromeEvents,
     GpuWorkQueue _gpuWork;
     GpuCommandPump _recordedCommands;
     GpuResidencyBudget _graphGpuBudget;
+    GpuResidencyReservation _pixelFinalShutdownGpu;
     GpuResidencyReservation _strokeFinishShutdownGpu;
     GpuResidencyReservation _strokeFinishShutdownDisplayGpu;
     StrokeFinishSource _strokeFinishSource{*this};
@@ -1394,6 +1406,7 @@ class Application final : public ChromeEvents,
     bool _committedDisplayInitialized = false;
     bool _committedDisplayAllowHiddenForTest = false;
     HRESULT _committedDisplayFailure = S_OK;
+    std::optional<CommittedDisplayKey> _committedDisplayFailureKey;
     bool _gpuWorkInitialized = false;
     HRESULT _gpuBindingError = E_PENDING;
     HistoryWork _historyWork;

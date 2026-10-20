@@ -8,7 +8,12 @@
 - [x] Fix the private original-ticket publication fixture's retirement transfer boundary; all242 WARP/hardware ASan facts pass, including acquired-prefix and active-worker Close. Production host integration and the complete failure/Close grid remain open.
 - [x] Adopt deferred live-adjustment target capture after1,650 exact private Release/ASan facts, including25 new independent assertions.
 - [x] Qualify the combined1,011-TU source in full x64 Debug/Release/real ASan and all three ARM64 cross-builds, with exact source/archive/compiler/link/full-PDB proof. [Current six-profile evidence](../../TestRuns/P1CtrlCaptureMatrix_2026-10-20.md). Native ARM64 runtime remains unavailable.
-- [ ] Finish final-source analysis, atomic original-parent rows/GPU integration, remaining journal/Wand and ownership bounds, ordinary activation and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
+- [x] Commit/push the qualified 1,011-TU capture/journal step as `10e5fde`; verify the remote SHA.
+- [x] Qualify original-parent final CPU/history/rows/GPU publication in focused real ASan:325 exact host facts, including real device rebuild memory refusal and explicit retry; preserve both earlier occupied-slot failures. [Publication evidence](../../TestRuns/P1OriginalFinalPublication_2026-10-20.md).
+- [x] Qualify the CPU delegate and immutable Size final-source/output lifetime prerequisites:24,003 Document facts and a genuine ASan detection probe. Adopt the reviewed code, component/host tests and actual project registrations; private Main selectors are excluded.
+- [x] Preserve the first combined ASan/ARM64 Release build failures and their verified archives; repair the composition test project's pinned public-header import and key current display errors to their original source/device.
+- [ ] Qualify the integrated 1,021-TU source, including new Busy-residency and actual suspended-slot resume/cancel/Close controls, in current full native/analysis/ARM64 builds. The preceding six-profile pass does not qualify these changes.
+- [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 
 ## Historical progress checkpoints
 

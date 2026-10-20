@@ -25,6 +25,7 @@ struct SizingWorkTestGate final
     std::uint64_t reservationBytes = 0;
     std::atomic<bool> captureReservationHeld{false};
     std::atomic<unsigned int> historyFaultHits{0};
+    std::atomic<bool> payloadAllocatedOffOwner{false};
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadRetiredOffOwner{false};
     JobResult result{};

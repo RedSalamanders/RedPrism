@@ -573,9 +573,8 @@ void Application::RenderFrame() noexcept
     }
     else
         AbandonUiFrameLatency(); // An occluded Present is not a completed visible frame.
-    HRESULT canvasFailure = _committedDisplayInitialized && FAILED(_committedDisplayFailure)
-                                ? _committedDisplayFailure
-                                : _renderer.CanvasFailure();
+    const HRESULT committedFailure = _committedDisplayInitialized ? CurrentCommittedDisplayFailureOwner() : S_OK;
+    HRESULT canvasFailure = FAILED(committedFailure) ? committedFailure : _renderer.CanvasFailure();
     if (_pendingDisplayInitialized && _pendingDisplayFailureKey && FAILED(_pendingDisplayFailure))
     {
         CommittedDisplayDescriptor current;
@@ -3939,6 +3938,7 @@ void Application::Shutdown() noexcept
         _lassoDraftDisplayEnabled = false;
         _lassoDraftViewValid = false;
     }
+    _pixelFinalShutdownGpu.ResetOwner();
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)

@@ -23,6 +23,7 @@
 #include "Composition.Tests.GpuCommandStream.h"
 #include "Composition.Tests.GpuCompletion.h"
 #include "Composition.Tests.GpuResidencyGrowth.h"
+#include "Composition.Tests.OriginalDisplayPublication.h"
 #include "Composition.Tests.PublicationParent.h"
 #include "Composition.Tests.RecordedAdjustment.h"
 #include "Composition.Tests.RecordedBrush.h"
@@ -2267,6 +2268,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWarpReplayComputeTests();
     gFailures += RunRecordedWarpPreviewParentTests();
     gFailures += RunRecordedPixelPreviewParentTests();
+    gFailures += RunOriginalDisplayPixelPublicationTests();
     gFailures += RunEmptyJoinedShutdownTests();
     gFailures += RunVideoMemorySnapshotTests();
     gFailures += RunBrushDensityClearTests();

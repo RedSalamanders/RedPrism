@@ -46,6 +46,9 @@
   </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <!-- Tests compile the application's row adapter against the pinned public interface only.
+       DxUi implementation code and its library remain in RedPrism.exe. -->
+  <Import Project="..\..\Build\RedPrism.DxUi.props" />
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets">
@@ -393,5 +396,16 @@
     <ClInclude Include="..\..\RedPrism\LassoDraftDisplayController.h" />
     <ClInclude Include="Composition.Tests.LassoDraftController.h" />
     <ClInclude Include="Composition.Tests.LassoDraftPixels.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\LayerRowsWork.cpp" />
+    <ClCompile Include="..\..\Common\PixelMoveClosureWork.cpp" />
+    <ClCompile Include="..\..\Common\PixelMoveOpeningWork.cpp" />
+    <ClCompile Include="..\..\RedPrism\PreparedLayerRows.cpp" />
+    <ClCompile Include="..\..\RedPrism\OriginalDisplayPublication.cpp" />
+    <ClCompile Include="Composition.Tests.OriginalDisplayPublication.cpp" />
+    <ClInclude Include="..\..\RedPrism\PreparedLayerRows.h" />
+    <ClInclude Include="..\..\RedPrism\OriginalDisplayPublication.h" />
+    <ClInclude Include="Composition.Tests.OriginalDisplayPublication.h" />
   </ItemGroup>
 </Project>

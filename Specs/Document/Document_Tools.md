@@ -2278,9 +2278,9 @@ immutable lift, metadata, complete GPU preview and real-use retirement before ca
 excludes the pending pixel frame; redrag cannot inherit an obsolete landing.
 
 Successful pixel closure invalidates the committed document display; outline-only terminals retain their
-selection notification. This component still requests a separate committed frame after final CPU/history
-closure. Original-parent atomic final rows/GPU publication, journal/Wand, complete phase bounds, ordinary
-activation and G1 remain open. [Implementation and private evidence](../TestRuns/P1CtrlPixelHost_2026-10-19.md).
+selection notification. The CPU reference route requests a separate committed frame after final CPU/history
+closure. The explicit final-publication route below retains that work on the original parent. Journal/Wand,
+complete phase bounds, ordinary activation and G1 retain their separate delivery gates. [Implementation and private evidence](../TestRuns/P1CtrlPixelHost_2026-10-19.md).
 
 ### Typed pixel journal successors
 
@@ -2303,3 +2303,39 @@ the original complete mask metadata into its carried mask; preview/histogram val
 No current-document lookup can refresh a stale opening's authority. Original pixel, selection, mask,
 history, undo/redo and cancellation semantics remain required. Direct inline and adjustment-layer capture
 paths retain their existing behavior; this component establishes no whole-UI or G1 completion claim.
+
+### Original-parent pixel final publication
+
+An explicitly enabled native pixel gesture includes its final display/rows envelope in the original complete
+admission before Submit. A moved final closure remains inside that original job: no younger display job,
+new FIFO ordinal, continuing-output reservation growth or owner pixel preparation may finish it. The worker
+prepares immutable final rows, raster residency and GPU recording; actual original recording, GPU completion
+and transport-retirement acknowledgements precede publication.
+
+Before capture the original waits for the committed source and a free controller cell. Actual visibility or
+device recovery readiness resumes the same ticket through its acknowledged worker stage. A failed current
+source with no pending rebuild fails the original with that error, preserving committed pixels/history/rows;
+it must not strand the original. A suspended source with no failure remains dormant until visibility resumes,
+cancellation or joined Close. A busy or changed history-residency witness resumes that original worker for
+refresh; the owner never waits for the lease. These waits do not poll or enlarge the fixed controller/mux.
+
+The nonreentrant successful publication validates source/editor/history/collapse/device authority, binds the
+original output, prepares the private GPU/rows root, then swaps CPU/history, rows and scalar row keys before
+adopting the committed GPU graph. Its publication observer sees all four before terminal input receipts.
+Replaced graphs and temporary owners retire on workers; original charges survive real last GPU use and
+strong/expired weak owners. Close supplies destruction authority only and suppresses useful completion.
+This selected route remains disabled in ordinary startup until complete caller/lifetime/admission/G1 gates pass.
+
+### Immutable sizing final source and output ownership
+
+`PreparedDocumentSize::FinalDocument` exposes the checked immutable candidate only while valid and unapplied.
+A move invalidates the source; successful Apply invalidates final-source access before the prepared object
+holds the retired predecessor. Its current-only query and residency acquire/refresh APIs grant no mutation
+authority. A stale or cancelled preparation adds no history and cannot replace a newer source.
+
+When a caller supplies original output memory to resize/render preparation, every new image/mask allocation,
+separately allocated semantic mask thumbnail, sealed layer root and prepared history retains that same owner.
+Shared unchanged pixels retain their existing owners. Destruction releases metadata/pixels before accounting;
+surviving immutable history/strong/weak readers cannot lose their charge when the prepared aggregate retires.
+The current size-card host still needs original-parent display/rows integration and measured complete 2 ms Apply;
+the ownership API and CPU tests alone do not close P1.8.

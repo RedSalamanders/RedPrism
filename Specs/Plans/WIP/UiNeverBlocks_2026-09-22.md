@@ -8,7 +8,17 @@
 - [x] Fix the private original-ticket publication fixture's retirement transfer boundary; all242 WARP/hardware ASan facts pass, including acquired-prefix and active-worker Close. Production host integration and the complete failure/Close grid remain open.
 - [x] Adopt deferred live-adjustment target capture after1,650 exact private Release/ASan facts, including25 new independent assertions.
 - [x] Qualify the combined1,011-TU source in full x64 Debug/Release/real ASan and all three ARM64 cross-builds, with exact source/archive/compiler/link/full-PDB proof. [Current six-profile evidence](../../TestRuns/P1CtrlCaptureMatrix_2026-10-20.md). Native ARM64 runtime remains unavailable.
-- [ ] Finish final-source analysis, atomic original-parent rows/GPU integration, remaining journal/Wand and ownership bounds, ordinary activation and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
+- [x] Commit/push the qualified 1,011-TU capture/journal step as `10e5fde`; verify the remote SHA.
+- [x] Qualify original-parent final CPU/history/rows/GPU publication in focused real ASan:325 exact host facts, including real device rebuild memory refusal and explicit retry; preserve both earlier occupied-slot failures. [Publication evidence](../../TestRuns/P1OriginalFinalPublication_2026-10-20.md).
+- [x] Qualify the CPU delegate and immutable Size final-source/output lifetime prerequisites:24,003 Document facts and a genuine ASan detection probe. Adopt the reviewed code, component/host tests and actual project registrations; private Main selectors are excluded.
+- [x] Preserve the first combined ASan/ARM64 Release build failures and their verified archives; repair the composition test project's pinned public-header import and key current display errors to their original source/device.
+- [x] Qualify the integrated 1,021-TU publication baseline in full x64 Debug/Release/real ASan and all three ARM64 cross-builds, including Busy-residency and suspended-slot controls. Preserve failed analysis f1an1 and the Debug reader recovery separately. Native ARM64 runtime remains unavailable.
+- [x] Reproduce the actual Chrome-row handoff failure, then qualify its repair and first-row resume/cancel/failure/Close in 473 focused ASan facts; qualify first-worker Size payload allocation in the full private ASan Application run.
+- [x] Adopt the reviewed Chrome/first-row, worker-allocation and four analysis repairs; keep warning limits, goldens, dependency pins and ordinary activation unchanged.
+- [x] Qualify the followthrough in current full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 1,021 TUs, 154 Application stages, 12,026 Application facts and 473 original-publication facts. Native ARM64 runtime remains unavailable.
+- [x] Privately qualify the generic Image Size final-publication path in real ASan: 129 Size and all 473 Pixel facts, including first-row resume/cancel/failure/Close, foreign restore and late cancellation. Native adoption and its complete matrix remain due.
+- [ ] Commit/push this qualified publication step, then adopt and qualify the reviewed Image Size host code/test/registration/contracts.
+- [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 
 ## Remaining gates before P1 Done
 

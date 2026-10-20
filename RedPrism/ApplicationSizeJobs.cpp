@@ -73,7 +73,20 @@ class Application::SizingJob final : public Job
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_payload)
-            return {}; // same admitted record reaches capture on an owner completion pass
+        {
+            // Allocate only after original admission, on its first worker. The next successful
+            // acknowledgement captures source/token/history into this already constructed payload.
+            auto owned = std::make_unique<SizingPayload>();
+            owned->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            owned->gate = _gate;
+            owned->ownerThread = _ownerThread;
+            if (_gate)
+                _gate->payloadAllocatedOffOwner.store(GetCurrentThreadId() != _ownerThread);
+            _payload.reset(owned.release());
+            return {};
+        }
+        if (!_captured || !_payload->source || !_payload->token)
+            return {JobStatus::Failed, E_UNEXPECTED};
         if (_gate && !_gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -126,18 +139,14 @@ class Application::SizingJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (_payload || result.status != JobStatus::Finished || _owner._shutdownStarted ||
+        if (_captured || !_payload || result.status != JobStatus::Finished || _owner._shutdownStarted ||
             !_owner._historyWork.IsCurrent(_stamp) || _owner._historyWork.CancelRequested(_stamp) ||
             _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
             _owner._session.Generation() != _generation || !_owner._session.Document())
             return false;
         try
         {
-            auto owned = std::make_unique<SizingPayload>();
-            owned->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            owned->gate = _gate;
-            owned->ownerThread = _ownerThread;
-            _payload.reset(owned.release());
+
             if (_gate)
             {
                 _gate->captureReservationHeld.store(_gate->reservationBytes != 0 &&
@@ -149,8 +158,12 @@ class Application::SizingJob final : public Job
             _payload->source = _owner._session.Document();
             _payload->active = _owner._session.ActiveLayerID();
             _payload->history = _owner._session.history.CaptureState();
-            if (_payload->token && _owner._jobs.Resume(ticket))
-                return true;
+            if (_payload->token)
+            {
+                _captured = true;
+                if (_owner._jobs.Resume(ticket))
+                    return true;
+            }
             _captureError = E_UNEXPECTED;
         }
         catch (const std::bad_alloc&)
@@ -262,6 +275,7 @@ class Application::SizingJob final : public Job
     const std::shared_ptr<SizingWorkTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<SizingPayload, RetireSizingPayload> _payload;
+    bool _captured = false;
     ResizeStatus _status = ResizeStatus::Invalid;
     std::int32_t _captureError = 0;
 };
@@ -565,11 +579,12 @@ int Application::RunSizingWorkSelfTest() noexcept
                                   : HostOutcome::Succeeded;
         const auto gate = _sizingWorkTestGate;
         const bool reached = mode == Mode::CaptureAllocation ? !state.visited : state.visited && state.held;
-        bool correct =
-            settled == SettleResult::Settled && reached && actual.outcome == expected && !_historyWork.Busy() &&
-            !_sizingTicket && !_sizingStamp && _jobs.ReservedMemoryBytes() == retainedBaseline &&
-            _jobs.ReleasingMemoryBytes() == 0 && clipboardUnchanged() && _renderer.PresentCount() == presents &&
-            gate->captureReservationHeld.load() && gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load();
+        bool correct = settled == SettleResult::Settled && reached && actual.outcome == expected &&
+                       !_historyWork.Busy() && !_sizingTicket && !_sizingStamp &&
+                       _jobs.ReservedMemoryBytes() == retainedBaseline && _jobs.ReleasingMemoryBytes() == 0 &&
+                       clipboardUnchanged() && _renderer.PresentCount() == presents &&
+                       gate->captureReservationHeld.load() && gate->payloadAllocatedOffOwner.load() &&
+                       gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load();
         if (preservesRedo)
             correct = correct && _session.history.UndoCount() == historyCount && _session.history.CanRedo() &&
                       _session.history.RedoName() == L"Layer Opacity" && _session.ActiveLayer()->opacity == 1 &&

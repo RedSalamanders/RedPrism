@@ -60,6 +60,9 @@ std::uint64_t MetadataBytes(const CanvasDocument& source) noexcept
 {
     // Snapshot, detached next document, apply validation and current history copies. Selection geometry is
     // immutable shared storage. This allowance is intentionally conservative until P1.9 moves history values.
+    // The eight per-record 256-byte allocation allowances also cover the owned-output variant's at most
+    // three 32-byte raster lifetime headers and its sealed-root/history ownership controls. The single
+    // possible Canvas Extension is covered by the fixed 64 KiB allowance, including its owned raster header.
     std::uint64_t bytes = 64 * 1024;
     for (const auto& layer : source.layers)
     {
@@ -455,7 +458,8 @@ int ImageSizeDraft::RoundedHeight() const noexcept
 }
 
 Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int width, int height,
-                         LayerSampling sampling, const CancelToken& cancellation)
+                         LayerSampling sampling, const CancelToken& cancellation,
+                         const std::shared_ptr<const SharedPublicationMemory>& outputMemory)
 {
     if (cancellation.IsCancelled() || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
@@ -487,7 +491,7 @@ Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int 
         {
             return {};
         }
-        return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
+        return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes), outputMemory);
     }
     catch (const std::bad_alloc&)
     {
@@ -496,7 +500,8 @@ Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int 
 }
 
 Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int width, int height, LayerSampling sampling,
-                        std::uint8_t background, const CancelToken& cancellation)
+                        std::uint8_t background, const CancelToken& cancellation,
+                        const std::shared_ptr<const SharedPublicationMemory>& outputMemory)
 {
     if (cancellation.IsCancelled() || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
@@ -528,7 +533,7 @@ Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int wi
         {
             return {};
         }
-        return Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes));
+        return Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes), outputMemory);
     }
     catch (const std::bad_alloc&)
     {
@@ -537,7 +542,8 @@ Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int wi
 }
 
 ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions& options, CanvasDocument& result,
-                          const CancelToken& cancellation)
+                          const CancelToken& cancellation,
+                          const std::shared_ptr<const SharedPublicationMemory>& outputMemory)
 {
     if (cancellation.IsCancelled())
     {
@@ -645,7 +651,8 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
                                 static_cast<std::size_t>(clearX1 - clearX0) * 4u);
                 }
             }
-            const Raster image = Raster::Adopt(options.width, options.height, RasterFormat::Bgra8888, std::move(bytes));
+            const Raster image =
+                Raster::Adopt(options.width, options.height, RasterFormat::Bgra8888, std::move(bytes), outputMemory);
             if (!image.HasStorage())
             {
                 return ResizeStatus::Memory;
@@ -661,7 +668,7 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             result = {};
             return ResizeStatus::Cancelled;
         }
-        auto next = draft.value().Seal(cancellation);
+        auto next = draft.value().Seal(cancellation, outputMemory);
         if (!next)
         {
             result = {};
@@ -682,7 +689,8 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
 }
 
 ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& options, CanvasDocument& result,
-                         const CancelToken& cancellation)
+                         const CancelToken& cancellation,
+                         const std::shared_ptr<const SharedPublicationMemory>& outputMemory)
 {
     if (cancellation.IsCancelled())
     {
@@ -753,7 +761,7 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
                 const Affine2 map =
                     PixelToDocument(layer.transform, image.Width(), image.Height()).Concat(scale).Concat(toTarget);
                 const Raster rendered =
-                    RenderPlacedImage(image, map, boxWidth, boxHeight, options.sampling, cancellation);
+                    RenderPlacedImage(image, map, boxWidth, boxHeight, options.sampling, cancellation, outputMemory);
                 if (!rendered.HasStorage())
                 {
                     result = {};
@@ -782,14 +790,14 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
                     const Affine2 map = PixelToDocument(layer.transform, pixels.Width(), pixels.Height())
                                             .Concat(scale)
                                             .Concat(toTarget);
-                    const Raster rendered =
-                        RenderPlacedMask(pixels, map, boxWidth, boxHeight, options.sampling, 0, cancellation);
+                    const Raster rendered = RenderPlacedMask(pixels, map, boxWidth, boxHeight, options.sampling, 0,
+                                                             cancellation, outputMemory);
                     if (!rendered.HasStorage())
                     {
                         result = {};
                         return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Memory;
                     }
-                    const Raster thumbnail = ThumbnailRasterForWork(rendered, 96, cancellation);
+                    const Raster thumbnail = ThumbnailRasterForWork(rendered, 96, cancellation, outputMemory);
                     if (!thumbnail.HasStorage())
                     {
                         result = {};
@@ -805,7 +813,7 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
             result = {};
             return ResizeStatus::Cancelled;
         }
-        auto resized = draft.value().Seal(cancellation);
+        auto resized = draft.value().Seal(cancellation, outputMemory);
         if (!resized)
         {
             result = {};
