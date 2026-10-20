@@ -103,3 +103,17 @@ for misleading comments/reordered executable AST and unrelated error text. No na
 helper executes in these controls. [Tooling evidence](P1ValidationTooling_2026-10-21.md) records the
 affected qualification. A fresh hosted run with complete terminal/source/environment/product evidence
 is still required; no current native runtime pass or performance result is inferred.
+
+
+## Observed followup 39511716098
+
+The separate CI-only comment commit `43725c68817eb303b519f9837064d03bb77a148c` requests one guarded
+native Release push run. The executable helper behavior matches the adopted tooling; all 30 wrapper
+controls pass again, and both remote helper/workflow blobs match the committed source. Workflow pins,
+permissions, runner, Release-only selection and parent/job limits remain unchanged.
+
+[Run 39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) is observed in
+progress in the canonical entrypoint step. The watcher preserves this exact attempt and downloads its
+artifacts at termination. This request supplies no runtime pass, closing identity or performance result;
+independent terminal, source, environment, product and complete-roster qualification remains due.
+Evidence destination: `.build/P1Evidence/p1-native-arm-hosted-r4/`.

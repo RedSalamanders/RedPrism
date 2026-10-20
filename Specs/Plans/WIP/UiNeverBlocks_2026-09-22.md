@@ -52,7 +52,9 @@
   The native-only 5,400-second failure backstop is an observation bound, not a causal repair or G1 result.
   [Affected tooling evidence](../../TestRuns/P1ValidationTooling_2026-10-21.md).
 - [x] Publish the qualified tooling step as `d6231b07f68eac678c43577c4cb2a99c7636d771`; approved branch destination SHA is verified and the guarded native job [39511554815](https://github.com/RedSalamanders/RedPrism/actions/runs/39511554815) correctly skips this unmarked mixed commit.
-- [ ] Request and independently qualify the next native ARM64 Release attempt under the existing guarded workflow.
+- [x] Request the separately guarded native ARM64 Release attempt as `43725c68817eb303b519f9837064d03bb77a148c`; exact remote helper/workflow blobs are verified and all 30 wrapper controls pass again. [Run 39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) is observed in progress.
+- [ ] Independently qualify that native run's actual terminal result, complete source/environment bookends,
+  executable/full-PDB identities and full assertion rosters. An in-progress run is no runtime pass.
 
 ## Remaining gates before P1 Done
 
