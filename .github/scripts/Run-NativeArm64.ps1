@@ -35,6 +35,34 @@ function Assert-CleanSource {
         throw 'Source worktree changed; this run cannot qualify the event commit.'
     }
 }
+function Initialize-NativeBuildHost {
+    Import-Module (Join-Path $repoRoot 'Build/VisualStudioDiscovery.psm1') -Force
+    $original = Find-RedPrismMSBuild
+    $installation = Find-RedPrismVisualStudioInstallationOfMSBuild $original
+    $native = Join-Path $installation 'MSBuild/Current/Bin/arm64/MSBuild.exe'
+    if (-not (Test-Path -LiteralPath $native -PathType Leaf)) {
+        throw 'The selected Visual Studio installation has no ARM64-hosted MSBuild; refusing another emulated build.'
+    }
+    if ([Diagnostics.FileVersionInfo]::GetVersionInfo($native).FileMajorPart -ne 18) {
+        throw 'Native MSBuild is outside the required Visual Studio 2026 version.'
+    }
+    $version = (Get-Content -LiteralPath (Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+    $compiler = Join-Path $installation "VC/Tools/MSVC/$version/bin/HostARM64/ARM64/cl.exe"
+    if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
+        throw 'Native ARM64-hosted compiler is unavailable in the default v145 toolset.'
+    }
+    # Supported canonical discovery override, inherited by test.ps1, dependency restore and build.ps1.
+    # Microsoft.Cpp.ToolsetLocation.props selects arm64 only in an ARM64-hosted MSBuild process.
+    $env:MSBUILD_EXE_PATH = $native
+    $env:PreferredToolArchitecture = 'arm64'
+    Write-Evidence 'build-host-selection.json' ([ordered]@{
+        originalMSBuild=$original;selectedMSBuild=$native;requestedPreferredToolArchitecture='arm64'
+        msbuildSha256=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash
+        availableNativeCompiler=$compiler;availableNativeCompilerSha256=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash
+        interpretation='Native build-host selection only; runtime suite success still requires actual completion'
+    })
+}
+
 function Get-EnvironmentEvidence {
     Import-Module (Join-Path $repoRoot 'Build/VisualStudioDiscovery.psm1') -Force
     $msbuildPath = Find-RedPrismMSBuild
@@ -105,6 +133,7 @@ try {
     Assert-CleanSource
     $before = Get-SourceSnapshot
     Write-Evidence 'source-before.json' $before
+    Initialize-NativeBuildHost
     Write-Evidence 'environment-before.json' (Get-EnvironmentEvidence)
 
     $info = [Diagnostics.ProcessStartInfo]::new()
@@ -125,14 +154,25 @@ try {
     Write-Evidence 'started.json' ([ordered]@{pid=$child.Id;utc=[DateTime]::UtcNow.ToString('o');configuration='Release';platform='ARM64'})
     $stdoutCopy = $child.StandardOutput.BaseStream.CopyToAsync($stdoutStream)
     $stderrCopy = $child.StandardError.BaseStream.CopyToAsync($stderrStream)
-    if (-not $child.WaitForExit(85*60*1000)) {
+    $elapsed = [Diagnostics.Stopwatch]::StartNew()
+    while (-not $child.WaitForExit(30000) -and $elapsed.Elapsed.TotalMinutes -lt 170) {
+        $osNow = Get-CimInstance Win32_OperatingSystem
+        $last = Get-Content -LiteralPath (Join-Path $outRoot 'test.stdout.log') -Tail 1 -ErrorAction SilentlyContinue
+        $progress = [ordered]@{utc=[DateTime]::UtcNow.ToString('o');elapsedSeconds=[math]::Round($elapsed.Elapsed.TotalSeconds)
+            freeMemoryBytes=([uint64]$osNow.FreePhysicalMemory*1024);lastOutput=[string]$last}
+        ($progress | ConvertTo-Json -Compress) | Add-Content -LiteralPath (Join-Path $outRoot 'progress.jsonl') -Encoding utf8
+        Write-Host ("Native ARM64 canonical run: {0}s, free memory {1} MiB, last output: {2}" -f $progress.elapsedSeconds,([math]::Round($progress.freeMemoryBytes/1MB)),$last)
+    }
+    if (-not $child.HasExited) {
         Write-Evidence 'child-result.json' ([ordered]@{pid=$child.Id;exit=$null;status='timeout-child-not-terminated';nativeQualified=$false})
         throw 'Canonical test exceeded its bounded interval; no successful runtime result is claimed.'
     }
-    $stdoutCopy.GetAwaiter().GetResult()
-    $stderrCopy.GetAwaiter().GetResult()
-    $stdoutStream.Flush();$stderrStream.Flush()
+    # Record the actual process exit before waiting for inherited output handles to drain.
     Write-Evidence 'child-result.json' ([ordered]@{pid=$child.Id;exit=$child.ExitCode;utc=[DateTime]::UtcNow.ToString('o')})
+    $drain = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutCopy,$stderrCopy))
+    if (-not $drain.Wait(30000)) { throw 'Canonical child exited, but its raw output stream did not drain within 30 seconds.' }
+    $drain.GetAwaiter().GetResult()
+    $stdoutStream.Flush();$stderrStream.Flush()
     $after = Get-SourceSnapshot
     Write-Evidence 'source-after.json' $after
     Write-Evidence 'environment-after.json' (Get-EnvironmentEvidence)
