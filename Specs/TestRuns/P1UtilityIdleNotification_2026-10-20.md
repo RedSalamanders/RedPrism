@@ -1,6 +1,6 @@
 # Utility-owner idle and memory-notification fixture
 
-Status: complete same-source local matrix qualified; publication pending. P1 remains WIP.
+Status: complete same-source local matrix qualified and published. P1 remains WIP.
 
 ## Checklist
 
@@ -9,7 +9,7 @@ Status: complete same-source local matrix qualified; publication pending. P1 rem
 - [x] Preserve all original routing assertions; isolate their memory input and add three state controls.
 - [x] Qualify the original complete Composition roster plus exactly three new facts in real ASan.
 - [x] Complete x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis.
-- [ ] Commit and push this qualified step; verify the destination SHA.
+- [x] Commit and push this qualified step as `a2f56263c7a36a9d5bfb24c1c18cb297885bbae6`; the approved branch destination SHA is verified.
 
 ## Complete integrated qualification
 

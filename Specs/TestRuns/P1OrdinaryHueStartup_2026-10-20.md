@@ -1,6 +1,6 @@
 # Independent ordinary recorded Hue startup
 
-Status: complete same-source local matrix qualified; publication pending. P1 remains WIP.
+Status: complete same-source local matrix qualified and published. P1 remains WIP.
 
 ## Checklist
 
@@ -11,7 +11,7 @@ Status: complete same-source local matrix qualified; publication pending. P1 rem
 - [x] Adopt the reviewed code/contracts; canonical formatting checks 1,354 files and validates all 15 skills.
 - [x] Qualify actual startup and every predecessor Application assertion in the focused real-ASan run:155 stages,12,262 facts; the complete matrix below closes canonical profile qualification.
 - [x] Complete x64 Debug/Release/real ASan, three ARM64 cross-builds and canonical Release analysis; retain all failures.
-- [ ] Commit/push this qualified step and verify the destination SHA.
+- [x] Commit/push this qualified step as `a2f56263c7a36a9d5bfb24c1c18cb297885bbae6`; the approved branch destination SHA is verified.
 
 ## Scope and independent expectations
 
@@ -86,7 +86,7 @@ This is a full Application self-test on the instrumented program, with no privat
 It does not rerun the other four suites, scanner controls, genuine poisoning probe, stress or canonical
 smokes. The canonical `oh2a1` failure remains a failure. A fresh canonical ASan run and the required
 latest-source profile matrix were still due at this focused checkpoint. The complete later matrix below
-closes local profile qualification; publication remains a separate checklist item.
+closes local profile qualification; the verified publication is recorded in the opening checklist.
 
 ## Complete same-source local qualification
 
