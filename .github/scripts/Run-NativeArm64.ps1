@@ -180,7 +180,20 @@ try {
     if (($before | ConvertTo-Json -Depth 4 -Compress) -cne ($after | ConvertTo-Json -Depth 4 -Compress)) {
         throw 'Tracked source bytes changed during the canonical run.'
     }
-    if ($child.ExitCode -ne 0) { throw "Canonical test.ps1 failed with actual exit $($child.ExitCode)." }
+    if ($child.ExitCode -ne 0) {
+        # A runtime failure can leave all five valid built products. Preserve their byte identities
+        # without turning the nonzero child exit into a successful native qualification.
+        $completeProducts = $true
+        foreach ($name in @('RedPrism','HostTests','DocumentTests','CompositionTests','IoTests')) {
+            foreach ($extension in @('exe','pdb')) {
+                if (-not (Test-Path -LiteralPath (Join-Path $repoRoot ".build/ARM64/Release/$name.$extension") -PathType Leaf)) {
+                    $completeProducts = $false
+                }
+            }
+        }
+        if ($completeProducts) { Write-Evidence 'products.json' (Get-ProductEvidence) }
+        throw "Canonical test.ps1 failed with actual exit $($child.ExitCode)."
+    }
     Write-Evidence 'products.json' (Get-ProductEvidence)
     Write-Evidence 'result.json' ([ordered]@{status='canonical-native-arm64-release-exited-zero';exit=0;sourceBookends=$true;nativeArm64Release=$true;debugQualified=$false;asanQualified=$false;g1Qualified=$false;p1Done=$false})
     Write-Host 'Canonical native ARM64 Release exited 0; source bookends and five ARM64 products verified.'
