@@ -21,7 +21,7 @@
 - [x] Adopt the reviewed generic Image Size final-publication path and 129 actual-host controls; preserve all 473 Pixel predecessors and remove private absolute fixture includes.
 - [x] Qualify the 1,022-TU / 155-stage Image Size integration in full native x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 12,155 Application facts, including all 129 Size and 473 Pixel predicates. Native ARM64 runtime remains unavailable.
 - [x] Privately qualify five additional actual Size slot/device recovery cases: 52 new facts plus all 129 Size and 473 Pixel predecessors (181/473). These controls remain a separate next adoption.
-- [ ] Commit/push the qualified Image Size final-publication step and verify the remote SHA.
+- [x] Commit/push the qualified Image Size final-publication step as `088a3d7` and verify the remote SHA.
 - [ ] Complete remaining Size recovery/phase bounds/2 ms and the other P1 delivery gates before ordinary activation and Done.
 - [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 

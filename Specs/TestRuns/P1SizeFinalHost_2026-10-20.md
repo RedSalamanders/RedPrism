@@ -54,3 +54,5 @@ full PDB, actual ISA0 and source/product bookends pass; its expanded test is not
 The focused actual-handoff benchmark and row-holder worker construction remain unqualified drafts. Complete
 phase bounds,2ms Apply, ordinary activation, measuredG1 and the remaining parent delivery gates are open.
 This is a qualified implementation step; P1 remains WIP.
+
+Qualified implementation committed/pushed as `088a3d730c694c4101110cfa91d096df1c80e39c`, remote SHA independently verified.
