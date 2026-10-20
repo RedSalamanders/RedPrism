@@ -241,3 +241,55 @@ The cross-build/analysis rows and complete source/archive identities are recorde
 No new layer-row preparation timing, external-client RPC latency, ordinary activation or G1 result is measured
 by this reconciliation. The older measured preparation misses above remain unresolved; they are not replaced
 by passing functional assertions.
+
+
+## Current exact-product cost diagnostics — 2026-10-20
+
+The complete current monitor/cursor matrix passes, including recovered same-source analysis `m1an2`.
+These two runs use the exact archived, full-runtime-qualified `m1r2` Release image and PDB, not the
+analysis-linked image. Source freeze is `A9390781134537A6CFE7341F67D4CD9824A0EA1D35DDD80926BB898D2C92CFED`;
+image SHA256 is `1141ED2D4EE1996259D69F72506E434D892E24A0302ECF6615BC6DE9898DE0CB`.
+Main verifies raw reports, actual exits and source/product bookends. Each run includes the initial epoch
+and ten renames: 11 boundaries, 99 timing rows, and all 10,000 full 1,024-unit names at every boundary.
+
+Machine: Ryzen 9 9950X3D (16 cores / 32 logical processors), 66,155,405,312 reported physical-memory bytes, Windows build 26300,
+RTX 5080 driver 32.0.16.1714, Balanced power scheme. The product reports scalar dispatch and enabled
+CRT FMA3 policy. These metadata/provider measurements do not benchmark pixel kernels or visible frames.
+
+All values below are microseconds. Trials 0 and 1 remain visible; trials 2–10 do not replace them.
+
+| Device | Actual PID / exit | Initial Prepare | First rename Prepare | Largest Prepare, renames 2–10 | Largest Apply | Largest drain |
+| --- | --- | --- | --- | --- | --- | --- |
+| hardware | 77216 / 0 | 6,383 | 8,621 | 2,637 | 260 | 265 |
+| WARP | 106544 / 0 | 7,387 | 6,520 | 3,537 | 240 | 245 |
+
+Maximum per-trial p99 histogram upper bounds for Prepare are 16,000 us (hardware) and 8,000 us (WARP).
+They are recorded bounds for these selected samples, not a pooled or complete G1 percentile. Request,
+dispatch, Apply and drain remain below their corresponding owner targets in this selected run. Early
+Prepare intervals exceed the 4 ms p99 target and need attribution before ordinary prepared-row activation.
+`ChromeHost::Prepare` includes application layout, embedded-view preparation and accessibility attachment/update;
+those existing boundaries must be measured separately before selecting a repair.
+No sample is discarded, relabelled as an extra warmup or used to close the complete G1/first-display gate.
+
+Direct embedded-STA provider navigation/name p99 upper bounds are at most 1 / 2 us per trial. Retained
+maxima include 1,281 us for one hardware name read and 1,318 us for one WARP navigation read. These are
+same-process server calls; external UIA RPC and visible-frame latency remain unmeasured.
+
+The original build-free preflight predicates returned zero before each run. Continuous build-overlap
+observation was not collected for these selected diagnostics, so no stronger overlap claim is made.
+Evidence root: `Z:\src\RedPrism\.build\P1Evidence\p1-layer-rows-current-costs-main-r1`.
+`identity-before.json`, raw outputs/results, `completed.json` and Main's `main-evidence-readback.json`
+retain the selected product identities and all original measurements.
+
+### Separate first-use GPU granularity diagnostic
+
+An isolated WARP process, actual PID 74484 / exit 0, records 162 rows: six texture sizes, three retained
+trials and nine phases. Original source/product bookends pass. No application rendering code changed.
+Maximum owner Signal intervals are 33, 39, 453, 448, 1,437 and 3,676 us at sides 512, 1,024, 2,048,
+4,096, 6,700 and 10,000 respectively. This does not establish the cause of an application overrun or
+qualify a production GPU fix. Earlier R4 and actual application misses remain retained.
+
+The coordinated sorting hold was released by its authorized owner. A subsequent original diagnostic
+preflight refused with exit 7 before any compile/runtime while the DxUi build slot was occupied. That
+receipt remains intact. A later attempt waited for the same unchanged predicate and completed; it did
+not terminate another process. Evidence root: `Z:\src\RedPrism\.build\P1Evidence\p1-gpu-first-use-probe-private-r5`.

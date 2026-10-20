@@ -15,6 +15,9 @@
   [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Native ARM64 runtime for this source, complete ordinary prepared activation and G1 remain open. Commit/push verified as `76b7af0bea0f5f4a1a2f087baf6b65fa0bb65866` on `codex/p1-opacity-host-proof`. The parent P1 delivery gates remain open.
 - [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
 
+- [x] Record exact-product hardware/WARP 10,000-layer cost diagnostics: 11 boundaries and 99 timing rows per device, with initial and first-rename Prepare intervals retained (hardware 6.383 / 8.621 ms; WARP 7.387 / 6.520 ms). Apply maxima are 0.260 / 0.240 ms. [Evidence](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-exact-product-cost-diagnostics--2026-10-20).
+- [ ] Attribute and fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. The private startup candidate is unbuilt and unadopted.
+
 ## Remaining gates before P1 Done
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
