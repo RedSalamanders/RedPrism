@@ -10,7 +10,7 @@ while (-not (Test-Path -LiteralPath (Join-Path $fixtureRepo 'Build/IsaScan.cs'))
     }
     $fixtureRepo = $parent
 }
-. (Join-Path $fixtureRepo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $fixtureRepo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 # The caller preloads its private scanner type. The imported helper provides PE setup,
 # byte-writing, listing formatting, and Invoke-Control assertions.

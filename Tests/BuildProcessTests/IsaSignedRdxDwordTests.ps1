@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1') *> $null
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1') *> $null
 $script:rdxDwordCount = 0
 
 # Independent synthetic parser controls for the exact 27-byte RDX signed-index dispatch.

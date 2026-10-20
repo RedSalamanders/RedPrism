@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $rsiRepo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $rsiRepo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $rsiRepo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-RsiDwordCase([string]$Name, [string]$Fault = '') {
     $case = New-SyntheticCase ($Name + 'Seed') -PdbData

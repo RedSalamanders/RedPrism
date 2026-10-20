@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $r9Repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $r9Repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $r9Repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 # Independent PE/listing/PDB parser controls. No synthetic byte array is executed.
 function New-R9ByteSwitchCase([string]$Name,[string]$Fault='',[int]$Maximum=12,[switch]$AlignedTail) {

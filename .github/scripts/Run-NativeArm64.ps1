@@ -86,9 +86,72 @@ function Get-EnvironmentEvidence {
         defaultVCToolsVersion=(Get-Content -LiteralPath (Join-Path $vsPath 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
         vcpkgPin=(Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg-tool.json') -Raw | ConvertFrom-Json)
         dxuiPin=(Get-Content -LiteralPath (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') -Raw | ConvertFrom-Json)
-        platform='ARM64';configuration='Release';maxCpuCount=2;performanceQualification=$false;p1Done=$false
+        platform='ARM64';configuration='Release';maxCpuCount=2;selfTestFailureBoundSeconds=5400;performanceQualification=$false;p1Done=$false
     }
 }
+function Get-NativeProgressEvidence([string] $RepositoryRoot, [int] $CanonicalChildId, [double] $ElapsedSeconds) {
+    # Optional diagnostics must not abort canonical tests when CIM, a log or a process disappears.
+    $progress = [ordered]@{
+        utc=[DateTime]::UtcNow.ToString('o');elapsedSeconds=[math]::Round($ElapsedSeconds)
+        freeMemoryBytes=$null;lastOutput='';applicationLogAvailable=$false
+        applicationStderrAvailable=$false
+        ownedApplicationQueryAvailable=$false;ownedApplicationCount=$null;ownedApplications=@()
+    }
+    $errors = [Collections.Generic.List[string]]::new()
+    try {
+        $osNow = Get-CimInstance Win32_OperatingSystem -OperationTimeoutSec 5 -ErrorAction Stop
+        $progress['freeMemoryBytes'] = [uint64]$osNow.FreePhysicalMemory*1024
+    } catch {
+        $message = $_.Exception.Message
+        $errors.Add('memory: ' + $message.Substring(0, [math]::Min(256, $message.Length)))
+    }
+    try {
+        $parentLog = Join-Path $RepositoryRoot '.build/native-arm-ci/test.stdout.log'
+        if (Test-Path -LiteralPath $parentLog -PathType Leaf) {
+            $progress['lastOutput'] = [string](Get-Content -LiteralPath $parentLog -Tail 1 -ErrorAction Stop)
+        }
+        $applicationLog = Join-Path $RepositoryRoot '.build/ARM64/Release/RedPrism.self-test.log'
+        if (Test-Path -LiteralPath $applicationLog -PathType Leaf) {
+            $applicationInfo = Get-Item -LiteralPath $applicationLog -ErrorAction Stop
+            $progress['applicationStdoutBytes'] = $applicationInfo.Length
+            $progress['applicationLastWriteUtc'] = $applicationInfo.LastWriteTimeUtc.ToString('o')
+            $progress['applicationLastOutput'] = [string](Get-Content -LiteralPath $applicationLog -Tail 1 -ErrorAction Stop)
+            $progress['applicationLogAvailable'] = $true
+        }
+        # Self-test stage/fact output may be on stderr while stdout remains empty.
+        $applicationErrorLog = Join-Path $RepositoryRoot '.build/ARM64/Release/RedPrism.self-test.err.log'
+        if (Test-Path -LiteralPath $applicationErrorLog -PathType Leaf) {
+            $errorInfo = Get-Item -LiteralPath $applicationErrorLog -ErrorAction Stop
+            $progress['applicationStderrBytes'] = $errorInfo.Length
+            $progress['applicationStderrLastWriteUtc'] = $errorInfo.LastWriteTimeUtc.ToString('o')
+            $progress['applicationLastErrorOutput'] = [string](Get-Content -LiteralPath $applicationErrorLog -Tail 1 -ErrorAction Stop)
+            $progress['applicationStderrAvailable'] = $true
+        }
+    } catch {
+        $message = $_.Exception.Message
+        $errors.Add('logs: ' + $message.Substring(0, [math]::Min(256, $message.Length)))
+    }
+    try {
+        $applicationPath = [IO.Path]::GetFullPath((Join-Path $RepositoryRoot '.build/ARM64/Release/RedPrism.exe'))
+        $ownedApplications = @(Get-CimInstance Win32_Process -OperationTimeoutSec 5 -ErrorAction Stop `
+            -Filter "ParentProcessId=$CanonicalChildId AND Name='RedPrism.exe'" | Where-Object {
+                $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -ieq $applicationPath
+            })
+        $progress['ownedApplicationCount'] = $ownedApplications.Count
+        $progress['ownedApplications'] = @($ownedApplications | Select-Object -First 4 | ForEach-Object {
+            [ordered]@{pid=$_.ProcessId;parent=$_.ParentProcessId;created=[string]$_.CreationDate
+                userCpu100ns=[uint64]$_.UserModeTime;kernelCpu100ns=[uint64]$_.KernelModeTime
+                workingSetBytes=[uint64]$_.WorkingSetSize}
+        })
+        $progress['ownedApplicationQueryAvailable'] = $true
+    } catch {
+        $message = $_.Exception.Message
+        $errors.Add('application-process: ' + $message.Substring(0, [math]::Min(256, $message.Length)))
+    }
+    $progress['diagnosticErrors'] = $errors.ToArray()
+    return $progress
+}
+
 function Get-ProductEvidence {
     $products = [ordered]@{}
     foreach ($name in @('RedPrism','HostTests','DocumentTests','CompositionTests','IoTests')) {
@@ -143,7 +206,7 @@ try {
     $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
-    foreach ($argument in @('-NoProfile','-NonInteractive','-File',(Join-Path $repoRoot 'test.ps1'),'-Platform','ARM64','-Configuration','Release','-MaxCpuCount','2')) {
+    foreach ($argument in @('-NoProfile','-NonInteractive','-File',(Join-Path $repoRoot 'test.ps1'),'-Platform','ARM64','-Configuration','Release','-MaxCpuCount','2','-SelfTestTimeoutSeconds','5400')) {
         $info.ArgumentList.Add($argument)
     }
     $stdoutStream = [IO.File]::Open((Join-Path $outRoot 'test.stdout.log'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
@@ -156,12 +219,10 @@ try {
     $stderrCopy = $child.StandardError.BaseStream.CopyToAsync($stderrStream)
     $elapsed = [Diagnostics.Stopwatch]::StartNew()
     while (-not $child.WaitForExit(30000) -and $elapsed.Elapsed.TotalMinutes -lt 170) {
-        $osNow = Get-CimInstance Win32_OperatingSystem
-        $last = Get-Content -LiteralPath (Join-Path $outRoot 'test.stdout.log') -Tail 1 -ErrorAction SilentlyContinue
-        $progress = [ordered]@{utc=[DateTime]::UtcNow.ToString('o');elapsedSeconds=[math]::Round($elapsed.Elapsed.TotalSeconds)
-            freeMemoryBytes=([uint64]$osNow.FreePhysicalMemory*1024);lastOutput=[string]$last}
-        ($progress | ConvertTo-Json -Compress) | Add-Content -LiteralPath (Join-Path $outRoot 'progress.jsonl') -Encoding utf8
-        Write-Host ("Native ARM64 canonical run: {0}s, free memory {1} MiB, last output: {2}" -f $progress.elapsedSeconds,([math]::Round($progress.freeMemoryBytes/1MB)),$last)
+        $progress = Get-NativeProgressEvidence -RepositoryRoot $repoRoot -CanonicalChildId $child.Id -ElapsedSeconds $elapsed.Elapsed.TotalSeconds
+        ($progress | ConvertTo-Json -Depth 6 -Compress) | Add-Content -LiteralPath (Join-Path $outRoot 'progress.jsonl') -Encoding utf8
+        $freeMemory = if ($null -ne $progress['freeMemoryBytes']) { [math]::Round($progress['freeMemoryBytes']/1MB) } else { 'unavailable' }
+        Write-Host ("Native ARM64 canonical run: {0}s, free memory {1} MiB, last output: {2}; Application stderr: {3}" -f $progress['elapsedSeconds'],$freeMemory,$progress['lastOutput'],$progress['applicationLastErrorOutput'])
     }
     if (-not $child.HasExited) {
         Write-Evidence 'child-result.json' ([ordered]@{pid=$child.Id;exit=$null;status='timeout-child-not-terminated';nativeQualified=$false})
@@ -169,32 +230,30 @@ try {
     }
     # Record the actual process exit before waiting for inherited output handles to drain.
     Write-Evidence 'child-result.json' ([ordered]@{pid=$child.Id;exit=$child.ExitCode;utc=[DateTime]::UtcNow.ToString('o')})
-    $drain = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutCopy,$stderrCopy))
-    if (-not $drain.Wait(30000)) { throw 'Canonical child exited, but its raw output stream did not drain within 30 seconds.' }
-    $drain.GetAwaiter().GetResult()
-    $stdoutStream.Flush();$stderrStream.Flush()
+    Write-Evidence 'terminal-progress.json' (Get-NativeProgressEvidence -RepositoryRoot $repoRoot -CanonicalChildId $child.Id -ElapsedSeconds $elapsed.Elapsed.TotalSeconds)
+    # Preserve closing identity before any raw-pipe drain can refuse a failed child with a live descendant.
     $after = Get-SourceSnapshot
     Write-Evidence 'source-after.json' $after
     Write-Evidence 'environment-after.json' (Get-EnvironmentEvidence)
+    $completeProducts = $true
+    foreach ($name in @('RedPrism','HostTests','DocumentTests','CompositionTests','IoTests')) {
+        foreach ($extension in @('exe','pdb')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $repoRoot ".build/ARM64/Release/$name.$extension") -PathType Leaf)) {
+                $completeProducts = $false
+            }
+        }
+    }
+    if ($completeProducts) { Write-Evidence 'products.json' (Get-ProductEvidence) }
     Assert-CleanSource
     if (($before | ConvertTo-Json -Depth 4 -Compress) -cne ($after | ConvertTo-Json -Depth 4 -Compress)) {
         throw 'Tracked source bytes changed during the canonical run.'
     }
-    if ($child.ExitCode -ne 0) {
-        # A runtime failure can leave all five valid built products. Preserve their byte identities
-        # without turning the nonzero child exit into a successful native qualification.
-        $completeProducts = $true
-        foreach ($name in @('RedPrism','HostTests','DocumentTests','CompositionTests','IoTests')) {
-            foreach ($extension in @('exe','pdb')) {
-                if (-not (Test-Path -LiteralPath (Join-Path $repoRoot ".build/ARM64/Release/$name.$extension") -PathType Leaf)) {
-                    $completeProducts = $false
-                }
-            }
-        }
-        if ($completeProducts) { Write-Evidence 'products.json' (Get-ProductEvidence) }
-        throw "Canonical test.ps1 failed with actual exit $($child.ExitCode)."
-    }
-    Write-Evidence 'products.json' (Get-ProductEvidence)
+    $drain = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdoutCopy,$stderrCopy))
+    if (-not $drain.Wait(30000)) { throw 'Canonical child exited, but its raw output stream did not drain within 30 seconds.' }
+    $drain.GetAwaiter().GetResult()
+    $stdoutStream.Flush();$stderrStream.Flush()
+    if ($child.ExitCode -ne 0) { throw "Canonical test.ps1 failed with actual exit $($child.ExitCode)." }
+    if (-not $completeProducts) { throw 'Canonical test exited zero without all five executable/PDB pairs.' }
     Write-Evidence 'result.json' ([ordered]@{status='canonical-native-arm64-release-exited-zero';exit=0;sourceBookends=$true;nativeArm64Release=$true;debugQualified=$false;asanQualified=$false;g1Qualified=$false;p1Done=$false})
     Write-Host 'Canonical native ARM64 Release exited 0; source bookends and five ARM64 products verified.'
 } catch {

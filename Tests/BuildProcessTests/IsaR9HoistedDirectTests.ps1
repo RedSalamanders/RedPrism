@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 # These fixtures are literal parser controls. They are never executed as native code.
 # The seed supplies the same small PE32+ / RSDS image used by the neighboring controls;

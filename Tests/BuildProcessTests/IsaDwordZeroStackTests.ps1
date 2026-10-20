@@ -2,7 +2,7 @@
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
+. (Join-Path $PSScriptRoot 'IsaInlineTableFixtures.ps1')
 
 $script:dwPrefixRva = [UInt32]($script:sectionRva + 0x89d)
 $script:dwDispatchRva = [UInt32]($script:dwPrefixRva + 6)

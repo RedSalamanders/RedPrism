@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # Reuse the repository's PE/PDB builder and scanner setup. Its fixtures and all controls
 # are synthetic parser inputs; this script never executes their bytes or launches a build.
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1') *> $null
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1') *> $null
 # Keep the helper's PE debug directory intact while placing the case target at RVA 0x9a2c4.
 $script:sectionRva = [UInt32]0x0009a000
 $script:dispatchRva = $script:sectionRva

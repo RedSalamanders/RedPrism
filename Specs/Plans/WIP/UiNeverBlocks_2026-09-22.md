@@ -45,6 +45,15 @@
   Retain `oh3a1`'s failure/archive and the unchanged original idle predicate. [Evidence](../../TestRuns/P1UtilityIdleNotification_2026-10-20.md).
 - [x] Commit/push the qualified ordinary-Hue, utility-fixture and existing D13/H3 core reconciliation step as `a2f56263c7a36a9d5bfb24c1c18cb297885bbae6`; verify the approved branch destination SHA. Complete H3 and parent P1 delivery gates remain open.
 
+- [x] Adopt and qualify the scanner fixture extraction and native ARM64 terminal/progress tooling in
+  the authoritative checkout: 4,350 parser PASS records / 4,305 distinct records, all 15 named compiled
+  controls, and 30 native-wrapper regression controls with three typed refusal children. Keep every
+  product assertion, the 1,200-second default, all historical failures and unchanged workflow guards.
+  The native-only 5,400-second failure backstop is an observation bound, not a causal repair or G1 result.
+  [Affected tooling evidence](../../TestRuns/P1ValidationTooling_2026-10-21.md).
+- [ ] Publish the qualified tooling step, verify the destination SHA and the intentionally skipped CI job,
+  then request the next separately recorded native ARM64 Release attempt under the existing guarded workflow.
+
 ## Remaining gates before P1 Done
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).

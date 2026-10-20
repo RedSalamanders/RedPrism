@@ -9,7 +9,7 @@ $runRoot = Join-Path $repo ('.build/BuildProcessTests/IsaR8RaxRdx-' + [guid]::Ne
 Start-Transcript -LiteralPath (Join-Path $runRoot 'controls.log') | Out-Null
 try {
 $candidateHash = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash
-$helperPath = Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'
+$helperPath = Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'
 $helperHash = (Get-FileHash -LiteralPath $helperPath -Algorithm SHA256).Hash
 Write-Host "PRIVATE CANDIDATE $candidate SHA256=$candidateHash"
 Write-Host "HELPER SOURCE $helperPath SHA256=$helperHash"

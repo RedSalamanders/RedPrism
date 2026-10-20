@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1') *> $null
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1') *> $null
 $script:signedRdxCount = 0
 
 function New-SignedRdxControl([string]$Name, [string]$Fault = '') {

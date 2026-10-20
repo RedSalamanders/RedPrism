@@ -14,7 +14,7 @@ while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs'))) {
 }
 
 # Import the existing parser-only fixture helpers and run their established controls.
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-AlGuardedTerminalDwordCase {
     param(

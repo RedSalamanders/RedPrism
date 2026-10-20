@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 # repository sentinel; no current-directory or hard-coded-worktree assumption is used.
 $repo = (Get-Item -LiteralPath $PSScriptRoot).FullName
 while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs')) -or
-       -not (Test-Path -LiteralPath (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'))) {
+       -not (Test-Path -LiteralPath (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'))) {
     $parent = Split-Path -Parent $repo
     if ([string]::IsNullOrEmpty($parent) -or $parent -eq $repo) {
         throw 'Could not find the RedPrism repository root from the sidecar location.'
@@ -65,7 +65,7 @@ Write-Host "RbxLongGuard frozen roster: $($rosterNames.Count) cases (4 accepted,
 foreach ($name in $rosterNames) { Write-Host "ROSTER $name" }
 
 # The baseline helper loads the tracked scanner unless the caller preloads a draft type.
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-RbxLongGuardCase {
     param(

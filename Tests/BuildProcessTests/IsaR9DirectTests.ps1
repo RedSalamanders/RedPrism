@@ -2,7 +2,7 @@
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
+. (Join-Path $PSScriptRoot 'IsaInlineTableFixtures.ps1')
 # Independent PE, PDB and listing controls. These bytes are never executed.
 function New-R9DirectCase([string]$Name, [string]$Fault = '', [int]$Maximum = 12) {
     $case = New-SyntheticCase ($Name + 'Seed') -PdbData
@@ -98,4 +98,4 @@ foreach($i in 0..6){$faults+=('MissingGuard'+$i);$faults+=('ListingGuard'+$i);$f
 foreach($fault in $faults){Invoke-Control (New-R9DirectCase ('R9Direct'+$fault) $fault) $false}
 Invoke-Control (New-R9DirectCase 'R9DirectZeroRange' '' 0) $false
 Invoke-Control (New-R9DirectCase 'R9DirectRange128' '' 128) $false
-Write-Host ('SUMMARY isa-r9-direct controls='+($faults.Count+5)+' failures=0')
+Write-Host ('SUMMARY isa-r9-direct controls='+($faults.Count+5)+' failures=0')

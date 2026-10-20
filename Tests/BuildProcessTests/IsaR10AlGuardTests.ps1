@@ -4,13 +4,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Parser controls for the observed R10 AL guard. Dot-sourcing the existing helper follows
-# IsaAlGuardTests.ps1: the established inline-table controls run when this sidecar is invoked.
+# IsaAlGuardTests.ps1: the baseline runs once in IsaScanTests.ps1; this sidecar imports only fixtures.
 $repo = (Get-Item -LiteralPath $PSScriptRoot).FullName
 while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs'))) {
     $repo = Split-Path -Parent $repo
     if ([string]::IsNullOrEmpty($repo)) { throw 'Could not resolve repository root.' }
 }
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 $r10FixtureRoot = Join-Path $repo ('.build/BuildProcessTests/IsaR10AlGuard-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $r10FixtureRoot -Force)

@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
+. (Join-Path $PSScriptRoot 'IsaInlineTableFixtures.ps1')
 
 # Independent PE/listing/PDB controls for the exact std::format switch observed in Release.
 # Numeric instruction bytes are authored here, not obtained from the parser's match patterns.

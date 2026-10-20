@@ -13,7 +13,11 @@ param(
     [switch] $Rebuild,
 
     [ValidateRange(0, 256)]
-    [int] $MaxCpuCount = 0
+    [int] $MaxCpuCount = 0,
+
+    # A deadlock/failure bound, never a performance target. Extended bounds require native ARM64.
+    [ValidateRange(1200, 5400)]
+    [int] $SelfTestTimeoutSeconds = 1200
 )
 
 Set-StrictMode -Version Latest
@@ -24,6 +28,17 @@ $nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArc
 if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
     throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'
 }
+
+if ($SelfTestTimeoutSeconds -ne 1200 -and ($Platform -ne 'ARM64' -or $nativeArchitecture -ne 'Arm64')) {
+    throw 'An extended self-test failure bound requires native ARM64.'
+}
+
+Write-Host 'Validating native ARM64 closeout regression controls...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\NativeArmValidationTests.ps1') -RepositoryRoot $repoRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Native ARM64 validation controls failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
 
 $buildArguments = @{
     Configuration = $Configuration
@@ -157,10 +172,10 @@ $selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
 Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
 $selfTestLog = Join-Path $outputRoot 'RedPrism.self-test.log'
 Remove-Item -LiteralPath $selfTestLog -ErrorAction SilentlyContinue
-$selfTestTimeoutSeconds = 1200
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
+Write-Host "Hidden WARP self-test PID $($selfTest.Id); failure bound $SelfTestTimeoutSeconds seconds. This is not a performance qualification."
 if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).

@@ -902,8 +902,39 @@ entrypoint's success exit code and MUST NOT be reused as the pass/fail signal fo
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
 
-The hidden WARP self-test runs under a bounded timeout; a run that does not finish in time fails with the process id
-reported, never killed.
+The hidden WARP self-test failure bound defaults to 1,200 seconds. Optional
+`-SelfTestTimeoutSeconds` accepts 1,200–5,400 seconds; values above the default require `-Platform ARM64`
+on a native ARM64 host and are rejected before build on every other route. The hosted native ARM64 Release
+helper requests 5,400 seconds as a failure backstop. This extends observation only: it does not establish
+a prior stall's cause, a performance fix, a G1 pass or successful runtime completion. A timeout fails with
+the process id reported, never killed.
+
+The native helper copies canonical stdout/stderr independently and records Application stdout and stderr
+progress, byte counts, last-write times, and bounded owned-process CPU/memory diagnostics. Unavailable CIM,
+missing/disappearing logs and processes are diagnostic states with explicit availability/errors, never an
+invented zero or a reason to abandon canonical work. The actual parent exit and terminal progress precede
+closing source/environment receipts and available product hashes, all before the 30-second raw-pipe drain.
+A drain refusal still fails; it cannot erase these earlier receipts. A zero exit without all five product
+pairs fails. Preserve the previous failed attempt and every absent receipt as historical evidence.
+
+`NativeArmValidationTests.ps1` runs 30 pure-PowerShell controls before the build, after entrypoint argument
+guards. Literal available/unavailable and independent stdout/stderr fixtures test progress; executable AST
+commands test terminal/closing-evidence ordering. Three byte-identical entrypoint copies refuse 1,199,
+5,401 and x64 5,400 seconds with the required exception types/parameter or exact native-only message.
+An isolated build sentinel must remain unreachable. All source bookends remain identical. These controls
+execute no native helper, Application runtime or build. Main's separate misleading-comment/reordered-AST
+and unrelated-error counterexamples must be refused by these guards; they are tooling proof, not native
+qualification.
+
+The ISA synthetic fixture helpers live in `IsaInlineTableFixtures.ps1`. Importing helpers must not run the
+inline-table assertion suite. `IsaScanTests.ps1` explicitly runs that complete baseline once, followed by
+every original family and compiled probe. Keep the 21 helper bodies, 13 setup statements, all 181 original
+non-function baseline statements, nested helper scope and successful-import exit semantics unchanged.
+The composite run retains all 4,305 distinct parser PASS records (4,350 occurrences) and 15 compiled named
+controls; only fourteen repeated executions of the same 698 baseline PASS records are removed. This is
+fixture reuse, with no decoder, runtime allowlist, compiler, project, instruction or golden relaxation.
+The [adopted tooling evidence](../TestRuns/P1ValidationTooling_2026-10-21.md) records the current source,
+actual affected runs and retained counterexamples. Full application and performance gates remain separate.
 
 A test run never waits on a dialog. In Debug and ASan Debug, `RedPrism.exe`'s harness modes (`--self-test`,
 `--screenshot`, a `--demo`, a `--bench`) install a CRT report hook (`_CrtSetReportHook2`) that ends the process at the

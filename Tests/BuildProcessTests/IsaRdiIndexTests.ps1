@@ -14,10 +14,10 @@ while ($privateRoot) {
     $privateRoot = $parent
 }
 if (-not $scannerPath) { throw "Could not find Build/IsaScan.cs above $PSScriptRoot." }
-$sharedTests = Join-Path $privateRoot 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'
+$sharedTests = Join-Path $privateRoot 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'
 if (-not (Test-Path -LiteralPath $sharedTests -PathType Leaf)) { throw "Missing shared ISA fixture source: $sharedTests" }
 
-# Import the existing builders and scanner assertion helpers. The shared script also runs its own established controls.
+# Import the existing builders and scanner assertion helpers. The baseline runs once in IsaScanTests.ps1; this import only defines fixtures.
 . $sharedTests
 if (-not ('RedPrismBuild.IsaScanner' -as [type])) { Add-Type -Path $scannerPath }
 

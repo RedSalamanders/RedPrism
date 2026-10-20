@@ -7,12 +7,12 @@ $ErrorActionPreference = 'Stop'
 
 $repo = $PSScriptRoot
 while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs')) -or
-    -not (Test-Path -LiteralPath (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'))) {
+    -not (Test-Path -LiteralPath (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'))) {
     $parent = Split-Path -Parent $repo
     if (-not $parent -or $parent -eq $repo) { throw 'Repository root not found.' }
     $repo = $parent
 }
-$primitivePath = Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'
+$primitivePath = Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'
 if ($ScannerSource) {
     if (-not (Test-Path -LiteralPath $ScannerSource -PathType Leaf)) { throw "Scanner source not found: $ScannerSource" }
     if ('RedPrismBuild.IsaScanner' -as [type]) { throw 'Run in a fresh PowerShell process when -ScannerSource is specified.' }
@@ -22,7 +22,7 @@ if ($ScannerSource) {
 }
 
 # Import only the existing PE/PDB fixture-building functions. Parsing the source AST avoids
-# executing the older IsaInlineTableTests.ps1 assertions as a side effect of reusing its primitives.
+# executing the older IsaInlineTableFixtures.ps1 assertions as a side effect of reusing its primitives.
 $tokens = $null
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($primitivePath, [ref]$tokens, [ref]$parseErrors)

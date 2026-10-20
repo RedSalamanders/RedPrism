@@ -18,7 +18,7 @@ if ($ScannerSourcePath) {
 }
 
 # Reuse the repository's PE32+/RSDS/PDB synthetic builder and scanner invocation.
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 $script:r13Root = Join-Path $repo ('.build/BuildProcessTests/IsaR13Terminal-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $script:r13Root -Force)

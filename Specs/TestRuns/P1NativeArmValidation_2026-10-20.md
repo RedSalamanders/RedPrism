@@ -87,3 +87,19 @@ is recorded separately; these limited observations do not qualify a native profi
 a stall remain distinct possibilities. A followup needs progress/CPU diagnostics and closing evidence
 recorded before a possible output-drain refusal. Any native-only failure-bound adjustment must be
 explicit, retain the failure and preserve every assertion, golden, performance requirement and terminal gate.
+
+
+## Adopted native-tooling followup
+
+The followup preserves the default 1,200-second bound and permits a native-only optional 5,400-second
+failure backstop. The hosted helper requests that observation window. This neither diagnoses nor fixes
+the prior slow/stalled Application run. Both Application output streams and bounded CPU/memory progress
+are recorded. Actual parent exit, terminal progress, closing source/environment and available product
+identities precede the unchanged bounded raw-pipe drain. A drain refusal remains a failure.
+
+The adopted source passes 30 pure-PowerShell controls and three typed invalid-argument children, each
+with actual exit 1 and no build sentinel reached. Main retains independent negative counterexamples
+for misleading comments/reordered executable AST and unrelated error text. No native Application or CI
+helper executes in these controls. [Tooling evidence](P1ValidationTooling_2026-10-21.md) records the
+affected qualification. A fresh hosted run with complete terminal/source/environment/product evidence
+is still required; no current native runtime pass or performance result is inferred.
