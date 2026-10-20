@@ -293,3 +293,64 @@ The coordinated sorting hold was released by its authorized owner. A subsequent 
 preflight refused with exit 7 before any compile/runtime while the DxUi build slot was occupied. That
 receipt remains intact. A later attempt waited for the same unchanged predicate and completed; it did
 not terminate another process. Evidence root: `Z:\src\RedPrism\.build\P1Evidence\p1-gpu-first-use-probe-private-r5`.
+
+
+## Current Release CPU stack attribution — 2026-10-21
+
+Status: diagnostic attribution verified; the remaining cost repair, controlled timing, ordinary
+prepared-row activation and complete G1 stay open. The DxUi pin and product C++ source are unchanged.
+
+The exact plain Release executable/full PDB and local runtime DLLs come from the qualified `oh4r1`
+archive for published code `a2f56263c7a36a9d5bfb24c1c18cb297885bbae6`. The real WARP/scalar
+10,000-layer, 1,024-unit-name benchmark child 71216 exits0 with its original correctness predicates.
+The owner retains its creation-returned primary thread 36812, resumes it exactly once, joins it and
+closes only its own collector GUID. The installed CPU-high configuration samples at 4,000 Hz.
+
+Main verifies Running/Stopped state for all three zero-exit collector commands, the nonempty diagnostic
+archive and unchanged product bookends. Archive SHA256:
+`4A378C9323AECA0D1D7836D651B1632ED24B6A9AE7053080E99F6EF2DF7FC0D3`.
+The extracted ETL has 49,812 sampled-profile events, 18,745 with stack walks. A filtered WPA export and
+an independent direct reader agree on exactly 1,293 primary-thread samples and 323.077500 ms of sampled
+CPU weight. Of those samples, 1,291 have stacks and 1,192 have a resolved application frame.
+
+The direct reader uses pinned Microsoft.Windows.EventTracing.Processing.All 1.12.10 and its recorded
+dependency lock. It reads the original ETL; no replacement benchmark is run to repair an export.
+Its final parent 85848 exits0. [Microsoft's symbol API](https://learn.microsoft.com/en-us/windows/apps/trace-processing/symbols)
+documents this direct CPU-sample/stack workflow. Full frames/source symbols and per-sample relative
+timestamps remain in the private receipt. All 1,293 SDK timestamps are explicitly partial: raw QPC is
+unavailable, so no exact per-trial alignment to benchmark QPC intervals is claimed.
+
+The 156 samples whose actual call stack contains ChromeHost::Prepare have 38.545800 ms of sampled CPU
+weight. Mutually exclusive categories are:
+
+| Actual sampled call path | CPU weight across the recorded Prepare calls |
+| --- | --- |
+| Embedded preparation with a Direct2D EndDraw ancestor | 22.123900 ms |
+| Other embedded painting/preparation | 13.131400 ms |
+| Chrome accessibility publication | 2.785400 ms |
+| Other chrome layout/accessibility attach | 0.505100 ms |
+
+Observed EndDraw stacks include Direct2D deferred flush and WARP glyph drawing/shader compilation.
+Other stacks include control painting, text layout, allocation and UI Automation snapshot work. These
+are sampled CPU categories, not wall-clock budgets or a diagnosis of one specific rename interval.
+Cold Attach also contains substantial typography/font-family work; it remains a separate startup path.
+The evidence supports investigating bounded painting/flush work and cold resource preparation before
+speculating about row-name truncation or adding hidden warmups. No causal performance repair follows
+from observing a sampled frame.
+
+Preserve the first collector's invalid-session refusal despite its zero CLI exits and absent trace;
+the new transport creates its output directories and refuses explicit zero-exit errors/absent sessions.
+Preserve all three aggregate-only WPA exports and the first direct-reader refusal on an unavailable
+raw timestamp. The corrected reader records partial/null raw timestamps and retains every count/weight
+check. No assertion, timing requirement, compiler/pin policy or product behavior changes.
+
+An external PresentMon process is present in the ETL. The preflight's process-name/benchmark-argument
+checks therefore do not establish a globally quiet host. This capture is attribution only; it qualifies
+no G1 timing, paired speedup, first-display bound or host availability. Retain all original budget
+misses. Next, use controlled hardware/WARP timing and a concrete painting/resource change to close
+the remaining preparation and full consumer/activation gates.
+
+Evidence: `Z:\src\RedPrism\.build\P1Evidence\p1-owner-cost-current-main-r1`;
+`rows-cpu-high-r6/main-cpu-attribution-r1.json`, `DirectReader-r2/samples.jsonl` and all failed transports
+are preserved. Sample JSONL SHA256:
+`627C7205FED412529C955CF5CB368B38087864FA7B34318B9CF291D8F2666E77`.
