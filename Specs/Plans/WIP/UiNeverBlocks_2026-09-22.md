@@ -5,7 +5,7 @@
 - [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
 - [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
 - [x] Qualify the preceding Size integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
-- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. No local ARM64 host is available. The hosted Release attempt timed out before suites; cross-builds establish no runtime result.
+- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. No personal ARM64 host is available. The first hosted Release attempt timed out; the later native-hosted run reached the suites and failed one cancellation fixture assertion. Cross-builds establish no runtime result; the failed native attempt is recorded below.
 - [x] Record the six selected Release Size profiles: inclusive Apply maxima 40–554 µs. Retain all initial-display, warmup, frame and drain misses; these samples do not qualify complete G1.
 - [x] Commit/push the qualified Size recovery step as `aa8dd94`; verify the branch destination SHA `aa8dd945c023549f17aefe82396cef0b086f1e51`.
 - [ ] Resolve remaining owner/frame costs, complete phase admission and ordinary activation, and close every delivery gate below before P1 Done.
@@ -16,7 +16,10 @@
 - [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
 
 - [x] Record exact-product hardware/WARP 10,000-layer cost diagnostics: 11 boundaries and 99 timing rows per device, with initial and first-rename Prepare intervals retained (hardware 6.383 / 8.621 ms; WARP 7.387 / 6.520 ms). Apply maxima are 0.260 / 0.240 ms. [Evidence](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-exact-product-cost-diagnostics--2026-10-20).
-- [ ] Attribute and fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. The private startup candidate is unbuilt and unadopted.
+- [ ] Attribute and fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. Opt-in layout/DxUi/accessibility phase attribution and public surface/cache statistics pass the canonical Release build, 1,022-TU profile and five PE/full-PDB checks; runtime diagnosis is waiting for the explicitly coordinated measurement hold to be released. Full latest-source runtime qualification remains due. The private startup candidate remains unbuilt and unadopted.
+
+- [x] Independently verify failed native ARM64 Release run `39429595846`: exact 2,073-file commit/source bookends, five AA64/full-PDB pairs, successful Host/Document footers and the single retained cancellation fixture failure. [Native evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
+- [ ] Adopt and qualify the prepared event-publication fixture repair, then rerun native ARM64 validation. The repair preserves every original assertion; no native pass, application/IO runtime or G1 qualification is inferred from the failed attempt.
 
 ## Remaining gates before P1 Done
 
