@@ -3706,3 +3706,11 @@ invocation/restore staleness, final admission failure, joined Close, late cancel
 first-row resume/cancel/failure/retry/Close. Restore checks current row/display epochs and foreign Redo,
 rather than requiring obsolete pointer identity. Hidden final work completes through event acknowledgements
 without a RenderFrame pump. Private selected proof remains distinct from full current native qualification.
+
+## Runtime function object casing controls
+
+The ISA build-process suite MUST retain the wrong-object runtime-name refusal and run seven additional
+compiled-fixture parser controls: exact/lowercase/uppercase object basenames accept the complete named
+procedure; changed function-name case, object prefix/suffix and function suffix refuse. The original
+decoded vector bytes, matching PE/PDB, procedure extent and contribution remain required. These controls
+do not execute the vector fixture and do not expand the reviewed runtime allowlist.

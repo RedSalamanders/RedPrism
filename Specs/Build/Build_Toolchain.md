@@ -781,3 +781,13 @@ guard, flow, ownership, extent, target, terminal-row and PE/listing corruptions.
 are never executed. The same originally rejected Release image/full PDB passes after correction;
 the original failed scan remains retained and the native Application is not replayed for a scanner
 repair. The runtime allowlist is unchanged. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).
+
+
+### Runtime function object identity
+
+The reviewed runtime-function allowlist matches a Windows object basename with ordinal case-insensitive
+comparison and the complete C/C++ procedure name with ordinal case-sensitive comparison. Both complete
+names, the exact matching PE/PDB procedure range and its owning contribution are required. Object or
+function prefixes/suffixes, a different object, and function-name case changes MUST remain refused.
+Linker path casing alone MUST NOT reject an otherwise identical approved runtime procedure. This rule
+adds no runtime allowlist entry and grants no whole-object exemption.

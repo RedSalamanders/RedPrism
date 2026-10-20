@@ -173,6 +173,30 @@ $result = [RedPrismBuild.IsaScanner]::Scan((Join-Path $negativeRoot 'out\IsaProb
 if ($result.Violations.Count -eq 0) { throw 'A same-named runtime function in an unapproved object bypassed the gate.' }
 Write-Host 'PASS isa-scan.control.RuntimeFunctionWrongObject (expected rejection)'
 
+# The real relinked Size diagnostic uses lowercase imagecodecs.obj in the matching PDB. Windows
+# object basenames ignore case; C/C++ procedure names remain ordinal and exact. Reuse the compiled
+# hostile vector fixture and its exact altered procedure range, without executing vector bytes.
+foreach ($case in @(
+    @{ Name = 'RuntimeFunctionExactObject'; Entry = 'BaselineLeak.obj!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionLowercaseObject'; Entry = 'baselineleak.obj!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionUppercaseObject'; Entry = 'BASELINELEAK.OBJ!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionNameCase'; Entry = 'BaselineLeak.obj!WMEMCHR'; Refused = $true },
+    @{ Name = 'RuntimeFunctionObjectPrefix'; Entry = 'OtherBaselineLeak.obj!wmemchr'; Refused = $true },
+    @{ Name = 'RuntimeFunctionObjectSuffix'; Entry = 'BaselineLeak.obj.extra!wmemchr'; Refused = $true },
+    @{ Name = 'RuntimeFunctionNameSuffix'; Entry = 'BaselineLeak.obj!wmemchr_extra'; Refused = $true }
+)) {
+    $result = [RedPrismBuild.IsaScanner]::Scan((Join-Path $negativeRoot 'out\IsaProbe.exe'),
+        (Join-Path $negativeScan 'contributions.txt'), $alteredSymbols, (Join-Path $negativeScan 'disassembly.txt'),
+        [string[]] $allowlist.Objects, [string[]] $allowlist.Libraries, [string[]] @($case.Entry))
+    if ($case.Refused) {
+        if ($result.Violations.Count -eq 0) { throw "Runtime function identity control accepted: $($case.Name)" }
+    } elseif ($result.Violations.Count -ne 0 -or $result.RuntimeInstructions -eq 0) {
+        throw "Exact runtime function/object control refused or observed no vector instructions: $($case.Name)"
+    }
+    Write-Host "PASS isa-scan.control.$($case.Name)"
+}
+
+
 foreach ($case in @(
     @{ Name = 'MissingPdb'; Pdb = (Join-Path $root 'absent.pdb'); Pattern = 'needs the linked image and its full PDB' },
     @{ Name = 'MismatchedPdb'; Pdb = [IO.Path]::ChangeExtension($avx2, '.pdb'); Pattern = 'PDB GUID/age does not match' }

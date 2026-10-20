@@ -97,6 +97,16 @@ namespace RedPrismBuild
             }
             return hi >= 0 && address < contributions[hi].End ? hi : -1;
         }
+        private static bool ContainsRuntimeFunction(string[] values, string objectName, string function)
+        {
+            foreach (string candidate in values)
+                if (candidate.Length == objectName.Length + 1 + function.Length &&
+                    candidate[objectName.Length] == '!' &&
+                    String.Compare(candidate, 0, objectName, 0, objectName.Length, StringComparison.OrdinalIgnoreCase) == 0 &&
+                    String.Compare(candidate, objectName.Length + 1, function, 0, function.Length, StringComparison.Ordinal) == 0)
+                    return true;
+            return false;
+        }
         private static bool Contains(string[] values, string value)
         {
             foreach (string candidate in values)
@@ -4301,7 +4311,7 @@ namespace RedPrismBuild
                                 var procedure = new Function { Module = module, Name = function, Begin = begin, End = end,
                                     ContributionBegin = contributions[owner].Begin, ContributionEnd = contributions[owner].End };
                                 procedures.Add(procedure);
-                                if (Array.IndexOf(runtimeFunctions, Path.GetFileName(functionOwner.Object) + "!" + function) >= 0)
+                                if (ContainsRuntimeFunction(runtimeFunctions, Path.GetFileName(functionOwner.Object), function))
                                     functions.Add(procedure);
                             }
                         }

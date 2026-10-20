@@ -22,6 +22,7 @@
 - [x] Qualify the 1,022-TU / 155-stage Image Size integration in full native x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 12,155 Application facts, including all 129 Size and 473 Pixel predicates. Native ARM64 runtime remains unavailable.
 - [x] Privately qualify five additional actual Size slot/device recovery cases: 52 new facts plus all 129 Size and 473 Pixel predecessors (181/473). These controls remain a separate next adoption.
 - [x] Commit/push the qualified Image Size final-publication step as `088a3d7` and verify the remote SHA.
+- [x] Qualify the reproduced ISA runtime-object casing repair with the full existing control suite, seven identity controls and the unchanged originally refused image; exact function/contribution checks and the allowlist remain unchanged. [Evidence](../../TestRuns/IsaRuntimeObjectCase_2026-10-20.md).
 - [ ] Complete remaining Size recovery/phase bounds/2 ms and the other P1 delivery gates before ordinary activation and Done.
 - [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 
