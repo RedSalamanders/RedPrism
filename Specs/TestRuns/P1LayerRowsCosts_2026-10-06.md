@@ -354,3 +354,47 @@ Evidence: `Z:\src\RedPrism\.build\P1Evidence\p1-owner-cost-current-main-r1`;
 `rows-cpu-high-r6/main-cpu-attribution-r1.json`, `DirectReader-r2/samples.jsonl` and all failed transports
 are preserved. Sample JSONL SHA256:
 `627C7205FED412529C955CF5CB368B38087864FA7B34318B9CF291D8F2666E77`.
+
+
+### Matching hardware diagnostic
+
+The separate hardware capture uses the same qualified executable/PDB/DLLs on the RTX 5080
+(driver 32.0.16.1714), with the original 10,000-layer/1,024-unit-name fixture and all correctness checks.
+Benchmark child 107908 and primary thread 76376 complete with actual child exit 0. All three owned collector
+commands exit 0 and explicitly report Running/Running/Stopped. Source and product identities remain verified.
+Diagnostic archive SHA256:
+`790390F505E6C42FFAE6B035BB7B0A0A99AB666E12738169904CDF47BAC24EBF`.
+
+A cheaper helper prepares the extraction/export sidecar. Main reviews it and adds independent target-thread,
+staged product/archive hashes, empty collector stderr, a 128 MiB ETL bound and closed-input bookends before
+execution. The raw export is explicitly aggregate-only; Main independently verifies its single primary-thread
+row. The generic direct reader keeps the earlier qualified reader intact and requires the independent expected
+sample count as a bounded explicit argument. Its actual parent 79000 exits 0 with empty stderr.
+
+WPA and the direct reader agree on 1,840 samples / 459.004200 ms of primary-thread sampled CPU; 1,839 have
+stacks and 1,716 have a resolved application frame. All raw timestamps remain partial/null. The 123 samples
+containing the exact ChromeHost::Prepare frame have 30.824800 ms of sampled CPU weight:
+
+| Actual sampled call path | CPU weight across the hardware Prepare calls |
+| --- | --- |
+| Embedded preparation with a Direct2D EndDraw ancestor | 11.768700 ms |
+| Other embedded painting/preparation | 15.027500 ms |
+| Chrome accessibility publication | 3.787000 ms |
+| Other chrome layout/accessibility attach | 0.241600 ms |
+
+The hardware trace also retains the first 5.650 ms and first-rename 10.183 ms Prepare intervals; subsequent
+observed intervals are 2.176–3.546 ms. These are individual instrumented observations. The captures are
+unpaired, run under the standing FrameView/PresentMon services and do not establish a speedup, globally
+quiet host, exact per-trial sampled-QPC correspondence or G1 pass. Hardware acceleration alone does not
+remove the shared painting and accessibility work; a bounded preparation repair still needs proof.
+
+The new private reader's first build records NU1900 audit-transport warnings. A forced locked restore
+refreshes the stale audit assets using its scoped cache; the following build reports 0 warnings/0 errors.
+No package version, dependency lock or audit policy changes. This is diagnostic-tool preparation, not a
+product build result. The hardware reader succeeds on its first execution; the earlier failed raw-timestamp
+reader belongs to the WARP capture and stays separately preserved.
+
+Evidence: `rows-hardware-cpu-high-r7/main-cpu-attribution-r1.json` and its independent
+`main-cpu-attribution-review-r2.json` under the same private evidence root. Hardware sample JSONL SHA256:
+`3F599AFCAB5A8147D0CB6121E5CDA5CD3828295B044096EF08B48DE922755828`.
+No library or application code/pin changes in this attribution step.
