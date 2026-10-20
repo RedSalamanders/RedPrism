@@ -315,6 +315,9 @@ int Application::Run(int showCommand) noexcept
     // Cursor containment is independently admitted by the compute scheduler. It needs neither prepared GPU
     // display nor stroke activation; every ordinary input path uses its latest-request worker after startup.
     _asyncSelectionCursorEnabled = true;
+    // Recorded Hue sampling uses the common admitted utility route already initialized by processing.
+    // Its scalar press queues an original host request; no synchronous readback fallback is enabled.
+    _hueReadbackEnabled = true;
     if (_processingTestProbe && _processingTestProbe->afterRuntimeSources &&
         FAILED(static_cast<HRESULT>(_processingTestProbe->afterRuntimeSources(_processingTestProbe->context))))
         return 5;

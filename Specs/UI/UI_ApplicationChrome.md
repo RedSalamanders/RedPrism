@@ -1032,11 +1032,13 @@ runs suppress dialogs.
 
 ### Pending Hue and preserving-panel Wand controls
 
-For the explicitly enabled asynchronous route, queued/selected Hue input or preserving-panel Wand freezes
-mutating color controls while Cancel retains its existing action. A consumed Hue press, including a refusal,
+Ordinary Hue input uses the admitted recorded readback route after successful application startup. The
+preserving-panel Wand route retains its separate activation contract. Queued/selected Hue input or an enabled
+preserving-panel Wand freezes mutating color controls while Cancel retains its existing action. A consumed Hue
+press, including a refusal,
 must not fall through to another canvas tool. Capacity and admission errors use the existing localized Busy
-or error feedback. Transparent/near-neutral samples leave panel settings unchanged. This conditional route
-policy does not itself enable ordinary prepared startup or qualify first-frame/G1 bounds.
+or error feedback. Transparent/near-neutral samples leave panel settings unchanged. Complete prepared display
+startup and first-frame/G1 qualification retain their separate delivery gates.
 
 After the acknowledged Wand, color controls resume on the same panel. Preview and OK keep that panel's
 opening coverage, and Cancel keeps the completed Wand selection. A later panel starts from the current

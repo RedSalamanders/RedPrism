@@ -64,3 +64,26 @@ Local evidence is under `.build/P1Evidence/p1-native-arm-hosted-r2/`:
 the original artifacts and raw logs. A reader-only Git batch-filter protocol refusal is
 retained in `main-git-filter-reader-refusal.json`; corrected raw/standalone filtered-byte
 reading verifies the same archive without rerunning native tests or changing any hash check.
+
+## Repaired-source run 39479072110: incomplete failed attempt
+
+The single push run on commit `950bebe32e3821107f77e92e0808c13e710c3d16` completes as failure.
+Canonical test parent7008 exits1 at2026-10-20T20:07:55.4838546Z. Its Host, Document, Composition
+and I/O success footers are present, including recorded-parent-cancellation passed=41 failed=0.
+The Application child3196 does not finish within its unchanged1,200-second failure bound. Its captured
+partial output has38 begun stages,5,074 PASS facts and no FAIL line; the last captured stage is
+RunStandalonePendingRasterDisplaySelfTest. A complete Application exit is not observed.
+
+After parent exit, the wrapper's stdout/stderr copy does not drain within30 seconds. The wrapper fails
+before source-after, environment-after and native product-hash receipts are written. Their absence
+must remain explicit; successful closing bookends cannot be inferred from the initial snapshot or
+downloaded built products. The failed qualification reader correctly refuses this missing evidence.
+GitHub's final runner cleanup reports terminating the orphaned child; this supplies no successful
+Application terminal result. No retry is dispatched from these observations.
+
+The run's downloaded source-before, raw logs, partial Application output and five executable/PDB files
+remain preserved. Independent before-source, downloaded-byte, internal PDB and observed-roster verification
+is recorded separately; these limited observations do not qualify a native profile. Slow execution and
+a stall remain distinct possibilities. A followup needs progress/CPU diagnostics and closing evidence
+recorded before a possible output-drain refusal. Any native-only failure-bound adjustment must be
+explicit, retain the failure and preserve every assertion, golden, performance requirement and terminal gate.

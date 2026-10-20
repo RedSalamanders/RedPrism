@@ -1,12 +1,15 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
+#include "ChromeHost.h"
 
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace
 {
@@ -66,6 +69,128 @@ int Application::RunStandaloneResponsiveStartupSelfTest(HINSTANCE instance) noex
     };
     int failures = 0;
     unsigned int checks = 0;
+    {
+        const auto expect = [&](bool value, const char* name) noexcept
+        {
+            ++checks;
+            failures += value ? 0 : 1;
+            std::printf("%s responsive-startup.ordinary-hue.%s\n", value ? "PASS" : "FAIL", name);
+        };
+        struct OrdinaryHue final
+        {
+            Application* owner = nullptr;
+            bool visited = false;
+            bool independent = false;
+            bool inputHeld = false;
+            bool scalar = false;
+            bool literal = false;
+            bool sourcePreserved = false;
+            bool retired = false;
+            std::uint32_t captures = 0;
+        } state;
+        ApplicationProcessingTestProbe probe;
+        probe.context = &state;
+        probe.workerCount = 2;
+        probe.afterRuntimeSources = [](void* raw) noexcept -> std::int32_t
+        {
+            auto& state = *static_cast<OrdinaryHue*>(raw);
+            auto& app = *state.owner;
+            state.visited = true;
+            state.independent = app._hueReadbackEnabled && app._hostSourceRegistered && app._gpuWorkInitialized &&
+                                app._utilityReadbackInitialized && app._recordedCommandsInitialized &&
+                                !app._preparedLayerRowsEnabled && !app._committedDisplayInitialized &&
+                                !app._pendingDisplayInitialized && !app._asyncStrokeFinishEnabled &&
+                                !app._asyncStrokeSamplesEnabled && !app._selectionOutlineInitialized;
+            state.inputHeld = app._startupPaths.has_value();
+            if (!state.independent)
+                return E_ABORT;
+            const auto settle = [&app]() noexcept
+            { return SettleJobs(app._jobs, 10000, DispatchMessageThunk, &app) == SettleResult::Settled; };
+            DocumentFixture fixture;
+            fixture.width = 4;
+            fixture.height = 1;
+            ImageLayer layer = ImageLayer::Blank(L"Ordinary Hue literal", {4, 1});
+            constexpr std::array<std::uint8_t, 16> bytes{0xCC, 0x66, 0x33, 0xFF, 0x20, 0x40, 0x80, 0xFF,
+                                                         0,    0,    0,    0,    0x80, 0x80, 0x80, 0xFF};
+            const auto pixels = Raster::Make(4, 1, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+            const auto id = layer.id;
+            layer.asset = RasterAsset{pixels, {}, layer.name};
+            fixture.layers.push_back(std::move(layer));
+            app.ReplaceDocument(std::move(fixture).Seal(), id, {});
+            if (!settle() || !app.BeginColorEdit(ChromeHost::kCommandHueSaturation))
+                return E_ABORT;
+            auto settings = app._session.PendingColorEdit()->settings.hsv;
+            settings.range = ColorRange::Reds;
+            app._session.UpdateHueSaturation(settings, true);
+            app._session.SetHueTargeting(false);
+            app._session.SetHueSampleMode(HueSampleMode::Replace);
+            app.DocumentChanged();
+            if (!settle())
+                return E_ABORT;
+            const auto revision = app._session.history.CurrentRevision();
+            const auto undo = app._session.history.UndoCount();
+            const auto before = app._gpuWork.Statistics();
+            app._hueCapturesForTest = &state.captures;
+            const auto resetCounter = wil::scope_exit([&app]() noexcept { app._hueCapturesForTest = nullptr; });
+            if (!app.QueueHuePressOwner({.2, .2}, 0, HostHueInput::Purpose::RangeSample, HueSampleMode::Replace))
+                return E_ABORT;
+            const auto* entry =
+                app._hostRequests.Size() ? app._hostRequests.PendingAt(app._hostRequests.Size() - 1) : nullptr;
+            const auto receipt = entry ? entry->input.Receipt() : ContinuationReceipt::Failure(E_UNEXPECTED);
+            const auto queued = app._gpuWork.Statistics();
+            state.scalar = app._hueInput.Busy() && !app._hueReadbackTicket && state.captures == 0 &&
+                           receipt.Read().outcome == HostOutcome::Pending && queued.copies == before.copies &&
+                           queued.maps == before.maps;
+            if (!settle())
+                return E_ABORT;
+            const auto& panel = app._session.PendingColorEdit();
+            // #3366CC has hue220. The legacy fixed band is [175,205,235,265].
+            state.literal =
+                receipt.Read().outcome == HostOutcome::Succeeded && state.captures == 1 && panel &&
+                panel->settings.hsv.bands[static_cast<std::size_t>(ColorRange::Reds)] == HueBand{175, 205, 235, 265};
+            const auto* active = app._session.ActiveLayer();
+            std::array<std::uint8_t, 16> actual{};
+            if (active && active->asset)
+                active->asset->image.ReadRegion(0, 0, 4, 1, actual.data(), 16, 0);
+            state.sourcePreserved = active && active->id == id && active->asset && active->asset->image == pixels &&
+                                    actual == bytes && app._session.history.CurrentRevision() == revision &&
+                                    app._session.history.UndoCount() == undo;
+            app.CancelColorEditForTest();
+            state.retired = settle() && !app._hueReadbackTicket && !app._hueReadbackStamp && !app._hueInput.Busy() &&
+                            !app._historyWork.Busy() && !app._utilityReadback.HasPending() &&
+                            !app._recordedCommands.HasPending() && app._jobs.ReservedMemoryBytes() == 0 &&
+                            app._jobs.ReleasingMemoryBytes() == 0;
+            return E_ABORT; // Stop before startup paths and ordinary input can dispatch.
+        };
+        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+        const auto shutdown = wil::scope_exit([&]() noexcept { owner->Shutdown(); });
+        state.owner = owner.get();
+        owner->_quietUi = true;
+        owner->_prompts = &QuietPrompts();
+        owner->_processingTestProbe = &probe;
+        const auto processing = owner->InitializeProcessing();
+        expect(SUCCEEDED(processing), "real-processing-initializes");
+        if (FAILED(processing))
+            return 5;
+        constexpr std::array<std::wstring_view, 1> held{L"ordinary-hue-startup-must-not-open.prism"};
+        expect(owner->OpenCommandLinePaths(held), "startup-input-owned-before-run");
+        if (!owner->_startupPaths)
+            return 5;
+        expect(owner->Run(SW_HIDE) == 5 && state.visited, "actual-run-reaches-ordinary-source-boundary");
+        expect(state.independent, "recorded-hue-ready-with-other-prepared-consumers-off");
+        expect(state.inputHeld && owner->_startupPaths, "original-startup-input-remains-undispatched");
+        expect(state.scalar, "press-enqueues-without-owner-capture-or-copy-map");
+        expect(state.literal, "real-original-readback-publishes-independent-hue220-band");
+        expect(state.sourcePreserved, "literal-source-pixels-and-history-unchanged");
+        expect(state.retired, "joined-command-acknowledges-and-refunds-original-work");
+        owner->Shutdown();
+        expect(owner->_shutdownComplete && owner->_jobs.IsIdle() && !owner->_jobs.WakeHandle() &&
+                   owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0,
+               "shutdown-retires-all-acquired-prefixes-and-input");
+        const auto quit = PumpMessages();
+        const auto remaining = PumpMessages();
+        expect(quit.quit && quit.exitCode == 0 && !remaining.quit, "failed-startup-drains-one-quit");
+    }
     for (const auto& scenario : cases)
     {
         const auto expect = [&](bool condition, const char* name) noexcept

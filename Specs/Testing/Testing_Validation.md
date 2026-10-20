@@ -2853,6 +2853,17 @@ predicates. Native matrix and measured S5/G1 qualification remain distinct requi
 
 ### Hue readback and panel-preserving Wand validation (P1)
 
+The independent ordinary Hue startup case in `RunStandaloneResponsiveStartupSelfTest` calls actual
+`Application::Run` without a responsive-source opt-in, holding an owned startup path until the probe. Its eleven
+`responsive-startup.ordinary-hue.*` facts must prove ready common routes with other prepared GPU consumers off,
+scalar queued press before any capture/copy/Map, actual original readback returning literal hue220's
+`HueBand{175,205,235,265}`, unchanged source bytes/history, joined original work and complete Shutdown retirement.
+Require one drained quit from its intentional pre-input startup exit. With CPU rows disabled this case has no
+current row lease; a combined CPU-row startup must retain exactly its independently admitted current row charge
+while running and still reach zero after Shutdown. Preserve all previous startup, physical Hue, capacity,
+cancellation, stale-panel, device/failure and source-retirement controls. This is functional startup acceptance,
+not a timing, ordinary full-display activation, native ARM64 or whole-P1 qualification.
+
 Keep all predecessor DocumentTests, HostTests, Application WARP, and legacy numeric controls. Add the named source families below to their existing runners and require their complete ordered PASS output; a missing, duplicate, reordered, failed, or unexpected family record fails the corresponding run.
 
 `Document.Tests.HueSampleScalar` emits `huesamplescalar.*`. Preserve the existing Replace/Add/Remove band behavior and literal red/blue references; compare the raster wrappers with their scalar-value counterparts. The six invalid scalar values (360, negative, NaN, both infinities, and nullopt) must refuse without changing panel settings, targeting/drag state, document, global settings, or history. Preserve the raster wrapper's literal transparent, gray, near-gray, half-alpha, out-of-bounds, and nonfinite sampling controls and the existing targeting drag expectations.
@@ -3745,3 +3756,14 @@ compiled-fixture parser controls: exact/lowercase/uppercase object basenames acc
 procedure; changed function-name case, object prefix/suffix and function suffix refuse. The original
 decoded vector bytes, matching PE/PDB, procedure extent and contribution remain required. These controls
 do not execute the vector fixture and do not expand the reviewed runtime allowlist.
+
+## Utility routing and independent memory readiness
+
+The utility-owner routing/capacity fixture uses a fixed memory snapshot so asynchronous system-pressure
+events cannot invalidate its empty-router baseline. It retains the original idle assertion and every
+original routing predicate. Three additional controls explicitly call NotifyMemoryChanged: the empty
+scheduler has ready UI work and is non-idle, the utility service stays quiescent, and one drain restores
+idle. Receiver readiness is never queried for an empty service. Ordinary live OS notification behavior
+is unchanged. The complete predecessor roster plus exactly these three controls must pass on the
+required profiles; the [failed attempt and adoption](../TestRuns/P1UtilityIdleNotification_2026-10-20.md)
+remain separate from subsequent qualification.

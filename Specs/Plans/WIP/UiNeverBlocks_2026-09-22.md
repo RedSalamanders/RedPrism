@@ -1,6 +1,6 @@
 # P1 — Responsive raster editor delivery milestone
 
-## Current delivery checklist — 2026-10-20
+## Current delivery checklist — 2026-10-21
 
 - [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
 - [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
@@ -20,7 +20,7 @@
 
 - [x] Independently verify failed native ARM64 Release run `39429595846`: exact 2,073-file commit/source bookends, five AA64/full-PDB pairs, successful Host/Document footers and the single retained cancellation fixture failure. [Native evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
 - [x] Qualify the adopted event-publication fixture repair in the complete latest-source local matrix, preserving all 41 original assertions. [Current repair evidence](../../TestRuns/P1CapturedBindingRepair_2026-10-20.md). The earlier failed native attempt remains separate evidence.
-- [ ] Rerun native ARM64 validation on the repaired source. Cross-builds establish no ARM64 runtime or G1 qualification.
+- [ ] Finish native ARM64 validation. Hosted Release run [39479072110](https://github.com/RedSalamanders/RedPrism/actions/runs/39479072110) observes passing Host/Document/Composition/I/O rosters and all41 cancellation controls, then fails its 1,200-second Application bound. Its subsequent output-drain failure prevents closing source/environment/product receipts; Application exit and full native qualification remain unknown. [Preserved evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
 
 - [x] Preserve and diagnose the preceding-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
   and the exact dump/PDB resolves `PreparedCommittedDisplay::PrepareForWork` querying the live immediate context
@@ -30,6 +30,20 @@
   identities without invoking the immediate context. No current-generation or completion authority is inferred
   from that comparison. Original failed receipts remain retained.
 - [x] Commit/push the qualified repair as `202c52be8043cd532ab0b33d1751a034009e362c`; the approved branch destination SHA is verified. Repaired-source native ARM64 validation remains open above.
+
+- [x] Qualify independent ordinary recorded Hue startup with eleven actual-Run controls and every
+  predecessor in complete same-source x64 Debug/Release/real ASan, all three ARM64 cross-builds and
+  canonical Release analysis: 1,022 TUs, 155 Application stages and 12,262 facts. All original failures and
+  focused receipts remain preserved. [Complete local matrix](../../TestRuns/P1OrdinaryHueStartup_2026-10-20.md#complete-same-source-local-qualification).
+  The common utility routes were already acquired; this step enables no other prepared GPU consumer.
+  Complete phase/resource timing, full-display activation, native ARM64 runtime and parent delivery gates remain open.
+
+- [x] Reconcile D13 with the existing host RAM budget, unchanged class default and ten independently verified boundary facts per qualified x64 profile. Full H3 admission/caller/cost work remains open. [Decision evidence](../../TestRuns/P1HistoryBudgetDecision_2026-10-20.md).
+
+- [x] Qualify the utility-owner routing fixture repair in the complete same-source local matrix:
+  preserve all 8,425 Composition predecessors and add exactly three explicit memory-notification/drain facts.
+  Retain `oh3a1`'s failure/archive and the unchanged original idle predicate. [Evidence](../../TestRuns/P1UtilityIdleNotification_2026-10-20.md).
+- [ ] Commit/push the qualified ordinary-Hue, utility-fixture and existing D13 reconciliation step; verify the destination SHA.
 
 ## Remaining gates before P1 Done
 
@@ -761,7 +775,10 @@ The image-wrapper residency and original worker/upload transport step is fully q
 - [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
 - [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
-- [ ] H3 resumed slice: enforce nonmovable same-thread leases; qualify late-residency core and semantic mask thumbnails; then wire admitted same-ticket host refresh and live-cache maintenance.
+- [x] Reconcile the existing H3 scope-bound lease, stopped-waiter, live-index maintenance/late-refresh core
+  and five semantic-thumbnail ownership cases:38 retained facts per qualified x64 profile,1,451 relevant inputs
+  unchanged, and the exact current ASan DocumentTests executable/full-PDB. [Evidence](../../TestRuns/P1HistoryResidencyCore_2026-10-21.md).
+- [ ] Complete H3 production caller admission, same-ticket host refresh/live-cache retirement, complete semantic-thumbnail caller coverage, ordinary activation and G1; the scoped existing core does not close them.
   - [x] Earlier mutex core/mask/Warp candidate passes full managed Debug r77, Release r78 and ASan Debug r79: 6,778 document / 9,298 application controls and unchanged 79 stages; all archive copies verify. Subsequent analysis failures r80–r84 are preserved and repaired with a waitable atomic gate and explicit test ownership/initialization/null guards ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
   - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
   - [x] Qualified core committed/pushed as `ce4f8b4`; Native checklist/evidence pushed as `88b9b1b`.
@@ -1968,7 +1985,7 @@ its "Gates" column.
 | D10 | Hybrid laptops (panel on the iGPU) | Adapter-of-monitor (today; never uses the dGPU); honor the Windows "High performance" preference with a cross-adapter present | **Keep adapter-of-monitor until the P3 exit measures a cross-adapter present on R2; then decide** | none now | |
 | D11 | Save speed beyond STORE + parallel | WIC PNG only; a RedPrism PNG writer (fpng-style filter + libdeflate; output any PNG reader accepts) | **Measure after P1.7; adopt the writer only if one 45 MP layer still takes more than 1.5 s** | P1.7 target | |
 | D12 | Preview and histogram policy | Keep 4096/2048/full; view-resolution GPU previews; the legacy 8000 px histogram source; an integer histogram | **View-resolution GPU previews for filters; the per-layer adjust draw for table kinds; the histogram redefined as exact integer numerators N = Σ a·m per bin in `uint64`, with bins[c] = N_c / 65025.0 and bins[0] = (N_r + N_g + N_b) / (3 × 65025.0), each rounded once, from an 8000 px source (legacy)** | P1–P3 | 2026-09-27: adopt the recommended policy in stages. P1.1a retains existing preview grids and histogram arithmetic; P2.2 changes the histogram only with the named goldens and AutoLevels parity. P1.2/P3 add GPU previews with their parity gates. |
-| D13 | History budget | 256 MiB fixed; scale with RAM; count selections | **The host passes min(25 % of RAM, 2 GiB) as a `uint64`; the class default stays 256 MiB for the legacy test; selections are counted** | P1.9 | |
+| D13 | History budget | 256 MiB fixed; scale with RAM; count selections | **The host passes min(25 % of RAM, 2 GiB) as a `uint64`; the class default stays 256 MiB for the legacy test; selections are counted** | P1.9 |  2026-10-20: reconcile the already implemented recommendation and current Document_History contract. Host startup supplies min(RAM / 4, 2 GiB), with a 256 MiB query-failure fallback; the class default stays unchanged. Ten budget/boundary facts pass in each qualified x64 profile. Complete H3 caller/admission/cost qualification remains open. [Evidence](../../TestRuns/P1HistoryBudgetDecision_2026-10-20.md). |
 | D14 | Pixel budgets for RAW | 100 M per document (legacy); higher | **Keep 100 M until D6 v2; any RAW whose oriented, cropped frame exceeds 100 000 000 pixels returns `TooLarge`, with the embedded preview offered** | P4, P6 | |
 | D15 | Nikon HE/HE* | Ship LibRaw's decoder when it lands; refuse | **Refuse, offering the embedded preview, until a legal review of TicoRAW** | P4 | |
 | D16 | AVX-512 tier | None; opt-in tier | **Add only if it is ≥ 1.3× over AVX2 on R1 for the kernel and the exactness matrix is green** | P2 | |

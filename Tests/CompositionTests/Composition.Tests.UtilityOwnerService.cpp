@@ -34,6 +34,14 @@ void FailFast(const char* name, DWORD result) noexcept
     std::_Exit(1);
 }
 
+bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
+{
+    // Routing assertions control memory notifications; a real OS notification is independent ready work.
+    constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
+    snapshot = {available, available};
+    return true;
+}
+
 class Receiver final : public UtilityReadbackOwner
 {
   public:
@@ -195,13 +203,20 @@ int RunUtilityOwnerServiceRoutingTests()
     OwnerWorkMultiplexer routes;
     JobScheduler scheduler;
 
-    Expect(scheduler.Initialize(2) >= 0, "scheduler-initialized");
+    Expect(scheduler.Initialize(2, {}, {nullptr, StableMemory}) >= 0, "scheduler-initialized");
     Expect(scheduler.RegisterOwnerWork(routes), "scheduler-routes-registered");
     Expect(SUCCEEDED(service->InitializeOwner(scheduler, routes)), "service-initialized");
 
     Expect(!service->HasPending(), "empty-service-not-pending");
     Expect(!service->HasReady(), "empty-service-not-ready");
     Expect(scheduler.IsIdle(), "empty-scheduler-is-idle");
+    // A notification is ready scheduler work even when this utility service owns no records.
+    // Check both states explicitly without relying on the timing of live system-pressure callbacks.
+    scheduler.NotifyMemoryChanged();
+    Expect(!scheduler.IsIdle() && scheduler.HasUiWork(), "memory-event-makes-empty-scheduler-nonidle");
+    Expect(!service->HasPending() && !service->HasReady(), "memory-event-keeps-empty-utility-quiescent");
+    (void)DrainCompletions(scheduler);
+    Expect(scheduler.IsIdle() && !scheduler.HasUiWork(), "drained-memory-event-restores-empty-idle");
     bool emptyHadReadinessVisits = false;
     for (const auto& entry : *entries)
         emptyHadReadinessVisits = emptyHadReadinessVisits || entry.receiver.readinessQueries != 0;

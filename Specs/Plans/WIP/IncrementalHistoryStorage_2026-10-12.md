@@ -9,7 +9,15 @@ Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, p
 
 ## Current checklist
 
-Current native qualification: Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 Debug/Release/ASan cross-builds r1009-r1011. The r1006 source freeze contains 1,334 inputs; the strict full roster is 21,673 DocumentTests records and 136 Application stages. Preserve predecessor failures and non-launches as historical receipts (including r954, r958-r961 and ARM111); they are not the current matrix. The separate lasso-host analysis/runtime receipts are complete for x64 r1026 and r1028-r1030; ARM64 r1031-r1033 also pass. This does not close H3 or broaden the native history-index foundation result. Full production callers, complete admission/retirement bounds, ordinary activation, latency, G1 and P1 remain open; see the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
+Scoped reconciliation (2026-10-21): the existing nonmovable lease, stopped waiters, live-index maintenance,
+original-edit late-residency refresh and five semantic mask-thumbnail ownership cases have 38 retained core
+assertions per qualified B21 x64 Debug/Release/real-ASan profile. Current source matches 1,451 relevant
+inputs; current `oh4a1` uses the exact B21 ASan DocumentTests executable/full-PDB and passes 24,003 facts.
+[Core evidence](../../TestRuns/P1HistoryResidencyCore_2026-10-21.md). This adds no runtime behavior and closes
+no complete production admission/retirement, activation, cost, H3 or P1 gate.
+
+
+Original native foundation qualification: Release analysis r1005, full Release r1006, Debug r1007, real ASan Debug r1008, and ARM64 Debug/Release/ASan cross-builds r1009-r1011. The r1006 source freeze contains 1,334 inputs; the strict full roster is 21,673 DocumentTests records and 136 Application stages. Preserve predecessor failures and non-launches as historical receipts (including r954, r958-r961 and ARM111); they are not the current matrix. The separate lasso-host analysis/runtime receipts are complete for x64 r1026 and r1028-r1030; ARM64 r1031-r1033 also pass. This does not close H3 or broaden the native history-index foundation result. Full production callers, complete admission/retirement bounds, ordinary activation, latency, G1 and P1 remain open; see the [native lasso qualification](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md).
 
 - [x] Inspect the current index and its callers: complete map clones, current-topology traversal, charge sampling,
   bounds scans and diagnostic `RetainedBytes` traversal still occur.
@@ -25,6 +33,9 @@ Current native qualification: Release analysis r1005, full Release r1006, Debug 
 
 - [x] Selectively integrate the persistent indexes, actual Raster journal, direct-root topology and six
   focused test pairs into native sources; preserve the reference API and original goldens.
+- [x] Reconcile the existing scope-bound leases, cancellation/waiters, late-residency maintenance/refresh
+  and five semantic-thumbnail core cases against the 38 retained assertions and exact current source/artifacts;
+  see the 2026-10-21 scoped evidence above. This is existing component qualification, not caller completeness.
 - [ ] Prove complete operation admission, original-ticket ownership and bounded retirement on actual production callers.
 - [x] Qualify the integrated original-ticket fixture: retain its 33 predecessor controls and five added admission controls (38 total). The earlier draft's pre-admission capture, retained diagnostic strong lock and expired-object/weak-control confusion were repaired; the r943 below-headroom refusal remains preserved. Native r1006 stdout contains exactly 38 non-summary PASS history-original-ticket.* records and one passing summary (passed=38 failed=0 controls=38 expected=38). The r1006 source-freeze entry for Tests/DocumentTests/Document.Tests.HistoryOriginalTicket.cpp matches the frozen r1019 source copy (SHA-256 06A2C18C5CF4A2AE07721E35B5568B6696696231313DFDCC1C2DD83131E86A7E). This is fixture-level evidence only; production caller migration and measured retirement remain separate.
 - [x] In the private adapter, update unique self-storage contributions incrementally and skip charge sampling

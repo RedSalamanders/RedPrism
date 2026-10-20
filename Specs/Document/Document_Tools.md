@@ -1268,6 +1268,12 @@ hue while retaining the raster entry points as numeric references. Missing/nonfi
 their existing panel prerequisites before sampling, then delegate. Range/band selection, near-neutral refusal
 and half-unit targeting deltas keep the existing formulas; no color or kernel golden changes.
 
+The ordinary host enables recorded Hue sampling after its common utility/recording routes are acquired.
+A physical range sample or targeting opening queues a scalar press. Its original admitted source supplies the
+one-pixel worker result; no synchronous composition readback runs in pointer dispatch. The scalar model's existing
+range/targeting formulas, transparent/near-neutral refusal and source/history invariants remain unchanged.
+Capacity, stale source and device/refused-admission paths retain the original lifetime through acknowledgement.
+
 The explicit preserving-panel Wand route uses separate opaque `PanelWandOpening` and `PanelWandAuthority`.
 The physical opening binds session, document serial, exact panel opening and color sequence. It may survive
 older FIFO source changes; the admitted source witness is captured only after those prerequisites finish.

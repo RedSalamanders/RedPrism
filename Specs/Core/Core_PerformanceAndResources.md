@@ -1572,6 +1572,12 @@ allowance. Native correctness does not establish complete operation bounds, ordi
 
 ### Hue and panel-preserving Wand ownership
 
+Ordinary startup enables recorded Hue input after its common processing, utility/recording routes, renderer,
+chrome and history sources are ready, before startup paths or pointer input dispatch. It does not require
+prepared GPU display, stroke or selection-overlay activation. The press queues its scalar descriptor; it performs
+no source traversal, owner pixel copy or synchronous readback. Refused admission preserves the current panel and
+original input lifetime and reports the existing local failure; it must not fall through to another tool.
+
 Selected Hue reserves its complete source/readback/metadata/CPU/GPU/retirement envelope before source capture.
 The one-pixel worker result keeps the original ticket and shared charge through actual acknowledgement and
 aggregate retirement. Source, panel and cancellation refusals preserve pixels/history/settings. Publication
