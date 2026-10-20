@@ -10,7 +10,8 @@
 - [x] Qualify Busy-residency and actual suspended-slot controls in the combined six-profile baseline; ARM64 is cross-build only.
 - [x] Preserve failed canonical analysis, qualify its four focused repairs, and adopt the independently qualified Chrome/first-row and worker-allocation followthrough.
 - [x] Qualify the current followthrough in full native x64 profiles, canonical Release analysis and ARM64 cross-builds.
-- [ ] Commit/push the qualified integration step; complete Size host adoption and the remaining delivery gates.
+- [x] Commit/push the qualified integration step as `bd65f11` and verify the remote SHA.
+- [ ] Complete Size host adoption and the remaining delivery gates.
 - [ ] Finish Size host integration, complete phase bounds, ordinary activation and measured G1 before P1 Done.
 
 ## Retained failures and correction

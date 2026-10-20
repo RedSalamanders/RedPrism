@@ -17,7 +17,8 @@
 - [x] Adopt the reviewed Chrome/first-row, worker-allocation and four analysis repairs; keep warning limits, goldens, dependency pins and ordinary activation unchanged.
 - [x] Qualify the followthrough in current full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 1,021 TUs, 154 Application stages, 12,026 Application facts and 473 original-publication facts. Native ARM64 runtime remains unavailable.
 - [x] Privately qualify the generic Image Size final-publication path in real ASan: 129 Size and all 473 Pixel facts, including first-row resume/cancel/failure/Close, foreign restore and late cancellation. Native adoption and its complete matrix remain due.
-- [ ] Commit/push this qualified publication step, then adopt and qualify the reviewed Image Size host code/test/registration/contracts.
+- [x] Commit/push the qualified publication step as `bd65f11` and verify the remote SHA.
+- [ ] Adopt and qualify the reviewed Image Size host code/test/registration/contracts; remove the private absolute fixture include before final delivery.
 - [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 
 ## Remaining gates before P1 Done
