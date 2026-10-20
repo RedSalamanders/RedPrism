@@ -51,8 +51,8 @@
   product assertion, the 1,200-second default, all historical failures and unchanged workflow guards.
   The native-only 5,400-second failure backstop is an observation bound, not a causal repair or G1 result.
   [Affected tooling evidence](../../TestRuns/P1ValidationTooling_2026-10-21.md).
-- [ ] Publish the qualified tooling step, verify the destination SHA and the intentionally skipped CI job,
-  then request the next separately recorded native ARM64 Release attempt under the existing guarded workflow.
+- [x] Publish the qualified tooling step as `d6231b07f68eac678c43577c4cb2a99c7636d771`; approved branch destination SHA is verified and the guarded native job [39511554815](https://github.com/RedSalamanders/RedPrism/actions/runs/39511554815) correctly skips this unmarked mixed commit.
+- [ ] Request and independently qualify the next native ARM64 Release attempt under the existing guarded workflow.
 
 ## Remaining gates before P1 Done
 

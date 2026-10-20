@@ -1,6 +1,6 @@
 # P1 validation tooling: fixture reuse and native ARM64 evidence
 
-Status: adopted affected controls qualified; publication pending. P1 remains WIP.
+Status: adopted affected controls qualified and published. P1 remains WIP.
 
 ## Checklist
 
@@ -10,7 +10,7 @@ Status: adopted affected controls qualified; publication pending. P1 remains WIP
 - [x] Run all 30 native diagnostic controls and all three exact typed-refusal children against adopted bytes.
 - [x] Preserve failed native runs, private counterexamples, source identity and raw output.
 - [x] Canonical formatting checks 1,354 files; all 15 repository skills validate.
-- [ ] Commit/push and verify destination identity.
+- [x] Commit/push as `d6231b07f68eac678c43577c4cb2a99c7636d771`; approved branch destination SHA is independently verified. The guarded native job [39511554815](https://github.com/RedSalamanders/RedPrism/actions/runs/39511554815) correctly skips this unmarked mixed commit.
 - [ ] Request and independently qualify the next native ARM64 Release run; native Debug/ASan remain separate.
 
 ## Scanner extraction
