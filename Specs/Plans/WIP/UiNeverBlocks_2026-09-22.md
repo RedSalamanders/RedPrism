@@ -2,6 +2,33 @@
 
 ## Current delivery checklist — 2026-10-20
 
+- [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
+- [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
+- [x] Qualify the exact current integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
+- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. Native ARM64 execution is unavailable; cross-builds establish no runtime result.
+- [x] Record the six selected Release Size profiles: inclusive Apply maxima 40–554 µs. Retain all initial-display, warmup, frame and drain misses; these samples do not qualify complete G1.
+- [ ] Commit/push the qualified Size recovery step and verify the branch destination SHA.
+- [ ] Resolve remaining owner/frame costs, complete phase admission and ordinary activation, and close every delivery gate below before P1 Done.
+
+## Remaining gates before P1 Done
+
+- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
+- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and the remaining large-outline cursor containment walk and complete deferred transform settlement (P1.5–P1.6, S5).
+- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
+- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
+- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
+- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
+- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
+- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
+- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
+## Historical progress checkpoints
+
+### Prior delivery checkpoint entries
+
+These entries preserve earlier sequencing and evidence. Later qualification above resolves earlier future-tense caveats; the current delivery checklist and remaining gates govern the present status.
+
 - [x] Commit/push the six-profile qualified Ctrl CPU/GPU foundation as `ac17fee` and verify the remote SHA.
 - [x] Adopt the reviewed physical Ctrl/Polygonal host,42-fact typed pixel journal and colour target/final-source changes after their separate private native/CPU proofs. [Host evidence](../../TestRuns/P1CtrlPixelHost_2026-10-19.md), [colour/capture evidence](../../TestRuns/P1ColorTargetCapture_2026-10-19.md).
 - [x] Qualify all three ARM64 cross-builds of the preceding1,010-TU source; native ARM64 runtime remains unavailable.
@@ -26,20 +53,12 @@
 - [ ] Complete remaining Size recovery/phase bounds/2 ms and the other P1 delivery gates before ordinary activation and Done.
 - [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
 
-## Remaining gates before P1 Done
+- [x] Adopt the reviewed Size recovery, predelegate worker retirement, row-holder worker allocation and actual Size benchmark after private ASan proof: 191 Size, 473 Ctrl and 123 layer-row assertions; the corrected complete Application roster is 12,233 facts. Boundary/direct/sampler smoke is separately qualified.
+- [x] Qualify the latest 1,022-TU Size recovery integration in full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 155 Application stages, 12,233 Application facts, 191 Size / 473 Ctrl / 123 row assertions. [Current matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20). No native ARM64 runtime host is available.
+- [ ] Commit/push the qualified Size recovery step and verify the destination SHA, then continue the remaining P1 delivery gates.
+- [x] Record selected Size setup/warmup/scored owner costs for all six hardware/WARP Release profiles in [the Size recovery and cost evidence](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md); Apply maxima are 40–554 µs. Initial-display/excluded-warmup costs remain in the evidence.
+- [ ] Resolve measured frame/drain overruns and complete phase bounds; ordinary activation and complete P1 G1 remain open.
 
-- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
-- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
-- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove owner geometry/coverage/outline construction and the remaining large-outline cursor containment walk and complete deferred transform settlement (P1.5–P1.6, S5).
-- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
-- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
-- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
-- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
-- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
-- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
-- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
-
-## Historical progress checkpoints
 
 ### Earlier integration ledger
 

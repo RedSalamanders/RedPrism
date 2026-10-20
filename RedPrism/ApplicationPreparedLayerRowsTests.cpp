@@ -50,11 +50,20 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
         Replace,
         CopySession,
         CaptureFailure,
-        WorkerFailure
+        WorkerFailure,
+        AllocationFailure
     };
-    constexpr std::array names{
-        "success", "cancel-before-capture", "cancel",          "late-cancel",   "stale-root", "collapse",
-        "replace", "copy-session",          "capture-failure", "worker-failure"};
+    constexpr std::array names{"success",
+                               "cancel-before-capture",
+                               "cancel",
+                               "late-cancel",
+                               "stale-root",
+                               "collapse",
+                               "replace",
+                               "copy-session",
+                               "capture-failure",
+                               "worker-failure",
+                               "worker-allocation-failure"};
     int failures = 0;
     unsigned int checks = 0;
     const auto expect = [&](bool condition, const char* mode, const char* name) noexcept
@@ -102,7 +111,8 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
         const auto gate = std::make_shared<LayerRowsTestGate>();
         gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         gate->holdAfterPrepare = mode == Mode::LateCancel;
-        gate->hold = mode != Mode::CaptureFailure && mode != Mode::WorkerFailure;
+        gate->hold = mode != Mode::CaptureFailure && mode != Mode::WorkerFailure && mode != Mode::AllocationFailure;
+        gate->throwAllocate = mode == Mode::AllocationFailure;
         gate->throwCapture = mode == Mode::CaptureFailure;
         gate->throwPrepare = mode == Mode::WorkerFailure;
         if (!gate->release)
@@ -190,8 +200,17 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
         expect(bool(_preparedLayerRows) == published && bool(_layerRowsCacheTicket) == published &&
                    (_jobs.ReservedMemoryBytes() != 0) == published,
                name, "active-cache-retains-the-original-memory-charge");
-        if (mode != Mode::CancelBeforeCapture)
+        if (mode == Mode::AllocationFailure)
         {
+            expect(!gate->allocated.load() && !gate->captures.load() && !gate->preparations.load() &&
+                       !gate->publications.load() && _layerRowsRetryAvailable && !_layerRowsSource.HasReady() &&
+                       CurrentLayerRowsKey() == original && _session.history.CurrentRevision() == revision,
+                   name, "first-worker-allocation-refusal-preserves-source-and-offers-explicit-retry");
+        }
+        else if (mode != Mode::CancelBeforeCapture)
+        {
+            expect(gate->allocated.load() && gate->allocatedOffOwner.load() && gate->allocationReserved.load(), name,
+                   "original-admission-precedes-off-owner-source-holder-allocation");
             expect(gate->captureReserved.load() && gate->retired.load() && gate->retiredOffOwner.load(), name,
                    "admitted-input-retirement-is-acknowledged-off-owner");
             expect(gate->captures.load() == (mode == Mode::CaptureFailure ? 0u : 1u), name,
@@ -200,7 +219,8 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
         else
             expect(gate->captures.load() == 0 && gate->preparations.load() == 0, name,
                    "cancel-before-first-run-captures-no-source");
-        if (mode != Mode::CaptureFailure && mode != Mode::WorkerFailure && mode != Mode::CancelBeforeCapture)
+        if (mode != Mode::CaptureFailure && mode != Mode::WorkerFailure && mode != Mode::CancelBeforeCapture &&
+            mode != Mode::AllocationFailure)
             expect(state.visited && state.held && state.view, name,
                    "real-message-dispatch-and-view-input-run-while-worker-is-held");
         if (published)

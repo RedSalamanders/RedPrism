@@ -470,7 +470,7 @@ literal readable graphs survive actual Close and scheduler destruction; post-clo
 graph's live-byte record and cannot affect an unrelated scheduler. Complete normal-profile qualification and
 actual admitted row/accessibility graph adoption remain required; this primitive alone establishes no H4/G1 result.
 
-The actual WARP self-test adds 107 `layer-rows-host.*` publication/lifetime expectations and 46
+The actual WARP self-test adds 123 `layer-rows-host.*` publication/lifetime expectations and 46
 `application-prepared-layer-rows-boundary.*` initial-refusal/changed-key/shutdown expectations, each with a
 separate summary. Current/stale/cancelled/failed/deleted-folder/copy-session cases use the real scheduler,
 owner capture, held worker, pinned Tree and deferred sink. Shutdown before/after preparation and with an active
@@ -3700,12 +3700,27 @@ handoff must fail that assertion. All sizing fault modes also require first-work
 ### Size original final host integration
 
 The standard self-test registers RunStandaloneSizeFinalPublicationSelfTest after the Ctrl Pixel fixture.
-Its 129 independent actual-host facts preserve all 473 Pixel publication predecessors and cover 13 Size
+Its 191 independent actual-host facts preserve all 473 Pixel publication predecessors and cover 19 Size
 cases: literal nearest resize, coloured canvas extension, Undo/Redo, cancellation, history cancellation,
 invocation/restore staleness, final admission failure, joined Close, late cancellation after Apply, and
 first-row resume/cancel/failure/retry/Close. Restore checks current row/display epochs and foreign Redo,
 rather than requiring obsolete pointer identity. Hidden final work completes through event acknowledgements
 without a RenderFrame pump. Private selected proof remains distinct from full current native qualification.
+
+
+The Size extension requires actual suspended-slot resume/cancel/Close and real device rebuild/refusal/retry.
+Its parked-slot witness comes from the original final delegate waitingOwner callback, not temporary absence
+of runnable work. Cancellation and held-worker Close prove predelegate private CPU/history retirement on the
+original worker. A separate actual BeforeSnapshot allocation fault follows successful real resize; require
+one fault hit, no CPU/history/row/GPU publication, off-owner result destruction before terminal and zero charges
+after joined Close. Literal nearest and coloured extension references remain unchanged.
+
+Prepared-row controls additionally require original admission before off-owner holder allocation in each
+existing applicable case and allocation refusal before owner source capture. Preserve live source/history,
+offer explicit retry, avoid idle rearm and retire complete ownership. The four selected Size CLI modes and
+actual focused smoke publication/boundary records are separate from these state tests. Private proof alone
+does not establish full current native qualification, ordinary activation, 2ms Apply or G1.
+
 
 ## Runtime function object casing controls
 

@@ -383,3 +383,29 @@ isolates diagnostic readback staging creation. Real private ETL decoding verifie
 payload types/values, owner thread, keyword and worker/chrome suppression. Tests never assert elapsed times.
 Actual largest-fixture Release/ETW measurements and fixes remain necessary for H4/G1; instrumentation alone
 cannot qualify first display or an accelerated pipeline.
+
+
+### Selected Size final-publication diagnostic
+
+The opt-in ui-size-prepared, ui-size-prepared45 and ui-size-prepared100 modes use the existing 4K,45MP and
+100MP fixtures with prepared display/rows and original Size final publication. ui-size-prepared-smoke uses
+64x48, one excluded warmup and two scored samples. Only canvas-size-fill, image-size-nearest and
+image-size-resolution run, in that order. Canvas Size uses the
+`canvas-size-fill-refused-pixel-budget` operation for both the 45MP and 100MP fixtures because adding the requested coloured extension
+would exceed the aggregate 100 M image-pixel budget. Each is an expected refusal and is never counted as a published resize. Other benchmark and
+ordinary startup routes
+retain their explicit activation policy.
+
+Each accepted Size sample requires exactly one successful original-job final publication; an expected refusal
+requires zero. The counter advances from actual completed original publication after CPU/history, Fit, current
+Chrome rows, GPU adoption and worker retirement. UI SIZE PUBLICATION records report scored recorded/expected
+counts and warmupExcluded=1. A later retry or legacy fallback cannot satisfy that witness.
+
+Each focused operation separately reports initial-display and excluded-warmup timing boundaries and the six
+resource stages. These costs are outside the scored distribution but remain present in raw output and must be reviewed for owner overruns. Excluding setup or warmup from scored statistics does not waive their cost or
+qualify them as free; frame and drain maxima and initial-display observations remain visible evidence. Size smoke
+requires six unique operation/boundary pairs, all36 resource rows,
+completed frame/latency observations, valid percentile buckets and zero clock/abandonment failures, plus its
+three exact two-publication records. The sampler keeps its existing two boundary records. Smoke is correctness
+only, including its display-power exception; full modes retain presentation/input guards. Qualified Release
+measurements and the complete P1 G1 matrix remain necessary before performance or ordinary activation claims.

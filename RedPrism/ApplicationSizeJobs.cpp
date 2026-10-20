@@ -5,6 +5,7 @@
 #include "DocumentSizeHistory.h"
 #include "FinalPublicationWork.h"
 #include "SizingWorkTestGate.h"
+#include "UiBenchmark.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -67,9 +68,9 @@ class Application::SizingJob final : public Job
     SizingJob(Application& owner, HistoryWorkStamp stamp, std::variant<CanvasSizeOptions, ImageSizeOptions> options,
               std::uint64_t retirement, std::uint64_t initialMemory, std::uint64_t outputMemory, bool finalDisplay)
         : _owner(owner), _stamp(stamp), _options(std::move(options)), _invocation(owner._sizeInvocation),
-          _generation(owner._session.Generation()), _retirement(retirement), _gate(owner._sizingWorkTestGate),
-          _ownerThread(GetCurrentThreadId()), _initialMemory(initialMemory), _outputMemory(outputMemory),
-          _finalDisplay(finalDisplay)
+          _generation(owner._session.Generation()), _sourceAuthority(owner._session.CaptureDocumentReadAuthority()),
+          _retirement(retirement), _gate(owner._sizingWorkTestGate), _ownerThread(GetCurrentThreadId()),
+          _initialMemory(initialMemory), _outputMemory(outputMemory), _finalDisplay(finalDisplay)
     {
     }
     JobResult Run(JobContext& context) override
@@ -162,7 +163,22 @@ class Application::SizingJob final : public Job
     void RetireWorkerStage(JobContext& context, JobResult result) noexcept override
     {
         if (_finalDelegate)
+        {
             _finalDelegate->RetireWorkerStage(context, result);
+            return;
+        }
+        if (_finalDisplay && _payload &&
+            (result.status != JobStatus::Finished || (_captured && _status != ResizeStatus::Ok)))
+        {
+            // Failure/cancellation before delegate construction can own a full private resize and
+            // prepared history. Retire it on this original worker, before terminal owner delivery;
+            // a separately admitted release record must not be needed to avoid a large owner free.
+            {
+                const std::unique_ptr<SizingPayload> retired(_payload.release());
+            }
+            if (_gate)
+                _gate->failureRetiredByOriginalWorker.store(true);
+        }
     }
     bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
     {
@@ -226,7 +242,8 @@ class Application::SizingJob final : public Job
              _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
              _owner._session.Generation() != _generation ||
              (_payload && _payload->token &&
-              !_owner._session.CanApplyJobResult(_payload->token.value(), _payload->token->sequence))))
+              !_owner._session.CanApplyJobResult(_payload->token.value(), _payload->token->sequence)) ||
+             (_sourceAuthority && !_owner._session.IsDocumentReadCurrent(_sourceAuthority.value()))))
         {
             outcome = HostOutcome::Stale;
             error = E_ABORT;
@@ -327,7 +344,12 @@ class Application::SizingJob final : public Job
         callbacks.context = this;
         callbacks.currentOwner = [](void* raw) noexcept { return static_cast<SizingJob*>(raw)->CurrentParentOwner(); };
         callbacks.waitingOwner = [](void* raw, bool waiting) noexcept
-        { static_cast<SizingJob*>(raw)->_finalWaiting = waiting; };
+        {
+            auto& parent = *static_cast<SizingJob*>(raw);
+            parent._finalWaiting = waiting;
+            if (parent._gate)
+                parent._gate->finalWaitingForDisplay.store(waiting);
+        };
         callbacks.appliedOwner = [](void* raw) noexcept
         {
             auto& parent = *static_cast<SizingJob*>(raw);
@@ -341,6 +363,10 @@ class Application::SizingJob final : public Job
             auto& parent = *static_cast<SizingJob*>(raw);
             parent._finalApplied = applied;
             parent._finalOutcome = outcome;
+            // Count only the actual selected original's completed handoff, after rows/GPU publication
+            // and worker retirement. The existing benchmark also requires the exact current graph/rows.
+            if (applied && parent._owner._uiBenchmark && parent._owner._uiBenchmark->sizeOnly)
+                ++parent._owner._uiBenchmark->sizeFinalPublications;
         };
         return Application::MakeSizeFinalForWork(
             &_owner, callbacks,
@@ -367,6 +393,9 @@ class Application::SizingJob final : public Job
     const std::variant<CanvasSizeOptions, ImageSizeOptions> _options;
     const std::uint64_t _invocation;
     const std::uint64_t _generation;
+    // Descriptor-only source authority is captured before admission, with no image/selection ownership.
+    // It still detects restore/session replacement when a failed worker already destroyed its token.
+    const std::optional<DocumentReadAuthority> _sourceAuthority;
     const std::uint64_t _retirement;
     const std::shared_ptr<SizingWorkTestGate> _gate;
     const DWORD _ownerThread;

@@ -517,5 +517,5 @@ The selected native pixel final publication swaps its prepared CPU/history befor
 one nonreentrant original acknowledgement. A busy residency permit resumes the same original worker for
 refresh rather than blocking the owner or dropping an otherwise current edit. A changed source/history
 refuses before mutation. Replaced owners retire under the original temporary account on workers; terminal
-receipt notification follows complete publication/retirement. Size-card host integration and final G1 remain
+receipt notification follows complete publication/retirement. Ordinary Size activation and measured G1 remain
 separate P1 gates.

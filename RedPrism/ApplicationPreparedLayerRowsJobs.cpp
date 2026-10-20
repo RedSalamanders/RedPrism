@@ -191,7 +191,27 @@ class Application::LayerRowsJob final : public Job
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_input)
-            return {}; // The original record admits its complete peak before owner capture.
+        {
+            // The complete original reservation precedes this first worker. Construct its source/row
+            // holder here; the successful acknowledgement only captures into an existing allocation.
+            if (_gate && _gate->throwAllocate)
+                throw std::bad_alloc{};
+            auto input = std::make_unique<RowsInput>();
+            input->bytes = _admission.Bytes() + sizeof(RowsInput);
+            input->gate = _gate;
+            input->ownerThread = _ownerThread;
+            if (_gate)
+            {
+                _gate->allocatedOffOwner.store(GetCurrentThreadId() != _ownerThread);
+                _gate->allocationReserved.store(context.reservedMemoryBytes >=
+                                                (_admission.Bytes() + sizeof(RowsInput)));
+                _gate->allocated.store(true);
+            }
+            _input.reset(input.release());
+            return {};
+        }
+        if (!_captured)
+            return {JobStatus::Failed, E_UNEXPECTED};
         if (_gate)
         {
             _gate->preparations.fetch_add(1);
@@ -222,14 +242,10 @@ class Application::LayerRowsJob final : public Job
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
         _ticket = ticket;
-        if (_input || !Current())
+        if (_captured || !_input || !Current())
             return false;
         try
         {
-            _input.reset(std::make_unique<RowsInput>().release());
-            _input->bytes = _admission.Bytes() + sizeof(RowsInput);
-            _input->gate = _gate;
-            _input->ownerThread = _ownerThread;
             if (_gate)
             {
                 _gate->captureReserved.store(_owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
@@ -248,6 +264,7 @@ class Application::LayerRowsJob final : public Job
             for (const auto& id : collapsed)
                 _input->collapsed.push_back(id);
             _input->pattern = _owner._layerRowsHiddenPattern;
+            _captured = true;
             if (_owner._jobs.Resume(ticket))
                 return true;
             _captureError = E_UNEXPECTED;
@@ -319,6 +336,7 @@ class Application::LayerRowsJob final : public Job
     std::unique_ptr<RowsInput, RetireRowsInput> _input;
     JobTicket _ticket;
     std::uint64_t _firstItemId = 0;
+    bool _captured = false;
     HRESULT _captureError = S_OK;
     const std::shared_ptr<LayerRowsTestGate> _gate;
     const DWORD _ownerThread;

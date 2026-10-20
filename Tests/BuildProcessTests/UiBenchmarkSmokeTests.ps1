@@ -6,7 +6,7 @@ Runs the real UI benchmark loop on its bounded 64x48 smoke fixture and validates
 param(
     [Parameter(Mandatory)] [string] $ExecutablePath,
     [Parameter(Mandatory)] [string] $OutputDirectory,
-    [ValidateSet('direct', 'prepared')] [string] $DisplayRoute = 'direct'
+    [ValidateSet('direct', 'prepared', 'size-prepared')] [string] $DisplayRoute = 'direct'
 )
 
 Set-StrictMode -Version Latest
@@ -29,10 +29,13 @@ $ErrorActionPreference = 'Stop'
 
 
 function Assert-UiBenchmarkDisplayRoute([string[]] $lines, [string] $route) {
-    if ($route -cnotin 'direct', 'prepared') { throw 'Unknown benchmark display route.' }
+    if ($route -cnotin 'direct', 'prepared', 'size-prepared') { throw 'Unknown benchmark display route.' }
     $rows = @($lines | Where-Object { $_ -cmatch '^UI BENCH ROUTE\b' })
-    $async = [int]($route -ceq 'prepared')
-    $expected = "UI BENCH ROUTE display=$route rows=$route asyncStroke=$async asyncWarp=$async ordinaryActivation=0"
+    $prepared = $route -cne 'direct'
+    $async = [int]$prepared
+    $finalPublication = if ($route -ceq 'size-prepared') { ' finalPublication=size-prepared-benchmark' } else { '' }
+    $routeName = if ($route -ceq 'size-prepared') { 'prepared' } else { $route }
+    $expected = "UI BENCH ROUTE display=$routeName rows=$routeName asyncStroke=$async asyncWarp=$async$finalPublication ordinaryActivation=0"
     if ($rows.Count -ne 1 -or $rows[0] -cne $expected) {
         throw "Benchmark must report its exact selected route once: $expected"
     }
@@ -45,7 +48,11 @@ if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
     throw "Benchmark smoke output directory was not found: $OutputDirectory"
 }
 
-$benchMode = if ($DisplayRoute -ceq 'prepared') { 'ui-prepared-smoke' } else { 'ui-smoke' }
+$benchMode = switch ($DisplayRoute) {
+    'prepared' { 'ui-prepared-smoke' }
+    'size-prepared' { 'ui-size-prepared-smoke' }
+    default { 'ui-smoke' }
+}
 $stdoutPath = Join-Path $OutputDirectory ('RedPrism.' + $benchMode + '.log')
 $stderrPath = Join-Path $OutputDirectory ('RedPrism.' + $benchMode + '.err.log')
 Remove-Item -LiteralPath $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
@@ -71,24 +78,31 @@ if ($machineRows.Count -ne 1) {
     throw "UI benchmark smoke printed $($machineRows.Count) BENCH MACHINE lines, expected exactly one ($stdoutPath)."
 }
 
-$expectedNames = @(
+$expectedNames = if ($DisplayRoute -ceq 'size-prepared') {
+    @('canvas-size-fill', 'image-size-nearest', 'image-size-resolution')
+} else { @(
     'zoom-actual', 'zoom-fit', 'levels-open', 'levels-update', 'levels-commit', 'hsv-update',
     'exposure-update', 'gaussian-update', 'noise-update', 'grain-update', 'lens-update',
     'invert', 'fill', 'clear', 'undo', 'canvas-size-fill', 'image-size-nearest', 'image-size-resolution', 'project-save', 'project-open',
     'png-export', 'image-import-new-canvas', 'image-import-existing-layer', 'jpeg-export',
     'gradient-preview-coalesced', 'gradient-apply-ordered', 'sampler-accepted-prefix'
-)
+) }
+$expectedOperationCount = $expectedNames.Count
 $operationRows = @($lines | Where-Object { $_ -match '^UI BENCH name=' })
 if ($operationRows.Count -ne $expectedNames.Count) {
     throw "UI benchmark smoke printed $($operationRows.Count) operation rows, expected $($expectedNames.Count) ($stdoutPath)."
 }
 
 $seenNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-foreach ($row in $operationRows) {
+for ($rowIndex = 0; $rowIndex -lt $operationRows.Count; $rowIndex++) {
+    $row = $operationRows[$rowIndex]
     if ($row -notmatch '^UI BENCH name=(?<name>[a-z0-9-]+) width=64 height=48 runs=2 warmup=1\b') {
         throw "Malformed UI benchmark smoke operation row (expected dimensions and run counts): $row"
     }
     $name = $Matches['name']
+    if ($DisplayRoute -ceq 'size-prepared' -and $name -cne $expectedNames[$rowIndex]) {
+        throw "Prepared Size smoke operation order differs at row $rowIndex; expected '$($expectedNames[$rowIndex])': $row"
+    }
     if ($row -notmatch '\bframes=(?<frames>\d+)\b') {
         throw "UI benchmark smoke operation row is missing its frame count: $row"
     }
@@ -144,17 +158,99 @@ foreach ($name in $expectedNames) {
     }
 }
 
+if ($DisplayRoute -ceq 'size-prepared') {
+    $publications = @($lines | Where-Object { $_ -cmatch '^UI SIZE PUBLICATION\b' })
+    if ($publications.Count -ne 3) { throw 'Prepared Size smoke requires three actual publication receipts.' }
+    for ($index = 0; $index -lt $expectedNames.Count; $index++) {
+        $expected = "UI SIZE PUBLICATION name=$($expectedNames[$index]) recorded=2 expected=2 warmupExcluded=1"
+        if ($publications[$index] -cne $expected) {
+            throw "Prepared Size smoke did not observe its two real final publications: $expected"
+        }
+    }
+
+    $boundaryNames = @('initial-display', 'excluded-warmup')
+    $expectedBoundaryPairs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($name in $expectedNames) {
+        foreach ($boundary in $boundaryNames) { [void]$expectedBoundaryPairs.Add("$name|$boundary") }
+    }
+    $boundaryRows = @($lines | Where-Object { $_ -cmatch '^UI BENCH BOUNDARY\b' })
+    if ($boundaryRows.Count -ne 6) {
+        throw "Prepared Size smoke printed $($boundaryRows.Count) boundary rows, expected six ($stdoutPath)."
+    }
+    $seenBoundaryPairs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($row in $boundaryRows) {
+        if ($row -notmatch '^UI BENCH BOUNDARY name=(?<name>[a-z0-9-]+) boundary=(?<boundary>initial-display|excluded-warmup) width=64 height=48\b') {
+            throw "Malformed prepared Size smoke boundary row: $row"
+        }
+        $name = $Matches['name']
+        $boundary = $Matches['boundary']
+        $pair = "$name|$boundary"
+        if (-not $expectedBoundaryPairs.Contains($pair) -or -not $seenBoundaryPairs.Add($pair)) {
+            throw "Unexpected or duplicate prepared Size boundary pair '$pair': $row"
+        }
+        $boundaryValues = @{}
+        foreach ($field in 'dispatchP99UpperUs', 'dispatchMaxUs', 'messageP99UpperUs', 'messageMaxUs',
+            'drainP99UpperUs', 'drainMaxUs', 'applyMaxUs', 'actionP99UpperUs', 'actionMaxUs',
+            'frameP99UpperUs', 'frameMaxUs', 'frames', 'invalidationToPresentSamples',
+            'invalidationToPresentP99UpperUs', 'invalidationToPresentMaxUs', 'clockFailures', 'abandonedFrameIntervals') {
+            if ($row -notmatch "\b$field=(?<value>\d+)\b") { throw "Prepared Size boundary is missing '$field': $row" }
+            $boundaryValues[$field] = [long]$Matches['value']
+        }
+        if ($boundaryValues.frames -lt 1 -or $boundaryValues.invalidationToPresentSamples -lt 1 -or
+            $boundaryValues.clockFailures -ne 0 -or $boundaryValues.abandonedFrameIntervals -ne 0) {
+            throw "Prepared Size boundary needs a frame and completed presentation with no clock failures or abandoned intervals: $row"
+        }
+        foreach ($pairFields in @(@('dispatchP99UpperUs', 'dispatchMaxUs'), @('messageP99UpperUs', 'messageMaxUs'),
+            @('drainP99UpperUs', 'drainMaxUs'), @('actionP99UpperUs', 'actionMaxUs'), @('frameP99UpperUs', 'frameMaxUs'),
+            @('invalidationToPresentP99UpperUs', 'invalidationToPresentMaxUs'))) {
+            Assert-PercentileFitsMaximumBucket $boundaryValues[$pairFields[0]] $boundaryValues[$pairFields[1]] `
+                "prepared Size $name $boundary $($pairFields[0])" $row
+        }
+    }
+    if ($seenBoundaryPairs.Count -ne $expectedBoundaryPairs.Count) {
+        throw 'Prepared Size smoke must report initial-display and excluded-warmup exactly once for each operation.'
+    }
+
+    $resourceStages = @('texture-create', 'shader-view-create', 'mip-generation', 'raster-upload',
+        'composition-record', 'chrome-sync')
+    $expectedResourceRows = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($name in $expectedNames) {
+        foreach ($boundary in $boundaryNames) {
+            foreach ($stage in $resourceStages) { [void]$expectedResourceRows.Add("$name|$boundary|$stage") }
+        }
+    }
+    $resourceRows = @($lines | Where-Object { $_ -cmatch '^UI RESOURCE\b.*\bboundary=(initial-display|excluded-warmup)\b' })
+    if ($resourceRows.Count -ne 36) {
+        throw "Prepared Size smoke printed $($resourceRows.Count) boundary resource rows, expected 36 ($stdoutPath)."
+    }
+    $seenResourceRows = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($row in $resourceRows) {
+        if ($row -notmatch '^UI RESOURCE name=(?<name>[a-z0-9-]+) boundary=(?<boundary>initial-display|excluded-warmup) stage=(?<stage>[a-z-]+) samples=(?<samples>\d+) p99UpperUs=(?<p99>\d+) maxUs=(?<maximum>\d+) inclusive=1$') {
+            throw "Malformed prepared Size boundary resource row: $row"
+        }
+        $resourceKey = "$($Matches['name'])|$($Matches['boundary'])|$($Matches['stage'])"
+        if (-not $expectedResourceRows.Contains($resourceKey) -or -not $seenResourceRows.Add($resourceKey)) {
+            throw "Unexpected or duplicate prepared Size boundary resource '$resourceKey': $row"
+        }
+        Assert-PercentileFitsMaximumBucket ([long]$Matches['p99']) ([long]$Matches['maximum']) `
+            "prepared Size resource $resourceKey" $row
+    }
+    if ($seenResourceRows.Count -ne $expectedResourceRows.Count) {
+        throw 'Prepared Size smoke must report all six resource stages for every operation/boundary pair.'
+    }
+}
+
 $reports = @($lines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
 if ($reports.Count -ne 1 -or
-    $reports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=27(?:\s+.*)?$') {
+    $reports[0] -notmatch "^UI BENCH REPORT status=ok width=64 height=48 operations=$expectedOperationCount(?:\s+.*)?$") {
     throw "UI benchmark smoke did not print exactly one valid completion report ($stdoutPath)."
 }
 
-Write-Host "PASS UI benchmark smoke: route=$DisplayRoute, 27 operations, 64x48, 2 samples after one warmup"
+Write-Host "PASS UI benchmark smoke: route=$DisplayRoute, $expectedOperationCount operations, 64x48, 2 samples after one warmup"
 $global:LASTEXITCODE = 0
 
 # The prepared full roster already checks its sampler row. The legacy focused sampler keeps its separate boundaries.
-if ($DisplayRoute -ceq 'prepared') { return }
+if ($DisplayRoute -in @('prepared', 'size-prepared')) { return }
 
 $samplerStdoutPath = Join-Path $OutputDirectory 'RedPrism.ui-sampler-smoke.log'
 $samplerStderrPath = Join-Path $OutputDirectory 'RedPrism.ui-sampler-smoke.err.log'

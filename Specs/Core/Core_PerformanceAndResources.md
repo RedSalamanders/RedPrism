@@ -91,7 +91,7 @@ against those same owners in the live document.
 - Derived display state (DPI, client size, adapter LUID) is recomputed when its inputs change, not per idle wake.
 
 Diagnostic exception: the bounded UI smoke correctness harnesses (`ui-smoke`, `ui-prepared-smoke`, focused
-sampler smoke and direct/prepared cancellation smoke) may render with session display power off, as the
+sampler smoke, focused Size smoke and direct/prepared cancellation smoke) may render with session display power off, as the
 screenshot harness does. It keeps visibility, suspension and occlusion checks, and its timings are
 never qualification evidence. Full UI benchmark modes fail if presentation is unavailable. See
 [`Testing_Benchmarks.md`](../Testing/Testing_Benchmarks.md).
@@ -1955,3 +1955,18 @@ capturing new row/device owners or allocating that graph. Growth refusal fails l
 publication. No reservation growth is allowed after final output binding. The complete old parent payload
 retires on a worker, never in the owner's terminal wrapper destructor. Conservative bounds and small host
 controls do not establish the 2 ms Apply target or measured G1.
+
+
+### First-worker row holders and predelegate Size failures
+
+An admitted prepared-row job constructs its RowsInput holder on its first worker entry. Owner acknowledgement
+captures immutable source handles, the localized pattern and the existing bounded collapse-ID snapshot into
+that holder. Allocation refusal before capture preserves the source/history and enables the existing explicit
+retry. It does not rearm itself on unrelated memory events. This change does not remove the bounded owner
+collapse-ID capture or qualify complete H4 phase peaks, UI Automation lifetime or G1.
+
+For the selected Size final-display path, a failed or cancelled worker stage before delegate construction
+destroys any private resize/history payload on that same original worker before terminal owner delivery.
+It MUST NOT depend on admission of a second release job to avoid a large owner free. Descriptor-only original
+document authority survives payload retirement so restore/session/invocation staleness still refuses. Source,
+history, original accounting, actual GPU-use retirement and joined Close rules remain unchanged.

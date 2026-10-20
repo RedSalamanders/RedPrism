@@ -92,7 +92,8 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate,
             L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke|ui|ui45|ui100|ui-smoke|ui-sampler|"
             L"ui-sampler45|ui-sampler100|ui-sampler-smoke|ui-prepared|ui-prepared45|ui-prepared100|"
-            L"ui-prepared-smoke|layer-rows|layer-rows-smoke|ui-cancel|ui-cancel45|ui-cancel100|ui-cancel-smoke|ui-"
+            L"ui-prepared-smoke|ui-size-prepared|ui-size-prepared45|ui-size-prepared100|ui-size-prepared-smoke|"
+            L"layer-rows|layer-rows-smoke|ui-cancel|ui-cancel45|ui-cancel100|ui-cancel-smoke|ui-"
             L"cancel-prepared|ui-cancel-prepared45|ui-cancel-prepared100|ui-cancel-prepared-smoke>",
             L"Run the brush benchmark on the selected device, or the CPU kernel benchmark (kernels: 3840x2160, 10; "
             L"kernels45: 8192x5464, 10; kernels-smoke: 32x24, 2). The smoke mode is not a performance "
@@ -104,8 +105,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
             L"UI fixture at 10 samples after one warmup; ui-sampler-smoke runs that row at 64x48 for two samples "
             L"after one warmup. ui-prepared, ui-prepared45, ui-prepared100 and ui-prepared-smoke use those "
             L"same UI fixtures with the experimental prepared display and rows, requiring current publications. "
-            L"They do not enable that route for normal editing. layer-rows measures owner-thread publish/Prepare and "
-            L"full offscreen UI Automation "
+            L"They do not enable that route for normal editing. "
+            L"ui-size-prepared, ui-size-prepared45, ui-size-prepared100 and ui-size-prepared-smoke use only the "
+            L"Canvas Size, Image Size nearest-resample and resolution operations through prepared display/rows and "
+            L"the opt-in Size final-publication route; smoke is correctness-only at 64x48 with two trials. "
+            L"layer-rows measures owner-thread publish/Prepare and full offscreen UI Automation "
             L"(UIA) name reads with 10,000 rows and 1,024 UTF-16-unit names; layer-rows-smoke uses a small fixture. "
             L"These modes report measurements without asserting performance success."
             L"\n\nOpt-in ui-cancel modes dispatch actual Escape and measure cancellation feedback and body return with "
@@ -426,6 +430,10 @@ struct RedPrismCommandLineScan final
                                                std::wstring_view{arguments[index + 1]} != L"ui-prepared45" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-prepared100" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-prepared-smoke" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-size-prepared" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-size-prepared45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-size-prepared100" &&
+                                               std::wstring_view{arguments[index + 1]} != L"ui-size-prepared-smoke" &&
                                                std::wstring_view{arguments[index + 1]} != L"layer-rows" &&
                                                std::wstring_view{arguments[index + 1]} != L"layer-rows-smoke" &&
                                                std::wstring_view{arguments[index + 1]} != L"ui-cancel" &&

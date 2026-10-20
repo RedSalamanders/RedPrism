@@ -31,6 +31,7 @@ struct UiBenchmarkState final
         std::uint64_t elapsedUs = 0;
         std::uint64_t frames = 0;
         GpuReadbackStatistics readback;
+        std::uint64_t sizeFinalPublications = 0;
     };
     std::unique_ptr<UiCancellationBenchmark> cancellation;
     CanvasDocument fixture;
@@ -45,7 +46,9 @@ struct UiBenchmarkState final
     unsigned int runs = 10;
     bool smoke = false;           // bounded correctness harness; may render while session display power is off
     bool preparedDisplay = false; // experimental benchmark route; ordinary startup remains separate
+    bool sizeOnly = false;        // explicit prepared Size final-publication benchmark roster
     bool samplerOnly = false;     // same production loop and fixture; skips unrelated operation setup
+    std::uint64_t sizeFinalPublications = 0, previousSizeFinalPublications = 0;
     std::uint64_t previousPresents = 0;
     std::uint64_t previousReservedMemoryBytes = 0; // settled prepared caches; never an allowance for a sampler leak
     std::int64_t requestedAt = 0;

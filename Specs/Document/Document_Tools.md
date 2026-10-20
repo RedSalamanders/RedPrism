@@ -2337,7 +2337,7 @@ When a caller supplies original output memory to resize/render preparation, ever
 separately allocated semantic mask thumbnail, sealed layer root and prepared history retains that same owner.
 Shared unchanged pixels retain their existing owners. Destruction releases metadata/pixels before accounting;
 surviving immutable history/strong/weak readers cannot lose their charge when the prepared aggregate retires.
-The current size-card host still needs original-parent display/rows integration and measured complete 2 ms Apply;
+Ordinary size-card activation and measured complete 2 ms Apply remain required beyond the selected route below;
 the ownership API and CPU tests alone do not close P1.8.
 
 
@@ -2354,3 +2354,11 @@ publishes the actual current Chrome row owner and adopts the GPU graph in one no
 Late cancellation cannot change an already committed result into a dropped/cancelled edit. One Undo/Redo
 restores the original/final dimensions and pixels. Failure preserves the current committed source; accepted
 work remains charged through original worker/GPU retirement, including joined Close.
+
+
+Selected Size suspension/recovery retains its exact original ticket and private new CPU/history while the
+committed source is unavailable. Visibility readiness resumes the same original; cancellation and Close drop
+only its private result. A current-source device recovery failure preserves the old document/history/rows;
+explicit source retry rebuilds that old committed display without reviving the failed Size request. Worker
+failure before final delegate construction retires partial CPU/history results on the original worker. Source
+authority is validated even after that payload is gone. These rules do not activate the route in ordinary use.

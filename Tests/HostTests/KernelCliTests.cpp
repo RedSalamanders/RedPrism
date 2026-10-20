@@ -85,6 +85,14 @@ int RunKernelCliTests()
         const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
         check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-ui-benchmark-value");
     }
+    constexpr std::array<std::wstring_view, 4> kPreparedSizeBenchmarks{
+        {L"ui-size-prepared", L"ui-size-prepared45", L"ui-size-prepared100", L"ui-size-prepared-smoke"}};
+    for (const std::wstring_view benchmark : kPreparedSizeBenchmarks)
+    {
+        std::wstring parsedBenchmark;
+        const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
+        check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-prepared-size-benchmark-value");
+    }
     std::wstring layerRowsBenchmark;
     const bool layerRowsSucceeded = ParseArguments({L"--bench", L"layer-rows"}, parsed, error, &layerRowsBenchmark);
     check(layerRowsSucceeded && layerRowsBenchmark == L"layer-rows" && error.empty(),

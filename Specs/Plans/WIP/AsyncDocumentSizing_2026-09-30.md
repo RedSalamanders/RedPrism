@@ -9,6 +9,8 @@
 - [x] P1.8.5 — Update owning contracts, record full configuration qualification and real 4K/45 MP/WARP measurements.
 - [x] P1.9 H1 size publication — Move source capture after complete admission, bind detached document/history,
   transfer retired drafts and qualify five history faults, capture refusal and stale epoch across all profiles.
+- [x] Adopt selected original Size slot/device recovery and predelegate worker retirement after private actual ASan state proof, including real history allocation failure; latest full native qualification follows the parent checklist.
+- [x] Add focused actual-publication and separate setup/warmup benchmark reporting; private Size/direct/sampler smoke and all six selected hardware/WARP Release large-fixture runs pass. Inclusive Apply maxima are at most554 microseconds; frame/drain overruns, initial-display costs, complete bounds, ordinary activation and latest full native qualification remain open.
 - [ ] P1.8 exit — Meet the 2 ms owner-apply target after the P1.9 history/chrome/upload work; current measured failures are retained in the evidence.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.8.
@@ -28,6 +30,20 @@ assertions and 22 actual host scenarios in each x64 profile. It preserves resize
 preparation owns the complete history candidate, and owner apply validates token, active layer and epoch before
 nonthrowing ownership swaps. The first ASan folder-save failure is preserved and remains F6 work; only the final
 r2 matrix qualifies this slice. [Evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md).
+
+## Current selected publication result — 2026-10-20
+
+The selected original-ticket route now has191 Size and473 unchanged Ctrl host assertions, including
+actual post-resize history allocation failure, original-worker cleanup and slot/device recovery. Private
+Release and real-ASan standard Application runs pass; the complete current native matrix now also passes full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis.
+All six selected Release fixtures keep inclusive completion Apply at most554 microseconds. The retained
+owner/frame and initial-display overruns still require resolution before the P1 exit. This does not
+activate the selected route in ordinary use. See the [current evidence](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md).
+The user confirms that no native ARM64 runtime host is available; cross-builds do not qualify runtime.
+
+The initial source inventory and recommended shape below describe the September30 migration. Later H1
+admission and original final-publication ownership supersede those implementation suggestions; current
+behavior is governed by the owning document/history/performance contracts and the parent checklist.
 
 ## Scope and contract
 

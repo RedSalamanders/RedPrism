@@ -7998,9 +7998,11 @@ int Application::RunBenchmark() noexcept
         return RunLayerRowsBenchmark();
     }
     if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
-        _bench == L"ui-sampler" || _bench == L"ui-sampler45" || _bench == L"ui-sampler100" ||
-        _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" || _bench == L"ui-prepared45" ||
-        _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" || IsUiCancellationBenchmark(_bench))
+        _bench == L"ui-size-prepared" || _bench == L"ui-size-prepared45" || _bench == L"ui-size-prepared100" ||
+        _bench == L"ui-size-prepared-smoke" || _bench == L"ui-sampler" || _bench == L"ui-sampler45" ||
+        _bench == L"ui-sampler100" || _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" ||
+        _bench == L"ui-prepared45" || _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" ||
+        IsUiCancellationBenchmark(_bench))
     {
         return RunUiBenchmark();
     }
