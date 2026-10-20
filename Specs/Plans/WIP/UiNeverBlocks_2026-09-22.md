@@ -16,17 +16,27 @@
 - [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
 
 - [x] Record exact-product hardware/WARP 10,000-layer cost diagnostics: 11 boundaries and 99 timing rows per device, with initial and first-rename Prepare intervals retained (hardware 6.383 / 8.621 ms; WARP 7.387 / 6.520 ms). Apply maxima are 0.260 / 0.240 ms. [Evidence](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-exact-product-cost-diagnostics--2026-10-20).
-- [ ] Attribute and fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. Opt-in layout/DxUi/accessibility phase attribution and public surface/cache statistics pass the canonical Release build, 1,022-TU profile and five PE/full-PDB checks; runtime diagnosis is waiting for the explicitly coordinated measurement hold to be released. Full latest-source runtime qualification remains due. The private startup candidate remains unbuilt and unadopted.
+- [ ] Attribute and fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. Opt-in layout/DxUi/accessibility phase attribution and public surface/cache statistics pass the canonical Release build, 1,022-TU profile and five PE/full-PDB checks; enabled hardware/WARP diagnostic runs and the disabled-attribution smoke now pass with original timing/pixel/history/provider checks retained. Latest-source local runtime qualification now passes with the captured-binding repair; the measured cost repair remains due. The private startup candidate remains unbuilt and unadopted.
 
 - [x] Independently verify failed native ARM64 Release run `39429595846`: exact 2,073-file commit/source bookends, five AA64/full-PDB pairs, successful Host/Document footers and the single retained cancellation fixture failure. [Native evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
-- [ ] Adopt and qualify the prepared event-publication fixture repair, then rerun native ARM64 validation. The repair preserves every original assertion; no native pass, application/IO runtime or G1 qualification is inferred from the failed attempt.
+- [x] Qualify the adopted event-publication fixture repair in the complete latest-source local matrix, preserving all 41 original assertions. [Current repair evidence](../../TestRuns/P1CapturedBindingRepair_2026-10-20.md). The earlier failed native attempt remains separate evidence.
+- [ ] Rerun native ARM64 validation on the repaired source. Cross-builds establish no ARM64 runtime or G1 qualification.
+
+- [x] Preserve and diagnose the latest-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
+  and the exact dump/PDB resolves `PreparedCommittedDisplay::PrepareForWork` querying the live immediate context
+  on a worker. The earlier Release run passes; the ASan attempt and later unstarted profiles remain unqualified.
+- [x] Qualify the captured-binding repair and ten independent immutable binding controls in complete latest-source
+  x64 Debug/Release/real ASan, analysis and all three ARM64 cross-builds. Worker preparation compares owner-captured
+  identities without invoking the immediate context. No current-generation or completion authority is inferred
+  from that comparison. Original failed receipts remain retained.
+- [ ] Commit/push this qualified repair step and verify its remote SHA; then run repaired-source native ARM64 validation.
 
 ## Remaining gates before P1 Done
 
 - [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
 - [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
 - [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove remaining owner geometry/coverage/outline construction and complete deferred transform settlement. Ordinary CPU cursor startup is qualified above; remaining selection input/display activation and S5/G1 stay open (P1.5–P1.6, S5).
-- [ ] **Clipboard and files:** close remaining real clipboard contention/delayed-render and I/O failure, cancellation, durability and session-end cases (P1.7, F3–F6).
+- [ ] **Clipboard and files:** retain the receipt, real contention, delayed-render, cancellation, native-fault and session-end controls preserved by the current full x64 matrix. Finish complete operation phase/admission bounds, controlled investigation of the retained historical save failures and measured G1 (P1.7, F3–F6); later passing repeats establish no historical cause.
 - [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
 - [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
 - [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).

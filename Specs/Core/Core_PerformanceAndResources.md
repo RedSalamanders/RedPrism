@@ -384,8 +384,12 @@ until requested; failure refuses recording or fails the caller's startup. A boun
 may block only this recorder on events, while ordinary CPU jobs remain independently runnable.
 
 Only RedPrism's private recording components may own/use a deferred D3D11 context on that lane. Common's
-public scheduler boundary remains standard-only. No worker receives an immediate context, maps for read,
-executes a command list, Presents or mutates a document. The scheduler joins recording callbacks before closing
+public scheduler boundary remains standard-only. Workers may retain an owner-captured immediate context solely
+for lifetime and identity; they must not invoke it, including observational `GetType` / `GetDevice` calls.
+`GpuCompletionContext::MatchesBindingForWork` compares the immutable captured owner/device/context identities
+without COM calls; it establishes neither current queue authority nor GPU acknowledgement. Type/device validation
+happens on the original owner before capture. No worker maps for read, executes a command list, Presents or
+mutates a document. The scheduler joins recording callbacks before closing
 their borrowed general kernel executor/MTA and before owner cleanup or final worker graph retirement.
 The independent lane-state reference is startup refusal, cross-lane FIFO through delayed external retirement,
 event-driven cancellation and complete reservation return. This foundation does not activate display/strokes.

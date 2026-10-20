@@ -427,3 +427,17 @@ reported explicitly. Renderer phases and command-list execution/completion regis
 opt-in sink. Disabled scopes read no clock and allocate nothing; enabling attribution adds no timer
 or wakeup source. Rows marked `diagnostic=1` locate costs and do not qualify G1. Performance evidence
 requires a separately qualified run with attribution disabled.
+
+## Optional layer-row Prepare attribution
+
+The layer-row benchmark also accepts `REDPRISM_UI_TIMING_ATTRIBUTION=1`. It retains the original initial
+and rename timing rows and reports bounded owner phase records (32 slots, minimum 1,000 microseconds).
+Chrome Prepare detail IDs are 3000 (tool visuals/layout), 3001 (DxUi Prepare), 3002 (accessibility attach)
+and 3003 (accessibility placement publication). QPC and available thread-cycle deltas identify measured
+intervals. Public embedded statistics before/after the original Prepare boundary show surface/cache changes;
+reading/reporting those statistics occurs outside that boundary. No samples are discarded.
+
+Overflow and clock failures are explicit. Disabled scopes read no clock and allocate nothing; attribution
+adds no timer, polling or wakeup. Rows marked `diagnostic=1` locate costs and establish no G1 qualification.
+Performance evidence requires a separate qualified run with attribution disabled. This hidden embedded-STA
+provider harness establishes neither visible frame latency nor external UI Automation RPC latency.

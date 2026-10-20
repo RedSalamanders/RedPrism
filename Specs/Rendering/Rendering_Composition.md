@@ -561,6 +561,12 @@ before sealing. Published graphs admit only owner blits on their actual device/c
 or mip generation. A blit installs the full target scissor after tiled recording. The renderer's opt-in route
 never falls back to owner composition while a replacement waits or refuses.
 
+Worker final-display preparation validates the supplied owner/device/immediate identities against its immutable
+`GpuCompletionContext` capture before acquiring a graph prefix. It must never query the live owner context,
+including `GetType` or `GetDevice`; the owner already validated its type and device before capture. A mismatch
+refuses without acquiring a graph. This metadata check is not a fresh-generation or GPU-completion check.
+Published-seed residency borrowing likewise reads immutable cache metadata and never invokes the seed's context.
+
 Publication transfers the preclaimed CPU retention slot before pointer adoption. A different document/device
 or a cleared document excludes old pixels immediately, even while an unfinished replacement holds a seed borrow.
 Same-document revisions can retain the previous complete display until replacement. Retiring a cache first

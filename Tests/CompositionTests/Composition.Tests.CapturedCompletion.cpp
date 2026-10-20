@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <thread>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -255,11 +256,46 @@ bool TestCaptureRefusalsAreNonMutating() noexcept
     Expect(SUCCEEDED(created), "capture.create-replacement-device-for-occupied-value-check");
     if (FAILED(created))
         return false;
+    // Matching the captured owner/device/context is immutable metadata work, including after rebind.
+    // A worker receives strong owners for retention only; it never queries their immediate context.
+    const auto ownerThread = GetCurrentThreadId();
+    std::array<bool, 9> binding{};
+    std::thread verifier(
+        [&]() noexcept
+        {
+            const auto foreignThread = GetCurrentThreadId();
+            GpuCompletionContext invalid;
+            binding = {
+                captured.MatchesBindingForWork(ownerThread, local.device.device.get(), local.device.context.get()),
+                !captured.MatchesBindingForWork(0, local.device.device.get(), local.device.context.get()),
+                !captured.MatchesBindingForWork(foreignThread, local.device.device.get(), local.device.context.get()),
+                !captured.MatchesBindingForWork(ownerThread, nullptr, local.device.context.get()),
+                !captured.MatchesBindingForWork(ownerThread, local.device.device.get(), nullptr),
+                !captured.MatchesBindingForWork(ownerThread, replacement.device.get(), local.device.context.get()),
+                !captured.MatchesBindingForWork(ownerThread, local.device.device.get(), replacement.context.get()),
+                !captured.MatchesBindingForWork(ownerThread, replacement.device.get(), replacement.context.get()),
+                !invalid.MatchesBindingForWork(ownerThread, local.device.device.get(), local.device.context.get())};
+        });
+    verifier.join();
+    constexpr std::array<const char*, 9> bindingNames{"binding.worker-matches-exact-owner-device-context",
+                                                      "binding.worker-refuses-zero-owner",
+                                                      "binding.worker-refuses-foreign-owner",
+                                                      "binding.worker-refuses-null-device",
+                                                      "binding.worker-refuses-null-context",
+                                                      "binding.worker-refuses-foreign-device",
+                                                      "binding.worker-refuses-foreign-context",
+                                                      "binding.worker-refuses-foreign-pair",
+                                                      "binding.worker-refuses-empty-capture"};
+    for (std::size_t index = 0; index < binding.size(); ++index)
+        Expect(binding[index], bindingNames[index]);
     const HRESULT rebound = local.queue.Bind(replacement.device.get(), replacement.context.get());
     Expect(SUCCEEDED(rebound) && local.queue.DeviceGeneration() != occupiedGeneration,
            "capture.rebind-advances-current-generation-before-occupied-refusal");
     if (FAILED(rebound))
         return false;
+    Expect(captured.MatchesBindingForWork(ownerThread, local.device.device.get(), local.device.context.get()) &&
+               !captured.MatchesBindingForWork(ownerThread, replacement.device.get(), replacement.context.get()),
+           "binding.rebind-retains-original-identities-without-granting-current-authority");
     const HRESULT recapture = local.queue.CaptureCompletionContext(occupied);
     Expect(FAILED(recapture) && occupied && occupied.DeviceGeneration() == occupiedGeneration &&
                occupied.DeviceGeneration() != local.queue.DeviceGeneration() &&

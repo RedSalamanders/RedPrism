@@ -4,6 +4,7 @@
 
 #include "Resources.h"
 #include "ThemePalette.h"
+#include "UiTiming.h"
 
 #include <algorithm>
 #include <cmath>
@@ -3247,13 +3248,21 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
     {
         return E_UNEXPECTED;
     }
-    SyncToolVisuals();
-    Layout(widthPixels, heightPixels, dpi);
-    const HRESULT prepared = _view.Prepare(widthPixels, heightPixels, _dpi);
+    {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3000};
+        SyncToolVisuals();
+        Layout(widthPixels, heightPixels, dpi);
+    }
+    const HRESULT prepared = [&]() noexcept
+    {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3001};
+        return _view.Prepare(widthPixels, heightPixels, _dpi);
+    }();
     // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
     // Its accessibility calls cancel a press in progress, so both wait for the pointer to be up.
     if (SUCCEEDED(prepared) && _owner != nullptr && !_accessibilitySite && !_pointerPressed && !_inDispatch)
     {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3002};
         AttachAccessibility();
     }
     else if (SUCCEEDED(prepared) && !_inDispatch && !_pointerPressed && AccessibilityBehind() &&
@@ -3263,6 +3272,7 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
         // listening client hears every change, and the controls a panel, a card or a header shows join the tree with
         // the frame that lays them out. Anything else (the overlay, values, the status bar under a moving pointer)
         // waits until a client asks for the tree (PublishAccessibilityForClient, RF-1001).
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3003};
         FlushAccessibilityPlacement();
     }
     return prepared;

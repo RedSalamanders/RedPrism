@@ -104,6 +104,15 @@ class GpuCompletionContext final
     {
         return _deviceGeneration;
     }
+    // Thread-independent identity check against the immutable owner capture. No COM calls, current queue
+    // status, GPU completion or permission to use the immediate context is implied. Bind validated its type
+    // and device on the owner; workers must not repeat GetType/GetDevice on that live immediate context.
+    [[nodiscard]] bool MatchesBindingForWork(std::uint32_t ownerThread, ID3D11Device* device,
+                                             ID3D11DeviceContext* immediate) const noexcept
+    {
+        return _origin && _deviceGeneration && ownerThread && _ownerThread == ownerThread && device && immediate &&
+               _device.get() == device && _context.get() == immediate;
+    }
     // Owner-only fresh status of the captured device. A barrier refusal is not a status query or acknowledgement.
     [[nodiscard]] HRESULT DeviceStatusOwner() const noexcept;
 

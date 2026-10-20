@@ -225,9 +225,15 @@ class CancellationProbe final : public RecordedDocumentReadbackJob
             _observation.processThread == _observation.ownerThread)
             return {JobStatus::Failed, E_UNEXPECTED};
 
-        _observation.enteredEventSignaled = SetEvent(_observation.entered.get()) != FALSE;
-        if (!_observation.enteredEventSignaled)
-            return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
+        // Publish every blocked-state observation before waking the owner. Writing the flag from
+        // SetEvent's return value would race the already-awakened owner on the successful path.
+        _observation.enteredEventSignaled = true;
+        if (!SetEvent(_observation.entered.get()))
+        {
+            const HRESULT error = HRESULT_FROM_WIN32(GetLastError());
+            _observation.enteredEventSignaled = false;
+            return {JobStatus::Failed, error};
+        }
         const DWORD waited = WaitForSingleObject(_observation.release.get(), kFailureBoundMs);
         _observation.processReleasedByTest = waited == WAIT_OBJECT_0;
         _observation.processObservedActualCancellation =

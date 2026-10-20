@@ -1237,14 +1237,11 @@ std::unique_ptr<PreparedCommittedDisplay> PreparedCommittedDisplay::PrepareForWo
     ID3D11Device* device, ID3D11DeviceContext* originalContext, GpuCompletionContext captured, CancelToken cancellation)
 {
     if (!ownerThread || ownerThread == GetCurrentThreadId() || !admission.IsValid() ||
-        cpuBound < admission.CpuBytes() || cpuBound - admission.CpuBytes() < sizeof(Storage) + 4096 || !device ||
-        !originalContext || originalContext->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE ||
-        !captured.DeviceGeneration() || cancellation.IsCancelled())
+        cpuBound < admission.CpuBytes() || cpuBound - admission.CpuBytes() < sizeof(Storage) + 4096 ||
+        !captured.MatchesBindingForWork(ownerThread, device, originalContext) || cancellation.IsCancelled())
         return {};
-    wil::com_ptr_nothrow<ID3D11Device> contextDevice;
-    originalContext->GetDevice(contextDevice.put());
-    if (contextDevice.get() != device)
-        return {};
+    // The owner already validated and captured this binding. Even observational context methods such as
+    // GetType/GetDevice race with rendering here; compare immutable captured identities only on this worker.
     auto root = std::make_unique<Storage>(ownerThread);
     root->bytes = cpuBound;
     root->device = device;

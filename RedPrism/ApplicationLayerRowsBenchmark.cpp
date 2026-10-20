@@ -164,6 +164,29 @@ void RowsReport(const LayerRowsMeasurement& measurement, unsigned int trial, std
     }};
     for (const auto& [kind, name] : kinds)
         report(name, measurement.owner.durations[static_cast<std::size_t>(kind)]);
+    if (measurement.owner.attributionEnabled)
+    {
+        for (std::uint32_t index = 0; index < measurement.owner.attributionCursor; ++index)
+        {
+            const auto& record = measurement.owner.attributionRecords[index];
+            std::printf("LAYER ROWS ATTRIBUTION trial=%u index=%u kind=%u phase=%u detail=%u wallUs=%llu "
+                        "qpcBegin=%lld qpcEnd=%lld qpcFrequency=%lld cyclesKnown=%d threadCycles=%llu "
+                        "sourceLine=%u diagnostic=1\n",
+                        trial, index, static_cast<unsigned int>(record.kind), static_cast<unsigned int>(record.phase),
+                        record.detail, static_cast<unsigned long long>(record.wallMicroseconds),
+                        static_cast<long long>(record.qpcBegin), static_cast<long long>(record.qpcEnd),
+                        static_cast<long long>(record.qpcFrequency), record.threadCycleKnown,
+                        static_cast<unsigned long long>(record.threadCycleDelta),
+                        static_cast<unsigned int>(record.line));
+        }
+        std::printf("LAYER ROWS ATTRIBUTION SUMMARY trial=%u count=%u overflow=%llu clockFailures=%llu "
+                    "capacity=%zu minimumUs=%llu diagnostic=1\n",
+                    trial, measurement.owner.attributionCursor,
+                    static_cast<unsigned long long>(measurement.owner.attributionOverflowCount),
+                    static_cast<unsigned long long>(measurement.owner.attributionClockFailures),
+                    kUiTimingAttributionCapacity,
+                    static_cast<unsigned long long>(kUiTimingAttributionMinimumMicroseconds));
+    }
     std::fflush(stdout);
 }
 } // namespace
@@ -196,6 +219,9 @@ int Application::RunLayerRowsBenchmark() noexcept
             FAILED(InitializeChrome()))
             return 5;
         BindCompositionDevice();
+        wchar_t attributionValue[2]{};
+        const bool attribution = GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attributionValue, 2) == 1 &&
+                                 attributionValue[0] == L'1';
         const bool smoke = _bench == L"layer-rows-smoke";
         const std::size_t layers = smoke ? 128 : PreparedLayerRowsStressFixture::kLayerCount;
         const unsigned int renames = smoke ? 2 : 10;
@@ -255,6 +281,7 @@ int Application::RunLayerRowsBenchmark() noexcept
             measuredTrial = trial;
             step = "request";
             LayerRowsMeasurement measurement;
+            measurement.owner.attributionEnabled = attribution;
             // Harness-only weak provenance observations; no hold, failure injection or useful work.
             // Original admission is still measured. Weak controls are reset before the retirement oracle.
             std::shared_ptr<LayerMetadataTestGate> accounting;
@@ -309,10 +336,28 @@ int Application::RunLayerRowsBenchmark() noexcept
                 afterPublication.surfaceAllocations != beforePublication.surfaceAllocations)
                 return 5;
             step = "prepare";
+            const auto prepareBefore = attribution ? _chrome->Statistics() : DxUi::EmbeddedStatistics{};
             std::int64_t prepareStart = 0;
             if (!RowsClock(prepareStart) || FAILED(prepare()) ||
                 !RowsRecord(measurement.prepare, prepareStart, frequency.QuadPart))
                 return 5;
+            if (attribution)
+            {
+                const auto after = _chrome->Statistics();
+                std::printf("LAYER ROWS PREPARE STATE trial=%u preparationsBefore=%llu preparationsAfter=%llu "
+                            "allocationsBefore=%llu allocationsAfter=%llu surfaceBytes=%llu replacementPeakBytes=%llu "
+                            "brushesBefore=%llu brushesAfter=%llu formatsBefore=%llu formatsAfter=%llu diagnostic=1\n",
+                            trial, static_cast<unsigned long long>(prepareBefore.preparations),
+                            static_cast<unsigned long long>(after.preparations),
+                            static_cast<unsigned long long>(prepareBefore.surfaceAllocations),
+                            static_cast<unsigned long long>(after.surfaceAllocations),
+                            static_cast<unsigned long long>(after.surfaceBytes),
+                            static_cast<unsigned long long>(after.replacementPeakBytes),
+                            static_cast<unsigned long long>(prepareBefore.cachedBrushes),
+                            static_cast<unsigned long long>(after.cachedBrushes),
+                            static_cast<unsigned long long>(prepareBefore.cachedTextFormats),
+                            static_cast<unsigned long long>(after.cachedTextFormats));
+            }
             wil::com_ptr_nothrow<IRawElementProviderFragment> root;
             auto* rawRoot = _chrome->AccessibilityRoot();
             if (!rawRoot || FAILED(rawRoot->QueryInterface(IID_PPV_ARGS(root.put()))))

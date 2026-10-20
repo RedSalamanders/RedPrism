@@ -2740,6 +2740,12 @@ the worker, which observes its actual cancellation token; terminal cancellation 
 no useful output. Require zero GPU sources/copies/maps/barriers, actual same-ticket Compute/MTA execution
 and the same bound memory owner through final aggregate destruction. The finite test barrier is a failure
 bound, not an application wait or a cancellation timing result.
+Every worker observation read after the entered-event wait MUST be published before signaling that event.
+In particular, assigning an observation from `SetEvent`'s return value after waking the owner is not a
+publication barrier for that later assignment. The fixture publishes its blocked-state flag first,
+captures an actual failed signal's Win32 error immediately, and preserves its event and original-ticket
+cancellation predicates. This ordering requirement establishes no wall-clock performance result.
+
 
 
 ### Recorded parent pixel continuation
