@@ -81,6 +81,8 @@ struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct CloneReadbackTestGate;
 struct SizingWorkTestGate;
+struct FinalPublicationCallbacks;
+struct SizeFinalPublicationWork;
 struct HistoryRestoreTestGate;
 struct HistoryResidencyTestGate;
 struct LayerRowsTestGate;
@@ -174,6 +176,7 @@ class Application final : public ChromeEvents,
     static int RunStandaloneLassoHostInputSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionPressGestureSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneSizeFinalPublicationSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneDisplayOpeningRetirementSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneSelectionPressShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneRectanglePressSelfTest(HINSTANCE instance) noexcept;
@@ -563,13 +566,14 @@ class Application final : public ChromeEvents,
     void PumpSelectionPressOwner() noexcept;
     [[nodiscard]] bool AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory&, std::uint64_t& cpu,
                                                    std::uint64_t& gpu) const noexcept;
-    class PixelFinalJob;
+    class FinalPublicationJob;
     static std::unique_ptr<Job> MakePixelFinalForWork(void*, SelectionOutlineGestureState&, SelectionPixelFinalWork);
-    void PumpPixelFinalPublicationOwner() noexcept;
-    [[nodiscard]] bool PixelFinalPublicationPendingOwner() const noexcept;
-    [[nodiscard]] bool PixelFinalPublicationReadyOwner() const noexcept;
+    static std::unique_ptr<Job> MakeSizeFinalForWork(void*, FinalPublicationCallbacks, SizeFinalPublicationWork&&);
+    void PumpFinalPublicationOwner() noexcept;
+    [[nodiscard]] bool FinalPublicationPendingOwner() const noexcept;
+    [[nodiscard]] bool FinalPublicationReadyOwner() const noexcept;
     bool _selectionPixelFinalPublicationEnabled = false;
-    PixelFinalJob* _pixelFinalCurrent = nullptr;
+    FinalPublicationJob* _finalPublicationCurrent = nullptr;
     void SelectionPressEventOwner(SelectionOutlineGestureState::Event) noexcept;
     [[nodiscard]] HRESULT StartSelectionPressGesture(std::uint64_t opening) noexcept;
 
@@ -1371,7 +1375,7 @@ class Application final : public ChromeEvents,
     GpuWorkQueue _gpuWork;
     GpuCommandPump _recordedCommands;
     GpuResidencyBudget _graphGpuBudget;
-    GpuResidencyReservation _pixelFinalShutdownGpu;
+    GpuResidencyReservation _finalPublicationShutdownGpu;
     GpuResidencyReservation _strokeFinishShutdownGpu;
     GpuResidencyReservation _strokeFinishShutdownDisplayGpu;
     StrokeFinishSource _strokeFinishSource{*this};

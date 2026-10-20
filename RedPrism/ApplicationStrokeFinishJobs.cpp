@@ -1965,12 +1965,12 @@ bool Application::StrokeFinishSource::Start() noexcept
 }
 bool Application::StrokeFinishSource::HasPending() const noexcept
 {
-    return _attached && (_owner._strokeFinishCurrent != nullptr || _owner.PixelFinalPublicationPendingOwner());
+    return _attached && (_owner._strokeFinishCurrent != nullptr || _owner.FinalPublicationPendingOwner());
 }
 bool Application::StrokeFinishSource::HasReady() const noexcept
 {
     return _attached && ((_owner._strokeFinishCurrent && _owner._strokeFinishCurrent->HasReadyOwner()) ||
-                         _owner.PixelFinalPublicationReadyOwner());
+                         _owner.FinalPublicationReadyOwner());
 }
 void Application::StrokeFinishSource::Pump() noexcept
 {
@@ -1978,8 +1978,8 @@ void Application::StrokeFinishSource::Pump() noexcept
         return;
     if (_owner._strokeFinishCurrent && _owner._strokeFinishCurrent->HasReadyOwner())
         _owner._strokeFinishCurrent->PumpOwner();
-    else if (_owner.PixelFinalPublicationReadyOwner())
-        _owner.PumpPixelFinalPublicationOwner();
+    else if (_owner.FinalPublicationReadyOwner())
+        _owner.PumpFinalPublicationOwner();
 }
 void Application::StrokeFinishSource::DeviceChangedOwner() noexcept
 {

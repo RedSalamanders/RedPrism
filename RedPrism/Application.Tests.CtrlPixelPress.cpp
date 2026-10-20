@@ -1,7 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
-#include "C:/Users/eric/.codex/worktrees/p1-opacity-host-proof/RedPrism/Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 #include "KeyboardState.h"
@@ -176,7 +176,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
     {
         auto& value = *static_cast<PublicationObservation*>(raw);
         auto& app = *value.owner;
-        if (!value.enabled || !app._pixelFinalCurrent || app._session.Generation() == value.generation)
+        if (!value.enabled || !app._finalPublicationCurrent || app._session.Generation() == value.generation)
             return; // Recovery may publish the still-current committed source before final edit publication.
         const auto* state = app._polygonalPressTestEnabled
                                 ? (app._polygonalPressState ? &app._polygonalPressState.value() : nullptr)
@@ -881,7 +881,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                         "actual-suspension-retires-source-before-original-final-capture"))
                 return 5;
             if (!expect(finalUntil([&]() noexcept { return state.pixelFinalWaitingForDisplay; }) &&
-                            !app.PixelFinalPublicationReadyOwner() && !state.completed && state.original == original &&
+                            !app.FinalPublicationReadyOwner() && !state.completed && state.original == original &&
                             receipt.Read().outcome == HostOutcome::Pending && app._session.Generation() == generation &&
                             app._session.history.UndoCount() == 0 && app._preparedLayerRows.get() == sourceRows &&
                             MatchesCpuPixels(app._session.Document().value(), SourcePixels()),
@@ -892,8 +892,8 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                 app.Shutdown();
                 if (!expect(app._jobs.IsIdle() && !state.completed && !state.controller && !state.closed &&
                                 !state.pixelFinalWaitingForDisplay && state.inputAcknowledged &&
-                                receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
-                                !app._pixelFinalShutdownGpu && app._jobs.ReservedMemoryBytes() == 0,
+                                receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
+                                !app._finalPublicationShutdownGpu && app._jobs.ReservedMemoryBytes() == 0,
                             "actual-joined-close-while-slot-waits-refunds-original-without-useful-completion"))
                     return 5;
             }
@@ -906,7 +906,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                     if (!expect(finalSettle() && state.completed && !state.controller && state.aborted &&
                                     !state.closed && !state.pixelFinalWaitingForDisplay && state.inputAcknowledged &&
                                     state.outcome.status == JobStatus::Cancelled &&
-                                    receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
+                                    receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
                                     app._session.Generation() == generation && app._session.history.UndoCount() == 0 &&
                                     app._preparedLayerRows.get() == sourceRows &&
                                     MatchesCpuPixels(app._session.Document().value(), SourcePixels()),
@@ -1009,7 +1009,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
             if (!expect(finalSettle() && gate.waited.load() == WAIT_OBJECT_0 && state.completed && !state.controller &&
                             !state.closed && state.aborted && state.inputAcknowledged &&
                             state.outcome.status == JobStatus::Failed && state.outcome.error == E_OUTOFMEMORY &&
-                            receipt.Read().outcome == HostOutcome::Failed && !app._pixelFinalCurrent &&
+                            receipt.Read().outcome == HostOutcome::Failed && !app._finalPublicationCurrent &&
                             app._session.Generation() == generation && app._session.history.UndoCount() == 0 &&
                             app._preparedLayerRows.get() == sourceRows &&
                             MatchesCpuPixels(app._session.Document().value(), SourcePixels()),
@@ -1059,8 +1059,8 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
             app.Shutdown(); // No release signal: only this actual Close can wake the held worker.
             if (!expect(gate.waited.load() == WAIT_OBJECT_0 + 1 && app._jobs.IsIdle() && !state.completed &&
                             !state.controller && !state.closed && state.inputAcknowledged &&
-                            receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
-                            !app._pixelFinalShutdownGpu && app._jobs.ReservedMemoryBytes() == 0,
+                            receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
+                            !app._finalPublicationShutdownGpu && app._jobs.ReservedMemoryBytes() == 0,
                         "actual-joined-close-retires-nested-original-without-useful-publication-or-charge"))
                 return 5;
         }
@@ -1072,7 +1072,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
             if (!expect(finalSettle() && gate.waited.load() == WAIT_OBJECT_0 && state.completed && !state.controller &&
                             !state.closed && state.aborted && state.inputAcknowledged &&
                             state.outcome.status == JobStatus::Cancelled &&
-                            receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
+                            receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
                             app._session.Generation() == generation && app._session.history.UndoCount() == 0 &&
                             app._preparedLayerRows.get() == sourceRows &&
                             MatchesCpuPixels(app._session.Document().value(), SourcePixels()) &&
@@ -1221,7 +1221,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         {
             if (!expect(state.completed && !state.closed && state.aborted && state.inputAcknowledged &&
                             state.outcome.status == JobStatus::Failed && state.outcome.error == E_FAIL &&
-                            receipt.Read().outcome == HostOutcome::Failed && !app._pixelFinalCurrent &&
+                            receipt.Read().outcome == HostOutcome::Failed && !app._finalPublicationCurrent &&
                             !state.pixelFinalWaitingForDisplay && app._layerRowsRetryAvailable &&
                             !app._preparedLayerRows && app._session.Generation() == generation &&
                             app._session.history.UndoCount() == 0 &&
@@ -1241,7 +1241,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         else
         {
             if (!expect(sourceRowsTicket && app._layerRowsTicket == sourceRowsTicket &&
-                            !app.PixelFinalPublicationReadyOwner() && !state.completed && !state.closed &&
+                            !app.FinalPublicationReadyOwner() && !state.completed && !state.closed &&
                             receipt.Read().outcome == HostOutcome::Pending && !app._preparedLayerRows &&
                             app._session.Generation() == generation && app._session.history.UndoCount() == 0 &&
                             MatchesCpuPixels(app._session.Document().value(), SourcePixels()) &&
@@ -1253,7 +1253,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                 app.Shutdown();
                 if (!expect(app._jobs.IsIdle() && !state.completed && !state.controller && !state.closed &&
                                 !state.pixelFinalWaitingForDisplay && state.inputAcknowledged &&
-                                receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
+                                receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
                                 app._jobs.ReservedMemoryBytes() == 0 && rowsGate->retired.load() &&
                                 rowsGate->retiredOffOwner.load(),
                             "joined-close-retires-both-originals-without-useful-publication"))
@@ -1264,7 +1264,7 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                 if (!expect(app._jobs.Cancel(original) && until([&]() noexcept { return state.completed; }) &&
                                 !state.closed && state.aborted && state.inputAcknowledged &&
                                 state.outcome.status == JobStatus::Cancelled && !state.pixelFinalWaitingForDisplay &&
-                                receipt.Read().outcome == HostOutcome::Cancelled && !app._pixelFinalCurrent &&
+                                receipt.Read().outcome == HostOutcome::Cancelled && !app._finalPublicationCurrent &&
                                 app._layerRowsTicket == sourceRowsTicket && !app._preparedLayerRows &&
                                 app._session.Generation() == generation && app._session.history.UndoCount() == 0 &&
                                 MatchesCpuPixels(app._session.Document().value(), SourcePixels()),

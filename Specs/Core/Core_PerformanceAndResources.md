@@ -1944,3 +1944,14 @@ The sizing job constructs its large source/history/result payload on its first a
 acknowledgement captures into that existing payload; it must not allocate a replacement wrapper. Capture
 failure, stale completion and Close still retire the complete payload on a worker. This structural rule
 does not qualify Size final GPU/chrome publication or its complete 2 ms Apply target.
+
+
+### Size final-display phase admission
+
+Unlike the continuing Pixel Move output, Size exposes no intermediate output. Its initial reservation covers
+CPU/history preparation, both worker-created accounting controls and positive old-source/temporary overlap.
+An acknowledged original may grow once from the exact immutable final rows/raster/WARP descriptor, before
+capturing new row/device owners or allocating that graph. Growth refusal fails locally with no CPU/history
+publication. No reservation growth is allowed after final output binding. The complete old parent payload
+retires on a worker, never in the owner's terminal wrapper destructor. Conservative bounds and small host
+controls do not establish the 2 ms Apply target or measured G1.

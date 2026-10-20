@@ -3695,3 +3695,14 @@ Polygonal each cover resume, cancellation, current-epoch failure and joined Clos
 and all prior CPU/history/row/GPU state until publication. The atomic GPU observer compares Chrome's real
 prepared accessibility-row owner with the published application owner. A control using the previous
 handoff must fail that assertion. All sizing fault modes also require first-worker payload allocation.
+
+
+### Size original final host integration
+
+The standard self-test registers RunStandaloneSizeFinalPublicationSelfTest after the Ctrl Pixel fixture.
+Its 129 independent actual-host facts preserve all 473 Pixel publication predecessors and cover 13 Size
+cases: literal nearest resize, coloured canvas extension, Undo/Redo, cancellation, history cancellation,
+invocation/restore staleness, final admission failure, joined Close, late cancellation after Apply, and
+first-row resume/cancel/failure/retry/Close. Restore checks current row/display epochs and foreign Redo,
+rather than requiring obsolete pointer identity. Hidden final work completes through event acknowledgements
+without a RenderFrame pump. Private selected proof remains distinct from full current native qualification.

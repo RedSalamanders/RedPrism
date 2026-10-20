@@ -176,6 +176,8 @@
     <ClInclude Include="..\Common\ZipOwner.h" />
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
+    <ClInclude Include="FinalEditSource.h" />
+    <ClInclude Include="FinalPublicationWork.h" />
     <ClInclude Include="UiCancellationFrame.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
@@ -532,6 +534,7 @@
     <ClCompile Include="FileDialogs.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="Application.Tests.SizeFinalPublication.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\CompositionVertex.hlsl">

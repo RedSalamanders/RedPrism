@@ -2339,3 +2339,18 @@ Shared unchanged pixels retain their existing owners. Destruction releases metad
 surviving immutable history/strong/weak readers cannot lose their charge when the prepared aggregate retires.
 The current size-card host still needs original-parent display/rows integration and measured complete 2 ms Apply;
 the ownership API and CPU tests alone do not close P1.8.
+
+
+### Selected Image Size original final publication
+
+The selected prepared-display Size path keeps CPU resizing, prepared history, final row/display preparation,
+recording and retirement on the same admitted original job. It creates its payload and final/temporary
+accounting owners on the first worker. Source/history capture follows admission. The immutable prepared Size
+source supports current-only validation and residency refresh; source/history/invocation cancellation is
+checked before each useful owner stage. Foreign restore or a newer Size invocation cannot be overwritten.
+
+Publication prevalidates the final graph and history permit, then applies CPU/history, recalculates Fit,
+publishes the actual current Chrome row owner and adopts the GPU graph in one nonreentrant owner action.
+Late cancellation cannot change an already committed result into a dropped/cancelled edit. One Undo/Redo
+restores the original/final dimensions and pixels. Failure preserves the current committed source; accepted
+work remains charged through original worker/GPU retirement, including joined Close.

@@ -982,3 +982,12 @@ Final publication updates the actual Chrome prepared-row consumer to the same cu
 GPU adoption callback, as well as the application's cached row handle. An unchanged-key sync cannot admit
 a younger row job. A pending first-row producer keeps the final original suspended until its exact current
 epoch succeeds or fails; cancellation and Close retain their original retirement authority.
+
+
+### Original final publication for changed canvas dimensions
+
+The final source adapter may carry prepared Pixel Move or prepared Size history. Both use the same original
+publication driver and the existing owner-work leaf. A Size graph may change canvas dimensions only after
+the exact immutable final descriptor is validated. CPU/history and the recalculated viewport Fit precede
+the actual Chrome rows and GPU publication callback. First-row waits retain the original and stop on its
+own cancellation/current row failure; explicit row retry cannot revive a failed Size edit.

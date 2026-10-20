@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "FinalEditSource.h"
+#include "FinalPublicationWork.h"
 #include "OriginalDisplayPublication.h"
 #include "SelectionOutlineGestureState.h"
 #include "SelectionPixelFinalWork.h"
@@ -29,17 +31,37 @@ struct PixelFinalPayload final : DeferredReleaseNode
     // These accounting aliases die last, after every owned graph/history/row payload.
     std::shared_ptr<SharedPublicationMemory> finalMemory;
     std::shared_ptr<SharedPublicationMemory> temporaryMemory;
-    std::optional<PreparedPixelMoveClosure> closure;
+    std::optional<FinalEditSource> source;
+    std::unique_ptr<DeferredReleaseNode, DestroyFinalParentForWork> parent;
     std::shared_ptr<const PreparedLayerRows> previousRowsAtApply;
     OriginalDisplayPublication::RowInput rows;
     OriginalDisplayPublication::Bounds bounds;
     std::unique_ptr<OriginalDisplayPublication> display;
+    static FinalEditSource TakeSource(SelectionPixelFinalWork&& work) noexcept
+    {
+        return FinalEditSource(std::move(work.closure));
+    }
+    static FinalEditSource TakeSource(SizeFinalPublicationWork&& work) noexcept
+    {
+        return FinalEditSource(std::move(work.publication));
+    }
+    static std::unique_ptr<DeferredReleaseNode, DestroyFinalParentForWork> TakeParent(
+        SelectionPixelFinalWork&&) noexcept
+    {
+        return {};
+    }
+    static std::unique_ptr<DeferredReleaseNode, DestroyFinalParentForWork> TakeParent(
+        SizeFinalPublicationWork&& work) noexcept
+    {
+        return std::move(work.parent);
+    }
     bool originalCaptured = false;
     bool shutdownJoined = false;
 
-    explicit PixelFinalPayload(SelectionPixelFinalWork work)
+    template <class Work>
+    explicit PixelFinalPayload(Work&& work)
         : finalMemory(std::move(work.finalMemory)), temporaryMemory(std::move(work.temporaryMemory)),
-          closure(std::move(work.closure))
+          source(TakeSource(std::move(work))), parent(TakeParent(std::move(work)))
     {
         bytes = (std::max)(work.remainingCpuBytes, kDeferredReleaseThreshold);
         destroy = [](DeferredReleaseNode* raw) noexcept
@@ -64,8 +86,8 @@ struct RetirePixelFinalPayload final
 };
 } // namespace
 
-// This is a stage object inside SelectionOutlineGestureJob, never a submitted younger job.
-class Application::PixelFinalJob final : public Job
+// This stage belongs to its already admitted selection/Size original, never a submitted younger job.
+class Application::FinalPublicationJob final : public Job
 {
     enum class Stage
     {
@@ -85,11 +107,11 @@ class Application::PixelFinalJob final : public Job
         Destroy
     };
     Application& _owner;
-    SelectionOutlineGestureState& _result;
+    const FinalPublicationCallbacks _callbacks;
     const std::uint32_t _ownerThread;
     std::uint64_t _cpuBytes;
     std::uint64_t _finalBytes;
-    const std::uint64_t _displayCpuBytes, _displayGpuBytes;
+    std::uint64_t _displayCpuBytes, _displayGpuBytes;
     std::uint64_t _collapseRevision = 0;
     Stage _stage = Stage::Intro;
     JobTicket _original;
@@ -102,6 +124,24 @@ class Application::PixelFinalJob final : public Job
     bool _detached = false;
     bool _shutdownJoined = false;
 
+    [[nodiscard]] bool CurrentOwner() const noexcept
+    {
+        return _payload && _payload->source && _payload->source->IsCurrent(_owner._session) &&
+               (!_callbacks.currentOwner || _callbacks.currentOwner(_callbacks.context));
+    }
+    void SetWaitingOwner(bool value) noexcept
+    {
+        if (_callbacks.waitingOwner)
+            _callbacks.waitingOwner(_callbacks.context, value);
+    }
+    void CompleteParentOwner(JobResult result) noexcept
+    {
+        if (_callbacks.completedOwner)
+            _callbacks.completedOwner(_callbacks.context, _applied,
+                                      _applied                                  ? JobResult{}
+                                      : _terminal.status == JobStatus::Finished ? result
+                                                                                : _terminal);
+    }
     void AcceptOriginal(JobTicket ticket) noexcept
     {
         if (!ticket.generation || (_original.generation && _original != ticket))
@@ -132,14 +172,14 @@ class Application::PixelFinalJob final : public Job
     }
     static void Wake(void* raw) noexcept
     {
-        auto& value = *static_cast<PixelFinalJob*>(raw);
+        auto& value = *static_cast<FinalPublicationJob*>(raw);
         if (!value._owner._shutdownStarted &&
             !value._owner._jobs.RequestUiActionSource(value._owner._continuationAction))
             std::terminate();
     }
     bool BeginRetirement() noexcept
     {
-        _result.pixelFinalWaitingForDisplay = false;
+        SetWaitingOwner(false);
         _residency.Reset();
         if (_payload && _payload->display && !_detached)
         {
@@ -169,7 +209,7 @@ class Application::PixelFinalJob final : public Job
     bool PublishOwner() noexcept;
     static void RowsAdopted(void* raw) noexcept
     {
-        auto& value = *static_cast<PixelFinalJob*>(raw);
+        auto& value = *static_cast<FinalPublicationJob*>(raw);
         auto& owner = value._owner;
         owner._layerRowsPublishedKey = owner.CurrentLayerRowsKey();
         owner._layerRowsRequestedKey = owner._layerRowsPublishedKey;
@@ -181,8 +221,9 @@ class Application::PixelFinalJob final : public Job
     }
 
   public:
-    PixelFinalJob(Application& owner, SelectionOutlineGestureState& result, SelectionPixelFinalWork work)
-        : _owner(owner), _result(result), _ownerThread(work.ownerThread), _cpuBytes(work.remainingCpuBytes),
+    template <class Work>
+    FinalPublicationJob(Application& owner, FinalPublicationCallbacks callbacks, Work&& work)
+        : _owner(owner), _callbacks(callbacks), _ownerThread(work.ownerThread), _cpuBytes(work.remainingCpuBytes),
           _finalBytes(work.finalOutputBytes), _displayCpuBytes(work.displayCpuBytes),
           _displayGpuBytes(work.displayGpuBytes)
     {
@@ -192,11 +233,11 @@ class Application::PixelFinalJob final : public Job
         _payload.reset(payload.release());
         _retirementMemory = _payload->temporaryMemory;
     }
-    ~PixelFinalJob() override
+    ~FinalPublicationJob() override
     {
         // All borrowed callback sources already detached. No result-state access after parent Terminal.
-        if (_owner._pixelFinalCurrent == this)
-            _owner._pixelFinalCurrent = nullptr;
+        if (_owner._finalPublicationCurrent == this)
+            _owner._finalPublicationCurrent = nullptr;
     }
     JobResult Run(JobContext& context) override
     {
@@ -212,21 +253,21 @@ class Application::PixelFinalJob final : public Job
             return {};
         case Stage::PrepareDisplay:
         {
-            const auto* final = _payload->closure->FinalDocument();
+            const auto* final = _payload->source->FinalDocument();
             const auto prepared =
                 final ? _payload->display->PrepareForWork(*final, std::move(_payload->rows), context.cancellation)
                       : JobResult{JobStatus::Failed, E_UNEXPECTED};
-            if (prepared.status == JobStatus::Finished && _result.pixelFinalPreparedForTest)
-                _result.pixelFinalPreparedForTest(_result.workObserver, context.shutdownEvent);
+            if (prepared.status == JobStatus::Finished && _callbacks.preparedForWork)
+                _callbacks.preparedForWork(_callbacks.context, context.shutdownEvent);
             return prepared;
         }
         case Stage::Record:
             return _terminal.status == JobStatus::Finished ? _payload->display->RecordForWork(context.cancellation)
                                                            : _terminal;
         case Stage::RefreshHistory:
-            ++_result.residencyRefreshes;
-            _result.NotifyWork(SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted);
-            return _payload->closure->RefreshHistoryResidency(context.cancellation)
+            if (_callbacks.refreshForWork)
+                _callbacks.refreshForWork(_callbacks.context);
+            return _payload->source->RefreshHistoryResidency(context.cancellation)
                        ? JobResult{}
                        : JobResult{context.cancellation.IsCancelled() ? JobStatus::Cancelled : JobStatus::Failed,
                                    E_ABORT};
@@ -257,7 +298,8 @@ class Application::PixelFinalJob final : public Job
         {
             if (_payload->display && !_payload->display->RetireGraphForWork())
                 std::terminate();
-            _payload->closure.reset();
+            _payload->source.reset();
+            _payload->parent.reset();
             _payload->previousRowsAtApply.reset();
             _payload->rows = {};
             _payload->finalMemory.reset();
@@ -307,9 +349,9 @@ class Application::PixelFinalJob final : public Job
         case Stage::AllocateDisplay:
         case Stage::Capture:
         {
-            if (!_owner._session.IsPreparedDeferredPixelMoveClosureCurrent(*_payload->closure))
+            if (!CurrentOwner())
                 return Fail(E_ABORT);
-            _result.pixelFinalWaitingForDisplay = false;
+            SetWaitingOwner(false);
             // A failed current-source rebuild has no future readiness to wait for. Preserve the
             // original pixels/history and retire this original, rather than stranding it until Close.
             const HRESULT sourceFailure = _owner.CurrentCommittedDisplayFailureOwner();
@@ -322,7 +364,7 @@ class Application::PixelFinalJob final : public Job
             if (!_owner._committedDisplay.HasCurrentPublicationOwner() || _owner._committedDisplay.HasPending())
             {
                 _stage = Stage::AwaitSlot;
-                _result.pixelFinalWaitingForDisplay = true;
+                SetWaitingOwner(true);
                 _owner._jobs.NotifyOwnerWork();
                 return true;
             }
@@ -337,6 +379,8 @@ class Application::PixelFinalJob final : public Job
         }
         case Stage::PrepareDisplay:
         {
+            if (!CurrentOwner())
+                return Fail(E_ABORT);
             const auto status = _payload->display->AdmitRecordingOwner();
             if (FAILED(status))
             {
@@ -361,10 +405,10 @@ class Application::PixelFinalJob final : public Job
         if (_owner._shutdownStarted)
             return false;
         if (_stage == Stage::AwaitRows)
-            return _cancellation.IsCancelled() || RowsReadyOwner() || RowsFailedOwner() ||
-                   !_owner._session.IsPreparedDeferredPixelMoveClosureCurrent(*_payload->closure);
+            return _cancellation.IsCancelled() || !CurrentOwner() || RowsReadyOwner() || RowsFailedOwner() ||
+                   !CurrentOwner();
         if (_stage == Stage::AwaitSlot)
-            return _cancellation.IsCancelled() ||
+            return _cancellation.IsCancelled() || !CurrentOwner() ||
                    (!_owner._committedDisplay.HasPending() && (_owner._committedDisplay.HasCurrentPublicationOwner() ||
                                                                FAILED(_owner.CurrentCommittedDisplayFailureOwner())));
         return _stage == Stage::AwaitTransport && _payload && _payload->display->TransportReadyOwner();
@@ -397,12 +441,9 @@ class Application::PixelFinalJob final : public Job
         if (_retirementMemory && !_retirementMemory->IsBound() &&
             FAILED(_retirementMemory->BindForRetirement(_owner._jobs, _original)))
             std::terminate();
-        _result.pixelFinalClosed = _applied;
-        _result.pixelFinalOutcome = _applied                                  ? JobResult{}
-                                    : _terminal.status == JobStatus::Finished ? result
-                                                                              : _terminal;
-        if (_owner._pixelFinalCurrent == this)
-            _owner._pixelFinalCurrent = nullptr;
+        CompleteParentOwner(result);
+        if (_owner._finalPublicationCurrent == this)
+            _owner._finalPublicationCurrent = nullptr;
     }
     void RetainJoinedRetirement(JobScheduler& jobs, JobTicket ticket) noexcept override
     {
@@ -419,13 +460,13 @@ class Application::PixelFinalJob final : public Job
             if (_payload->display && _payload->display->OriginalOwner().generation)
             {
                 _payload->originalCaptured = true;
-                if (!_payload->display->JoinedShutdownOwner(_owner._pixelFinalShutdownGpu))
+                if (!_payload->display->JoinedShutdownOwner(_owner._finalPublicationShutdownGpu))
                     std::terminate();
             }
             _payload->shutdownJoined = true;
         }
-        _result.pixelFinalClosed = _applied;
-        _result.pixelFinalWaitingForDisplay = false;
+        CompleteParentOwner({JobStatus::Cancelled, E_ABORT});
+        SetWaitingOwner(false);
         _shutdownJoined = true;
     }
 };
@@ -470,14 +511,14 @@ bool Application::AddPixelFinalAdmissionOwner(SelectionOutlineGestureMemory& mem
     return true;
 }
 
-bool Application::PixelFinalJob::PlanOwner() noexcept
+bool Application::FinalPublicationJob::PlanOwner() noexcept
 {
     if (!_owner._selectionPixelFinalPublicationEnabled || !_owner._committedDisplayInitialized ||
-        !_owner._recordedCommandsInitialized || (_owner._pixelFinalCurrent && _owner._pixelFinalCurrent != this) ||
-        !_payload || !_payload->closure ||
-        !_owner._session.IsPreparedDeferredPixelMoveClosureCurrent(*_payload->closure))
+        !_owner._recordedCommandsInitialized ||
+        (_owner._finalPublicationCurrent && _owner._finalPublicationCurrent != this) || !_payload ||
+        !_payload->source || !CurrentOwner())
         return Fail(E_ABORT);
-    _owner._pixelFinalCurrent = this;
+    _owner._finalPublicationCurrent = this;
     if (!RowsReadyOwner())
     {
         if (RowsFailedOwner())
@@ -486,12 +527,12 @@ bool Application::PixelFinalJob::PlanOwner() noexcept
         // identities by waiting for its actual epoch before capturing previous rows. No new request,
         // capture, reservation growth, periodic wake or younger final-edit job is created here.
         _stage = Stage::AwaitRows;
-        _result.pixelFinalWaitingForDisplay = true;
+        SetWaitingOwner(true);
         _owner._jobs.NotifyOwnerWork();
         return true;
     }
-    _result.pixelFinalWaitingForDisplay = false;
-    const auto* final = _payload->closure->FinalDocument();
+    SetWaitingOwner(false);
+    const auto* final = _payload->source->FinalDocument();
     if (!final)
         return Fail(E_UNEXPECTED);
     RasterResidencyPlanOptions options;
@@ -509,6 +550,22 @@ bool Application::PixelFinalJob::PlanOwner() noexcept
         !AddPixelFinalBytes(extra, sizeof(OriginalDisplayPublication) + 32768) ||
         (_owner._renderer.IsWarp() && !AddPixelFinalBytes(extra, gpu.GpuBytes())))
         return Fail(E_OUTOFMEMORY);
+    if (_payload->source->SourceKind() == FinalEditSource::Kind::Size && !_displayCpuBytes && !_displayGpuBytes)
+    {
+        auto total = _cpuBytes;
+        auto output = _finalBytes;
+        if (!AddPixelFinalBytes(total, extra) || !AddPixelFinalBytes(output, extra) || output >= total)
+            return Fail(E_OUTOFMEMORY);
+        // Size exposes no continuing output. Grow only this original from the exact immutable final
+        // descriptor, before row/source/device capture or any new graph allocation. Refusal is final.
+        const auto grown = static_cast<HRESULT>(_owner._jobs.IncreaseReservation(_original, total));
+        if (FAILED(grown))
+            return Fail(grown);
+        _cpuBytes = total;
+        _finalBytes = output;
+        _displayCpuBytes = extra;
+        _displayGpuBytes = gpu.GpuBytes();
+    }
     if (!extra || extra > _displayCpuBytes || gpu.GpuBytes() > _displayGpuBytes || _finalBytes < _displayCpuBytes ||
         _finalBytes >= _cpuBytes)
         return Fail(E_OUTOFMEMORY);
@@ -531,14 +588,13 @@ bool Application::PixelFinalJob::PlanOwner() noexcept
     return Resume(Stage::AllocateDisplay);
 }
 
-bool Application::PixelFinalJob::PublishOwner() noexcept
+bool Application::FinalPublicationJob::PublishOwner() noexcept
 {
-    if (!_payload || !_payload->closure ||
-        !_owner._session.IsPreparedDeferredPixelMoveClosureCurrent(*_payload->closure) ||
-        _collapseRevision != _owner._session.CollapseRevision())
+    if (!_payload || !_payload->source || !CurrentOwner() || _collapseRevision != _owner._session.CollapseRevision())
         return Fail(E_ABORT);
-    ++_result.residencyTries;
-    const auto decision = _payload->closure->TryAcquireHistoryResidency(_residency);
+    if (_callbacks.residencyTryOwner)
+        _callbacks.residencyTryOwner(_callbacks.context);
+    const auto decision = _payload->source->TryAcquireHistoryResidency(_residency);
     if (decision == DocumentHistory::ResidencyValidation::Refresh ||
         decision == DocumentHistory::ResidencyValidation::Busy)
     {
@@ -547,7 +603,7 @@ bool Application::PixelFinalJob::PublishOwner() noexcept
     }
     if (decision != DocumentHistory::ResidencyValidation::Ready)
         return Fail(E_ABORT);
-    const auto* final = _payload->closure->FinalDocument();
+    const auto* final = _payload->source->FinalDocument();
     if (!final)
         return Fail(E_UNEXPECTED);
     // One original transfer covers final pixels/history/rows/graph; its temporary sibling protects all
@@ -558,40 +614,76 @@ bool Application::PixelFinalJob::PublishOwner() noexcept
         status = _payload->display->PreparePublicationOwner(_payload->finalMemory, *final);
     if (FAILED(status))
         return Fail(status);
-    if (!_owner._session.ApplyPreparedDeferredPixelMoveClosureIfCurrent(*_payload->closure))
+    if (!_payload->source->ApplyIfCurrent(_owner._session))
         std::terminate(); // Prevalidated under the exact residency permit, without nested dispatch.
     _applied = true;
+    if (_callbacks.appliedOwner)
+        _callbacks.appliedOwner(_callbacks.context);
     _payload->previousRowsAtApply = std::move(_owner._preparedLayerRows);
     if (!_payload->display->AdoptOwner(_owner._preparedLayerRows, RowsAdopted, this))
         std::terminate();
     _residency.Reset();
-    _result.pixelFinalClosed = true;
+
     return BeginRetirement();
 }
 
 std::unique_ptr<Job> Application::MakePixelFinalForWork(void* host, SelectionOutlineGestureState& result,
                                                         SelectionPixelFinalWork work)
 {
-    static_assert(sizeof(PixelFinalJob) + sizeof(PixelFinalPayload) + 4096 <= 16384,
+    static_assert(sizeof(FinalPublicationJob) + sizeof(PixelFinalPayload) + 4096 <= 16384,
                   "Native wrapper allocation must fit the original pixel-gesture wrapper allowance.");
     if (!host || !work.ownerThread)
         return {};
     // This worker constructs owners only. It never reads the host/session/window/device.
-    return std::make_unique<PixelFinalJob>(*static_cast<Application*>(host), result, std::move(work));
+    FinalPublicationCallbacks callbacks;
+    callbacks.context = &result;
+    callbacks.waitingOwner = [](void* raw, bool waiting) noexcept
+    { static_cast<SelectionOutlineGestureState*>(raw)->pixelFinalWaitingForDisplay = waiting; };
+    callbacks.residencyTryOwner = [](void* raw) noexcept
+    { ++static_cast<SelectionOutlineGestureState*>(raw)->residencyTries; };
+    callbacks.refreshForWork = [](void* raw) noexcept
+    {
+        auto& state = *static_cast<SelectionOutlineGestureState*>(raw);
+        ++state.residencyRefreshes;
+        state.NotifyWork(SelectionOutlineGestureState::WorkStage::ResidencyRefreshStarted);
+    };
+    callbacks.preparedForWork = [](void* raw, void* shutdown) noexcept
+    {
+        auto& state = *static_cast<SelectionOutlineGestureState*>(raw);
+        if (state.pixelFinalPreparedForTest)
+            state.pixelFinalPreparedForTest(state.workObserver, shutdown);
+    };
+    callbacks.appliedOwner = [](void* raw) noexcept
+    { static_cast<SelectionOutlineGestureState*>(raw)->pixelFinalClosed = true; };
+    callbacks.completedOwner = [](void* raw, bool applied, JobResult outcome) noexcept
+    {
+        auto& state = *static_cast<SelectionOutlineGestureState*>(raw);
+        state.pixelFinalClosed = applied;
+        state.pixelFinalOutcome = outcome;
+    };
+    return std::make_unique<FinalPublicationJob>(*static_cast<Application*>(host), callbacks, std::move(work));
 }
 
-void Application::PumpPixelFinalPublicationOwner() noexcept
+void Application::PumpFinalPublicationOwner() noexcept
 {
-    if (!_shutdownStarted && _pixelFinalCurrent)
-        _pixelFinalCurrent->AdvanceOwner();
+    if (!_shutdownStarted && _finalPublicationCurrent)
+        _finalPublicationCurrent->AdvanceOwner();
 }
 
-bool Application::PixelFinalPublicationPendingOwner() const noexcept
+bool Application::FinalPublicationPendingOwner() const noexcept
 {
-    return _pixelFinalCurrent != nullptr;
+    return _finalPublicationCurrent != nullptr;
 }
 
-bool Application::PixelFinalPublicationReadyOwner() const noexcept
+bool Application::FinalPublicationReadyOwner() const noexcept
 {
-    return _pixelFinalCurrent && _pixelFinalCurrent->HasReadyOwner();
+    return _finalPublicationCurrent && _finalPublicationCurrent->HasReadyOwner();
+}
+
+std::unique_ptr<Job> Application::MakeSizeFinalForWork(void* host, FinalPublicationCallbacks callbacks,
+                                                       SizeFinalPublicationWork&& work)
+{
+    if (!host || !work.ownerThread || !callbacks.currentOwner || !callbacks.completedOwner)
+        return {};
+    return std::make_unique<FinalPublicationJob>(*static_cast<Application*>(host), callbacks, std::move(work));
 }

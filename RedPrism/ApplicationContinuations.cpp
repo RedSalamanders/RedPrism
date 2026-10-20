@@ -26,7 +26,7 @@
 // only admits event-time arguments. Pixel/IO snapshots are acquired after preceding history work has finished.
 void Application::ContinuationAction::Run() noexcept
 {
-    _owner.PumpPixelFinalPublicationOwner();
+    _owner.PumpFinalPublicationOwner();
     _owner.RunHostContinuation();
 }
 

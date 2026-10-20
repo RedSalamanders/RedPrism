@@ -3,6 +3,7 @@
 #include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentSizeHistory.h"
+#include "FinalPublicationWork.h"
 #include "SizingWorkTestGate.h"
 #include "resource.h"
 
@@ -22,6 +23,8 @@ namespace
 #pragma warning(disable : 4324)
 struct SizingPayload final : DeferredReleaseNode
 {
+    std::shared_ptr<SharedPublicationMemory> finalMemory;
+    std::shared_ptr<SharedPublicationMemory> temporaryMemory;
     std::optional<JobToken> token;
     std::optional<CanvasDocument> source;
     DocumentHistory::StateView history;
@@ -62,14 +65,17 @@ class Application::SizingJob final : public Job
 {
   public:
     SizingJob(Application& owner, HistoryWorkStamp stamp, std::variant<CanvasSizeOptions, ImageSizeOptions> options,
-              std::uint64_t retirement)
+              std::uint64_t retirement, std::uint64_t initialMemory, std::uint64_t outputMemory, bool finalDisplay)
         : _owner(owner), _stamp(stamp), _options(std::move(options)), _invocation(owner._sizeInvocation),
           _generation(owner._session.Generation()), _retirement(retirement), _gate(owner._sizingWorkTestGate),
-          _ownerThread(GetCurrentThreadId())
+          _ownerThread(GetCurrentThreadId()), _initialMemory(initialMemory), _outputMemory(outputMemory),
+          _finalDisplay(finalDisplay)
     {
     }
     JobResult Run(JobContext& context) override
     {
+        if (_finalDelegate)
+            return _finalDelegate->Run(context);
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_payload)
@@ -80,6 +86,12 @@ class Application::SizingJob final : public Job
             owned->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
             owned->gate = _gate;
             owned->ownerThread = _ownerThread;
+            if (_finalDisplay)
+            {
+                owned->finalMemory = SharedPublicationMemory::CreateForWork(_outputMemory);
+                owned->temporaryMemory = SharedPublicationMemory::CreateForWork(_initialMemory);
+                _retirementMemory = owned->temporaryMemory;
+            }
             if (_gate)
                 _gate->payloadAllocatedOffOwner.store(GetCurrentThreadId() != _ownerThread);
             _payload.reset(owned.release());
@@ -100,9 +112,11 @@ class Application::SizingJob final : public Job
             {
                 using Options = std::decay_t<decltype(options)>;
                 if constexpr (std::is_same_v<Options, CanvasSizeOptions>)
-                    return ResizeCanvas(_payload->source.value(), options, _payload->result, context.cancellation);
+                    return ResizeCanvas(_payload->source.value(), options, _payload->result, context.cancellation,
+                                        _payload->finalMemory);
                 else
-                    return ResizeImage(_payload->source.value(), options, _payload->result, context.cancellation);
+                    return ResizeImage(_payload->source.value(), options, _payload->result, context.cancellation,
+                                       _payload->finalMemory);
             },
             _options);
         if (_gate && _gate->status)
@@ -123,7 +137,7 @@ class Application::SizingJob final : public Job
                 _payload->source, _payload->active, _payload->token.value(), std::move(_payload->history),
                 std::move(_payload->result),
                 std::holds_alternative<CanvasSizeOptions>(_options) ? L"Canvas Size" : L"Image Size",
-                context.cancellation, _gate ? observer : DocumentHistory::PrepareObserver{});
+                context.cancellation, _gate ? observer : DocumentHistory::PrepareObserver{}, _payload->finalMemory);
             if (!_payload->publication)
                 _status = context.cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Invalid;
         }
@@ -133,12 +147,33 @@ class Application::SizingJob final : public Job
             if (result.status != JobStatus::Finished)
                 return result;
         }
+        if (!context.cancellation.IsCancelled() && _finalDisplay && _status == ResizeStatus::Ok)
+        {
+            if (!_payload->publication)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            _finalDelegate = MakeFinalStageForWork(context.reservedMemoryBytes);
+            if (!_finalDelegate)
+                return {JobStatus::Failed, E_OUTOFMEMORY};
+        }
         return context.cancellation.IsCancelled() || _status == ResizeStatus::Cancelled
                    ? JobResult{JobStatus::Cancelled}
                    : JobResult{};
     }
+    void RetireWorkerStage(JobContext& context, JobResult result) noexcept override
+    {
+        if (_finalDelegate)
+            _finalDelegate->RetireWorkerStage(context, result);
+    }
+    bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override
+    {
+        AcceptOriginal(ticket);
+        return _finalDelegate && _finalDelegate->DeferRetirement(result, ticket);
+    }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
+        AcceptOriginal(ticket);
+        if (_finalDelegate)
+            return _finalDelegate->DeferCompletion(result, ticket);
         if (_captured || !_payload || result.status != JobStatus::Finished || _owner._shutdownStarted ||
             !_owner._historyWork.IsCurrent(_stamp) || _owner._historyWork.CancelRequested(_stamp) ||
             _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
@@ -174,20 +209,29 @@ class Application::SizingJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
+        if (_finalDelegate)
+        {
+            _finalDelegate->Completed(result);
+            result = _finalOutcome;
+        }
+        if (_retirementMemory && !_retirementMemory->IsBound() &&
+            FAILED(_retirementMemory->BindForRetirement(_owner._jobs, _original)))
+            std::terminate();
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
         std::int32_t error = result.error;
-        if (_owner._sizingStamp != _stamp || !_owner._historyWork.IsCurrent(_stamp) ||
-            _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
-            _owner._session.Generation() != _generation ||
-            (_payload && _payload->token &&
-             !_owner._session.CanApplyJobResult(_payload->token.value(), _payload->token->sequence)))
+        if (!_finalApplied &&
+            (_owner._sizingStamp != _stamp || !_owner._historyWork.IsCurrent(_stamp) ||
+             _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
+             _owner._session.Generation() != _generation ||
+             (_payload && _payload->token &&
+              !_owner._session.CanApplyJobResult(_payload->token.value(), _payload->token->sequence))))
         {
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
-        else if (_owner._historyWork.CancelRequested(_stamp))
+        else if (!_finalApplied && _owner._historyWork.CancelRequested(_stamp))
         {
             outcome = HostOutcome::Cancelled;
             error = E_ABORT;
@@ -197,14 +241,15 @@ class Application::SizingJob final : public Job
             outcome = HostOutcome::Failed;
             error = _captureError;
         }
-        bool changed = false;
+        bool changed = _finalApplied;
         if (outcome == HostOutcome::Succeeded)
         {
             switch (_status)
             {
             case ResizeStatus::Ok:
-                changed = _payload && _payload->publication &&
-                          _owner._session.ApplyPreparedDocumentSizeIfCurrent(_payload->publication.value());
+                changed = _finalApplied ||
+                          (!_finalDisplay && _payload && _payload->publication &&
+                           _owner._session.ApplyPreparedDocumentSizeIfCurrent(_payload->publication.value()));
                 if (!changed)
                 {
                     outcome = HostOutcome::Stale;
@@ -252,7 +297,58 @@ class Application::SizingJob final : public Job
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
 
+    void RetainJoinedRetirement(JobScheduler& jobs, JobTicket ticket) noexcept override
+    {
+        AcceptOriginal(ticket);
+        if (_finalDelegate)
+            _finalDelegate->RetainJoinedRetirement(jobs, ticket);
+        else if (_retirementMemory && !_retirementMemory->IsBound() &&
+                 FAILED(_retirementMemory->BindForRetirement(jobs, ticket)))
+            std::terminate();
+    }
+
   private:
+    void AcceptOriginal(JobTicket ticket) noexcept
+    {
+        if (!ticket.generation || (_original.generation && ticket != _original))
+            std::terminate();
+        _original = ticket;
+    }
+    [[nodiscard]] bool CurrentParentOwner() const noexcept
+    {
+        return !_owner._shutdownStarted && _owner._sizingStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               !_owner._historyWork.CancelRequested(_stamp) && _owner._sizeInvocation == _invocation &&
+               _owner._session.DocumentSerial() == _stamp.documentSerial && _owner._session.Generation() == _generation;
+    }
+    __declspec(noinline) std::unique_ptr<Job> MakeFinalStageForWork(std::uint64_t memory)
+    {
+        // Construct callbacks only. They never inspect the borrowed owner until its acknowledged stage.
+        FinalPublicationCallbacks callbacks;
+        callbacks.context = this;
+        callbacks.currentOwner = [](void* raw) noexcept { return static_cast<SizingJob*>(raw)->CurrentParentOwner(); };
+        callbacks.waitingOwner = [](void* raw, bool waiting) noexcept
+        { static_cast<SizingJob*>(raw)->_finalWaiting = waiting; };
+        callbacks.appliedOwner = [](void* raw) noexcept
+        {
+            auto& parent = *static_cast<SizingJob*>(raw);
+            parent._finalApplied = true;
+            // Fit is part of the same nonfailing first-display handoff, before any GPU publication callback.
+            parent._owner._viewport.followsFit = true;
+            parent._owner._viewport.Fit(parent._owner.DocumentSize());
+        };
+        callbacks.completedOwner = [](void* raw, bool applied, JobResult outcome) noexcept
+        {
+            auto& parent = *static_cast<SizingJob*>(raw);
+            parent._finalApplied = applied;
+            parent._finalOutcome = outcome;
+        };
+        return Application::MakeSizeFinalForWork(
+            &_owner, callbacks,
+            SizeFinalPublicationWork{
+                _payload->finalMemory, _payload->temporaryMemory, std::move(_payload->publication.value()),
+                std::unique_ptr<DeferredReleaseNode, DestroyFinalParentForWork>(_payload.release()), memory,
+                _outputMemory, _ownerThread, 0, 0});
+    }
     JobResult PassGate(JobContext& context) noexcept
     {
         _gate->visits.fetch_add(1);
@@ -275,6 +371,13 @@ class Application::SizingJob final : public Job
     const std::shared_ptr<SizingWorkTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<SizingPayload, RetireSizingPayload> _payload;
+    const std::uint64_t _initialMemory, _outputMemory;
+    const bool _finalDisplay;
+    std::shared_ptr<SharedPublicationMemory> _retirementMemory;
+    std::unique_ptr<Job> _finalDelegate;
+    JobTicket _original;
+    bool _finalApplied = false, _finalWaiting = false;
+    JobResult _finalOutcome{};
     bool _captured = false;
     ResizeStatus _status = ResizeStatus::Invalid;
     std::int32_t _captureError = 0;
@@ -312,13 +415,28 @@ HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOption
             add(memory, sizeof(SizingJob) + sizeof(SizingPayload)) &&
             memory <= (std::numeric_limits<std::uint64_t>::max)() / 2 && add(retirement, memory * 2))
         {
+            const bool finalDisplay = _selectionPixelFinalPublicationEnabled && _preparedLayerRowsEnabled &&
+                                      _committedDisplayInitialized && _recordedCommandsInitialized;
+            auto outputMemory = memory;
+            if (finalDisplay)
+            {
+                // No continuing output: the original may grow once from the exact final immutable source,
+                // before capturing rows or GPU/device owners. Initial admission covers CPU/history and
+                // both output controls, plus positive old-source/temporary retirement overlap.
+                if (!add(outputMemory, 2 * SharedPublicationMemory::OwnershipAllowance() + 32768) ||
+                    !add(memory, outputMemory) || !add(memory, retirement))
+                    throw std::bad_alloc{}; // Entire admission fails through the stamp-cleanup boundary below.
+            }
             if (_sizingWorkTestGate)
                 _sizingWorkTestGate->reservationBytes = memory;
-            std::unique_ptr<Job> job =
-                std::make_unique<SizingJob>(*this, _sizingStamp.value(), std::move(options), retirement);
+            std::unique_ptr<Job> job = std::make_unique<SizingJob>(*this, _sizingStamp.value(), std::move(options),
+                                                                   retirement, memory, outputMemory, finalDisplay);
             JobTicket ticket;
-            result =
-                static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+            JobOptions descriptor{JobClass::Commit, _session.DocumentSerial(), memory};
+            descriptor.deferredRetirement = finalDisplay;
+            descriptor.reserveRetainedMemory = finalDisplay;
+            descriptor.allowMemoryWaiting = !finalDisplay;
+            result = static_cast<HRESULT>(_jobs.Submit(job, descriptor, ticket));
             if (SUCCEEDED(result))
                 _sizingTicket = ticket;
         }

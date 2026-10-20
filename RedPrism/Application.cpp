@@ -3938,7 +3938,7 @@ void Application::Shutdown() noexcept
         _lassoDraftDisplayEnabled = false;
         _lassoDraftViewValid = false;
     }
-    _pixelFinalShutdownGpu.ResetOwner();
+    _finalPublicationShutdownGpu.ResetOwner();
     _strokeFinishShutdownGpu.ResetOwner();
     _strokeFinishShutdownDisplayGpu.ResetOwner();
     if (_committedDisplayInitialized)
