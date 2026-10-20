@@ -263,8 +263,13 @@
         cross-builds against 503 frozen inputs: 34 document controls and 214 actual host checks per x64 profile.
         The exact r3 archive retains all images, logs and receipts; the ISA and I/O failures are preserved.
       - [ ] A7.3b.2 — Complete live producer settlement and capture/apply/history/chrome/upload/G1 measurements.
-    - [ ] A7.3c — Live-shape transform redraw with prepared carried mask and atomic after-document/history;
+    - [x] A7.3c — Live-shape transform redraw with prepared carried mask and atomic after-document/history;
       coordinate with A6 so distortion, redraw and floating settlement cannot bypass the owning worker graph.
+      Current x64 Debug/Release/real ASan each pass the same nine actual-host redraw assertions, including
+      held source/history/reservation, pan/zoom while the worker is held, literal output and carried mask,
+      one history entry, worker retirement and exact undo/redo. This closes the scoped functional redraw
+      route; complete phase bounds, ordinary prepared activation and measured G1 remain required by A8.
+      [Current reconciliation](../../TestRuns/P1ShapeRedrawReconciliation_2026-10-20.md).
 - [ ] A8 — All moved production callers, ordering/lifetime/failure gates and every due G1 operation measured; reconcile master and owning specs before closing P1.5.
 
 Status: ACTIVE, executable P1.5 child; no completion claim.

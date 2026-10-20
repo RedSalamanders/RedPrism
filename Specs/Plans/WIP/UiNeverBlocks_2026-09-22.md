@@ -7,7 +7,7 @@
 - [x] Qualify the exact current integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
 - [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. Native ARM64 execution is unavailable; cross-builds establish no runtime result.
 - [x] Record the six selected Release Size profiles: inclusive Apply maxima 40–554 µs. Retain all initial-display, warmup, frame and drain misses; these samples do not qualify complete G1.
-- [ ] Commit/push the qualified Size recovery step and verify the branch destination SHA.
+- [x] Commit/push the qualified Size recovery step as `aa8dd94`; verify the branch destination SHA `aa8dd945c023549f17aefe82396cef0b086f1e51`.
 - [ ] Resolve remaining owner/frame costs, complete phase admission and ordinary activation, and close every delivery gate below before P1 Done.
 
 ## Remaining gates before P1 Done
@@ -55,7 +55,7 @@ These entries preserve earlier sequencing and evidence. Later qualification abov
 
 - [x] Adopt the reviewed Size recovery, predelegate worker retirement, row-holder worker allocation and actual Size benchmark after private ASan proof: 191 Size, 473 Ctrl and 123 layer-row assertions; the corrected complete Application roster is 12,233 facts. Boundary/direct/sampler smoke is separately qualified.
 - [x] Qualify the latest 1,022-TU Size recovery integration in full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 155 Application stages, 12,233 Application facts, 191 Size / 473 Ctrl / 123 row assertions. [Current matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20). No native ARM64 runtime host is available.
-- [ ] Commit/push the qualified Size recovery step and verify the destination SHA, then continue the remaining P1 delivery gates.
+- [x] Commit/push the qualified Size recovery step as `aa8dd94` and verify the destination SHA. Remaining P1 delivery gates continue above.
 - [x] Record selected Size setup/warmup/scored owner costs for all six hardware/WARP Release profiles in [the Size recovery and cost evidence](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md); Apply maxima are 40–554 µs. Initial-display/excluded-warmup costs remain in the evidence.
 - [ ] Resolve measured frame/drain overruns and complete phase bounds; ordinary activation and complete P1 G1 remain open.
 
