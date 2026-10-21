@@ -7,67 +7,6 @@
 #include <type_traits>
 #include <vector>
 
-// Only this producer may adopt its construction-cached geometry. No uncancellable second path traversal.
-class SelectionNudgeBuilder final
-{
-  public:
-    static std::optional<SelectionLoops> Build(const SelectionLoops& source, int dx, int dy, CancelToken cancellation,
-                                               SelectionNudgeObserver observer)
-    {
-        std::uint64_t work = 0;
-        const auto checkpoint = [&](SelectionNudgeStage stage)
-        {
-            if (observer.checkpoint)
-                observer.checkpoint(observer.context, stage, work);
-            return !cancellation.IsCancelled();
-        };
-        if (!checkpoint(SelectionNudgeStage::Begin))
-            return std::nullopt;
-        if (dx == 0 && dy == 0)
-            return checkpoint(SelectionNudgeStage::Complete) ? std::optional(source) : std::nullopt;
-        std::vector<SelectionLoop> loops;
-        loops.reserve(source.size());
-        SelectionLoops result;
-        for (const auto& loop : source)
-        {
-            if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
-                return std::nullopt;
-            SelectionLoop translated;
-            translated.reserve(loop.size());
-            for (const auto& point : loop)
-            {
-                if ((work++ % 1024) == 0 && !checkpoint(SelectionNudgeStage::Translate))
-                    return std::nullopt;
-                const Vec2 next{point.x + static_cast<double>(dx), point.y + static_cast<double>(dy)};
-                translated.push_back(next);
-                if (std::isfinite(next.x) && std::isfinite(next.y))
-                {
-                    if (!result._bounds)
-                        result._bounds = SelectionBounds{next.x, next.y, next.x, next.y};
-                    else
-                    {
-                        result._bounds.value().minX = std::min(result._bounds.value().minX, next.x);
-                        result._bounds.value().minY = std::min(result._bounds.value().minY, next.y);
-                        result._bounds.value().maxX = std::max(result._bounds.value().maxX, next.x);
-                        result._bounds.value().maxY = std::max(result._bounds.value().maxY, next.y);
-                    }
-                }
-            }
-            result._pointCount += translated.size();
-            result._storageBytes += translated.capacity() * sizeof(Vec2);
-            loops.push_back(std::move(translated));
-        }
-        if (!checkpoint(SelectionNudgeStage::Complete))
-            return std::nullopt;
-        if (!loops.empty())
-        {
-            result._storageBytes += sizeof(loops) + loops.capacity() * sizeof(SelectionLoop);
-            result._loops = std::make_shared<const std::vector<SelectionLoop>>(std::move(loops));
-        }
-        return !cancellation.IsCancelled() ? std::optional(std::move(result)) : std::nullopt;
-    }
-};
-
 std::optional<SelectionNudgeInput> DocumentSession::PrepareSelectionNudgeInput(int dx, int dy) const
 {
     if (!_document || !_document.value().selection || _document.value().selection.value().IsEmpty() ||
@@ -93,8 +32,8 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
         input._document.value().height != input._token.canvasHeight)
         return std::nullopt;
     auto loops =
-        SelectionNudgeBuilder::Build(input._document.value().selection.value().loops, input._dx, input._dy,
-                                     cancellation, geometryObserver ? *geometryObserver : SelectionNudgeObserver{});
+        TranslateSelectionLoopsForWork(input._document.value().selection.value().loops, input._dx, input._dy,
+                                       cancellation, geometryObserver ? *geometryObserver : SelectionNudgeObserver{});
     if (!loops || cancellation.IsCancelled())
         return std::nullopt;
     PreparedSelectionNudge result(std::move(input));
@@ -112,13 +51,9 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
     after.height = before.height;
     after.resolution = before.resolution;
     after.selection = DocumentSelection{before.selection.value().antialiased, std::move(loops.value())};
-    after.layers.reserve(before.layers.size());
-    for (const auto& layer : before.layers)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        after.layers.push_back(layer);
-    }
+    if (cancellation.IsCancelled())
+        return std::nullopt;
+    after.layers = before.layers;
     if (cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
         return std::nullopt;
     result._document = std::move(after);
@@ -126,6 +61,25 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
                                                    result._input._active, result._document, result._input._active,
                                                    L"Move Selection", cancellation, observer);
     return result._history && !cancellation.IsCancelled() ? std::optional(std::move(result)) : std::nullopt;
+}
+
+DocumentHistory::ResidencyValidation PreparedSelectionNudge::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_input._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedSelectionNudge::RefreshHistoryResidency(CancelToken cancellation,
+                                                     DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_input._valid || cancellation.IsCancelled())
+        return false;
+    // A real nudge sampled the after-document's outline; the zero offset has no after-document and sampled
+    // no new trim decision. Preserve each publication's exact current-topology witness during refresh.
+    return !_history || DocumentHistory::RefreshPreparedResidency(
+                            _history.value(), _document ? _document : _input._document, cancellation, observer);
 }
 
 bool DocumentSession::IsPreparedSelectionNudgeCurrent(const PreparedSelectionNudge& prepared) const noexcept
@@ -158,8 +112,10 @@ std::uint64_t DocumentSession::SelectionNudgeMemoryBytes() const noexcept
     if (!_document || !_document.value().selection || _document.value().selection.value().IsEmpty())
         return 0;
     auto bytes = history.EditMemoryBytes(_document);
-    if (!bytes)
+    // Preparation may overlap the original history and a refreshed index/container set.
+    if (!bytes || bytes > (std::numeric_limits<std::uint64_t>::max)() / 2)
         return 0;
+    bytes *= 2;
     const auto add = [&](std::uint64_t count, std::uint64_t size)
     {
         const auto maximum = (std::numeric_limits<std::uint64_t>::max)();

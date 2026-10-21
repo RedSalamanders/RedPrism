@@ -1,5 +1,7 @@
 #include "Document.Tests.ShapeEditWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "ShapeEditWork.h"
@@ -331,7 +333,7 @@ void AtomicGroupSelectionMaskAndRedo()
     session.SetOpacity(0.5);
     session.Undo();
     session.SelectLayerTarget(sourceID, true);
-    session.CollapsedGroupIDs().insert(groupID);
+    session.SetGroupCollapsed(groupID, true);
     const auto selection = session.Selection();
     const auto sourceDocument = session.Document();
     const auto priorCount = session.history.UndoCount();
@@ -380,14 +382,15 @@ void StaleInputsAndMovedFrom()
         if (input)
         {
             const Guid id = session.ActiveLayerID().value();
-            session.EditForTest(
-                [](CanvasDocument& document)
-                {
-                    ImageLayer& layer = document.layers.front();
-                    const std::array<std::uint8_t, 4> pixel{0x37, 0x29, 0x1B, 0xFF};
-                    const Raster replacement = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
-                    layer.asset = RasterAsset{replacement, replacement, layer.name};
-                });
+            EditLayerRecordsForTest(session,
+                                    [](DocumentFixture& document)
+                                    {
+                                        ImageLayer& layer = document.layers.front();
+                                        const std::array<std::uint8_t, 4> pixel{0x37, 0x29, 0x1B, 0xFF};
+                                        const Raster replacement =
+                                            Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
+                                        layer.asset = RasterAsset{replacement, replacement, layer.name};
+                                    });
             const auto before = session.Document();
             const auto history = session.history.CaptureState();
             auto result = DocumentSession::PrepareShapeEditPublication(std::move(input.value()), executor, {}, {});
@@ -443,8 +446,8 @@ void StaleInputsAndMovedFrom()
         Expect(input.has_value(), "stale.transform-input-prepared");
         if (input)
         {
-            session.EditForTest([](CanvasDocument& document)
-                                { document.layers.front().transform.origin = Vec2{3, 4}; });
+            EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                    { document.layers.front().transform.origin = Vec2{3, 4}; });
             const auto before = session.Document();
             auto result = DocumentSession::PrepareShapeEditPublication(std::move(input.value()), executor, {}, {});
             Expect(result.publication.has_value(), "stale.transform-worker-prepared");
@@ -472,7 +475,7 @@ void StaleInputsAndMovedFrom()
 void ActiveGroupSubtreeAndUnsettledDraft()
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 100;
     document.height = 80;
@@ -485,9 +488,9 @@ void ActiveGroupSubtreeAndUnsettledDraft()
     child.parentID = nested.id;
     const auto unrelated = ImageLayer::Blank(L"Root sibling", {2, 2});
     document.layers = {group, nested, child, unrelated};
-    session.ReplaceDocument(std::move(document), group.id);
-    session.CollapsedGroupIDs().insert(group.id);
-    session.CollapsedGroupIDs().insert(nested.id);
+    session.ReplaceDocument(std::move(document).Seal(), group.id);
+    session.SetGroupCollapsed(group.id, true);
+    session.SetGroupCollapsed(nested.id, true);
     InlineExecutor executor;
     auto result = Prepare(session, Draft(ShapeKind::Rectangle, 4, 5, 8, 6), 0xFF0033AAu, executor);
     const bool applied = result.publication && session.ApplyPreparedShapeEditIfCurrent(result.publication.value());

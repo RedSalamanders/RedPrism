@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerCopyWorkTestGate.h"
 #include "Selection.h"
@@ -88,7 +89,8 @@ int Application::RunLayerCopyWorkSelfTest() noexcept
             state.cancelledRetained = state.receipt.Read().outcome == HostOutcome::Pending && owner._layerCopyTicket;
         }
         else if (state.mode == Mode::StaleSource)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
         else if (state.mode == Mode::StaleSelection)
             owner._session.Deselect();
         else if (state.mode == Mode::StaleHistory)
@@ -138,14 +140,16 @@ int Application::RunLayerCopyWorkSelfTest() noexcept
                     _session.Deselect();
                 if (kind == 2)
                 {
-                    _session.EditForTest(
-                        [](CanvasDocument& document)
-                        {
-                            auto& layer = document.layers.back();
-                            const auto gray = Raster::MakeSparse(8, 6, RasterFormat::Gray8, {}, 0, 0, {}, 85);
-                            layer.mask = LayerMask{};
-                            layer.mask->asset = RasterAsset{gray, Raster::MakeThumbnail(gray), L"Literal gray"};
-                        });
+                    EditLayerRecordsForTest(_session,
+                                            [](DocumentFixture& document)
+                                            {
+                                                auto& layer = document.layers.back();
+                                                const auto gray =
+                                                    Raster::MakeSparse(8, 6, RasterFormat::Gray8, {}, 0, 0, {}, 85);
+                                                layer.mask = LayerMask{};
+                                                layer.mask->asset =
+                                                    RasterAsset{gray, Raster::MakeThumbnail(gray), L"Literal gray"};
+                                            });
                     _session.SelectLayerTarget(target, true);
                 }
                 _session.history.Reset();
@@ -246,5 +250,5 @@ int Application::RunLayerCopyWorkSelfTest() noexcept
             }
     std::printf("layer-copy-host summary: %u checks, %d failures\n", checks, failures);
     std::fflush(stdout);
-    return failures ? 5 : 0;
+    return failures ? 5 : RunImageWrapperResidencySelfTest(1);
 }

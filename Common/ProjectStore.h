@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 enum class ProjectIoStatus
@@ -85,14 +86,17 @@ struct ProjectIoObserver
     void* context = nullptr;
 };
 
-// Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
-// value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
-// there is no process-wide test state. Injected operation errors are final; only native rename errors get the
-// bounded recovery attempts. DestinationTimerCreate/Arm/Wait apply only after a native prepublication rename
-// refusal; cancellation can stop there with the current destination intact. RecoveryTimerCreate/Arm/Wait fault results
-// stop that recovery operation while the observer still receives the native rollback rename error. Publication
-// timer faults preserve the native staging rename error; cancellation stops publication only before rotation.
-// ZIP saves do not consult this policy.
+// Optional deterministic failure seam for checked durability and destination publication. The callback returns a Win32
+// error value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call; there
+// is no process-wide test state. Injected operation errors are final; only native rename errors get the bounded
+// recovery attempts. DestinationTimerCreate/Arm/Wait apply only after a native prepublication rename refusal;
+// cancellation can stop there with the current destination intact. RecoveryTimerCreate/Arm/Wait fault results stop that
+// recovery operation while the observer still receives the native rollback rename error. Publication timer faults
+// preserve the native staging rename error; cancellation stops publication only before rotation. Manifest durability
+// gates apply to both shapes. Archive commit/flush/close/replacement gates apply only to ZIP saves; ZIP saves never
+// consult directory rename/recovery/cleanup stages. Injected durability/replacement errors are reported before cleanup
+// and refuse publication with Encode. They deny a gate before its real operation, while RAII still closes/discards its
+// exclusively owned resources.
 enum class ProjectSaveFaultStage : std::uint8_t
 {
     DestinationToBackupRename,
@@ -109,7 +113,17 @@ enum class ProjectSaveFaultStage : std::uint8_t
     PublicationTimerCreate,
     PublicationTimerArm,
     PublicationTimerWait,
+    ManifestFlush,
+    ManifestClose,
+    ArchiveCommit,
+    ArchiveFlush,
+    ArchiveClose,
+    ArchiveReplace,
+    Count,
 };
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::PublicationTimerWait) == 13);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::ManifestFlush) == 14);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::Count) == 20);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RollbackRename) == 2);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerCreate) == 5);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerArm) == 6);
@@ -134,70 +148,68 @@ template <typename AttributeFn>
     const auto trim = [](std::wstring path)
     {
         while (!path.empty() && (path.back() == L'\\' || path.back() == L'/'))
-        {
             path.pop_back();
-        }
         return path;
     };
-    const auto samePrefix = [](const std::wstring& text, const std::wstring& prefix)
+    const auto startsWithInsensitive = [](std::wstring_view text, std::wstring_view prefix)
     {
         if (text.size() < prefix.size())
-        {
             return false;
-        }
         for (std::size_t index = 0; index < prefix.size(); ++index)
         {
             wchar_t left = text[index];
             wchar_t right = prefix[index];
             if (left >= L'A' && left <= L'Z')
-            {
                 left = static_cast<wchar_t>(left - L'A' + L'a');
-            }
             if (right >= L'A' && right <= L'Z')
-            {
                 right = static_cast<wchar_t>(right - L'A' + L'a');
-            }
             if (left != right)
-            {
                 return false;
-            }
         }
         return true;
     };
-    const std::wstring base = trim(root);
-    const std::wstring full = trim(candidate);
-    if (base.empty() || full.size() <= base.size() || !samePrefix(full, base))
+    // Compare only the standard DOS/UNC namespace spellings. Other verbatim/device roots retain their exact
+    // spelling and are compared only with the same namespace spelling; they are never mapped to DOS/UNC.
+    // Preserve the candidate API spelling for attribute queries and retain the component reparse check below.
+    const auto comparisonSpelling = [&](const std::wstring& path)
     {
+        if (startsWithInsensitive(path, L"\\\\?\\UNC\\"))
+            return std::wstring{L"\\\\"} + path.substr(8);
+        if (path.size() >= 7 && startsWithInsensitive(path, L"\\\\?\\") &&
+            ((path[4] >= L'A' && path[4] <= L'Z') || (path[4] >= L'a' && path[4] <= L'z')) && path[5] == L':' &&
+            path[6] == L'\\')
+            return path.substr(4);
+        return path;
+    };
+    const std::wstring fullOriginal = trim(candidate);
+    const std::wstring baseComparable = trim(comparisonSpelling(root));
+    const std::wstring full = comparisonSpelling(fullOriginal);
+    if (baseComparable.empty() || full.size() <= baseComparable.size() ||
+        !startsWithInsensitive(full, baseComparable) ||
+        (full[baseComparable.size()] != L'\\' && full[baseComparable.size()] != L'/'))
         return false;
-    }
-    if (full[base.size()] != L'\\' && full[base.size()] != L'/')
-    {
-        return false;
-    }
-    std::size_t cursor = base.size();
+
+    // comparisonSpelling changes only the leading namespace prefix; this offset maps each compared component
+    // back to the caller's original candidate for attribute checks (including long extended paths).
+    const std::size_t originalOffset = fullOriginal.size() - full.size();
+    std::size_t cursor = baseComparable.size();
     while (cursor < full.size())
     {
         const std::size_t slash = full.find_first_of(L"\\/", cursor + 1);
         const std::size_t end = slash == std::wstring::npos ? full.size() : slash;
         const std::wstring component = full.substr(cursor + 1, end - (cursor + 1));
         if (component.empty() || component == L"." || component == L"..")
-        {
             return false;
-        }
-        const std::uint32_t flags = attributes(full.substr(0, end));
+        const std::size_t originalEnd = originalOffset + end;
+        const std::uint32_t flags = attributes(fullOriginal.substr(0, originalEnd));
         if (flags != kProjectMissingAttributes && (flags & kProjectReparseAttribute) != 0)
-        {
             return false;
-        }
         if (slash == std::wstring::npos)
-        {
             break;
-        }
         cursor = slash;
     }
     return true;
 }
-
 [[nodiscard]] bool PathLooksLikeZipProject(const wchar_t* path) noexcept;
 [[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation = {},
                                             ProjectIoObserver observer = {}, ProjectLoadLimits limits = {});

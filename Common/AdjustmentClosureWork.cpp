@@ -1,6 +1,7 @@
 #include "AdjustmentClosureWork.h"
 
 #include "Adjust.h"
+#include "DocumentDraft.h"
 
 #include <algorithm>
 #include <type_traits>
@@ -43,31 +44,32 @@ std::optional<PreparedAdjustmentClosure> DocumentSession::PrepareAdjustmentClosu
     if (cancellation.IsCancelled())
         return std::nullopt;
 
-    CanvasDocument after;
-    after.id = source->id;
-    after.width = source->width;
-    after.height = source->height;
-    after.resolution = source->resolution;
-    after.selection = source->selection;
-    after.layers.reserve(source->layers.size());
-    for (const auto& layer : source->layers)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        after.layers.push_back(layer);
-    }
-    const auto target = std::find_if(after.layers.begin(), after.layers.end(),
-                                     [&](const auto& layer) { return layer.id == input.layerID; });
-    if (input.commit &&
-        (target == after.layers.end() || !target->adjustment || target->adjustment->kind != input.original.kind))
+    const auto targetIndex = IndexOf(source->layers, input.layerID);
+    if (input.commit && (!targetIndex || !source->layers[targetIndex.value()].adjustment ||
+                         source->layers[targetIndex.value()].adjustment->kind != input.original.kind))
         return std::nullopt;
     // Cancel mirrors UpdateAdjustment: restore when the adjustment still exists, and close even if it is gone.
-    if (target != after.layers.end() && target->adjustment)
+    CanvasDocument after;
+    if (targetIndex && source->layers[targetIndex.value()].adjustment)
     {
+        auto draft = CanvasDocumentDraft::Clone(source.value(), source->layers.size(), cancellation);
+        if (!draft)
+            return std::nullopt;
         auto adjusted = input.commit ? Adjust::AdjustmentWithSettings(input.original, input.settings) : input.original;
         if (!adjusted.IsValid())
             return std::nullopt;
-        target->adjustment = std::move(adjusted);
+        {
+            auto layers = draft.value().EditLayers();
+            layers[targetIndex.value()].adjustment = std::move(adjusted);
+        }
+        auto sealed = draft.value().Seal(cancellation);
+        if (!sealed)
+            return std::nullopt;
+        after = std::move(sealed.value());
+    }
+    else
+    {
+        after = source.value();
     }
     if (cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
         return std::nullopt;

@@ -1,11 +1,16 @@
 #include "Application.h"
 
-#include "DocumentReadbackJob.h"
+#include "DocumentDraft.h"
+
+#include "PublicationGraphAllocator.h"
 #include "RasterWork.h"
+#include "RecordedDocumentReadbackJob.h"
 #include "Runtime.Tests.UtilityWorkTestGate.h"
+#include "SharedPublicationMemory.h"
 #include "resource.h"
 
 #include <algorithm>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -28,6 +33,7 @@ void RecordMergeRetirement(const std::shared_ptr<UtilityWorkTestGate>& gate, DWO
 #pragma warning(disable : 4324)
 struct Application::MergeProbePayload final : DeferredReleaseNode
 {
+    std::shared_ptr<SharedPublicationMemory> memory; // Last after all captured source/plan owners.
     std::optional<CanvasDocument> source;
     std::optional<Guid> active;
     std::optional<JobToken> token;
@@ -62,7 +68,31 @@ class Application::MergePlanProbeJob final : public Job
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
         if (!_payload)
-            return {}; // first owner continuation captures only after this record is admitted
+        {
+            _memory = SharedPublicationMemory::CreateForWork();
+            auto allocated = std::make_unique<MergeProbePayload>();
+            allocated->memory = _memory;
+            allocated->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            allocated->gate = _gate;
+            allocated->ownerThread = _ownerThread;
+            const auto retire = [](MergeProbePayload* payload) noexcept
+            {
+                if (!payload)
+                    return;
+                if (GetCurrentThreadId() == payload->ownerThread)
+                {
+                    if (!TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+                        std::terminate();
+                }
+                else
+                {
+                    const std::unique_ptr<MergeProbePayload> owned(payload);
+                }
+            };
+            _payload = std::shared_ptr<MergeProbePayload>{allocated.release(), retire,
+                                                          PublicationGraphAllocator<MergeProbePayload>{_memory}};
+            return {}; // Original admitted Compute allocates before the owner captures source/selection.
+        }
         if (_gate && _gate->throwProbeAllocationFailure)
             throw std::bad_alloc{};
         _payload->plan = DocumentSession::PlanMergeForWork(_payload->source, _payload->active, _payload->selected,
@@ -74,7 +104,10 @@ class Application::MergePlanProbeJob final : public Job
             flat.width = _payload->source->width;
             flat.height = _payload->source->height;
             flat.resolution = _payload->source->resolution;
-            flat.layers.reserve(_payload->plan->ids.size());
+            auto draft = CanvasDocumentDraft::Rebuild(flat, _payload->source->layers.size(), context.cancellation);
+            if (!draft)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
             for (const auto& layer : _payload->source->layers)
             {
                 if (context.cancellation.IsCancelled())
@@ -86,8 +119,14 @@ class Application::MergePlanProbeJob final : public Job
                     copy.parentID.reset();
                 if (copy.maskSourceID && !_payload->plan->removed.contains(copy.maskSourceID.value()))
                     copy.maskSourceID.reset();
-                flat.layers.push_back(std::move(copy));
+                if (!draft.value().Append(std::move(copy)))
+                    return {JobStatus::Failed, E_INVALIDARG};
             }
+            auto sealed = draft.value().Seal(context.cancellation);
+            if (!sealed)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
+            flat = std::move(sealed.value());
         }
         if (_gate)
             _gate->probePreparations.fetch_add(1);
@@ -107,24 +146,24 @@ class Application::MergePlanProbeJob final : public Job
         }
         return {};
     }
+    bool DeferRetirement(JobResult, JobTicket original) noexcept override
+    {
+        _ticket = original;
+        return false;
+    }
+    void RetainJoinedRetirement(JobScheduler& scheduler, JobTicket original) noexcept override
+    {
+        if (&scheduler != &_owner._jobs)
+            std::terminate();
+        if (_memory && !_memory->IsBound() && FAILED(_memory->BindForRetirement(scheduler, original)))
+            std::terminate();
+    }
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        if (_payload || !Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (_captured || !_payload || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
         try
         {
-            auto retire = [](MergeProbePayload* payload) noexcept
-            {
-                if (payload && !TryDeferRelease(*payload))
-                {
-                    const std::unique_ptr<MergeProbePayload> owned(payload);
-                }
-            };
-            auto owned = std::unique_ptr<MergeProbePayload, decltype(retire)>(new MergeProbePayload, retire);
-            owned->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            owned->gate = _gate;
-            owned->ownerThread = _ownerThread;
-            _payload = std::shared_ptr<MergeProbePayload>(std::move(owned));
             if (_gate)
             {
                 _gate->probeReservationHeld = _gate->probeReservationBytes != 0 &&
@@ -136,6 +175,7 @@ class Application::MergePlanProbeJob final : public Job
             _payload->source = _owner._session.Document();
             _payload->active = _active;
             _payload->selected = _owner._session.SelectedLayerIDs();
+            _captured = true;
             if (_payload->token && _owner._jobs.Resume(ticket))
                 return true;
             _captureError = E_UNEXPECTED;
@@ -148,6 +188,8 @@ class Application::MergePlanProbeJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
+        if (_memory && !_memory->IsBound() && FAILED(_memory->BindForRetirement(_owner._jobs, _ticket)))
+            std::terminate();
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -192,7 +234,10 @@ class Application::MergePlanProbeJob final : public Job
     const std::shared_ptr<UtilityWorkTestGate> _gate;
     const DWORD _ownerThread;
     const std::optional<Guid> _active;
+    std::shared_ptr<SharedPublicationMemory> _memory;
     std::shared_ptr<MergeProbePayload> _payload;
+    JobTicket _ticket;
+    bool _captured = false;
     std::int32_t _captureError = 0;
 };
 
@@ -202,12 +247,14 @@ namespace
 #pragma warning(disable : 4324)
 struct MergePayload final : DeferredReleaseNode
 {
+    std::shared_ptr<SharedPublicationMemory> memory;
     DocumentHistory::StateView history;
     std::optional<DocumentSession::PreparedMergePublication> publication;
     DocumentSession::MergePublicationStatus status = DocumentSession::MergePublicationStatus::Invalid;
     CanvasDocument readbackDocument;
     PixelBuffer readbackPixels;
     Raster readbackImage;
+    Raster completedImage; // Terminal output is separate from the mandatory empty transfer destination.
     std::shared_ptr<UtilityWorkTestGate> gate;
     DWORD ownerThread = 0;
     MergePayload() noexcept
@@ -226,28 +273,31 @@ struct RetireMergePayload final
 {
     void operator()(MergePayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
-        {
-            const std::unique_ptr<MergePayload> owned(payload);
-        }
+        if (payload && !TryDeferRelease(*payload, DeferredReleasePolicy::AlwaysOnOwner))
+            std::terminate();
     }
 };
 } // namespace
 
-class Application::MergeReadbackJob final : public DocumentReadbackJob
+class Application::MergeReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
     MergeReadbackJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t generation, D3D11_BOX region,
-                     std::uint64_t retirement, std::shared_ptr<MergeProbePayload> probe) noexcept
-        : DocumentReadbackJob(owner._jobs, owner._gpuWork, owner._composition, region), _owner(owner), _stamp(stamp),
-          _generation(generation), _retirement(retirement), _gate(owner._utilityWorkTestGate),
-          _ownerThread(GetCurrentThreadId()), _active(owner._session.ActiveLayerID()), _probe(std::move(probe))
+                     UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation,
+                     std::shared_ptr<MergeProbePayload> probe) noexcept
+        : RecordedDocumentReadbackJob(owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback,
+                                      owner._graphGpuBudget, envelope, std::move(reservation), region,
+                                      owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _generation(generation), _retirement(envelope.cpuBytes),
+          _gate(owner._utilityWorkTestGate), _ownerThread(GetCurrentThreadId()),
+          _active(owner._session.ActiveLayerID()), _probe(std::move(probe))
     {
     }
     ~MergeReadbackJob() override
     {
         if (_payload)
-            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage);
+            TransferReadbackOwners(_payload->readbackDocument, _payload->readbackPixels, _payload->readbackImage,
+                                   _payload->memory);
         // The base acknowledges mappings/releases utility targets on the owner. CPU owners retire separately.
     }
 
@@ -258,17 +308,21 @@ class Application::MergeReadbackJob final : public DocumentReadbackJob
                _owner._session.DocumentSerial() == _stamp.documentSerial &&
                _owner._session.Generation() == _generation && _owner._session.ActiveLayerID() == _active;
     }
+    JobResult PrepareReadbackOpening(JobContext&) override
+    {
+        _payload.reset(std::make_unique<MergePayload>().release());
+        _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+        _payload->gate = _gate;
+        _payload->ownerThread = _ownerThread;
+        return {};
+    }
     HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
     {
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp) || !_probe->token ||
+        if (!Current() || !_payload || _owner._historyWork.CancelRequested(_stamp) || !_probe->token ||
             !_owner._session.CanApplyJobResult(_probe->token.value(), _stamp.acquisition))
             return E_ABORT;
         try
         {
-            _payload.reset(new MergePayload);
-            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
-            _payload->gate = _gate;
-            _payload->ownerThread = _ownerThread;
             if (_gate && _gate->throwCaptureFailure)
                 throw std::bad_alloc{};
             _payload->history = _owner._session.history.CaptureState();
@@ -307,7 +361,7 @@ class Application::MergeReadbackJob final : public DocumentReadbackJob
                         _gate.get()};
         _payload->publication = DocumentSession::PrepareMergePublication(
             _probe->source, _probe->active, _probe->token.value(), std::move(_payload->history), _probe->plan.value(),
-            image, _payload->status, context.cancellation, observer);
+            image, _payload->status, context.cancellation, observer, ReadbackOutputLifetime());
         image = {}; // full readback pixels are no longer needed and release on this worker
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
@@ -332,7 +386,7 @@ class Application::MergeReadbackJob final : public DocumentReadbackJob
     void ReadbackCompleted(JobResult result, Raster image, std::uint64_t) noexcept override
     {
         if (_payload)
-            _payload->readbackImage = std::move(image);
+            _payload->completedImage = std::move(image);
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -376,10 +430,11 @@ HRESULT Application::StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uin
     HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const D3D11_BOX region{
         0, 0, 0, static_cast<UINT>(_session.Document()->width), static_cast<UINT>(_session.Document()->height), 1};
-    const auto readback = DocumentReadbackJob::RequiredMemory(region);
+    const auto readback = RecordedDocumentReadbackJob::RequiredMemory(region);
     const auto history = _session.history.EditMemoryBytes(_session.Document());
     auto held = _session.MergeRetirementMemoryBytes();
-    std::uint64_t memory = sizeof(MergeReadbackJob) + sizeof(MergePayload) + 64 * 1024;
+    std::uint64_t memory =
+        sizeof(MergeReadbackJob) + sizeof(MergePayload) + SharedPublicationMemory::OwnershipAllowance() + 64 * 1024;
     const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
     {
         const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
@@ -397,12 +452,29 @@ HRESULT Application::StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uin
         held = held * 2 + memory * 2;
         try
         {
-            std::unique_ptr<Job> job =
-                std::make_unique<MergeReadbackJob>(*this, stamp, generation, region, held, std::move(source));
-            JobTicket ticket;
-            result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, stamp.documentSerial, memory}, ticket));
+            UtilityReadbackAdmission::Envelope envelope;
+            GpuResidencyReservation reservation;
+            result = PrepareRecordedUtilityAdmission(source->flat, held, envelope, reservation);
             if (SUCCEEDED(result))
-                _utilityTicket = ticket;
+            {
+                std::unique_ptr<Job> job = std::make_unique<MergeReadbackJob>(
+                    *this, stamp, generation, region, envelope, std::move(reservation), std::move(source));
+                JobTicket ticket;
+                if (_utilityWorkTestGate)
+                    _utilityWorkTestGate->readbackReservationBytes = envelope.cpuBytes;
+                // The predecessor's captured allocation remains resident until this phase retires.
+                // Waiting on that owned dependency cannot make space: refuse once on insufficient admission.
+                result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                           {.kind = JobClass::Commit,
+                                                            .serialKey = stamp.documentSerial,
+                                                            .memoryBytes = envelope.cpuBytes,
+                                                            .deferredRetirement = true,
+                                                            .allowMemoryWaiting = false,
+                                                            .reserveRetainedMemory = true},
+                                                           ticket));
+                if (SUCCEEDED(result))
+                    _utilityTicket = ticket;
+            }
         }
         catch (const std::bad_alloc&)
         {
@@ -454,7 +526,9 @@ HRESULT Application::StartMergeReadback() noexcept
     };
     HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     // Metadata-only planning. Pixel/readback/history publication allocation starts only when a plan exists.
-    if (memory && held && add(1, sizeof(MergePlanProbeJob) + sizeof(MergeProbePayload) + 64 * 1024) &&
+    if (memory && held &&
+        add(1, sizeof(MergePlanProbeJob) + sizeof(MergeProbePayload) + SharedPublicationMemory::OwnershipAllowance() +
+                   64 * 1024) &&
         add(_session.Document()->layers.size(), 1024) && add(_session.SelectedLayerIDs().size(), 1024) &&
         memory <= maximum / 2 && memory * 2 <= maximum - held)
     {
@@ -462,11 +536,17 @@ HRESULT Application::StartMergeReadback() noexcept
         try
         {
             if (_utilityWorkTestGate)
-                _utilityWorkTestGate->probeReservationBytes = memory;
+                _utilityWorkTestGate->probeReservationBytes = held;
             std::unique_ptr<Job> job = std::make_unique<MergePlanProbeJob>(*this, _utilityStamp.value(), held);
             JobTicket ticket;
-            result =
-                static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+            result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                       {.kind = JobClass::Commit,
+                                                        .serialKey = _session.DocumentSerial(),
+                                                        .memoryBytes = held,
+                                                        .deferredRetirement = true,
+                                                        .allowMemoryWaiting = true,
+                                                        .reserveRetainedMemory = true},
+                                                       ticket));
             if (SUCCEEDED(result))
                 _utilityTicket = ticket;
         }

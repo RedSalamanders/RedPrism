@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -215,7 +216,7 @@ function Assert-CompactRcxControl($Case, [bool]$ExpectedPass) {
     # The dispatch recognizer alone; the full gate's PDB-marked table proof is controlled in IsaMarkedTableTests.ps1. Under the
     # full gate the valid controls stay accepted and the genuine vector instructions (ActualVex, ActualEvex) stay rejected.
     $gate = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
-        [string[]]@(), [string[]]@(), [string[]]@())
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and $gate.Violations.Count -ne 0) { throw "$($Case.Name) violated the full ISA gate: $($gate.Violations -join '; ')" }
     if (-not $ExpectedPass -and $Case.Name -match 'vex' -and $gate.Violations.Count -eq 0) {
         throw "$($Case.Name): the full ISA gate accepted a genuine vector instruction."

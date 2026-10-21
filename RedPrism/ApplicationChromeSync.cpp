@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Resources.h"
@@ -290,11 +292,30 @@ int Application::RunChromeSyncSelfTest() noexcept
             measure(label(L"brush hover"), kMoves, [&](int index) noexcept
                     { OnPointer(WM_MOUSEMOVE, 0, client(Vec2{start.x + 1.0 * (index + 1), start.y})); });
         OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, client(start));
+        // Opening now prepares the private draft on its admitted worker. Measure actual live moves only after
+        // that original opening has acknowledged and replayed Down; leave every chrome cost assertion intact.
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || !_session.PendingBrush() ||
+            !_canvasBrushInput.Sampling())
+            return fail(L"The measured brush opening did not acknowledge its live draft.\n");
+        bool replayed = true;
         const Tally stroke =
-            measure(label(L"brush drag"), kMoves, [&](int index) noexcept
-                    { OnPointer(WM_MOUSEMOVE, MK_LBUTTON, client(Vec2{start.x + 1.0 * (index + 1), start.y + 2.0})); });
+            measure(label(L"brush drag"), kMoves,
+                    [&](int index) noexcept
+                    {
+                        OnPointer(WM_MOUSEMOVE, MK_LBUTTON, client(Vec2{start.x + 1.0 * (index + 1), start.y + 2.0}));
+                        // The real outer loop replays this accepted sample before its next frame.
+                        // Settle the source here before measure's Prepare; do not measure an idle
+                        // frame while the move still belongs to the fixed input FIFO.
+                        replayed = replayed &&
+                                   SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                   _session.PendingBrush() && _canvasBrushInput.PendingCount() == 0;
+                    });
+        if (!replayed)
+            return fail(L"A measured brush sample did not acknowledge replay before its chrome frame.\n");
         OnPointer(WM_LBUTTONUP, 0, client(Vec2{start.x + 1.0 * kMoves, start.y + 2.0}));
         OnTool(EditorTool::Move);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return fail(L"The measured stroke and Move tool switch did not settle.\n");
         for (const Tally* brush : {&hover, &stroke})
         {
             if (brush->syncs != 0 || brush->counters.overlays != kMoves || brush->preparations != kMoves ||
@@ -389,18 +410,18 @@ int Application::RunChromeSyncSelfTest() noexcept
         // 1000 small layers, then "Target" on top: 100 x 100 at (500, 300), active.
         const Raster tile = SolidRaster(8, 8, 0xFF3366AAu);
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (int index = 0; index < 1000; ++index)
-                {
-                    ImageLayer layer = ImageLayer::Blank(L"Many", Vec2{8, 8});
-                    layer.asset = RasterAsset{tile, Raster::MakeThumbnail(tile), layer.name};
-                    layer.transform.origin =
-                        Vec2{static_cast<double>((index * 37) % 1200), static_cast<double>((index * 53) % 760)};
-                    document.layers.push_back(layer);
-                }
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (int index = 0; index < 1000; ++index)
+                                    {
+                                        ImageLayer layer = ImageLayer::Blank(L"Many", Vec2{8, 8});
+                                        layer.asset = RasterAsset{tile, Raster::MakeThumbnail(tile), layer.name};
+                                        layer.transform.origin = Vec2{static_cast<double>((index * 37) % 1200),
+                                                                      static_cast<double>((index * 53) % 760)};
+                                        document.layers.push_back(layer);
+                                    }
+                                });
         _session.EndEdit();
         const Guid target = InsertPaintedLayer(_session, L"Target", 100, 100, Vec2{500, 300}, 0.0, 0xFFCC3322u);
         OnTool(EditorTool::Move);
@@ -508,17 +529,17 @@ int Application::RunChromeSyncSelfTest() noexcept
         holdControl(true);
         const bool controlOnNothing = cursorAt(onNothing) == IDC_ARROW;
         const bool controlPicks = cursorAt(onSmall) == IDC_SIZEALL;
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == smallId.value())
-                    {
-                        layer.visible = false;
-                    }
-                }
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == smallId.value())
+                                        {
+                                            layer.visible = false;
+                                        }
+                                    }
+                                });
         DocumentChanged();
         const bool followsSession = cursorAt(onSmall) == IDC_ARROW;
         holdControl(false);

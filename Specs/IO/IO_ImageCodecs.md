@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-14
 Owner: `Common/ImageCodecs.*`, `Common/ClipboardDibWork.*`
 
 ## Scope
@@ -49,8 +49,9 @@ and allow no C++ exception; explicit noexcept creation admission translates only
 
 Whole host admission additionally charges stream/vector overlap, source/document/history roots, row/conversion
 buffers, movable blocks, receipt/hash owners, opaque codec workspace and aggregate retirement. The sink cap
-alone does not bound WIC workspace or qualify production clipboard activation. Existing inline clipboard callers
-remain F5b.2b/F5d work. Cancellation cannot interrupt an in-flight OS/WIC call.
+alone does not bound WIC workspace. Production clipboard jobs use whole-graph admission and this capped worker
+encoding; complete opaque-workspace/headroom and measured UI qualification remain F5d/G1 work. Cancellation
+cannot interrupt an in-flight OS/WIC call.
 ## Import
 
 `ImportImageFile` / `ImportImageOnto` accept JPEG, PNG, TIFF, and HEIC/HEIF when WIC has a HEIF codec. Missing HEIF
@@ -88,7 +89,8 @@ exceed those encoded/frame/output ceilings before allocation; changed bytes with
 Cached failed inspection statuses retain their original order and skip decoding even if the file later appears.
 Preparation cancellation clears both baseline/final documents. Production host admission/application uses two
 separately admitted Io jobs under one selected input; memory, ordering and owner work are specified in
-`Core_PerformanceAndResources.md` and `UI_ApplicationChrome.md`. Clipboard migration remains P1.7 work.
+`Core_PerformanceAndResources.md` and `UI_ApplicationChrome.md`. Clipboard commands use the separately
+admitted production graphs described below.
 
 ## Export
 
@@ -99,6 +101,13 @@ separately admitted Io jobs under one selected input; memory, ordering and owner
 - Both write a uniquely named, exclusively created temp file beside the destination, check exact writes,
   flush and close it, then replace the destination atomically (`ReplaceFileW`,
   falling back to `MoveFileExW`), so a crash mid-export never leaves a truncated file at the destination path.
+
+Export selects an exact sibling using the [project staging naming rule](IO_ProjectFormat.md#win32-staging-names):
+retain the destination leaf when its generated suffix fits 255 UTF-16 units; otherwise use the short GUID leaf
+in that same parent. Exclusive creation and exact owned-path cleanup preserve unrelated siblings. The destination
+and generated temporary each receive the appropriate Win32 API spelling; resolving an ordinary path precedes
+adding an extended prefix. Already extended/device spellings remain intact. Codec caps, pixels, quality,
+metadata, cancellation checkpoints and the publication boundary are unchanged.
 
 ## Detached clipboard byte preparation (P1.7 F5a)
 
@@ -120,7 +129,12 @@ zero alpha has zero RGB. Sparse rows are read into the final output vector witho
 second full source frame. Cancellation is checked between rows and before publication; an active scalar row is
 not interruptible. Invalid/cancelled results expose no metadata, raster or byte vector. Explicit PixelBuffer
 allocation failure reports OutOfMemory; allocating routines otherwise propagate bad_alloc to the worker boundary.
-These are preparation foundations. Production clipboard transfers and host callers remain tracked by F5b–F5d.
+Production clipboard transfer and host graphs consume these preparation routines. Host session-end assertions
+cover the current cancellation/publication boundary, but complete contention, resource and measured UI
+qualification remains F5d/G1 work. Full Debug r278 and Release r280 pass the repaired publication-counter
+oracle; the earlier Release r276 failure remains preserved in
+[`Testing_Validation.md`](../Testing/Testing_Validation.md). Identical-source ASan and analysis qualification
+are recorded separately in [P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md).
 
 ## Worker clipboard transfer preparation (P1.7 F5b.1)
 
@@ -141,9 +155,17 @@ budgets retain the independent 100 M decode cap; cancelled/failed public outputs
 
 This boundary owns no live session or Application window and performs no retry. Its partial memory report covers
 owned bytes and final pixels only; complete codec, capture/history, insertion and retirement admission belongs
-to F5b.2. Production Copy/Cut/Paste/New Canvas migration remains open. The shared owner event/deadline retry
-framework is defined in Core_Architecture; six-attempt accounting and source guards in actual clipboard jobs
-remain F5c.2. An emptied publication must never be retried.
+to the Application graph. Production Copy/Cut/Paste/Copy Merged jobs and metadata-only New Canvas prefill
+use this adapter with whole-graph admission and acknowledged event-backed retries. The shared owner
+event/deadline framework is defined in Core_Architecture; actual jobs retain one ticket/reservation and
+allow six total acquisitions (shared between Inspect and Copy for Paste). An emptied publication must never
+be retried after `EmptyClipboard`; a pre-Empty Busy result may consume another acquisition within the six-attempt
+job limit. Current host controls permit those pre-Empty retries and compare the final acquisition count with the
+count captured at Empty, proving there was no post-Empty retry. The earlier 48-control clipboard session-end
+source passed in Debug r275; Release r276 failed its combined publication-counter assertion. The repaired oracle
+reports individual counters and checks the irreversible boundary; production retry behavior is unchanged.
+Its fresh qualification is recorded in [P1ClipboardSessionEnd](../TestRuns/P1ClipboardSessionEnd_2026-10-06.md).
+Full F5d/session-end and G1 qualification remains open.
 
 ### Registered receipt and owned payload binding (P1.7 F5b.2a)
 
@@ -162,8 +184,12 @@ format; at least one copied image format must match. One altered format refuses 
 preferred PNG remains valid. Identical receipt and payload copied back at a changed sequence retain content
 origin. No later sampled sequence or global memory address supplies this authority.
 
-This boundary activates no production caller. Complete encoding-stream bounds, graph admission, Copy/Cut/Paste
-application, event retries and measured UI/digest costs remain F5b.2b/F5c.2/F5d.
+Production Copy/Cut/Paste and Copy Merged consume this binding under their selected history ordinal;
+private application, owned encoding/transfer, decode, acknowledged retries and aggregate worker retirement
+are specified in Document_Tools and Core_Architecture. The registered host matrix includes command,
+prefill, delayed-render and publication-fault controls
+([record](../TestRuns/ClipboardHost_2026-10-01.md)). It does not close complete F5d/session-end or measured
+UI/digest/G1 costs.
 
 ## Status
 

@@ -292,6 +292,8 @@ class CapacityReceiver final : public GpuReadbackReceiver
                "cap.successful-bounded-completion");
         if (FAILED(result))
             return;
+        if (rows.data == nullptr)
+            return;
         fullPixelsCorrect = fullPixelsCorrect && rows.data[0] == 0 && rows.data[3] == 160;
         if (deliveries < leases.size())
             leases[deliveries] = rows.lease;

@@ -37,6 +37,11 @@ constexpr std::uint64_t kOneMiB = 1'048'576;
 constexpr std::uint32_t kUiTimingSentinelDetail = 0xa100;
 constexpr std::uint32_t kUiTimingSuppressedDetail = 0xb100;
 constexpr std::uint32_t kUiTimingWorkerDetail = 0xc100;
+constexpr std::uint32_t kUiResourceStageSentinelDetail = 0xd100;
+constexpr std::uint32_t kUiResourceStageWorkerDetail = 0xe100;
+constexpr std::uint32_t kUiResourceStageSuppressedDetail = 0xf100;
+
+constexpr std::array<std::uint32_t, 6> kUiResourceStageExpectedIds{6, 7, 8, 9, 10, 11};
 
 struct TimingSentinel final
 {
@@ -65,6 +70,23 @@ constexpr std::array<TimingSentinel, 6> kUiTimingWorkerSentinels{{
     {0, 105'005},
     {0, 106'006},
 }};
+constexpr std::array<TimingSentinel, 6> kUiResourceStageSentinels{{
+    {kUiResourceStageSentinelDetail + 1, 201'001},
+    {kUiResourceStageSentinelDetail + 2, 202'002},
+    {kUiResourceStageSentinelDetail + 3, 203'003},
+    {kUiResourceStageSentinelDetail + 4, 204'004},
+    {kUiResourceStageSentinelDetail + 5, 205'005},
+    {kUiResourceStageSentinelDetail + 6, 206'006},
+}};
+constexpr std::array<TimingSentinel, 6> kUiResourceStageWorkerSentinels{{
+    {kUiResourceStageWorkerDetail + 1, 211'001},
+    {kUiResourceStageWorkerDetail + 2, 212'002},
+    {kUiResourceStageWorkerDetail + 3, 213'003},
+    {kUiResourceStageWorkerDetail + 4, 214'004},
+    {kUiResourceStageWorkerDetail + 5, 215'005},
+    {kUiResourceStageWorkerDetail + 6, 216'006},
+}};
+constexpr TimingSentinel kUiResourceStageSuppressedSentinel{kUiResourceStageSuppressedDetail + 1, 4'000};
 constexpr std::array<std::wstring_view, 6> kUiTimingEventNames{L"UiDispatch", L"UiMessage", L"UiDrain",
                                                                L"UiApply",    L"UiAction",  L"UiFrame"};
 
@@ -100,6 +122,11 @@ struct EventCapture final
     std::array<std::uint32_t, 6> uiTimingKeywordEvents{};
     std::array<std::uint32_t, 3> suppressedTimingEvents{};
     std::array<std::uint32_t, 6> workerTimingEvents{};
+    std::array<std::uint32_t, 6> uiResourceStageEvents{};
+    std::array<std::uint32_t, 6> uiResourceStageOwnerEvents{};
+    std::array<std::uint32_t, 6> uiResourceStageKeywordEvents{};
+    std::array<std::uint32_t, 6> workerResourceStageEvents{};
+    std::uint32_t suppressedChromeSyncEvents = 0;
 };
 
 bool ReadTraceUInt32(PEVENT_RECORD record, const wchar_t* name, std::uint32_t& value) noexcept
@@ -160,6 +187,55 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
     }
 
     const std::wstring_view eventNameView{eventName, eventNameLength};
+    if (eventNameView == L"UiResourceStage")
+    {
+        std::uint32_t stage = 0;
+        std::uint32_t detail = 0;
+        std::uint64_t durationUs = 0;
+        if (!ReadTraceUInt32(record, L"stage", stage) || !ReadTraceUInt32(record, L"detail", detail) ||
+            !ReadTraceUInt64(record, L"durationUs", durationUs))
+        {
+            ++capture.undecodedEvents;
+            return;
+        }
+
+        if (stage < kUiResourceStageExpectedIds.front() || stage > kUiResourceStageExpectedIds.back())
+        {
+            return;
+        }
+        const std::size_t stageIndex = stage - kUiResourceStageExpectedIds.front();
+        if (stage != kUiResourceStageExpectedIds[stageIndex])
+        {
+            return;
+        }
+
+        const TimingSentinel ownerSentinel = kUiResourceStageSentinels[stageIndex];
+        if (detail == ownerSentinel.detail && durationUs == ownerSentinel.durationUs)
+        {
+            ++capture.uiResourceStageEvents[stageIndex];
+            if (record->EventHeader.ThreadId == capture.uiThreadId)
+            {
+                ++capture.uiResourceStageOwnerEvents[stageIndex];
+            }
+            if (record->EventHeader.EventDescriptor.Keyword == 0x4)
+            {
+                ++capture.uiResourceStageKeywordEvents[stageIndex];
+            }
+        }
+
+        const TimingSentinel workerSentinel = kUiResourceStageWorkerSentinels[stageIndex];
+        if (detail == workerSentinel.detail && durationUs == workerSentinel.durationUs)
+        {
+            ++capture.workerResourceStageEvents[stageIndex];
+        }
+        if (stage == kUiResourceStageExpectedIds.back() && detail == kUiResourceStageSuppressedSentinel.detail &&
+            durationUs == kUiResourceStageSuppressedSentinel.durationUs)
+        {
+            ++capture.suppressedChromeSyncEvents;
+        }
+        return;
+    }
+
     if (eventNameView != L"UiFree")
     {
         std::size_t timingIndex = 0;
@@ -360,6 +436,21 @@ int RunPipelineTraceTests()
     TracePipelineUi(UiTimingKind::UiAction, kUiTimingSentinels[4].durationUs, 0);
     TracePipelineUi(UiTimingKind::Frame, kUiTimingSentinels[5].durationUs, 0);
 
+    TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageSentinels[0].durationUs,
+                    kUiResourceStageSentinels[0].detail);
+    TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageSentinels[1].durationUs,
+                    kUiResourceStageSentinels[1].detail);
+    TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageSentinels[2].durationUs,
+                    kUiResourceStageSentinels[2].detail);
+    TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageSentinels[3].durationUs,
+                    kUiResourceStageSentinels[3].detail);
+    TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageSentinels[4].durationUs,
+                    kUiResourceStageSentinels[4].detail);
+    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSentinels[5].durationUs,
+                    kUiResourceStageSentinels[5].detail);
+    TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageSuppressedSentinel.durationUs,
+                    kUiResourceStageSuppressedSentinel.detail);
+
     TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingSuppressedSentinels[0].durationUs,
                     kUiTimingSuppressedSentinels[0].detail);
     TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingSuppressedSentinels[1].durationUs,
@@ -383,6 +474,18 @@ int RunPipelineTraceTests()
                             kUiTimingWorkerSentinels[3].detail);
             TracePipelineUi(UiTimingKind::UiAction, kUiTimingWorkerSentinels[4].durationUs, 0);
             TracePipelineUi(UiTimingKind::Frame, kUiTimingWorkerSentinels[5].durationUs, 0);
+            TracePipelineUi(UiTimingKind::TextureCreate, kUiResourceStageWorkerSentinels[0].durationUs,
+                            kUiResourceStageWorkerSentinels[0].detail);
+            TracePipelineUi(UiTimingKind::ShaderViewCreate, kUiResourceStageWorkerSentinels[1].durationUs,
+                            kUiResourceStageWorkerSentinels[1].detail);
+            TracePipelineUi(UiTimingKind::MipGeneration, kUiResourceStageWorkerSentinels[2].durationUs,
+                            kUiResourceStageWorkerSentinels[2].detail);
+            TracePipelineUi(UiTimingKind::RasterUpload, kUiResourceStageWorkerSentinels[3].durationUs,
+                            kUiResourceStageWorkerSentinels[3].detail);
+            TracePipelineUi(UiTimingKind::CompositionRecord, kUiResourceStageWorkerSentinels[4].durationUs,
+                            kUiResourceStageWorkerSentinels[4].detail);
+            TracePipelineUi(UiTimingKind::ChromeSync, kUiResourceStageWorkerSentinels[5].durationUs,
+                            kUiResourceStageWorkerSentinels[5].detail);
         });
     worker.join();
     Expect(!workerTimingEnabled.load(std::memory_order_relaxed), "worker-ui-timing-disabled");
@@ -491,5 +594,14 @@ int RunPipelineTraceTests()
            "dispatch-message-drain-at-or-below-four-ms-suppressed");
     Expect(capture.workerTimingEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0},
            "worker-ui-timing-events-suppressed");
+    Expect(capture.uiResourceStageEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "decode-all-six-resource-stage-events-and-properties-for-ids-6-through-11");
+    Expect(capture.uiResourceStageOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "resource-stage-events-run-on-owner-thread");
+    Expect(capture.uiResourceStageKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "resource-stage-events-use-keyword-four");
+    Expect(capture.workerResourceStageEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0},
+           "worker-resource-stage-events-suppressed");
+    Expect(capture.suppressedChromeSyncEvents == 0, "chrome-sync-at-four-ms-suppressed");
     return g_failures;
 }

@@ -88,8 +88,8 @@ class CancelledRetry final : public Job, public RetryWaitReceiver
         _state.ticket = ticket;
         if (FAILED(_state.queue->Start(ticket, 5, _state.cancellation, *this)))
             return false;
-        _state.duplicateRefused =
-            _state.queue->Start(ticket, 5, _state.cancellation, *this) == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        _state.duplicateRefused = _state.queue->Start(ticket, 5, _state.cancellation, *this) ==
+                                  static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
         if (_state.requestCancel)
             _state.cancelAccepted = _state.scheduler->Cancel(ticket);
         std::unique_ptr<Job> unrelated = std::make_unique<Unrelated>(_state);
@@ -158,7 +158,7 @@ void RunScenario(bool cancel, bool signalFailure)
         Expect(state.completed && state.final.status == (cancel ? JobStatus::Cancelled : JobStatus::Finished),
                "one-final-result");
         Expect(state.signalFaultVisits == (signalFailure ? 1u : 0u) &&
-                   state.readyError == (signalFailure ? E_OUTOFMEMORY : S_OK),
+                   state.readyError == static_cast<std::int32_t>(signalFailure ? E_OUTOFMEMORY : S_OK),
                "signal-error-retained-until-real-deadline-acknowledgement");
         Expect(!queue.HasPending() && !queue.HasReady() && scheduler.ReservedMemoryBytes() == 0,
                "no-leaked-wait-or-reservation");

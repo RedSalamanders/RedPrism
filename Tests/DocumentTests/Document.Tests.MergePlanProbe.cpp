@@ -1,5 +1,6 @@
 #include "Document.Tests.MergePlanProbe.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 
@@ -57,9 +58,9 @@ ImageLayer Group(const char* id, const wchar_t* name, const std::optional<Guid>&
     return layer;
 }
 
-CanvasDocument EmptyDocument()
+DocumentFixture EmptyDocument()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Id("10000000-0000-4000-8000-000000000001");
     document.width = 1;
     document.height = 1;
@@ -82,11 +83,12 @@ void ImmutableSnapshotMergeDown()
     const Guid lower = Id(lowerText);
     const Guid upper = Id(upperText);
     const Guid parent = Id(parentText);
-    CanvasDocument document = EmptyDocument();
+    DocumentFixture document = EmptyDocument();
     document.layers.push_back(Group(parentText, L"Folder"));
     document.layers.push_back(PixelLayer(lowerText, L"Lower", parent));
     document.layers.push_back(PixelLayer(upperText, L"Upper", parent));
-    const std::optional<CanvasDocument> source{document};
+    const CanvasDocument sealed = std::move(document).Seal();
+    const std::optional<CanvasDocument> source{sealed};
     const std::optional<Guid> active{upper};
     const std::unordered_set<Guid> selected{upper};
 
@@ -97,7 +99,7 @@ void ImmutableSnapshotMergeDown()
         Expect(Matches(plan.value(), {lower, upper}, {lower, upper}, L"Lower", parent, upper, L"Merge Down"),
                "merge-down.literal-ids-and-metadata");
     }
-    Expect(source == std::optional<CanvasDocument>{document}, "merge-down-source-document-unchanged");
+    Expect(source == std::optional<CanvasDocument>{sealed}, "merge-down-source-document-unchanged");
     Expect(active == std::optional<Guid>{upper}, "merge-down-active-input-unchanged");
     Expect(selected == std::unordered_set<Guid>{upper}, "merge-down-selected-input-unchanged");
 }
@@ -108,10 +110,11 @@ void NoOpCases()
     constexpr char emptyGroupText[] = "22000000-0000-4000-8000-000000000002";
     const Guid bottom = Id(bottomText);
     const Guid emptyGroup = Id(emptyGroupText);
-    CanvasDocument document = EmptyDocument();
+    DocumentFixture document = EmptyDocument();
     document.layers.push_back(PixelLayer(bottomText, L"Only pixel"));
     document.layers.push_back(Group(emptyGroupText, L"Empty folder"));
-    const std::optional<CanvasDocument> source{document};
+    const CanvasDocument sealed = std::move(document).Seal();
+    const std::optional<CanvasDocument> source{sealed};
     const std::unordered_set<Guid> none;
 
     Expect(!DocumentSession::PlanMergeForWork(source, bottom, none), "noop-single-bottom-layer");
@@ -134,15 +137,16 @@ void GroupDescendantsRespectSiblingParents()
     const Guid nestedPixel = Id(nestedPixelText);
     const Guid sibling = Id(siblingText);
     const Guid siblingPixel = Id(siblingPixelText);
-    CanvasDocument document = EmptyDocument();
+    DocumentFixture document = EmptyDocument();
     document.layers.push_back(Group(rootText, L"Root folder"));
     document.layers.push_back(PixelLayer(firstText, L"First", root));
     document.layers.push_back(Group(nestedText, L"Nested folder", root));
     document.layers.push_back(PixelLayer(nestedPixelText, L"Nested pixel", nested));
     document.layers.push_back(Group(siblingText, L"Sibling folder"));
     document.layers.push_back(PixelLayer(siblingPixelText, L"Sibling pixel", sibling));
+    const CanvasDocument sealed = std::move(document).Seal();
 
-    const auto plan = DocumentSession::PlanMergeForWork(document, root, {});
+    const auto plan = DocumentSession::PlanMergeForWork(sealed, root, {});
     Expect(plan.has_value(), "group-descendants.plan-exists");
     if (plan)
     {
@@ -162,12 +166,13 @@ void GroupDescendantsRespectSiblingParents()
     const Guid childLower = Id(childLowerText);
     const Guid foreign = Id(foreignText);
     const Guid childUpper = Id(childUpperText);
-    CanvasDocument siblings = EmptyDocument();
+    DocumentFixture siblings = EmptyDocument();
     siblings.layers.push_back(Group(childParentText, L"Child folder"));
     siblings.layers.push_back(PixelLayer(childLowerText, L"Child lower", childParent));
     siblings.layers.push_back(PixelLayer(foreignText, L"Root sibling"));
     siblings.layers.push_back(PixelLayer(childUpperText, L"Child upper", childParent));
-    const auto down = DocumentSession::PlanMergeForWork(siblings, childUpper, {});
+    const CanvasDocument sealedSiblings = std::move(siblings).Seal();
+    const auto down = DocumentSession::PlanMergeForWork(sealedSiblings, childUpper, {});
     Expect(down.has_value(), "merge-down-skips-other-parent-sibling");
     if (down)
     {
@@ -190,16 +195,17 @@ void MultiselectionIncludesDescendantsAndUsesTopSelectedAnchor()
     const Guid descendant = Id(descendantText);
     const Guid topSelected = Id(topSelectedText);
     const Guid unselected = Id(unselectedText);
-    CanvasDocument document = EmptyDocument();
+    DocumentFixture document = EmptyDocument();
     document.layers.push_back(PixelLayer(baseText, L"Base"));
     document.layers.push_back(Group(selectedGroupText, L"Selected folder"));
     document.layers.push_back(PixelLayer(descendantText, L"Folder content", selectedGroup));
     document.layers.push_back(PixelLayer(topSelectedText, L"Top selected", selectedGroup));
     document.layers.push_back(PixelLayer(unselectedText, L"Unselected", selectedGroup));
+    const CanvasDocument sealed = std::move(document).Seal();
     const std::unordered_set<Guid> selected{selectedGroup, topSelected};
     const std::optional<Guid> active{selectedGroup};
 
-    const auto plan = DocumentSession::PlanMergeForWork(document, active, selected);
+    const auto plan = DocumentSession::PlanMergeForWork(sealed, active, selected);
     Expect(plan.has_value(), "multiselect.descendant-expansion-plan-exists");
     if (plan)
     {
@@ -220,17 +226,18 @@ void CancellationBeforeWorkReturnsNoPlan()
     constexpr char lowerText[] = "25000000-0000-4000-8000-000000000001";
     constexpr char upperText[] = "25000000-0000-4000-8000-000000000002";
     const Guid upper = Id(upperText);
-    CanvasDocument document = EmptyDocument();
+    DocumentFixture document = EmptyDocument();
     document.layers.push_back(PixelLayer(lowerText, L"Lower"));
     document.layers.push_back(PixelLayer(upperText, L"Upper"));
-    const std::optional<CanvasDocument> source{document};
+    const CanvasDocument sealed = std::move(document).Seal();
+    const std::optional<CanvasDocument> source{sealed};
     const std::optional<Guid> active{upper};
     const std::unordered_set<Guid> selected{upper};
     CancelSource cancellation;
     Expect(cancellation.Cancel(), "cancel.before-work-request-is-accepted");
     Expect(!DocumentSession::PlanMergeForWork(source, active, selected, cancellation.Token()),
            "cancel.before-work-produces-no-plan");
-    Expect(source == std::optional<CanvasDocument>{document} && active == std::optional<Guid>{upper} &&
+    Expect(source == std::optional<CanvasDocument>{sealed} && active == std::optional<Guid>{upper} &&
                selected == std::unordered_set<Guid>{upper},
            "cancel.before-work-keeps-all-inputs-unchanged");
 }

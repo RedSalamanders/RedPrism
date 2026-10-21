@@ -270,6 +270,20 @@ bool SetGlobal(UINT format, std::span<const std::uint8_t> bytes) noexcept
     return true;
 }
 
+void NativeFailureDiagnostic(void*, ClipboardTransfer::NativeCall call, std::uint32_t format,
+                             std::uint32_t error) noexcept
+{
+    DWORD holderProcess = 0, ownerProcess = 0;
+    if (const HWND holder = GetOpenClipboardWindow())
+        (void)GetWindowThreadProcessId(holder, &holderProcess);
+    if (const HWND owner = GetClipboardOwner())
+        (void)GetWindowThreadProcessId(owner, &ownerProcess);
+    std::printf("DIAG clipboardtransfer.native call=%u format=%lu error=%lu holderProcess=%lu ownerProcess=%lu "
+                "callerProcess=%lu sequence=%lu\n",
+                static_cast<unsigned>(call), static_cast<unsigned long>(format), static_cast<unsigned long>(error),
+                holderProcess, ownerProcess, GetCurrentProcessId(), GetClipboardSequenceNumber());
+}
+
 ClipboardTransfer::Status InspectWithBusyRetry(std::int64_t pixelBudget, ClipboardTransfer::Inspection& output,
                                                CancelToken cancellation, ClipboardTransfer::Observer observer);
 ClipboardTransfer::Status CopyWithBusyRetry(const ClipboardTransfer::Inspection& inspection,
@@ -521,6 +535,7 @@ ClipboardTransfer::Publication PublishWithBusyRetry(ClipboardTransfer::PreparedI
 ClipboardTransfer::Status InspectWithBusyRetry(std::int64_t pixelBudget, ClipboardTransfer::Inspection& output,
                                                CancelToken cancellation = {}, ClipboardTransfer::Observer observer = {})
 {
+    observer.nativeFailure = NativeFailureDiagnostic;
     FixtureRetryWait wait;
     return RetryFixtureAcquisition([&](unsigned)
                                    { return ClipboardTransfer::Inspect(pixelBudget, output, cancellation, observer); },
@@ -533,6 +548,7 @@ ClipboardTransfer::Status CopyWithBusyRetry(const ClipboardTransfer::Inspection&
                                             ClipboardTransfer::ImageCopy& output, CancelToken cancellation = {},
                                             ClipboardTransfer::Observer observer = {})
 {
+    observer.nativeFailure = NativeFailureDiagnostic;
     FixtureRetryWait wait;
     return RetryFixtureAcquisition(
         [&](unsigned attempt)
@@ -854,6 +870,96 @@ void TestActualOpenBusy()
     (void)SetEvent(release.get());
     JoinNativeThread(holder.get(), "clipboard-holder");
     Expect(true, "busy-holder.release-and-close-acknowledged");
+}
+
+struct ConcurrentInspection final
+{
+    HANDLE entered;
+    HANDLE release;
+    std::atomic<DWORD> windowThread{0}, releaseWait{WAIT_FAILED};
+    ClipboardTransfer::Inspection inspection;
+    ClipboardTransfer::Status status = ClipboardTransfer::Status::Invalid;
+};
+
+DWORD WINAPI HoldInspection(void* raw) noexcept
+{
+    auto& state = *static_cast<ConcurrentInspection*>(raw);
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(com))
+        return 1;
+    const auto uninitialize = wil::scope_exit([]() noexcept { CoUninitialize(); });
+    const ClipboardTransfer::Observer observer{
+        &state,
+        [](void* context, ClipboardTransfer::Stage stage) noexcept
+        {
+            if (stage != ClipboardTransfer::Stage::Opened)
+                return;
+            auto& held = *static_cast<ConcurrentInspection*>(context);
+            DWORD process = 0;
+            const auto thread = GetWindowThreadProcessId(GetOpenClipboardWindow(), &process);
+            held.windowThread = process == GetCurrentProcessId() && thread == GetCurrentThreadId() ? thread : 0;
+            (void)SetEvent(held.entered);
+            held.releaseWait = WaitForSingleObject(held.release, 5000);
+        },
+        nullptr, NativeFailureDiagnostic};
+    state.status = InspectWithBusyRetry(2, state.inspection, {}, observer);
+    return 0;
+}
+
+void TestConcurrentReadScopes()
+{
+    Expect(PutClipboard({}, kLiteralDibV5), "concurrent.distinct-worker-window-fixture-installed");
+    ClipboardTransfer::Inspection previous;
+    Expect(InspectWithBusyRetry(2, previous) == ClipboardTransfer::Status::Ok && previous,
+           "concurrent.copy-authority-prepared-before-held-reader");
+    wil::unique_handle entered(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle release(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (!entered || !release)
+    {
+        Expect(false, "concurrent.events-created");
+        return;
+    }
+    ConcurrentInspection held{entered.get(), release.get()};
+    wil::unique_handle reader(CreateThread(nullptr, 0, HoldInspection, &held, 0, nullptr));
+    if (!reader)
+    {
+        Expect(false, "concurrent.reader-created");
+        return;
+    }
+    const DWORD reached = WaitForSingleObject(entered.get(), 5000);
+    Expect(reached == WAIT_OBJECT_0 && held.windowThread.load() != 0,
+           "concurrent.first-open-has-exact-worker-owned-window");
+    unsigned opens = 0;
+    const ClipboardTransfer::Observer observer{&opens, nullptr,
+                                               [](void* raw, ClipboardTransfer::Fault fault) noexcept -> std::uint32_t
+                                               {
+                                                   if (fault == ClipboardTransfer::Fault::Open)
+                                                       ++*static_cast<unsigned*>(raw);
+                                                   return 0;
+                                               },
+                                               NativeFailureDiagnostic};
+    ClipboardTransfer::Inspection second;
+    ClipboardTransfer::ImageCopy copied;
+    const auto inspected = ClipboardTransfer::Inspect(2, second, {}, observer);
+    const auto copyStatus = ClipboardTransfer::Copy(previous, copied, {}, observer);
+    Expect(inspected == ClipboardTransfer::Status::Busy && !second && copyStatus == ClipboardTransfer::Status::Busy &&
+               copied.RetainedBytes() == 0 && opens == 2,
+           "concurrent.inspect-and-copy-each-refuse-one-native-acquisition-with-empty-output");
+    (void)SetEvent(release.get());
+    JoinNativeThread(reader.get(), "isolated-clipboard-reader");
+    Expect(held.releaseWait == WAIT_OBJECT_0 && held.status == ClipboardTransfer::Status::Ok && held.inspection &&
+               held.inspection.Dib().width == 2 && held.inspection.Dib().height == 1,
+           "concurrent.original-scope-keeps-valid-enumeration-through-its-own-close");
+    Control failure;
+    failure.faultAt = ClipboardTransfer::Fault::Window;
+    Expect(ClipboardTransfer::Inspect(2, second, {}, Observer(failure)) == ClipboardTransfer::Status::NativeFailure &&
+               !second && failure.reached[static_cast<std::size_t>(ClipboardTransfer::Stage::Opened)] == 0,
+           "concurrent.inspect-window-refusal-does-not-open-or-publish");
+    Expect(ClipboardTransfer::Copy(previous, copied, {}, Observer(failure)) ==
+                   ClipboardTransfer::Status::NativeFailure &&
+               copied.RetainedBytes() == 0 &&
+               failure.reached[static_cast<std::size_t>(ClipboardTransfer::Stage::Opened)] == 0,
+           "concurrent.copy-window-refusal-does-not-open-or-publish");
 }
 
 void TestInspectCopyDecode()
@@ -1214,6 +1320,7 @@ int RunWorker()
     TestPublishOutcomes();
     TestSequenceAndRetry();
     TestActualOpenBusy();
+    TestConcurrentReadScopes();
     TestInspectCopyDecode();
     TestInspectionCancellation();
     TestReadFaultFallbacks();

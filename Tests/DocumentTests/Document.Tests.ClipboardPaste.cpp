@@ -1,5 +1,7 @@
 #include "Document.Tests.ClipboardPaste.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "ClipboardPasteWork.h"
 #include "Document.h"
 #include "Executor.h"
@@ -8,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <span>
@@ -36,7 +39,7 @@ Guid Id(const char* text)
 
 CanvasDocument PixelDocument(int width = 6, int height = 5)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Id("31000000-0000-4000-8000-000000000001");
     document.width = width;
     document.height = height;
@@ -59,7 +62,7 @@ CanvasDocument PixelDocument(int width = 6, int height = 5)
     layer.id = Id("31000000-0000-4000-8000-000000000002");
     layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 DocumentSession SessionWithPrivateCopy()
@@ -228,12 +231,12 @@ void ForeignPlacementAndNames()
         DocumentSession session = SessionWithPrivateCopy();
         ImageLayer first = ImageLayer::Blank(L"Layer 1", Vec2{1, 1});
         ImageLayer third = ImageLayer::Blank(L"Layer 3", Vec2{1, 1});
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                document.layers.push_back(std::move(first));
-                document.layers.push_back(std::move(third));
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    document.layers.push_back(std::move(first));
+                                    document.layers.push_back(std::move(third));
+                                });
         auto prepared = PreparePrivate(session);
         Expect(prepared && session.ApplyPreparedClipboardPasteIfCurrent(prepared.value()) &&
                    NewLayerMatches(session, L"Layer 2", Vec2{2, 1}, 2, 1,
@@ -262,7 +265,7 @@ void GroupInsertionAndSiblingPlacement()
     constexpr auto tailID = "32000000-0000-4000-8000-000000000006";
     constexpr auto outerTailID = "32000000-0000-4000-8000-000000000007";
     constexpr auto unrelatedID = "32000000-0000-4000-8000-000000000008";
-    CanvasDocument document = PixelDocument();
+    DocumentFixture document = DocumentFixture::Copy(PixelDocument());
     const Raster sourcePixels = document.layers.front().asset->image;
     document.layers.clear();
     document.layers.push_back(Group(outerID, L"Outer"));
@@ -286,11 +289,11 @@ void GroupInsertionAndSiblingPlacement()
     outerTail.parentID = Guid::Parse(outerID).value();
     document.layers.push_back(std::move(outerTail));
     document.layers.push_back(Group(unrelatedID, L"Unrelated"));
-    session.ReplaceDocument(std::move(document), Guid::Parse(childID).value());
+    session.ReplaceDocument(std::move(document).Seal(), Guid::Parse(childID).value());
     static_cast<void>(session.CopySelection());
     session.SelectLayer(Guid::Parse(activeID).value());
-    session.CollapsedGroupIDs().insert(Guid::Parse(activeID).value());
-    session.CollapsedGroupIDs().insert(Guid::Parse(unrelatedID).value());
+    session.SetGroupCollapsed(Guid::Parse(activeID).value(), true);
+    session.SetGroupCollapsed(Guid::Parse(unrelatedID).value(), true);
     auto prepared = PreparePrivate(session);
     const Guid unrelated = Guid::Parse(unrelatedID).value();
     const auto applied = prepared && session.ApplyPreparedClipboardPasteIfCurrent(prepared.value());
@@ -307,7 +310,7 @@ void GroupInsertionAndSiblingPlacement()
                session.CollapsedGroupIDs().contains(unrelated),
            "paste-expands-only-new-layer-parent");
 
-    CanvasDocument siblings = PixelDocument();
+    DocumentFixture siblings = DocumentFixture::Copy(PixelDocument());
     const Raster siblingPixels = siblings.layers.front().asset->image;
     const std::optional<RasterAsset> siblingAsset{
         RasterAsset{siblingPixels, Raster::MakeThumbnail(siblingPixels), L"Active sibling"}};
@@ -326,7 +329,7 @@ void GroupInsertionAndSiblingPlacement()
     siblings.layers.push_back(std::move(below));
     siblings.layers.push_back(std::move(active));
     siblings.layers.push_back(std::move(above));
-    sibling.ReplaceDocument(std::move(siblings), activeLayerID);
+    sibling.ReplaceDocument(std::move(siblings).Seal(), activeLayerID);
     static_cast<void>(sibling.CopySelection());
     auto siblingPaste = PreparePrivate(sibling);
     Expect(siblingPaste && sibling.ApplyPreparedClipboardPasteIfCurrent(siblingPaste.value()) && sibling.Document() &&
@@ -339,7 +342,8 @@ void GroupInsertionAndSiblingPlacement()
 void SerialAndStaleAuthorities()
 {
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         const auto oldSerial = session.ClipboardSerial();
         static_cast<void>(session.CopySelection());
@@ -349,7 +353,8 @@ void SerialAndStaleAuthorities()
                "newer-private-copy-refuses-stale-private-paste");
     }
     {
-        DocumentSession session;
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        DocumentSession& session = *sessionOwner;
         CanvasDocument document = PixelDocument(5, 4);
         session.ReplaceDocument(std::move(document), Id("31000000-0000-4000-8000-000000000002"));
         auto prepared = PrepareForeign(session, ForeignPixels());
@@ -360,7 +365,8 @@ void SerialAndStaleAuthorities()
                "foreign-paste-does-not-depend-on-private-clipboard-serial");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         CanvasDocument replacement = PixelDocument();
         session.ReplaceDocument(std::move(replacement), Id("31000000-0000-4000-8000-000000000002"));
@@ -370,10 +376,12 @@ void SerialAndStaleAuthorities()
                "document-replacement-stales-prepared-paste-without-mutation");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         ImageLayer other = ImageLayer::Blank(L"Other active layer", Vec2{1, 1});
         const Guid otherID = other.id;
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(std::move(other)); });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document) { document.layers.push_back(std::move(other)); });
         auto prepared = PreparePrivate(session);
         session.SelectLayer(otherID);
         const OwnerState changed(session);
@@ -382,7 +390,8 @@ void SerialAndStaleAuthorities()
                "active-layer-change-stales-prepared-paste");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
         session.RenameLayer(session.ActiveLayerID().value(), L"History changed after preparation");
         const OwnerState changed(session);
@@ -391,9 +400,11 @@ void SerialAndStaleAuthorities()
                "history-change-stales-prepared-paste");
     }
     {
-        DocumentSession session = SessionWithPrivateCopy();
+        auto sessionOwner = std::unique_ptr<DocumentSession>(new DocumentSession(SessionWithPrivateCopy()));
+        DocumentSession& session = *sessionOwner;
         auto prepared = PreparePrivate(session);
-        DocumentSession moved(std::move(session));
+        auto movedOwner = std::make_unique<DocumentSession>(std::move(session));
+        DocumentSession& moved = *movedOwner;
         const OwnerState changed(moved);
         Expect(prepared && !moved.ApplyPreparedClipboardPasteIfCurrent(prepared.value()) &&
                    SameOwnerState(moved, changed),
@@ -436,14 +447,15 @@ void SelectionMaskAndNoClipboard()
     {
         DocumentSession session = SessionWithPrivateCopy();
         const Guid source = session.ActiveLayerID().value();
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                constexpr std::array<std::uint8_t, 1> value{64};
-                const auto mask = Raster::Make(1, 1, RasterFormat::Gray8, value.data(), value.size());
-                document.layers.front().mask =
-                    LayerMask{RasterAsset{mask, mask, L"Literal mask"}, true, std::nullopt, true};
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    constexpr std::array<std::uint8_t, 1> value{64};
+                                    const auto mask =
+                                        Raster::Make(1, 1, RasterFormat::Gray8, value.data(), value.size());
+                                    document.layers.front().mask =
+                                        LayerMask{RasterAsset{mask, mask, L"Literal mask"}, true, std::nullopt, true};
+                                });
         session.SelectLayerTarget(source, true);
         const bool maskSelected = session.IsMaskSelected();
         auto prepared = PreparePrivate(session);
@@ -564,7 +576,7 @@ void InputSingleUseAndBudgetBoundaries()
     }
     {
         DocumentSession session;
-        CanvasDocument document = PixelDocument(1, 1);
+        DocumentFixture document = DocumentFixture::Copy(PixelDocument(1, 1));
         document.layers.clear();
         document.layers.reserve(10'000);
         for (int i = 0; i < 10'000; ++i)
@@ -574,7 +586,7 @@ void InputSingleUseAndBudgetBoundaries()
             document.layers.push_back(std::move(blank));
         }
         const Guid active = document.layers.back().id;
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         Expect(session.ClipboardPastePixelLimit() == 0 && !session.PrepareClipboardPasteInput(),
                "layer-count-cap-refuses-paste-input");
     }
@@ -584,12 +596,12 @@ void ExactCapacityAndRefusalState()
 {
     {
         DocumentSession session;
-        auto document = PixelDocument(1, 1);
+        DocumentFixture document = DocumentFixture::Copy(PixelDocument(1, 1));
         const Raster source = ForeignPixels(100, 100);
         document.layers.front().asset = RasterAsset{source, {}, L"Sparse budget source"};
         document.layers.front().transform.size = {100, 100};
         const auto active = document.layers.front().id;
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         const Raster image = ForeignPixels(10000, 9999);
         Expect(session.ClipboardPastePixelLimit() == 99'990'000 && image.PixelCount() == 99'990'000 &&
                    image.IsSparse() && !image.IsMaterialized(),

@@ -1,5 +1,6 @@
 #include "Document.Tests.TransformDeferredGuard.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "FloatingPixelsWork.h"
@@ -85,7 +86,7 @@ struct Fixture final
         const Raster image = Raster::Make(2, 2, RasterFormat::Bgra8888, imageBytes.data(), imageBytes.size());
         const Raster mask = Raster::Make(2, 2, RasterFormat::Gray8, maskBytes.data(), maskBytes.size());
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -103,7 +104,7 @@ struct Fixture final
         sibling = second.id;
         document.layers = {first, second};
 
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         static_cast<void>(session.CopySelection());
         session.SelectLayerTarget(active, false);
         static_cast<void>(session.BeginDeferredTransform());
@@ -437,19 +438,20 @@ void PreviewMapsOutlineAtomicallyAndHonorsSelectionCheckpoint()
     ImageLayer layer = ImageLayer::Blank(L"floating", Vec2{4, 4});
     layer.transform = Place({0, 0}, {4, 4});
     layer.asset = RasterAsset{image, image, layer.name};
-    CanvasDocument source;
-    source.id = Guid::Generate();
-    source.width = 8;
-    source.height = 8;
-    source.layers = {base, layer};
-    source.selection = Selection(Rectangle(1, 1, 3, 3));
+    DocumentFixture sourceFixture;
+    sourceFixture.id = Guid::Generate();
+    sourceFixture.width = 8;
+    sourceFixture.height = 8;
+    sourceFixture.layers = {base, layer};
+    sourceFixture.selection = Selection(Rectangle(1, 1, 3, 3));
+    CanvasDocument source = std::move(sourceFixture).Seal();
 
     TransformEdit edit = FloatingEdit(Place({10, 20}, {8, 12}));
     edit.layerID = layer.id;
     edit.floating->sourceID = base.id;
-    CanvasDocument before = source;
+    auto before = DocumentFixture::Copy(source);
     before.layers = {base};
-    edit.floating->before = std::make_shared<CanvasDocument>(std::move(before));
+    edit.floating->before = std::make_shared<CanvasDocument>(std::move(before).Seal());
     edit.floating->beforeActive = base.id;
     edit.floating->original = Place({0, 0}, {4, 4});
     edit.floating->pixelWidth = 4;

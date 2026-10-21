@@ -1,11 +1,12 @@
 # Once per host qualification. Native compiler/child-process gates retain their canonical build/test owners.
-[CmdletBinding()]param()
+[CmdletBinding()]param([switch]$ListScripts)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $failures=[Collections.Generic.List[string]]::new()
-$native=@('FailureReportTests.ps1','UiBenchmarkSmokeTests.ps1','IsaScanTests.ps1','CodeAnalysisTests.ps1')
+$native=@('FailureReportTests.ps1','UiBenchmarkSmokeTests.ps1','UiCancellationBenchmarkSmokeTests.ps1','UiCancellationBenchmarkFullTests.ps1','LayerRowsBenchmarkSmokeTests.ps1','IsaScanTests.ps1','CodeAnalysisTests.ps1')
 $scripts=@(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1'|Where-Object{$_.Name -ne 'Invoke-ToolingTests.ps1' -and $_.Name -notin $native}|Sort-Object Name)
 $scripts+=Get-Item -LiteralPath (Join-Path (Split-Path $PSScriptRoot) 'Tooling.Tests.ScopedTesting.ps1')
+if($ListScripts){$scripts.FullName;return}
 foreach($script in $scripts){
     Write-Host "== $($script.Name)"
     try{$global:LASTEXITCODE=0;& $script.FullName;if(-not $? -or $LASTEXITCODE -ne 0){throw "Exit $LASTEXITCODE"}}

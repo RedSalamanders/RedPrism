@@ -1,9 +1,12 @@
 #include "Host.Tests.FilterWorkBenchmark.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
+#include "BenchmarkMachine.h"
 #include "CanvasSize.h"
 #include "ColorEditWork.h"
 #include "Jobs.h"
+#include "Kernels.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -32,12 +35,32 @@ struct Observation final
 {
     wil::unique_event_nothrow started;
     wil::unique_event_nothrow returned;
+    JobTicket ticket{};
+    bool returnClockValid = false;
     LARGE_INTEGER finish{};
     JobResult completion;
     bool produced = false;
     std::optional<ResizeStatus> resizeStatus;
     CanvasDocument resized;
 };
+
+// One original job per sample. Set current before Submit; ticket assignment precedes dispatch. Change/clear
+// only after joined SettleJobs or Close. The context and borrowed event outlive the scheduler's Close.
+struct FilterExecutionObservation final
+{
+    Observation* current = nullptr;
+};
+
+void NoteFilterBodyBoundary(void* opaque, JobExecutionNotice notice) noexcept
+{
+    auto& context = *static_cast<FilterExecutionObservation*>(opaque);
+    auto* const current = context.current;
+    if (!current || notice.ticket != current->ticket || notice.boundary != JobExecutionBoundary::BodyExited)
+        return;
+    // Run's locals and its stack have unwound. This timestamp excludes later worker retirement and owner apply.
+    current->returnClockValid = QueryPerformanceCounter(&current->finish) != FALSE;
+    current->returned.SetEvent();
+}
 
 class FilterWork final : public Job
 {
@@ -99,8 +122,7 @@ class FilterWork final : public Job
             }
         }
         _observed.produced = _observed.produced || output.HasStorage();
-        QueryPerformanceCounter(&_observed.finish);
-        _observed.returned.SetEvent();
+
         return {};
     }
     void Completed(JobResult result) noexcept override
@@ -139,8 +161,7 @@ class SizingWork final : public Job
             _options);
         const ResizeStatus status = _observed.resizeStatus.value();
         _observed.produced = status == ResizeStatus::Ok || status == ResizeStatus::Unchanged;
-        QueryPerformanceCounter(&_observed.finish);
-        _observed.returned.SetEvent();
+
         return context.cancellation.IsCancelled() || status == ResizeStatus::Cancelled ? JobResult{JobStatus::Cancelled}
                                                                                        : JobResult{};
     }
@@ -159,6 +180,9 @@ class SizingWork final : public Job
 
 int RunFilterWorkBenchmark()
 {
+    // Explicit scalar reference diagnostic; topology/report allocation is outside every measured interval.
+    if (InitializeKernels(KernelIsa::Scalar) != KernelSelection::Selected)
+        return 1;
     const std::size_t pixels = static_cast<std::size_t>(kWidth) * kHeight;
     PixelBuffer bytes = PixelBuffer::TryAllocate(pixels * 4);
     PixelBuffer maskBytes = PixelBuffer::TryAllocate(pixels);
@@ -198,28 +222,42 @@ int RunFilterWorkBenchmark()
                                "sizing-canvas-fill",
                                "sizing-image-nearest",
                                "sizing-image-high"};
-    CanvasDocument sizingSource;
-    sizingSource.id = Guid::Generate();
-    sizingSource.width = kWidth;
-    sizingSource.height = kHeight;
+    DocumentFixture sizingFixture;
+    sizingFixture.id = Guid::Generate();
+    sizingFixture.width = kWidth;
+    sizingFixture.height = kHeight;
     ImageLayer sizingLayer =
         ImageLayer::Blank(L"Benchmark source", {static_cast<double>(kWidth), static_cast<double>(kHeight)});
     sizingLayer.asset = RasterAsset{source, {}, sizingLayer.name};
-    sizingSource.layers.push_back(std::move(sizingLayer));
+    sizingFixture.layers.push_back(std::move(sizingLayer));
+    const CanvasDocument sizingSource = std::move(sizingFixture).Seal();
     const CanvasDocument originalSizingSource = sizingSource;
     LARGE_INTEGER frequency{};
     if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
     {
         return 1;
     }
+    FilterExecutionObservation executionObservation;
     JobScheduler scheduler;
-    if (scheduler.Initialize() < 0)
+    if (scheduler.Initialize(0, {}, {}, {NoteFilterBodyBoundary, &executionObservation}) < 0)
     {
         return 1;
     }
+    auto machine = ReadBenchmarkMachine();
+    machine.isa = "scalar";
+    machine.workerCount = scheduler.WorkerCount();
+    std::printf("BENCH MACHINE %s harness=filter-cancel\n", FormatBenchmarkMachineInfo(machine).c_str());
+    std::printf("FILTER CANCEL METHOD clock=QPC returnBoundary=job-body-exited warmup=1 samplesPerCase=10 "
+                "excludes=worker-retirement,owner-apply\n");
     bool succeeded = true;
     for (std::size_t operation = 0; operation < names.size() && succeeded; ++operation)
     {
+        if (operation >= names.size())
+        {
+            succeeded = false;
+            break;
+        }
+        const char* const operationName = names[operation];
         std::vector<double> latencies;
         latencies.reserve(kSamples);
         int early = 0;
@@ -268,10 +306,10 @@ int RunFilterWorkBenchmark()
                 job = std::make_unique<SizingWork>(sizingSource, sizingOptions, observation);
             else
                 job = std::make_unique<FilterWork>(source, mask, static_cast<int>(operation), observation);
-            JobTicket ticket;
+            executionObservation.current = &observation;
             // This benchmark runs one job at a time. 2 GiB covers the largest 45 MP case's whole graph;
             // production filter jobs use ColorEditJobMemoryBytes instead of this measurement-only ceiling.
-            if (scheduler.Submit(job, {JobClass::Commit, 0, reservation}, ticket) < 0 ||
+            if (scheduler.Submit(job, {JobClass::Commit, 0, reservation}, observation.ticket) < 0 ||
                 WaitForSingleObject(observation.started.get(), 5000) != WAIT_OBJECT_0)
             {
                 scheduler.Close(); // Join before the observation and its handles leave scope.
@@ -282,8 +320,13 @@ int RunFilterWorkBenchmark()
             LARGE_INTEGER requested{};
             if (wait == WAIT_TIMEOUT)
             {
-                QueryPerformanceCounter(&requested);
-                (void)scheduler.Cancel(ticket);
+                if (!QueryPerformanceCounter(&requested) || !scheduler.Cancel(observation.ticket))
+                {
+                    scheduler.Close(); // Join every observer before the current sample leaves scope.
+                    executionObservation.current = nullptr;
+                    succeeded = false;
+                    break;
+                }
             }
             if ((wait != WAIT_TIMEOUT && wait != WAIT_OBJECT_0) ||
                 SettleJobs(scheduler, 10000) != SettleResult::Settled)
@@ -292,9 +335,16 @@ int RunFilterWorkBenchmark()
                 succeeded = false;
                 break;
             }
+            executionObservation.current = nullptr; // Exact original completion joined every body observation.
+            if (!observation.returnClockValid || observation.finish.QuadPart < 0)
+            {
+                std::printf("FILTER CANCEL ERROR name=%s reason=body-return-clock\n", operationName);
+                succeeded = false;
+                break;
+            }
             if (observation.completion.status == JobStatus::Failed)
             {
-                std::printf("FILTER CANCEL ERROR name=%s hr=0x%08X\n", names[operation],
+                std::printf("FILTER CANCEL ERROR name=%s hr=0x%08X\n", operationName,
                             static_cast<unsigned int>(observation.completion.error));
                 succeeded = false;
                 break;
@@ -316,7 +366,7 @@ int RunFilterWorkBenchmark()
                 {
                     std::printf("FILTER CANCEL ERROR name=%s reason=invalid-sizing-result resize_status=%u "
                                 "completion=%u empty=%u\n",
-                                names[operation], static_cast<unsigned int>(status),
+                                operationName, static_cast<unsigned int>(status),
                                 static_cast<unsigned int>(observation.completion.status), emptyResult ? 1u : 0u);
                     succeeded = false;
                     break;
@@ -324,7 +374,7 @@ int RunFilterWorkBenchmark()
             }
             if (wait == WAIT_OBJECT_0 && !observation.produced)
             {
-                std::printf("FILTER CANCEL ERROR name=%s reason=empty-before-cancellation\n", names[operation]);
+                std::printf("FILTER CANCEL ERROR name=%s reason=empty-before-cancellation\n", operationName);
                 succeeded = false;
                 break;
             }
@@ -348,7 +398,7 @@ int RunFilterWorkBenchmark()
                     observation.completion.status != JobStatus::Cancelled)
                 {
                     std::printf("FILTER CANCEL ERROR name=%s reason=cancelled-sizing-result-not-empty-safe\n",
-                                names[operation]);
+                                operationName);
                     succeeded = false;
                     break;
                 }
@@ -365,13 +415,13 @@ int RunFilterWorkBenchmark()
         if (sizing)
             std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
                         "cancelled_empty=%d peak_bytes=%llu median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
-                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, cancelled,
+                        operationName, kWidth, kHeight, kCancelDelayMs, count, early, overlap, cancelled,
                         static_cast<unsigned long long>(reservation), median, p95, maximum,
                         succeeded ? "ok" : "failed");
         else
             std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
                         "median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
-                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
+                        operationName, kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
                         succeeded ? "ok" : "failed");
         std::fflush(stdout);
     }

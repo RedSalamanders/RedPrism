@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformWorkTestGate.h"
 
@@ -112,7 +113,7 @@ int Application::RunDuplicateGestureSelfTest() noexcept
         const Raster image = Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
         if (!image.HasStorage())
             return std::nullopt;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 16;
         document.height = 16;
@@ -123,7 +124,7 @@ int Application::RunDuplicateGestureSelfTest() noexcept
         layer.transform.sampling = LayerSampling::Nearest;
         const Guid id = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), id);
+        _session.ReplaceDocument(std::move(document).Seal(), id);
         _session.history.Reset();
         _session.history.MarkSaved();
         _viewport.SetZoom(1, _viewport.Center(), DocumentSize());
@@ -312,7 +313,6 @@ int Application::RunDuplicateGestureSelfTest() noexcept
                     std::_Exit(5);
                 expect(!_duplicateGesture && !_session.PendingTransformEdit() && !_transformRestoreOwner &&
                            _session.Document()->layers.size() == 2 && _session.history.UndoCount() == 1 &&
-                           _session.history.UndoName() == L"Duplicate Layer" &&
                            _session.history.UndoName() == L"Duplicate Layer" && _session.ActiveLayer() &&
                            _session.ActiveLayer()->asset && _session.ActiveLayer()->asset->image == state.source,
                        "release-commits-one-copy-entry", test);

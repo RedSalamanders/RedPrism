@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-21
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -15,6 +15,11 @@ DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxU
 `.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. The clone keeps Git long paths and leaves out the directories a
 build never reads (`Measurements/`, `docs/gallery`, `Specs/`), so a deep checkout root restores. See
 [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
+
+DxUi consumer output folders use a 16-character fingerprint prefix with the complete identity retained and
+validated in a marker. This also bounds vcpkg's native temporary-directory path; Git long-path support alone
+does not make those directory operations work. Both MSBuild and product provenance use the resolved output
+root, with full identity comparison before cache reuse, as required by `Core_DxUiIntegration.md`.
 
 Lucide is the tool-rail picture source. It is not a vcpkg port and not an icon font. `Dependencies/Lucide.lock.json`
 names `https://github.com/lucide-icons/lucide` and one commit. `ThirdParty/Lucide/icons/` holds only the tool SVGs
@@ -38,6 +43,31 @@ adopted by replacing the locked files and the lock together.
 | Minimum OS | Windows 11 build 22000.2600 |
 
 First-party translation units compile as C++.
+
+On an X64 process, `build.ps1` MUST default an unset `PreferredToolArchitecture` to `x64` for dependency
+identity/restore, the solution build and its validation/provenance. An explicit value is preserved, including
+the native ARM64 wrapper's `arm64`. The caller's environment MUST be restored on success and every failure.
+MSBuild discovery keeps its existing `MSBUILD_EXE_PATH`, PATH and version-ranged installation precedence.
+An amd64 MSBuild process alone does not select x64-hosted tools when cross-targeting ARM64. Qualification
+records the actual compiler/linker and matching dependency identity; earlier tool-host receipts remain historical.
+`Tests/BuildProcessTests/ToolArchitectureTests.ps1` executes unchanged entrypoint bytes with isolated dependency
+and solution stand-ins to cover these boundaries, failures, clean builds and caller environment restoration.
+
+The current P1 native ARM64 feasibility wrapper requires default MSVC `14.52.37025` in the selected installation.
+It records required/actual versions in `toolset-requirement.json` and refuses a mismatch before changing the
+canonical discovery environment or starting work. Matching this declaration alone does not qualify compiler,
+dependency or runtime products. Earlier 14.51 native evidence cannot qualify the 14.52 environment.
+
+The reviewed disposable native CI job provisions BuildTools catalog `18.12.12316.0` side by side at
+`C:\P1NativeTools1452`. Fixed official bootstrapper/channel/catalog URLs and SHA-256 values bind the input;
+the bootstrapper also requires a valid Microsoft publisher signature. Local pinned manifests select native
+ARM64 MSBuild, ARM64-hosted compiler tools and SDK 26100. An existing target, input mismatch, installer failure
+or restart requirement refuses the job. Installed MSBuild/compiler bytes must match independently inspected
+AA64 package members before the unchanged default-version/host-selection guard can mutate the environment.
+Installer results, fresh installer logs and observed product hashes are retained, including mismatch facts.
+Log collection cannot replace the primary installer error. This CI setup never installs tools on the user's
+computer. The artifact retains the selected ARM64 Release intermediates and DxUi library/identity for
+independent compiler/dependency readback. Provisioning alone grants no runtime or P1 qualification.
 
 `format.ps1` prefers the C++ Clang tools bundled with the discovered supported Visual Studio installation,
 then falls back to PATH and standalone LLVM. It reports the actual formatter and version. This prevents an
@@ -69,10 +99,25 @@ MUST refuse to run on a non-ARM64 host.
 
 `.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
 
+`format.ps1` MUST process every discovered C++ source even in a deep worktree. It submits bounded filename
+batches below the Windows process command-line limit and fails on the first formatter error; splitting the
+invocations MUST NOT change formatting options, omit files or change the final discovered-file count.
+
 Builds sharing a mutable dependency output MUST be serialized, including private candidate builds. A separate
 application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes the same resolved library path.
 Parallel compilation requires isolated dependency outputs or an already-built immutable dependency; preserve
 failed source/object/link evidence before retrying a candidate affected by shared-output rebuilds.
+
+## Explicit build concurrency
+
+`build.ps1 -MaxCpuCount N` and `test.ps1 -MaxCpuCount N` accept 0–256. Zero preserves the automatic
+MSBuild/compiler choice. A positive value caps MSBuild project concurrency (`/m:N`) and forwards
+`CL_MPCount=N` for toolsets that use the compiler multi-tool scheduler. The test entrypoint forwards the
+same value without omitting any gate. The installed toolset may disable compiler `/MP` or use a separate
+task scheduler; qualification MUST inspect actual evaluated settings and MUST NOT infer an emitted `/MPN`
+switch from this property alone. Memory-constrained qualification SHOULD use an explicit small project cap
+and record the compiler/task settings. A single compiler batch can contain multiple translation units.
+No system pagefile setting or independently running application is changed by this option.
 
 Persistent qualification storage follows [Build_QualificationArchives.md](Build_QualificationArchives.md).
 Collectors use `archive-qualification.ps1` with explicit frozen hashes and retain all existing semantic checks.
@@ -215,8 +260,15 @@ After every x64 build, `build.ps1` scans all five first-party linked executables
 `Build/IsaScan.cs` inspects decoded executable instructions for C4/C5/62 VEX/EVEX prefixes, including a preceding
 legacy address/segment prefix. It checks the PE CodeView GUID and age against the full PDB, maps decimal section
 contributions to their object, and fails on missing/ambiguous attribution or a missing/mismatched PDB.
+GUID and age MUST match before PDB contribution offsets are interpreted in the image's sections. Independent
+wrong-GUID and wrong-age controls with impossible contribution offsets prove this ordering; a matching PDB
+still undergoes every existing contribution, instruction and runtime-allowlist check.
 AVX2 objects allow VEX; AVX-512 objects allow VEX and EVEX. Other objects must match the checked-in
 `Build/IsaRuntimeAllowlist.psd1`. No broad first-party object exception is permitted.
+The R15 signed variant-remap data proof checks the complete PE-backed body and encoded control flow,
+nonvolatile image-base reaching definition, anonymous same-owner DWORD/byte pairs, exact procedure end,
+uniform remap extent, decoded targets and literal alignment NOPs. Unknown effects and unmodelled transfers
+refuse that proof. This data recognition adds no runtime, object or function allowance.
 
 The runtime exceptions are MSVC `vector_algorithms.obj` from `msvcprt[d].lib`, and the exact PDB procedure range
 of the runtime-dispatched `wmemchr` intrinsic in the observed `ImageCodecs.obj`, `Host.Tests.Runner.obj`, `IO.Tests.Runner.obj` or
@@ -280,6 +332,45 @@ missing/malformed guard cannot fall back to another data symbol or procedure end
 controls include corrupt bytes/targets/bounds/PDB records, duplicate/unknown/overlapping dispatch rows,
 listing-versus-PE mismatches and real vector code outside the proved range. This is data proof, not a runtime
 allowlist entry.
+
+The observed Release RBX-index variant uses the same RDX image-base dispatch, with exactly
+`LEA EAX,[RBX+disp8]; CMP EAX,imm32; JA rel32; CDQE` immediately before the image-base LEA.
+Its guard is 16 bytes; the original RDX disp32 guard remains 19 bytes. All four known guard rows
+must match their PE bytes, decoded lengths and nonoverlapping boundaries. Both forms require
+the same procedure/contribution ownership, complete DWORD-target proof, proved JA default and
+`maximum + 1` byte-table bound (maximum below 4,096). A missing or malformed guard grants no
+fallback extent. `IsaRbxDisp8RemapTests.ps1` ports the original 39 remap controls to the RBX form
+and adds 20 guard/operand refusals: one accepted, 58 refused. The original RDX fixture remains
+unchanged. These encoded fixtures do not execute their bytes; the runtime allowlist is unchanged.
+
+The observed Release host-flow switch uses a full-width unsigned RSI guard followed by the exact contiguous
+`CMP RSI,imm8; JA rel32; LEA RCX,imagebase; MOV EAX,[RCX+4*RSI+table]; ADD RAX,RCX; JMP RAX`.
+Its 29 bytes and six decoded rows must match the PE; the maximum is 1–127. The anonymous untyped same-owner
+PDB table starts on a DWORD boundary and ends at exactly `tableStart + 4*(maximum+1)`, the procedure end.
+The complete procedure body before the table is capped at 16 KiB and must be known, contiguous, nonoverlapping
+and PE-matching, including the final one-byte RET and exact three-byte NOP. Every case/default target is a
+body boundary after the dispatch and before the NOP; the RET itself is valid. Direct branches bypassing the
+guard or entering the table refuse. Reported vector bytes must match the PE before data classification.
+`IsaRsi64TerminalTests.ps1` supplies 93 controls (seven accepted, 86 refused), including a genuine adjacent VEX
+instruction that remains rejected. Identical owner records and irrelevant foreign records leave valid proof
+intact; a missing or solely foreign owner does not prove the table. Existing recognizers and the runtime
+allowlist remain unchanged. Synthetic fixture bytes are never executed.
+
+The Release adjustment-construction table uses an exact nonvolatile RBX index: `MOVSXD RBX,EDX`,
+`MOV RDI,RCX`, a zero DWORD stack initializer, an ordinary x64 ABI call, a one DWORD initializer,
+`MOV [RDI],EBX`, `CMP EBX,max`, unsigned `JA rel32`, then `LEA RDX,imagebase`,
+`MOV ECX,[RDX+4*RBX+table]`, `ADD RCX,RDX`, `JMP RCX`. All twelve contiguous decoded rows and
+57 bytes must match the PE; the full-width initializer and unsigned maximum 1–127 bound the RBX index.
+The exact same-owner anonymous untyped symbol starts an aligned DWORD table whose
+`tableStart + 4*(max+1)` equals the owning PDB procedure end inside its contribution. The preceding
+one-byte RET and INT3, all case targets and the separate JA default require decoded boundaries before
+the table in that procedure. A larger contribution is allowed; changed procedure extent, symbols,
+guards, row ownership or bytes withhold proof. This form has no fallback to another data proof.
+Reported vector-row bytes must also match the PE before being classified as table data; adjacent real
+vector code remains gated. Duplicate decoded rows retain their longest claimed extent and become
+unknown, so a short first row cannot hide a later overlapping row. `IsaRbxLongGuardTests.ps1` supplies
+132 parser controls (four accepted, 128 refused); their bytes are never executed and the runtime
+allowlist is unchanged.
 
 The observed terminal RDX DWORD table has a different exact guard: `MOVZX ECX,byte [RAX]`, `CMP CL,max`,
 `JA rel8`, followed contiguously by `LEA RDX,imagebase`, `MOV EAX,[RDX+4*RCX+table]`, `ADD RAX,RDX`, `JMP RAX`.
@@ -356,6 +447,59 @@ The 183 independent controls include every protected row's missing/duplicate/unk
 refusal, extreme bounds, direct-entry and backward-target cases, metadata/target/tail refusals, and real VEX/EVEX
 in the body or adjacent to the table. This proof adds no runtime instruction, module or allowlist exemption.
 
+The observed Release `std::format::_Visit` terminal switch instead uses exactly 40 contiguous bytes:
+`MOVZX EAX,byte [RCX]`; three fixed register-preserving moves; `CMP AL,imm8`; `JA rel32`;
+`LEA R10,imagebase`; `MOV ECX,[R10+4*RAX+table]`; `ADD RCX,R10`; `JMP RCX`.
+Full EAX zero extension, all ten exact rows and the complete known procedure body must agree with PE bytes and
+nonoverlapping decoded boundaries. The unsigned maximum is 1…127. Anonymous untyped same-owner PDB data begins
+at the DWORD load's displacement, and max+1 DWORDs end exactly at that procedure's end. No intervening symbol
+may alter the count. Every table/default target is a known body boundary after dispatch, before the exact cold
+CALL/INT3/NOP tail. Direct branches may not bypass the protected guard, enter tail alignment or target table
+bytes. Reported table bytes must match PE bytes too. The 141 independent controls include every protected/body/
+tail-row proof failure, ownership/count/target corruption, bounds and genuine body/adjacent vector rejection.
+This proof recognizes data only; ordinary instructions and the runtime allowlist remain gated.
+
+The observed ASan menu tracing remap uses a different exact 45-byte form: `CMP dword [RSP+disp8],imm32`;
+`JA rel32`; zero-extending `MOV EAX,[RSP+the same disp8]`; the contiguous RCX image-base LEA, byte remap load,
+DWORD target load, ADD RAX,RCX and JMP RAX. All eight rows, their lengths and PE/listing bytes must agree without
+unknown/duplicate/overlapping boundaries. The unsigned maximum is 1…4095; max+1 byte indices end at the exact
+same-owner procedure end inside its contribution. Anonymous untyped same-owner symbols bound both tables;
+the byte table begins at the DWORD end, every byte index is below the DWORD count, and every target/default is
+a decoded body boundary before the DWORD table. Earlier contradictory or unrelated later symbols cannot rescue
+a malformed/missing guard. Reported DWORD rows must agree with PE bytes; genuine body/adjacent VEX/EVEX remain
+instructions. The 115 independent controls cover 15 valid bound/displacement combinations, all eight row-proof
+failure classes, operand/owner/range/count corruption and genuine body/adjacent vector rejection. This adds no
+module or allowlist exemption.
+
+The observed ASan color-picker remap also emits the exact 42-byte compact form with opcode `83`:
+`CMP dword [RSP+disp8],imm8; JA rel32; MOV EAX,[RSP+the same disp8]`, followed by the same contiguous
+RCX image-base LEA, byte-remap load, DWORD target load, ADD RAX,RCX and JMP RAX. Its sign-extended
+immediate must be positive, 1…127; encoded negative values and zero do not prove an unsigned bound.
+The compact comparison row must be retained as evidence. All eight rows, PE/listing agreement,
+nonoverlapping known boundaries, anonymous same-owner symbols, contiguous DWORD/byte spans,
+exact owning procedure end, remap indices and decoded body/default targets satisfy the same proof
+as the imm32 form. No missing or contradictory evidence receives a fallback exemption. The 115
+imm32 controls remain unchanged; `IsaDisp8RcxImm8ByteRemapTests.ps1` adds 116 independent controls,
+including the observed maximum 27 / stack displacement 40, invalid signed maxima, every row-evidence
+fault and genuine body/adjacent VEX/EVEX rejection. Only proved data receives data status; runtime
+and tier allowlists are unchanged. The [unchanged-image record](../TestRuns/P1WandReadbackRebind_2026-10-06.md)
+preserves the original false instruction report and exact failed binary/PDB.
+
+The observed ASan DxUi message switch uses the exact 51-byte zero-extending wide form:
+`CMP dword [RSP+disp32],imm32; JA rel32; MOV EAX,[RSP+the same disp32]`, followed by the contiguous
+RCX image-base LEA, byte-remap load, DWORD target load, ADD RAX,RCX and JMP RAX. The unsigned maximum
+is 1…4095. All four stack-displacement bytes agree and all eight rows match PE bytes, decoded lengths
+and nonoverlapping known boundaries. Anonymous same-owner PDB symbols bound the adjacent DWORD and
+byte spans. Exactly max+1 byte indices end at the owning procedure end, every index is below the
+DWORD count, and every target/default is a decoded body boundary before the DWORD table. Missing,
+malformed or contradictory evidence cannot be rescued by a later symbol or broader contribution.
+No other same-contribution procedure entry may begin inside these proved tables. Reported vector rows
+must match PE bytes. Genuine body/adjacent VEX/EVEX remains gated; this proof
+adds no object/function/runtime allowance and changes neither the pinned DxUi code nor its pin.
+`IsaWideRcxByteRemapTests.ps1` owns 136 independent encoded acceptance/refusal controls, including
+the observed maximum 226/stack 0xc98, shifted image/section, all eight row proof failures, full
+displacements, metadata/content/target boundaries and genuine vectors in/after the body.
+
 The ASan `Application::EndCanvasEdit` terminal switch uses exactly `CMP dword [RSP+disp32],imm8;
 JA rel32; MOVSXD RAX,dword [RSP+the same disp32]`, followed by the contiguous RCX image-base DWORD dispatch,
 ADD and JMP RAX. All seven guard/dispatch rows must match their PE bytes, decoded lengths and nonoverlapping
@@ -399,12 +543,29 @@ The separately observed ASan QWORD-stack/RAX terminal form requires exactly seve
 MOV ECX,[RAX+4*RCX+tableRva]; ADD RCX,RAX; JMP RCX`. Both full stack displacements must agree and the unsigned
 bound must be 1…127. All seven rows must match the PE bytes and decoded boundaries without overlap. The aligned
 table starts at an anonymous same-owner untyped PDB data record; max+1 DWORDs end exactly at its owning
-procedure's end, with no interior same-owner data record. A decoded single-byte RET immediately precedes it.
+procedure's end, with no interior same-owner data record. A decoded single-byte RET immediately precedes it,
+or is followed by exactly one decoded `0f 1f 00` alignment NOP immediately before the table. In the padded form,
+both terminal rows and every procedure-body row before the table must be known, contiguous, nonoverlapping and
+byte-identical to the PE. Table/default targets cannot enter the padding. Direct transfers, including LOOP-family
+and legacy-prefixed branches/calls, cannot enter the padding/table or protected guard interior from elsewhere.
 Every target is a decoded body boundary in that procedure before the table and outside the protected guard/
 dispatch; the guarded fallback must be among them. Direct branches/calls elsewhere in that procedure cannot
 enter the protected interior or the table. Missing or changed proof evidence leaves the bytes subject to the
 ordinary ISA gate; real vector code adjacent to the table remains gated. The runtime allowlist is unchanged
 ([73-control proof and unchanged-image rechecks](../TestRuns/IsaQwordStackRax_2026-10-03.md)).
+The padded extension retains those controls and all other predecessor parser suites; 113 additional controls
+and four unchanged archived images pass the [terminal-padding proof](../TestRuns/IsaQwordPadding_2026-10-03.md).
+Native qualification remains separately required for its activation.
+
+The additionally observed ASan DWORD zero-stack form is exactly `CMP dword [RSP],imm8; JA rel8;
+LEA RAX,imagebase; MOV ECX,[RSP]; MOV ECX,[RAX+4*RCX+tableRva]; ADD RCX,RAX; JMP RCX`.
+Its unsigned bound is 1…127, its ECX stack load zero-extends, and its seven PE/listing boundaries are contiguous
+and nonoverlapping. The same QWORD-form terminal symbol/count/target and complete padded-body proof above
+applies: anonymous same-owner untyped data, exact owning procedure end, all max+1 entries, a proved fallback,
+known PE-matched body rows and no outside transfer into guard interior or table/padding. The exact zero-stack
+form cannot infer another stack displacement or operand width. Missing, duplicate, unknown, contradictory or
+changed evidence withholds the exemption. Genuine body/adjacent VEX and EVEX instructions stay gated; no
+runtime exception is added. See [109 parser controls and the original failed-image proof](../TestRuns/IsaDwordZeroStack_2026-10-10.md).
 
 The observed Release variant form loads a signed byte into RAX from RBP+disp8 or RBP+disp32 immediately before
 LEA RCX of image base. Only `48 0F BE 45 <disp8>` or `48 0F BE 85 <disp32>` proves that index; a different
@@ -414,6 +575,17 @@ the first/default entry. Only the exact contiguous MOVSX/LEA/load/ADD/JMP form a
 symbol prove that bias. The complete table, including its default entry, must target decoded body instructions
 after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
 invalid default/other targets receive no exemption. This adds no runtime allowlist entry.
+
+The observed Release signed variant move also uses exactly five contiguous instructions, 27 bytes:
+`MOVSX RAX,byte [RBP+disp32]`, `LEA RDX,imagebase`, `MOV EAX,[RDX+4*RAX+tableRva]`,
+`ADD RAX,RDX`, `JMP RAX`. Every decoded row, length, nonoverlapping boundary and byte MUST match the PE.
+The exact anonymous same-owner untyped PDB data record MUST begin one DWORD before the load displacement;
+that first entry belongs to the signed index -1 default. The complete default and ordinary entries MUST target
+known decoded body instructions after the jump and before the table, with the existing contribution and
+next-data-symbol bounds. Another register, REX/frame/SIB/width, unsigned or disp8 index, bias, gap, unknown or
+conflicting row, symbol/owner or target receives no proof. A real vector instruction adjacent to this data
+remains a violation. This changes no runtime, object, function or address allowlist. Its 62 independent pure
+parser controls and same-image readback are separate from native profile qualification.
 
 The observed Release `std::variant` destruction dispatch (`_Variant_base<...>::_Destroy` of 21 alternatives) is exactly six
 contiguous instructions, 37 bytes: `MOVSX RAX,byte [RCX+disp32]`, `LEA R8,imagebase`, `MOVZX EAX,byte [R8+RAX+disp32]`,
@@ -428,6 +600,18 @@ register, displacement width, index extension, row, symbol, bound or target rece
 address, object or procedure name. This adds no runtime allowlist entry
 ([record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md)).
 
+The observed Release variant destructor also emits `MOVSX RAX,byte [RBP+disp32]`, contiguous `LEA RDX,imagebase`,
+`MOVZX EAX,byte [RDX+RAX+disp32]`, `MOV ECX,[RDX+4*RAX+disp32]`, `ADD RCX,RDX`, `JMP RCX`.
+This specific RDX form uses the same one-byte valueless bias and terminal DWORD/byte-table proof as the R8
+form above. Every instruction boundary and byte must agree with the PE; the anonymous same-owner PDB records
+bound both tables, every remap byte is below the exact DWORD entry count, every target is a decoded boundary
+inside the same procedure before its tables, and the procedure and contribution share the exact byte-table end.
+Reported table bytes must agree with the PE too. A different bias, register, width, owner, symbol, extent,
+decoded row or target receives no data exemption. `IsaSignedRdxRemapTests.ps1` preserves 62 independent controls,
+including malformed/missing/duplicated/overlapping rows, PE/listing contradictions, last-byte remap corruption,
+and real VEX/EVEX instructions in code. The runtime allowlist is unchanged. Full normal matrix qualification
+remains required before the scanner extension is complete.
+
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
 LEA EAX with disp8, compare EAX with imm8, then forward JA. Every instruction preserves R8. Both branch destinations
@@ -436,12 +620,89 @@ PDB data symbol in the owning contribution. A partial sequence, clobbered base, 
 or absent data symbol receives no exemption. Adjacent real VEX remains rejected. No generic instruction skipping
 or new runtime allowlist entry is permitted.
 
+The observed Release color-settings switch has a second exact terminal form: `MOVSXD RSI,EDX`, `MOV RDI,RCX`,
+an RSP+32 DWORD zero store, a direct call, the same slot set to one, unsigned `CMP ESI,imm8` / long `JA`,
+`LEA RDX,imagebase`, `MOV ECX,[RDX+4*RSI+table]`, `ADD RCX,RDX`, `JMP RCX`. The producer and prelude are
+mandatory because a 32-bit guard alone does not bound an arbitrary 64-bit RSI. Every row must decode and match
+the PE; the nonnegative maximum is 1–127. The exact same-owner anonymous data symbol begins the DWORD table;
+its guard-derived end is the owning PDB procedure end. Every target and the default decode after the dispatch
+and before the table. Interior symbols and outside branches entering the prelude or table invalidate proof.
+The terminal INT3 and two-byte NOP must match both PE and listing. Only the proved table receives data status;
+the existing checked INT3 suffix rule applies to a decoded row that crosses its end. Wrong producer, guard,
+base/index, rows, symbols, targets, boundaries or padding and adjacent real VEX remain rejected. Independent
+parser controls cover each refusal. Runtime and tier allowlists are unchanged.
+
+The observed Release terminal enum switch uses exactly six contiguous rows: `CMP R13D,imm8`;
+`JA rel32`; `LEA RDX,imagebase`; `MOV ECX,[RDX+4*R13+tableRva]`; `ADD RCX,RDX`; `JMP RCX`.
+Only these 30 bytes and a positive unsigned maximum 1–127 establish its table extent. The anonymous,
+untyped, same-owner PDB symbol starts exactly at the aligned table RVA; maximum+1 DWORDs end at the
+owning procedure end inside the same executable contribution. Each row must match the PE and decoded
+boundaries. The default and every table target must be decoded body boundaries after dispatch and before
+that procedure's first data symbol. Complete preceding code must be known, contiguous and PE-matching,
+ending in RET or RET followed by `0f 1f 00`. An earlier contiguous anonymous DWORD span requires valid
+same-procedure body targets outside the protected guard. Direct branches/calls, including legacy prefixes
+and LOOP-family branches, cannot enter the guard interior, alignment or either data span. The selected
+table's reported rows must also be known, contiguous, nonoverlapping and PE-matching; duplicate/missing
+rows provide no proof. A final scalar listing row may consume matching bytes after the logical table end;
+a crossing vector row remains subject to the existing checked suffix rule. This proves data only, not a
+general upper-bit invariant for R13, and adds no object/function or runtime-allowlist exemption. Parser
+controls and unchanged failed-image verification are separate from full native profile qualification.
+
+The observed Release worker-priority loop hoists `R14=imagebase` across exactly 35 contiguous rows (132 bytes).
+Only its complete fixed producer, two stack loads, predicates, zero-extended EAX index, unsigned guard of five,
+DWORD load, ADD/JMP, three case bodies, call, candidate update and bounded loop back edge prove this form.
+Every row and boundary MUST match the PE. Its one loop call targets outside the procedure and relies on the
+Windows x64 nonvolatile-register ABI; there is no general instruction skipping or same-procedure LEA proof.
+Outside direct branches/calls, including legacy-prefixed and LOOP-family transfers, cannot enter the protected
+loop interior. Other indirect/far jumps, far calls/returns and same-procedure direct calls invalidate proof.
+The six DWORDs start at an aligned, anonymous, untyped same-owner PDB record and end exactly at the owning
+procedure end. Each target MUST be one of the two independently decoded ordinary case starts. The full preceding
+procedure is known, contiguous, nonoverlapping and PE-matching, ending in a decoded backward JMP to a body
+boundary before the producer followed by exactly `66 90` alignment. No other same-owner data record lies in
+the procedure. Direct transfers cannot enter that alignment or table. The table listing also MUST be known,
+contiguous, nonoverlapping and byte-identical; a final row may consume only the existing checked `INT3` suffix
+when receiving vector-data status. Wrong or missing producer, loop, guard, row, symbol, extent, target or suffix
+provides no exemption. Real adjacent vector code remains gated. This changes no runtime, object, function,
+address or tier allowlist; parser/readback proof is separate from native profile qualification.
+
+The observed ASan Menu switch also has an unsigned wide-stack form: eight-byte `CMP [RSP+disp32],imm8`,
+six-byte unsigned `JA`, seven-byte zero-extending `MOV EAX,[RSP+same disp32]`, then the exact contiguous
+`LEA RCX,imagebase; MOV EAX,[RCX+4*RAX+tableRva]; ADD RAX,RCX; JMP RAX`. The nonnegative maximum 1–127
+bounds maximum+1 aligned DWORDs inside the same executable contribution and containing PDB procedure.
+The complete guard, dispatch and decoded body through the immediately preceding RET MUST match the PE.
+Default/case targets are known body instruction boundaries after dispatch. Interior anonymous symbols,
+overlapping/unknown/missing rows, bad targets and direct body transfers into the table, including archived behavioral reference prefixes and LOOP-family branches, refuse proof.
+An anonymous symbol at the table start is optional for this exact form; a later unrelated data symbol
+cannot extend its guard-derived extent. Only the exact table bytes receive data status and must match
+the listing. Real adjacent vector instructions remain gated. Collecting candidate body rows grants no
+exemption. `IsaWideUnsignedGuardTests.ps1` retains prior controls and checks three accepted forms and
+27 independent refusals. No runtime, object, function, tier or address allowlist changes.
+
+The observed pinned Menu immediate-R9 switch is a separate exact terminal form: `MOVZX EAX,[RDI+1]`,
+`CMP AL,max`, unsigned `JA rel32`, immediate `LEA R9,imagebase`, `MOV EAX,[R9+4*RAX+tableRva]`,
+`ADD RAX,R9`, `JMP RAX`. All seven PE/listing rows, same-contribution guard/dispatch, anonymous data
+start, exact maximum+1 DWORD terminal PDB extent, known immediately preceding RET, and forward
+case/default decoded boundaries are required. Maximum is 1–127. Only those proved data bytes are
+exempt, and their reported bytes must match the PE. Real vector code in the body, target or adjacent
+range remains gated. `IsaR9DirectTests.ps1` provides 64 independent controls; neither DxUi nor the
+runtime/object/function/tier/address allowlists change. [Exact readback](../TestRuns/IsaR9Direct_2026-10-17.md).
+
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
 placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named
 object from an unapproved library and a same-named function in an unapproved object MUST fail. Missing and
 mismatched PDB controls MUST fail. Reports, binary/PDB/allowlist hashes, disassembly, full
 PDB records and control logs live under `.build/IsaScan/`. `-Clean` and ARM64 builds do not invoke this x64 gate.
+
+## Bounded selection offset source authoring
+
+`Build/GenerateBoundedSelectionOffset.py` reproduces the isolated pinned Clipper2 2.0.1 offset fork.
+It requires explicit `--source`, fresh `--output`, `--clang-format`, `--format-style`, `--base-engine`
+and `--boolean-generator` paths. Exact upstream hashes, the existing base generation manifest and
+the shared lexical loop rewriter are verified. The base workspace/license are copied verbatim; the
+offset source retains normalization/offset/cleanup precision and ordering, scoped arena allocation,
+explicit Debug container initialization and cancellation checkpoints. The output provenance manifest
+records authoring only. Reproduction does not establish runtime, admission, lifetime or G1 qualification.
 
 ## Solution shape
 
@@ -470,3 +731,135 @@ development builds remain available; a copied candidate with uncertain object pr
 
 Expected: zero MSBuild warnings or errors; `.build\x64\<Configuration>\RedPrism.exe` exists; ASan Debug binaries are
 really instrumented.
+
+
+The observed ASan short-stack Menu form MUST use a complete proof: DWORD `CMP [RSP+disp8],imm8`
+with maximum 1–127, short unsigned `JA`, signed `MOVSXD RAX,[RSP+same disp8]`, and exact contiguous
+RCX image-base/load/add/jump dispatch. The anonymous same-owner DWORD table MUST end at the exact
+PDB procedure end, immediately follow `RET; NOP` with one-byte NOP, and contain only known PE-matching
+case boundaries after dispatch and before the RET. The default MUST also be a known case-body boundary.
+Every row from procedure start through terminal padding MUST be contiguous, known, nonoverlapping and
+PE-matching. Direct branch/call/LOOP-family transfers, with legacy prefixes, MUST NOT bypass the guard
+or enter padding/data. A short-stack one-byte NOP candidate MUST be selected before the generic forward reader, and a refused proof MUST NOT fall back to either the generic or older target-only reader. The distinct long-JA form keeps its existing proof. Unmapped candidate probing supplies no terminal evidence.
+Only the proved table receives data status; real vector instructions in its body stay gated. The existing
+PE-matching INT3 suffix rule still governs a decoder row that crosses the exact table end.
+
+The independent short-stack suite MUST retain five accepted controls (six-entry exact layout, shared-case
+default, bounds 1/127, and a PE-matching INT3 straddle) and 58 refusals. These include malformed guard/index/
+base/load/add/jump, PDB/table/procedure ownership and extents, unknown/missing/overlapping or contradictory
+rows, wrong terminal, out-of-body or interior targets, prefixed and LOOP-family entries, and real vector
+instructions in the body or directly after the exact table end. A genuine following instruction MUST NOT be
+consumed as another target RVA even when its byte encoding equals a valid case address.
+
+
+### R9 byte-switch two-byte alignment sibling
+
+The existing exact R9B-guarded switch may end with `RET; CALL rel32; INT3; 66 90`
+instead of the one-byte NOP tail. Both tail encodings require complete PE-matching decoded rows,
+the same anonymous terminal PDB table extent, complete preceding body and valid case/default targets.
+Only the two-byte sibling additionally accepts a short JNE into the shared JA when its immediately
+preceding R9B comparison uses exactly the same maximum. Other incoming guard transfers refuse proof.
+Its reported vector-data bytes must match the PE. The existing one-byte form stays covered.
+`IsaR9ByteSwitchTests.ps1` adds 109 independent controls (7 accepted, 102 refused); actual vector code
+in the body, target or adjacent range remains gated. No DxUi or allowlist change is involved.
+[Original failed-image and scanner regression evidence](../TestRuns/IsaR9AlignedTail_2026-10-17.md).
+
+
+### R8/RAX/RDX guarded interior DWORD table
+
+The observed pinned WindowHost switch adds only this exact contiguous seven-row, 36-byte sequence:
+`LEA EAX,[R15+disp32]; CMP EAX,max; JA rel32; LEA R8,imagebase; MOV EDX,[R8+4*RAX+tableRva]; ADD RDX,R8; JMP RDX`.
+Maximum is 1–127. Complete PE/listing agreement, one owning executable contribution and exact anonymous
+same-owner PDB start/end MUST prove maximum+1 DWORDs. A unique containing procedure supplies complete
+known, contiguous code before its first anonymous data symbol; code/default/case routing and no incoming
+guard-interior/data transfers remain required. Its code ends with RET or a backward JMP plus at most three
+alignment bytes. The table can follow earlier anonymous tail data; later data is not thereby proved.
+
+A separate LLVM LOCK row requires an adjacent PE-matching memory INC/DEC/XADD row. Orphan, unknown,
+register-only, missing, mismatching or non-atomic suffixes refuse this proof. Only verified table bytes receive
+data status; actual vector instructions in code remain gated. `IsaR8RaxRdxTests.ps1` adds 107 encoded controls
+(22 accepted, 85 refused) to every x64 scanner regression. No DxUi or allowlist change is involved.
+[Exact failed-image and regression evidence](../TestRuns/IsaR8RaxRdx_2026-10-18.md).
+
+## Joint unsigned stack switch tail data
+
+The observed ASan unsigned switch pair may end its exact PDB procedure with a DWORD table, a byte remap, and a second DWORD table after one RET/NOP. Recognize only the first contiguous 42-byte CMP DWORD [RSP+disp8],imm8 / unsigned near JA / zero-extending MOV EAX from the same slot / RCX image-base LEA / MOVZX EAX byte remap / DWORD RVA load / ADD RAX,RCX / JMP RAX and the second contiguous 34-byte guarded direct DWORD dispatch. Both maxima are 1–127. The remap has exactly first maximum+1 bytes, each below the first DWORD entry count; all three spans have exact anonymous same-owner PDB starts. The second maximum+1 DWORDs end exactly at the containing PDB procedure end within its contribution.
+
+Require known nonoverlapping decoded rows and matching PE bytes throughout the complete body through RET and its one-byte NOP. Both defaults and every table target stay after the second indirect jump and before RET. Direct edges cannot enter either guard/dispatch interior from outside, padding/data, or an instruction interior. Only the two proven indirect jumps are accepted; unproved indirect transfers refuse the data proof. A bounded candidate-procedure collection of at most 1 MiB grants no exemption by itself. Every claimed table-data row must match its actual PE bytes. Other vector instructions in the body, after the tables, or at a later anonymous symbol remain subject to the ordinary ISA gate. No object/function/runtime allowance changes.
+
+`IsaSplitTailUnsignedTests.ps1`, registered in `IsaScanTests.ps1`, has 94 encoded controls: valid joint proof, both dispatches' missing/duplicate/unknown/PE-mismatched rows, remap bounds and operands, PDB ownership/extents, actual direct guard-bypass edges, body/RET/NOP integrity, malformed targets and real VEX/EVEX gating. Synthetic inputs include the observed INT3 padding and later same-owner symbol in a distinct procedure; the old scanner rejects the valid form. Controls execute no encoded native instructions. [Qualification](../TestRuns/IsaSplitUnsignedTail_2026-10-18.md).
+
+
+## Direct EBX-guarded RBX terminal switch data
+
+A second observed Release form uses the contiguous 28-byte `CMP EBX,max; JA rel32; LEA RDX,imagebase;
+MOV ECX,[RDX+4*RBX+table]; ADD RCX,RDX; JMP RCX`. The unsigned maximum is 1–127. The DWORD-aligned
+anonymous same-owner table ends exactly at the containing PDB procedure end, within its contribution.
+Its executable body ends with an external direct CALL and INT3. All case/default targets are known decoded
+boundaries after the dispatch and before that CALL. The complete body is known, contiguous, nonoverlapping,
+PE-matched and bounded to 1 MiB; all six dispatcher rows and table bytes agree with the PE.
+
+The low-DWORD comparison alone MUST NOT prove the full-width RBX index. Require a reaching exact
+`MOVSXD RBX,[RBP+disp8]` within 4 KiB before CMP. Every later encoded effect through the dispatch must
+preserve a sign/zero-extended DWORD in RBX. Explicitly modeled 32-bit writes, byte/word writes, reads and
+ordinary Windows x64 ABI calls preserve that relation; a possible full-width clobber or unmodeled opcode
+refuses proof. No direct edge may bypass the reaching producer or enter the dispatcher after CMP. Known
+entries at the producer itself or from its protected region to CMP remain valid. Local calls, other unproved
+indirect jumps, far/system transfers and edges into data, trap padding or instruction interiors refuse.
+
+`IsaRbxDirectGuardTests.ps1` runs 120 encoded parser controls by default in the canonical ISA gate, including
+full-RBX clobbers, unmodeled register effects, actual guard-bypass branches, valid alternate producers and
+branch targets, exact row/PE/PDB/body/terminal refusals and genuine adjacent/body VEX/EVEX. Only table data
+is classified; executable vectors remain gated. Synthetic bytes never execute and no runtime allowlist entry
+is added. [Qualification](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).
+
+
+### Exact AL/RCX guarded terminal DWORD switch
+
+The observed Release stroke-finish table is recognized only after the contiguous exact sequence
+`MOVZX EAX,byte [RCX+disp32]; CMP AL,max; JA rel32; LEA RDX,imagebase;
+MOV EAX,[RDX+4*RAX+tableRva]; ADD RAX,RDX; JMP RAX`. The unsigned maximum is 1–127.
+Every guard/dispatch row must have known nonoverlapping boundaries and match the PE bytes.
+The exact same-owner anonymous PDB symbol starts the aligned DWORD table; `max+1` entries end
+at the exact containing procedure end within its executable contribution. Every case/default
+target is a decoded body boundary after dispatch and before the terminal external CALL.
+
+The complete owning body is capped at 1 MiB, known, contiguous, nonoverlapping and PE-matching.
+Its exact tail is external `CALL rel32; INT3; NOP 0F 1F 00` immediately before the table. Refuse
+guard-bypass branches, trap/padding/table entries, unknown effects, other indirect dispatches,
+far/system flow and local calls into this body. Bounded candidate-body row collection grants no
+exemption without this complete proof. Reported vector bytes must match the PE before table-data
+classification; genuine vector instructions in the body or adjacent code remain gated.
+
+`IsaAlNearRcxTests.ps1` supplies 121 default encoded controls for valid forms and independent
+guard, flow, ownership, extent, target, terminal-row and PE/listing corruptions. The encoded bytes
+are never executed. The same originally rejected Release image/full PDB passes after correction;
+the original failed scan remains retained and the native Application is not replayed for a scanner
+repair. The runtime allowlist is unchanged. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).
+
+
+### Runtime function object identity
+
+The reviewed runtime-function allowlist matches a Windows object basename with ordinal case-insensitive
+comparison and the complete C/C++ procedure name with ordinal case-sensitive comparison. Both complete
+names, the exact matching PE/PDB procedure range and its owning contribution are required. Object or
+function prefixes/suffixes, a different object, and function-name case changes MUST remain refused.
+Linker path casing alone MUST NOT reject an otherwise identical approved runtime procedure. This rule
+adds no runtime allowlist entry and grants no whole-object exemption.
+
+### Unsigned R9D / RCX / R8 terminal DWORD table
+
+Recognize only the observed seven-row, 30-byte `CMP R9D,max; JA rel8; LEA RCX,imagebase;
+MOVSXD RAX,R9D; MOV R8D,[RCX+4*RAX+tableRva]; ADD R8,RCX; JMP R8` form. The unsigned maximum
+is 1–127; it establishes a nonnegative signed-extended index. Every guard, dispatch, complete body
+and table listing row MUST match the PE without overlaps or unknown instructions. One valid owning
+PDB procedure (bounded to 1 MiB) and its anonymous untyped same-contribution terminal data symbol
+prove exactly max+1 aligned DWORDs. Earlier anonymous data does not qualify this form.
+
+The body ends at RET or RET plus exact `0f 1f 00` alignment. Default and case targets are known
+forward body boundaries after dispatch and before data; the default is represented in the table.
+Direct edges cannot enter the guard interior, instruction interiors, padding or data. Other indirect
+jumps and orphan prefixes refuse the proof. Candidate body collection grants no exemption. Only
+proved table bytes receive data status; real VEX/EVEX instructions remain gated everywhere else.
+`IsaR9dRcxR8Tests.ps1` contributes 85 encoded controls, including conflicting scopes and genuine
+vector body/target/adjacent cases. [Failure and qualification](../TestRuns/IsaR9dRcxR8_2026-10-21.md).

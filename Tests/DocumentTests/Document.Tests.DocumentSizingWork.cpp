@@ -1,5 +1,6 @@
 #include "Document.Tests.DocumentSizingWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasSize.h"
 #include "PixelBuffer.h"
 #include "RasterWork.h"
@@ -69,12 +70,13 @@ std::uint64_t RoundedPayloadBytes(std::uint64_t bytes)
 void CanvasExtensionAndAnchor()
 {
     constexpr std::array<std::uint8_t, 16> pixels{1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255};
-    CanvasDocument source;
-    source.width = 2;
-    source.height = 2;
+    DocumentFixture sourceFixture;
+    sourceFixture.width = 2;
+    sourceFixture.height = 2;
     ImageLayer layer = ImageLayer::Blank(L"Source", Vec2{2, 2});
     layer.asset = RasterAsset{Bgra(2, 2, pixels), {}, layer.name};
-    source.layers.push_back(layer);
+    sourceFixture.layers.push_back(layer);
+    const CanvasDocument source = std::move(sourceFixture).Seal();
 
     CanvasSizeOptions options;
     options.width = 4;
@@ -101,12 +103,13 @@ void NearestAndSparseReads()
     constexpr std::array<std::uint8_t, 32> expected{10, 20, 30, 255, 10, 20, 30, 255, 40, 50, 60, 255, 40, 50, 60, 255,
                                                     10, 20, 30, 255, 10, 20, 30, 255, 40, 50, 60, 255, 40, 50, 60, 255};
 
-    CanvasDocument imageSource;
-    imageSource.width = 2;
-    imageSource.height = 1;
+    DocumentFixture imageSourceFixture;
+    imageSourceFixture.width = 2;
+    imageSourceFixture.height = 1;
     ImageLayer imageLayer = ImageLayer::Blank(L"Sparse", Vec2{2, 1});
     imageLayer.asset = RasterAsset{sparse, {}, imageLayer.name};
-    imageSource.layers.push_back(imageLayer);
+    imageSourceFixture.layers.push_back(imageLayer);
+    const CanvasDocument imageSource = std::move(imageSourceFixture).Seal();
     ImageSizeOptions imageOptions;
     imageOptions.width = 4;
     imageOptions.height = 2;
@@ -128,13 +131,14 @@ void NearestAndSparseReads()
 void CancelledSharedAndNoOpResults()
 {
     constexpr std::array<std::uint8_t, 4> pixels{1, 2, 3, 255};
-    CanvasDocument source;
-    source.width = 1;
-    source.height = 1;
+    DocumentFixture sourceFixture;
+    sourceFixture.width = 1;
+    sourceFixture.height = 1;
     ImageLayer layer = ImageLayer::Blank(L"Shared", Vec2{1, 1});
     const Raster shared = Bgra(1, 1, pixels);
     layer.asset = RasterAsset{shared, shared, layer.name};
-    source.layers.push_back(layer);
+    sourceFixture.layers.push_back(layer);
+    const CanvasDocument source = std::move(sourceFixture).Seal();
 
     CancelSource cancelSource;
     (void)cancelSource.Cancel();
@@ -234,12 +238,13 @@ void SizingReservationLowerBounds()
                                                       10, 11, 12, 255, 13, 14, 15, 255, 16, 17, 18, 255};
     const Raster dense = Bgra(3, 2, imageBytes);
     const Raster sparse = Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, dense, 0, 0, {}, 0);
-    CanvasDocument source;
-    source.width = 3;
-    source.height = 2;
+    DocumentFixture sourceFixture;
+    sourceFixture.width = 3;
+    sourceFixture.height = 2;
     ImageLayer layer = ImageLayer::Blank(L"Sparse reservation", Vec2{3, 2});
     layer.asset = RasterAsset{sparse, {}, layer.name};
-    source.layers.push_back(layer);
+    sourceFixture.layers.push_back(layer);
+    const CanvasDocument source = std::move(sourceFixture).Seal();
 
     CanvasSizeOptions refusedCanvas;
     refusedCanvas.width = kMaxCanvasSide + 1;
@@ -266,13 +271,14 @@ void SizingReservationLowerBounds()
         RoundedPayloadBytes(static_cast<std::uint64_t>(sparse.Stride()) * static_cast<std::uint64_t>(sparse.Height()));
     const std::uint64_t imageLowerBound = RoundedPayloadBytes(6u * 4u * 4u) + sparseSourceLowerBound;
 
-    CanvasDocument multipleSparse = source;
+    auto multipleSparseFixture = DocumentFixture::Copy(source);
     const Raster largeSparseImage = Raster::MakeSparse(3'000, 3'000, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
     const Raster smallerSparseMask = Raster::MakeSparse(4'000, 4'000, RasterFormat::Gray8, {}, 0, 0, {}, 0);
-    multipleSparse.layers[0].asset->image = largeSparseImage;
+    multipleSparseFixture.layers[0].asset->image = largeSparseImage;
     LayerMask sparseMask;
     sparseMask.asset.image = smallerSparseMask;
-    multipleSparse.layers[0].mask = sparseMask;
+    multipleSparseFixture.layers[0].mask = sparseMask;
+    const CanvasDocument multipleSparse = std::move(multipleSparseFixture).Seal();
     const std::uint64_t multipleSparseMetadata = SizingMemoryBytes(multipleSparse, refusedImage);
     const std::uint64_t multipleSparseReserved = SizingMemoryBytes(multipleSparse, image);
     const std::uint64_t sparseImageBytes =
@@ -314,9 +320,9 @@ void NonuniformRotationAndUniformMask()
     constexpr std::array<std::uint8_t, 16> pixels{20,  40,  60,  255, 80,  100, 120, 255,
                                                   140, 160, 180, 255, 200, 220, 240, 255};
     const Raster image = Bgra(2, 2, pixels);
-    CanvasDocument source;
-    source.width = 4;
-    source.height = 4;
+    DocumentFixture sourceFixture;
+    sourceFixture.width = 4;
+    sourceFixture.height = 4;
     ImageLayer layer = ImageLayer::Blank(L"Rotated", Vec2{2, 2});
     layer.asset = RasterAsset{image, {}, layer.name};
     layer.transform.origin = Vec2{1, 1};
@@ -325,7 +331,8 @@ void NonuniformRotationAndUniformMask()
     constexpr std::array<std::uint8_t, 1> gray{173};
     uniform.asset.image = Gray(1, 1, gray);
     layer.mask = uniform;
-    source.layers.push_back(layer);
+    sourceFixture.layers.push_back(layer);
+    const CanvasDocument source = std::move(sourceFixture).Seal();
 
     ImageSizeOptions options;
     options.width = 8;

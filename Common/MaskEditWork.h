@@ -69,6 +69,17 @@ class PreparedMaskEdit final
     PreparedMaskEdit(PreparedMaskEdit&&) noexcept = default;
     PreparedMaskEdit& operator=(PreparedMaskEdit&&) = delete;
 
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept
+    {
+        return _publication.TryAcquireHistoryResidency(permit);
+    }
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {})
+    {
+        return _publication.RefreshHistoryResidency(cancellation, observer);
+    }
+
   private:
     friend class DocumentSession;
     explicit PreparedMaskEdit(PreparedImageImport publication) noexcept : _publication(std::move(publication)) {}

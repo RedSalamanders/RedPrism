@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformWorkTestGate.h"
 #include "Selection.h"
@@ -172,7 +174,8 @@ int Application::RunTransformWorkSelfTest() noexcept
             }
         }
         else if (state.test == Case::StaleSource)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
         else if (state.test == Case::StaleHistory)
             owner._session.history.Reset();
         else if (state.test == Case::SameIdReplacement)
@@ -295,7 +298,7 @@ int Application::RunTransformWorkSelfTest() noexcept
         mask.asset = RasterAsset{maskImage, Raster::MakeThumbnail(maskImage), L"Transform test mask"};
         mask.linked = linked;
         mask.placement = LayerTransform{Vec2{1, 1}, Vec2{8, 6}, 0, false, false, LayerSampling::Nearest};
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.back().mask = mask; });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.back().mask = mask; });
         _session.SelectLayer(target);
         _session.history.Reset();
         const auto before = _session.ActiveLayer()->transform;
@@ -555,9 +558,9 @@ int Application::RunTransformWorkSelfTest() noexcept
             const bool noGate = test == Case::Admission || test == Case::Capture;
             const auto outcome = fault.receipt.Read();
             expect(outcome.outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Failed) &&
-                       outcome.error == (cancelled                     ? E_ABORT
-                                         : test == Case::WorkerFailure ? E_ACCESSDENIED
-                                                                       : E_OUTOFMEMORY),
+                       outcome.error == static_cast<std::int32_t>(cancelled                     ? E_ABORT
+                                                                  : test == Case::WorkerFailure ? E_ACCESSDENIED
+                                                                                                : E_OUTOFMEMORY),
                    "floating-fault-exact-outcome", test, after, kind);
             expect(noGate ? !fault.visited : fault.visited && fault.held && fault.viewChanged,
                    "floating-fault-held-reservation-and-view-input", test, after, kind);

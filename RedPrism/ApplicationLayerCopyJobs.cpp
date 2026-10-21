@@ -60,6 +60,16 @@ class Application::LayerCopyJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed = _payload && _payload->prepared && _payload->prepared->publication &&
+                                   _payload->prepared->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         if (!_payload)
             return {}; // Whole admission precedes the owner snapshot and every pixel/history allocation.
         if (_gate && !_gate->afterPreparation)
@@ -80,10 +90,18 @@ class Application::LayerCopyJob final : public Job
                                                             }
                                                         },
                                                         _gate.get()};
+        if (_gate)
+            _gate->preparations.fetch_add(1);
         _payload->prepared.emplace(DocumentSession::PrepareLayerCopyPublication(
             std::move(_payload->input.value()), context.executor, context.cancellation, {},
             _gate ? observer : DocumentHistory::PrepareObserver{}));
         _payload->input.reset(); // Any remaining copied source and history owners retire on this worker.
+        if (_gate && _gate->lateResidencySource.HasStorage() && _payload->prepared->publication)
+        {
+            if (!_gate->lateResidencySource.Data())
+                return {JobStatus::Failed, E_FAIL};
+            _gate->residentGrowths.fetch_add(1);
+        }
         if (_gate && _gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -97,13 +115,43 @@ class Application::LayerCopyJob final : public Job
 
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (_payload || result.status != JobStatus::Finished || !Current() ||
-            _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
+        if (_payload)
+        {
+            if (!_payload->prepared || !_payload->prepared->publication)
+                return false;
+            const auto decision = _payload->prepared->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false;
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _captureError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshTicketMatches.store(_gate->capturedTicket == ticket);
+                _gate->refreshReservationHeld.store(_gate->reservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket);
+                return true;
+            }
+            _captureError = E_UNEXPECTED;
+            return false;
+        }
         try
         {
             if (_gate)
             {
+                _gate->captures.fetch_add(1);
+                _gate->capturedTicket = ticket;
                 _gate->captureReservationHeld =
                     _gate->reservationBytes != 0 && _owner._jobs.ReservedMemoryBytes() == _gate->reservationBytes;
                 if (_gate->throwCaptureFailure)
@@ -133,6 +181,7 @@ class Application::LayerCopyJob final : public Job
 
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         HostOutcome outcome = !Current() || _captureError == E_ABORT ? HostOutcome::Stale
                               : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
                                   ? HostOutcome::Cancelled
@@ -157,6 +206,7 @@ class Application::LayerCopyJob final : public Job
                                                               : E_INVALIDARG;
             }
         }
+        _residencyPermit.Reset(); // Release before notices, chrome, callbacks, or another owner pump.
         if (outcome == HostOutcome::Failed)
         {
             ++_owner._errorsShown;
@@ -173,7 +223,7 @@ class Application::LayerCopyJob final : public Job
         else
         {
             _owner.SyncChrome();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         (void)_owner._historyWork.Finish(_stamp);
         _owner.ResumeHostHistory(_stamp, outcome, error);
@@ -206,6 +256,8 @@ class Application::LayerCopyJob final : public Job
     const std::shared_ptr<LayerCopyWorkTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<LayerCopyPayload, RetireLayerCopyPayload> _payload;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _refreshResidency = false;
     HRESULT _captureError = S_OK;
 };
 
@@ -219,11 +271,13 @@ HRESULT Application::StartLayerCopy() noexcept
         return S_FALSE;
     const auto prepared = _session.LayerCopyPreparationMemoryBytes();
     const auto held = _session.ImageImportRetirementMemoryBytes();
+    const auto refresh = _session.history.EditMemoryBytes(_session.Document());
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     constexpr auto metadata = sizeof(LayerCopyJob) + sizeof(LayerCopyPayload);
-    if (!prepared || !held || prepared > maximum - metadata || prepared + metadata > (maximum - held) / 2)
+    if (!prepared || !held || !refresh || prepared > maximum - refresh || prepared + refresh > maximum - metadata ||
+        prepared + refresh + metadata > (maximum - held) / 2)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto whole = prepared + metadata;
+    const auto whole = prepared + refresh + metadata; // Original preparation and one private refresh coexist.
     const auto ordinal = _activeHostRequest->ordinal;
     _layerCopyStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
     if (!_layerCopyStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)

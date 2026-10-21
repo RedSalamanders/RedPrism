@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-16
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -77,6 +77,49 @@ returns. A false hook finalizes once even if it requested resume. Cancellation w
 external owner's acknowledgement, then skips the next Run and delivers one final Cancelled callback. Shutdown
 joins producers before destroying suspended payloads and drops callbacks.
 
+`InAcknowledgedJobCallback(ticket)` identifies only the exact successful original stage while its owner
+`DeferRetirement` or `DeferCompletion` callback runs after the producer returns. Progress, ordinary completion,
+failed/cancelled hooks, wrong generations and shutdown cannot acquire that identity. It grants no document or
+history mutation authority. A publication parent additionally needs its captured session/edit/history authority.
+
+`RetainPublicationMemory` is restricted to that original successful `DeferCompletion` callback, a suspended
+record with `deferredRetirement` and a descriptor-preclaimed retained-memory slot. It transfers the entire
+remaining CPU reservation once, without allocation, a memory query or a partial refund. All useful producers
+must have joined before this transfer; only bounded allocation-free cleanup may follow on the original record.
+The existing ordinary-completion `RetainMemory` contract remains unchanged.
+
+`JobOptions::continuingOutputLimit` is a separate explicit opt-in for one intermediate output from an
+original resumable job. It requires deferred retirement, a retained-slot preclaim and a nonzero limit below
+the whole descriptor admission. The descriptor MUST admit all future useful stages before source capture;
+reservation growth is refused. `RetainContinuingOutputMemory` runs only in that exact successful, uncancelled,
+joined DeferCompletion. It transfers only the declared completed output into the existing persistent endpoint,
+leaves the original global charge, FIFO/ticket/cancellation identity and terminal slot intact, and supplies
+later worker stages only the prepaid remainder. No new slot, allocation, memory query or early refund occurs.
+Only that output seals; other temporary/final producers remain under the original record. Wrong, repeated,
+over-limit and terminal/failed/cancelled/shutdown transfers refuse. Default descriptors and the terminal-only
+RetainPublicationMemory/RetainMemory contracts remain unchanged. Accounting conveys no mutation authority.
+
+Publication provenance MUST compare the original ticket and the live shared-memory endpoint. Wrapper addresses
+and slot/generation numbers alone are insufficient after scheduler reconstruction. `OwnsRetainedMemoryEndpoint`
+is an owner-only identity query: it allocates nothing, samples no memory and grants no callback or mutation authority.
+Close removes the live endpoint, while older foreign graphs keep their independent charged endpoint until final release.
+
+Jobs that lend mapped storage or retain an external receiver across a terminal worker result MUST opt in with
+`JobOptions::deferredRetirement`. After the worker has returned (or its cancelled Run has been skipped), the
+owner invokes `Job::DeferRetirement` for Finished, Failed and Cancelled results, before the success-only hook.
+Returning true retains the original job, exact ticket generation, serial position and complete reservation
+until its external owner acknowledges and resumes it. The job preserves its original terminal outcome across
+that acknowledgement; cancellation still wins. Returning false finalizes normally and cannot dispatch a
+requested resume. The default option and hook are disabled; existing failed/cancelled jobs do not acquire a
+new continuation. Hooks never run during joined shutdown, which destroys wrappers before owner cleanup.
+
+The dormant `GpuRasterUploadJob` is a leaf for one held raster layout and a precreated device destination.
+It MUST refuse before lending rows if its scheduler record has not opted in. Preparation/reduction/copying
+and CPU aggregate retirement belong to workers; queue recording, mapped-row acknowledgement and destination
+retirement belong to the owner. Pending map and copy-fence receivers, skipped fill stages and early queue
+completion retain their job/reservation until both producer and queue acknowledge. This leaf does not create
+whole-document resources, generate mips, publish a display or authorize production activation.
+
 One optional stable borrowed `OwnerWorkPump` shares completion draining with the production loop and `SettleJobs`.
 Its pending work prevents idle settlement; only ready work requests an owner pass. Pump runs under the same
 reentrancy guard as completion apply and MUST NOT wait, show a modal or recursively drain. Registration/removal
@@ -87,11 +130,16 @@ event tickets. Handles and contexts remain borrowed until owner teardown removes
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
 `OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
-borrows at most eight distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
+borrows at most eleven distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
 scheduler's one-source registration contract. Application registers this router once and attaches GPU and
-retry readiness sources. Standalone GPU tests may retain direct registration.
+retry readiness sources. Processing startup attaches the dormant `UtilityReadbackOwnerService` after native-read
+initialization, appending its checkpoint without changing the prior stage indices. The utility service is one bounded leaf;
+the complete responsive startup described below can use all eleven. This promises no particular array slot
+or activation of a utility parent. Stop the service
+before producer shutdown, and release its joined charges/detach it only after actual scheduler Close returns.
+Standalone GPU tests may retain direct registration.
 
 `RetryWaitQueue` owns eight persistent manual-reset events registered on that same WaitPool. An admitted
 suspended job owns its borrowed receiver and cancellation token until the wait callback acknowledges a
@@ -149,6 +197,22 @@ its lock. Submitted precedes worker dispatch; Retired follows the job's completi
 Shutdown drops notices with callbacks. Observers must not call the scheduler, pump, or wait. The context outlives
 Close. `Application` uses these notices to update its fixed-capacity `JobActivity` and the delayed progress control.
 
+An optional `JobExecutionObserver`, installed at scheduler initialization, publishes `BodyEntered`, `BodyExited`
+and `BodySkipped` on the actual compute or recording worker, outside scheduler locks. Each notice carries the
+original slot/generation ticket, class and lane, captured during locked worker selection. Callbacks borrow that
+immutable identity outside the lock and do not inspect the guarded record array. Entry has no result; exit carries the raw `Run` result or the
+runner's translated `bad_alloc`; a dispatched cancelled stage that never calls `Run` reports Cancelled/Skipped.
+Body exit follows destruction of `Run` locals and precedes cancellation normalization, `RetireWorkerStage`,
+completion publication and owner apply/drop. Resumed tickets may have multiple body pairs. Descriptors retired
+without dispatch and queued work discarded by Close emit no body notice. A cancelled queued stage that is
+dispatched still emits `BodySkipped`.
+
+Execution callbacks are bounded, nonthrowing and safe for concurrent workers. They may write fixed atomic
+samples and signal their own borrowed event; they MUST NOT call the scheduler, wait, pump, or access the UI or
+document. Their context outlives joined Close, including final running-body notices during shutdown. Default
+startup installs no callback, captures no clock, allocates no observation state and creates no diagnostic wake-up.
+These notices acknowledge neither external native/GPU work nor final retirement and grant no apply authority.
+
 UI-owned `PreviewMailbox`, `ContinuationQueue`, `HistoryWork` and `StrokeReplay` define input and apply ordering.
 `HistoryWork` spans scheduler classes and keeps the document busy until apply/drop. Its shared input ordinals merge
 the command queue with recorded strokes. The mailbox, barrier and application outlive all their workers; pointer
@@ -185,8 +249,11 @@ in `ColorCommitContinuations_2026-09-30.md`.
 Budgeted host construction reserves declared retained storage before allocating the result publisher. An
 allocation failure returns the reservation and leaves the input owned by its caller. The ticket moves with the
 request across queued/active ownership and returns only after publication and input destruction. The budget is
-an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after
-construction. Borrowed path batches, write paths and layer names use the length/count preflight and copy
+an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after construction except the original joined-stage path transfer. A pending
+request may swap its admitted vector into an empty zero-capacity worker payload and restore that unchanged
+vector to its original request after successful classification. The owner validates ordinal/session identity;
+receipt and input-budget ticket remain owner-affine. Terminal or wrong-variant requests refuse transfer,
+and payload destruction never returns the request's separate input charge. Borrowed path batches, write paths and layer names use the length/count preflight and copy
 builders before any owned input copy. Terminated Win32 paths first use a bounded scan. The builders reserve the
 complete declared copy peak before construction and reconcile it to retained capacities before publishing a
 request; a partial input or result allocation failure releases storage and returns its reservation.
@@ -236,6 +303,23 @@ preallocated final retirement work object outside that cleanup group. A
 dispatch callback carries only its owner/lane, never a job payload. Each lane coalesces outstanding wakeups at the
 thread count; `JobScheduler` drains its bounded records and owns job admission and state. No callbacks poll when idle.
 
+The scheduler opts its compute and optional recording pools into `WorkerWake`, a payload-free owner endpoint.
+Startup checks creation of one auto-reset event and one reusable one-shot wait per opted-in pool. Three inline,
+lock-free 32-bit counters coalesce hints at the pool's existing thread count (1–1,024); each owner request performs
+at most two strong CAS operations and signals the event, including at saturation. The owner publishes its real
+queue state with the queue's existing synchronization before the hint. The counters do not publish work. Request
+acquires no SRW lock, allocates no storage, submits no work callback and joins nothing. Its Win32 signal still
+requires measured owner-latency qualification.
+
+The wait borrows the existing compute/recording pool; it creates no second pool or thread. Its callback takes
+the bounded hint counts and submits through the existing priority lanes off owner. It installs the worker
+terminate handler before accessing state; actual dispatch retains the existing TLS, MTA and QoS scope. Rearm
+is serialized with Close. Opted-in Initialize/Close run on that endpoint's owner; foreign producers retain the
+original thread-safe Wake route, and default pools retain their existing serialized foreign-Close behavior.
+Startup failures propagate the original HRESULT and unwind before publication. A live signal failure after
+accepted work is published is an invariant failure: `std::terminate` invokes the installed crash handler rather
+than silently stranding that work. Closed/invalid-priority requests refuse before publishing a hint.
+
 Parallel execution dynamically claims disjoint tiles; the caller participates. A call owns at most one helper
 work object, whose destruction cancels unstarted callbacks and joins running callbacks. The work object is outside
 the dispatch cleanup group to prevent shutdown racing its local owner. No callback is disassociated. This join
@@ -250,6 +334,11 @@ on the existing MTA pool before releasing work ownership, cleanup group, private
 or new thread is needed during Close. Close is idempotent and runs on the owning teardown thread,
 never inside a callback. Initialization precedes publication; closed pools cannot restart. Cancellation does not
 forcibly interrupt a body: it checks its token per row or a measured smaller interval.
+
+For an opted-in endpoint, Close disarms and joins its wait before closing dispatch members or releasing the
+borrowed context. The event, counters and callback storage survive that join. This adds no job payload, ticket,
+queued release record or per-request allocation. Large source/private/cache phase admission and whole-editor
+activation remain separately tracked P1 obligations.
 
 Each pool owns a `CoIncrementMTAUsage` cookie through all of its callbacks. These cookies leave an initialized STA
 caller in its original apartment and make worker COM use independent of the UI apartment. Callbacks install the
@@ -267,7 +356,8 @@ Shutdown drops pending completion callbacks and UI actions after producers have 
 callback defer teardown until the callback has returned.
 
 Processing startup acquires trace registration, scheduler, owner routing, GPU wait slots, retry wait slots,
-host continuation source, deferred-release binding and recycling in that order. `Main` calls Shutdown after
+host continuation source, deferred-release binding, recycling, the native header-read event, the dormant
+utility owner service and the shared command pump/recording lane in that order. `Main` calls Shutdown after
 an initialization failure as well as after success. Cleanup must stop/join acquired producers, detach borrowed
 routes and clear bindings before releasing their owners; a second Shutdown repeats no retirement hooks.
 Harness-only borrowed startup checkpoints run after each successful stage; retry initialization reuses the
@@ -275,15 +365,28 @@ queue's event/registration observer seams. Their contexts outlive initialization
 Default startup supplies no observer. These controls qualify acquired-prefix cleanup, not failures inside
 unintercepted scheduler/pool/GPU/allocation APIs. A prefix with no acquired scheduler runs no final worker hook.
 
+The explicit complete responsive-source startup additionally acquires prepared layer rows, prepared display,
+stroke continuation, selection outline and nested lasso draft display in that order. Its owner-routing counts
+are 6 initially, 7 after rows, 9 after display, 10 after stroke and 11 after selection; lasso reuses that existing
+owner. Stroke Finish, stroke sampling and live Warp producer flags remain disabled until the final Ready stage
+succeeds. Failure or shutdown at any acquired prefix uses joined, idempotent Shutdown before owner release.
+The main input loop and startup-path dispatch follow successful acquisition. Default activation remains
+subject to complete consumer admission, lifetime and measured performance qualification.
+
 The scheduler's owner grants memory reservations before dispatch and holds them through UI application and
 payload destruction. Waiting admission uses records, never blocked workers; memory events and retirements retry
 from an OS snapshot. An independent intrusive release queue can return memory even at the scheduler record cap.
 `Raster` and `PixelBuffer` own their release nodes. A thread-local sink binds only the application owner to the
 queue. Close joins producers while retaining the sink, then drops owner-affine job/action wrappers outside locks
-so their admitted CPU aggregates enqueue retirement. Borrowed `CloseHooks` may detach external owner resources
+so their admitted CPU aggregates enqueue retirement. An explicit native header read retains its file, buffer,
+OVERLAPPED and stable event while its compute/recorder callbacks join. Its final worker cancels and
+acknowledges that existing OS operation before freeing storage; a stop token or readiness callback is not
+completion. Ordinary stages use only nonblocking acknowledgement and yield the compute lane. No wall-clock
+bound is claimed for a driver that cannot complete cancellation. Borrowed `CloseHooks` may detach external owner resources
 after wrapper destruction while the sink remains installed. Close clears the binding before the final MTA hook,
-which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or
-reenter Close; their context outlives acknowledgement. Uninitialized or repeated Close runs neither hook.
+which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or reenter Close; their context outlives acknowledgement. After those
+hooks return, the final worker release drain may acknowledge an already-issued native read before
+destroying its OS-owned storage. No useful work or new native producer is allowed in that drain. Uninitialized or repeated Close runs neither hook.
 Application detaches session coverage engines, brush/composition resources and joined GPU/retry receivers on the
 owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Application's
 sampling raster, cached selection geometry and benchmark document/image roots also retire on that worker.
@@ -354,12 +457,22 @@ the same change.
 
 ## Document and chrome
 
-`ApplicationFileJobs.cpp` owns the nonmutating Open-batch classification job and its owner completion. The job
-owns its immutable paths and fixed result; it reads no session or UI state. `Common/PathClassificationWork.*`
-has a standard-only public interface and private Win32/WIL IO. Local and shutdown stop registrations signal
-an owned event; the worker alone cancels and acknowledges its overlapped header read before destroying the
-file, events, buffer or `OVERLAPPED`. The selected host request outlives acknowledgement and uses one cached
-result for project/image routing. This foundation does not yet move project/image/clipboard processing.
+`ApplicationFileJobs.cpp` owns the nonmutating Open-batch classification parent. One original admitted
+Io ticket, FIFO position, ordinal, session identity and complete memory charge span allocation, joined
+path transfer, every four-byte header read and worker payload retirement. Workers access only their private
+payload and fixed result. `Common/PathClassificationRead.*` owns private Win32/WIL IO behind a standard-only
+header; `PathReadWait` owns one startup event/registration on the shared WaitPool and ninth owner route.
+An issued operation consumes registered readiness even on immediate completion, API refusal or cancellation before
+issue. Its nonzero 64-bit identity advances only for a new operation. An incomplete-read rearm retains that
+identity and exact original ticket, without resetting the event. A new read refuses arithmetic overflow before
+reset or issue; the final valid read can still rearm and acknowledge without wrap. Awaiting starts only after the original worker returns. A premature event resets and nonblocking
+rechecks the same operation before rearm, preserving a racing native completion. Cancellation requests
+exact CancelIoEx on the worker; it never signals hEvent to fake completion. GetOverlappedResult acknowledges
+the original operation before reuse/free. Shutdown disarms/joins wait callbacks, detaches borrowed owner
+wrappers while retaining the event, and closes it only after final worker native acknowledgement and
+scheduler Close. The legacy blocking `PathClassificationWork` helper remains a reference test surface.
+Successful classification restores the unchanged path allocation to the same selected owner request for
+ordered project/image routing; stale/failure/cancel paths publish no classification success.
 
 C4 owns `CanvasDocument` / `ImageLayer` / `DocumentHistory` as C++ value types with shared immutable `Raster`
 storage. `Application` owns `CanvasRenderer` (borrowed device). DxUi `EmbeddedHost` composites chrome into the same
@@ -405,3 +518,74 @@ Cancellation and staleness retain the record, reservation and payload until ackn
 aggregate CPU owners retire off owner. This graph neither reads nor writes the private clipboard and makes no OS
 clipboard calls. Live producer settlement and H2/G1 qualification remain open; see `Document_Tools.md` and
 `Core_PerformanceAndResources.md`.
+
+## Recorded utility parent
+
+`RecordedDocumentReadbackJob` is a separate utility parent. Its construction descriptor contains the
+complete admission envelope and original GPU charge; it captures immutable source owners only after its
+original Compute opening acknowledges. One scheduler record, ticket, retained-slot preclaim and CPU
+reservation span private recording, serial region copies, CPU processing, terminal adoption and retirement.
+Clone All Layers uses this parent and transfers its original shared accounting into the live sample.
+PNG/JPEG export uses the same parent: descriptor-only admission precedes source capture, the actual
+private graph retires before detached encoding, and the original accounting covers encoding and aggregate
+retirement. The eligible canvas sampler keeps its private excluded graph between real 1×1 inputs, with no
+command-source slot or mapped row while idle, and resumes through the original parent acknowledgement.
+New-mode All Layers Wand prepares its selection/history on Compute after acknowledged graphics retirement.
+Both retain the original shared accounting through payload retirement. Adjustment opening retains its
+below-composite through the panel and all copied/weak readers. Merge retains its independently charged
+metadata probe through the separately admitted dependent readback; a newly allocated crop explicitly
+owns that readback charge. Copy Merged resumes private preparation, encoding, OS offers and waits under
+the same original ticket. Its private pixels carry a precreated opaque output lifetime while useful
+work remains reserved; terminal or joined Close binds it before original refund. No early accounting
+transfer authorizes further useful work. Complete configuration/lifetime and activated timing gates
+remain P1 work.
+
+The worker creates `SharedPublicationMemory` before the intrusive root. The root owns source/output bytes,
+the private graph, command stream and captured contexts; it is also the queue's receiver/producer. Thus
+actual joined shutdown may destroy the wrapper before the queue closes without invalidating borrowed
+receiver storage. Stop notifications and join producers before detaching the wrapper's root pointer;
+close queue/map owners before the final MTA destruction drain. Accounting is declared before payload owners
+and dies last, including every caller adoption aggregate and weak accounting owner.
+
+`InJoinedRetirementCallback(original)` grants authority only on the scheduler owner during that exact
+original job's actual joined Close callback. It refuses ordinary acknowledgements, another ticket/thread
+and post-Close queries. `AcknowledgeSourceJoinedShutdownOwner` additionally requires the stopped common
+pump and exact source lease. It excludes the borrowed source before wrapper destruction and grants no
+useful completion, new work, row/copy acknowledgement or reservation refund.
+
+An explicit CPU-only capture descriptor requires `S_FALSE` and no GPU charge; CPU output is produced on
+Compute. For detached CPU/event continuations, callers use `ResumeDetachedReadback(original)` or the
+sampler's `ContinuePixelReadback`, preserving suspended readiness on refusal. Owner cancellation never
+resumes an executing CPU body. Serial source-capacity waits and healthy GPU quarantine remain event driven.
+
+## Selected Hue and panel-preserving Wand inputs
+
+The explicit asynchronous Hue route queues a scalar descriptor before retaining source/pixel/GPU owners.
+Invalid purpose/mode refuses before queue, opening and shared ordinal effects; every accepted descriptor
+consumes its opening before binding, even if binding later refuses. The original admitted readback parent
+captures the committed document, reads one pixel and derives hue on its worker. It never samples a panel or
+stroke preview. Apply checks document-read authority, exact panel opening and current color sequence.
+
+The fixed 512-event input retains physical delta, Ctrl choice and shared ordinal. Release/loss owns a separate
+terminal and applies no new release coordinate. One existing continuation applies at most one event per turn.
+Finishing the acquisition request must rearm acquired Hue with a pending prefix or clock-exhaustion closure;
+an idle live target has no polling source or dummy worker. Younger accepted commands close the older gesture
+at their physical boundary. Overflow retains the accepted prefix and Lost terminal; ordinal exhaustion never
+wraps. Stale input cleanup retires only the matching opening. Explicit Cancel retains its cancellation outcome
+through original acknowledgement, including after its panel card hides.
+
+Preserving-panel Wand binds its scalar opening at the physical input and its complete source witness after
+older FIFO work. It does not change global history-restore authority. Its original job owns capture, optional
+recorded composite/readback, worker geometry/history, publication and complete retirement. These selected
+routes do not authorize ordinary prepared startup or replace the remaining admission, device, lifetime and
+G1 gates.
+
+## Selected Rectangle/New physical host
+
+The explicitly test-enabled Rectangle/New route records only a fixed event descriptor and bounded accepted prefix in WndProc. One host FIFO entry, history stamp and original job own containment, inside-outline movement or outside drawing, publication and retirement. Complete cached branch admission precedes source capture; validate captured active/crop/mask target and session/document identity. A pre-dispatch E_ABORT drops only that exact input and reports Stale. No eligible admission failure falls back to synchronous geometry. Ordinary activation still requires every consumer and remaining branch gate.
+
+## Selected physical Ellipse caller
+
+The explicitly enabled selection-press caller dispatches Rectangle/New and Ellipse/New through the same
+original parent. Accepted Down captures the primitive kind; worker containment chooses an existing-outline
+move or a new shape under that kind-specific admission. Ordinary activation remains separately gated.

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionCommandTestGate.h"
 #include "Selection.h"
@@ -24,6 +26,10 @@ class OccupySelectionTestSlot final : public Job
 
 int Application::RunSelectionCommandSelfTest() noexcept
 {
+    const auto originalHistoryBudget = _session.history.RetainedByteLimit();
+    const auto restoreHistoryBudget =
+        wil::scope_exit([this, originalHistoryBudget]() noexcept
+                        { _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget}; });
     const auto originalViewport = _viewport;
     const auto restoreViewport = wil::scope_exit([this, originalViewport] { _viewport = originalViewport; });
     enum class Mode
@@ -55,6 +61,12 @@ int Application::RunSelectionCommandSelfTest() noexcept
         Replacement,
         Lasso,
         ReopenedBrush,
+        ResidencyRefresh,
+        ResidencyRefreshFault,
+        ResidencyRefreshCancel,
+        DeselectResidencyRefresh,
+        DeselectResidencyRefreshFault,
+        DeselectResidencyRefreshCancel,
     };
     struct State final
     {
@@ -76,6 +88,7 @@ int Application::RunSelectionCommandSelfTest() noexcept
         std::size_t redoCount = 0;
         bool visited = false, held = false, cancelPending = false, pumpSeen = false, pumpWasPending = false;
         bool mutationApplied = false, maskSelected = false, viewChangedWhilePending = false;
+        bool deselectYoungerPendingAtGate = false;
         double zoomBefore = 0;
         unsigned int pumpMessages = 0;
     };
@@ -92,8 +105,9 @@ int Application::RunSelectionCommandSelfTest() noexcept
         std::fprintf(stderr, "PASS selection-host.%s.%s\n", mode, check);
         return true;
     };
-    const auto prepare = [this]()
+    const auto prepare = [this, originalHistoryBudget]()
     {
+        _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget};
         _session.ClearDocument();
         _session.CreateDocument(4, 3, true);
         _session.AddBlankLayer();
@@ -122,6 +136,19 @@ int Application::RunSelectionCommandSelfTest() noexcept
                          owner._session.history.CurrentRevision() == state.revision &&
                          state.receipt.Read().outcome == HostOutcome::Pending &&
                          owner._selectionCommandTestGate->captures.load() == 1;
+            if (state.mode == Mode::DeselectResidencyRefresh)
+            {
+                state.younger = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect});
+                owner._selectionCommandTestGate.reset(); // The first payload owns its gate; younger no-op is ungated.
+                state.deselectYoungerPendingAtGate =
+                    state.younger && state.younger->Read().outcome == HostOutcome::Pending &&
+                    state.receipt.Read().outcome == HostOutcome::Pending && owner._historyWork.Busy() &&
+                    owner._session.Document() == state.before &&
+                    owner._session.history.CurrentRevision() == state.revision &&
+                    owner._session.history.UndoCount() == 1 &&
+                    owner._session.history.UndoName() == L"Literal historical cache" &&
+                    !owner._session.history.IsModified();
+            }
             if (state.mode == Mode::SavedDuringWorker)
                 owner._session.history.MarkSaved(state.savedRevision);
             if (state.mode == Mode::Ordered)
@@ -262,6 +289,18 @@ int Application::RunSelectionCommandSelfTest() noexcept
             return "stale-lasso";
         case Mode::ReopenedBrush:
             return "stale-reopened-brush";
+        case Mode::ResidencyRefresh:
+            return "residency-refresh";
+        case Mode::ResidencyRefreshFault:
+            return "residency-refresh-fault";
+        case Mode::ResidencyRefreshCancel:
+            return "residency-refresh-cancel";
+        case Mode::DeselectResidencyRefresh:
+            return "deselect-residency-refresh";
+        case Mode::DeselectResidencyRefreshFault:
+            return "deselect-residency-refresh-fault";
+        case Mode::DeselectResidencyRefreshCancel:
+            return "deselect-residency-refresh-cancel";
         }
         return "unknown";
     };
@@ -269,6 +308,12 @@ int Application::RunSelectionCommandSelfTest() noexcept
     const auto run = [&](Mode mode) -> bool
     {
         const bool empty = mode == Mode::EmptyDocument;
+        const bool residency = mode == Mode::ResidencyRefresh || mode == Mode::ResidencyRefreshFault ||
+                               mode == Mode::ResidencyRefreshCancel;
+        const bool deselectResidency = mode == Mode::DeselectResidencyRefresh ||
+                                       mode == Mode::DeselectResidencyRefreshFault ||
+                                       mode == Mode::DeselectResidencyRefreshCancel;
+        Raster lateResidencySource;
         prepare();
         if (mode == Mode::Mask || mode == Mode::PreserveTargets)
         {
@@ -310,12 +355,60 @@ int Application::RunSelectionCommandSelfTest() noexcept
             _session.ClearDocument();
             DocumentChanged();
         }
+        if (residency)
+        {
+            _session.Deselect();
+            constexpr std::array<std::uint8_t, 4> historicalPixel{51, 52, 53, 255};
+            const Raster leaf =
+                Raster::Make(1, 1, RasterFormat::Bgra8888, historicalPixel.data(), historicalPixel.size());
+            lateResidencySource = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+            auto historical = DocumentFixture::Copy(_session.Document().value());
+            historical.layers.front().asset = RasterAsset{lateResidencySource, {}, L"Literal sparse history"};
+            _session.history = DocumentHistory{100, 8};
+            auto baseline = DocumentHistory::PrepareEdit(_session.history.CaptureState(), std::move(historical).Seal(),
+                                                         _session.ActiveLayerID(), _session.Document(),
+                                                         _session.ActiveLayerID(), L"Literal historical cache");
+            if (!baseline || !_session.history.Publish(baseline.value()) ||
+                _session.history.RetainedBytes(_session.Document()) != 4 || lateResidencySource.IsMaterialized())
+                return expect(name(mode), "literal-four-byte-baseline", false, "independent sparse fixture failed");
+        }
+        if (deselectResidency)
+        {
+            constexpr std::array<std::uint8_t, 4> historicalPixel{51, 52, 53, 255};
+            const Raster leaf =
+                Raster::Make(1, 1, RasterFormat::Bgra8888, historicalPixel.data(), historicalPixel.size());
+            lateResidencySource = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+            auto historical = DocumentFixture::Copy(_session.Document().value());
+            historical.selection =
+                DocumentSelection{false, SelectionLoops{SelectionLoop{Vec2{2, 1}, Vec2{3, 1}, Vec2{3, 2}, Vec2{2, 2}}}};
+            historical.layers.front().asset = RasterAsset{lateResidencySource, {}, L"Literal sparse history"};
+            const std::uint64_t selectionStorage = historical.selection.value().loops.StorageBytes();
+            // The unassembled sparse root owns zero pixel bytes; its retained leaf owns exactly four.
+            const std::uint64_t residencyBudget = selectionStorage + leaf.ByteSize();
+            _session.history = DocumentHistory{100, residencyBudget};
+            auto baseline = DocumentHistory::PrepareEdit(_session.history.CaptureState(), std::move(historical).Seal(),
+                                                         _session.ActiveLayerID(), _session.Document(),
+                                                         _session.ActiveLayerID(), L"Literal historical cache");
+            const bool baselineValid = baseline && _session.history.Publish(baseline.value()) &&
+                                       selectionStorage != 0 && lateResidencySource.ByteSize() == 0 &&
+                                       leaf.ByteSize() == 4 &&
+                                       _session.history.RetainedBytes(_session.Document()) == residencyBudget &&
+                                       !lateResidencySource.IsMaterialized();
+            if (!expect(name(mode), "literal-selection-budget-baseline", baselineValid,
+                        "independent selected sparse fixture did not retain exactly its selection and 4-byte tile"))
+                return false;
+        }
         const auto document = _session.Document();
         const auto gate = std::make_shared<SelectionCommandTestGate>();
         gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (!gate->release)
             return expect(name(mode), "gate-event", false, "CreateEventW failed");
         gate->throwCaptureFailure = mode == Mode::CaptureFailure;
+        gate->lateResidencySource = lateResidencySource;
+        gate->throwResidencyRefresh =
+            mode == Mode::ResidencyRefreshFault || mode == Mode::DeselectResidencyRefreshFault;
+        gate->cancelResidencyRefresh =
+            mode == Mode::ResidencyRefreshCancel || mode == Mode::DeselectResidencyRefreshCancel;
         if (mode == Mode::Failure)
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
         switch (mode)
@@ -344,7 +437,7 @@ int Application::RunSelectionCommandSelfTest() noexcept
         _selectionCommandTestGate = gate;
         State state{*this, mode,
                     QueueHostInput(HostCommandInput{mode == Mode::Deselect || mode == Mode::NoOpDeselect ||
-                                                            mode == Mode::PreserveTargets
+                                                            mode == Mode::PreserveTargets || deselectResidency
                                                         ? ChromeHost::kCommandDeselect
                                                         : ChromeHost::kCommandSelectAll})};
         state.before = document;
@@ -412,6 +505,73 @@ int Application::RunSelectionCommandSelfTest() noexcept
             ok &= expect(name(mode), "history-title",
                          _session.history.UndoName() == (mode == Mode::SelectAll ? L"Select All" : L"Deselect"),
                          "command history title is not exact");
+        }
+        else if (deselectResidency)
+        {
+            const std::uint64_t retainedSelectionBytes = state.before.value().selection.value().loops.StorageBytes();
+            if (mode == Mode::DeselectResidencyRefresh)
+                ok &= expect(name(mode), "younger-deselect-waits-behind-held-command",
+                             state.deselectYoungerPendingAtGate && state.younger &&
+                                 state.younger.value().Read().outcome == HostOutcome::Succeeded,
+                             "younger Deselect did not remain queued until the original command acknowledged");
+            ok &= expect(
+                name(mode), "single-capture-prepare-refresh-held-reservation",
+                gate->captures.load() == 1 && gate->visits.load() == 1 && gate->residentGrowths.load() == 1 &&
+                    gate->residencyRefreshes.load() == 1 && gate->reservationHeld.load() &&
+                    gate->refreshReservationHeld.load() && lateResidencySource.ByteSize() == 8,
+                "Deselect refresh recaptured or reprepared, refreshed more than once, or released its reservation");
+            if (mode == Mode::DeselectResidencyRefresh)
+                ok &= expect(
+                    name(mode), "deselect-and-original-history-trim",
+                    result.outcome == HostOutcome::Succeeded && !_session.Selection() && document && state.younger &&
+                        state.younger.value().Read().outcome == HostOutcome::Succeeded && _session.Document() &&
+                        document.value().layers == _session.Document().value().layers &&
+                        _session.history.UndoCount() == 1 && _session.history.UndoName() == L"Deselect" &&
+                        _session.history.RetainedBytes(_session.Document()) == retainedSelectionBytes &&
+                        _session.history.CurrentRevision() != state.revision && _session.history.IsModified(),
+                    "Deselect was lost or duplicated, or residency growth did not trim the original cache entry");
+            else
+                ok &= expect(
+                    name(mode), "refresh-fault-cancel-preserves-deselect-authority",
+                    result.outcome == (mode == Mode::DeselectResidencyRefreshFault ? HostOutcome::Failed
+                                                                                   : HostOutcome::Cancelled) &&
+                        (mode != Mode::DeselectResidencyRefreshFault || result.error == E_OUTOFMEMORY) &&
+                        _session.Document() == state.before && _session.Generation() == state.generation &&
+                        _session.Selection() == state.before.value().selection &&
+                        _session.history.CurrentRevision() == state.revision &&
+                        _session.history.UndoCount() == state.undoCount && state.undoCount == 1 &&
+                        !_session.history.IsModified(),
+                    "an incomplete Deselect refresh changed original document/history/selection/saved authority");
+        }
+        else if (residency)
+        {
+            ok &= expect(name(mode), "single-capture-preparation-and-retained-reservation",
+                         gate->captures.load() == 1 && gate->visits.load() == 1 && gate->residentGrowths.load() == 1 &&
+                             gate->residencyRefreshes.load() == 1 && gate->refreshReservationHeld.load() &&
+                             lateResidencySource.ByteSize() == 8,
+                         "refresh recreated input or released the original reservation");
+            if (mode == Mode::ResidencyRefresh)
+            {
+                const auto literal = std::optional<DocumentSelection>{DocumentSelection{
+                    true, SelectionLoops{SelectionLoop{Vec2{0, 0}, Vec2{4, 0}, Vec2{4, 3}, Vec2{0, 3}}}}};
+                ok &= expect(name(mode), "grown-cache-trim-preserves-completed-selection-intent",
+                             result.outcome == HostOutcome::Succeeded && _session.Selection() == literal && document &&
+                                 _session.Document() && document->layers == _session.Document()->layers &&
+                                 _session.history.UndoCount() == 1 && _session.history.UndoName() == L"Select All" &&
+                                 _session.history.RetainedBytes(_session.Document()) == 0 &&
+                                 _session.history.CurrentRevision() != state.revision && _session.history.IsModified(),
+                             "refresh lost selection intent, recorded it twice, or retained the over-budget old entry");
+            }
+            else
+                ok &=
+                    expect(name(mode), "refresh-fault-or-cancel-preserves-original-state",
+                           result.outcome == (mode == Mode::ResidencyRefreshFault ? HostOutcome::Failed
+                                                                                  : HostOutcome::Cancelled) &&
+                               (mode != Mode::ResidencyRefreshFault || result.error == E_OUTOFMEMORY) &&
+                               _session.Document() == state.before && _session.Generation() == state.generation &&
+                               _session.history.CurrentRevision() == state.revision && !_session.history.IsModified() &&
+                               _session.history.UndoCount() == state.undoCount && state.undoCount == 1,
+                           "an incomplete refresh changed the original selection/document/history/saved revision");
         }
         else if (mode == Mode::NoOpRedo)
         {
@@ -523,20 +683,39 @@ int Application::RunSelectionCommandSelfTest() noexcept
         return ok;
     };
 
-    constexpr std::array modes{Mode::SelectAll,      Mode::Deselect,
-                               Mode::NoOpRedo,       Mode::NoOpDeselect,
-                               Mode::EmptyDocument,  Mode::PreserveTargets,
-                               Mode::Nested,         Mode::SavedDuringWorker,
-                               Mode::Ordered,        Mode::ViewPump,
-                               Mode::Cancel,         Mode::Failure,
-                               Mode::CaptureFailure, Mode::SelectionSnapshot,
-                               Mode::BeforeSnapshot, Mode::AfterSnapshot,
-                               Mode::Entry,          Mode::StackGrowth,
-                               Mode::TrimIndex,      Mode::Generation,
-                               Mode::Active,         Mode::Mask,
-                               Mode::Crop,           Mode::Epoch,
-                               Mode::Replacement,    Mode::Lasso,
-                               Mode::ReopenedBrush};
+    constexpr std::array modes{Mode::SelectAll,
+                               Mode::Deselect,
+                               Mode::NoOpRedo,
+                               Mode::NoOpDeselect,
+                               Mode::EmptyDocument,
+                               Mode::PreserveTargets,
+                               Mode::Nested,
+                               Mode::SavedDuringWorker,
+                               Mode::Ordered,
+                               Mode::ViewPump,
+                               Mode::Cancel,
+                               Mode::Failure,
+                               Mode::CaptureFailure,
+                               Mode::SelectionSnapshot,
+                               Mode::BeforeSnapshot,
+                               Mode::AfterSnapshot,
+                               Mode::Entry,
+                               Mode::StackGrowth,
+                               Mode::TrimIndex,
+                               Mode::Generation,
+                               Mode::Active,
+                               Mode::Mask,
+                               Mode::Crop,
+                               Mode::Epoch,
+                               Mode::Replacement,
+                               Mode::Lasso,
+                               Mode::ReopenedBrush,
+                               Mode::ResidencyRefresh,
+                               Mode::ResidencyRefreshFault,
+                               Mode::ResidencyRefreshCancel,
+                               Mode::DeselectResidencyRefresh,
+                               Mode::DeselectResidencyRefreshFault,
+                               Mode::DeselectResidencyRefreshCancel};
     for (const auto mode : modes)
     {
         if (!run(mode))
@@ -560,9 +739,9 @@ int Application::RunSelectionCommandSelfTest() noexcept
     const bool admissionRefused =
         expect("admission", "full-record-table-refuses",
                refused.Read().outcome == HostOutcome::Failed &&
-                   refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && !_historyWork.Busy() &&
-                   !_selectionCommandTicket && !_selectionCommandStamp && _session.Document() == beforeAdmission &&
-                   _session.history.CurrentRevision() == admissionRevision,
+                   refused.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+                   !_historyWork.Busy() && !_selectionCommandTicket && !_selectionCommandStamp &&
+                   _session.Document() == beforeAdmission && _session.history.CurrentRevision() == admissionRevision,
                "real scheduler refusal lost history/input acknowledgement or changed state");
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled || !admissionRefused)
         return 5;

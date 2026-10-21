@@ -77,6 +77,17 @@ class PreparedShapeEdit final
     PreparedShapeEdit(PreparedShapeEdit&&) noexcept = default;
     PreparedShapeEdit& operator=(PreparedShapeEdit&&) = delete;
 
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept
+    {
+        return _publication.TryAcquireHistoryResidency(permit);
+    }
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {})
+    {
+        return _publication.RefreshHistoryResidency(cancellation, observer);
+    }
+
   private:
     friend class DocumentSession;
     PreparedShapeEdit(PreparedImageImport publication, std::optional<Guid> parent) noexcept

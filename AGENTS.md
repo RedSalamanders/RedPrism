@@ -74,6 +74,7 @@ check. Shared payloads remain read-only; edit only independent copies. Preserve 
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
 | `JobScheduler` (`Common/Jobs.*`), owned by `Application` | Bounded job records, class/priority scheduling, cancellation, ordered completion delivery and UI actions; standard-only public header with a private implementation; no document mutation or GPU ownership |
 | `GpuWorkQueue` (`RedPrism/GpuWork.*`), optional registered owner pump | Bounded staging/copy slots, completion fences/events, mapped-row leases and retired context/resource references; owner-only recording/Map/Unmap; shares the scheduler's event wait pool; no swap chain, Present, pixel copying on the UI thread or document mutation |
+| `GpuCommandStream`, `GpuCommandPump`, `GpuRecordingCommands` | Two-slot command transport, original-context owner execution/acknowledgement and worker-only bounded recording into a private deferred context; explicitly enabled single scheduler recorder, shared admission/FIFO, no immediate context on workers, read Map, swap chain, Present or document mutation |
 | `Kernels` (`Common/Kernels.*`, `Kernels_<Tier>_<Module>.*`) | Immutable CPU dispatch tables, guarded CPU/OS capability detection and noinline tier entry points; no UI, document mutation or GPU ownership |
 | `Executor`, `WorkerPool`, `WaitPool` | Standard C++ kernel execution interface; private bounded Windows compute pool and separate event-wait pool, cancellation, callback/COM lifetime; no document mutation or GPU ownership |
 

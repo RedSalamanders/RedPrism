@@ -19,6 +19,8 @@ foreach ($function in 'Find-RedPrismVisualStudioInstallationPath', 'Find-RedPris
 }
 Write-Host 'PASS tooldiscovery.module-exports'
 
+& (Join-Path $PSScriptRoot 'ToolArchitectureTests.ps1')
+
 $installation = Find-RedPrismVisualStudioInstallationPath
 if ($installation) {
     $bundled = @('VC/Tools/Llvm/x64/bin/clang-format.exe','VC/Tools/Llvm/bin/clang-format.exe') |

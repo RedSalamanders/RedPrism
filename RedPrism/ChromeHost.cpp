@@ -4,11 +4,13 @@
 
 #include "Resources.h"
 #include "ThemePalette.h"
+#include "UiTiming.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
 #include <iterator>
+#include <limits>
 #include <new>
 #include <string_view>
 
@@ -167,6 +169,8 @@ void AppendSeparator(HMENU menu) noexcept
 void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive,
                                          bool newMaskTargeted)
 {
+    preparedRows = nullptr;
+    preparedMode = false;
     rows = std::move(newRows);
     active = newActive;
     maskTargeted = newMaskTargeted;
@@ -194,59 +198,69 @@ void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows, co
 
 size_t ChromeHost::LayerTreeModel::GetVisibleItemCount() const noexcept
 {
-    return rows.size();
+    return RowsView().size();
+}
+
+std::optional<std::size_t> ChromeHost::LayerTreeModel::FindVisibleItemById(uint64_t itemId) const noexcept
+{
+    if (preparedMode)
+        return preparedRows ? preparedRows->FindVisibleItem(itemId) : std::nullopt;
+    return itemId != 0 && itemId <= RowsView().size() ? std::optional<std::size_t>(static_cast<std::size_t>(itemId - 1))
+                                                      : std::nullopt;
 }
 
 void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const
 {
-    if (visibleIndex >= rows.size())
+    const auto current = RowsView();
+    if (visibleIndex >= current.size())
     {
         outItem = {};
         return;
     }
-    // DxUi's Tree::Paint declares one TreeItemData outside its per-row loop and reuses it for every visible row
-    // (Tree::Paint, DxUi.Tree.cpp): assigning into each field, rather than resetting the whole struct first,
-    // keeps outItem.text's existing heap buffer instead of dropping it every row of every paint.
-    const HierarchyEntry& row = rows[visibleIndex];
-    outItem.id = visibleIndex + 1;
+    // DxUi reuses this item's strings for visible rows. Prepared text stays owned by the admitted publisher;
+    // painting borrows only a visible row, without hierarchy traversal or formatting.
+    const HierarchyEntry& row = current[visibleIndex];
+    outItem.id = preparedMode ? preparedRows->ItemIdAt(visibleIndex) : visibleIndex + 1;
     outItem.parentId.reset();
-    outItem.text = displayText[visibleIndex];
+    outItem.text = TextView()[visibleIndex];
     outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
-    if (badgeText[visibleIndex] != nullptr)
-    {
-        outItem.badgeText = *badgeText[visibleIndex];
-    }
+    if (row.hasMask)
+        outItem.badgeText = row.maskEnabled ? maskBadge : maskOffBadge;
     else
-    {
         outItem.badgeText.clear();
-    }
     outItem.tooltipText.clear();
     outItem.depth = static_cast<uint32_t>(row.depth);
     outItem.hasChildren = row.isGroup;
     outItem.expanded = row.isGroup && !row.collapsed;
-    outItem.badgeTone = badgeTone[visibleIndex];
+    const bool targeted = row.hasMask && maskTargeted && active == std::optional<Guid>(row.id);
+    outItem.badgeTone = targeted           ? DxUi::AdornmentTone::Accent
+                        : !row.maskEnabled ? DxUi::AdornmentTone::Error
+                                           : DxUi::AdornmentTone::Info;
 }
 
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
 {
-    if (drop.sourceId == 0 || drop.targetId == 0 || drop.sourceId > rows.size() || drop.targetId > rows.size())
+    const auto visibleRows = RowsView();
+    const auto sourceIndex = FindVisibleItemById(drop.sourceId);
+    const auto targetIndex = FindVisibleItemById(drop.targetId);
+    if (!sourceIndex || !targetIndex)
     {
         return;
     }
-    const Guid source = rows[drop.sourceId - 1].id;
-    const Guid target = rows[drop.targetId - 1].id;
+    const Guid source = visibleRows[sourceIndex.value()].id;
+    const Guid target = visibleRows[targetIndex.value()].id;
     std::optional<Guid> parent;
     if (drop.place != DxUi::TreeDropPlace::Inside)
     {
-        const int depth = rows[drop.targetId - 1].depth;
+        const int depth = visibleRows[targetIndex.value()].depth;
         if (depth > 0)
         {
-            for (std::size_t index = drop.targetId - 1; index > 0;)
+            for (std::size_t index = targetIndex.value(); index > 0;)
             {
                 --index;
-                if (rows[index].depth == depth - 1)
+                if (visibleRows[index].depth == depth - 1)
                 {
-                    parent = rows[index].id;
+                    parent = visibleRows[index].id;
                     break;
                 }
             }
@@ -305,20 +319,24 @@ void ChromeHost::ShortcutListModel::OnTreeItemInvoked(uint64_t itemId)
 
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
 {
-    if (itemId == 0 || itemId > rows.size())
+    const auto visibleRows = RowsView();
+    const auto index = FindVisibleItemById(itemId);
+    if (!index)
     {
         return;
     }
-    events.OnLayerSelected(rows[itemId - 1].id);
+    events.OnLayerSelected(visibleRows[index.value()].id);
 }
 
 void ChromeHost::LayerTreeModel::OnTreeToggleExpanded(uint64_t itemId, bool expanded)
 {
-    if (itemId == 0 || itemId > rows.size())
+    const auto visibleRows = RowsView();
+    const auto index = FindVisibleItemById(itemId);
+    if (!index)
     {
         return;
     }
-    events.OnLayerExpanded(rows[itemId - 1].id, expanded);
+    events.OnLayerExpanded(visibleRows[index.value()].id, expanded);
 }
 
 ChromeHost::ChromeHost(ChromeEvents& events) noexcept : _events(events), _shortcutModel(*this), _treeModel(events) {}
@@ -398,6 +416,9 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
+    _treeModel.preparedRows = nullptr;
+    _treeModel.preparedMode = false;
+    NotePickerOpening();
     DetachAccessibility();
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
     // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
@@ -435,6 +456,7 @@ void ChromeHost::ResetControlPointers() noexcept
     _jobProgress = nullptr;
     _deferredJobProgress.reset();
     _layersTitle = nullptr;
+    _layerRetry = nullptr;
     _splitter = nullptr;
     _railPalette = nullptr;
     _opacity = nullptr;
@@ -896,6 +918,9 @@ HRESULT ChromeHost::Build() noexcept
                                [this](DxUi::NumericStepperChange change)
                                { _events.OnLayerOpacity(change.value / 100.0, EditPhase(change.phase)); });
         _opacity->SetEnabled(false);
+        _layerRetry =
+            MakeButton(*root, {.labelId = IDS_CMD_RETRY_LAYER_LIST}, [this] { RunCommand(kCommandRetryLayerList); });
+        _layerRetry->SetVisible(false);
         _layers = root->AddChild<DxUi::Tree>();
         _layers->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LAYERS));
         _layers->SetModel(&_treeModel);
@@ -1426,6 +1451,11 @@ void ChromeHost::Arrange() noexcept
     {
         PlaceControl(_layers, D2D1::RectF(layersLeft, tabBottom + kLayersTitleDip, widthDip, statusTop));
     }
+    if (_layerRetry)
+    {
+        PlaceControl(_layerRetry, D2D1::RectF(widthDip - 4.0f - kOpacityWidthDip, tabBottom + 2.0f, widthDip - 4.0f,
+                                              tabBottom + kLayersTitleDip - 2.0f));
+    }
     if (_status)
     {
         PlaceControl(_status, D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
@@ -1518,12 +1548,20 @@ D2D1_RECT_F ChromeHost::LayerRowBoundsDip(std::size_t index) const noexcept
 
 D2D1_RECT_F ChromeHost::LayerMaskBadgeBoundsDip(std::size_t index) const noexcept
 {
-    if (!_attached || _layers == nullptr || index >= _treeModel.rows.size())
+    if (!_attached || _layers == nullptr || index >= _treeModel.RowsView().size())
     {
         return D2D1::RectF();
     }
     const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), index);
     return metrics.hasBadge ? metrics.badgeRect : D2D1::RectF();
+}
+
+D2D1_RECT_F ChromeHost::LayerRowExpanderBoundsDipForTest(std::size_t index) const noexcept
+{
+    if (!_attached || _layers == nullptr || index >= _treeModel.RowsView().size())
+        return D2D1::RectF();
+    const auto metrics = _layers->GetItemLayoutMetrics(_view.Controls(), index);
+    return metrics.hasExpander ? metrics.expanderRect : D2D1::RectF();
 }
 
 D2D1_RECT_F ChromeHost::FlipHorizontalBoundsDipForTest() const noexcept
@@ -1535,7 +1573,7 @@ D2D1_RECT_F ChromeHost::FlipHorizontalBoundsDipForTest() const noexcept
 
 std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPixels, float yPixels) const
 {
-    if (!_attached || _layers == nullptr || !_layers->IsVisible())
+    if (!_attached || _layers == nullptr || !_layers->IsVisible() || !_layers->IsEnabled())
     {
         return std::nullopt;
     }
@@ -1551,11 +1589,11 @@ std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPix
         }
     }
     const std::optional<std::size_t> row = _layers->FindVisibleItemAtPoint(point);
-    if (!row.has_value() || row.value() >= _treeModel.rows.size() || _treeModel.badgeText[row.value()] == nullptr)
+    if (!row.has_value() || row.value() >= _treeModel.RowsView().size() || !_treeModel.RowsView()[row.value()].hasMask)
     {
         return std::nullopt;
     }
-    const Guid id = _treeModel.rows[row.value()].id;
+    const Guid id = _treeModel.RowsView()[row.value()].id;
     const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), row.value());
     if (metrics.hasBadge && inside(metrics.badgeRect))
     {
@@ -2546,8 +2584,22 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
     _events.OnChromeLayout();
 }
 
+void ChromeHost::NotePickerOpening() noexcept
+{
+    _pickerOpeningRevision.Advance();
+    NotePickerInput();
+}
+
+void ChromeHost::NotePickerInput(bool sampledPublication) noexcept
+{
+    _pickerInputRevision.Advance();
+    if (!sampledPublication)
+        _pickerIntentRevision.Advance();
+}
+
 void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
 {
+    NotePickerInput(_sampledPickerPublication); // Explicit equal-value or A-B-A input supersedes older samples.
     // The target follows the working color (a palette well here, a Gradient Map end or the Canvas Size swatch in
     // the host); OK keeps it, Cancel restores it.
     const PickerTarget target = _pickerTarget;
@@ -2576,6 +2628,7 @@ void ChromeHost::ClosePickerCard() noexcept
     {
         return;
     }
+    NotePickerOpening();
     // The keyboard goes back where it was: the well or swatch that opened the picker.
     PopCard(ModalCard::Picker);
     _pickerCard->SetVisible(false);
@@ -2605,6 +2658,7 @@ void ChromeHost::OpenColorPicker(PickerTarget target, uint32_t argb) noexcept
         return;
     }
     _pickerTarget = target;
+    NotePickerOpening();
     _picker->SetColor(argb | 0xFF000000u);
     ArrangePicker();
     _pickerCard->SetVisible(true);
@@ -2632,6 +2686,8 @@ void ChromeHost::SampleColor(uint32_t argb) noexcept
 {
     if (ColorPickerOpen())
     {
+        // An explicit equal-value input also supersedes a pending asynchronous sample.
+        NotePickerInput(_sampledPickerPublication);
         _picker->SampleColor(_view.Controls(), argb);
     }
 }
@@ -3091,8 +3147,9 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
                left.isGroup == right.isGroup && left.collapsed == right.collapsed && left.hasMask == right.hasMask &&
                left.maskEnabled == right.maskEnabled && left.name == right.name;
     };
-    if (!TakeResync(kResyncLayers) && active == _treeModel.active && maskTargeted == _treeModel.maskTargeted &&
-        std::equal(rows.begin(), rows.end(), _treeModel.rows.begin(), _treeModel.rows.end(), sameRow))
+    if (!_treeModel.preparedMode && !TakeResync(kResyncLayers) && active == _treeModel.active &&
+        maskTargeted == _treeModel.maskTargeted &&
+        std::equal(rows.begin(), rows.end(), _treeModel.RowsView().begin(), _treeModel.RowsView().end(), sameRow))
     {
         return;
     }
@@ -3106,9 +3163,9 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
         std::optional<uint64_t> selected;
         if (active.has_value())
         {
-            for (size_t index = 0; index < _treeModel.rows.size(); ++index)
+            for (size_t index = 0; index < _treeModel.RowsView().size(); ++index)
             {
-                if (_treeModel.rows[index].id == active.value())
+                if (_treeModel.RowsView()[index].id == active.value())
                 {
                     selected = index + 1;
                     break;
@@ -3117,6 +3174,51 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
         }
         _layers->SetSelectedItemId(selected);
     }
+}
+
+void ChromeHost::SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows,
+                                   const std::optional<Guid>& active, bool maskTargeted)
+{
+    const bool resync = TakeResync(kResyncLayers);
+    if (!resync && _treeModel.preparedMode && rows == _treeModel.preparedRows && active == _treeModel.active &&
+        maskTargeted == _treeModel.maskTargeted)
+        return;
+    ++_syncCounters.layerRows;
+    _accessibleStructureChanged = true;
+    // String-table badge captions are small, cached once; row names/hidden labels are already prepared.
+    if (_treeModel.maskBadge.empty())
+    {
+        _treeModel.maskBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE);
+        _treeModel.maskOffBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_OFF_BADGE);
+    }
+    _treeModel.preparedMode = true;
+    _treeModel.preparedRows = rows;
+    _treeModel.active = active;
+    _treeModel.maskTargeted = maskTargeted;
+    if (_layers)
+    {
+        const auto index = rows && active ? rows->FindVisibleRow(active.value()) : std::nullopt;
+        const auto selected = index ? std::optional<uint64_t>(rows->ItemIdAt(index.value())) : std::nullopt;
+        _layers->SetSelectedItemId(selected);
+        _layers->NotifyDataChanged();
+    }
+}
+
+void ChromeHost::SetPreparedLayerInteraction(bool enabled) noexcept
+{
+    if (_layers && _layers->IsEnabled() != enabled)
+        _layers->SetEnabled(enabled);
+}
+
+void ChromeHost::SetPreparedLayerRetry(bool available) noexcept
+{
+    ShowControl(_layerRetry, available);
+    ShowControl(_opacity, !available);
+}
+
+D2D1_RECT_F ChromeHost::LayerRetryBoundsDipForTest() const noexcept
+{
+    return _layerRetry && _layerRetry->IsVisible() ? _layerRetry->GetBounds() : D2D1::RectF();
 }
 
 void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept
@@ -3131,19 +3233,36 @@ void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept
     Arrange();
 }
 
+HRESULT ChromeHost::PrepareInteraction(UINT widthPixels, UINT heightPixels, float dpi) noexcept
+{
+    if (!_attached)
+        return E_UNEXPECTED;
+    SyncToolVisuals();
+    Layout(widthPixels, heightPixels, dpi);
+    return _view.PrepareInteraction(widthPixels, heightPixels, _dpi);
+}
+
 HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept
 {
     if (!_attached)
     {
         return E_UNEXPECTED;
     }
-    SyncToolVisuals();
-    Layout(widthPixels, heightPixels, dpi);
-    const HRESULT prepared = _view.Prepare(widthPixels, heightPixels, _dpi);
+    {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3000};
+        SyncToolVisuals();
+        Layout(widthPixels, heightPixels, dpi);
+    }
+    const HRESULT prepared = [&]() noexcept
+    {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3001};
+        return _view.Prepare(widthPixels, heightPixels, _dpi);
+    }();
     // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
     // Its accessibility calls cancel a press in progress, so both wait for the pointer to be up.
     if (SUCCEEDED(prepared) && _owner != nullptr && !_accessibilitySite && !_pointerPressed && !_inDispatch)
     {
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3002};
         AttachAccessibility();
     }
     else if (SUCCEEDED(prepared) && !_inDispatch && !_pointerPressed && AccessibilityBehind() &&
@@ -3153,6 +3272,7 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
         // listening client hears every change, and the controls a panel, a card or a header shows join the tree with
         // the frame that lays them out. Anything else (the overlay, values, the status bar under a moving pointer)
         // waits until a client asks for the tree (PublishAccessibilityForClient, RF-1001).
+        const ScopedUiTimingAttribution timing{UiTimingKind::Frame, UiTimingAttributionPhase::Operation, 3003};
         FlushAccessibilityPlacement();
     }
     return prepared;
@@ -3213,6 +3333,14 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
         _pointerPressed = true;
     }
     _inDispatch = true;
+    if (ColorPickerOpen() && (event.action == DxUi::PointerAction::Down || _picker->IsDragging()))
+    {
+        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+        const auto bounds = _pickerCard->GetBounds();
+        const float x = event.xPixels / scale, y = event.yPixels / scale;
+        if (_picker->IsDragging() || (x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom))
+            NotePickerInput();
+    }
     const bool handled = _view.DispatchPointer(event);
     _inDispatch = false;
     if (event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave)
@@ -3267,6 +3395,8 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
         return true;
     }
     _inDispatch = true;
+    if (down && ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
+        NotePickerInput(); // Equal or unfinished typed values may emit no DxUi change callback.
     const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
     _inDispatch = false;
     if (handledKey)
@@ -3353,6 +3483,8 @@ bool ChromeHost::DispatchCharacter(wchar_t character, UINT modifiers) noexcept
         return character >= L' ' ? OpenMenuByMnemonic(character) : true;
     }
     _inDispatch = true;
+    if (ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
+        NotePickerInput();
     const bool handled = _view.DispatchCharacter(character, modifiers);
     _inDispatch = false;
     return handled;
@@ -3666,18 +3798,94 @@ void ChromeHost::SetSelectionInspector(const SelectionInspectorState& state) noe
 void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept
 {
     if (!_overlay)
-    {
         return;
-    }
-    ++_syncCounters.overlays; // the Application pushes an outline only when it or the view mapping changed
-    for (std::vector<D2D1_POINT_2F>& loop : loops)
+    ++_syncCounters.overlays;
+    ++_syncCounters.selectionOutlines;
+    std::optional<std::uint64_t> memory = sizeof(loops);
+    const auto add = [&](std::uint64_t count, std::uint64_t width) noexcept
     {
-        for (D2D1_POINT_2F& point : loop)
-        {
-            point = PixelToDip(point);
-        }
+        if (!memory)
+            return;
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (count > maximum / width || count * width > maximum - memory.value())
+            memory.reset(); // Unknown ownership refuses the next prepared admission.
+        else
+            memory.value() += count * width;
+    };
+    add(loops.capacity(), sizeof(CanvasOverlay::OutlineLoop));
+    // Reuse the existing counters traversal; no extra outline pass on the reference route.
+    for (const auto& loop : loops)
+    {
+        _syncCounters.selectionVertices += loop.size();
+        add(loop.capacity(), sizeof(D2D1_POINT_2F));
+        add(1, 256); // Supported allocator/Debug iterator bookkeeping.
     }
-    _overlay->SetSelectionOutline(std::move(loops));
+    _overlay->SetSelectionOutline(std::move(loops), memory);
+}
+
+bool ChromeHost::SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                             std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
+{
+    if (!_overlay || !outline.HasStorage())
+        return false;
+    const auto points = outline.PointCount();
+    if (!_overlay->SetPreparedSelectionOutline(std::move(outline), retired))
+        return false;
+    ++_syncCounters.overlays;
+    ++_syncCounters.selectionOutlines;
+    _syncCounters.selectionVertices += points;
+    return true;
+}
+
+std::optional<std::uint64_t> ChromeHost::LegacySelectionOutlineMemoryOwner() const noexcept
+{
+    return _overlay ? _overlay->LegacySelectionOutlineMemoryOwner() : std::optional<std::uint64_t>{0};
+}
+
+void ChromeHost::SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept
+{
+    // The caller supplies the current frame DPI; interaction preparation can still retain the previous one.
+    // Divide while values are double so a large document anchor is not narrowed before cancellation/mapping.
+    const double dipPerPixel = dpi > 0 ? 96.0 / dpi : 1.0;
+    if (_overlay && _overlay->SetSelectionMapping(D2D1::Point2F(static_cast<float>(originPixels.x * dipPerPixel),
+                                                                static_cast<float>(originPixels.y * dipPerPixel)),
+                                                  static_cast<float>(pixelsPerDocumentPixel * dipPerPixel)))
+    {
+        ++_syncCounters.overlays;
+        ++_syncCounters.selectionMappings;
+    }
+}
+
+D2D1_MATRIX_3X2_F ChromeHost::SelectionMappingForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionMappingForTest() : D2D1::Matrix3x2F::Identity();
+}
+
+void ChromeHost::EnableSelectionTimingForTest(bool enabled) noexcept
+{
+    if (_overlay)
+        _overlay->EnableSelectionTimingForTest(enabled);
+}
+
+CanvasOverlay::SelectionTimingForTest ChromeHost::SelectionTimingStateForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionTimingStateForTest() : CanvasOverlay::SelectionTimingForTest{};
+}
+
+CanvasOverlay::SelectionResourcesForTest ChromeHost::SelectionResourcesStateForTest() const noexcept
+{
+    return _overlay ? _overlay->SelectionResourcesStateForTest() : CanvasOverlay::SelectionResourcesForTest{};
+}
+
+const std::vector<CanvasOverlay::OutlineLoop>* ChromeHost::SelectionOutlineForTest() const noexcept
+{
+    return _overlay ? &_overlay->SelectionOutlineForTest() : nullptr;
+}
+
+void ChromeHost::SetSelectionPaintExternal(bool external) noexcept
+{
+    if (_overlay)
+        _overlay->SetSelectionPaintExternal(external);
 }
 
 void ChromeHost::SetSelectionAntPhase(float phase) noexcept
@@ -4066,20 +4274,60 @@ std::optional<D2D1_POINT_2F> ChromeHost::CloneSourceMarkDip() const noexcept
     return _overlay != nullptr ? _overlay->CloneSource() : std::nullopt;
 }
 
+std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerSampleAuthority() const noexcept
+{
+    if (!ColorPickerOpen() || _pickerInputRevision.Current() == 0)
+        return std::nullopt;
+    return PickerSampleAuthority{_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
+}
+
+std::optional<ChromeHost::PickerIntentAuthority> ChromeHost::CapturePickerIntentAuthority() const noexcept
+{
+    if (!ColorPickerOpen() || _pickerIntentRevision.Current() == 0 || _pickerOpeningRevision.Current() == 0)
+        return std::nullopt;
+    return PickerIntentAuthority{_pickerInstance, _pickerOpeningRevision.Current(), _pickerIntentRevision.Current(),
+                                 _pickerTarget};
+}
+
+bool ChromeHost::IsPickerIntentCurrent(const PickerIntentAuthority& authority) const noexcept
+{
+    return IsPickerOpeningCurrent(authority) && _pickerIntentRevision.Matches(authority.revision);
+}
+
+bool ChromeHost::IsPickerOpeningCurrent(const PickerIntentAuthority& authority) const noexcept
+{
+    return ColorPickerOpen() && authority.host == _pickerInstance && authority.target == _pickerTarget &&
+           _pickerOpeningRevision.Matches(authority.opening);
+}
+
+bool ChromeHost::ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept
+{
+    if (!ColorPickerOpen() || authority.host != _pickerInstance || authority.target != _pickerTarget ||
+        !_pickerInputRevision.Matches(authority.revision))
+        return false;
+    const bool outerPublication = _sampledPickerPublication;
+    const auto restorePublication =
+        wil::scope_exit([this, outerPublication]() noexcept { _sampledPickerPublication = outerPublication; });
+    _sampledPickerPublication = true;
+    SetPickerColor(argb);
+    authority = {_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
+    return true;
+}
+
 void ChromeHost::SetPickerColor(uint32_t argb) noexcept
 {
     if (!_picker || !_pickerCard || !_pickerCard->IsVisible())
     {
         return;
     }
-    _picker->SetCurrentColor(argb | 0xFF000000u);
-    ShowPaletteWell(_pickerTarget, argb | 0xFF000000u);
-    _view.MarkDirty();
+    // DxUi's current color is the opening/cancellation swatch, not the chosen color.
+    // SampleColor updates the chosen value and reports its normal preview callback.
+    SampleColor(argb);
 }
 
 uint32_t ChromeHost::PickerColor() const noexcept
 {
-    return _picker != nullptr ? _picker->GetCurrentColor() : _foregroundArgb;
+    return _picker != nullptr ? _picker->GetColor() : _foregroundArgb;
 }
 
 void ChromeHost::SetCommandChecked(int command, bool checked) noexcept

@@ -1,5 +1,7 @@
 #include "IO.Tests.FileIoBench.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
@@ -205,19 +207,21 @@ int RunFileIoBench(int argc, wchar_t** argv)
                                         : mode == L"png-memory" ? L"unused.png"
                                         : mode == L"zip-save"   ? L"fixture.prism"
                                                                 : L"fixture-folder");
-    CanvasDocument document;
-    document.id = Guid::Generate();
-    document.width = static_cast<int>(width);
-    document.height = static_cast<int>(height);
-    document.layers.reserve(layers);
+    DocumentFixture fixture;
+    fixture.id = Guid::Generate();
+    fixture.width = static_cast<int>(width);
+    fixture.height = static_cast<int>(height);
+    fixture.layers.reserve(layers);
     const Raster thumbnail = Raster::MakeThumbnail(image);
     for (std::uint32_t i = 0; i < layers; ++i)
     {
         ImageLayer layer = ImageLayer::Blank(L"Bench " + std::to_wstring(i),
                                              Vec2{static_cast<double>(width), static_cast<double>(height)});
         layer.asset = RasterAsset{image, thumbnail, layer.name};
-        document.layers.push_back(std::move(layer));
+        fixture.layers.push_back(std::move(layer));
     }
+
+    const CanvasDocument document = std::move(fixture).Seal();
 
     std::vector<std::uint8_t> encoded;
     LARGE_INTEGER frequency{}, begin{}, end{};

@@ -1,12 +1,17 @@
 #include "Application.h"
 
 #include "../Tests/Runtime.Tests.ClipboardMergedBudget.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
+#include "DeferredRelease.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 
@@ -38,11 +43,16 @@ bool ClearClipboardFixture(HWND owner) noexcept
     const auto close = wil::scope_exit([]() noexcept { (void)CloseClipboard(); });
     return EmptyClipboard() != FALSE;
 }
-bool InstallForeignClipboard(HWND owner, bool malformed = false) noexcept
+bool InstallForeignClipboard(HWND owner, bool malformed = false, bool replacementPixel = false) noexcept
 {
-    constexpr std::array<std::uint8_t, 44> literal{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0,  0,  1,  0,  32,
-                                                   0,  0, 0, 0, 0, 4, 0, 0, 0, 0, 0,  0,  0,  0,  0,
-                                                   0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 33, 65, 255};
+    std::array<std::uint8_t, 44> literal{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 32, 0, 0, 0, 0,  0,  4,  0,
+                                         0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 17, 33, 65, 255};
+    if (replacementPixel)
+    {
+        literal[40] = 9;
+        literal[41] = 19;
+        literal[42] = 39;
+    }
     wil::unique_hglobal block(GlobalAlloc(GMEM_MOVEABLE, literal.size()));
     if (!block)
         return false;
@@ -62,6 +72,75 @@ bool InstallForeignClipboard(HWND owner, bool malformed = false) noexcept
         return false;
     (void)block.release();
     return true;
+}
+
+bool InstallIndependentForeignDib(HWND owner, DWORD& error, unsigned int& stage) noexcept
+{
+    error = ERROR_SUCCESS;
+    stage = 1;
+    constexpr std::array<std::uint8_t, 48> literal{
+        40, 0,  0,  0, // BITMAPINFOHEADER size
+        2,  0,  0,  0, // width
+        1,  0,  0,  0, // bottom-up height
+        1,  0,         // planes
+        32, 0,         // bit count
+        0,  0,  0,  0, // BI_RGB
+        8,  0,  0,  0, // image bytes
+        0,  0,  0,  0, // x pixels per meter
+        0,  0,  0,  0, // y pixels per meter
+        0,  0,  0,  0, // colors used
+        0,  0,  0,  0, // important colors
+        13, 27, 41, 0, // pixel 0: BGR; BI_RGB reserved byte ignored
+        59, 73, 89, 0, // pixel 1
+    };
+    wil::unique_hglobal block(GlobalAlloc(GMEM_MOVEABLE, literal.size()));
+    if (!block)
+    {
+        error = GetLastError();
+        return false;
+    }
+    {
+        const wil::unique_hglobal_locked locked(block.get());
+        if (!locked.get())
+        {
+            error = GetLastError();
+            return false;
+        }
+        std::memcpy(locked.get(), literal.data(), literal.size());
+    }
+    stage = 2;
+    if (!OpenClipboardFixture(owner))
+    {
+        error = GetLastError();
+        return false;
+    }
+    bool closed = false;
+    const auto close = wil::scope_exit(
+        [&]() noexcept
+        {
+            if (!closed)
+                (void)CloseClipboard();
+        });
+    stage = 3;
+    if (!EmptyClipboard())
+    {
+        error = GetLastError();
+        return false;
+    }
+    stage = 4;
+    if (!SetClipboardData(CF_DIB, block.get()))
+    {
+        error = GetLastError();
+        return false;
+    }
+    (void)block.release();
+    stage = 5;
+    closed = CloseClipboard() != FALSE;
+    if (!closed)
+        error = GetLastError();
+    if (closed)
+        stage = 6;
+    return closed;
 }
 } // namespace
 
@@ -116,11 +195,14 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Empty,
         Malformed,
         Retry,
+        ReplacedBeforeInspect,
+        UnavailableSequence,
         Exhaust,
         EncodeFailure,
         ReceiptFailure,
         YoungerUndo,
         ReceiptOrigin,
+        ForeignReplacement,
         Rebind,
         Replacement,
     };
@@ -179,9 +261,15 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"paste-empty", paste, Mode::Empty, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
         Scenario{"paste-malformed", paste, Mode::Malformed, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-retry", paste, Mode::Retry, ClipboardWorkPhase::PasteProbe, HostOutcome::Succeeded},
+        Scenario{"paste-replaced-before-inspect", paste, Mode::ReplacedBeforeInspect, ClipboardWorkPhase::PasteProbe,
+                 HostOutcome::Succeeded},
+        Scenario{"paste-unavailable-sequence", paste, Mode::UnavailableSequence, ClipboardWorkPhase::PasteProbe,
+                 HostOutcome::Succeeded},
         Scenario{"paste-exhaust", paste, Mode::Exhaust, ClipboardWorkPhase::PasteProbe, HostOutcome::Failed},
         Scenario{"paste-owned-receipt", paste, Mode::ReceiptOrigin, ClipboardWorkPhase::PastePrepared,
                  HostOutcome::Succeeded},
+        Scenario{"copy-foreign-replacement-after-close", copy, Mode::ForeignReplacement,
+                 ClipboardWorkPhase::CopyPublicationSucceeded, HostOutcome::Succeeded},
         Scenario{"merged", merged, Mode::Success, ClipboardWorkPhase::CopyPrepared, HostOutcome::Succeeded},
         Scenario{"merged-cancel", merged, Mode::Cancel, ClipboardWorkPhase::MergedSnapshot, HostOutcome::Cancelled},
         Scenario{"merged-late-cancel", merged, Mode::LateCancel, ClipboardWorkPhase::CopyPrivateApplied,
@@ -214,6 +302,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
         ContinuationReceipt receipt, younger;
         Guid replacementRevision;
         bool visited = false, held = false, cancelAcknowledged = false;
+        bool replacementWhilePendingAfterClose = false;
+        bool foreignReplacementInstalled = false;
+        DWORD foreignReplacementError = ERROR_SUCCESS;
+        unsigned int foreignReplacementStage = 0;
+        HWND foreignWindow = nullptr;
     };
     const auto dispatch = [](void* raw, void* native) noexcept
     {
@@ -260,6 +353,15 @@ int Application::RunClipboardWorkSelfTest() noexcept
             owner._session.ReplaceDocument(owner._session.Document().value(), owner._session.ActiveLayerID());
             state.replacementRevision = owner._session.history.CurrentRevision();
             break;
+        case Mode::ReplacedBeforeInspect:
+            state.foreignReplacementInstalled = InstallForeignClipboard(owner._window.get(), false, true);
+            break;
+        case Mode::ForeignReplacement:
+            state.replacementWhilePendingAfterClose = state.held && state.gate->publications.load() == 1 &&
+                                                      state.receipt.Read().outcome == HostOutcome::Pending;
+            state.foreignReplacementInstalled = InstallIndependentForeignDib(
+                state.foreignWindow, state.foreignReplacementError, state.foreignReplacementStage);
+            break;
         case Mode::YoungerUndo:
             state.younger = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
             state.cancelAcknowledged =
@@ -273,7 +375,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
     for (const auto& scenario : scenarios)
     {
         _clipboardWorkTestGate.reset();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 9;
         document.height = 7;
@@ -286,10 +388,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
         document.layers.push_back(std::move(layer));
         if (scenario.mode == Mode::Empty)
         {
-            _session = DocumentSession{}; // independent owner without a previous private copy
+            _session = DocumentSession{};              // independent owner without a previous private copy
+            _session.SetColorDisplayJobsEnabled(true); // Keep the Application's publication policy on this owner.
             _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
         }
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.SetSelection(
             DocumentSelection{false, SelectionLoops{{Vec2{1, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{1, 1}}}}, L"Fixture");
         if (scenario.mode != Mode::Empty && !_session.CopySelection())
@@ -300,15 +403,31 @@ int Application::RunClipboardWorkSelfTest() noexcept
         _session.history.Reset();
         _session.history.MarkSaved();
         _clipboardBinding.reset();
+        const bool retry = scenario.mode == Mode::Retry || scenario.mode == Mode::UnavailableSequence ||
+                           scenario.mode == Mode::ReplacedBeforeInspect;
         const bool foreign =
             scenario.mode == Mode::Foreign || scenario.mode == Mode::ForeignNewCopy ||
-            (scenario.command == paste && (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust ||
+            (scenario.command == paste && (retry || scenario.mode == Mode::Exhaust ||
                                            scenario.mode == Mode::LateCancel || scenario.mode == Mode::Malformed));
         if (!(foreign ? InstallForeignClipboard(_window.get(), scenario.mode == Mode::Malformed)
                       : ClearClipboardFixture(_window.get())))
         {
             std::printf("FAIL clipboard-host.%s.fixture-clipboard-install error=%lu\n", scenario.name, GetLastError());
             return 5;
+        }
+        {
+            const DWORD traceLastError = GetLastError();
+            DWORD process = 0;
+            const HWND installedOwner = GetClipboardOwner();
+            if (installedOwner)
+                (void)GetWindowThreadProcessId(installedOwner, &process);
+            std::printf("DIAG clipboard-fixture case=%s expected_foreign=%d sequence=%lu owner=%p pid=%lu self_pid=%lu "
+                        "canvas=%dx%d\n",
+                        scenario.name, foreign, static_cast<unsigned long>(GetClipboardSequenceNumber()),
+                        static_cast<void*>(installedOwner), static_cast<unsigned long>(process),
+                        static_cast<unsigned long>(GetCurrentProcessId()), _session.Document()->width,
+                        _session.Document()->height);
+            SetLastError(traceLastError);
         }
         _clipboardSequence = foreign || scenario.mode == Mode::NoFormats || scenario.mode == Mode::Empty
                                  ? 0
@@ -333,15 +452,30 @@ int Application::RunClipboardWorkSelfTest() noexcept
         gate->throwMainAdmissionFailure = scenario.mode == Mode::MainAdmission;
         gate->throwCaptureFailure = scenario.mode == Mode::Capture;
         gate->throwWorkerFailure = scenario.mode == Mode::WorkerAllocation;
+        gate->forceUnavailableProbeSequence = scenario.mode == Mode::UnavailableSequence;
         if (scenario.mode == Mode::Failure)
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
-        if (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust)
-            gate->openFailures.store(scenario.mode == Mode::Retry ? 2u : 6u);
+        if (retry || scenario.mode == Mode::Exhaust)
+            gate->openFailures.store(retry ? 2u : 6u);
+        // A temporary native OpenClipboard failure must not satisfy the successful-publication gate.
+        if (scenario.mode == Mode::ForeignReplacement)
+            gate->openFailures.store(2);
         if (scenario.mode == Mode::EncodeFailure)
             gate->fault = ClipboardTransfer::Fault::PngGlobal;
         if (scenario.mode == Mode::ReceiptFailure)
             gate->fault = ClipboardTransfer::Fault::ReceiptPlace;
+        wil::unique_hwnd foreignWindow;
+        if (scenario.mode == Mode::ForeignReplacement)
+        {
+            foreignWindow.reset(
+                CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, _instance, nullptr));
+            expect(foreignWindow && IsWindow(foreignWindow.get()) && foreignWindow.get() != _window.get(),
+                   scenario.name, "actual-distinct-foreign-clipboard-owner-window");
+            if (!foreignWindow)
+                return 5;
+        }
         State state{*this, scenario, gate, QueueHostInput(HostCommandInput{scenario.command})};
+        state.foreignWindow = foreignWindow.get();
         const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
         if (settled != SettleResult::Settled)
         {
@@ -352,8 +486,11 @@ int Application::RunClipboardWorkSelfTest() noexcept
                "receipt");
         const bool noGate = scenario.mode == Mode::Admission || scenario.mode == Mode::Capture;
         expect(noGate ? !state.visited : state.visited && state.held, scenario.name, "admitted-pump");
+        const bool retainedMerged = scenario.command == merged && scenario.outcome == HostOutcome::Succeeded;
+        const auto retainedBytes = retainedMerged ? gate->reservationBytes : 0;
         expect(!_clipboardTicket && !_clipboardStamp && !_historyWork.Busy() && !_activeHostRequest &&
-                   _hostRequests.Size() == 0 && !_hostInputBudget.Used() && _jobs.ReservedMemoryBytes() == 0 &&
+                   _hostRequests.Size() == 0 && !_hostInputBudget.Used() &&
+                   _jobs.ReservedMemoryBytes() == retainedBytes && (!retainedMerged || retainedBytes != 0) &&
                    _jobs.ReleasingMemoryBytes() == 0 && gate->retiredOwnerNodes.load() == 0,
                scenario.name, "acknowledged-retirement");
         if (scenario.mode == Mode::Cancel || scenario.mode == Mode::LateCancel)
@@ -373,12 +510,10 @@ int Application::RunClipboardWorkSelfTest() noexcept
                 expect(_session.ActiveLayer() && _session.ActiveLayer()->asset &&
                            _session.ActiveLayer()->asset->image == source && _session.history.UndoCount() == 0,
                        scenario.name, "unchanged-source-history");
-            if (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust)
-                expect(gate->forcedBusyAttempts.load() == (scenario.mode == Mode::Retry ? 2u : 6u) &&
-                           gate->openAttempts.load() >= (scenario.mode == Mode::Retry ? 3u : 6u) &&
-                           gate->openAttempts.load() <= 6 &&
-                           gate->emptyAttempts.load() == (scenario.mode == Mode::Retry ? 1u : 0u) &&
-                           _clipboardWriteSucceeded == (scenario.mode == Mode::Retry),
+            if (retry || scenario.mode == Mode::Exhaust)
+                expect(gate->forcedBusyAttempts.load() == (retry ? 2u : 6u) &&
+                           gate->openAttempts.load() >= (retry ? 3u : 6u) && gate->openAttempts.load() <= 6 &&
+                           gate->emptyAttempts.load() == (retry ? 1u : 0u) && _clipboardWriteSucceeded == retry,
                        scenario.name, "bounded-write-attempts");
             if (scenario.mode == Mode::LateCancel || scenario.mode == Mode::EncodeFailure ||
                 scenario.mode == Mode::Exhaust)
@@ -402,10 +537,23 @@ int Application::RunClipboardWorkSelfTest() noexcept
             std::array<std::uint8_t, 4> pixel{};
             if (pasted && pasted->asset)
                 pasted->asset->image.ReadRegion(0, 0, 1, 1, pixel.data(), 4, 0);
+            if (scenario.mode == Mode::Retry)
+                std::printf("DIAG clipboard-paste retry forced=%u opens=%u layers=%zu selection=%d undo=%ls "
+                            "origin=%.3f,%.3f pixels=%u,%u,%u,%u\n",
+                            gate->forcedBusyAttempts.load(), gate->openAttempts.load(),
+                            _session.Document()->layers.size(), _session.Selection().has_value(),
+                            _session.history.UndoName().c_str(), pasted ? pasted->transform.origin.x : -1.0,
+                            pasted ? pasted->transform.origin.y : -1.0, pixel[0], pixel[1], pixel[2], pixel[3]);
+            if (scenario.mode == Mode::Retry && pasted && pasted->asset)
+                std::printf("DIAG clipboard-paste-size width=%d height=%d canvas=%dx%d sequence=%lu\n",
+                            pasted->asset->image.Width(), pasted->asset->image.Height(), _session.Document()->width,
+                            _session.Document()->height, static_cast<unsigned long>(GetClipboardSequenceNumber()));
             expect(pasted && pasted->asset && _session.Document()->layers.size() == 2 && !_session.Selection() &&
                        _session.history.UndoName() == L"Paste" &&
                        pasted->transform.origin == (foreign ? Vec2{4, 3} : Vec2{1, 0}) &&
-                       pixel == (foreign ? std::array<std::uint8_t, 4>{17, 33, 65, 255}
+                       pixel == (foreign ? (scenario.mode == Mode::ReplacedBeforeInspect
+                                                ? std::array<std::uint8_t, 4>{9, 19, 39, 255}
+                                                : std::array<std::uint8_t, 4>{17, 33, 65, 255})
                                          : std::array<std::uint8_t, 4>{20, 40, 80, 255}),
                    scenario.name, "complete-paste-origin-pixels-history");
         }
@@ -416,12 +564,279 @@ int Application::RunClipboardWorkSelfTest() noexcept
                            (scenario.mode == Mode::Replacement ? state.replacementRevision : revision) &&
                        _session.history.UndoCount() == 0,
                    scenario.name, "refusal-preserves-source-history");
-        if (scenario.command == paste && (scenario.mode == Mode::Retry || scenario.mode == Mode::Exhaust))
-            expect(gate->forcedBusyAttempts.load() == (scenario.mode == Mode::Retry ? 2u : 6u) &&
-                       gate->openAttempts.load() >= (scenario.mode == Mode::Retry ? 4u : 6u) &&
+        if (scenario.mode == Mode::ReplacedBeforeInspect)
+            expect(state.foreignReplacementInstalled && gate->forcedBusyAttempts.load() == 2 &&
+                       gate->openAttempts.load() >= 4 && gate->openAttempts.load() <= 6 && _session.Clipboard() &&
+                       _session.Clipboard()->image.Width() == 1 && _session.Clipboard()->image.Data()[0] == 20,
+                   scenario.name,
+                   "actual-replacement-before-first-inspect-is-authoritative-with-private-copy-unchanged");
+        if (scenario.mode == Mode::UnavailableSequence)
+            expect(_clipboardSequence == 0 && gate->forceUnavailableProbeSequence &&
+                       gate->forcedBusyAttempts.load() == 2 && gate->openAttempts.load() >= 4 &&
                        gate->openAttempts.load() <= 6,
+                   scenario.name, "unavailable-query-inspects-foreign-pixels-under-original-retry-budget");
+        if (scenario.command == paste && (retry || scenario.mode == Mode::Exhaust))
+            expect(gate->forcedBusyAttempts.load() == (retry ? 2u : 6u) &&
+                       gate->openAttempts.load() >= (retry ? 4u : 6u) && gate->openAttempts.load() <= 6,
                    scenario.name, "six-total-inspect-copy-attempts");
+        if (retainedMerged)
+        {
+            // Private success is already authoritative, including late Cancel/exhausted OS publication.
+            // Test final readers only after every unchanged private/OS receipt and literal predicate above.
+            Raster reader = _session.Clipboard() ? _session.Clipboard()->image : Raster{};
+            auto weak = reader.WeakStorageForTest();
+            const auto literal = [&]() noexcept
+            {
+                constexpr std::array<std::uint8_t, 4> expected{20, 40, 80, 255};
+                return reader.HasStorage() && reader.Width() == 1 && reader.Height() == 1 && reader.Stride() == 4 &&
+                       reader.Data() && std::equal(expected.begin(), expected.end(), reader.Data());
+            };
+            const auto lifetime = [&](bool condition, const char* stage) noexcept
+            {
+                std::printf("%s clipboard-merged-lifetime.%s.%s\n", condition ? "PASS" : "FAIL", scenario.name, stage);
+                failures += condition ? 0 : 1;
+            };
+            lifetime(literal() && _jobs.ReservedMemoryBytes() == retainedBytes && _jobs.ReleasingMemoryBytes() == 0,
+                     "private-copy-retains-original-terminal-charge");
+            _composition.ReleaseDocumentSurfaces();
+            _session.ClearDocument(); // Closing preserves the private clipboard for later Paste.
+            DocumentFixture replacement;
+            replacement.id = Guid::Generate();
+            replacement.width = replacement.height = 1;
+            ImageLayer replacementLayer = ImageLayer::Blank(L"Replacement private copy", {1, 1});
+            constexpr std::array<std::uint8_t, 4> replacementPixel{7, 8, 9, 255};
+            replacementLayer.asset = RasterAsset{
+                Raster::Make(1, 1, RasterFormat::Bgra8888, replacementPixel.data(), replacementPixel.size()),
+                {},
+                replacementLayer.name};
+            const auto replacementActive = replacementLayer.id;
+            replacement.layers.push_back(std::move(replacementLayer));
+            _session.ReplaceDocument(std::move(replacement).Seal(), replacementActive);
+            const bool replacedPrivate =
+                _session.CopySelection(); // Real private-copy replacement drops the old reader.
+            _session.ClearDocument();     // Release the replacement's live/history owners too.
+            DocumentChanged();
+            const bool released = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+            lifetime(released && replacedPrivate && !_session.Document() && _session.history.UndoCount() == 0 &&
+                         !_session.history.CanRedo() && _session.Clipboard() && _session.Clipboard()->image != reader &&
+                         literal() && _jobs.ReservedMemoryBytes() == retainedBytes && _jobs.ReleasingMemoryBytes() == 0,
+                     "copied-reader-survives-private-clipboard-and-document-release");
+            reader = {};
+            const bool storageReleased = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+            lifetime(storageReleased && weak.expired() && _jobs.ReservedMemoryBytes() == retainedBytes &&
+                         _jobs.ReleasingMemoryBytes() == 0,
+                     "last-weak-storage-control-retains-original-charge");
+            weak.reset();
+            const bool acknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+            lifetime(acknowledged && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0 &&
+                         _jobs.IsIdle(),
+                     "final-control-acknowledges-original-refund");
+        }
+        if (scenario.mode == Mode::ForeignReplacement)
+        {
+            std::printf("DIAG clipboard-post-close held=%d afterClose=%d installed=%d error=%lu nativeStage=%u "
+                        "windowValid=%d closed=%u receipts=%u "
+                        "writeSucceeded=%d preferred=%u live=%u\n",
+                        state.held, state.replacementWhilePendingAfterClose, state.foreignReplacementInstalled,
+                        state.foreignReplacementError, state.foreignReplacementStage, IsWindow(state.foreignWindow),
+                        gate->publications.load(), gate->receiptPlacements.load(), _clipboardWriteSucceeded,
+                        _clipboardSequence, SystemClipboard::SequenceNumber());
+            expect(gate->forcedBusyAttempts.load() == 2 && gate->openAttempts.load() >= 3 &&
+                       gate->openAttempts.load() <= 6 && gate->visits.load() == 1 && gate->publications.load() == 1 &&
+                       gate->receiptPlacements.load() == 1 && gate->pngPlacements.load() == 1 &&
+                       gate->dibPlacements.load() == 1,
+                   scenario.name, "successful-gate-follows-busy-retries-and-one-closed-publication");
+            expect(state.replacementWhilePendingAfterClose && state.foreignReplacementInstalled &&
+                       gate->receiptPlacements.load() == 1 && _clipboardWriteSucceeded && _clipboardSequence != 0 &&
+                       _clipboardSequence != SystemClipboard::SequenceNumber(),
+                   scenario.name, "replacement-after-close-leaves-stale-private-receipt-preference");
+            const auto privateCopySerial = _session.ClipboardSerial();
+            const auto pasteReceipt = QueueHostInput(HostCommandInput{paste});
+            const auto pasteSettled = SettleJobs(_jobs, 15000, DispatchMessageThunk, this);
+            expect(pasteSettled == SettleResult::Settled && pasteReceipt.Read().outcome == HostOutcome::Succeeded,
+                   scenario.name, "later-actual-paste-completes");
+            const auto* pasted = _session.ActiveLayer();
+            std::array<std::uint8_t, 4> first{};
+            std::array<std::uint8_t, 4> second{};
+            if (pasted && pasted->asset)
+            {
+                pasted->asset->image.ReadRegion(0, 0, 1, 1, first.data(), 4, 0);
+                pasted->asset->image.ReadRegion(1, 0, 1, 1, second.data(), 4, 0);
+            }
+            std::printf("DIAG clipboard-post-close-paste width=%d height=%d origin=%.3f,%.3f first=%u,%u,%u,%u "
+                        "second=%u,%u,%u,%u\n",
+                        pasted && pasted->asset ? pasted->asset->image.Width() : -1,
+                        pasted && pasted->asset ? pasted->asset->image.Height() : -1,
+                        pasted ? pasted->transform.origin.x : -1.0, pasted ? pasted->transform.origin.y : -1.0,
+                        first[0], first[1], first[2], first[3], second[0], second[1], second[2], second[3]);
+            expect(pasted && pasted->asset && pasted->asset->image.Width() == 2 && pasted->asset->image.Height() == 1 &&
+                       pasted->transform.origin == Vec2{3, 3} &&
+                       first == std::array<std::uint8_t, 4>{13, 27, 41, 255} &&
+                       second == std::array<std::uint8_t, 4>{59, 73, 89, 255},
+                   scenario.name, "paste-uses-independent-foreign-dib-literal-pixels");
+            expect(_session.Document()->layers.size() == 2 && !_session.Selection() &&
+                       _session.history.UndoName() == L"Paste" && _session.history.UndoCount() == 1 &&
+                       _session.history.CanUndo() && !_session.history.CanRedo() &&
+                       _session.ClipboardSerial() == privateCopySerial,
+                   scenario.name, "document-selection-history-and-private-serial-consistent");
+            expect(!_clipboardTicket && !_clipboardStamp && !_historyWork.Busy() && !_activeHostRequest &&
+                       _hostRequests.Size() == 0 && !_hostInputBudget.Used() && _jobs.ReservedMemoryBytes() == 0 &&
+                       _jobs.ReleasingMemoryBytes() == 0 && gate->retiredOwnerNodes.load() == 0 &&
+                       gate->retiredNodes.load() >= 2 && gate->openAttempts.load() >= 3 &&
+                       gate->openedScopes.load() >= 3,
+                   scenario.name, "original-ticket-refunded-and-worker-retirement-acknowledged");
+        }
     }
     std::printf("clipboard-host summary: %u checks, %d failures\n", checks, failures);
     return failures ? 5 : 0;
+}
+
+int Application::RunStandaloneClipboardMergedShutdownSelfTest(HINSTANCE instance) noexcept
+{
+    unsigned checks = 0;
+    unsigned failures = 0;
+    for (const bool privateApplied : std::array{false, true})
+    {
+        const char* scenario = privateApplied ? "private-applied-before-encoding" : "source-snapshot-before-graphics";
+        const auto expect = [&](bool condition, const char* label) noexcept
+        {
+            ++checks;
+            failures += condition ? 0u : 1u;
+            std::printf("%s clipboard-merged-close.%s.%s\n", condition ? "PASS" : "FAIL", scenario, label);
+        };
+        expect(!DeferredReleaseDetail::sink.enqueue, "no-outer-sink");
+        auto gate = std::make_shared<ClipboardWorkTestGate>();
+        gate->phase = privateApplied ? ClipboardWorkPhase::CopyPrivateApplied : ClipboardWorkPhase::MergedSnapshot;
+        auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+        const auto cleanup = wil::scope_exit(
+            [&]() noexcept
+            {
+                if (owner)
+                    owner->Shutdown();
+            });
+        owner->_quietUi = true;
+        owner->_prompts = &QuietPrompts();
+        if (!gate->release || FAILED(owner->InitializeProcessing()) || FAILED(owner->RegisterWindowClass()) ||
+            FAILED(owner->CreateMainWindow(false)) || FAILED(owner->InitializeRenderer()) ||
+            FAILED(owner->InitializeChrome()))
+            return 5;
+        owner->BindCompositionDevice();
+        constexpr std::array<std::uint8_t, 12> source{11, 22, 33, 255, 20, 40, 80, 255, 99, 100, 101, 255};
+        DocumentFixture fixture;
+        fixture.id = Guid::Generate();
+        fixture.width = 9;
+        fixture.height = 7;
+        ImageLayer layer = ImageLayer::Blank(L"Joined Copy Merged literal", {3, 1});
+        const Guid active = layer.id;
+        layer.asset =
+            RasterAsset{Raster::Make(3, 1, RasterFormat::Bgra8888, source.data(), source.size()), {}, layer.name};
+        fixture.layers.push_back(std::move(layer));
+        owner->_session.ReplaceDocument(std::move(fixture).Seal(), active);
+        owner->_session.SetSelection(
+            DocumentSelection{false, SelectionLoops{{Vec2{1, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{1, 1}}}}, L"Fixture");
+        owner->_session.history.Reset();
+        owner->_session.history.MarkSaved();
+        owner->DocumentChanged();
+        const auto root = owner->_session.Document()->layers.Identity();
+        const auto generation = owner->_session.Generation();
+        const auto revision = owner->_session.history.CurrentRevision();
+        const auto serial = owner->_session.ClipboardSerial();
+        owner->_clipboardWorkTestGate = gate;
+        const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandCopyMerged});
+        struct State final
+        {
+            Application& owner;
+            bool reached = false;
+        } state{*owner};
+        const auto dispatch = [](void* opaque, void* native) noexcept
+        {
+            auto& value = *static_cast<State*>(opaque);
+            auto& message = *static_cast<MSG*>(native);
+            if (message.message == ClipboardWorkTestGate::kMessage)
+                value.reached = true;
+            else
+                value.owner.DispatchQueuedMessage(message);
+        };
+        const auto deadline = GetTickCount64() + 10000;
+        while (!state.reached)
+        {
+            if (PumpMessages(dispatch, &state).quit)
+                std::_Exit(5);
+            (void)DrainCompletions(owner->_jobs);
+            (void)RunUiActions(owner->_jobs);
+            if (state.reached)
+                break;
+            const auto now = GetTickCount64();
+            if (now >= deadline)
+                std::_Exit(5);
+            if (owner->_jobs.HasUiWork())
+                continue;
+            const HANDLE wake = owner->_jobs.WakeHandle();
+            if (MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
+                                            MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                std::_Exit(5);
+        }
+        expect(receipt.Read().outcome == HostOutcome::Pending && owner->_clipboardTicket &&
+                   owner->_historyWork.Busy() && gate->captureReservationHeld && gate->reservationBytes != 0 &&
+                   owner->_jobs.ReservedMemoryBytes() == gate->reservationBytes && gate->visits.load() == 1,
+               "actual-original-ticket-and-full-admission-held");
+        struct Observation final
+        {
+            Application& owner;
+            const void* root;
+            std::uint64_t generation;
+            Guid revision;
+            std::uint64_t serial;
+            bool privateApplied;
+            std::uint64_t bytes;
+            bool exactSource = false;
+            bool exactPrivate = false;
+            bool charged = false;
+        } observed{*owner, root, generation, revision, serial, privateApplied, gate->reservationBytes};
+        ApplicationShutdownTestProbe probe;
+        probe.checkContext = &observed;
+        probe.checkOwner = [](void* opaque) noexcept
+        {
+            auto& value = *static_cast<Observation*>(opaque);
+            value.exactSource = value.owner._session.Document() &&
+                                value.owner._session.Document()->layers.Identity() == value.root &&
+                                value.owner._session.Generation() == value.generation &&
+                                value.owner._session.history.CurrentRevision() == value.revision &&
+                                value.owner._session.history.UndoCount() == 0;
+            const auto& copied = value.owner._session.Clipboard();
+            constexpr std::array<std::uint8_t, 4> literal{20, 40, 80, 255};
+            value.exactPrivate = value.privateApplied
+                                     ? copied && copied->origin == Vec2{1, 0} && copied->image.Width() == 1 &&
+                                           copied->image.Height() == 1 && copied->image.Data() &&
+                                           std::equal(literal.begin(), literal.end(), copied->image.Data()) &&
+                                           value.owner._session.ClipboardSerial() == value.serial + 1
+                                     : !copied && value.owner._session.ClipboardSerial() == value.serial;
+            value.charged = value.owner._jobs.ReservedMemoryBytes() == value.bytes && value.bytes != 0;
+        };
+        owner->_shutdownTestProbe = &probe;
+        owner->Shutdown(); // Actual joined Close; never signal the worker's test gate or replay an encoder.
+        expect(receipt.Read().outcome == HostOutcome::Cancelled && observed.exactSource && observed.exactPrivate &&
+                   observed.charged && probe.graphicsDetachedOnOwner && probe.reservationAndWakeAlive,
+               "joined-close-preserves-completed-private-truth-and-original-charge-at-detach");
+        expect(gate->openAttempts.load() == 0 && gate->emptyAttempts.load() == 0 && gate->publications.load() == 0 &&
+                   gate->receiptPlacements.load() == 0 && gate->pngPlacements.load() == 0 &&
+                   gate->dibPlacements.load() == 0,
+               "shutdown-does-not-enter-or-mutate-the-os-clipboard");
+        expect(gate->retiredNodes.load() == 1 && gate->retiredOwnerNodes.load() == 0 &&
+                   probe.hostCpuRootsRetired.load() && owner->_jobs.ReservedMemoryBytes() == 0 &&
+                   owner->_jobs.ReleasingMemoryBytes() == 0 && owner->_jobs.IsIdle() && !owner->_clipboardTicket &&
+                   !owner->_clipboardStamp && !owner->_historyWork.Busy() && !owner->_utilityReadback.HasPending() &&
+                   owner->_graphGpuBudget.ReservedOwner() == 0,
+               "actual-joined-cpu-graphics-and-private-root-retirement-refund");
+        owner->_shutdownTestProbe = nullptr;
+        owner.reset();
+        MSG quit{};
+        unsigned quitCount = 0;
+        while (PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE))
+            ++quitCount;
+        expect(quitCount == 1 && !DeferredReleaseDetail::sink.enqueue,
+               "fixture-quit-and-owner-sink-cleared-before-next-owner");
+    }
+    std::printf("%u clipboard-merged-close assertions; %u failed.\n", checks, failures);
+    return failures == 0 ? 0 : 5;
 }

@@ -1,5 +1,6 @@
 #include "Document.Tests.DuplicateOpeningWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "DuplicateOpeningWork.h"
 #include "Executor.h"
@@ -45,7 +46,7 @@ struct Fixture final
         image = Raster::Make(2, 2, RasterFormat::Bgra8888, kImageBytes.data(), kImageBytes.size());
         mask = Raster::Make(2, 2, RasterFormat::Gray8, kMaskBytes.data(), kMaskBytes.size());
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -64,7 +65,7 @@ struct Fixture final
         siblingID = sibling.id;
         document.layers = {source, sibling};
 
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         session.history.Reset();
         // Retain a real redo branch while the source state is saved.
         session.RenameLayer(siblingID, L"Redo branch edit");
@@ -263,7 +264,7 @@ void RestoreCancellationAndNestedParent()
         auto& session = fixture.session;
         InlineExecutor executor;
         session.BeginEdit(L"Literal outer parent edit");
-        session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.625; });
+        EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.625; });
         const OwnerState parent(session);
         auto opening = Prepare(session, executor);
         Expect(opening.publication && session.ApplyPreparedDuplicateOpeningIfCurrent(opening.publication.value()) &&
@@ -289,7 +290,7 @@ void RestoreCancellationAndNestedParent()
         auto& session = fixture.session;
         InlineExecutor executor;
         session.BeginEdit(L"Literal outer commit parent");
-        session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.75; });
+        EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.75; });
         const OwnerState parent(session);
         auto opening = Prepare(session, executor);
         const bool opened =
@@ -489,7 +490,8 @@ void StaleAuthorityAndOwnership()
             fixture.session.SelectLayerTarget(fixture.sourceID, false);
             break;
         case Mutation::Source:
-            fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+            EditLayerRecordsForTest(fixture.session,
+                                    [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
             break;
         case Mutation::History:
             fixture.session.history.Reset();
@@ -572,31 +574,32 @@ void Refusals()
     }
     {
         Fixture fixture;
-        fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().asset.reset(); });
+        EditLayerRecordsForTest(fixture.session,
+                                [](DocumentFixture& document) { document.layers.front().asset.reset(); });
         Expect(!fixture.session.CanTransform() && fixture.session.DuplicateOpeningPreparationMemoryBytes() == 0 &&
                    !fixture.session.PrepareDuplicateOpeningInput(),
                "nontransformable-blank-source-refused");
     }
     {
         Fixture fixture;
-        auto document = fixture.session.Document().value();
+        auto document = DocumentFixture::Copy(fixture.session.Document().value());
         ImageLayer group = ImageLayer::Blank(L"Transform group", Vec2{8, 8});
         group.isGroup = true;
         ImageLayer child = document.layers.front();
         child.parentID = group.id;
         document.layers = {group, child};
-        fixture.session.ReplaceDocument(std::move(document), group.id);
+        fixture.session.ReplaceDocument(std::move(document).Seal(), group.id);
         Expect(fixture.session.TransformsAsGroup() && fixture.session.DuplicateOpeningPreparationMemoryBytes() == 0 &&
                    !fixture.session.PrepareDuplicateOpeningInput(),
                "group-transform-source-refused");
     }
     {
         Fixture fixture;
-        auto document = fixture.session.Document().value();
+        auto document = DocumentFixture::Copy(fixture.session.Document().value());
         document.layers.reserve(static_cast<std::size_t>(kMaxLayerCount));
         while (document.layers.size() < static_cast<std::size_t>(kMaxLayerCount))
             document.layers.push_back(ImageLayer::Blank(L"Source-limit filler", Vec2{1, 1}));
-        fixture.session.ReplaceDocument(std::move(document), fixture.sourceID);
+        fixture.session.ReplaceDocument(std::move(document).Seal(), fixture.sourceID);
         Expect(fixture.session.DuplicateOpeningPreparationMemoryBytes() == 0 &&
                    !fixture.session.PrepareDuplicateOpeningInput(),
                "source-layer-count-limit-refuses-opening");
@@ -608,13 +611,13 @@ void GroupedInsertionAndStaleRollback()
     InlineExecutor executor;
     {
         Fixture fixture;
-        auto document = fixture.session.Document().value();
+        auto document = DocumentFixture::Copy(fixture.session.Document().value());
         ImageLayer group = ImageLayer::Blank(L"Parent", {8, 8});
         group.isGroup = true;
         const auto parentID = group.id;
         document.layers.front().parentID = parentID;
         document.layers.insert(document.layers.begin(), std::move(group));
-        fixture.session.ReplaceDocument(std::move(document), fixture.sourceID);
+        fixture.session.ReplaceDocument(std::move(document).Seal(), fixture.sourceID);
         const auto original = fixture.session.Document().value();
         auto opened = Prepare(fixture.session, executor);
         Expect(opened.publication && fixture.session.ApplyPreparedDuplicateOpeningIfCurrent(*opened.publication),
@@ -638,7 +641,8 @@ void GroupedInsertionAndStaleRollback()
             continue;
         const auto restore = opened.publication->Restoration();
         if (sourceChange)
-            fixture.session.EditForTest([](CanvasDocument& document) { document.layers[1].opacity = 0.5; });
+            EditLayerRecordsForTest(fixture.session,
+                                    [](DocumentFixture& document) { document.layers[1].opacity = 0.5; });
         else
             fixture.session.history.Reset();
         const OwnerState changed(fixture.session);
@@ -659,7 +663,7 @@ void ExactPixelBudgets()
         for (const bool over : {false, true})
         {
             Fixture fixture;
-            auto document = fixture.session.Document().value();
+            auto document = DocumentFixture::Copy(fixture.session.Document().value());
             const auto format = maskBudget ? RasterFormat::Gray8 : RasterFormat::Bgra8888;
             const auto large = Raster::MakeSparse(10'000, 9999, format, Raster{}, 0, 0, {}, 0);
             // Both original layers have four color pixels; only the source has four mask pixels.
@@ -675,7 +679,7 @@ void ExactPixelBudgets()
                     layer.asset = RasterAsset{raster, {}, L"Virtual image"};
                 document.layers.push_back(std::move(layer));
             }
-            fixture.session.ReplaceDocument(std::move(document), fixture.sourceID);
+            fixture.session.ReplaceDocument(std::move(document).Seal(), fixture.sourceID);
             const OwnerState before(fixture.session);
             InlineExecutor executor;
             auto prepared = Prepare(fixture.session, executor);

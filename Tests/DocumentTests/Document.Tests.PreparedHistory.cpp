@@ -1,5 +1,6 @@
 #include "Document.Tests.PreparedHistory.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <array>
@@ -274,18 +275,20 @@ int RunPreparedHistoryTests()
         DocumentHistory history(1, 4);
         const std::array<std::uint8_t, 4> beforeBytes{17, 34, 51, 255};
         const std::array<std::uint8_t, 8> afterBytes{68, 85, 102, 255, 119, 136, 153, 255};
-        CanvasDocument before;
-        before.width = before.height = 1;
+        DocumentFixture beforeFixture;
+        beforeFixture.width = beforeFixture.height = 1;
         auto layer = ImageLayer::Blank(L"Trim restore", {1, 1});
         layer.asset = RasterAsset{
             Raster::Make(1, 1, RasterFormat::Bgra8888, beforeBytes.data(), beforeBytes.size()), {}, layer.name};
         const auto active = layer.id;
-        before.layers.push_back(std::move(layer));
-        CanvasDocument after = before;
-        after.width = 2;
-        after.layers.front().transform.size = {2, 1};
-        after.layers.front().asset->image =
+        beforeFixture.layers.push_back(std::move(layer));
+        const CanvasDocument before = std::move(beforeFixture).Seal();
+        DocumentFixture afterFixture = DocumentFixture::Copy(before);
+        afterFixture.width = 2;
+        afterFixture.layers.front().transform.size = {2, 1};
+        afterFixture.layers.front().asset.value().image =
             Raster::Make(2, 1, RasterFormat::Bgra8888, afterBytes.data(), afterBytes.size());
+        const CanvasDocument after = std::move(afterFixture).Seal();
         const auto openingRevision = history.CurrentRevision();
         Expect(PublishWidthEdit(history, before, after, active, L"Trim restore") && history.CanUndo(),
                "trim-restore-setup-retains-before-storage");

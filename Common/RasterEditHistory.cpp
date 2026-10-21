@@ -1,5 +1,7 @@
 #include "RasterEditWork.h"
 
+#include "DocumentDraft.h"
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -34,28 +36,29 @@ std::optional<PreparedRasterEdit> PrepareRasterEditPublication(
         (source->selection && (source->selection->antialiased != token.selection->antialiased ||
                                source->selection->loops.Identity() != token.selection->loops.Identity())))
         return std::nullopt;
-    CanvasDocument after;
-    after.id = source->id;
-    after.width = source->width;
-    after.height = source->height;
-    after.resolution = source->resolution;
-    after.selection = raster.selection ? raster.selection : source->selection;
-    after.layers.reserve(source->layers.size());
-    for (const auto& layer : source->layers)
+    const auto index = IndexOf(source->layers, raster.layer.value().id);
+    if (!index)
+        return std::nullopt;
+    auto draft = CanvasDocumentDraft::Clone(source.value(), source->layers.size(), cancellation);
+    if (!draft)
+        return std::nullopt;
     {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        after.layers.push_back(layer.id == raster.layer->id ? raster.layer.value() : layer);
+        auto layers = draft.value().EditLayers();
+        layers[index.value()] = raster.layer.value();
     }
-    if (cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
+    if (raster.selection)
+        draft.value().DocumentState().selection = raster.selection;
+    auto sealed = draft.value().Seal(cancellation);
+    if (!sealed || cancellation.IsCancelled() || ValidateDocument(sealed.value()) != DocumentStatus::Ok)
         return std::nullopt;
     // Moving the after-document into its optional avoids an extra layer-record copy before history preparation.
-    const std::optional<CanvasDocument> afterDocument{std::move(after)};
+    std::optional<CanvasDocument> afterDocument{std::move(sealed.value())};
     auto publication = DocumentHistory::PrepareEdit(std::move(history), source, active, afterDocument, active,
                                                     std::move(name), cancellation, observer);
     if (!publication || cancellation.IsCancelled())
         return std::nullopt;
-    return PreparedRasterEdit(kind, mask, std::move(token), std::move(raster), std::move(*publication));
+    return PreparedRasterEdit(kind, mask, std::move(token), std::move(raster), std::move(afterDocument), index.value(),
+                              std::move(publication.value()));
 }
 
 bool DocumentSession::ApplyPreparedRasterEditIfCurrent(PreparedRasterEdit& prepared) noexcept

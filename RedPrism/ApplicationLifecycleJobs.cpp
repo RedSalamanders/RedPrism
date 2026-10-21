@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "DocumentDraft.h"
 #include "ImageImportHistory.h"
 #include "Runtime.Tests.DocumentLifecycleTestGate.h"
 #include "resource.h"
@@ -97,10 +98,19 @@ class Application::DocumentLifecycleJob final : public Job
             document.id = Guid::Generate();
             document.width = (*_dimensions)[0];
             document.height = (*_dimensions)[1];
-            document.layers.push_back(ImageLayer::Blank(
-                L"Layer 1", Vec2{static_cast<double>(document.width), static_cast<double>(document.height)}));
-            active = document.layers.front().id;
-            replacement.emplace(std::move(document));
+            auto draft = CanvasDocumentDraft::Rebuild(document, 1, context.cancellation);
+            if (!draft)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
+            auto layer = ImageLayer::Blank(
+                L"Layer 1", Vec2{static_cast<double>(document.width), static_cast<double>(document.height)});
+            active = layer.id;
+            if (!draft.value().Append(std::move(layer)))
+                return {JobStatus::Failed, E_INVALIDARG};
+            replacement = draft.value().Seal(context.cancellation);
+            if (!replacement)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
         }
         const DocumentHistory::PrepareObserver observer{[](void* opaque, DocumentHistory::PrepareStage stage)
                                                         {
@@ -209,8 +219,12 @@ class Application::DocumentLifecycleJob final : public Job
         const bool outlineCurrent =
             !size || size->draft.kind != SizeCardKind::NewCanvas || !size->selectionMoveOpening ||
             (_owner.CanQueueSelectionSizeOutline() && !_owner._session.IsMovingSelection() && _owner.SizeCardOpen());
+        const bool ownsLifecycleOutline = _owner._activeHostRequest && _owner.SelectionLifecycleRequestOpening(
+                                                                           _owner._activeHostRequest->input.Input());
+        const bool lifecycleCurrent = !ownsLifecycleOutline || (_owner.SelectionLifecycleOutlineCurrent() &&
+                                                                !_owner._session.IsMovingSelection());
         return !_owner._shutdownStarted && _owner._documentLifecycleStamp == _stamp && outlineCurrent &&
-               _owner._hostCommitStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               lifecycleCurrent && _owner._hostCommitStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
                _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
                _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
                _owner._session.DocumentSerial() == _stamp.documentSerial &&

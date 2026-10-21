@@ -1,5 +1,6 @@
 #include "Document.Tests.PreparedColorHistory.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
 #include "Document.h"
@@ -50,7 +51,7 @@ bool BytesEqual(const Raster& raster, std::span<const std::uint8_t> expected)
 DocumentSession MakeSession()
 {
     const Raster pixels = Bgra(kSourcePixels);
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 1;
@@ -59,7 +60,7 @@ DocumentSession MakeSession()
     layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
     document.layers.push_back(std::move(layer));
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 
@@ -111,7 +112,8 @@ std::optional<PreparedColorEdit> Prepare(DocumentSession& session, const ColorEd
 bool InstallPriorRedo(DocumentSession& session)
 {
     session.BeginEdit(L"Fixture change");
-    session.EditForTest([](CanvasDocument& document) { document.layers.front().name = L"Changed fixture"; });
+    EditLayerRecordsForTest(session,
+                            [](DocumentFixture& document) { document.layers.front().name = L"Changed fixture"; });
     session.EndEdit();
     session.Undo();
     return session.history.CanRedo() && session.history.UndoCount() == 0 &&
@@ -436,9 +438,9 @@ void RetirementAccountingFloors()
     const std::array<std::uint8_t, 4> leafPixels{9, 8, 7, 255};
     const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, leafPixels.data(), leafPixels.size());
     const Raster sparse = Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{2, 0, leaf}}, 0);
-    CanvasDocument sparseDocument = session.Document().value();
-    sparseDocument.layers.front().asset->image = sparse;
-    const std::optional<CanvasDocument> sparseOwner{std::move(sparseDocument)};
+    DocumentFixture sparseDocument = DocumentFixture::Copy(session.Document().value());
+    sparseDocument.layers.front().asset.value().image = sparse;
+    const std::optional<CanvasDocument> sparseOwner{std::move(sparseDocument).Seal()};
     const std::uint64_t sparseRetirement = session.history.RetirementMemoryBytes(sparseOwner);
     Expect(sparse.IsSparse() && sparseRetirement >= sparse.RetirementMemoryBytes() && !sparse.IsMaterialized(),
            "retirement.sparse-possible-cache-accounted-without-materialization");

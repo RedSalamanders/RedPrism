@@ -4,6 +4,7 @@
 #include "Executor.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 enum class CopyPixelsStatus : std::uint8_t
@@ -33,6 +34,8 @@ struct CopyPixelsObserver final
 // This pixel primitive owns no session/history/private clipboard authority. Its caller supplies those barriers.
 struct CopyPixelsInput final
 {
+    // Last to retire. Caller supplies its original admitted lifetime; no implicit inheritance or reservation.
+    std::shared_ptr<const void> outputLifetime;
     Raster source;
     LayerTransform placement;
     std::optional<DocumentSelection> selection;

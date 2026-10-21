@@ -1,4 +1,5 @@
 #include "Jobs.h"
+#include "SharedRetainedMemoryState.h"
 
 #include "DeferredRelease.h"
 #include "PipelineTrace.h"
@@ -7,13 +8,31 @@
 #include "WorkerPool.h"
 
 #include <array>
+#include <atomic>
+#include <bit>
 #include <cassert>
+#include <exception>
 #include <limits>
 #include <new>
 #include <optional>
+#include <utility>
 
 namespace
 {
+std::atomic<std::uint64_t> gRetainedMemoryOwners{1};
+
+std::uint64_t NextRetainedMemoryOwner() noexcept
+{
+    auto current = gRetainedMemoryOwners.load(std::memory_order_relaxed);
+    while (current != 0)
+    {
+        const auto next = current == (std::numeric_limits<std::uint64_t>::max)() ? 0 : current + 1;
+        if (gRetainedMemoryOwners.compare_exchange_weak(current, next, std::memory_order_relaxed))
+            return current;
+    }
+    return 0; // exhaustion permanently refuses transfers; no lifetime can alias an earlier owner
+}
+
 WorkPriority Priority(JobClass kind) noexcept
 {
     switch (kind)
@@ -70,6 +89,8 @@ struct JobScheduler::Impl final
         std::uint64_t sequence = 0;
         JobOptions options{};
         std::uint64_t reserved = 0;
+        std::size_t retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+        bool continuingOutputTransferred = false;
         std::unique_ptr<Job> job;
         std::optional<CancelSource> cancel;
         JobResult result{};
@@ -90,15 +111,32 @@ struct JobScheduler::Impl final
         InitializeSListHead(&releases);
     }
 
+    struct RetainedMemory final
+    {
+        std::uint64_t generation = 0;
+        std::uint64_t bytes = 0;
+        bool shared = false;
+        bool partitioned = false;
+        std::array<std::uint64_t, 2> parts{};
+        std::uint64_t reservedFor = 0; // exact original record sequence; owner only
+    };
+    const std::uint64_t retainedMemoryOwner = NextRetainedMemoryOwner();
+    std::array<RetainedMemory, JobScheduler::kRetainedMemoryCapacity> retainedMemory{};
+    std::shared_ptr<SharedRetainedMemoryLease::State> sharedMemory;
     DWORD ownerThread = GetCurrentThreadId();
     SRWLOCK lock = SRWLOCK_INIT;
     _Guarded_by_(lock) bool closing = false;
     _Guarded_by_(lock) std::array<Record, JobScheduler::kCapacity> records {};
-    std::uint64_t nextSequence = 0; // owner thread
-    std::size_t liveCount = 0;      // owner thread, counts queued/running/undrained
-    bool inCallback = false;        // owner thread, guards drain and actions across nested message loops
+    std::uint64_t nextSequence = 0;          // owner thread
+    std::size_t liveCount = 0;               // owner thread, counts queued/running/undrained
+    bool inCallback = false;                 // owner thread, guards drain and actions across nested message loops
+    bool inJoinedRetirementCallback = false; // exact actual joined Close hook; reuses retainedMemoryCallback ticket
+    std::optional<JobTicket> retainedMemoryCallback;    // exact final apply only, never progress/pump/action
+    std::optional<JobTicket> acknowledgedJobCallback;   // owner-only original joined success hook
+    std::optional<JobTicket> publicationMemoryCallback; // exact acknowledged successful DeferCompletion only
     bool closed = false;
     JobObserver observer;
+    JobExecutionObserver executionObserver; // Immutable after initialization; borrowed through joined Close.
     MemorySource memorySource;
     MemoryBudget memory;
     bool releaseSinkInstalled = false;
@@ -109,6 +147,7 @@ struct JobScheduler::Impl final
     std::atomic<unsigned int> trimCount{0}; // queued plus executing trims
     std::atomic<std::uint64_t> releasingBytes{0};
     std::atomic<std::size_t> releasingCount{0};
+    std::atomic<unsigned int> memoryRetirements{0}; // publication between final count decrement and readiness
     std::atomic<bool> memoryChanged{false};
     // A signal is one-shot. Low arms high and high arms low: never poll or rearm a signaled level in a loop.
     std::atomic<unsigned int> pressureSignal{0}; // 1 low, 2 high
@@ -126,6 +165,7 @@ struct JobScheduler::Impl final
     wil::unique_handle wake;
     wil::unique_handle shutdown;
     WorkerPool workers;
+    std::unique_ptr<WorkerPool> recorders; // Created only by explicit owner startup, immutable until Close.
     WaitPool memoryWaits;
     bool waitsInitialized = false;
     std::array<std::uint64_t, WaitPool::kCapacity> eventGenerations{}; // external registrations, owner only
@@ -140,6 +180,17 @@ struct JobScheduler::Impl final
     void MemoryChanged() noexcept
     {
         memoryChanged.store(true, std::memory_order_release);
+        (void)SetEvent(wake.get());
+    }
+
+    template <typename Integer> void FinishMemoryRetirement(std::atomic<Integer>& count) noexcept
+    {
+        // Keep idle false across publication. Admission observes completed release/trim counts before
+        // consuming readiness, including the recycle-cap restore. One wake follows the entire publication.
+        memoryRetirements.fetch_add(1, std::memory_order_relaxed);
+        count.fetch_sub(1, std::memory_order_release);
+        memoryChanged.store(true, std::memory_order_release);
+        memoryRetirements.fetch_sub(1, std::memory_order_release);
         (void)SetEvent(wake.get());
     }
 
@@ -177,8 +228,7 @@ struct JobScheduler::Impl final
             const std::uint64_t bytes = node->bytes;
             node->destroy(node);
             releasingBytes.fetch_sub(bytes, std::memory_order_relaxed);
-            releasingCount.fetch_sub(1, std::memory_order_release);
-            MemoryChanged();
+            FinishMemoryRetirement(releasingCount);
         }
     }
 
@@ -204,9 +254,39 @@ struct JobScheduler::Impl final
         if (trimPending.exchange(false, std::memory_order_acq_rel))
         {
             TrimPixelBufferRecycle();
-            trimCount.fetch_sub(1, std::memory_order_release);
-            MemoryChanged();
+            FinishMemoryRetirement(trimCount);
         }
+    }
+
+    _Requires_lock_held_(lock) HRESULT
+        ValidateRetainedGrowth(const SharedRetainedMemoryLease& retained, std::uint64_t totalBytes) const noexcept
+    {
+        if (closing || closed || workers.ShutdownToken().stop_requested())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        if (!retained._state || retained._state != sharedMemory || retained._slot >= kRetainedMemoryCapacity ||
+            !retained._generation || !retained._bytes)
+            return E_INVALIDARG;
+        const auto& slot = retainedMemory[retained._slot];
+        if (slot.partitioned || !slot.shared || slot.generation != retained._generation ||
+            slot.bytes != retained._bytes ||
+            (sharedMemory->pending[retained._part].load(std::memory_order_acquire) &
+             (std::uint64_t{1} << retained._slot)))
+            return E_INVALIDARG;
+        return totalBytes < slot.bytes ? E_INVALIDARG : S_OK;
+    }
+
+    _Requires_lock_held_(lock) HRESULT
+        ValidateReservationGrowth(JobTicket ticket, std::uint64_t totalBytes) const noexcept
+    {
+        const auto& record = records[ticket.slot];
+        if (closing || closed || record.state != State::Suspended || record.generation != ticket.generation ||
+            !record.cancel)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        if (record.cancel->Token().IsCancelled() || workers.ShutdownToken().stop_requested())
+            return E_ABORT;
+        if (record.options.continuingOutputLimit)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE); // Complete future stages were admitted together.
+        return totalBytes < record.reserved ? E_INVALIDARG : S_OK;
     }
 
     bool SampleMemory(MemorySnapshot& snapshot) const noexcept
@@ -316,14 +396,17 @@ struct JobScheduler::Impl final
             const bool cancelled = selected->cancel->Token().IsCancelled();
             MemorySnapshot snapshot{};
             const bool sampled = cancelled || selected->options.memoryBytes == 0 || SampleMemory(snapshot);
-            const auto decision = cancelled ? MemoryAdmission::Refused
-                                  : sampled ? memory
-                                                  .Reserve(selected->options.memoryBytes, snapshot,
-                                                           releasingBytes.load(std::memory_order_acquire) +
-                                                               (trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0))
-                                                  .admission
-                                            : MemoryAdmission::Refused;
-            if (!cancelled && sampled && decision != MemoryAdmission::Ready && PixelBufferRecycleBytes() != 0)
+            auto decision = cancelled ? MemoryAdmission::Refused
+                            : sampled ? memory
+                                            .Reserve(selected->options.memoryBytes, snapshot,
+                                                     releasingBytes.load(std::memory_order_acquire) +
+                                                         (trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0))
+                                            .admission
+                                      : MemoryAdmission::Refused;
+            if (decision == MemoryAdmission::Waiting && !selected->options.allowMemoryWaiting)
+                decision = MemoryAdmission::Refused;
+            if (!cancelled && sampled && selected->options.allowMemoryWaiting && decision != MemoryAdmission::Ready &&
+                PixelBufferRecycleBytes() != 0)
             {
                 RequestTrim();
                 continue;
@@ -359,9 +442,50 @@ struct JobScheduler::Impl final
         WakeQueued();
     }
 
+    bool DrainSharedMemoryAcknowledgements() noexcept
+    {
+        if (!sharedMemory)
+            return false;
+        const auto persistent = sharedMemory->persistentReleasedBytes.exchange(0, std::memory_order_acquire);
+        bool changed = persistent != 0;
+        if (persistent != 0)
+        {
+            const bool released = memory.Release(persistent);
+            assert(released);
+            (void)released;
+        }
+        for (std::size_t part = 0; part < 2; ++part)
+        {
+            auto mask = sharedMemory->pending[part].exchange(0, std::memory_order_acquire);
+            changed = changed || mask != 0;
+            while (mask != 0)
+            {
+                const auto index = static_cast<std::size_t>(std::countr_zero(mask));
+                mask &= mask - 1;
+                auto& cache = retainedMemory[index];
+                const auto generation =
+                    sharedMemory->acknowledged[part * kRetainedMemoryCapacity + index].load(std::memory_order_relaxed);
+                const auto bytes = cache.parts[part];
+                assert(cache.shared && bytes != 0 && cache.bytes >= bytes && cache.generation == generation);
+                if (cache.shared && bytes != 0 && cache.bytes >= bytes && cache.generation == generation)
+                {
+                    const bool released = memory.Release(bytes);
+                    assert(released);
+                    (void)released;
+                    cache.parts[part] = 0;
+                    cache.bytes -= bytes;
+                    if (!cache.bytes)
+                        cache.shared = false;
+                }
+            }
+        }
+        return changed;
+    }
+
     void ProcessMemoryChange() noexcept
     {
-        if (!memoryChanged.exchange(false, std::memory_order_acq_rel))
+        const bool sharedChanged = DrainSharedMemoryAcknowledgements();
+        if (!memoryChanged.exchange(false, std::memory_order_acq_rel) && !sharedChanged)
         {
             return;
         }
@@ -384,7 +508,7 @@ struct JobScheduler::Impl final
         AdmitWaiting();
     }
 
-    Record* Take(WorkPriority priority) noexcept
+    Record* Take(WorkPriority priority, JobExecutionLane lane, JobExecutionNotice* observation) noexcept
     {
         WorkerResources::ExclusiveLock guard{lock};
         if (closing)
@@ -394,8 +518,9 @@ struct JobScheduler::Impl final
         Record* selected = nullptr;
         for (auto& record : records)
         {
-            if (record.state == State::Queued && Priority(record.options.kind) == priority &&
-                (!selected || record.sequence < selected->sequence) && !Blocked(record))
+            if (record.state == State::Queued && record.options.executionLane == lane &&
+                Priority(record.options.kind) == priority && (!selected || record.sequence < selected->sequence) &&
+                !Blocked(record))
             {
                 selected = &record;
             }
@@ -403,42 +528,102 @@ struct JobScheduler::Impl final
         if (selected)
         {
             selected->state = State::Running;
+            if (observation)
+                *observation = {JobExecutionBoundary::BodyEntered,
+                                {static_cast<std::size_t>(selected - records.data()), selected->generation},
+                                selected->options.kind,
+                                selected->options.executionLane,
+                                std::nullopt};
         }
         return selected;
     }
 
     static void Dispatch(void* context, WorkPriority priority, CancelToken) noexcept
     {
+        DispatchLane(context, priority, JobExecutionLane::Compute);
+    }
+    static void DispatchRecorder(void* context, WorkPriority priority, CancelToken) noexcept
+    {
+        DispatchLane(context, priority, JobExecutionLane::GpuRecording);
+    }
+
+    void ObserveExecution(const JobExecutionNotice& identity, JobExecutionBoundary boundary,
+                          std::optional<JobResult> result) noexcept
+    {
+        if (executionObserver.notify)
+            executionObserver.notify(executionObserver.context,
+                                     {boundary, identity.ticket, identity.kind, identity.lane, result});
+    }
+    JobResult RunBody(Record& record, JobContext& execution, const JobExecutionNotice& identity)
+    {
+        if (!executionObserver.cancellationObserved)
+            return record.job->Run(execution);
+        struct FirstCheck final
+        {
+            Impl& scheduler;
+            const JobExecutionNotice& identity;
+            std::atomic<bool> reported{false};
+        } first{*this, identity};
+        static_assert(std::atomic<bool>::is_always_lock_free);
+        const CancellationObservation::Scope scope{{[](void* context) noexcept
+                                                    {
+                                                        auto& check = *static_cast<FirstCheck*>(context);
+                                                        if (!check.reported.exchange(true, std::memory_order_relaxed))
+                                                            check.scheduler.executionObserver.cancellationObserved(
+                                                                check.scheduler.executionObserver.context,
+                                                                {JobExecutionBoundary::CancellationObserved,
+                                                                 check.identity.ticket, check.identity.kind,
+                                                                 check.identity.lane, std::nullopt});
+                                                    },
+                                                    &first}};
+        // The job and executor contract joins helpers before return/unwind; no retained token owns scope.
+        return record.job->Run(execution);
+    }
+    static void DispatchLane(void* context, WorkPriority priority, JobExecutionLane lane) noexcept
+    {
         auto& self = *static_cast<Impl*>(context);
-        if (priority == WorkPriority::Normal)
+        if (lane == JobExecutionLane::Compute && priority == WorkPriority::Normal)
         {
             self.DrainReleases();
             self.TrimRecycle();
         }
-        while (Record* record = self.Take(priority))
+        // The optional immutable identity is captured under Take's existing lock. Observers run outside
+        // that lock and never inspect the guarded slot array; normal execution captures no identity.
+        JobExecutionNotice observation{};
+        while (Record* record = self.Take(priority, lane,
+                                          (self.executionObserver.notify || self.executionObserver.cancellationObserved)
+                                              ? &observation
+                                              : nullptr))
         {
             JobContext execution{self.workers,
                                  record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
                                  self.shutdown.get(),
                                  Report,
                                  record,
-                                 record->reserved};
+                                 record->reserved,
+                                 record->options.deferredRetirement};
             JobResult result{JobStatus::Cancelled};
             if (!execution.cancellation.IsCancelled())
             {
+                self.ObserveExecution(observation, JobExecutionBoundary::BodyEntered, std::nullopt);
                 try
                 {
-                    result = record->job->Run(execution);
+                    result = self.RunBody(*record, execution, observation);
                 }
                 catch (const std::bad_alloc&)
                 {
                     result = {JobStatus::Failed, E_OUTOFMEMORY};
                 }
+                self.ObserveExecution(observation, JobExecutionBoundary::BodyExited, result);
             }
+            else
+                self.ObserveExecution(observation, JobExecutionBoundary::BodySkipped, result);
             if (execution.cancellation.IsCancelled())
             {
                 result = {JobStatus::Cancelled};
             }
+            if (record->options.deferredRetirement)
+                record->job->RetireWorkerStage(execution, result);
             {
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record->result = result;
@@ -446,7 +631,7 @@ struct JobScheduler::Impl final
             }
             // No access to record after this call. A draining UI may immediately destroy/reuse the slot.
             self.Publish(record->final);
-            if (priority == WorkPriority::Normal)
+            if (lane == JobExecutionLane::Compute && priority == WorkPriority::Normal)
             {
                 self.DrainReleases();
                 self.TrimRecycle();
@@ -456,7 +641,7 @@ struct JobScheduler::Impl final
 
     void WakeQueued() noexcept
     {
-        std::array<bool, 3> pending{};
+        std::array<std::array<bool, 3>, 2> pending{};
         {
             WorkerResources::ExclusiveLock guard{lock};
             if (closing)
@@ -467,17 +652,38 @@ struct JobScheduler::Impl final
             {
                 if (record.state == State::Queued && !Blocked(record))
                 {
-                    pending[static_cast<std::size_t>(Priority(record.options.kind))] = true;
+                    pending[static_cast<std::size_t>(record.options.executionLane)]
+                           [static_cast<std::size_t>(Priority(record.options.kind))] = true;
                 }
             }
         }
-        for (std::size_t index = 0; index < pending.size(); ++index)
+        for (std::size_t lane = 0; lane < pending.size(); ++lane)
+            for (std::size_t index = 0; index < pending[lane].size(); ++index)
+                if (pending[lane][index])
+                {
+                    if (lane == 0)
+                        (void)workers.Wake(static_cast<WorkPriority>(index));
+                    else if (recorders)
+                        (void)recorders->Wake(static_cast<WorkPriority>(index));
+                }
+    }
+
+    bool ResumeOwner(JobTicket ticket, std::optional<JobExecutionLane> lane) noexcept
+    {
+        CheckOwner();
         {
-            if (pending[index])
-            {
-                (void)workers.Wake(static_cast<WorkPriority>(index));
-            }
+            WorkerResources::ExclusiveLock guard{lock};
+            auto& record = records[ticket.slot];
+            if (closing || record.state != State::Suspended || record.generation != ticket.generation ||
+                (lane && lane.value() == JobExecutionLane::GpuRecording && !recorders))
+                return false;
+            if (lane)
+                record.options.executionLane = lane.value(); // Prior stage has actually acknowledged.
+            record.state = State::Resuming;
         }
+        resumesPending = true;
+        (void)SetEvent(wake.get());
+        return true;
     }
 
     void PromoteResumed() noexcept
@@ -512,7 +718,8 @@ JobScheduler::~JobScheduler()
     Close();
 }
 
-std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer, MemorySource memory) noexcept
+std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer, MemorySource memory,
+                                      JobExecutionObserver execution) noexcept
 {
     if (_impl)
     {
@@ -520,7 +727,9 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
     }
     try
     {
-        _impl = std::make_unique<Impl>();
+        auto candidate = std::make_unique<Impl>();
+        candidate->sharedMemory = std::make_shared<SharedRetainedMemoryLease::State>();
+        _impl = std::move(candidate);
     }
     catch (const std::bad_alloc&)
     {
@@ -540,9 +749,17 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
         Close();
         return result;
     }
+    if (!DuplicateHandle(GetCurrentProcess(), _impl->wake.get(), GetCurrentProcess(), _impl->sharedMemory->wake.put(),
+                         0, FALSE, DUPLICATE_SAME_ACCESS))
+    {
+        const HRESULT result = HRESULT_FROM_WIN32(GetLastError());
+        Close();
+        return result;
+    }
     _impl->observer = observer;
+    _impl->executionObserver = execution;
     _impl->memorySource = memory;
-    HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
+    HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get(), true);
     if (SUCCEEDED(result) && !memory.sample)
     {
         _impl->lowMemory.reset(CreateMemoryResourceNotification(LowMemoryResourceNotification));
@@ -570,6 +787,29 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
         Close();
     }
     return result;
+}
+
+std::int32_t JobScheduler::EnableGpuRecordingLane() noexcept
+{
+    if (!_impl)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.nextSequence != 0 || self.recorders ||
+        self.workers.ShutdownToken().stop_requested())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    try
+    {
+        auto candidate = std::make_unique<WorkerPool>();
+        const HRESULT result = candidate->Initialize(1, Impl::DispatchRecorder, &self, true);
+        if (SUCCEEDED(result))
+            self.recorders = std::move(candidate);
+        return result;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Explicit optional startup boundary; caller must refuse recording or fail startup.
+    }
 }
 
 bool JobScheduler::EnableDeferredRelease() noexcept
@@ -626,6 +866,299 @@ std::uint64_t JobScheduler::ReleasingMemoryBytes() const noexcept
     return _impl ? _impl->releasingBytes.load(std::memory_order_acquire) : 0;
 }
 
+std::int32_t JobScheduler::RetainMemory(JobTicket ticket, RetainedMemoryTicket& retained) noexcept
+{
+    return RetainMemoryImpl(ticket, retained, false);
+}
+
+std::int32_t JobScheduler::RetainMemoryImpl(JobTicket ticket, RetainedMemoryTicket& retained, bool publication,
+                                            bool retirement) noexcept
+{
+    if (!_impl || _impl->closed)
+        return E_UNEXPECTED;
+    auto& self = *_impl;
+    self.CheckOwner();
+    const auto& callback = publication ? self.publicationMemoryCallback : self.retainedMemoryCallback;
+    if (!self.inCallback || !callback || callback.value() != ticket || retained.owner != 0 ||
+        retained.generation != 0 || ticket.slot >= kCapacity || self.retainedMemoryOwner == 0)
+        return E_INVALIDARG;
+    WorkerResources::ExclusiveLock guard{self.lock};
+    auto& record = self.records[ticket.slot];
+    const auto expectedState = publication ? Impl::State::Suspended : Impl::State::Completed;
+    if (record.generation != ticket.generation || record.state != expectedState || record.reserved == 0 ||
+        (!retirement && (self.closing || record.result.status != JobStatus::Finished || !record.cancel ||
+                         record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    if ((publication || retirement) && (!record.options.deferredRetirement || !record.options.reserveRetainedMemory ||
+                                        record.retainedSlot >= kRetainedMemoryCapacity))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    if (record.retainedSlot < kRetainedMemoryCapacity)
+    {
+        const auto index = record.retainedSlot;
+        auto& cache = self.retainedMemory[index];
+        if (cache.reservedFor != record.sequence || cache.bytes || !cache.generation)
+            std::terminate();
+        cache.reservedFor = 0;
+        cache.bytes = std::exchange(record.reserved, 0);
+        cache.shared = false;
+        record.retainedSlot = kRetainedMemoryCapacity;
+        retained = {index, cache.generation, self.retainedMemoryOwner};
+        if (publication)
+            self.publicationMemoryCallback.reset();
+        return S_OK;
+    }
+    for (std::size_t index = 0; index < self.retainedMemory.size(); ++index)
+    {
+        auto& cache = self.retainedMemory[index];
+        if (cache.bytes == 0 && cache.reservedFor == 0 &&
+            cache.generation != (std::numeric_limits<std::uint64_t>::max)())
+        {
+            ++cache.generation;
+            cache.bytes = std::exchange(record.reserved, 0);
+            cache.shared = false;
+            retained = {index, cache.generation, self.retainedMemoryOwner};
+            return S_OK;
+        }
+    }
+    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+}
+
+std::int32_t JobScheduler::RetainMemory(JobTicket ticket, SharedRetainedMemoryLease& retained) noexcept
+{
+    return RetainSharedMemoryImpl(ticket, retained, false);
+}
+
+std::int32_t JobScheduler::RetainPublicationMemory(JobTicket ticket, SharedRetainedMemoryLease& retained) noexcept
+{
+    return RetainSharedMemoryImpl(ticket, retained, true);
+}
+
+std::int32_t JobScheduler::RetainContinuingOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                        SharedRetainedMemoryLease& output) noexcept
+{
+    if (!_impl || _impl->closed)
+        return E_UNEXPECTED;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (!self.inCallback || !self.publicationMemoryCallback || self.publicationMemoryCallback.value() != original ||
+        !self.acknowledgedJobCallback || self.acknowledgedJobCallback.value() != original || output || !outputBytes ||
+        original.slot >= kCapacity || !self.retainedMemoryOwner)
+        return E_INVALIDARG;
+    WorkerResources::ExclusiveLock guard{self.lock};
+    auto& record = self.records[original.slot];
+    if (record.generation != original.generation || record.state != Impl::State::Suspended || self.closing ||
+        record.result.status != JobStatus::Finished || !record.cancel || record.cancel->Token().IsCancelled() ||
+        self.workers.ShutdownToken().stop_requested() || !record.options.deferredRetirement ||
+        !record.options.reserveRetainedMemory || !record.options.continuingOutputLimit ||
+        record.continuingOutputTransferred || outputBytes > record.options.continuingOutputLimit ||
+        outputBytes >= record.reserved || record.retainedSlot >= kRetainedMemoryCapacity)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    const auto& terminal = self.retainedMemory[record.retainedSlot];
+    if (terminal.reservedFor != record.sequence || terminal.bytes || !terminal.generation)
+        std::terminate();
+    // The original memory budget already owns these bytes. Only their ownership changes. Persistent output
+    // uses the existing endpoint's aggregate last-reader acknowledgement, so the terminal slot stays reserved.
+    record.reserved -= outputBytes;
+    record.continuingOutputTransferred = true;
+    self.sharedMemory->residentBytes.fetch_add(outputBytes, std::memory_order_relaxed);
+    output._state = self.sharedMemory;
+    output._slot = kRetainedMemoryCapacity;
+    output._part = 2;
+    output._generation = original.generation;
+    output._bytes = outputBytes;
+    self.publicationMemoryCallback.reset(); // No second transfer in this same joined acknowledgement.
+    return S_OK;
+}
+
+std::int32_t JobScheduler::RetainRetirementMemory(JobTicket ticket, SharedRetainedMemoryLease& retained) noexcept
+{
+    return RetainSharedMemoryImpl(ticket, retained, false, true);
+}
+
+bool JobScheduler::OwnsRetainedMemoryEndpoint(const SharedRetainedMemoryLease& retained) const noexcept
+{
+    if (!_impl)
+        return false;
+    _impl->CheckOwner();
+    // Both endpoints are strongly held. Their addresses cannot alias while an older lease survives.
+    return retained._state && _impl->sharedMemory == retained._state;
+}
+
+std::int32_t JobScheduler::RetainSharedMemoryImpl(JobTicket ticket, SharedRetainedMemoryLease& retained,
+                                                  bool publication, bool retirement) noexcept
+{
+    if (retained)
+        return E_INVALIDARG;
+    RetainedMemoryTicket transfer{};
+    const auto result = RetainMemoryImpl(ticket, transfer, publication, retirement);
+    if (result != S_OK)
+        return result;
+    auto& self = *_impl;
+    // A successful transfer owns one of the fixed slots. Fail fast before indexing if this bridge's
+    // contract is ever broken; the explicit bound also keeps compiler analysis independent of callee inference.
+    if (transfer.slot >= kRetainedMemoryCapacity)
+        std::terminate();
+    auto& cache = self.retainedMemory[transfer.slot];
+    cache.shared = true;
+    cache.partitioned = false;
+    cache.parts = {cache.bytes, 0};
+    self.sharedMemory->residentBytes.fetch_add(cache.bytes, std::memory_order_relaxed);
+    retained._state = self.sharedMemory;
+    retained._slot = transfer.slot;
+    retained._part = 0;
+    retained._generation = transfer.generation;
+    retained._bytes = cache.bytes;
+    return S_OK;
+}
+
+std::int32_t JobScheduler::RetainPartitionedMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                   SharedRetainedMemoryLease& output,
+                                                   SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, false, false);
+}
+std::int32_t JobScheduler::RetainPartitionedPublicationMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                              SharedRetainedMemoryLease& output,
+                                                              SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, true, false);
+}
+std::int32_t JobScheduler::RetainPartitionedRetirementMemory(JobTicket ticket, std::uint64_t outputBytes,
+                                                             SharedRetainedMemoryLease& output,
+                                                             SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPartitionedMemoryImpl(ticket, outputBytes, output, temporary, false, true);
+}
+std::int32_t JobScheduler::RetainPartitionedMemoryImpl(JobTicket ticket, std::uint64_t outputBytes,
+                                                       SharedRetainedMemoryLease& output,
+                                                       SharedRetainedMemoryLease& temporary, bool publication,
+                                                       bool retirement) noexcept
+{
+    if (!_impl || _impl->closed)
+        return E_UNEXPECTED;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (&output == &temporary || output || temporary || !outputBytes || ticket.slot >= kCapacity)
+        return E_INVALIDARG;
+    {
+        WorkerResources::ExclusiveLock guard{self.lock};
+        const auto& record = self.records[ticket.slot];
+        if (record.generation != ticket.generation || !record.options.deferredRetirement ||
+            !record.options.reserveRetainedMemory || record.retainedSlot >= kRetainedMemoryCapacity ||
+            outputBytes >= record.reserved)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    }
+    // The existing bridge authenticates exact callback/status/cancellation and consumes the original
+    // descriptor-reserved slot. Nothing after success can fail or allocate. Both leases are immutable.
+    const auto result = RetainSharedMemoryImpl(ticket, output, publication, retirement);
+    if (result != S_OK)
+        return result;
+    auto& cache = self.retainedMemory[output._slot];
+    cache.partitioned = true;
+    cache.parts = {outputBytes, cache.bytes - outputBytes};
+    output._bytes = outputBytes;
+    temporary._state = self.sharedMemory;
+    temporary._slot = output._slot;
+    temporary._part = 1;
+    temporary._generation = output._generation;
+    temporary._bytes = cache.parts[1];
+    return S_OK;
+}
+
+std::int32_t JobScheduler::RetainPersistentOutputMemory(JobTicket original, std::uint64_t outputBytes,
+                                                        SharedRetainedMemoryLease& output,
+                                                        SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, false, false);
+}
+std::int32_t JobScheduler::RetainPersistentOutputPublicationMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                   SharedRetainedMemoryLease& output,
+                                                                   SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, true, false);
+}
+std::int32_t JobScheduler::RetainPersistentOutputRetirementMemory(JobTicket original, std::uint64_t outputBytes,
+                                                                  SharedRetainedMemoryLease& output,
+                                                                  SharedRetainedMemoryLease& temporary) noexcept
+{
+    return RetainPersistentOutputMemoryImpl(original, outputBytes, output, temporary, false, true);
+}
+std::int32_t JobScheduler::RetainPersistentOutputMemoryImpl(JobTicket original, std::uint64_t outputBytes,
+                                                            SharedRetainedMemoryLease& output,
+                                                            SharedRetainedMemoryLease& temporary, bool publication,
+                                                            bool retirement) noexcept
+{
+    // Reuse all existing admission/authority checks before consuming the preclaimed slot.
+    const auto result = RetainPartitionedMemoryImpl(original, outputBytes, output, temporary, publication, retirement);
+    if (result != S_OK)
+        return result;
+    auto& self = *_impl;
+    auto& cache = self.retainedMemory[temporary._slot];
+    // Both accounts already own this exact reservation. Conversion changes neither resident nor reserved
+    // totals, and cannot allocate/fail. The cache slot now belongs solely to the temporary phase.
+    cache.bytes = temporary._bytes;
+    cache.parts = {temporary._bytes, 0};
+    temporary._part = 0;
+    output._slot = kRetainedMemoryCapacity;
+    output._part = 2;
+    return S_OK;
+}
+
+std::int32_t JobScheduler::IncreaseRetainedReservation(SharedRetainedMemoryLease& retained,
+                                                       std::uint64_t totalBytes) noexcept
+{
+    if (!_impl)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    {
+        WorkerResources::ExclusiveLock validationLock{self.lock};
+        const auto valid = self.ValidateRetainedGrowth(retained, totalBytes);
+        if (FAILED(valid) || totalBytes == retained._bytes)
+            return valid;
+    }
+    MemorySnapshot snapshot;
+    if (!self.SampleMemory(snapshot))
+        return E_OUTOFMEMORY;
+    // The test/OS sampler runs outside scheduler locks. It can reenter an owner action; revalidate exact
+    // lease identity and lifetime before any accounting. The caller never grows while readers access it.
+    WorkerResources::ExclusiveLock accountingLock{self.lock};
+    const auto current = self.ValidateRetainedGrowth(retained, totalBytes);
+    if (FAILED(current) || totalBytes == retained._bytes)
+        return current;
+    const auto delta = totalBytes - retained._bytes;
+    const auto decision = self.memory.Reserve(delta, snapshot,
+                                              self.releasingBytes.load(std::memory_order_acquire) +
+                                                  (self.trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0));
+    if (decision.admission != MemoryAdmission::Ready)
+        return E_OUTOFMEMORY;
+    self.retainedMemory[retained._slot].bytes = totalBytes;
+    self.retainedMemory[retained._slot].parts[0] = totalBytes;
+    self.sharedMemory->residentBytes.fetch_add(delta, std::memory_order_relaxed);
+    retained._bytes = totalBytes;
+    return S_OK;
+}
+
+bool JobScheduler::ReleaseRetainedMemory(RetainedMemoryTicket ticket) noexcept
+{
+    if (!_impl || _impl->closed)
+        return false;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (ticket.owner == 0 || ticket.owner != self.retainedMemoryOwner || ticket.slot >= kRetainedMemoryCapacity)
+        return false;
+    auto& cache = self.retainedMemory[ticket.slot];
+    if (cache.bytes == 0 || cache.shared || cache.generation != ticket.generation)
+        return false;
+    const bool released = self.memory.Release(cache.bytes);
+    assert(released);
+    if (!released)
+        return false;
+    cache.bytes = 0;
+    NotifyMemoryChanged(); // one readiness transition; original admission waiters retry on the next outer drain
+    return true;
+}
+
 void JobScheduler::NotifyMemoryChanged() noexcept
 {
     if (_impl)
@@ -637,7 +1170,10 @@ void JobScheduler::NotifyMemoryChanged() noexcept
 std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept
 {
     ticket = {};
-    if (!job || static_cast<unsigned int>(options.kind) >= static_cast<unsigned int>(JobClass::Count))
+    if (!job || static_cast<unsigned int>(options.kind) >= static_cast<unsigned int>(JobClass::Count) ||
+        static_cast<unsigned int>(options.executionLane) >= static_cast<unsigned int>(JobExecutionLane::Count) ||
+        (options.continuingOutputLimit && (!options.deferredRetirement || !options.reserveRetainedMemory ||
+                                           options.continuingOutputLimit >= options.memoryBytes)))
     {
         return E_INVALIDARG;
     }
@@ -653,6 +1189,8 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
+        if (options.executionLane == JobExecutionLane::GpuRecording && !self.recorders)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         std::size_t slot = 0;
         for (; slot < self.records.size(); ++slot)
         {
@@ -664,6 +1202,24 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         if (slot == self.records.size())
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        }
+        std::size_t retainedSlot = kRetainedMemoryCapacity;
+        if (options.reserveRetainedMemory)
+        {
+            if (!options.memoryBytes)
+                return E_INVALIDARG;
+            for (std::size_t index = 0; index < self.retainedMemory.size(); ++index)
+            {
+                const auto& cache = self.retainedMemory[index];
+                if (!cache.bytes && !cache.reservedFor &&
+                    cache.generation != (std::numeric_limits<std::uint64_t>::max)())
+                {
+                    retainedSlot = index;
+                    break;
+                }
+            }
+            if (retainedSlot == kRetainedMemoryCapacity)
+                return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
         }
         auto& record = self.records[slot];
         try
@@ -679,6 +1235,14 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         record.reserved = 0;
         record.sequence = ++self.nextSequence;
         record.generation = record.sequence;
+        record.retainedSlot = retainedSlot;
+        record.continuingOutputTransferred = false;
+        if (retainedSlot < kRetainedMemoryCapacity)
+        {
+            auto& cache = self.retainedMemory[retainedSlot];
+            ++cache.generation;
+            cache.reservedFor = record.sequence;
+        }
         record.job = std::move(job);
         record.result = {};
         record.percent.store(0, std::memory_order_relaxed);
@@ -720,24 +1284,47 @@ bool JobScheduler::Cancel(JobTicket ticket) noexcept
 
 bool JobScheduler::Resume(JobTicket ticket) noexcept
 {
+    return _impl && ticket.slot < kCapacity && _impl->ResumeOwner(ticket, std::nullopt);
+}
+
+bool JobScheduler::Resume(JobTicket ticket, JobExecutionLane lane) noexcept
+{
+    return _impl && ticket.slot < kCapacity &&
+           static_cast<unsigned int>(lane) < static_cast<unsigned int>(JobExecutionLane::Count) &&
+           _impl->ResumeOwner(ticket, lane);
+}
+
+std::int32_t JobScheduler::IncreaseReservation(JobTicket ticket, std::uint64_t totalBytes) noexcept
+{
     if (!_impl || ticket.slot >= kCapacity)
-    {
-        return false;
-    }
+        return E_INVALIDARG;
     auto& self = *_impl;
     self.CheckOwner();
     {
-        WorkerResources::ExclusiveLock guard{self.lock};
-        auto& record = self.records[ticket.slot];
-        if (self.closing || record.state != Impl::State::Suspended || record.generation != ticket.generation)
-        {
-            return false;
-        }
-        record.state = Impl::State::Resuming;
+        WorkerResources::ExclusiveLock validationLock{self.lock};
+        const HRESULT status = self.ValidateReservationGrowth(ticket, totalBytes);
+        if (FAILED(status) || totalBytes == self.records[ticket.slot].reserved)
+            return status;
     }
-    self.resumesPending = true;
-    (void)SetEvent(self.wake.get());
-    return true;
+    MemorySnapshot snapshot{};
+    // The OS/test snapshot source is outside the scheduler lock, as in initial admission. Revalidate the
+    // exact acknowledged stage before accounting; an intervening owner action cannot authorize new owners.
+    if (!self.SampleMemory(snapshot))
+        return E_OUTOFMEMORY;
+    WorkerResources::ExclusiveLock accountingLock{self.lock};
+    const HRESULT status = self.ValidateReservationGrowth(ticket, totalBytes);
+    auto& record = self.records[ticket.slot];
+    if (FAILED(status) || totalBytes == record.reserved)
+        return status;
+    const auto delta = totalBytes - record.reserved;
+    const auto decision = self.memory.Reserve(delta, snapshot,
+                                              self.releasingBytes.load(std::memory_order_acquire) +
+                                                  (self.trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0));
+    if (decision.admission != MemoryAdmission::Ready)
+        return E_OUTOFMEMORY;
+    record.options.memoryBytes = totalBytes;
+    record.reserved = totalBytes;
+    return S_OK;
 }
 
 bool JobScheduler::RegisterOwnerWork(OwnerWorkPump& source) noexcept
@@ -933,6 +1520,8 @@ void JobScheduler::RequestStop() noexcept
         (void)SetEvent(self.shutdown.get());
     }
     self.workers.RequestStop();
+    if (self.recorders)
+        self.recorders->RequestStop();
     self.sourceReady = false;
     self.resumesPending = false;
 }
@@ -956,15 +1545,48 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
     self.highMemory.reset();
     struct CloseState final
     {
+        JobScheduler& owner;
         Impl& scheduler;
         CloseHooks hooks;
-    } closeState{self, hooks};
+    } closeState{*this, self, hooks};
+    // Recorder callbacks borrow the same records and general executor. Join them before general-pool
+    // teardown, job-wrapper destruction, owner cleanup and final worker graph retirement.
+    if (self.recorders)
+        self.recorders->Close();
     self.workers.Close({[](void* opaque) noexcept
                         {
                             auto& state = *static_cast<CloseState*>(opaque);
                             auto& stopped = state.scheduler;
                             stopped.CheckOwner();
                             (void)InterlockedFlushSList(&stopped.completions);
+                            // Every compute/recorder callback joined. An explicit native read may remain
+                            // owned through final-worker acknowledgement. Grant only terminal accounting,
+                            // outside the scheduler lock and before resetting cancelled wrappers. Success-only
+                            // capture/publication hooks remain unset and no useful callback is invoked.
+                            stopped.inCallback = true;
+                            for (std::size_t index = 0; index < stopped.records.size(); ++index)
+                            {
+                                Job* joined = nullptr;
+                                JobTicket original{};
+                                {
+                                    WorkerResources::ExclusiveLock guard{stopped.lock};
+                                    auto& record = stopped.records[index];
+                                    if (record.job)
+                                    {
+                                        record.state = Impl::State::Completed;
+                                        joined = record.job.get();
+                                        original = {index, record.generation};
+                                    }
+                                }
+                                if (!joined)
+                                    continue;
+                                stopped.retainedMemoryCallback = original;
+                                stopped.inJoinedRetirementCallback = true;
+                                joined->RetainJoinedRetirement(state.owner, original);
+                                stopped.inJoinedRetirementCallback = false;
+                                stopped.retainedMemoryCallback.reset();
+                            }
+                            stopped.inCallback = false;
                             std::array<std::unique_ptr<Job>, kCapacity> retired;
                             {
                                 WorkerResources::ExclusiveLock guard{stopped.lock};
@@ -1008,6 +1630,12 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
     // Final CPU retirement is acknowledged while events, reservations and the pool apartment are alive.
     assert(self.releasingCount.load(std::memory_order_acquire) == 0);
     (void)self.memory.Release(self.memory.Reserved());
+    for (auto& cache : self.retainedMemory)
+    {
+        cache.reservedFor = 0;
+        cache.bytes = 0; // Close has joined producers and owner cleanup; every older ticket is now invalid.
+    }
+    self.sharedMemory.reset(); // Foreign leases keep their independent endpoint and owned wake alive.
     self.actionCount = 0;
     self.actionSource = nullptr;
     self.sourceReady = false;
@@ -1029,7 +1657,8 @@ bool JobScheduler::IsIdle() const noexcept
     return _impl->liveCount == 0 && _impl->actionCount == 0 && !_impl->sourceReady &&
            (!_impl->ownerWork || (!_impl->ownerWork->HasPending() && !_impl->ownerWork->HasReady())) &&
            _impl->releasingCount.load(std::memory_order_acquire) == 0 &&
-           _impl->trimCount.load(std::memory_order_acquire) == 0;
+           _impl->trimCount.load(std::memory_order_acquire) == 0 &&
+           _impl->memoryRetirements.load(std::memory_order_acquire) == 0 && !HasUiWork();
 }
 
 unsigned int JobScheduler::WorkerCount() const noexcept
@@ -1052,7 +1681,8 @@ bool JobScheduler::HasUiWork() const noexcept
     return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0 || _impl->sourceReady ||
            _impl->resumesPending ||
            (!_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady()) ||
-           _impl->memoryChanged.load(std::memory_order_acquire);
+           _impl->memoryChanged.load(std::memory_order_acquire) ||
+           (_impl->sharedMemory && _impl->sharedMemory->HasPending());
 }
 
 bool JobScheduler::InUiCallback() const noexcept
@@ -1063,6 +1693,36 @@ bool JobScheduler::InUiCallback() const noexcept
     }
     _impl->CheckOwner();
     return _impl->inCallback;
+}
+
+bool JobScheduler::InJoinedRetirementCallback(JobTicket original) const noexcept
+{
+    if (!_impl || _impl->ownerThread != GetCurrentThreadId() || _impl->closed)
+        return false;
+    return _impl->inCallback && _impl->inJoinedRetirementCallback && _impl->retainedMemoryCallback == original &&
+           !_impl->acknowledgedJobCallback && !_impl->publicationMemoryCallback;
+}
+
+bool JobScheduler::InAcknowledgedJobCallback(JobTicket original) const noexcept
+{
+    if (!_impl || _impl->closed)
+        return false;
+    _impl->CheckOwner();
+    return _impl->inCallback && _impl->acknowledgedJobCallback == original;
+}
+
+JobScheduler::UiReadiness JobScheduler::UiReadinessForTest() const noexcept
+{
+    if (!_impl || _impl->closed)
+        return {};
+    _impl->CheckOwner();
+    return {QueryDepthSList(&_impl->completions),
+            static_cast<std::uint32_t>(_impl->actionCount),
+            _impl->sourceReady,
+            _impl->resumesPending,
+            !_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady(),
+            _impl->memoryChanged.load(std::memory_order_acquire) ||
+                (_impl->sharedMemory && _impl->sharedMemory->HasPending())};
 }
 
 void* JobScheduler::WakeHandle() const noexcept
@@ -1157,52 +1817,131 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             }
             continue;
         }
-        const ScopedUiTiming applyTiming{UiTimingKind::ResultApply, static_cast<std::uint32_t>(record.options.kind)};
+        const UiTimingAttributionIdentity identity{ticket.slot, ticket.generation};
+        const auto detail = static_cast<std::uint32_t>(record.options.kind);
+        const ScopedUiTiming applyTiming{UiTimingKind::ResultApply, detail, identity};
         JobResult result = record.result;
         if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
         {
             result = {JobStatus::Cancelled};
         }
-        if (result.status == JobStatus::Finished)
+        if (record.options.deferredRetirement)
         {
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Suspended;
             }
-            if (record.job->DeferCompletion(result, ticket))
+            bool retirementDeferred = false;
             {
-                continue;
+                if (result.status == JobStatus::Finished)
+                    self.acknowledgedJobCallback = ticket;
+                const auto clearAcknowledged =
+                    wil::scope_exit([&]() noexcept { self.acknowledgedJobCallback.reset(); });
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::DeferRetirement, detail, identity};
+                retirementDeferred = record.job->DeferRetirement(result, ticket);
             }
-            // A hook returning false retires even if it requested Resume. Resuming is not runnable until
-            // promotion below, so payload destruction cannot race a worker stage.
+            if (retirementDeferred)
+                continue;
+            // Promotion is below this drain. A false acknowledgement hook cannot dispatch a resumed worker
+            // before final apply/destruction, exactly as the successful-stage continuation contract requires.
             {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
                 WorkerResources::ExclusiveLock guard{self.lock};
                 record.state = JobScheduler::Impl::State::Completed;
             }
             if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
                 result = {JobStatus::Cancelled};
         }
-        if (apply)
+        if (result.status == JobStatus::Finished)
         {
-            apply(context, *record.job, result);
+            {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Suspended;
+            }
+            bool deferred = false;
+            {
+                self.acknowledgedJobCallback = ticket;
+                const auto clearAcknowledged =
+                    wil::scope_exit([&]() noexcept { self.acknowledgedJobCallback.reset(); });
+                self.publicationMemoryCallback = ticket;
+                const auto clearPublication =
+                    wil::scope_exit([&]() noexcept { self.publicationMemoryCallback.reset(); });
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::DeferCompletion, detail, identity};
+                deferred = record.job->DeferCompletion(result, ticket);
+            }
+            if (deferred)
+                continue;
+            // A hook returning false retires even if it requested Resume. Resuming is not runnable until
+            // promotion below, so payload destruction cannot race a worker stage.
+            {
+                const ScopedUiTimingAttribution phaseTiming{
+                    UiTimingKind::ResultApply, UiTimingAttributionPhase::StateTransition, detail, identity};
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Completed;
+            }
+            if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
+                result = {JobStatus::Cancelled};
         }
-        else
         {
-            record.job->Completed(result);
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::CompletedCallback, detail, identity};
+            self.retainedMemoryCallback = ticket;
+            const auto endTransfer = wil::scope_exit([&]() noexcept { self.retainedMemoryCallback.reset(); });
+            if (apply)
+            {
+                apply(context, *record.job, result);
+            }
+            else
+            {
+                record.job->Completed(result);
+            }
         }
-        record.job.reset();
-        record.cancel.reset();
-        const bool released = self.memory.Release(record.reserved);
-        assert(released);
-        (void)released;
-        record.reserved = 0;
         {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::PayloadDestruction, detail, identity};
+            record.job.reset();
+        }
+        {
+            const ScopedUiTimingAttribution phaseTiming{
+                UiTimingKind::ResultApply, UiTimingAttributionPhase::CancellationSourceDestruction, detail, identity};
+            record.cancel.reset();
+        }
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::MemoryRefund, detail, identity};
+            const bool released = self.memory.Release(record.reserved);
+            assert(released);
+            (void)released;
+            record.reserved = 0;
+            if (record.retainedSlot < JobScheduler::kRetainedMemoryCapacity)
+            {
+                auto& cache = self.retainedMemory[record.retainedSlot];
+                if (cache.reservedFor != record.sequence || cache.bytes)
+                    std::terminate();
+                cache.reservedFor = 0;
+                record.retainedSlot = JobScheduler::kRetainedMemoryCapacity;
+            }
+        }
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::StateTransition, detail, identity};
             WorkerResources::ExclusiveLock guard{self.lock};
             record.state = JobScheduler::Impl::State::Empty;
         }
         --self.liveCount;
         ++completed;
-        self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
+        {
+            const ScopedUiTimingAttribution phaseTiming{UiTimingKind::ResultApply,
+                                                        UiTimingAttributionPhase::RetirementNotice, detail, identity};
+            self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
+        }
     }
     if (completed != 0)
     {
@@ -1226,6 +1965,8 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     }
     const ScopedUiTiming timing{UiTimingKind::UiAction};
     const bool runSource = self.sourceReady && (self.actionCount == 0 || self.preferSource);
+    // Declared before owned: when engaged below, destruction includes the original leave guard and payload.
+    std::optional<ScopedUiTimingAttribution> destruction;
     std::unique_ptr<UiAction> owned;
     UiAction* action = nullptr;
     if (runSource)
@@ -1244,7 +1985,12 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     }
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
-    action->Run();
+    {
+        const ScopedUiTimingAttribution attribution{UiTimingKind::UiAction, UiTimingAttributionPhase::ActionRun};
+        action->Run();
+    }
+    destruction.emplace(UiTimingKind::UiAction, UiTimingAttributionPhase::ActionDestruction, 0,
+                        UiTimingAttributionIdentity{}, std::source_location::current());
     return true;
 }
 

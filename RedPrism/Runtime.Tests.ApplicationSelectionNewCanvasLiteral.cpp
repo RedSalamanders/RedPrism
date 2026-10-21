@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include <algorithm>
+
 #include "ChromeHost.h"
 #include "Prompts.h"
 
@@ -110,7 +112,8 @@ int Application::RunSelectionNewCanvasLiteralSelfTest() noexcept
             break;
         }
 
-        const std::vector<ImageLayer> originalLayers = _session.Document().value().layers;
+        const auto& originalLayerRecords = _session.Document().value().layers;
+        const std::vector<ImageLayer> originalLayers(originalLayerRecords.begin(), originalLayerRecords.end());
         const Guid originalActiveLayer = _session.ActiveLayerID().value();
         const int originalUndoCount = _session.history.UndoCount();
         const bool originalCanRedo = _session.history.CanRedo();
@@ -187,7 +190,7 @@ int Application::RunSelectionNewCanvasLiteralSelfTest() noexcept
         {
             expect(mode.name, "cancel-keeps-original-document-and-layers",
                    result != nullptr && result->width == 40 && result->height == 40 &&
-                       result->layers == originalLayers && _session.ActiveLayerID().has_value() &&
+                       std::ranges::equal(result->layers, originalLayers) && _session.ActiveLayerID().has_value() &&
                        _session.ActiveLayerID().value() == originalActiveLayer);
             expect(mode.name, "cancel-restores-literal-live-outline-and-opening",
                    SizeCardOpen() && _session.IsMovingSelection() &&

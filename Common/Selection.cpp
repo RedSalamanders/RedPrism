@@ -1,4 +1,6 @@
 #include "Selection.h"
+#include "BoundedLassoGesture.h"
+#include "SelectionHitWork.h"
 
 #include "CanvasSize.h"
 #include "RasterWork.h"
@@ -1337,7 +1339,7 @@ Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, i
 
 bool DocumentSession::CanEditSelection() const noexcept
 {
-    return _document.has_value() && !_transformEdit.has_value();
+    return _document.has_value() && !_transformEdit.has_value() && !_warpUpdatingOpening && !_warpFinishingOpening;
 }
 
 const std::optional<DocumentSelection>& DocumentSession::Selection() const noexcept
@@ -1383,25 +1385,37 @@ bool DocumentSession::UpdateHeldSelectionKeys(bool shift, bool option) noexcept
 
 void DocumentSession::BeginMarquee(Vec2 point, SelectionMode mode)
 {
-    if (!CanEditSelection() || _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    if (_lassoOpening == (std::numeric_limits<std::uint64_t>::max)() || !CanEditSelection() ||
+        _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
+    InvalidateLassoPendingIntents();
+    ++_lassoOpening;
     _lassoDraft = LassoDraft{{anchor}, std::nullopt, mode, marqueeKind, anchor};
 }
 
 void DocumentSession::BeginLasso(Vec2 point, SelectionMode mode)
 {
-    if (!CanEditSelection() || _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    if (_lassoOpening == (std::numeric_limits<std::uint64_t>::max)() || !CanEditSelection() ||
+        _selectionMoveOrigin.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
+    InvalidateLassoPendingIntents();
+    ++_lassoOpening;
     _lassoDraft = LassoDraft{{point}, std::nullopt, mode, lassoKind, std::nullopt};
 }
 
 void DocumentSession::DragMarquee(Vec2 point, bool square, bool fromCenter)
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!DragBoundedMarquee(point, square, fromCenter))
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value() || !_lassoDraft->anchor.has_value() ||
         (_lassoDraft->kind != LassoKind::Rectangle && _lassoDraft->kind != LassoKind::Ellipse) ||
         !std::isfinite(point.x) || !std::isfinite(point.y))
@@ -1415,6 +1429,12 @@ void DocumentSession::DragMarquee(Vec2 point, bool square, bool fromCenter)
 
 void DocumentSession::ExtendLasso(Vec2 point)
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!ExtendBoundedLasso(point))
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
@@ -1432,6 +1452,12 @@ void DocumentSession::ExtendLasso(Vec2 point)
 
 void DocumentSession::MoveLassoCursor(std::optional<Vec2> point) noexcept
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!MoveBoundedLassoCursor(point))
+            CancelLasso();
+        return;
+    }
     if (_lassoDraft.has_value())
     {
         _lassoDraft->cursor = point;
@@ -1440,6 +1466,12 @@ void DocumentSession::MoveLassoCursor(std::optional<Vec2> point) noexcept
 
 void DocumentSession::RemoveLastLassoPoint()
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+    {
+        if (!RemoveLastBoundedLassoPoint())
+            CancelLasso();
+        return;
+    }
     if (!_lassoDraft.has_value())
     {
         return;
@@ -1456,11 +1488,17 @@ void DocumentSession::RemoveLastLassoPoint()
 
 void DocumentSession::CancelLasso() noexcept
 {
+    InvalidateLassoPendingIntents();
+    if (_lassoDraft && _lassoDraft->_bounded)
+        (void)_lassoDraft->_bounded->CancelOwner(_lassoDraft->_bounded->CurrentOwner());
+    _lassoFinishPendingSerial = 0;
     _lassoDraft.reset();
 }
 
 void DocumentSession::FinishLasso()
 {
+    if (_lassoDraft && _lassoDraft->IsBounded())
+        return; // An admitted draft finishes only through the selected worker intent.
     if (!_lassoDraft.has_value())
     {
         return;
@@ -1559,7 +1597,36 @@ bool DocumentSession::CanMoveSelection(Vec2 point) const
     {
         return false;
     }
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        // Numeric reference only: inverse-query translation changes rounding at large coordinates.
+        // The selected host must decide hits off-owner with the exact translated geometry.
+        const auto offset = _selectionMoveOffset.value();
+        const auto bounds = selection->Bounds();
+        // The materialized numeric selection is empty if finite rounding collapses either extent.
+        if (!bounds || !(bounds->maxX + offset.x > bounds->minX + offset.x) ||
+            !(bounds->maxY + offset.y > bounds->minY + offset.y))
+            return false;
+        const auto loops = SelectionGeometry::Translated(selection->loops, offset.x, offset.y);
+        return SelectionGeometry::Contains(loops, point);
+    }
     return SelectionGeometry::Contains(selection->loops, point);
+}
+
+bool DocumentSession::HasCurrentDeferredSelectionMoveSource() const noexcept
+{
+    return _document && _selectionMoveOrigin && _selectionMoveOffset && _document->selection &&
+           _document->selection->antialiased == _selectionMoveOrigin->antialiased &&
+           _document->selection->loops.Identity() == _selectionMoveOrigin->loops.Identity();
+}
+
+bool DocumentSession::BeginDeferredSelectionMove()
+{
+    // Panel-preserving moves need their own opening witness; never silently grant Wand authority here.
+    if (HasColorEdit() || !Selection() || !Selection()->Bounds() || !BeginSelectionMove())
+        return false;
+    _selectionMoveOffset = Vec2{};
+    return true;
 }
 
 bool DocumentSession::BeginSelectionMove()
@@ -1572,6 +1639,7 @@ bool DocumentSession::BeginSelectionMove()
     }
     BeginEdit(L"Move Selection");
     _selectionMoveOrigin = selection;
+    _selectionMoveOffset.reset();
     ++_selectionMoveOpening;
     return true;
 }
@@ -1583,6 +1651,20 @@ void DocumentSession::MoveSelection(double dx, double dy)
         return;
     }
     const DocumentSelection& origin = _selectionMoveOrigin.value();
+    if (_selectionMoveOffset)
+    {
+        if (!HasCurrentDeferredSelectionMoveSource())
+            return;
+        const Vec2 offset{std::round(dx), std::round(dy)};
+        const auto bounds = origin.Bounds();
+        if (!bounds || !std::isfinite(bounds->minX + offset.x) || !std::isfinite(bounds->maxX + offset.x) ||
+            !std::isfinite(bounds->minY + offset.y) || !std::isfinite(bounds->maxY + offset.y) ||
+            offset == _selectionMoveOffset.value())
+            return;
+        _selectionMoveOffset = offset;
+        NoteDocumentMutation();
+        return;
+    }
     _document->selection = DocumentSelection{
         origin.antialiased, SelectionGeometry::Translated(origin.loops, std::round(dx), std::round(dy))};
     NoteDocumentMutation();
@@ -1590,10 +1672,18 @@ void DocumentSession::MoveSelection(double dx, double dy)
 
 void DocumentSession::EndSelectionMove()
 {
-    if (!_selectionMoveOrigin.has_value())
-    {
+    if (!_selectionMoveOrigin)
         return;
+    // Numeric reference only; the selected host uses a prepared worker closure.
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        const auto offset = _selectionMoveOffset.value();
+        if (offset != Vec2{})
+            _document->selection =
+                DocumentSelection{_selectionMoveOrigin->antialiased,
+                                  SelectionGeometry::Translated(_selectionMoveOrigin->loops, offset.x, offset.y)};
     }
+    _selectionMoveOffset.reset();
     _selectionMoveOrigin.reset();
     EndEdit();
 }
@@ -1610,6 +1700,7 @@ void DocumentSession::CancelSelectionMove()
         _document->selection = _selectionMoveOrigin;
         NoteDocumentMutation();
     }
+    _selectionMoveOffset.reset(); // Cancel must not materialize the discarded offset in reference End.
     EndSelectionMove();
 }
 
@@ -1809,4 +1900,35 @@ WandFailure DocumentSession::MagicWand(Vec2 point, SelectionMode mode, const Ras
         ApplySelection(outline.value(), mode, L"Magic Wand");
     }
     return WandFailure::None;
+}
+
+std::optional<SelectionCursorProbePlan> DocumentSession::DescribeSelectionCursorProbe() const noexcept
+{
+    const auto& selection = Selection();
+    const auto authority = CaptureDocumentReadAuthority();
+    if (!authority || !selection || selection.value().IsEmpty() || !CanEditSelection() || _lassoDraft)
+        return std::nullopt;
+    const auto bounds = selection.value().Bounds();
+    if (!bounds)
+        return std::nullopt;
+    const auto offset = HasCurrentDeferredSelectionMoveSource() ? _selectionMoveOffset.value() : Vec2{};
+    const SelectionBounds moved{bounds.value().minX + offset.x, bounds.value().minY + offset.y,
+                                bounds.value().maxX + offset.x, bounds.value().maxY + offset.y};
+    if (!std::isfinite(moved.minX) || !std::isfinite(moved.minY) || !std::isfinite(moved.maxX) ||
+        !std::isfinite(moved.maxY) || !(moved.maxX > moved.minX) || !(moved.maxY > moved.minY))
+        return std::nullopt;
+    const auto storage = selection.value().loops.StorageBytes();
+    const auto ownership = SelectionLoops::WorkOwnershipAllowance(selection.value().loops.size());
+    if (!storage || !ownership || ownership > (std::numeric_limits<std::uint64_t>::max)() - storage)
+        return std::nullopt;
+    return SelectionCursorProbePlan{authority.value(), offset, moved, storage + ownership};
+}
+
+std::optional<SelectionDisplayValue> DocumentSession::CaptureSelectionCursorProbe(
+    const SelectionCursorProbePlan& admitted) const noexcept
+{
+    const auto current = DescribeSelectionCursorProbe();
+    if (!current || current.value() != admitted)
+        return std::nullopt;
+    return SelectionDisplayValue{Selection(), admitted.translation};
 }

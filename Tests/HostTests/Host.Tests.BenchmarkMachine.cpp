@@ -3,8 +3,10 @@
 #include "../../Common/BenchmarkMachine.h"
 #include "../../Common/Jobs.h"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <windows.h>
 
@@ -44,8 +46,87 @@ int RunBenchmarkMachineTests()
     Expect(formatted.find("ccd_count=unknown") != std::string::npos, "cache-count-not-assumed-to-be-ccd-count");
     Expect(formatted.find("adapter=unknown driver=unknown adapter_luid=unknown") != std::string::npos,
            "missing-renderer-values-explicit");
-    Expect(formatted.find("worker_count=4") != std::string::npos && formatted.ends_with("fma3=disabled"),
+    Expect(formatted.find("worker_count=4") != std::string::npos &&
+               formatted.find("fma3=disabled") != std::string::npos,
            "actual-pool-and-crt-policy-fields");
+    const auto monitorFieldPosition = formatted.find(" monitor_device=");
+    Expect(monitorFieldPosition != std::string::npos &&
+               formatted.substr(0, monitorFieldPosition).ends_with(" fma3=disabled"),
+           "existing-format-prefix-ends-at-fma3");
+    Expect(formatted.find("monitor_device=unknown refresh_numerator=unknown refresh_denominator=unknown") !=
+               std::string::npos,
+           "missing-monitor-and-refresh-explicit");
+
+    BenchmarkMachineInfo monitorFixture;
+    monitorFixture.monitorDeviceName = "Panel \"A\"\\path\n";
+    monitorFixture.refreshRate = BenchmarkMachineInfo::RefreshRate{60000, 1001};
+    const auto monitorFormatted = FormatBenchmarkMachineInfo(monitorFixture);
+    Expect(monitorFormatted.find("monitor_device=\"Panel \\\"A\\\"\\\\path\\n\"") != std::string::npos,
+           "monitor-device-escaped");
+    Expect(monitorFormatted.ends_with("monitor_device=\"Panel \\\"A\\\"\\\\path\\n\" refresh_numerator=60000 "
+                                      "refresh_denominator=1001"),
+           "refresh-rational-preserved-literally");
+
+    monitorFixture.refreshRate = BenchmarkMachineInfo::RefreshRate{60000, 0};
+    const auto zeroDenominatorFormatted = FormatBenchmarkMachineInfo(monitorFixture);
+    Expect(zeroDenominatorFormatted.ends_with("refresh_numerator=unknown refresh_denominator=unknown"),
+           "zero-refresh-denominator-makes-pair-unknown");
+    monitorFixture.refreshRate = BenchmarkMachineInfo::RefreshRate{0, 1001};
+    const auto zeroNumeratorFormatted = FormatBenchmarkMachineInfo(monitorFixture);
+    Expect(zeroNumeratorFormatted.ends_with("refresh_numerator=unknown refresh_denominator=unknown"),
+           "zero-refresh-numerator-makes-pair-unknown");
+
+    using Refresh = BenchmarkMachineInfo::RefreshRate;
+    using Candidate = BenchmarkRefreshCandidate;
+    const auto isRate =
+        [](const std::optional<Refresh>& value, std::uint32_t numerator, std::uint32_t denominator) noexcept
+    { return value && value->numerator == numerator && value->denominator == denominator; };
+    Expect(!SelectBenchmarkRefreshRate({}), "refresh-no-display-path-remains-unknown");
+    std::array<Candidate, 2> rates{{{false, true, {120, 1}}, {true, true, {60000, 1001}}}};
+    Expect(isRate(SelectBenchmarkRefreshRate(rates), 60000, 1001), "refresh-selected-monitor-preserves-fraction");
+    rates[1].matches = false;
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-unmatched-monitor-remains-unknown");
+    rates[1].matches = true;
+    rates[0].eligible = false;
+    Expect(isRate(SelectBenchmarkRefreshRate(rates), 60000, 1001),
+           "refresh-unrelated-unavailable-path-does-not-replace-selected-monitor");
+    rates[1].eligible = false;
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-selected-unavailable-or-variable-path-refuses");
+    rates[1].eligible = true;
+    rates[1].rate = {0, 1001};
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-selected-zero-numerator-refuses");
+    rates[1].rate = {60000, 0};
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-selected-zero-denominator-refuses");
+    rates = {{{true, true, {60000, 1001}}, {true, true, {60000, 1001}}}};
+    Expect(isRate(SelectBenchmarkRefreshRate(rates), 60000, 1001), "refresh-identical-clones-agree");
+    rates[1].rate = {120000, 2002};
+    Expect(isRate(SelectBenchmarkRefreshRate(rates), 60000, 1001),
+           "refresh-equivalent-clones-preserve-first-exact-fraction");
+    rates[1].rate = {60, 1};
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-conflicting-clones-refuse-guess");
+    rates[1].eligible = false;
+    Expect(!SelectBenchmarkRefreshRate(rates), "refresh-later-ineligible-clone-cannot-hide-behind-first-match");
+
+    BenchmarkDisplayContinuity continuity;
+    continuity.ObserveMessage(WM_MOVE, false);
+    Expect(!continuity.invalidated, "continuity-same-monitor-move-remains-valid");
+    continuity.ObserveMessage(WM_MOVE, true);
+    Expect(continuity.invalidated, "continuity-monitor-change-invalidates");
+    continuity.ObserveMessage(WM_NULL);
+    Expect(continuity.invalidated, "continuity-unrelated-message-does-not-clear");
+    continuity = {};
+    continuity.ObserveMessage(WM_DISPLAYCHANGE);
+    Expect(continuity.invalidated, "continuity-display-change-invalidates");
+    continuity = {};
+    continuity.ObserveMessage(WM_DPICHANGED);
+    Expect(continuity.invalidated, "continuity-dpi-change-invalidates");
+    continuity = {};
+    continuity.ObserveMessage(WM_EXITSIZEMOVE);
+    Expect(continuity.invalidated, "continuity-interactive-size-end-invalidates");
+    constexpr auto maximum = (std::numeric_limits<std::uint32_t>::max)();
+    rates = {{{true, true, {maximum, maximum - 1}}, {true, true, {maximum, maximum - 1}}}};
+    Expect(isRate(SelectBenchmarkRefreshRate(rates), maximum, maximum - 1),
+           "refresh-equivalence-products-use-complete-64-bit-range");
 
     const auto live = ReadBenchmarkMachine();
     Expect(live.cpuBrand.has_value() && !live.cpuBrand.value().empty(), "host-cpu-brand-readable");

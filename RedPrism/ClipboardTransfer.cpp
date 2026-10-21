@@ -30,6 +30,12 @@ void Reached(Observer observer, Stage stage) noexcept
         observer.reached(observer.context, stage);
 }
 
+void NativeFailure(Observer observer, NativeCall call, UINT format, DWORD error) noexcept
+{
+    if (observer.nativeFailure)
+        observer.nativeFailure(observer.context, call, format, error);
+}
+
 DWORD Injected(Observer observer, Fault stage) noexcept
 {
     return observer.fault ? observer.fault(observer.context, stage) : 0;
@@ -75,6 +81,19 @@ std::optional<ClipboardReceipt::Key> ReadReceipt() noexcept
                : std::nullopt;
 }
 
+wil::unique_hwnd ReadWindow(Observer observer) noexcept
+{
+    if (Injected(observer, Fault::Window) != 0)
+        return {};
+    wil::unique_hwnd window(
+        CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+    if (!window)
+        NativeFailure(observer, NativeCall::Window, 0, GetLastError());
+    else
+        Reached(observer, Stage::WindowCreated);
+    return window;
+}
+
 class OpenScope final
 {
   public:
@@ -86,7 +105,7 @@ class OpenScope final
     }
     OpenScope(const OpenScope&) = delete;
     OpenScope& operator=(const OpenScope&) = delete;
-    bool Open(HWND window = nullptr) noexcept
+    bool Open(HWND window) noexcept
     {
         _open = OpenClipboard(window) != FALSE;
         return _open;
@@ -197,43 +216,64 @@ Status ProbeBytes(std::span<const std::uint8_t> bytes, bool png, std::int64_t pi
 
 // ClipboardScope has already opened. GetClipboardData may block a worker while an external owner renders.
 // The OS handle is borrowed; only the locked pointer's scope owns an unlock, never GlobalFree.
-Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation)
+Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation,
+                     Observer observer)
 {
     info = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const HANDLE handle = GetClipboardData(format);
     if (!handle)
+    {
+        NativeFailure(observer, NativeCall::Read, format, GetLastError());
         return Status::NativeFailure;
+    }
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const SIZE_T size = GlobalSize(handle);
     if (size == 0)
+    {
+        NativeFailure(observer, NativeCall::Size, format, GetLastError());
         return Status::Invalid;
+    }
     if (size > kMaxImageEncodedBytes)
         return Status::TooLarge;
     const wil::unique_hglobal_locked locked(handle);
     if (!locked.get())
+    {
+        NativeFailure(observer, NativeCall::Lock, format, GetLastError());
         return Status::NativeFailure;
+    }
     return ProbeBytes({static_cast<const std::uint8_t*>(locked.get()), size}, png, pixelBudget, info, cancellation);
 }
 
 Status CopyFormat(UINT format, bool png, std::int64_t pixelBudget, const FormatInfo& inspected,
-                  std::vector<std::uint8_t>& output, CancelToken cancellation)
+                  std::vector<std::uint8_t>& output, CancelToken cancellation, Observer observer)
 {
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const HANDLE handle = GetClipboardData(format);
     if (!handle)
+    {
+        NativeFailure(observer, NativeCall::Read, format, GetLastError());
         return Status::NativeFailure;
+    }
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     const SIZE_T size = GlobalSize(handle);
-    if (size == 0 || size != inspected.encodedBytes || size > kMaxImageEncodedBytes)
+    if (size == 0)
+    {
+        NativeFailure(observer, NativeCall::Size, format, GetLastError());
+        return Status::Stale;
+    }
+    if (size != inspected.encodedBytes || size > kMaxImageEncodedBytes)
         return Status::Stale;
     const wil::unique_hglobal_locked locked(handle);
     if (!locked.get())
+    {
+        NativeFailure(observer, NativeCall::Lock, format, GetLastError());
         return Status::NativeFailure;
+    }
     const auto* source = static_cast<const std::uint8_t*>(locked.get());
     FormatInfo current;
     const Status probed = ProbeBytes({source, size}, png, pixelBudget, current, cancellation);
@@ -534,22 +574,37 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
         return Status::Cancelled;
     if (pixelBudget < 0)
         return Status::TooLarge;
+    // NULL scopes may both open successfully on different threads and one Close invalidates the other.
+    // A distinct worker-owned HWND makes native acquisition exclusive, including concurrent hint/availability.
+    const auto window = ReadWindow(observer);
+    if (!window)
+        return Status::NativeFailure;
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
     OpenScope scope;
-    if (Injected(observer, Fault::Open) != 0 || !scope.Open())
+    if (Injected(observer, Fault::Open) != 0)
         return Status::Busy;
+    if (!scope.Open(window.get()))
+    {
+        NativeFailure(observer, NativeCall::Open, 0, GetLastError());
+        return Status::Busy;
+    }
     Reached(observer, Stage::Opened);
     Inspection inspected;
     inspected._pixelBudget = pixelBudget;
     const UINT png = PngFormat();
     if (png == 0)
+    {
+        NativeFailure(observer, NativeCall::RegisterFormat, 0, GetLastError());
         return Status::NativeFailure;
+    }
     const bool hasPng = IsClipboardFormatAvailable(png) != FALSE;
     const bool hasV5 = IsClipboardFormatAvailable(CF_DIBV5) != FALSE;
     const bool hasDib = IsClipboardFormatAvailable(CF_DIB) != FALSE;
     Status pngStatus = Status::Invalid;
     if (hasPng)
     {
-        pngStatus = InspectFormat(png, true, pixelBudget, inspected._png, cancellation);
+        pngStatus = InspectFormat(png, true, pixelBudget, inspected._png, cancellation, observer);
         if (pngStatus == Status::Ok)
             inspected._pngFormat = png;
     }
@@ -568,8 +623,12 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
             format = EnumClipboardFormats(format);
             if (!format)
             {
-                if (GetLastError() != ERROR_SUCCESS)
+                const DWORD error = GetLastError();
+                if (error != ERROR_SUCCESS)
+                {
+                    NativeFailure(observer, NativeCall::Enumerate, 0, error);
                     return Status::NativeFailure;
+                }
                 break;
             }
             if (format == CF_DIBV5 || format == CF_DIB)
@@ -583,7 +642,7 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     if (dib)
     {
         Reached(observer, dib == CF_DIBV5 ? Stage::DibV5InspectRead : Stage::DibInspectRead);
-        dibStatus = InspectFormat(dib, false, pixelBudget, inspected._dib, cancellation);
+        dibStatus = InspectFormat(dib, false, pixelBudget, inspected._dib, cancellation, observer);
         if (dibStatus == Status::Cancelled)
             return dibStatus;
         if (dibStatus == Status::Ok)
@@ -593,7 +652,10 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
         return Status::Cancelled;
     inspected._sequence = GetClipboardSequenceNumber();
     if (!scope.Close())
+    {
+        NativeFailure(observer, NativeCall::Close, 0, GetLastError());
         return Status::NativeFailure;
+    }
     Reached(observer, Stage::Inspected);
     if (cancellation.IsCancelled())
         return Status::Cancelled;
@@ -613,9 +675,19 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
         return Status::Invalid;
     if (cancellation.IsCancelled())
         return Status::Cancelled;
+    const auto window = ReadWindow(observer);
+    if (!window)
+        return Status::NativeFailure;
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
     OpenScope scope;
-    if (Injected(observer, Fault::Open) != 0 || !scope.Open())
+    if (Injected(observer, Fault::Open) != 0)
         return Status::Busy;
+    if (!scope.Open(window.get()))
+    {
+        NativeFailure(observer, NativeCall::Open, 0, GetLastError());
+        return Status::Busy;
+    }
     Reached(observer, Stage::Opened);
     if (GetClipboardSequenceNumber() != inspected._sequence)
         return Status::Stale;
@@ -633,7 +705,7 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
         pngStatus = Injected(observer, Fault::PngRead) != 0
                         ? Status::NativeFailure
                         : CopyFormat(inspected._pngFormat, true, inspected._pixelBudget, inspected._png, copy._png,
-                                     cancellation);
+                                     cancellation, observer);
     if (pngStatus == Status::Stale || pngStatus == Status::Cancelled)
         return pngStatus;
     if (GetClipboardSequenceNumber() != inspected._sequence)
@@ -643,7 +715,7 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
         dibStatus = Injected(observer, Fault::DibRead) != 0
                         ? Status::NativeFailure
                         : CopyFormat(inspected._dibFormat, false, inspected._pixelBudget, inspected._dib, copy._dib,
-                                     cancellation);
+                                     cancellation, observer);
     if (dibStatus == Status::Stale || dibStatus == Status::Cancelled)
         return dibStatus;
     if (pngStatus != Status::Ok && dibStatus != Status::Ok)
@@ -652,7 +724,10 @@ Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancella
         return Status::Stale;
     copy._sequence = inspected._sequence;
     if (!scope.Close())
+    {
+        NativeFailure(observer, NativeCall::Close, 0, GetLastError());
         return Status::NativeFailure;
+    }
     Reached(observer, Stage::Copied);
     if (cancellation.IsCancelled())
         return Status::Cancelled;

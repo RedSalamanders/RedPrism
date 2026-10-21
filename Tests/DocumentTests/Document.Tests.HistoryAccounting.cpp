@@ -1,5 +1,6 @@
 #include "Document.Tests.HistoryAccounting.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <cstddef>
@@ -123,16 +124,19 @@ ImageLayer RasterLayer(int edge, const wchar_t* name)
 void UndoRestoreSurvivesTrimDroppingItsFutureEntry()
 {
     DocumentHistory history(8, 256);
-    std::optional<CanvasDocument> document = CanvasDocument{};
+    DocumentFixture fixture;
     ImageLayer oldLayer = RasterLayer(1, L"Old");
     const Guid oldLayerID = oldLayer.id;
-    document.value().layers.push_back(std::move(oldLayer));
+    fixture.layers.push_back(std::move(oldLayer));
+    std::optional<CanvasDocument> document{std::move(fixture).Seal()};
     std::optional<Guid> activeLayer = oldLayerID;
 
     history.Begin(L"Replace raster", document, activeLayer);
     ImageLayer newLayer = RasterLayer(16, L"New");
     const Guid newLayerID = newLayer.id;
-    document.value().layers[0] = std::move(newLayer);
+    DocumentFixture changed = DocumentFixture::Copy(document.value());
+    changed.layers[0] = std::move(newLayer);
+    document = std::move(changed).Seal();
     activeLayer = newLayerID;
     history.End(document, activeLayer);
     Expect(history.UndoCount() == 1 && history.RetainedBytes(document) <= 256,
@@ -181,13 +185,17 @@ void EditAdmissionIncludesWholeDocumentAndExistingHistory()
     DocumentHistory history;
     std::optional<CanvasDocument> document{CanvasDocument{}};
     const auto empty = history.EditMemoryBytes(document);
-    document->layers.push_back(ImageLayer::Blank(L"One", {2, 2}));
+    DocumentFixture fixture = DocumentFixture::Copy(document.value());
+    fixture.layers.push_back(ImageLayer::Blank(L"One", {2, 2}));
+    document = std::move(fixture).Seal();
     const auto one = history.EditMemoryBytes(document);
     // Begin and End each copy the complete layer array, not only the edited target. This independent floor
     // includes those two arrays; the declared bound also covers growth, names and trim set bookkeeping.
-    document->layers.reserve(10000);
+    DocumentFixture manyFixture = DocumentFixture::Copy(document.value());
+    manyFixture.layers.reserve(10000);
     for (int index = 1; index < 10000; ++index)
-        document->layers.push_back(ImageLayer::Blank(L"Peer", {2, 2}));
+        manyFixture.layers.push_back(ImageLayer::Blank(L"Peer", {2, 2}));
+    document = std::move(manyFixture).Seal();
     const auto many = history.EditMemoryBytes(document);
     Expect(empty > 0 && one > empty && many >= 2 * document->layers.size() * sizeof(ImageLayer),
            "edit-admission-whole-document-snapshot-metadata-floor");
@@ -196,7 +204,8 @@ void EditAdmissionIncludesWholeDocumentAndExistingHistory()
     history.End(document, {});
     const auto recorded = history.EditMemoryBytes(document);
     Expect(recorded > many, "edit-admission-includes-existing-snapshot-bookkeeping");
-    document->layers.back().name.assign(16384, L'A');
+    EditDocumentFixture(document.value(),
+                        [](DocumentFixture& fixture) { fixture.layers.back().name.assign(16384, L'A'); });
     Expect(history.EditMemoryBytes(document) > recorded,
            "edit-admission-accounts-long-peer-name-not-only-active-target");
     const auto pendingBefore = history.CurrentRevision();

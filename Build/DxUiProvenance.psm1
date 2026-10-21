@@ -1,5 +1,6 @@
 # Bind ordinary product outputs to the exact restored DxUi source/archive and actual linker inputs.
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot 'DxUiOutputPath.psm1') -Force
 
 function Write-RedPrismDxUiProvenance {
     [CmdletBinding()]
@@ -15,7 +16,8 @@ function Write-RedPrismDxUiProvenance {
     if ($identity.Identity.commit -cne $pin.commit -or $identity.Identity.platform -cne $Platform) {
         throw 'Restored DxUi identity does not match the product pin/profile.'
     }
-    $archive = Join-Path $dependencyRoot "$($identity.Fingerprint)/$Platform/$Configuration/DxUi.lib"
+    $consumerOutputRoot = Read-RedPrismDxUiResolvedOutputRoot -DependencyRoot $dependencyRoot -Platform $Platform -BuildIdentity $identity
+    $archive = Join-Path $consumerOutputRoot "$Platform/$Configuration/DxUi.lib"
     $source = Join-Path $dependencyRoot "source/$($pin.commit)"
     & (Join-Path $source 'Tools/validate_consumer.ps1') -DxUiRoot $source -LockFile (Join-Path $RepoRoot 'Dependencies/DxUi.lock.json')
     $output = Join-Path $RepoRoot ".build/$Platform/$Configuration"
@@ -43,6 +45,7 @@ function Write-RedPrismDxUiProvenance {
         configuration = $Configuration
         publicHeadersGitTree = $headers
         buildIdentity = $identity
+        consumerOutputRoot = $consumerOutputRoot
         archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
         modules = @($modules)
     }

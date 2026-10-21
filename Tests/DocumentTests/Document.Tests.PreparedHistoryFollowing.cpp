@@ -1,5 +1,6 @@
 #include "Document.Tests.PreparedHistoryFollowing.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <cstdio>
@@ -19,14 +20,16 @@ void Expect(bool value, const char* name)
 
 void DependentClosure(bool restore)
 {
-    CanvasDocument before;
-    before.id = Guid::Generate();
-    before.width = 8;
-    before.height = 8;
-    before.layers.push_back(ImageLayer::Blank(L"Before", {8, 8}));
-    const auto active = before.layers.front().id;
-    auto after = before;
-    after.layers.front().name = L"After";
+    DocumentFixture beforeFixture;
+    beforeFixture.id = Guid::Generate();
+    beforeFixture.width = 8;
+    beforeFixture.height = 8;
+    beforeFixture.layers.push_back(ImageLayer::Blank(L"Before", {8, 8}));
+    const auto active = beforeFixture.layers.front().id;
+    const CanvasDocument before = std::move(beforeFixture).Seal();
+    DocumentFixture afterFixture = DocumentFixture::Copy(before);
+    afterFixture.layers.front().name = L"After";
+    const CanvasDocument after = std::move(afterFixture).Seal();
     DocumentHistory history;
     const auto opening = history.CaptureState();
     auto begin = DocumentHistory::PrepareBegin(opening, before, active, L"Transform Selection");

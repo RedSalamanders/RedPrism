@@ -7,6 +7,8 @@
 #include "CommandBindings.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "LayerRowsWork.h"
+#include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "TransformOverlay.h"
 
@@ -422,9 +424,20 @@ class ChromeHost final : public CommandIds
                              const std::vector<float>& guideYs) noexcept;
     // The selection tools' header: kinds, mode, wand settings, Anti-alias, Expand / Contract and Deselect.
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
-    // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
+    // Selection vertices are document coordinates relative to the retained anchor. Mapping is independent.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                   std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept;
+    void SetSelectionMapping(Vec2 originPixels, double pixelsPerDocumentPixel, float dpi) noexcept;
+    [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept;
+    [[nodiscard]] CanvasOverlay::SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
+    void EnableSelectionTimingForTest(bool enabled) noexcept;
+    [[nodiscard]] CanvasOverlay::SelectionTimingForTest SelectionTimingStateForTest() const noexcept;
+    [[nodiscard]] const std::vector<CanvasOverlay::OutlineLoop>* SelectionOutlineForTest() const noexcept;
+    // Lasso draft remains in canvas-hole pixels.
     void SetSelectionAntPhase(float phase) noexcept;
+    void SetSelectionPaintExternal(bool external) noexcept;
     [[nodiscard]] float SelectionAntPhase() const noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
     // The Brush and Eraser header: mode, size, hardness, opacity, mask paint and the color swatch.
@@ -456,6 +469,27 @@ class ChromeHost final : public CommandIds
     // The eyedropper loads a sampled color into the open picker (its swatch previews it; OK commits it).
     void SetPickerColor(uint32_t argb) noexcept;
     [[nodiscard]] uint32_t PickerColor() const noexcept;
+    struct PickerSampleAuthority final
+    {
+        Guid host;
+        std::uint64_t revision = 0;
+        PickerTarget target = PickerTarget::Foreground;
+        bool operator==(const PickerSampleAuthority&) const noexcept = default;
+    };
+    [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerSampleAuthority() const noexcept;
+    // Explicit picker input is independent of the revision renewed by a checked sample's preview callback.
+    struct PickerIntentAuthority final
+    {
+        Guid host;
+        std::uint64_t opening = 0;
+        std::uint64_t revision = 0;
+        PickerTarget target = PickerTarget::Foreground;
+        bool operator==(const PickerIntentAuthority&) const noexcept = default;
+    };
+    [[nodiscard]] std::optional<PickerIntentAuthority> CapturePickerIntentAuthority() const noexcept;
+    [[nodiscard]] bool IsPickerIntentCurrent(const PickerIntentAuthority& authority) const noexcept;
+    [[nodiscard]] bool IsPickerOpeningCurrent(const PickerIntentAuthority& authority) const noexcept;
+    [[nodiscard]] bool ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept;
     // A checkable View menu item (Sample Ring).
     void SetCommandChecked(int command, bool checked) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
@@ -474,6 +508,14 @@ class ChromeHost final : public CommandIds
     void SetTool(EditorTool tool) noexcept;
     // `maskTargeted`: the active layer's mask is the target, so its row's Mask badge shows in the accent (RF-907).
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted);
+    // Share the admitted immutable epoch with the publisher and accessibility snapshots. Its original charge
+    // survives replacement while any reader remains; final graph retirement acknowledges it. Publication does
+    // no row traversal, string formatting, pixel access or complete owner-thread graph destruction.
+    void SetPreparedLayers(const std::shared_ptr<const PreparedLayerRows>& rows, const std::optional<Guid>& active,
+                           bool maskTargeted);
+    void SetPreparedLayerRetry(bool available) noexcept;
+    void SetPreparedLayerInteraction(bool enabled) noexcept;
+
     // The layer a press at a point of the layers panel targets (RF-907, legacy NativeLayerList's thumbnails): the
     // row's mask when the point is on its Mask badge, else the row's pixels when that row's mask is the target; nullopt
     // anywhere else, a floating card over the panel included.
@@ -541,6 +583,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F JobProgressBoundsDip() const noexcept;
     // Lays the chrome out for the client size and DPI without drawing: HolePixels follows. Prepare lays out and draws.
     void Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
+    // Acknowledge caller-arranged input geometry at the already painted extent, without drawing/publishing UIA.
+    HRESULT PrepareInteraction(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -558,6 +602,9 @@ class ChromeHost final : public CommandIds
         std::uint64_t menus = 0;     // SetUndoRedoNames, SetEditTargets or SetMaskCommands rebuilt their captions
         std::uint64_t texts = 0;     // SetStatus or SetDocumentTitle wrote a text
         std::uint64_t headers = 0;   // a tool header, the adjust panel or a size card wrote its controls
+        std::uint64_t selectionOutlines = 0;
+        std::uint64_t selectionVertices = 0;
+        std::uint64_t selectionMappings = 0;
         std::uint64_t overlays = 0;  // the canvas overlay took something new to draw
         std::uint64_t publishes = 0; // the UI Automation snapshot was republished
     };
@@ -672,9 +719,16 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F LayerRowBoundsDip(std::size_t index) const noexcept;
     // A row's Mask badge in DIP (empty without one) and the row as the tree paints it (RF-907 self-test).
     [[nodiscard]] D2D1_RECT_F LayerMaskBadgeBoundsDip(std::size_t index) const noexcept;
+    [[nodiscard]] D2D1_RECT_F LayerRowExpanderBoundsDipForTest(std::size_t index) const noexcept;
+    [[nodiscard]] D2D1_RECT_F LayerRetryBoundsDipForTest() const noexcept;
     // The Move tool header's Flip Horizontal button, for a self-test click; empty while hidden.
     [[nodiscard]] D2D1_RECT_F FlipHorizontalBoundsDipForTest() const noexcept;
     [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
+    [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> PreparedLayerAccessibilityForTest()
+        const noexcept
+    {
+        return _treeModel.CapturePreparedAccessibilityRows();
+    }
     [[nodiscard]] bool MenuItemGrayedForTest(int command) const noexcept;
     // 0 none, 1 layers tree, 2 splitter, 3 shortcuts, 4 notice, 5 adjust, 6 picker, 7 overlay, 8 other.
     [[nodiscard]] int HitKindForTest(float xPixels, float yPixels) noexcept;
@@ -775,6 +829,20 @@ class ChromeHost final : public CommandIds
         explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
         ChromeEvents& events;
         std::vector<HierarchyEntry> rows;
+        std::shared_ptr<const PreparedLayerRows>
+            preparedRows; // same admitted immutable epoch as the publisher and snapshots
+        bool preparedMode = false;
+        [[nodiscard]] std::span<const HierarchyEntry> RowsView() const noexcept
+        {
+            return preparedMode ? (preparedRows ? preparedRows->Rows() : std::span<const HierarchyEntry>{})
+                                : std::span<const HierarchyEntry>(rows);
+        }
+        [[nodiscard]] std::span<const std::wstring> TextView() const noexcept
+        {
+            return preparedMode ? (preparedRows ? preparedRows->DisplayText() : std::span<const std::wstring>{})
+                                : std::span<const std::wstring>(displayText);
+        }
+
         // Each row's display text (the name, or the "(hidden)" suffixed form), built once by SetRows so
         // GetVisibleItem's per-paint call is an assignment into the caller's reused buffer, never a
         // FormatStringResource call.
@@ -793,7 +861,13 @@ class ChromeHost final : public CommandIds
         // rows directly so a settled layers panel does not re-format every row's name on every repaint.
         void SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive, bool newMaskTargeted);
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
+        [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
+        [[nodiscard]] std::shared_ptr<const DxUi::IPreparedTreeAccessibilityRows> CapturePreparedAccessibilityRows()
+            const noexcept override
+        {
+            return preparedMode ? preparedRows : std::shared_ptr<const PreparedLayerRows>{};
+        }
         void OnTreeSelectionChanged(uint64_t itemId) override;
         void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;
         void OnTreeItemInvoked(uint64_t itemId) override;
@@ -945,6 +1019,8 @@ class ChromeHost final : public CommandIds
     void SyncToolVisuals() noexcept;
     void OnSplitterChange(DxUi::SplitterChange change) noexcept;
     void OnPickerChange(DxUi::ColorPickerChange change) noexcept;
+    void NotePickerInput(bool sampledPublication = false) noexcept;
+    void NotePickerOpening() noexcept;
     // A palette well shows `argb` (the picker's working color while it previews there).
     void ShowPaletteWell(PickerTarget target, uint32_t argb) noexcept;
     // Hides the picker card without reporting a pick (its target's card closed).
@@ -1111,6 +1187,7 @@ class ChromeHost final : public CommandIds
     DxUi::StatusStrip* _status = nullptr;
     DxUi::ProgressBar* _jobProgress = nullptr;
     DxUi::Label* _layersTitle = nullptr;
+    DxUi::Button* _layerRetry = nullptr;
     DxUi::Splitter* _splitter = nullptr;
     PaletteControl* _railPalette = nullptr;
     DxUi::NumericStepper* _opacity = nullptr;
@@ -1346,6 +1423,11 @@ class ChromeHost final : public CommandIds
     std::optional<bool> _maskPaintWhite; // engaged while a layer's mask is the target: the wells show black and white
     EditorTool _tool = EditorTool::Move;
     PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
+    Guid _pickerInstance = Guid::Generate();
+    InputRevision _pickerInputRevision;
+    InputRevision _pickerIntentRevision;
+    InputRevision _pickerOpeningRevision;
+    bool _sampledPickerPublication = false;
     bool _canvasFocused = true;
     bool _attached = false;
 };

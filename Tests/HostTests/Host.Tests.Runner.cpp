@@ -9,37 +9,83 @@
 #include "EditorTool.h"
 #include "FrameScheduler.h"
 #include "Host.Tests.BenchmarkMachine.h"
+#include "Host.Tests.CancellationCheck.h"
+#include "Host.Tests.CompletedPreviewMemory.h"
+#include "Host.Tests.ContinuationAdjacentPreview.h"
+#include "Host.Tests.ContinuationPendingView.h"
 #include "Host.Tests.ContinuationQueue.h"
 #include "Host.Tests.ContinuationReceipt.h"
 #include "Host.Tests.ContinuationRequest.h"
 #include "Host.Tests.DeferredRelease.h"
+#include "Host.Tests.ExecutionLaneStages.h"
 #include "Host.Tests.Executor.h"
 #include "Host.Tests.FilterWorkBenchmark.h"
+#include "Host.Tests.GpuRecordingLane.h"
 #include "Host.Tests.HistoryWork.h"
 #include "Host.Tests.HostPathRead.h"
+#include "Host.Tests.HueInput.h"
 #include "Host.Tests.Job.h"
 #include "Host.Tests.JobActivity.h"
 #include "Host.Tests.JobBenchmark.h"
 #include "Host.Tests.JobCloseHook.h"
+#include "Host.Tests.JobExecutionObservation.h"
 #include "Host.Tests.JobMemory.h"
+#include "Host.Tests.JobRetirement.h"
 #include "Host.Tests.JobShutdownRetirement.h"
 #include "Host.Tests.JobStage.h"
 #include "Host.Tests.JobSuspendedRetirement.h"
 #include "Host.Tests.JobUiPolicy.h"
+#include "Host.Tests.JoinedRetirementAuthority.h"
 #include "Host.Tests.KernelCli.h"
 #include "Host.Tests.KernelDispatch.h"
+#include "Host.Tests.KeyboardState.h"
 #include "Host.Tests.MemoryAdmission.h"
 #include "Host.Tests.MemoryBenchmark.h"
+#include "Host.Tests.OpacityInputOrder.h"
 #include "Host.Tests.OwnerWorkMultiplexer.h"
+#include "Host.Tests.PartitionedRetainedMemory.h"
+#include "Host.Tests.PathClassificationRead.h"
+#include "Host.Tests.PathInputTransfer.h"
+#include "Host.Tests.PathReadWaitCycleExhaustion.h"
 #include "Host.Tests.PerfRoot.h"
+#include "Host.Tests.PersistentOutputMemory.h"
 #include "Host.Tests.PipelineTrace.h"
 #include "Host.Tests.PixelRecycle.h"
+#include "Host.Tests.PointerInputStream.h"
+#include "Host.Tests.PointerInputStreamPeek.h"
+#include "Host.Tests.PolygonalInputJournal.h"
+#include "Host.Tests.PreparedRasterPreviewLifetime.h"
+#include "Host.Tests.PreservedContinuation.h"
 #include "Host.Tests.PreviewMailbox.h"
+#include "Host.Tests.PublicationCallback.h"
+#include "Host.Tests.PublicationRetention.h"
+#include "Host.Tests.ReservationGrowth.h"
+#include "Host.Tests.RetainedGrowth.h"
+#include "Host.Tests.RetainedJobMemory.h"
+#include "Host.Tests.RetainedSlotAdmission.h"
+#include "Host.Tests.RetirementMemory.h"
 #include "Host.Tests.RetryWaitCancellation.h"
 #include "Host.Tests.RetryWaitQueue.h"
+#include "Host.Tests.SamplerInput.h"
+#include "Host.Tests.SamplerIntentInput.h"
+#include "Host.Tests.SelectionCursorRequests.h"
+#include "Host.Tests.SharedRetainedJobMemory.h"
+#include "Host.Tests.UiCancellationBody.h"
+#include "Host.Tests.UiCancellationCapture.h"
+#include "Host.Tests.UiCancellationCli.h"
+#include "Host.Tests.UiCancellationFrame.h"
+#include "Host.Tests.UiCancellationObservation.h"
+#include "Host.Tests.UiCancellationRefusal.h"
+#include "Host.Tests.UiFrameLatency.h"
 #include "Host.Tests.UiTiming.h"
+#include "Host.Tests.UiTimingAttribution.h"
 #include "Host.Tests.UiTimingHistogram.h"
+#include "Host.Tests.WarpFactoryLifetime.h"
+#include "Host.Tests.WarpPreviewLifetime.h"
 #include "Host.Tests.WorkerPool.h"
+#include "Host.Tests.WorkerStageRetirement.h"
+#include "Host.Tests.WorkerWake.h"
+#include "Host.Tests.WorkerWriteCompletion.h"
 #include "Localization.h"
 #include "Resources.h"
 #include "SettingsStore.h"
@@ -237,6 +283,55 @@ void TestCommandLine() noexcept
     Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath != nullptr &&
                parsed.screenshotPath == std::wstring_view{png},
            "cli.screenshot-parse");
+
+    struct PreparedBenchCase final
+    {
+        const wchar_t* token;
+        const char* name;
+    };
+    constexpr std::array preparedBenchCases{
+        PreparedBenchCase{L"ui-prepared", "cli.prepared-bench-ui-prepared"},
+        PreparedBenchCase{L"ui-prepared45", "cli.prepared-bench-ui-prepared45"},
+        PreparedBenchCase{L"ui-prepared100", "cli.prepared-bench-ui-prepared100"},
+        PreparedBenchCase{L"ui-prepared-smoke", "cli.prepared-bench-ui-prepared-smoke"},
+    };
+    wchar_t preparedBenchSwitch[] = L"--bench";
+    wchar_t preparedWarpSwitch[] = L"--warp";
+    for (const PreparedBenchCase& testCase : preparedBenchCases)
+    {
+        wchar_t* preparedArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                   const_cast<wchar_t*>(testCase.token)};
+        parsed = {};
+        const bool withoutWarp = RedPrismParseCommandLine(preparedArgs, 3, parsed, &error) && !parsed.warp &&
+                                 parsed.bench && std::wstring_view{parsed.bench} == std::wstring_view{testCase.token} &&
+                                 parsed.inputPathCount == 0;
+        wchar_t* preparedWarpArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                       const_cast<wchar_t*>(testCase.token), preparedWarpSwitch};
+        parsed = {};
+        const bool withWarp = RedPrismParseCommandLine(preparedWarpArgs, 4, parsed, &error) && parsed.warp &&
+                              parsed.bench && std::wstring_view{parsed.bench} == std::wstring_view{testCase.token} &&
+                              parsed.inputPathCount == 0;
+        Expect(withoutWarp && withWarp, testCase.name);
+    }
+
+    wchar_t malformedPreparedValue[] = L"ui-prepared999";
+    wchar_t* malformedPreparedArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                        malformedPreparedValue};
+    parsed = {};
+    parsed.warp = true;
+    parsed.bench = L"sentinel";
+    parsed.inputPathCount = 1;
+    parsed.inputPaths[0] = L"sentinel-path";
+    Expect(!RedPrismParseCommandLine(malformedPreparedArgs, 3, parsed, &error) && error == malformedPreparedValue &&
+               parsed.warp && parsed.bench == std::wstring_view{L"sentinel"} && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0] == std::wstring_view{L"sentinel-path"},
+           "cli.prepared-bench-malformed-atomic-rejection");
+
+    wchar_t preparedInputPath[] = L"input.prism";
+    wchar_t* preparedWithInputArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), preparedBenchSwitch,
+                                        const_cast<wchar_t*>(L"ui-prepared"), preparedInputPath};
+    Expect(!RedPrismParseCommandLine(preparedWithInputArgs, 4, parsed, &error) && error == preparedInputPath,
+           "cli.prepared-bench-refuses-positional-input");
 
     wchar_t* missingScreenshotValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot};
     Expect(!RedPrismParseCommandLine(missingScreenshotValueArgs, 2, parsed, &error) && error == screenshot,
@@ -523,6 +618,25 @@ void TestCommandLine() noexcept
            "cli.help-text");
 }
 
+// Separate runtime metadata queries retain their normal guarded switch entry points; do not duplicate four
+// hoisted switch dispatches inside the container-heavy test. Every existing numeric/control expectation stays.
+__declspec(noinline) wchar_t RuntimeEditorToolKey(EditorTool tool) noexcept
+{
+    return EditorToolKey(tool);
+}
+__declspec(noinline) wchar_t RuntimeEditorToolGlyph(EditorTool tool) noexcept
+{
+    return EditorToolGlyph(tool);
+}
+__declspec(noinline) UINT RuntimeEditorToolName(EditorTool tool) noexcept
+{
+    return EditorToolNameId(tool);
+}
+__declspec(noinline) EditorTool RuntimeEditorToolForCommand(UINT command) noexcept
+{
+    return CommandIds::ToolForSelectCommand(command);
+}
+
 void TestEditorTools() noexcept
 {
     std::set<wchar_t> keys;
@@ -531,13 +645,13 @@ void TestEditorTools() noexcept
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
         const EditorTool tool = EditorToolAt(index);
-        keys.insert(EditorToolKey(tool));
-        glyphs.insert(EditorToolGlyph(tool));
-        names.insert(EditorToolNameId(tool));
+        keys.insert(RuntimeEditorToolKey(tool));
+        glyphs.insert(RuntimeEditorToolGlyph(tool));
+        names.insert(RuntimeEditorToolName(tool));
         // A tool's key is the default chord of its select command, and that command selects the tool.
         Expect(PrimaryDefaultChord(CommandIds::SelectToolCommand(tool)) ==
-                       Key(static_cast<std::uint16_t>(EditorToolKey(tool))) &&
-                   CommandIds::ToolForSelectCommand(CommandIds::SelectToolCommand(tool)) == tool,
+                       Key(static_cast<std::uint16_t>(RuntimeEditorToolKey(tool))) &&
+                   RuntimeEditorToolForCommand(CommandIds::SelectToolCommand(tool)) == tool,
                "tools.key-is-the-select-command-default");
         Expect(EditorToolIndex(tool) == index, "tools.index-round-trip");
     }
@@ -637,7 +751,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 486> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 491> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -774,6 +888,8 @@ void TestStringTable() noexcept
                                          IDS_CMD_LOAD_LAYER_SELECTION,
                                          IDS_CMD_LOAD_MASK_SELECTION,
                                          IDS_ERROR_WAND_DETAILED,
+                                         IDS_ERROR_LAYER_ROWS,
+                                         IDS_CMD_RETRY_LAYER_LIST,
                                          IDS_ERROR_WAND_MEMORY,
                                          IDS_UNIT_PIXELS,
                                          IDS_SELECTION_RECTANGLE,
@@ -947,8 +1063,10 @@ void TestStringTable() noexcept
                                          IDS_ADJUST_EDIT_TITLE,
                                          IDS_ERROR_FILTER,
                                          IDS_ERROR_PIXEL_EDIT,
+                                         IDS_ERROR_LAYER_METADATA,
                                          IDS_ERROR_SELECTION_EDIT,
                                          IDS_ERROR_HISTORY_RESTORE,
+                                         IDS_ERROR_HISTORY_RESIDENCY,
                                          IDS_CMD_CONTENT_AWARE_FILL,
                                          IDS_ADJUST_CONTENT_FILL_HINT,
                                          IDS_ADJUST_NO_SOURCE,
@@ -1125,6 +1243,7 @@ void TestStringTable() noexcept
                                          IDS_KEY_FUNCTION,
                                          IDS_KEY_VIRTUAL,
                                          IDS_SHUTDOWN_UNSAVED,
+                                         IDS_SHUTDOWN_SAVING,
                                          IDS_ERROR_CANVAS_DRAW,
                                          IDS_ERROR_SELECTION_DETAILED,
                                          IDS_CMD_TARGET_MASK,
@@ -1790,25 +1909,68 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunBenchmarkMachineTests();
     gFailures += RunUiTimingHistogramTests();
     gFailures += RunUiTimingTests();
+    gFailures += RunUiTimingAttributionTests();
+    gFailures += RunKeyboardStateScopeTests();
+    gFailures += RunJobExecutionObservationTests();
+    gFailures += RunUiCancellationCaptureTests();
+    gFailures += static_cast<int>(!RunUiCancellationBodyTests());
+    gFailures += static_cast<int>(!RunCancellationCheckTests());
+    gFailures += static_cast<int>(!RunUiCancellationFrameTests());
+    gFailures += RunUiCancellationObservationTransportTests();
+    gFailures += RunUiCancellationCliTests();
+    gFailures += static_cast<int>(!RunUiCancellationRefusalTests());
+    gFailures += RunHostUiFrameLatencyTests();
     gFailures += RunWorkerPoolTests(stress);
+    gFailures += RunWorkerWakeTests();
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();
     gFailures += RunOwnerWorkMultiplexerTests();
+    gFailures += RunHostPathClassificationReadTests();
+    gFailures += RunPathInputTransferTests();
+    gFailures += RunHostPathReadWaitCycleExhaustionTests();
     gFailures += RunRetryWaitQueueTests();
     gFailures += RunRetryWaitCancellationTests();
     gFailures += RunJobUiPolicyTests();
+    gFailures += RunWorkerWriteCompletionChecks();
     gFailures += RunJobActivityTests();
     gFailures += RunMemoryAdmissionTests();
     gFailures += RunDeferredReleaseTests();
     gFailures += RunPerfRootTests();
     gFailures += RunPipelineTraceTests();
     gFailures += RunJobMemoryTests();
+    gFailures += RunRetainedJobMemoryTests();
+    gFailures += RunSharedRetainedJobMemoryTests();
+    gFailures += RunPartitionedRetainedMemoryTests();
+    gFailures += RunPersistentOutputMemoryTests();
+    gFailures += RunCompletedPreviewMemoryTests();
+    gFailures += RunRetirementMemoryTests();
+    gFailures += RunPreparedRasterPreviewLifetimeTests();
+    gFailures += RunWarpFactoryLifetimeTests();
+    gFailures += RunWarpPreviewLifetimeTests();
     gFailures += RunJobShutdownRetirementTests();
     gFailures += RunJobCloseHookTests();
     gFailures += RunJobSuspendedRetirementTests();
+    gFailures += RunJoinedRetirementAuthorityTests();
+    gFailures += RunHostWorkerStageRetirementTests();
+    gFailures += RunGpuRecordingLaneTests();
+    gFailures += RunExecutionLaneStagesTests();
+    gFailures += RunReservationGrowthTests();
+    gFailures += RunRetainedGrowthTests();
+    gFailures += RunRetainedSlotAdmissionTests();
+    gFailures += RunPreservedContinuationTests();
+    gFailures += RunJobRetirementTests();
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();
+    gFailures += RunContinuationAdjacentPreviewTests();
+    gFailures += RunContinuationPendingViewTests();
+    gFailures += RunOpacityInputOrderTests();
+    gFailures += RunPointerInputStreamTests();
+    gFailures += RunHostPointerInputStreamPeekTests();
+    gFailures += RunHostHueInputTests();
+    gFailures += RunHostPolygonalInputJournalTests();
+    gFailures += RunSamplerInputTests();
+    gFailures += RunSamplerIntentInputTests();
     gFailures += RunContinuationReceiptTests();
     gFailures += RunContinuationRequestTests();
     gFailures += RunHostPathReadTests();
@@ -1826,6 +1988,9 @@ int wmain(int argc, wchar_t** argv)
     TestCrashDumps();
     TestLocalization();
     TestVersionInfo();
+    gFailures += RunPublicationCallbackTests();
+    gFailures += RunPublicationRetentionTests();
+    gFailures += RunSelectionCursorRequestsTests();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

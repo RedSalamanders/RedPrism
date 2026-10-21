@@ -200,7 +200,7 @@ Application::HostOutcome Application::StartColorCancellation(std::uint64_t ordin
     if (_colorPreviewTicket)
     {
         (void)_jobs.Cancel(_colorPreviewTicket.value());
-        _colorPreviewTicket.reset();
+        // The cancelled preview ticket is retained until its exact acknowledgement.
     }
     DocumentChanged();
     return HostOutcome::Pending;

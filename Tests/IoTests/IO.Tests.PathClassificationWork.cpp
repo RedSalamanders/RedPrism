@@ -2,9 +2,12 @@
 
 #include "PathClassificationWork.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <filesystem>
+#include <memory>
+#include <new>
 #include <span>
 #include <string>
 #include <string_view>
@@ -113,6 +116,35 @@ class ScratchDirectory final
 [[nodiscard]] bool HasOnlyStatus(const PathClassificationBatch& result, PathClassificationStatus status) noexcept
 {
     return result.status == status && result.count == 0;
+}
+
+struct ScratchFactoryContext final
+{
+    unsigned int calls = 0;
+    CancelSource* cancellation = nullptr;
+    bool refuse = false;
+};
+
+[[nodiscard]] std::unique_ptr<PathClassificationScratch> CreateTestScratch(void* rawContext) noexcept
+{
+    auto& context = *static_cast<ScratchFactoryContext*>(rawContext);
+    ++context.calls;
+    if (context.cancellation)
+    {
+        (void)context.cancellation->Cancel();
+    }
+    if (context.refuse)
+    {
+        return nullptr;
+    }
+    try
+    {
+        return std::make_unique<PathClassificationScratch>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return nullptr; // This noexcept fixture factory reports only complete allocation refusal.
+    }
 }
 
 void ClassificationRules()
@@ -259,6 +291,62 @@ void EmptyBatchesAndBoundedViews()
            "bounded.counted-uppercase-comp-subview-is-project");
     Expect(backing == backingBefore && nonTerminatedView == original, "bounded.classification-preserves-input-source");
 }
+
+void ScratchAllocationAndCancellation()
+{
+    constexpr std::wstring_view requested = L"counted.PRISM";
+    const std::wstring source = std::wstring(requested) + L".trailing-text";
+    const std::wstring sourceBefore = source;
+    const std::array<std::wstring_view, 1> views{std::wstring_view{source.data(), requested.size()}};
+
+    ScratchFactoryContext refused{0, nullptr, true};
+    const PathClassificationBatch outOfMemory =
+        ClassifyPathBatch(views, {}, PathClassificationScratchSource{&refused, CreateTestScratch});
+    Expect(outOfMemory.status == PathClassificationStatus::OutOfMemory && outOfMemory.count == 0,
+           "scratch.refusal-is-out-of-memory");
+    Expect(std::all_of(outOfMemory.classifications.begin(), outOfMemory.classifications.end(),
+                       [](PathClassification value) { return value == PathClassification{}; }),
+           "scratch.refusal-publishes-default-classifications");
+    Expect(source == sourceBefore && views[0] == requested, "scratch.refusal-preserves-source");
+    Expect(refused.calls == 1, "scratch.refusal-calls-factory-once");
+
+    CancelSource allocationCancelled;
+    ScratchFactoryContext cancelAtAllocation{0, &allocationCancelled, true};
+    const PathClassificationBatch cancelled = ClassifyPathBatch(
+        views, allocationCancelled.Token(), PathClassificationScratchSource{&cancelAtAllocation, CreateTestScratch});
+    Expect(HasOnlyStatus(cancelled, PathClassificationStatus::Cancelled), "scratch.allocation-cancellation-wins");
+    Expect(cancelAtAllocation.calls == 1, "scratch.cancel-calls-factory-once");
+
+    ScratchFactoryContext emptyFactory{};
+    const PathClassificationBatch empty = ClassifyPathBatch(
+        std::span<const std::wstring_view>{}, {}, PathClassificationScratchSource{&emptyFactory, CreateTestScratch});
+    Expect(empty.status == PathClassificationStatus::Ok && empty.count == 0 && emptyFactory.calls == 0,
+           "scratch.empty-batch-skips-factory");
+
+    const std::array<std::wstring_view, 1> invalidPath{std::wstring_view{}};
+    ScratchFactoryContext invalidFactory{};
+    const PathClassificationBatch invalid =
+        ClassifyPathBatch(invalidPath, {}, PathClassificationScratchSource{&invalidFactory, CreateTestScratch});
+    Expect(HasOnlyStatus(invalid, PathClassificationStatus::InvalidInput) && invalidFactory.calls == 0,
+           "scratch.invalid-input-skips-factory");
+
+    CancelSource preCancelled;
+    (void)preCancelled.Cancel();
+    ScratchFactoryContext preCancelledFactory{};
+    const PathClassificationBatch alreadyCancelled = ClassifyPathBatch(
+        views, preCancelled.Token(), PathClassificationScratchSource{&preCancelledFactory, CreateTestScratch});
+    Expect(HasOnlyStatus(alreadyCancelled, PathClassificationStatus::Cancelled) && preCancelledFactory.calls == 0,
+           "scratch.precancelled-batch-skips-factory");
+
+    ScratchFactoryContext successful{};
+    const PathClassificationBatch customScratch =
+        ClassifyPathBatch(views, {}, PathClassificationScratchSource{&successful, CreateTestScratch});
+    Expect(customScratch.status == PathClassificationStatus::Ok && customScratch.count == 1 &&
+               customScratch.classifications[0] == PathClassification::Project,
+           "scratch.custom-buffer-classifies-counted-comp-view");
+    Expect(source == sourceBefore && views[0] == requested, "scratch.custom-buffer-preserves-source");
+    Expect(successful.calls == 1, "scratch.success-calls-factory-once");
+}
 } // namespace
 
 int RunPathClassificationWorkTests()
@@ -267,5 +355,6 @@ int RunPathClassificationWorkTests()
     ClassificationRules();
     InvalidAndCancelledBatches();
     EmptyBatchesAndBoundedViews();
+    ScratchAllocationAndCancellation();
     return gFailures;
 }

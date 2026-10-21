@@ -77,17 +77,45 @@ int RunKernelCliTests()
     check(!ParseArguments({L"--isa", L"scalar", L"--isa", L"sse2"}, parsed, error) && error == L"--isa",
           "duplicate-switch-rejected");
 
-    constexpr std::array<std::wstring_view, 4> kUiBenchmarks{{L"ui", L"ui45", L"ui100", L"ui-smoke"}};
+    constexpr std::array<std::wstring_view, 8> kUiBenchmarks{
+        {L"ui", L"ui45", L"ui100", L"ui-smoke", L"ui-sampler", L"ui-sampler45", L"ui-sampler100", L"ui-sampler-smoke"}};
     for (const std::wstring_view benchmark : kUiBenchmarks)
     {
         std::wstring parsedBenchmark;
         const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
         check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-ui-benchmark-value");
     }
+    constexpr std::array<std::wstring_view, 4> kPreparedSizeBenchmarks{
+        {L"ui-size-prepared", L"ui-size-prepared45", L"ui-size-prepared100", L"ui-size-prepared-smoke"}};
+    for (const std::wstring_view benchmark : kPreparedSizeBenchmarks)
+    {
+        std::wstring parsedBenchmark;
+        const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
+        check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-prepared-size-benchmark-value");
+    }
+    std::wstring layerRowsBenchmark;
+    const bool layerRowsSucceeded = ParseArguments({L"--bench", L"layer-rows"}, parsed, error, &layerRowsBenchmark);
+    check(layerRowsSucceeded && layerRowsBenchmark == L"layer-rows" && error.empty(),
+          "valid-layer-rows-benchmark-value");
+    std::wstring layerRowsSmokeBenchmark;
+    const bool layerRowsSmokeSucceeded =
+        ParseArguments({L"--bench", L"layer-rows-smoke"}, parsed, error, &layerRowsSmokeBenchmark);
+    check(layerRowsSmokeSucceeded && layerRowsSmokeBenchmark == L"layer-rows-smoke" && error.empty(),
+          "valid-layer-rows-smoke-benchmark-value");
+    check(!ParseArguments({L"--bench", L"layer-row"}, parsed, error) && error == L"layer-row",
+          "bench-layer-rows-near-miss-rejected");
     check(!ParseArguments({L"--bench"}, parsed, error) && error == L"--bench", "bench-missing-value-rejected");
     check(!ParseArguments({L"--bench", L""}, parsed, error) && error.empty(), "bench-empty-value-rejected");
     check(!ParseArguments({L"--bench", L"ui-smoke-extra"}, parsed, error) && error == L"ui-smoke-extra",
           "bench-invalid-value-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler-smoke-extra"}, parsed, error) && error == L"ui-sampler-smoke-extra",
+          "bench-sampler-suffixed-value-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler45x"}, parsed, error) && error == L"ui-sampler45x",
+          "bench-sampler45-near-match-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler1000"}, parsed, error) && error == L"ui-sampler1000",
+          "bench-sampler100-near-match-rejected");
+    check(!ParseArguments({L"--bench", L"ui-sampler-Smoke"}, parsed, error) && error == L"ui-sampler-Smoke",
+          "bench-sampler-value-is-case-sensitive");
 
     const RedPrismCommandLineSwitch* isaSwitch = RedPrismFindSwitch(L"--isa");
     const std::wstring help = RedPrismFormatCommandLineHelp();

@@ -1,5 +1,7 @@
 #include "IO.Tests.ProjectPublicationRetry.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "../../Common/Document.h"
 #include "../../Common/ProjectStore.h"
 
@@ -83,7 +85,7 @@ struct Control final
     unsigned int rollbackFailures = 0;
     unsigned int timerFaultError = 0;
     bool foreignCreated = false;
-    std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1> visits{};
+    std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> visits{};
 };
 
 bool LocksSource(Mode mode) noexcept
@@ -196,7 +198,7 @@ void RunCase(const std::filesystem::path& root, bool replacement, Mode mode)
     auto layer = ImageLayer::Blank(L"Original publication", {2, 2});
     constexpr std::array<std::uint8_t, 16> pixels{7, 19, 31, 255, 7, 19, 31, 255, 7, 19, 31, 255, 7, 19, 31, 255};
     layer.asset = RasterAsset{Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size()), {}, layer.name};
-    original.layers.push_back(layer);
+    EditDocumentFixture(original, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
     Tree before;
     Tree earlierBackup;
     const auto backup = destination.wstring() + L".old";
@@ -220,7 +222,7 @@ void RunCase(const std::filesystem::path& root, bool replacement, Mode mode)
     }
     auto next = original;
     next.resolution = 144;
-    next.layers.front().name = L"Published replacement";
+    EditDocumentFixture(next, [](DocumentFixture& fixture) { fixture.layers.front().name = L"Published replacement"; });
     Control control{mode, destination, replacement};
     const ProjectIoObserver observer{[](void* opaque, ProjectIoStage stage, unsigned int value) noexcept
                                      {

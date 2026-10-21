@@ -110,8 +110,10 @@
     <ClInclude Include="..\Common\Version.h" />
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\AdjustmentClosureWork.h" />
+    <ClInclude Include="..\Common\CancellationObservation.h" />
     <ClInclude Include="..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\Common\LayerMetadataWork.h" />
     <ClInclude Include="..\Common\SelectionNudgeWork.h" />
     <ClInclude Include="..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\Common\SelectionMoveWork.h" />
@@ -127,8 +129,17 @@
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\Common\ImageImportHistory.h" />
     <ClInclude Include="..\Common\HistoryEntries.h" />
+    <ClInclude Include="..\Common\InputRevision.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
+    <ClInclude Include="..\Common\PixelMoveOpeningWork.h" />
+    <ClInclude Include="..\Common\PixelMoveClosureWork.h" />
+    <ClInclude Include="..\Common\PixelMovePreviewWork.h" />
+    <ClInclude Include="..\Common\RasterUploadReductionWork.h" />
+    <ClInclude Include="..\Common\RasterUploadWork.h" />
+    <ClInclude Include="..\Common\RasterUploadLayout.h" />
+    <ClInclude Include="..\Common\RasterResidencyPlanWork.h" />
+    <ClInclude Include="..\Common\RasterResidencyManifestWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
     <ClInclude Include="..\Common\Selection.h" />
     <ClInclude Include="..\Common\BrushStroke.h" />
@@ -138,16 +149,23 @@
     <ClInclude Include="Runtime.Tests.FileWorkTestGate.h" />
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
+    <ClInclude Include="GpuRasterUploadJob.h" />
+    <ClInclude Include="GpuResidencyBudget.h" />
+    <ClInclude Include="GpuRasterTextureCreation.h" />
+    <ClInclude Include="GpuMipSlice.h" />
     <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ClipboardDibWork.h" />
     <ClInclude Include="..\Common\CodecFileStream.h" />
     <ClInclude Include="..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
+    <ClInclude Include="..\Common\Win32FilePath.h" />
     <ClInclude Include="..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\Common\ImageImportWork.h" />
     <ClInclude Include="..\Common\ProjectSaveWork.h" />
     <ClInclude Include="Runtime.Tests.ProjectSaveTestGate.h" />
+    <ClInclude Include="WorkerWriteCompletion.h" />
+    <ClInclude Include="Runtime.Tests.EndSessionWriteTestGate.h" />
     <ClInclude Include="Runtime.Tests.ProjectOpenTestGate.h" />
     <ClInclude Include="Runtime.Tests.ImageImportTestGate.h" />
     <ClInclude Include="..\Common\ExportWork.h" />
@@ -158,15 +176,19 @@
     <ClInclude Include="..\Common\ZipOwner.h" />
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
+    <ClInclude Include="FinalEditSource.h" />
+    <ClInclude Include="FinalPublicationWork.h" />
+    <ClInclude Include="UiCancellationFrame.h" />
     <ClInclude Include="Runtime.Tests.HistoryRestoreTestGate.h" />
     <ClInclude Include="Runtime.Tests.SelectionCommandTestGate.h" />
+    <ClInclude Include="Runtime.Tests.LayerMetadataTestGate.h" />
+    <ClInclude Include="ModalProbePrompts.h" />
     <ClInclude Include="Runtime.Tests.SelectionNudgeTestGate.h" />
     <ClInclude Include="Runtime.Tests.SelectionMoveCloseTestGate.h" />
     <ClInclude Include="Runtime.Tests.WandLayerHostTestGate.h" />
     <ClInclude Include="Runtime.Tests.DocumentLifecycleTestGate.h" />
     <ClInclude Include="Runtime.Tests.ApplicationShutdownTestProbe.h" />
     <ClInclude Include="Runtime.Tests.ApplicationProcessingTestProbe.h" />
-    <ClInclude Include="Runtime.Tests.ViewportFixture.h" />
     <ClInclude Include="Runtime.Tests.ColorWorkTestGate.h" />
     <ClInclude Include="Runtime.Tests.SizingWorkTestGate.h" />
     <ClInclude Include="Runtime.Tests.RasterEditTestGate.h" />
@@ -175,6 +197,7 @@
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
+    <ClInclude Include="SelectionOutlineWork.h" />
     <ClInclude Include="AdjustControls.h" />
     <ClInclude Include="ChromeEvents.h" />
     <ClInclude Include="ChromeHost.h" />
@@ -198,20 +221,43 @@
   <ItemGroup>
     <ClCompile Include="..\Common\WindowCapture.cpp" />
     <ClCompile Include="..\Common\Document.cpp" />
+    <ClCompile Include="..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\Common\SharedRetainedMemory.cpp" />
+    <ClCompile Include="..\Common\SharedPublicationMemory.cpp" />
+    <ClInclude Include="..\Common\SharedPublicationMemory.h" />
     <ClCompile Include="..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\Common\UiTiming.cpp" />
     <ClCompile Include="..\Common\BenchmarkMachine.cpp" />
     <ClCompile Include="..\Common\TransformEdit.cpp" />
     <ClCompile Include="..\Common\Selection.cpp" />
     <ClCompile Include="..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\Common\StrokeFinishWork.cpp" />
+    <ClCompile Include="..\Common\StrokeOpeningWork.cpp" />
+    <ClCompile Include="..\Common\WarpSampleWork.cpp" />
+    <ClInclude Include="..\Common\WarpSampleWork.h" />
+    <ClCompile Include="..\Common\WarpOpeningWork.cpp" />
+    <ClInclude Include="..\Common\WarpOpeningWork.h" />
+    <ClCompile Include="..\Common\StrokeSampleWork.cpp" />
+    <ClInclude Include="..\Common\StrokeSampleWork.h" />
     <ClCompile Include="..\Common\Heal.cpp" />
     <ClCompile Include="..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\Common\WarpFinishWork.cpp" />
+    <ClInclude Include="..\Common\WarpFinishWork.h" />
+    <ClCompile Include="..\Common\WarpRetirementWork.cpp" />
+    <ClInclude Include="..\Common\WarpRetirementWork.h" />
+    <ClCompile Include="..\Common\PlacedRasterWork.cpp" />
+    <ClInclude Include="..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\Common\LayerMetadataWork.cpp" />
     <ClCompile Include="..\Common\SelectionNudgeWork.cpp" />
+    <ClCompile Include="..\Common\BoundedClipper\BoundedSelectionBoolean.cpp" />
+    <ClCompile Include="..\Common\BoundedClipper\clipper.engine.cpp" />
     <ClCompile Include="..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\Common\CopyPixelsWork.cpp" />
@@ -237,9 +283,34 @@
     <ClCompile Include="..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
+    <ClCompile Include="..\Common\PendingDisplaySource.cpp" />
+    <ClCompile Include="..\Common\AdjustmentDisplayAdmission.cpp" />
     <ClCompile Include="..\Common\ColorEditHistory.cpp" />
+    <ClCompile Include="..\Common\ColorDisplayWork.cpp" />
+    <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\Common\PixelMoveOpeningWork.cpp" />
+    <ClCompile Include="..\Common\PixelMoveClosureWork.cpp" />
+    <ClCompile Include="..\Common\PreparedRasterPreview.cpp" />
+    <ClInclude Include="..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\Common\PublicationGraphAllocator.h" />
+    <ClInclude Include="..\Common\PublicationObject.h" />
+    <ClInclude Include="..\Common\AccountedPublicationObject.h" />
+    <ClInclude Include="..\Common\LocallyOwnedPublication.h" />
+    <ClInclude Include="..\Common\PublicationAllocationLedger.h" />
+    <ClInclude Include="..\Common\PersistentOwnerIndex.h" />
+    <ClInclude Include="..\Common\ResidencyChangeJournal.h" />
+    <ClInclude Include="..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
+    <ClInclude Include="..\Common\BoundedClipper\Workspace.h" />
+    <ClInclude Include="..\Common\BoundedClipper\clipper.core.h" />
+    <ClInclude Include="..\Common\BoundedClipper\clipper.engine.h" />
+    <ClInclude Include="..\Common\BoundedClipper\clipper.version.h" />
+    <ClCompile Include="..\Common\RasterUploadReductionWork.cpp" />
+    <ClCompile Include="..\Common\RasterUploadWork.cpp" />
+    <ClCompile Include="..\Common\RasterUploadLayout.cpp" />
+    <ClCompile Include="..\Common\RasterResidencyPlanWork.cpp" />
+    <ClCompile Include="..\Common\RasterResidencyManifestWork.cpp" />
     <ClCompile Include="..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\Common\DocumentSizeHistory.cpp" />
@@ -248,23 +319,50 @@
     <ClCompile Include="ApplicationProjectSaveJobs.cpp" />
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
+    <ClCompile Include="ApplicationHistoryResidencyJobs.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidency.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationHistoryResidencyShutdown.cpp" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
+    <ClCompile Include="ApplicationLayerMetadataJobs.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerMetadata.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacity.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationLayerOpacityContexts.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionNudge.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineLiteral.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionSizeOutlineFault.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasLiteral.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionNewCanvasFault.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectLiteral.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionCloseProjectFault.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineLiteral.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSelectionLifecycleOutlineFault.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionNudgeFault.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveClose.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveCaller.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveFollowup.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandHost.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandLifecycle.cpp" />
+    <ClCompile Include="Application.Tests.PanelWandFollowthrough.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionMoveHeader.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationSelectionCommand.cpp" />
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
+    <ClCompile Include="ApplicationWandCompositeHostJobs.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationWandCompositeHost.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerIntent.cpp" />
+    <ClCompile Include="ApplicationSamplerInput.cpp" />
+    <ClCompile Include="ApplicationSamplerJobs.cpp" />
+    <ClCompile Include="ApplicationHueReadbackJobs.cpp" />
+    <ClCompile Include="ApplicationHueReadbackPublication.cpp" />
+    <ClCompile Include="ApplicationHueInput.cpp" />
+    <ClCompile Include="Application.Tests.HueReadbackHost.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerHost.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationSamplerCaller.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationWandLayerHost.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationImageImportResidency.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationImageWrapperResidency.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
@@ -279,28 +377,85 @@
     <ClCompile Include="..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\Common\WorkerWake.cpp" />
     <ClCompile Include="..\Common\Jobs.cpp" />
     <ClCompile Include="..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
+    <ClCompile Include="..\Common\LayerRowsWork.cpp" />
+    <ClInclude Include="..\Common\LayerRowsWork.h" />
+    <ClCompile Include="ApplicationPreparedLayerRowsJobs.cpp" />
+    <ClCompile Include="PreparedLayerRows.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsIdentity.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsAccessibility.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsNotification.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRows.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsBoundary.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsInteraction.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsRetry.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationPreparedLayerRowsEdit.cpp" />
+    <ClInclude Include="Runtime.Tests.LayerRowsTestGate.h" />
+    <ClInclude Include="PreparedLayerRows.h" />
+    <ClInclude Include="../Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationClipboardJobs.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationClipboard.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationClipboardPrefill.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationClipboardDelayed.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationClipboardFault.cpp" />
+    <ClCompile Include="Application.Tests.ClipboardEndSession.cpp" />
+    <ClCompile Include="Application.Tests.FileEndSession.cpp" />
     <ClCompile Include="..\Tests\Runtime.Tests.ClipboardMergedBudget.cpp" />
     <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
+    <ClCompile Include="ApplicationCancellationBenchmark.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCancellationBenchmark.cpp" />
+    <ClInclude Include="UiCancellationBenchmark.h" />
+    <ClInclude Include="UiCancellationObservation.h" />
+    <ClInclude Include="UiCancellationBody.h" />
+    <ClInclude Include="UiCancellationCapture.h" />
+    <ClInclude Include="UiCancellationRefusal.h" />
+    <ClCompile Include="ApplicationLayerRowsBenchmark.cpp" />
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayHost.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationColorDisplayAdmissionHost.cpp" />
     <ClCompile Include="ApplicationCommitJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentClosureJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentOpeningJobs.cpp" />
     <ClCompile Include="ApplicationColorCancellationJobs.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationColorCancellation.cpp" />
     <ClCompile Include="ApplicationContinuations.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
+    <ClCompile Include="ApplicationStrokeOpeningJobs.cpp" />
+    <ClCompile Include="ApplicationStrokeFinishJobs.cpp" />
+    <ClCompile Include="Application.Tests.StrokeOpening.cpp" />
+    <ClCompile Include="Application.Tests.SealedStroke.cpp" />
+    <ClCompile Include="Application.Tests.SealedClone.cpp" />
+    <ClCompile Include="ApplicationCloneReadbackJobs.cpp" />
+    <ClCompile Include="ApplicationCloneLayerSourceJobs.cpp" />
+    <ClCompile Include="Application.Tests.CloneLayerSource.cpp" />
+    <ClCompile Include="Application.Tests.CloneLayerSourceFaults.cpp" />
+    <ClCompile Include="Application.Tests.PreparedLayerRowsGroupSelection.cpp" />
+    <ClCompile Include="Application.Tests.CloneReadback.cpp" />
+    <ClCompile Include="Application.Tests.CloneInputPolicy.cpp" />
+    <ClInclude Include="CloneReadbackState.h" />
+    <ClInclude Include="Runtime.Tests.CloneReadbackTestGate.h" />
+    <ClInclude Include="Runtime.Tests.StrokeOpeningTestGate.h" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushInput.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCancellation.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushPalette.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushCompeting.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushBoundary.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushMaskPaletteExtension.cpp" />
+    <ClCompile Include="ApplicationCanvasLifetime.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeCancel.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAccepted.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeModal.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeAuthority.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeWindow.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationCanvasBrushLifetimeShutdown.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />
@@ -318,6 +473,7 @@
     <ClCompile Include="ApplicationDuplicateGesture.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationDuplicateGesture.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationTransform.cpp" />
+    <ClCompile Include="Runtime.Tests.ApplicationTransformShapeRedraw.cpp" />
     <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationTransformPreview.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationTransformPolicy.cpp" />
@@ -327,6 +483,12 @@
     <ClCompile Include="Runtime.Tests.ApplicationLifecycleClose.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationShutdown.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationProcessing.cpp" />
+    <ClCompile Include="Application.Tests.ResponsiveStartup.cpp" />
+    <ClCompile Include="Application.Tests.ResponsiveSelectionStartup.cpp" />
+    <ClCompile Include="Application.Tests.OpacityClosureGuard.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineTiming.cpp" />
+    <ClCompile Include="ApplicationResponsiveSources.cpp" />
+    <ClCompile Include="Application.Tests.HistoryResidencyStartup.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationLiveShutdown.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationLeaseShutdown.cpp" />
     <ClCompile Include="Runtime.Tests.ApplicationLayerCopy.cpp" />
@@ -347,10 +509,23 @@
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="GpuCapabilities.cpp" />
     <ClCompile Include="GpuWork.cpp" />
+    <ClCompile Include="GpuCommandStream.cpp" />
+    <ClCompile Include="GpuCommandPump.cpp" />
+    <ClInclude Include="GpuCommandPump.h" />
+    <ClInclude Include="GpuCommandStream.h" />
+    <ClCompile Include="GpuRecordingCommands.cpp" />
+    <ClInclude Include="GpuRecordingCommands.h" />
+    <ClCompile Include="GpuUploadWork.cpp" />
+    <ClCompile Include="GpuRasterUploadJob.cpp" />
+    <ClCompile Include="GpuResidencyBudget.cpp" />
+    <ClCompile Include="GpuRasterTextureCreation.cpp" />
     <ClCompile Include="DocumentReadbackJob.cpp" />
+    <ClInclude Include="RecordedDocumentReadbackJob.h" />
+    <ClCompile Include="RecordedDocumentReadbackJob.cpp" />
     <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="ApplicationMergeJobs.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
+    <ClCompile Include="SelectionOutlineWork.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />
     <ClCompile Include="ClipboardTransfer.cpp" />
     <ClCompile Include="ChromeHost.cpp" />
@@ -359,6 +534,7 @@
     <ClCompile Include="FileDialogs.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="Application.Tests.SizeFinalPublication.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\CompositionVertex.hlsl">
@@ -391,6 +567,16 @@
       <VariableName>g_BrushCoverageShader</VariableName>
       <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
+    <FxCompile Include="Shaders\RasterMip.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.0</ShaderModel>
+      <EntryPointName>PixelMain</EntryPointName>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <HeaderFileOutput>$(IntDir)RasterMipPixelShader.h</HeaderFileOutput>
+      <ObjectFileOutput>$(IntDir)RasterMipPixelShader.cso</ObjectFileOutput>
+      <VariableName>g_RasterMipPixelShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
+    </FxCompile>
     <FxCompile Include="Shaders\CompositionBlit.hlsl">
       <ShaderType>Pixel</ShaderType>
       <ShaderModel>5.0</ShaderModel>
@@ -407,7 +593,143 @@
     <ResourceCompile Include="RedPrism.rc" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ClCompile Include="RecordedDisplayGraph.cpp" />
+    <ClCompile Include="..\Common\UtilityReadbackAdmission.cpp" />
+    <ClInclude Include="..\Common\UtilityReadbackAdmission.h" />
+    <ClCompile Include="UtilityReadbackOwnerService.cpp" />
+    <ClInclude Include="UtilityReadbackOwnerService.h" />
+    <ClCompile Include="RecordedUtilityGraph.cpp" />
+    <ClInclude Include="RecordedUtilityGraph.h" />
+    <ClCompile Include="CommittedDisplayController.cpp" />
+    <ClCompile Include="ApplicationCommittedDisplay.cpp" />
+    <ClCompile Include="Application.Tests.CommittedDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingRasterDisplay.cpp" />
+    <ClCompile Include="Application.Tests.PendingDisplayTransport.cpp" />
+    <ClCompile Include="Application.Tests.RowPublication.cpp" />
+    <ClInclude Include="Application.Tests.RowPublication.h" />
+    <ClCompile Include="Application.Tests.StrokeFinish.cpp" />
+    <ClCompile Include="Application.Tests.WarpFinish.cpp" />
+    <ClCompile Include="Application.Tests.WarpLive.cpp" />
+    <ClCompile Include="Application.Tests.WarpLiveFault.cpp" />
+    <ClCompile Include="Application.Tests.WarpLiveInput.cpp" />
+    <ClCompile Include="Application.Tests.WarpLiveTargets.cpp" />
+    <ClCompile Include="Application.Tests.WarpLiveAdmission.cpp" />
+    <ClCompile Include="Application.Tests.WarpLiveStale.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSample.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleFault.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleInput.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleAdmission.cpp" />
+    <ClCompile Include="Application.Tests.StrokeSampleParity.cpp" />
+    <ClInclude Include="Runtime.Tests.StrokeFinishTestGate.h" />
+    <ClInclude Include="RecordedDisplayGraph.h" />
+    <ClInclude Include="RecordedPixelPreview.h" />
+    <ClInclude Include="CommittedDisplayController.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\InverseSelectionWork.cpp" />
+    <ClInclude Include="..\Common\InverseSelectionWork.h" />
+    <ClCompile Include="ApplicationInverseSelectionJobs.cpp" />
+    <ClCompile Include="Application.Tests.InverseSelection.cpp" />
+    <ClCompile Include="Application.Tests.InverseSelectionFailures.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionOffsetWork.cpp" />
+    <ClInclude Include="..\Common\SelectionOffsetWork.h" />
+    <ClCompile Include="..\Common\BoundedClipper\BoundedSelectionOffset.cpp" />
+    <ClInclude Include="..\Common\BoundedClipper\BoundedSelectionOffset.h" />
+    <ClCompile Include="..\Common\BoundedClipper\clipper.offset.cpp" />
+    <ClInclude Include="..\Common\BoundedClipper\clipper.offset.h" />
+    <ClCompile Include="ApplicationSelectionOffsetJobs.cpp" />
+    <ClInclude Include="Runtime.Tests.SelectionOffsetTestGate.h" />
+    <ClCompile Include="Application.Tests.SelectionOffset.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOffsetFailures.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOffsetLarge.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionOutlineRasterWork.cpp" />
+    <ClCompile Include="PreparedSelectionOutlineGpu.cpp" />
+    <ClCompile Include="SelectionOutlineDisplayController.cpp" />
+    <ClCompile Include="ApplicationSelectionOutlineDisplay.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuHost.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineGpuParity.cpp" />
+    <ClCompile Include="Application.Tests.SelectionOutlineOwnerCapacity.cpp" />
+    <ClInclude Include="..\Common\SelectionOutlineRasterWork.h" />
+    <ClInclude Include="PreparedSelectionOutlineGpu.h" />
+    <ClInclude Include="SelectionOutlineDisplayController.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="..\Build\RedPrism.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <ClInclude Include="..\Common\PathClassificationRead.h" />
+    <ClCompile Include="..\Common\PathClassificationRead.cpp" />
+    <ClInclude Include="..\Common\PathReadWait.h" />
+    <ClCompile Include="..\Common\PathReadWait.cpp" />
+    <ClCompile Include="Application.Tests.PathReadContinuation.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\LassoOpeningWork.cpp" />
+    <ClInclude Include="..\Common\LassoOpeningWork.h" />
+    <ClCompile Include="..\Common\LassoFinishGeometry.cpp" />
+    <ClInclude Include="..\Common\LassoFinishGeometry.h" />
+    <ClCompile Include="..\Common\LassoFinishWork.cpp" />
+    <ClCompile Include="..\Common\LassoDraftRasterWork.cpp" />
+    <ClCompile Include="PreparedLassoDraftGpu.cpp" />
+    <ClCompile Include="LassoDraftDisplayController.cpp" />
+    <ClCompile Include="ApplicationLassoDraftDisplay.cpp" />
+    <ClCompile Include="Application.Tests.LassoDraftDisplay.cpp" />
+    <ClCompile Include="ApplicationLassoOpeningJobs.cpp" />
+    <ClCompile Include="ApplicationLassoFinishJobs.cpp" />
+    <ClCompile Include="ApplicationLassoInput.cpp" />
+    <ClCompile Include="ApplicationSelectionPressJobs.cpp" />
+    <ClCompile Include="ApplicationPolygonalJobs.cpp" />
+    <ClCompile Include="ApplicationPolygonalPressJobs.cpp" />
+    <ClCompile Include="Application.Tests.PolygonalDispatch.cpp" />
+    <ClCompile Include="Application.Tests.PolygonalPress.cpp" />
+    <ClCompile Include="PolygonalDrawingJob.cpp" />
+    <ClCompile Include="ApplicationSelectionCursorJobs.cpp" />
+    <ClCompile Include="SelectionOutlineGestureJob.cpp" />
+    <ClInclude Include="SelectionOutlineGestureState.h" />
+    <ClInclude Include="SelectionOutlineGestureMemory.h" />
+    <ClCompile Include="Application.Tests.SelectionPressGesture.cpp" />
+    <ClCompile Include="Application.Tests.CtrlPixelPress.cpp" />
+    <ClCompile Include="Application.Tests.DisplayOpeningRetirement.cpp" />
+    <ClCompile Include="Application.Tests.RectanglePress.cpp" />
+    <ClCompile Include="Application.Tests.ClipboardContention.cpp" />
+    <ClCompile Include="Application.Tests.MarqueeModes.cpp" />
+    <ClCompile Include="Application.Tests.SelectionCursor.cpp" />
+    <ClCompile Include="Application.Tests.FreehandPress.cpp" />
+    <ClCompile Include="Application.Tests.SelectionPressShutdown.cpp" />
+    <ClCompile Include="Application.Tests.LassoHostInput.cpp" />
+    <ClInclude Include="..\Common\LassoFinishWork.h" />
+    <ClInclude Include="..\Common\BoundedLassoGesture.h" />
+    <ClInclude Include="HostLassoInput.h" />
+    <ClInclude Include="HostHueInput.h" />
+    <ClInclude Include="..\Common\LassoDraftRasterWork.h" />
+    <ClInclude Include="PreparedLassoDraftGpu.h" />
+    <ClInclude Include="LassoDraftDisplayController.h" />
+    <ClInclude Include="Runtime.Tests.LassoWorkTestGate.h" />
+    <ClInclude Include="..\Tests\Support\Support.Tests.HistoryWorkFixture.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Common\SelectionHitWork.cpp" />
+    <ClInclude Include="..\Common\SelectionHitWork.h" />
+    <ClCompile Include="..\Common\SelectionMoveOpeningWork.cpp" />
+    <ClInclude Include="..\Common\SelectionMoveOpeningWork.h" />
+    <ClInclude Include="HostSelectionPressInput.h" />
+    <ClInclude Include="HostSelectionGestureInput.h" />
+    <ClInclude Include="HostPolygonalInputJournal.h" />
+    <ClInclude Include="SelectionOutlineGestureJob.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Application.Tests.ScalarSelectionClosure.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ApplicationPixelFinalPublication.cpp" />
+    <ClCompile Include="OriginalDisplayPublication.cpp" />
+    <ClInclude Include="OriginalDisplayPublication.h" />
+    <ClInclude Include="SelectionPixelFinalWork.h" />
+  </ItemGroup>
 </Project>

@@ -15,8 +15,15 @@ param(
     [switch] $Full,
     [switch] $SkipBuild,
     [switch] $SkipTooling,
-    [ValidateRange(0,256)][int]$MaxCpuCount=0,
-    [ValidateRange(0,65535)][int]$BuildNumber=0
+    [ValidateRange(0, 65535)]
+    [int] $BuildNumber = 0,
+
+    [ValidateRange(0, 256)]
+    [int] $MaxCpuCount = 0,
+
+    # A deadlock/failure bound, never a performance target. Extended bounds require native ARM64.
+    [ValidateRange(1200, 5400)]
+    [int] $SelfTestTimeoutSeconds = 1200
 )
 
 Set-StrictMode -Version Latest
@@ -29,23 +36,27 @@ $Suites=@($Suites|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-
 foreach($suite in $Suites){if($suite -notin $available){throw "Unknown suite '$suite'."}}
 if($SkipTooling){$Suites=@($Suites|Where-Object{$_ -ne 'Tooling'})}
 if($Configuration -ne 'ASan Debug'){$Suites=@($Suites|Where-Object{$_ -ne 'Stress'})}
+$nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
+    throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'
+}
+
+if ($SelfTestTimeoutSeconds -ne 1200 -and ($Platform -ne 'ARM64' -or $nativeArchitecture -ne 'Arm64')) {
+    throw 'An extended self-test failure bound requires native ARM64.'
+}
+
 if('Tooling' -in $Suites){
     & (Join-Path $repoRoot 'validate.ps1')
     if($LASTEXITCODE -ne 0){throw 'Independent validation failed.'}
 }
 if(-not @($Suites|Where-Object{$_ -ne 'Tooling'}).Count){Write-Host 'Independent tooling passed; native coverage NOT_EVALUATED';exit 0}
 & (Join-Path $repoRoot 'Tools/Fold-Changelog.ps1') -Check
-$nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
-    throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'
-}
-
 $buildArguments = @{
     Configuration = $Configuration
     Platform = $Platform
+    MaxCpuCount = $MaxCpuCount
 }
 if($BuildNumber -gt 0){$buildArguments.BuildNumber=$BuildNumber}
-if($MaxCpuCount -gt 0){$buildArguments.MaxCpuCount=$MaxCpuCount}
 if ($Rebuild) {
     $buildArguments.Rebuild = $true
 }
@@ -184,10 +195,10 @@ $selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
 Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
 $selfTestLog = Join-Path $outputRoot 'RedPrism.self-test.log'
 Remove-Item -LiteralPath $selfTestLog -ErrorAction SilentlyContinue
-$selfTestTimeoutSeconds = 1200
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
+Write-Host "Hidden WARP self-test PID $($selfTest.Id); failure bound $SelfTestTimeoutSeconds seconds. This is not a performance qualification."
 if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).
@@ -268,6 +279,38 @@ Write-Host 'Running UI benchmark smoke...' -ForegroundColor Cyan
     -ExecutablePath $executable -OutputDirectory $outputRoot
 if ($LASTEXITCODE -ne 0) {
     throw "UI benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+Write-Host 'Running prepared display benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute prepared
+if ($LASTEXITCODE -ne 0) {
+    throw "Prepared display benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+Write-Host 'Running prepared Size final-publication benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute size-prepared
+if ($LASTEXITCODE -ne 0) {
+    throw "Prepared Size final-publication benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+foreach ($cancelRoute in @('direct', 'prepared')) {
+    Write-Host "Running UI cancellation smoke ($cancelRoute)..." -ForegroundColor Cyan
+    & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkSmokeTests.ps1') `
+        -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute $cancelRoute
+    if ($LASTEXITCODE -ne 0) { throw "UI cancellation smoke ($cancelRoute) failed with exit code $LASTEXITCODE." }
+    $global:LASTEXITCODE = 0
+}
+
+Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Layer-row benchmark smoke failed with exit code $LASTEXITCODE."
 }
 $global:LASTEXITCODE = 0
 

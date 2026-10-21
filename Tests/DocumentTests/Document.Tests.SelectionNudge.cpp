@@ -1,5 +1,7 @@
 #include "Document.Tests.SelectionNudge.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "SelectionNudgeWork.h"
@@ -623,6 +625,109 @@ void WorkerPreparationAndDisposal()
         expect(trial.disposed != owner, "actual-prepared-aggregate-disposed-off-owner");
     }
 }
+void LateResidencyKeepsOriginalNudgeAndZeroOffset()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    auto session = Session();
+    const std::uint64_t outlineBytes = session.Selection().value().loops.StorageBytes();
+    constexpr std::array<std::uint8_t, 4> pixel{51, 52, 53, 255};
+    const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+    auto historical = DocumentFixture::Copy(session.Document().value());
+    historical.layers.front().asset = RasterAsset{sparse, {}, L"Historical nudge pixel"};
+    session.history = DocumentHistory(100, 8 + outlineBytes);
+    auto baseline = DocumentHistory::PrepareEdit(session.history.CaptureState(), std::move(historical).Seal(),
+                                                 session.ActiveLayerID(), session.Document(), session.ActiveLayerID(),
+                                                 L"Saved sparse history");
+    if (!baseline || !session.history.Publish(baseline.value()))
+    {
+        Expect(false, "residency-literal-baseline");
+        return;
+    }
+    baseline.reset();
+    session.history.MarkSaved();
+    const auto before = session.Document();
+    const auto revision = session.history.CurrentRevision();
+    const auto generation = session.Generation();
+    const auto history = session.history.CaptureState();
+    auto input = session.PrepareSelectionNudgeInput(1, 0);
+    auto prepared = input ? DocumentSession::PrepareSelectionNudgePublication(std::move(input.value())) : std::nullopt;
+    if (!prepared)
+    {
+        Expect(false, "residency-prepare-nudge");
+        return;
+    }
+    const auto* pixels = sparse.Data();
+    DocumentHistory::ResidencyPermit permit;
+    Expect(pixels && pixels[0] == 51 && pixels[1] == 52 && pixels[2] == 53 && pixels[3] == 255 && pixels[4] == 1 &&
+               sparse.ByteSize() == 8 && session.history.RetainedBytes(before) == 12 &&
+               prepared.value().TryAcquireHistoryResidency(permit) == Validation::Refresh,
+           "residency-literal-cache-growth-requests-worker-refresh");
+    CancelSource stop;
+    (void)stop.Cancel();
+    Expect(!prepared.value().RefreshHistoryResidency(stop.Token()) && session.Document() == before &&
+               session.Generation() == generation && session.history.IsCurrent(history) &&
+               session.history.CurrentRevision() == revision && !session.history.IsModified(),
+           "residency-cancelled-refresh-preserves-original-outline-opening-and-history");
+    bool fault = false;
+    const DocumentHistory::PrepareObserver observer{[](void*, DocumentHistory::PrepareStage stage)
+                                                    {
+                                                        if (stage == DocumentHistory::PrepareStage::StorageIndexClone)
+                                                            throw std::bad_alloc{};
+                                                    },
+                                                    nullptr};
+    try
+    {
+        (void)prepared.value().RefreshHistoryResidency({}, observer);
+    }
+    catch (const std::bad_alloc&)
+    {
+        fault = true; // Explicit injected construction failure; the worker runner owns production translation.
+    }
+    Expect(fault && session.Document() == before && session.Generation() == generation &&
+               session.history.IsCurrent(history) && !session.history.IsModified() &&
+               prepared.value().TryAcquireHistoryResidency(permit) == Validation::Refresh,
+           "residency-refresh-allocation-failure-retains-sealed-nudge-and-owner-authority");
+    PreparedSelectionNudge moved(std::move(prepared.value()));
+    Expect(prepared.value().TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+               !prepared.value().RefreshHistoryResidency(),
+           "residency-moved-source-refuses-refresh-and-permit");
+    const bool refreshed = moved.RefreshHistoryResidency();
+    const auto ready = moved.TryAcquireHistoryResidency(permit);
+    const bool applied = refreshed && ready == Validation::Ready && session.ApplyPreparedSelectionNudgeIfCurrent(moved);
+    permit.Reset();
+    Expect(
+        applied &&
+            LiteralSelection(session, true, {SelectionLoop{Vec2{11, 10}, Vec2{31, 10}, Vec2{31, 30}, Vec2{11, 30}}}) &&
+            session.Generation() == generation + 2 && session.history.CurrentRevision() != revision &&
+            session.history.IsModified() && session.history.UndoCount() == 1 &&
+            session.history.UndoName() == L"Move Selection" &&
+            session.history.RetainedBytes(session.Document()) == outlineBytes,
+        "residency-after-outline-witness-refreshes-one-literal-nudge-and-trims-oldest-cache");
+    Expect(applied && moved.TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+               !moved.RefreshHistoryResidency() && !session.ApplyPreparedSelectionNudgeIfCurrent(moved),
+           "residency-applied-nudge-refuses-republication-and-refresh");
+
+    auto zeroSession = Session();
+    const auto zeroDocument = zeroSession.Document();
+    const auto zeroRevision = zeroSession.history.CurrentRevision();
+    const auto zeroGeneration = zeroSession.Generation();
+    auto zeroInput = zeroSession.PrepareSelectionNudgeInput(0, 0);
+    auto zero =
+        zeroInput ? DocumentSession::PrepareSelectionNudgePublication(std::move(zeroInput.value())) : std::nullopt;
+    DocumentHistory::ResidencyPermit zeroPermit;
+    const bool zeroRefreshed = zero && zero.value().RefreshHistoryResidency();
+    const auto zeroReady = zero ? zero.value().TryAcquireHistoryResidency(zeroPermit) : Validation::Invalid;
+    const bool zeroApplied = zeroRefreshed && zeroReady == Validation::Ready &&
+                             zeroSession.ApplyPreparedSelectionNudgeIfCurrent(zero.value());
+    zeroPermit.Reset();
+    Expect(zeroApplied && zeroSession.Document() == zeroDocument &&
+               zeroSession.history.CurrentRevision() == zeroRevision && zeroSession.Generation() == zeroGeneration + 2,
+           "residency-zero-offset-refresh-uses-original-witness-and-keeps-existing-acknowledgement");
+    Expect(zeroApplied && zero.value().TryAcquireHistoryResidency(zeroPermit) == Validation::Invalid &&
+               !zero.value().RefreshHistoryResidency(),
+           "residency-zero-offset-applied-output-is-single-use");
+}
 } // namespace
 
 int RunSelectionNudgeTests()
@@ -638,6 +743,7 @@ int RunSelectionNudgeTests()
     CapacityAndCachedGeometry();
     HistoryPreparationFailures();
     WorkerPreparationAndDisposal();
+    LateResidencyKeepsOriginalNudgeAndZeroOffset();
     std::printf("%d selection-nudge assertions; %d failed.\n", gAssertions, gFailures);
     return gFailures;
 }

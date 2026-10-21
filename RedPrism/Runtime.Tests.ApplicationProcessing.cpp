@@ -16,6 +16,20 @@ constexpr std::size_t kRetryCaseCount = 2 * RetryWaitQueue::kCapacity;
 constexpr HRESULT kCheckpointError = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 constexpr HRESULT kRetryError = E_ACCESSDENIED;
 
+class InertUtilityPrefix final : public OwnerWorkPump
+{
+  public:
+    bool HasPending() const noexcept override
+    {
+        return false;
+    }
+    bool HasReady() const noexcept override
+    {
+        return false;
+    }
+    void Pump() noexcept override {}
+};
+
 struct ProcessingCase final
 {
     ApplicationProcessingStage failAfter = ApplicationProcessingStage::Count;
@@ -26,6 +40,11 @@ struct ProcessingCase final
     std::size_t stageVisits = 0;
     std::size_t retryVisits = 0;
     bool retryReached = false;
+    bool refuseUtilityRoute = false;
+    bool refuseRecordingRoute = false;
+    OwnerWorkMultiplexer* routes = nullptr;
+    std::array<InertUtilityPrefix, 8> inert;
+    std::size_t attached = 0;
 
     static std::int32_t AfterStage(void* opaque, ApplicationProcessingStage stage) noexcept
     {
@@ -33,6 +52,18 @@ struct ProcessingCase final
         if (state.stageVisits < state.stages.size())
             state.stages[state.stageVisits] = stage;
         ++state.stageVisits;
+        if ((state.refuseUtilityRoute || state.refuseRecordingRoute) && stage == ApplicationProcessingStage::NativeRead)
+        {
+            // At NativeRead, original GPU, retry-wait and path-read leaves are three; utility attaches next.
+            // Eight fillers refuse utility; seven fill ten so utility takes slot eleven and recording is refused.
+            const std::size_t seedCount = state.refuseUtilityRoute ? 8 : 7;
+            for (std::size_t index = 0; index < seedCount; ++index)
+            {
+                if (!state.routes->Attach(state.inert[index]))
+                    break;
+                ++state.attached;
+            }
+        }
         return stage == state.failAfter ? kCheckpointError : S_OK;
     }
 
@@ -54,12 +85,16 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
 {
     unsigned int checks = 0;
     int failures = 0;
-    for (std::size_t caseIndex = 0; caseIndex < kStageCount + kRetryCaseCount + 2; ++caseIndex)
+    for (std::size_t caseIndex = 0; caseIndex < kStageCount + kRetryCaseCount + 4; ++caseIndex)
     {
         ProcessingCase state;
         const bool checkpointCase = caseIndex < kStageCount;
         const bool retryCase = caseIndex >= kStageCount && caseIndex < kStageCount + kRetryCaseCount;
         const bool neverStarted = caseIndex == kStageCount + kRetryCaseCount + 1;
+        const bool utilityRouteRefusal = caseIndex == kStageCount + kRetryCaseCount + 2;
+        const bool recordingRouteRefusal = caseIndex == kStageCount + kRetryCaseCount + 3;
+        state.refuseUtilityRoute = utilityRouteRefusal;
+        state.refuseRecordingRoute = recordingRouteRefusal;
         char label[64]{};
         if (checkpointCase)
         {
@@ -77,6 +112,10 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
                                    state.retryFault == RetryWaitFault::EventCreation ? "event" : "registration",
                                    state.retrySlot);
         }
+        else if (utilityRouteRefusal)
+            (void)std::format_to_n(label, sizeof(label) - 1, "utility-route-full");
+        else if (recordingRouteRefusal)
+            (void)std::format_to_n(label, sizeof(label) - 1, "recording-route-full");
         else
             (void)std::format_to_n(label, sizeof(label) - 1, "{}", neverStarted ? "never-started" : "complete");
         const auto expect = [&](bool condition, const char* name) noexcept
@@ -98,16 +137,21 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
         owner->_prompts = &QuietPrompts();
         owner->_processingTestProbe = &control;
         owner->_shutdownTestProbe = &retirement;
+        state.routes = &owner->_ownerWork;
         const HRESULT result = neverStarted ? S_FALSE : owner->InitializeProcessing();
         const HRESULT expectedResult = neverStarted     ? S_FALSE
                                        : checkpointCase ? kCheckpointError
                                        : retryCase      ? kRetryError
-                                                        : S_OK;
+                                       : utilityRouteRefusal || recordingRouteRefusal
+                                           ? HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)
+                                           : S_OK;
         expect(result == expectedResult, "exact-stage-result");
-        const std::size_t expectedStages = neverStarted     ? 0
-                                           : checkpointCase ? caseIndex + 1
-                                           : retryCase      ? 4
-                                                            : kStageCount;
+        const std::size_t expectedStages = neverStarted            ? 0
+                                           : checkpointCase        ? caseIndex + 1
+                                           : retryCase             ? 4
+                                           : utilityRouteRefusal   ? 9
+                                           : recordingRouteRefusal ? 10
+                                                                   : kStageCount;
         bool exactPrefix = state.stageVisits == expectedStages;
         for (std::size_t stage = 0; stage < expectedStages; ++stage)
             exactPrefix = exactPrefix && state.stages[stage] == static_cast<ApplicationProcessingStage>(stage);
@@ -128,9 +172,38 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
         expect(owner->_gpuWorkInitialized == gpuExpected && owner->_hostSourceRegistered == sourceExpected &&
                    (DeferredReleaseDetail::sink.enqueue != nullptr) == sinkExpected,
                "gpu-source-and-sink-match-acquired-prefix");
+        const bool utilityExpected =
+            !neverStarted && !retryCase && !utilityRouteRefusal && (!checkpointCase || caseIndex >= 9);
+        if (utilityRouteRefusal)
+            expect(state.attached == 8 && state.stageVisits == 9 &&
+                       state.stages[8] == ApplicationProcessingStage::NativeRead && !owner->_utilityReadbackInitialized,
+                   "actual-full-router-refuses-utility-after-nine-original-checkpoints");
+        expect(owner->_utilityReadbackInitialized == utilityExpected && !owner->_utilityReadback.HasPending() &&
+                   !owner->_utilityReadback.HasReady() &&
+                   (!utilityExpected || !owner->_ownerWork.Attach(owner->_utilityReadback)),
+               "dormant-utility-route-matches-literal-acquired-prefix");
+        const bool recordingExpected = !neverStarted && !retryCase && !utilityRouteRefusal && !recordingRouteRefusal &&
+                                       (!checkpointCase || caseIndex >= 10);
+        if (recordingRouteRefusal)
+            expect(state.attached == 7 && state.stageVisits == 10 &&
+                       state.stages[9] == ApplicationProcessingStage::UtilityReadback &&
+                       owner->_utilityReadbackInitialized && !owner->_recordedCommandsInitialized,
+                   "actual-full-router-refuses-recorded-command-route-after-ten-original-checkpoints");
+        expect(owner->_recordedCommandsInitialized == recordingExpected && !owner->_recordedCommands.HasPending() &&
+                   !owner->_recordedCommands.HasReady() &&
+                   (!recordingExpected || !owner->_ownerWork.Attach(owner->_recordedCommands)),
+               "shared-recorded-command-route-matches-literal-acquired-prefix");
         expect(!owner->_window && !owner->_chrome && !owner->_rendererReady, "startup-prefix-has-no-window-or-chrome");
         owner->Shutdown();
-        expect(owner->_shutdownComplete && !owner->_hostSourceRegistered && !owner->_gpuWorkInitialized,
+        bool inertDetached = true;
+        for (std::size_t index = 0; index < state.attached; ++index)
+            inertDetached = owner->_ownerWork.Detach(state.inert[index]) && inertDetached;
+        if (utilityRouteRefusal)
+            expect(inertDetached, "each-original-capacity-probe-detaches-after-joined-prefix-shutdown");
+        if (recordingRouteRefusal)
+            expect(inertDetached, "each-recording-capacity-probe-detaches-after-joined-prefix-shutdown");
+        expect(owner->_shutdownComplete && !owner->_hostSourceRegistered && !owner->_gpuWorkInitialized &&
+                   !owner->_utilityReadbackInitialized && !owner->_recordedCommandsInitialized,
                "first-shutdown-completes-and-detaches-sources");
         expect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
                    owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
@@ -147,6 +220,14 @@ int Application::RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept
         const bool gpuDetached = owner->_ownerWork.Attach(owner->_gpuWork);
         const bool gpuRemoved = gpuDetached && owner->_ownerWork.Detach(owner->_gpuWork);
         expect(gpuDetached && gpuRemoved, "gpu-route-detached-after-shutdown");
+        const bool utilityAttached = owner->_ownerWork.Attach(owner->_utilityReadback);
+        expect(utilityAttached && owner->_ownerWork.Detach(owner->_utilityReadback) &&
+                   !owner->_utilityReadback.HasPending() && !owner->_utilityReadback.HasReady(),
+               "utility-route-detached-after-original-close");
+        const bool recordingAttached = owner->_ownerWork.Attach(owner->_recordedCommands);
+        expect(recordingAttached && owner->_ownerWork.Detach(owner->_recordedCommands) &&
+                   !owner->_recordedCommands.HasPending() && !owner->_recordedCommands.HasReady(),
+               "shared-recorded-command-route-detached-after-original-close");
         expect(retirement.ownerCalls == (poolExpected ? 1u : 0u) &&
                    retirement.workerCalls.load() == (poolExpected ? 1u : 0u) &&
                    (!poolExpected || (retirement.offOwner.load() && retirement.mta.load())),

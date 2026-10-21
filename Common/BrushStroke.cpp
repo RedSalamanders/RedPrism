@@ -1,9 +1,13 @@
 #include "BrushStroke.h"
+#include "DocumentDraft.h"
+#include "WarpPreviewWork.h"
 
 #include "Heal.h"
 #include "ImageFilters.h"
+#include "PreparedRasterPreview.h"
 #include "RasterEditWork.h"
 #include "RasterWork.h"
+#include "SharedPublicationMemory.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
 
@@ -14,6 +18,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <new>
 #include <utility>
@@ -49,14 +54,16 @@ template <typename Container>
 {
     using Value = typename Container::value_type;
     constexpr std::uint64_t kNodeBytes = sizeof(Value) + 4 * sizeof(void*) + 64;
+    // The pinned MSVC hash directory stores two iterator slots per bucket.
+    constexpr std::uint64_t kBucketBytes = 2 * sizeof(void*);
     const std::size_t buckets = container.bucket_count();
     const std::size_t nodes = container.size();
-    if (buckets > std::numeric_limits<std::uint64_t>::max() / sizeof(void*) ||
+    if (buckets > std::numeric_limits<std::uint64_t>::max() / kBucketBytes ||
         nodes > std::numeric_limits<std::uint64_t>::max() / kNodeBytes)
     {
         return false;
     }
-    return AddRetirementBytes(total, static_cast<std::uint64_t>(buckets) * sizeof(void*)) &&
+    return AddRetirementBytes(total, static_cast<std::uint64_t>(buckets) * kBucketBytes) &&
            AddRetirementBytes(total, static_cast<std::uint64_t>(nodes) * kNodeBytes);
 }
 
@@ -101,7 +108,14 @@ template <typename Container>
     const int y0 = static_cast<int>(std::floor(minY));
     const int x1 = static_cast<int>(std::ceil(maxX));
     const int y1 = static_cast<int>(std::ceil(maxY));
-    return GridRect{x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+    // Clamped endpoints fit int, but their difference can still exceed INT_MAX. Keep the
+    // subtraction wide and reject unsupported mapped geometry before any cast or grid iteration.
+    const auto width = static_cast<std::int64_t>(x1) - x0;
+    const auto height = static_cast<std::int64_t>(y1) - y0;
+    if (width < 0 || height < 0 || width > (std::numeric_limits<int>::max)() ||
+        height > (std::numeric_limits<int>::max)())
+        return {};
+    return GridRect{x0, y0, static_cast<int>(width), static_cast<int>(height)};
 }
 } // namespace
 
@@ -215,16 +229,21 @@ double SegmentDensity(Vec2 point, const BrushSegment& segment, const BrushKernel
     return integral * halfLength / params.spacing;
 }
 
-void RenderTile(const BrushKernelTile& tile, std::span<const BrushSegment> settled, std::span<const BrushSegment> tail,
-                const BrushKernelParams& params) noexcept
+template <bool Cancellable>
+bool RenderTileImpl(const BrushKernelTile& tile, std::span<const BrushSegment> settled,
+                    std::span<const BrushSegment> tail, const BrushKernelParams& params,
+                    const CancelToken& cancellation) noexcept
 {
     if (tile.preview == nullptr || tile.permanent == nullptr || tile.width <= 0 || tile.height <= 0)
     {
-        return;
+        return false;
     }
     const bool hard = params.hardness >= 1.0;
     for (int py = 0; py < tile.height; ++py)
     {
+        if constexpr (Cancellable)
+            if (cancellation.IsCancelled())
+                return false;
         for (int px = 0; px < tile.width; ++px)
         {
             const std::size_t index =
@@ -273,6 +292,23 @@ void RenderTile(const BrushKernelTile& tile, std::span<const BrushSegment> settl
             }
         }
     }
+    if constexpr (Cancellable)
+        return !cancellation.IsCancelled();
+    else
+        return true;
+}
+
+void RenderTile(const BrushKernelTile& tile, std::span<const BrushSegment> settled, std::span<const BrushSegment> tail,
+                const BrushKernelParams& params) noexcept
+{
+    (void)RenderTileImpl<false>(tile, settled, tail, params, {});
+}
+
+bool RenderTileForWork(const BrushKernelTile& tile, std::span<const BrushSegment> settled,
+                       std::span<const BrushSegment> tail, const BrushKernelParams& params,
+                       const CancelToken& cancellation) noexcept
+{
+    return RenderTileImpl<true>(tile, settled, tail, params, cancellation);
 }
 } // namespace BrushKernel
 
@@ -400,26 +436,27 @@ LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int heig
 
 // ── BrushStroke ──────────────────────────────────────────────────────────
 
-BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth,
-                         int canvasHeight, BrushCoverageEngine* engine, BrushKind kind, SpotHealingMode healingMode)
-    : _layerID(layer.id), _mask(mask), _settings(settings), _canvasWidth(std::max(1, canvasWidth)),
-      _canvasHeight(std::max(1, canvasHeight)), _engine(engine != nullptr ? engine : &CpuBrushCoverage::Shared()),
-      _kind(kind), _healingMode(healingMode)
+std::optional<BrushStroke::GridPlan> BrushStroke::PlanGrid(const ImageLayer& layer, bool mask,
+                                                           const BrushSettings& settings, int canvasWidth,
+                                                           int canvasHeight) noexcept
 {
+    GridPlan plan;
     // A mask on its own placement is painted in its own pixel grid; otherwise the grid is the layer's.
     const bool placedMask = mask && layer.mask.has_value() && layer.mask->placement.has_value();
     const LayerTransform base = placedMask ? layer.mask->placement.value() : layer.transform;
-    _sourceTransform = base;
-    _source = mask ? (layer.mask.has_value() ? layer.mask->asset.image : Raster{})
-                   : (layer.asset.has_value() ? layer.asset->image : Raster{});
+    if (!settings.IsValid() || !base.IsValid())
+        return std::nullopt;
+    plan.sourceTransform = base;
+    const Raster* source =
+        mask ? (layer.mask ? &layer.mask->asset.image : nullptr) : (layer.asset ? &layer.asset->image : nullptr);
     // The grid: a placed mask's own pixels; otherwise the layer's pixels (a mask on the layer's grid is stretched
     // over them, as a uniform 1 × 1 mask is), or the layer's size when it has no pixels yet.
     int originalWidth = 0;
     int originalHeight = 0;
     if (placedMask)
     {
-        originalWidth = _source.Width();
-        originalHeight = _source.Height();
+        originalWidth = source->Width();
+        originalHeight = source->Height();
     }
     else if (layer.asset.has_value() && layer.asset->image.HasStorage())
     {
@@ -428,48 +465,675 @@ BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings
     }
     else
     {
+        // IsValid requires finite positive dimensions, but does not constrain their rounded integer range.
+        if (layer.transform.size.x < 0.5 || layer.transform.size.y < 0.5 ||
+            layer.transform.size.x >= static_cast<double>(kMaxCanvasSide) + 0.5 ||
+            layer.transform.size.y >= static_cast<double>(kMaxCanvasSide) + 0.5)
+            return std::nullopt;
         originalWidth = static_cast<int>(std::lround(layer.transform.size.x));
         originalHeight = static_cast<int>(std::lround(layer.transform.size.y));
     }
     if (originalWidth < 1 || originalHeight < 1 || originalWidth > kMaxCanvasSide || originalHeight > kMaxCanvasSide ||
         !settings.IsValid() || !base.IsValid())
     {
-        return;
+        return std::nullopt;
     }
     const Affine2 originalMapping = ::PixelToDocument(base, originalWidth, originalHeight);
     const GridRect originalBounds{0, 0, originalWidth, originalHeight};
     GridRect extent = originalBounds;
     if (!mask)
     {
-        extent = originalBounds.Union(MappedBox(originalMapping.Inverted(), 0.0, 0.0, static_cast<double>(_canvasWidth),
-                                                static_cast<double>(_canvasHeight)));
+        const GridRect canvas =
+            MappedBox(originalMapping.Inverted(), 0.0, 0.0, static_cast<double>((std::max)(1, canvasWidth)),
+                      static_cast<double>((std::max)(1, canvasHeight)));
+        if (canvas.Empty())
+            return std::nullopt; // Unsupported inverse geometry cannot silently produce a valid undersized paint grid.
+        const auto left = (std::min)(std::int64_t{0}, static_cast<std::int64_t>(canvas.x));
+        const auto top = (std::min)(std::int64_t{0}, static_cast<std::int64_t>(canvas.y));
+        const auto right =
+            (std::max)(static_cast<std::int64_t>(originalWidth), static_cast<std::int64_t>(canvas.x) + canvas.width);
+        const auto bottom =
+            (std::max)(static_cast<std::int64_t>(originalHeight), static_cast<std::int64_t>(canvas.y) + canvas.height);
+        if (right <= left || bottom <= top || right - left > kMaxGridSide || bottom - top > kMaxGridSide)
+            return std::nullopt;
+        // The resulting interval includes zero and has side <=1e9, so endpoints and widths now fit int.
+        extent = {static_cast<int>(left), static_cast<int>(top), static_cast<int>(right - left),
+                  static_cast<int>(bottom - top)};
     }
     if (extent.Empty() || extent.width > kMaxGridSide || extent.height > kMaxGridSide)
     {
-        return;
+        return std::nullopt;
     }
-    _width = extent.width;
-    _height = extent.height;
-    _sourceRect = GridRect{-extent.x, -extent.y, originalWidth, originalHeight};
-    _pixelToDocument = Affine2::Translation(extent.x, extent.y).Concat(originalMapping);
-    _paintTransform = PlacementOfRect(base, originalWidth, originalHeight, originalMapping, extent);
+    plan.width = extent.width;
+    plan.height = extent.height;
+    plan.sourceRect = GridRect{-extent.x, -extent.y, originalWidth, originalHeight};
+    plan.pixelToDocument = Affine2::Translation(extent.x, extent.y).Concat(originalMapping);
+    plan.paintTransform = PlacementOfRect(base, originalWidth, originalHeight, originalMapping, extent);
+    return plan;
+}
+
+BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth,
+                         int canvasHeight, BrushCoverageEngine* engine, BrushKind kind, SpotHealingMode healingMode)
+    : _layerID(layer.id), _mask(mask), _settings(settings), _canvasWidth(std::max(1, canvasWidth)),
+      _canvasHeight(std::max(1, canvasHeight)), _engine(engine != nullptr ? engine : &CpuBrushCoverage::Shared()),
+      _kind(kind), _healingMode(healingMode)
+{
+    _coverageOwner = std::this_thread::get_id();
+    _usesCpuPermanent = _engine->UsesCpuPermanent();
+    if (!mask && layer.mask && !layer.mask->placement)
+        _carriedMask = layer.mask->asset.image;
+    const auto plan = PlanGrid(layer, mask, settings, canvasWidth, canvasHeight);
+    if (!plan)
+        return;
+    _source = mask ? (layer.mask ? layer.mask->asset.image : Raster{}) : (layer.asset ? layer.asset->image : Raster{});
+    _sourceTransform = plan->sourceTransform;
+    _width = plan->width;
+    _height = plan->height;
+    _sourceRect = plan->sourceRect;
+    _pixelToDocument = plan->pixelToDocument;
+    _paintTransform = plan->paintTransform;
     _valid = true;
     _engine->BeginStroke();
 }
 
 BrushStroke::~BrushStroke()
 {
-    if (_valid && _engine != nullptr)
-    {
-        _engine->EndStroke();
-    }
+    ReleaseCoverageEngine();
 }
 
 void BrushStroke::ReleaseCoverageEngine() noexcept
 {
+    assert(!_engine || _engine == &CpuBrushCoverage::Shared() || _coverageOwner == std::this_thread::get_id());
     auto* engine = std::exchange(_engine, nullptr);
     if (_valid && engine != nullptr)
         engine->EndStroke();
+}
+
+BrushCoverageEngine* BrushStroke::DetachCoverageForRetirement() noexcept
+{
+    assert(!_engine || _engine == &CpuBrushCoverage::Shared() || _coverageOwner == std::this_thread::get_id());
+    _detachedFinish = true;
+    _workerRasterEdit = true;
+    return std::exchange(_engine, nullptr);
+}
+
+BrushCoverageEngine* BrushStroke::DetachCoverageForFinish() noexcept
+{
+    if (!_valid || _failed || _workerRasterEdit || _detachedFinish || _detachedSample || !_engine)
+        return nullptr;
+    assert(_engine == &CpuBrushCoverage::Shared() || _coverageOwner == std::this_thread::get_id());
+    auto* engine = std::exchange(_engine, nullptr);
+    _detachedFinish = true;
+    _workerRasterEdit = true;
+    return engine;
+}
+
+std::optional<BrushStroke::SampleMemoryPlan> BrushStroke::PlanSampleMemory(Vec2 point) const noexcept
+{
+    if (!_valid || _failed || _workerRasterEdit || _detachedFinish || _detachedSample || !_engine ||
+        !_tileOwnershipValid || _sampleSequence == UINT64_MAX || !std::isfinite(point.x) || !std::isfinite(point.y) ||
+        std::abs(point.x) > 1e7 || std::abs(point.y) > 1e7)
+        return std::nullopt;
+    SampleMemoryPlan plan;
+    plan.point = point;
+    plan.sequence = _sampleSequence + 1;
+    // Cubic convex hull of the unchanged centripetal segment, plus the straight provisional tail.
+    // Only the last three old samples are read; no curve, keys or pixels are built on the owner.
+    std::array<Vec2, 6> controls{point, point, point, point, point, point};
+    if (!_samples.empty())
+        controls[4] = _samples.back();
+    if (_samples.size() >= 2)
+    {
+        const auto n = _samples.size();
+        const Vec2 before = _samples[n >= 3 ? n - 3 : 0];
+        const Vec2 start = _samples[n - 2];
+        const Vec2 end = _samples[n - 1];
+        const double a = Knot(0, before, start);
+        const double b = Knot(0, start, end);
+        const double c = Knot(0, end, point);
+        controls[0] = start;
+        controls[1] = {
+            start.x + b * ((start.x - before.x) / a - (end.x - before.x) / (a + b) + (end.x - start.x) / b) / 3,
+            start.y + b * ((start.y - before.y) / a - (end.y - before.y) / (a + b) + (end.y - start.y) / b) / 3};
+        controls[2] = {end.x - b * ((end.x - start.x) / b - (point.x - start.x) / (b + c) + (point.x - end.x) / c) / 3,
+                       end.y - b * ((end.y - start.y) / b - (point.y - start.y) / (b + c) + (point.y - end.y) / c) / 3};
+        controls[3] = end;
+    }
+    const auto hull = PointBounds(controls);
+    if (!std::isfinite(hull.minX) || !std::isfinite(hull.maxX) || !std::isfinite(hull.minY) ||
+        !std::isfinite(hull.maxY))
+        return std::nullopt;
+    const double reach = _settings.diameter / 2 + 3;
+    const double left = (std::max)(0.0, hull.minX - reach);
+    const double top = (std::max)(0.0, hull.minY - reach);
+    const double right = (std::min)(static_cast<double>(_canvasWidth), hull.maxX + reach);
+    const double bottom = (std::min)(static_cast<double>(_canvasHeight), hull.maxY + reach);
+    GridRect nextGrid;
+    if (right > left && bottom > top)
+    {
+        const auto mapped = MappedBox(_pixelToDocument.Inverted(), left, top, right, bottom);
+        if (mapped.Empty())
+            return std::nullopt;
+        const auto affected = mapped.Intersect({0, 0, _width, _height});
+        if (!affected.Empty())
+        {
+            const int x = affected.x / kTileSize * kTileSize;
+            const int y = affected.y / kTileSize * kTileSize;
+            const int endX = (std::min)(_width, ((affected.x + affected.width - 1) / kTileSize + 1) * kTileSize);
+            const int endY = (std::min)(_height, ((affected.y + affected.height - 1) / kTileSize + 1) * kTileSize);
+            nextGrid = {x, y, endX - x, endY - y};
+        }
+    }
+    const auto projected = _allocated.value_or(_source.HasStorage() ? _sourceRect : GridRect{}).Union(nextGrid);
+    if (projected.width > kMaxCanvasSide || projected.height > kMaxCanvasSide ||
+        static_cast<std::int64_t>(projected.width) * projected.height > _pixelLimit)
+        return std::nullopt;
+    const auto countTiles = [](const GridRect& grid) noexcept -> std::uint64_t
+    {
+        return grid.Empty() ? 0
+                            : static_cast<std::uint64_t>((grid.width + kTileSize - 1) / kTileSize) *
+                                  static_cast<std::uint64_t>((grid.height + kTileSize - 1) / kTileSize);
+    };
+    // A conservative rectangle excludes untouched source pixels and does not grow for revisited tiles.
+    plan.maximumTiles = countTiles(_tileBounds.value_or(GridRect{}).Union(nextGrid));
+    plan.maximumChangedTiles = countTiles(nextGrid);
+    if (!AddRetirementBytes(plan.maximumChangedTiles, _tailKeys.size()))
+        return std::nullopt;
+    const auto original = RetirementMemoryBytes();
+    if (!original)
+        return std::nullopt;
+    const auto base = _sampleMemoryBaseCpu ? _sampleMemoryBaseCpu : (std::max)(original, _openingMemory.Bytes());
+    const auto add = [](std::uint64_t& total, std::uint64_t count, std::uint64_t bytes) noexcept
+    { return (!bytes || count <= UINT64_MAX / bytes) && AddRetirementBytes(total, count * bytes); };
+    constexpr std::uint64_t pixels = kTileSize * kTileSize;
+    const std::uint64_t channels = _mask ? 1 : 4;
+    const auto pixelBytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(pixels * channels));
+    if (!pixelBytes)
+        return std::nullopt;
+    plan.persistentCpuBytes = base;
+    if (!AddRetirementBytes(plan.persistentCpuBytes, 4096) ||
+        !add(plan.persistentCpuBytes, plan.maximumTiles,
+             2 * pixelBytes + pixels * (1 + (_usesCpuPermanent ? 4 : 0)) + 2 * sizeof(Tile) + 4608))
+        return std::nullopt;
+    plan.transientCpuBytes = 64 * 1024;
+    if (!add(plan.transientCpuBytes, 2 * (std::uint64_t{1} << kCurveDepth), sizeof(BrushSegment)) ||
+        !add(plan.transientCpuBytes, plan.maximumChangedTiles,
+             1024 + 2 * sizeof(BrushKernelTile) + 8 * sizeof(std::uint64_t) + 2 * pixelBytes))
+        return std::nullopt;
+    if (!_usesCpuPermanent &&
+        (!add(plan.additionalGpuBytes, countTiles(nextGrid), pixels * 8 + 4 * 4096) ||
+         !AddRetirementBytes(plan.additionalGpuBytes,
+                             2 * (std::uint64_t{1} << kCurveDepth) * 4 * sizeof(float) + 4 * 4096)))
+        return std::nullopt;
+    return plan;
+}
+
+BrushCoverageEngine* BrushStroke::DetachCoverageForSample(const SampleMemoryPlan& plan) noexcept
+{
+    const auto current = PlanSampleMemory(plan.point);
+    if (!current || current->sequence != plan.sequence || current->persistentCpuBytes != plan.persistentCpuBytes ||
+        _coverageOwner != std::this_thread::get_id() ||
+        (_openingMemory && _openingMemory.Bytes() < plan.persistentCpuBytes))
+        return nullptr;
+    if (!_sampleMemoryBaseCpu)
+        _sampleMemoryBaseCpu = RetirementMemoryBytes();
+    _samplePoint = plan.point;
+    _sampleSequence = plan.sequence;
+    _sampleCoveragePrepared = false;
+    _sampleCoverageComplete = false;
+    _detachedSample = true;
+    _workerRasterEdit = true;
+    _sampleOwnerEngine = _engine;
+    return std::exchange(_engine, nullptr);
+}
+
+std::optional<BrushStroke::SampleCoverage> BrushStroke::PrepareSampleCoverage(CancelToken cancellation)
+{
+    if (!_detachedSample || _engine || _failed || _sampleCoveragePrepared)
+        return std::nullopt;
+    _workCancellation = std::move(cancellation);
+    _sampleCoveragePrepared = true;
+    struct PreparationGuard final
+    {
+        bool& failed;
+        bool ready = false;
+        ~PreparationGuard()
+        {
+            if (!ready)
+                failed = true;
+        }
+    } guard{_failed};
+    if (_workCancellation.IsCancelled())
+        return std::nullopt;
+    SampleCoverage sample;
+    sample.sequence = _sampleSequence;
+    sample.params = KernelParams();
+    const bool duplicate = !_samples.empty() && _samples.back() == _samplePoint;
+    if (!duplicate)
+    {
+        _samples.push_back(_samplePoint);
+        if (_samples.size() > 4)
+            _samples.erase(_samples.begin());
+        const auto n = _samples.size();
+        if (n == 1)
+            sample.settled.push_back({_samplePoint, _samplePoint});
+        else if (n >= 3)
+            sample.settled =
+                BrushCurveSegments(_samples[n >= 4 ? n - 4 : 0], _samples[n - 3], _samples[n - 2], _samplePoint);
+        if (n >= 2)
+            sample.tail.push_back({_samples[n - 2], _samplePoint});
+    }
+    std::unordered_set<std::uint64_t> changed;
+    if (!duplicate)
+    {
+        if (!TileKeys(sample.tail, _sampleTailKeys))
+            return std::nullopt;
+        changed = _sampleTailKeys;
+        if (!TileKeys(sample.settled, changed))
+            return std::nullopt;
+        changed.insert(_tailKeys.begin(), _tailKeys.end());
+    }
+    std::vector<std::uint64_t> ordered(changed.begin(), changed.end());
+    std::sort(ordered.begin(), ordered.end());
+    for (const auto key : ordered)
+        if (_workCancellation.IsCancelled() || !AllocateTile(key))
+            return std::nullopt;
+    sample.tiles.reserve(ordered.size());
+    for (const auto key : ordered)
+    {
+        if (_workCancellation.IsCancelled())
+            return std::nullopt;
+        auto& tile = _tiles[_index.at(key)];
+        sample.tiles.push_back({key, tile.rect.x, tile.rect.y, tile.rect.width, tile.rect.height,
+                                tile.permanent.empty() ? nullptr : tile.permanent.data(), tile.coverage.data()});
+    }
+    sample.needsGpu = !_usesCpuPermanent && !sample.tiles.empty();
+    if (_usesCpuPermanent)
+        for (const auto& tile : sample.tiles)
+            if (!BrushKernel::RenderTileForWork(tile, sample.settled, sample.tail, sample.params, _workCancellation))
+                return std::nullopt;
+    _finalCoverageRemaining = sample.needsGpu ? ordered.size() : 0;
+    _finalCoverageReceived.assign(ordered.size(), static_cast<std::uint8_t>(sample.needsGpu ? 0 : 1));
+    _finalCoverageOrder = std::move(ordered);
+    if (!duplicate)
+        _tailKeys.swap(_sampleTailKeys);
+    std::unordered_set<std::uint64_t>{}.swap(_sampleTailKeys);
+    if (_workCancellation.IsCancelled())
+        return std::nullopt;
+    guard.ready = true;
+    return sample;
+}
+
+bool BrushStroke::InstallSampleCoverage(std::uint64_t key, std::span<const std::uint32_t> values)
+{
+    if (!_detachedSample || !_sampleCoveragePrepared || _sampleCoverageComplete || _engine || _failed ||
+        _workCancellation.IsCancelled())
+        return false;
+    const auto position = std::lower_bound(_finalCoverageOrder.begin(), _finalCoverageOrder.end(), key);
+    if (position == _finalCoverageOrder.end() || *position != key)
+        return false;
+    const auto i = static_cast<std::size_t>(position - _finalCoverageOrder.begin());
+    if (_finalCoverageReceived[i] || !_finalCoverageRemaining)
+        return false;
+    auto& tile = _tiles[_index.at(key)];
+    if (values.size() != tile.coverage.size())
+        return false;
+    for (std::size_t y = 0; y < static_cast<std::size_t>(tile.rect.height); ++y)
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        for (std::size_t x = 0; x < static_cast<std::size_t>(tile.rect.width); ++x)
+        {
+            const auto pixel = y * static_cast<std::size_t>(tile.rect.width) + x;
+            tile.coverage[pixel] = static_cast<std::uint8_t>((std::min)(255u, values[pixel]));
+        }
+    }
+    if (_workCancellation.IsCancelled())
+        return false;
+    _finalCoverageReceived[i] = 1;
+    --_finalCoverageRemaining;
+    return true;
+}
+
+bool BrushStroke::ComposeSampleCoverage(const SampleCoverage& sample)
+{
+    if (!_detachedSample || !_sampleCoveragePrepared || _sampleCoverageComplete || _engine || _failed ||
+        sample.sequence != _sampleSequence || _finalCoverageRemaining ||
+        sample.tiles.size() != _finalCoverageOrder.size() || _workCancellation.IsCancelled())
+        return false;
+    // Validate the complete description before composition. Private partial results stay detached.
+    for (std::size_t i = 0; i < sample.tiles.size(); ++i)
+    {
+        const auto& work = sample.tiles[i];
+        const auto found = _index.find(work.key);
+        if (work.key != _finalCoverageOrder[i] || found == _index.end())
+            return false;
+        const auto& tile = _tiles[found->second];
+        if (work.preview != tile.coverage.data() || work.x != tile.rect.x || work.y != tile.rect.y ||
+            work.width != tile.rect.width || work.height != tile.rect.height)
+            return false;
+    }
+    for (const auto& work : sample.tiles)
+    {
+        auto& tile = _tiles[_index.at(work.key)];
+        if (_workCancellation.IsCancelled() || !ComposeTile(tile))
+            return false;
+        tile.touched = true;
+        tile.changed = true;
+    }
+    if (_workCancellation.IsCancelled())
+        return false;
+    std::vector<std::uint64_t>{}.swap(_finalCoverageOrder);
+    std::vector<std::uint8_t>{}.swap(_finalCoverageReceived);
+    _sampleCoverageComplete = true;
+    return true;
+}
+
+bool BrushStroke::AttachCoverageAfterSample(BrushCoverageEngine* engine) noexcept
+{
+    if (!_detachedSample || !_sampleCoveragePrepared || !_sampleCoverageComplete || _engine || _failed ||
+        _workCancellation.IsCancelled() || !engine || engine != _sampleOwnerEngine ||
+        _coverageOwner != std::this_thread::get_id() || engine->UsesCpuPermanent() != _usesCpuPermanent)
+        return false;
+    _engine = engine;
+    _sampleOwnerEngine = nullptr;
+    _detachedSample = false;
+    _workerRasterEdit = false;
+    EndWorkerPreparation();
+    return true;
+}
+
+std::optional<BrushStroke::FinishMemoryPlan> BrushStroke::PlanFinishMemory() const noexcept
+{
+    if (!_valid || _failed || _workerRasterEdit || _detachedFinish || !_engine || !_tileOwnershipValid)
+        return std::nullopt;
+    FinishMemoryPlan plan;
+    plan.retirementCpuBytes = RetirementMemoryBytes();
+    if (!plan.retirementCpuBytes)
+        return std::nullopt;
+    const auto add = [](std::uint64_t& total, std::uint64_t count, std::uint64_t size) noexcept
+    {
+        return (!size || count <= (std::numeric_limits<std::uint64_t>::max)() / size) &&
+               AddRetirementBytes(total, count * size);
+    };
+    GridRect finalGrid;
+    std::uint64_t newTiles = 0;
+    if (_samples.size() >= 2)
+    {
+        const auto count = _samples.size();
+        const Vec2 before = _samples[count >= 3 ? count - 3 : 0];
+        const Vec2 start = _samples[count - 2];
+        const Vec2 end = _samples[count - 1];
+        const Vec2 after = end;
+        // This is the cubic Bezier form of the very same nonuniform centripetal Catmull-Rom segment.
+        // Its convex hull bounds all adaptive chord endpoints; only the last three samples are read.
+        const double a = Knot(0, before, start);
+        const double b = Knot(0, start, end);
+        const double c = Knot(0, end, after);
+        const Vec2 first{
+            start.x + b * ((start.x - before.x) / a - (end.x - before.x) / (a + b) + (end.x - start.x) / b) / 3,
+            start.y + b * ((start.y - before.y) / a - (end.y - before.y) / (a + b) + (end.y - start.y) / b) / 3};
+        const Vec2 second{
+            end.x - b * ((end.x - start.x) / b - (after.x - start.x) / (b + c) + (after.x - end.x) / c) / 3,
+            end.y - b * ((end.y - start.y) / b - (after.y - start.y) / (b + c) + (after.y - end.y) / c) / 3};
+        const std::array<Vec2, 4> controls{start, first, second, end};
+        const SelectionBounds hull = PointBounds(controls);
+        if (!std::isfinite(hull.minX) || !std::isfinite(hull.maxX) || !std::isfinite(hull.minY) ||
+            !std::isfinite(hull.maxY))
+            return std::nullopt;
+        // One document pixel is conservative numerical padding in addition to TileKeys' exact tip reach.
+        const double reach = _settings.diameter / 2 + 3;
+        const double left = (std::max)(0.0, hull.minX - reach);
+        const double top = (std::max)(0.0, hull.minY - reach);
+        const double right = (std::min)(static_cast<double>(_canvasWidth), hull.maxX + reach);
+        const double bottom = (std::min)(static_cast<double>(_canvasHeight), hull.maxY + reach);
+        if (right > left && bottom > top)
+        {
+            const GridRect affected =
+                MappedBox(_pixelToDocument.Inverted(), left, top, right, bottom).Intersect({0, 0, _width, _height});
+            if (!affected.Empty())
+            {
+                const int firstColumn = affected.x / kTileSize;
+                const int lastColumn = (affected.x + affected.width - 1) / kTileSize;
+                const int firstRow = affected.y / kTileSize;
+                const int lastRow = (affected.y + affected.height - 1) / kTileSize;
+                newTiles = static_cast<std::uint64_t>(lastColumn - firstColumn + 1) *
+                           static_cast<std::uint64_t>(lastRow - firstRow + 1);
+                const int x = firstColumn * kTileSize;
+                const int y = firstRow * kTileSize;
+                const int rightEdge = (std::min)(_width, (lastColumn + 1) * kTileSize);
+                const int bottomEdge = (std::min)(_height, (lastRow + 1) * kTileSize);
+                finalGrid = {x, y, rightEdge - x, bottomEdge - y};
+            }
+        }
+    }
+    plan.maximumTiles = _tiles.size();
+    plan.maximumChangedTiles = _tailKeys.size();
+    if (!AddRetirementBytes(plan.maximumTiles, newTiles) || !AddRetirementBytes(plan.maximumChangedTiles, newTiles))
+        return std::nullopt;
+    plan.commitBounds = _allocated.value_or(_sourceRect).Union(finalGrid);
+    if (plan.commitBounds.width > kMaxCanvasSide || plan.commitBounds.height > kMaxCanvasSide ||
+        static_cast<std::int64_t>(plan.commitBounds.width) * plan.commitBounds.height > _pixelLimit)
+        return std::nullopt;
+
+    auto& bytes = plan.additionalCpuBytes;
+    bytes = 64 * 1024; // fixed reader stack, control blocks and allocator headroom
+    // At most 2^10 final chords; geometric vector growth is at most twice its final size on the supported STL.
+    // Changed hash nodes, old/new vector capacities, index buckets and final acknowledgement buffers coexist.
+    if (!add(bytes, 2 * (std::uint64_t{1} << kCurveDepth), sizeof(BrushSegment)) ||
+        !add(bytes, plan.maximumChangedTiles, 256 + 2 * sizeof(BrushKernelTile) + 4 * sizeof(std::uint64_t)) ||
+        !add(bytes, plan.maximumTiles, 2 * sizeof(Tile) + 256 + 8 * sizeof(RasterTile) + 4096))
+        return std::nullopt;
+    constexpr auto tilePixels = static_cast<std::uint64_t>(kTileSize) * kTileSize;
+    const std::uint64_t channels = _mask ? 1 : 4;
+    // New base allocation/copy + coverage + optional permanent; replaced tile outputs remain owned until
+    // publication retires the whole draft. One composing vector and its Make copy may coexist with old image.
+    if (!add(bytes, newTiles, tilePixels * (2 * channels + 1 + (_usesCpuPermanent ? 4 : 0))) ||
+        !add(bytes, plan.maximumTiles, tilePixels * 2 * channels + 4096))
+        return std::nullopt;
+    const auto windows = _source.GridReplacementWorkspaceBytes();
+    if (!windows || !AddRetirementBytes(bytes, windows.value()))
+        return std::nullopt;
+    const auto outputPixels = static_cast<std::uint64_t>(plan.commitBounds.width) * plan.commitBounds.height;
+    const auto buffer = [&](std::uint64_t pixels, std::uint64_t components, std::uint64_t allocations = 1) noexcept
+    {
+        if (pixels > (std::numeric_limits<std::size_t>::max)() / components)
+            return false;
+        const auto required = PixelBuffer::RequiredBytes(static_cast<std::size_t>(pixels * components));
+        return required && add(bytes, allocations, required);
+    };
+    // Reserve the sparse output's possible assembled cache, including its size class and allocation record.
+    if (outputPixels && !buffer(outputPixels, channels))
+        return std::nullopt;
+    const auto outputGridTiles = static_cast<std::uint64_t>((plan.commitBounds.width + kTileSize - 1) / kTileSize) *
+                                 ((plan.commitBounds.height + kTileSize - 1) / kTileSize);
+    // Replacing may add outside-fill windows. Four disjoint strips, vector growth/splitting and the published
+    // sparse metadata can overlap. Their single shared uniform pixel block has no output-sized pixel plane.
+    if (!add(bytes, outputGridTiles, 4 * 8 * sizeof(RasterTile)) || !add(bytes, 2, tilePixels * channels + 512))
+        return std::nullopt;
+    if (_mask && _source.HasStorage() && _source.PixelCount() > 1 &&
+        (_source.Width() != _sourceRect.width || _source.Height() != _sourceRect.height))
+    {
+        // PaintSnapshot retains the stretched mask under the replacement tiles. It coexists with the future
+        // sparse cache; StretchedRasterForWork also owns one original source row and an integer column map.
+        if (!buffer(static_cast<std::uint64_t>(_sourceRect.width) * _sourceRect.height, channels) ||
+            !add(bytes, static_cast<std::uint64_t>(_source.Stride()), 1) ||
+            !add(bytes, static_cast<std::uint64_t>(_sourceRect.width), sizeof(int)))
+            return std::nullopt;
+    }
+    if (!_mask && _carriedMask.HasStorage() && _carriedMask.PixelCount() > 1)
+    {
+        // The actual CarriedMaskForWork fuses stretch/crop: one output plus a sparse source row and column map.
+        // It never allocates a full old stretched plane. The immutable original mask is already in retirement.
+        if (!buffer(outputPixels, 1) || !add(bytes, static_cast<std::uint64_t>(_carriedMask.Stride()), 1) ||
+            !add(bytes, static_cast<std::uint64_t>(plan.commitBounds.width), sizeof(int)))
+            return std::nullopt;
+    }
+    if ((_mask || _carriedMask.HasStorage()) &&
+        (!buffer(96 * 96, 1, 2) || !add(bytes, static_cast<std::uint64_t>(plan.commitBounds.width), channels)))
+        return std::nullopt;
+
+    if (Healing())
+    {
+        const GridRect painted = _tileBounds.value_or(GridRect{}).Union(finalGrid);
+        if (!painted.Empty())
+        {
+            const auto longest = (std::max)(painted.width, painted.height);
+            const auto reach = static_cast<std::int64_t>(std::ceil((static_cast<double>(longest) + 32) * 3.2));
+            const auto left = (std::max)(std::int64_t{0}, static_cast<std::int64_t>(painted.x) - reach);
+            const auto top = (std::max)(std::int64_t{0}, static_cast<std::int64_t>(painted.y) - reach);
+            const auto right = (std::min)(static_cast<std::int64_t>(_width),
+                                          static_cast<std::int64_t>(painted.x) + painted.width + reach);
+            const auto bottom = (std::min)(static_cast<std::int64_t>(_height),
+                                           static_cast<std::int64_t>(painted.y) + painted.height + reach);
+            if (right <= left || bottom <= top || right - left > kMaxCanvasSide || bottom - top > kMaxCanvasSide ||
+                (right - left) * (bottom - top) > kMaxLayerPixels)
+                return std::nullopt;
+            plan.healRegion = {static_cast<int>(left), static_cast<int>(top), static_cast<int>(right - left),
+                               static_cast<int>(bottom - top)};
+            auto width = static_cast<std::uint64_t>(plan.healRegion.width);
+            auto height = static_cast<std::uint64_t>(plan.healRegion.height);
+            // Input BGRA, coverage, role, near and four float channels; all recursive coarse grids coexist.
+            if (!add(bytes, width * height, 4 + 1 + 1 + 1 + 4 * sizeof(float)) ||
+                !add(bytes, (std::max)(width, height) + 1, sizeof(std::int64_t)))
+                return std::nullopt;
+            for (unsigned depth = 0; depth < 16 && (width > 32 || height > 32); ++depth)
+            {
+                width = (width + 1) / 2;
+                height = (height + 1) / 2;
+                if (!add(bytes, width * height, 4 * sizeof(float) + 1))
+                    return std::nullopt;
+            }
+        }
+    }
+    if (!_usesCpuPermanent)
+    {
+        // GPU density/uint coverage for potentially new tiles, their two buffers plus two views/driver allocation
+        // allowance, segment-buffer growth and one extra generation of that dynamic buffer. Queue staging is separate.
+        if (!add(plan.additionalGpuBytes, newTiles, tilePixels * 8 + 4 * 4096) ||
+            !add(plan.additionalGpuBytes, 2 * (std::uint64_t{1} << kCurveDepth), 4 * sizeof(float)) ||
+            !AddRetirementBytes(plan.additionalGpuBytes, 4 * 4096))
+            return std::nullopt;
+    }
+    if (!AddRetirementBytes(plan.retirementCpuBytes, bytes))
+        return std::nullopt;
+    return plan;
+}
+
+std::optional<BrushStroke::FinalCoverage> BrushStroke::PrepareFinalCoverage(CancelToken cancellation)
+{
+    if (!_detachedFinish || _engine || !_valid || _failed || _finalCoveragePrepared || cancellation.IsCancelled())
+        return std::nullopt;
+    _workCancellation = std::move(cancellation);
+    FinalCoverage final;
+    final.params = KernelParams();
+    const std::size_t n = _samples.size();
+    if (n >= 2)
+        final.settled =
+            BrushCurveSegments(_samples[n >= 3 ? n - 3 : 0], _samples[n - 2], _samples[n - 1], _samples[n - 1]);
+    std::unordered_set<std::uint64_t> changed;
+    if (!TileKeys(final.settled, changed))
+        return std::nullopt;
+    changed.insert(_tailKeys.begin(), _tailKeys.end());
+    std::vector<std::uint64_t> ordered(changed.begin(), changed.end());
+    std::sort(ordered.begin(), ordered.end());
+    for (const auto key : ordered)
+    {
+        if (_workCancellation.IsCancelled() || !AllocateTile(key))
+            return std::nullopt;
+    }
+    final.tiles.reserve(ordered.size());
+    for (const auto key : ordered)
+    {
+        if (_workCancellation.IsCancelled())
+            return std::nullopt;
+        Tile& tile = _tiles[_index.at(key)];
+        final.tiles.push_back({key, tile.rect.x, tile.rect.y, tile.rect.width, tile.rect.height,
+                               tile.permanent.empty() ? nullptr : tile.permanent.data(), tile.coverage.data()});
+    }
+    final.needsGpu = !_usesCpuPermanent && !final.tiles.empty();
+    if (_usesCpuPermanent)
+        for (const auto& tile : final.tiles)
+            if (!BrushKernel::RenderTileForWork(tile, final.settled, {}, KernelParams(), _workCancellation))
+                return std::nullopt;
+    _finalCoverageRemaining = final.needsGpu ? ordered.size() : 0;
+    _finalCoverageReceived.assign(ordered.size(), static_cast<std::uint8_t>(final.needsGpu ? 0 : 1));
+    _finalCoverageOrder = std::move(ordered);
+    if (_workCancellation.IsCancelled())
+        return std::nullopt;
+    _finalCoveragePrepared = true;
+    return final;
+}
+
+bool BrushStroke::InstallFinalCoverage(std::uint64_t key, std::span<const std::uint32_t> values)
+{
+    if (!_detachedFinish || !_finalCoveragePrepared || _finalCoverageComplete || _engine ||
+        _workCancellation.IsCancelled())
+        return false;
+    const auto position = std::lower_bound(_finalCoverageOrder.begin(), _finalCoverageOrder.end(), key);
+    if (position == _finalCoverageOrder.end() || *position != key)
+        return false;
+    const auto coverageIndex = static_cast<std::size_t>(position - _finalCoverageOrder.begin());
+    if (_finalCoverageReceived[coverageIndex] != 0)
+        return false;
+    const auto found = _index.find(key);
+    if (found == _index.end())
+        return false;
+    Tile& tile = _tiles[found->second];
+    const auto width = static_cast<std::size_t>(tile.rect.width);
+    const auto height = static_cast<std::size_t>(tile.rect.height);
+    if (values.size() != width * height || tile.coverage.size() != values.size())
+        return false;
+    for (std::size_t y = 0; y < height; ++y)
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        for (std::size_t x = 0; x < width; ++x)
+        {
+            const auto i = y * width + x;
+            tile.coverage[i] = static_cast<std::uint8_t>((std::min)(255u, values[i]));
+        }
+    }
+    if (_workCancellation.IsCancelled())
+        return false;
+    _finalCoverageReceived[coverageIndex] = 1;
+    --_finalCoverageRemaining;
+    return true;
+}
+
+bool BrushStroke::ComposeFinalCoverage(const FinalCoverage& final)
+{
+    if (!_detachedFinish || !_finalCoveragePrepared || _finalCoverageComplete || _engine ||
+        _finalCoverageRemaining != 0 || final.tiles.size() != _finalCoverageOrder.size() ||
+        _workCancellation.IsCancelled())
+        return false;
+    for (std::size_t i = 0; i < final.tiles.size(); ++i)
+    {
+        const auto& work = final.tiles[i];
+        if (work.key != _finalCoverageOrder[i])
+            return false;
+        if (_workCancellation.IsCancelled())
+            return false;
+        const auto found = _index.find(work.key);
+        if (found == _index.end())
+            return false;
+        Tile& tile = _tiles[found->second];
+        if (work.preview != tile.coverage.data() || work.x != tile.rect.x || work.y != tile.rect.y ||
+            work.width != tile.rect.width || work.height != tile.rect.height || !ComposeTile(tile))
+            return false;
+        tile.touched = true;
+        tile.changed = true;
+    }
+    if (!_samples.empty())
+    {
+        const Vec2 last = _samples.back();
+        _samples.assign(1, last);
+    }
+    _tailKeys.clear();
+    if (_workCancellation.IsCancelled())
+        return false;
+    _finalCoverageComplete = true;
+    return true;
 }
 
 void DocumentSession::DetachCoverageForShutdown() noexcept
@@ -494,10 +1158,16 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _displayCopy.reset();
     history.Reset();
     _transformEdit.reset();
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     _brush.reset();
+    _brushFinishingOpening.reset();
+    _brushUpdatingOpening.reset();
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
     _gradient.reset();
     _shapeDraft.reset();
     _pixelMove.reset();
@@ -507,7 +1177,7 @@ void DocumentSession::RetireCpuForShutdown() noexcept
     _adjustmentOriginal.reset();
     _warpSource.image = {};
     _selected.clear();
-    _collapsed.clear();
+    ClearCollapsedGroups();
     std::vector<double>{}.swap(_snapGuides.xs);
     std::vector<double>{}.swap(_snapGuides.ys);
     for (auto& channel : filterSettings.curves.channels)
@@ -529,12 +1199,14 @@ void DocumentSession::RetireCpuForShutdown() noexcept
 std::uint64_t BrushStroke::RetirementMemoryBytes() const noexcept
 {
     std::uint64_t total = sizeof(*this) + 1024; // control/allocator/stop-token headroom
-    if (!AddRetirementCapacity<Vec2>(total, _samples.capacity()) ||
+    if (!AddRetirementCapacity<std::uint64_t>(total, _finalCoverageOrder.capacity()) ||
+        !AddRetirementCapacity<std::uint8_t>(total, _finalCoverageReceived.capacity()) ||
+        !AddRetirementCapacity<Vec2>(total, _samples.capacity()) ||
         !AddRetirementCapacity<std::uint64_t>(total, _landingTiles.capacity()) ||
         _editName.capacity() == std::numeric_limits<std::size_t>::max() ||
         !AddRetirementCapacity<wchar_t>(total, _editName.capacity() + 1) ||
         !AddRetirementCapacity<Tile>(total, _tiles.capacity()) || !AddRetirementHashStorage(total, _tailKeys) ||
-        !AddRetirementHashStorage(total, _index))
+        !AddRetirementHashStorage(total, _index) || !AddRetirementHashStorage(total, _sampleTailKeys))
     {
         return 0;
     }
@@ -542,29 +1214,53 @@ std::uint64_t BrushStroke::RetirementMemoryBytes() const noexcept
     if (!AddRetirementRaster(total, _source) ||
         (_selection.has_value() && !AddRetirementRaster(total, _selection.value())) ||
         (_sample.has_value() && !AddRetirementRaster(total, _sample.value())) ||
+        !AddRetirementRaster(total, _carriedMask) ||
         (_lifted.has_value() && !AddRetirementRaster(total, _lifted->image)))
     {
         return 0;
     }
 
-    for (const Tile& tile : _tiles)
+    if (_warpSample)
     {
-        if (!AddRetirementCapacity<float>(total, tile.permanent.capacity()) ||
-            !AddRetirementCapacity<std::uint8_t>(total, tile.coverage.capacity()) ||
-            !AddRetirementRaster(total, tile.base) || !AddRetirementRaster(total, tile.image))
-        {
+        const auto bytes = _warpSample->RetirementMemoryBytes();
+        if (!bytes || !AddRetirementBytes(total, bytes))
             return 0;
-        }
     }
-    return total;
+    // Producers cache each tile's complete buffer/raster ownership after every allocation or replacement.
+    // Pointer release reads this aggregate, never the tiles or their pixels. Duplicate immutable ownership
+    // stays conservatively counted just as in the original per-tile reference bound.
+    return _tileOwnershipValid && AddRetirementBytes(total, _tileOwnershipBytes) ? total : 0;
+}
+
+void BrushStroke::RefreshTileOwnership(Tile& tile) noexcept
+{
+    if (!_tileOwnershipValid)
+        return;
+    std::uint64_t next = 0;
+    if (!AddRetirementCapacity<float>(next, tile.permanent.capacity()) ||
+        !AddRetirementCapacity<std::uint8_t>(next, tile.coverage.capacity()) || !AddRetirementRaster(next, tile.base) ||
+        !AddRetirementRaster(next, tile.image) || tile.ownershipBytes > _tileOwnershipBytes)
+    {
+        _tileOwnershipValid = false;
+        return;
+    }
+    const auto remaining = _tileOwnershipBytes - tile.ownershipBytes;
+    if (next > (std::numeric_limits<std::uint64_t>::max)() - remaining)
+    {
+        _tileOwnershipValid = false;
+        return;
+    }
+    _tileOwnershipBytes = remaining + next;
+    tile.ownershipBytes = next;
 }
 
 bool BrushStroke::ConfigureWorkerRasterEdit(CancelToken cancellation,
                                             void (*progress)(void*, std::size_t, std::size_t) noexcept,
-                                            void* progressContext) noexcept
+                                            void* progressContext, std::shared_ptr<const void> outputLifetime) noexcept
 {
     if (!_valid || _engine != &CpuBrushCoverage::Shared() || !_tiles.empty() || !_samples.empty())
         return false;
+    _workOutputLifetime = std::move(outputLifetime);
     _workerRasterEdit = true;
     _workCancellation = std::move(cancellation);
     _workProgress = progress;
@@ -588,6 +1284,8 @@ BrushKernelParams BrushStroke::KernelParams() const noexcept
 
 bool BrushStroke::Append(Vec2 point)
 {
+    if (_detachedFinish || _detachedSample)
+        return false;
     if (!_valid || _failed || !std::isfinite(point.x) || !std::isfinite(point.y) || std::abs(point.x) > 1e7 ||
         std::abs(point.y) > 1e7)
     {
@@ -622,6 +1320,8 @@ bool BrushStroke::Append(Vec2 point)
 
 bool BrushStroke::Flush()
 {
+    if (_detachedFinish || _detachedSample)
+        return false;
     if (!_valid || _failed)
     {
         return !_failed;
@@ -639,42 +1339,68 @@ bool BrushStroke::Flush()
     return ok;
 }
 
-void BrushStroke::TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys) const
+bool BrushStroke::TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys)
 {
     const double reach = _settings.diameter / 2.0 + 2.0;
     const Affine2 inverse = _pixelToDocument.Inverted();
     const int columns = (_width + kTileSize - 1) / kTileSize;
-    for (const BrushSegment& segment : segments)
+    const auto tileGrid = [&](const BrushSegment& segment) noexcept -> std::optional<GridRect>
     {
-        const double left = std::max(0.0, std::min(segment.from.x, segment.to.x) - reach);
-        const double top = std::max(0.0, std::min(segment.from.y, segment.to.y) - reach);
+        const double left = (std::max)(0.0, (std::min)(segment.from.x, segment.to.x) - reach);
+        const double top = (std::max)(0.0, (std::min)(segment.from.y, segment.to.y) - reach);
         const double right =
-            std::min(static_cast<double>(_canvasWidth), std::max(segment.from.x, segment.to.x) + reach);
+            (std::min)(static_cast<double>(_canvasWidth), (std::max)(segment.from.x, segment.to.x) + reach);
         const double bottom =
-            std::min(static_cast<double>(_canvasHeight), std::max(segment.from.y, segment.to.y) + reach);
+            (std::min)(static_cast<double>(_canvasHeight), (std::max)(segment.from.y, segment.to.y) + reach);
         if (right <= left || bottom <= top)
-        {
-            continue;
-        }
-        const GridRect affected =
-            MappedBox(inverse, left, top, right, bottom).Intersect(GridRect{0, 0, _width, _height});
+            return GridRect{};
+        const GridRect mapped = MappedBox(inverse, left, top, right, bottom);
+        if (mapped.Empty())
+            return std::nullopt;
+        const GridRect affected = mapped.Intersect({0, 0, _width, _height});
         if (affected.Empty())
+            return GridRect{};
+        const int x = affected.x / kTileSize * kTileSize;
+        const int y = affected.y / kTileSize * kTileSize;
+        const int rightEdge = (std::min)(_width, ((affected.x + affected.width - 1) / kTileSize + 1) * kTileSize);
+        const int bottomEdge = (std::min)(_height, ((affected.y + affected.height - 1) / kTileSize + 1) * kTileSize);
+        return GridRect{x, y, rightEdge - x, bottomEdge - y};
+    };
+    GridRect projected = _allocated.value_or(_source.HasStorage() ? _sourceRect : GridRect{});
+    for (const auto& segment : segments)
+    {
+        if (_workerRasterEdit && _workCancellation.IsCancelled())
+            return false;
+        const auto grid = tileGrid(segment);
+        if (!grid)
+            return false;
+        projected = projected.Union(grid.value()); // All coordinates lie in the validated <=1e9 grid.
+        if (projected.width > kMaxCanvasSide || projected.height > kMaxCanvasSide ||
+            static_cast<std::int64_t>(projected.width) * projected.height > _pixelLimit)
         {
-            continue;
-        }
-        const int firstColumn = affected.x / kTileSize;
-        const int lastColumn = (affected.x + affected.width - 1) / kTileSize;
-        const int firstRow = affected.y / kTileSize;
-        const int lastRow = (affected.y + affected.height - 1) / kTileSize;
-        for (int row = firstRow; row <= lastRow; ++row)
-        {
-            for (int column = firstColumn; column <= lastColumn; ++column)
-            {
-                keys.insert(static_cast<std::uint64_t>(row) * static_cast<std::uint64_t>(columns) +
-                            static_cast<std::uint64_t>(column));
-            }
+            _pixelLimitRefused = true;
+            return false;
         }
     }
+    for (const auto& segment : segments)
+    {
+        const auto grid = tileGrid(segment);
+        if (!grid || grid->Empty())
+            continue;
+        const int firstColumn = grid->x / kTileSize;
+        const int lastColumn = (grid->x + grid->width - 1) / kTileSize;
+        const int firstRow = grid->y / kTileSize;
+        const int lastRow = (grid->y + grid->height - 1) / kTileSize;
+        for (int row = firstRow; row <= lastRow; ++row)
+        {
+            if (_workerRasterEdit && _workCancellation.IsCancelled())
+                return false;
+            for (int column = firstColumn; column <= lastColumn; ++column)
+                keys.insert(static_cast<std::uint64_t>(row) * static_cast<std::uint64_t>(columns) +
+                            static_cast<std::uint64_t>(column));
+        }
+    }
+    return true;
 }
 
 bool BrushStroke::AllocateTile(std::uint64_t key, bool sourceOnly)
@@ -713,9 +1439,9 @@ bool BrushStroke::AllocateTile(std::uint64_t key, bool sourceOnly)
     try
     {
         const std::size_t count = static_cast<std::size_t>(rect.width) * static_cast<std::size_t>(rect.height);
-        if (!_workerRasterEdit)
+        if (!_workerRasterEdit || _detachedFinish || _detachedSample)
             tile.coverage.assign(count, 0);
-        if (!_workerRasterEdit && _engine->UsesCpuPermanent())
+        if ((!_workerRasterEdit || _detachedFinish || _detachedSample) && _usesCpuPermanent)
         {
             tile.permanent.assign(count, 0.0f);
         }
@@ -777,6 +1503,8 @@ bool BrushStroke::AllocateTile(std::uint64_t key, bool sourceOnly)
         tile.base = Raster::Make(rect.width, rect.height, format, bytes.data(), bytes.size());
         tile.image = tile.base;
         _tiles.push_back(std::move(tile));
+        _tileBounds = _tileBounds ? _tileBounds->Union(rect) : rect;
+        RefreshTileOwnership(_tiles.back());
         _index.emplace(key, _tiles.size() - 1);
     }
     catch (const std::bad_alloc&)
@@ -791,9 +1519,17 @@ bool BrushStroke::AllocateTile(std::uint64_t key, bool sourceOnly)
 bool BrushStroke::Render(const std::vector<BrushSegment>& settled, const std::vector<BrushSegment>& tail)
 {
     std::unordered_set<std::uint64_t> tailKeys;
-    TileKeys(tail, tailKeys);
+    if (!TileKeys(tail, tailKeys))
+    {
+        _failed = true;
+        return false;
+    }
     std::unordered_set<std::uint64_t> changed = tailKeys;
-    TileKeys(settled, changed);
+    if (!TileKeys(settled, changed))
+    {
+        _failed = true;
+        return false;
+    }
     changed.insert(_tailKeys.begin(), _tailKeys.end());
     std::vector<std::uint64_t> ordered(changed.begin(), changed.end());
     std::sort(ordered.begin(), ordered.end());
@@ -871,13 +1607,16 @@ bool BrushStroke::ComposeTile(Tile& tile)
     const double paintB = _settings.blue * 255.0;
     const double paintG = _settings.green * 255.0;
     const double paintR = _settings.red * 255.0;
-    const bool sampling = _sample.has_value() && _sample->HasStorage() &&
-                          _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888);
+    const bool sampling = _warpSample || (_sample.has_value() && _sample->HasStorage() &&
+                                          _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888));
     const bool washing = !sampling && Healing() && !_mask;
     const auto round8 = [](double value)
     { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
     for (std::size_t index = 0; index < count; ++index)
     {
+        if (_workerRasterEdit && index % static_cast<std::size_t>(tile.rect.width) == 0 &&
+            _workCancellation.IsCancelled())
+            return false;
         const std::uint8_t coverage = tile.coverage[index];
         if (coverage == 0)
         {
@@ -903,7 +1642,8 @@ bool BrushStroke::ComposeTile(Tile& tile)
         if (sampling)
         {
             std::array<double, 4> sample{};
-            if (!SampleAt(*_sample, document.x + _sampleX, document.y + _sampleY, sample))
+            if (_warpSample ? !_warpSample->Sample(document, sample, _workCancellation)
+                            : !SampleAt(*_sample, document.x + _sampleX, document.y + _sampleY, sample))
             {
                 continue;
             }
@@ -960,6 +1700,7 @@ bool BrushStroke::ComposeTile(Tile& tile)
     }
     tile.image = Raster::Make(tile.rect.width, tile.rect.height, _mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888,
                               bytes.data(), bytes.size());
+    RefreshTileOwnership(tile);
     return tile.image.HasStorage();
 }
 
@@ -1016,7 +1757,8 @@ LayerTransform BrushStroke::TransformFor(const GridRect& bounds) const noexcept
 
 std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
 {
-    if (!_valid || _failed || (_workerRasterEdit && _workCancellation.IsCancelled()))
+    if (!_valid || _failed || _detachedSample || (_detachedFinish && !_finalCoverageComplete) ||
+        (_workerRasterEdit && _workCancellation.IsCancelled()))
     {
         return std::nullopt;
     }
@@ -1086,7 +1828,7 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
         }
     }
     commit.image = Raster::Replacing(base, _sourceRect.x, _sourceRect.y, Patches(), crop.x, crop.y, crop.width,
-                                     crop.height, fill, _workCancellation);
+                                     crop.height, fill, _workCancellation, _workOutputLifetime);
     if (!commit.image.HasStorage())
     {
         return std::nullopt;
@@ -1108,14 +1850,14 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
 
 // ── DocumentSession ──────────────────────────────────────────────────────
 
-bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
+bool EffectivelyVisible(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     std::optional<Guid> current = id;
     int depth = 0;
     while (current.has_value() && depth < kMaxLayerCount)
     {
         const ImageLayer* found = nullptr;
-        for (const ImageLayer& layer : document.layers)
+        for (const ImageLayer& layer : layers)
         {
             if (layer.id == current.value())
             {
@@ -1135,8 +1877,8 @@ bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
 
 bool DocumentSession::CanPaint() const noexcept
 {
-    if (!_document.has_value() || _transformEdit.has_value() || _brush || HasColorEdit() ||
-        (_pixelMove && _pixelMove->deferred))
+    if (!_document.has_value() || _transformEdit.has_value() || _brush || HasColorEdit() || _warpUpdatingOpening ||
+        _warpFinishingOpening || (_pixelMove && _pixelMove->deferred))
     {
         return false;
     }
@@ -1155,7 +1897,7 @@ bool DocumentSession::CanPaint() const noexcept
     {
         return false;
     }
-    if (!EffectivelyVisible(_document.value(), layer->id))
+    if (!EffectivelyVisible(_document->layers, layer->id))
     {
         return false;
     }
@@ -1184,6 +1926,23 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
 {
+    return BeginBrush(point, kind, composite, brushSettings, maskPaintWhite);
+}
+
+bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings,
+                                 bool maskWhite, std::optional<Vec2> capturedCloneOffset)
+{
+    if (capturedCloneOffset && (kind != BrushKind::Clone || !_document || !composite || !composite->HasStorage() ||
+                                composite->Format() != RasterFormat::Bgra8888 ||
+                                composite->Width() != _document->width || composite->Height() != _document->height ||
+                                !std::isfinite(capturedCloneOffset->x) || !std::isfinite(capturedCloneOffset->y) ||
+                                std::round(capturedCloneOffset->x) < (std::numeric_limits<int>::min)() ||
+                                std::round(capturedCloneOffset->x) > (std::numeric_limits<int>::max)() ||
+                                std::round(capturedCloneOffset->y) < (std::numeric_limits<int>::min)() ||
+                                std::round(capturedCloneOffset->y) > (std::numeric_limits<int>::max)()))
+        return false; // Refuse captured input before resolving a gradient or touching alignment/history.
+    if (_brushFinishingOpening || _brushUpdatingOpening || _brushOpening == UINT64_MAX)
+        return false;
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     // A pending gradient applies first, so the stroke paints over it and never drops it (Decision D3).
@@ -1200,10 +1959,9 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         return false;
     }
-    BrushSettings settings = brushSettings;
     if (mask)
     {
-        settings.red = maskPaintWhite ? 1.0 : 0.0;
+        settings.red = maskWhite ? 1.0 : 0.0;
         settings.green = settings.red;
         settings.blue = settings.red;
     }
@@ -1213,12 +1971,17 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     std::wstring editName;
     if (kind == BrushKind::Clone)
     {
-        const std::optional<Vec2> offset = CloneStrokeOffset(point);
+        const std::optional<Vec2> offset = capturedCloneOffset ? capturedCloneOffset : CloneStrokeOffset(point);
         if (!offset.has_value())
         {
             return false;
         }
-        sample = CloneSample(composite);
+        // The admitted host retains the event-time offset and a complete committed composite. Later live
+        // source/settings changes cannot reinterpret that accepted stroke. Direct callers retain their reference.
+        if (capturedCloneOffset)
+            sample = *composite;
+        else
+            sample = CloneSample(composite);
         if (!sample->HasStorage())
         {
             return false;
@@ -1256,6 +2019,7 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         return false;
     }
+    ++_brushOpening;
     _brush = std::move(stroke);
     return true;
 }
@@ -1266,10 +2030,9 @@ void DocumentSession::ContinueBrush(Vec2 point)
     {
         return;
     }
-    if (_lastBrushPoint.has_value())
-    {
-        _lastBrushPoint->point = point;
-    }
+    // A worker-opened draft has no pointer sample yet. Preserve Shift-line metadata using the accepted
+    // point and its exact target, without producing coverage or pixels during opening publication.
+    _lastBrushPoint = LastBrushPoint{point, _brush->LayerID(), _brush->IsMask()};
     if (!_brush->Append(point))
     {
         CancelBrush();
@@ -1279,6 +2042,8 @@ void DocumentSession::ContinueBrush(Vec2 point)
 void DocumentSession::CancelBrush() noexcept
 {
     _brush.reset();
+    _brushFinishingOpening.reset();
+    _brushUpdatingOpening.reset();
 }
 
 void DocumentSession::FinishBrush()
@@ -1317,7 +2082,9 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
     {
         return false;
     }
-    ImageLayer* current = MutableLayer(stroke->LayerID());
+    if (HasDeferredTransform())
+        return false;
+    const ImageLayer* current = FindLayer(stroke->LayerID());
     if (current == nullptr)
     {
         return false;
@@ -1342,37 +2109,50 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
                               : stroke->IsMask()          ? L"Paint Mask"
                               : stroke->Erasing()         ? L"Erase"
                                                           : L"Brush Stroke";
-    BeginEdit(name);
-    if (stroke->IsMask())
+    const auto index = IndexOf(_document.value().layers, stroke->LayerID());
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
     {
-        current->mask->asset.image = result->image;
-        current->mask->asset.thumbnail = result->thumbnail;
-    }
-    else
-    {
-        // A mask on the layer's own grid grows with the layer; only the new area is revealed (the old one keeps the
-        // mask's pixels and fill). A uniform mask stays as is.
-        if (current->mask.has_value() && !current->mask->placement.has_value() &&
-            result->bounds != stroke->SourceRect() && current->mask->asset.image.PixelCount() > 1)
+        ImageLayer& edited = draft.value().EditLayers()[index.value()];
+        if (stroke->IsMask())
         {
-            const GridRect& source = stroke->SourceRect();
-            const Raster grown =
-                CarriedMask(current->mask->asset.image, source.width, source.height, source.x - result->bounds.x,
-                            source.y - result->bounds.y, result->bounds.width, result->bounds.height, 255);
-            if (grown.HasStorage())
-            {
-                current->mask->asset.image = grown;
-                current->mask->asset.thumbnail = Raster::MakeThumbnail(grown);
-            }
+            edited.mask->asset.image = result->image;
+            edited.mask->asset.thumbnail = result->thumbnail;
         }
-        const std::wstring layerName = current->name;
-        current->asset = RasterAsset{result->image, result->thumbnail, layerName};
-        current->transform = result->transform;
+        else
+        {
+            // A mask on the layer's own grid grows with the layer; only the new area is revealed (the old one keeps the
+            // mask's pixels and fill). A uniform mask stays as is.
+            if (edited.mask.has_value() && !edited.mask->placement.has_value() &&
+                result->bounds != stroke->SourceRect() && edited.mask->asset.image.PixelCount() > 1)
+            {
+                const GridRect& source = stroke->SourceRect();
+                const Raster grown =
+                    CarriedMask(edited.mask->asset.image, source.width, source.height, source.x - result->bounds.x,
+                                source.y - result->bounds.y, result->bounds.width, result->bounds.height, 255);
+                if (grown.HasStorage())
+                {
+                    edited.mask->asset.image = grown;
+                    edited.mask->asset.thumbnail = Raster::MakeThumbnail(grown);
+                }
+            }
+            const std::wstring layerName = edited.name;
+            edited.asset = RasterAsset{result->image, result->thumbnail, layerName};
+            edited.transform = result->transform;
+        }
     }
     if (selectionAfterCommit.has_value())
     {
-        _document->selection = selectionAfterCommit;
+        draft.value().DocumentState().selection = selectionAfterCommit;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
+    BeginEdit(name);
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
     _lastBrushCommit = BrushCommitInfo{result->image,        result->bounds.x,      result->bounds.y,
@@ -1454,12 +2234,16 @@ void DocumentSession::AddLayerMask(bool revealing)
     // Targeting the new mask is a target switch: a pending gradient applies first.
     if (!ResolveGradient())
         return;
-    ImageLayer* layer = MutableActiveLayer();
+    const ImageLayer* layer = ActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->mask.has_value())
     {
         return;
     }
     CommitTransform();
+    // Settlement can replace the root; the mask targets the same active layer in the settled document.
+    layer = ActiveLayer();
+    if (!layer || layer->mask)
+        return;
     if (PixelBudgetLeft(true) < 1)
     {
         _budgetRefused = true;
@@ -1467,8 +2251,19 @@ void DocumentSession::AddLayerMask(bool revealing)
     }
     const std::uint8_t value = revealing ? 255 : 0;
     const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &value, 1);
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask =
+        LayerMask{RasterAsset{mask, mask, layer->name}, true, std::nullopt, true};
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(revealing ? L"Add Reveal-All Mask" : L"Add Hide-All Mask");
-    layer->mask = LayerMask{RasterAsset{mask, mask, layer->name}, true, std::nullopt, true};
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
     _maskSelected = true;
@@ -1476,13 +2271,26 @@ void DocumentSession::AddLayerMask(bool revealing)
 
 void DocumentSession::ToggleLayerMask(const Guid& id)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->mask.has_value())
     {
         return;
     }
-    BeginEdit(layer->mask->enabled ? L"Disable Layer Mask" : L"Enable Layer Mask");
-    layer->mask->enabled = !layer->mask->enabled;
+    const bool enabled = layer->mask->enabled;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask.value().enabled = !enabled;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(enabled ? L"Disable Layer Mask" : L"Enable Layer Mask");
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
 }
@@ -1536,6 +2344,128 @@ void BrushStroke::SetSample(Raster sample, int offsetX, int offsetY, bool replac
     _sampleX = offsetX;
     _sampleY = offsetY;
     _replaces = replaces;
+}
+
+bool BrushStroke::HealForFinish(std::uint32_t seed)
+{
+    if (!_detachedFinish || !_finalCoverageComplete || _engine || !_valid || _failed || !Healing() || _mask ||
+        _workCancellation.IsCancelled())
+        return false;
+    // Failure can leave a private prefix of healed tiles. Keep every snapshot path closed until all tiles
+    // and selection blending finish; the caller drops the complete draft on any failure.
+    _failed = true;
+    _finalCoverageComplete = false;
+    std::optional<GridRect> painted;
+    for (const Tile& tile : _tiles)
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        if (!tile.touched)
+            continue;
+        const auto edges = SpotHealing::CoverageBounds(tile.coverage.data(), static_cast<std::size_t>(tile.rect.width),
+                                                       static_cast<std::size_t>(tile.rect.height),
+                                                       static_cast<std::size_t>(tile.rect.width), _workCancellation);
+        if (edges.Empty())
+            continue;
+        const GridRect rect{static_cast<int>(edges.x0) + tile.rect.x, static_cast<int>(edges.y0) + tile.rect.y,
+                            static_cast<int>(edges.x1 - edges.x0), static_cast<int>(edges.y1 - edges.y0)};
+        painted = painted ? painted.value().Union(rect) : rect;
+    }
+    const auto complete = [&]() noexcept
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        _failed = false;
+        _finalCoverageComplete = true;
+        return true;
+    };
+    if (!painted)
+        return complete();
+    // Same patch-search extent and arithmetic as the compatibility Heal path.
+    const auto bounds = painted.value();
+    const int reach = static_cast<int>(std::ceil(((std::max)(bounds.width, bounds.height) + 32) * 3.2));
+    const GridRect region =
+        GridRect{bounds.x - reach, bounds.y - reach, bounds.width + 2 * reach, bounds.height + 2 * reach}.Intersect(
+            GridRect{0, 0, _width, _height});
+    if (region.Empty())
+        return complete();
+    // The patch region can exceed the source dimensions on a heavily scaled grid. Validate the
+    // kernel's complete supported shape before either large private vector is allocated.
+    if (region.width > kMaxCanvasSide || region.height > kMaxCanvasSide ||
+        static_cast<std::int64_t>(region.width) * region.height > kMaxLayerPixels)
+        return false;
+    const auto width = static_cast<std::size_t>(region.width);
+    const auto height = static_cast<std::size_t>(region.height);
+    std::vector<std::uint8_t> pixels(width * height * 4, 0);
+    std::vector<std::uint8_t> coverage(width * height, 0);
+    if (_source.HasStorage() &&
+        !ReadRasterRegionForWork(_source,
+                                 {region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height},
+                                 pixels, width * 4, 0, _workCancellation))
+        return false;
+    for (const Tile& tile : _tiles)
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        if (!tile.touched)
+            continue;
+        const auto overlap = tile.rect.Intersect(region);
+        for (int y = overlap.y; y < overlap.y + overlap.height; ++y)
+        {
+            if (_workCancellation.IsCancelled())
+                return false;
+            std::memcpy(coverage.data() + static_cast<std::size_t>(y - region.y) * width +
+                            static_cast<std::size_t>(overlap.x - region.x),
+                        tile.coverage.data() +
+                            static_cast<std::size_t>(y - tile.rect.y) * static_cast<std::size_t>(tile.rect.width) +
+                            static_cast<std::size_t>(overlap.x - tile.rect.x),
+                        static_cast<std::size_t>(overlap.width));
+        }
+    }
+    if (!SpotHealing::HealForWork(pixels, coverage, width, height, width * 4, static_cast<float>(_settings.opacity),
+                                  _healingMode, seed, _workCancellation))
+        return false;
+    for (Tile& tile : _tiles)
+    {
+        if (_workCancellation.IsCancelled())
+            return false;
+        if (!tile.touched)
+            continue;
+        const auto count = static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height) * 4;
+        auto output = PixelBuffer::TryAllocate(count);
+        if (!output)
+            throw std::bad_alloc{};
+        if (!ReadRasterRegionForWork(tile.base, {0, 0, tile.rect.width, tile.rect.height},
+                                     {output.Data(), output.Size()}, static_cast<std::size_t>(tile.rect.width) * 4, 0,
+                                     _workCancellation))
+            return false;
+        const auto overlap = tile.rect.Intersect(region);
+        for (int y = overlap.y; y < overlap.y + overlap.height; ++y)
+        {
+            if (_workCancellation.IsCancelled())
+                return false;
+            for (int x = overlap.x; x < overlap.x + overlap.width; ++x)
+            {
+                const auto* healed =
+                    pixels.data() +
+                    (static_cast<std::size_t>(y - region.y) * width + static_cast<std::size_t>(x - region.x)) * 4;
+                auto* pixel = output.Data() +
+                              (static_cast<std::size_t>(y - tile.rect.y) * static_cast<std::size_t>(tile.rect.width) +
+                               static_cast<std::size_t>(x - tile.rect.x)) *
+                                  4;
+                const double clip = _selection ? SelectionAt(_pixelToDocument.Apply(Vec2{x + 0.5, y + 0.5})) : 1.0;
+                for (int channel = 0; channel < 4; ++channel)
+                    pixel[channel] =
+                        static_cast<std::uint8_t>(std::lround(healed[channel] * clip + pixel[channel] * (1.0 - clip)));
+            }
+        }
+        tile.image = Raster::Adopt(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, std::move(output));
+        RefreshTileOwnership(tile);
+        if (!tile.image.HasStorage())
+            return false;
+        tile.changed = true;
+    }
+    return complete();
 }
 
 bool BrushStroke::Heal(std::uint32_t seed)
@@ -1660,6 +2590,7 @@ bool BrushStroke::Heal(std::uint32_t seed)
         }
         tile.image =
             Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        RefreshTileOwnership(tile);
         tile.changed = true;
     }
     return true;
@@ -1668,7 +2599,8 @@ bool BrushStroke::Heal(std::uint32_t seed)
 bool BrushStroke::PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                               const std::function<bool(Vec2, std::array<double, 4>&)>& shade)
 {
-    if (!_valid || _failed || (_workerRasterEdit && _workCancellation.IsCancelled()))
+    if (!_valid || _failed || (_detachedFinish && !_finalCoverageComplete) ||
+        (_workerRasterEdit && _workCancellation.IsCancelled()))
     {
         return false;
     }
@@ -1827,6 +2759,7 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, PaintMode mode,
             }
             tile.image = Raster::Make(tile.rect.width, tile.rect.height,
                                       _mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888, bytes.data(), bytes.size());
+            RefreshTileOwnership(tile);
             tile.touched = true;
             tile.changed = true;
             ++completedTiles;
@@ -1962,11 +2895,13 @@ Raster DocumentSession::BlurSample(bool mask) const
 
 bool DocumentSession::BeginWarp(Vec2 point)
 {
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || _warpOpening == UINT64_MAX)
+        return false;
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
-    if (!CanPaint() || _maskSelected || _warp)
+    if (!CanPaint() || _maskSelected || HasPendingWarp())
     {
         return false;
     }
@@ -1993,8 +2928,11 @@ bool DocumentSession::BeginWarp(Vec2 point)
     {
         return false;
     }
-    _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
     warp->Append(point);
+    if (!warp->IsValid())
+        return false;
+    _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
+    ++_warpOpening;
     _warp = std::move(warp);
     _lastBrushPoint = LastBrushPoint{point, layer->id, false};
     return true;
@@ -2002,11 +2940,16 @@ bool DocumentSession::BeginWarp(Vec2 point)
 
 void DocumentSession::ContinueWarp(Vec2 point)
 {
-    if (!_warp)
+    if (!_warp || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     _warp->Append(point);
+    if (!_warp->IsValid())
+    {
+        _lastBrushPoint.reset();
+        return;
+    }
     if (_lastBrushPoint.has_value())
     {
         _lastBrushPoint->point = point;
@@ -2016,6 +2959,9 @@ void DocumentSession::ContinueWarp(Vec2 point)
 void DocumentSession::CancelWarp() noexcept
 {
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
 }
 
 void DocumentSession::FinishWarp()
@@ -2026,11 +2972,11 @@ void DocumentSession::FinishWarp()
     }
     const std::shared_ptr<WarpStroke> warp = std::move(_warp);
     _warp.reset();
-    if (warp->Points().empty() || !_document.has_value())
+    if (!warp->IsValid() || warp->Points().empty() || !_document.has_value() || HasDeferredTransform())
     {
         return;
     }
-    const ImageLayer* current = MutableLayer(_warpSource.layerID);
+    const ImageLayer* current = FindLayer(_warpSource.layerID);
     const Raster currentImage = current != nullptr && current->asset.has_value() ? current->asset->image : Raster{};
     if (current == nullptr || !(currentImage == _warpSource.image) || current->transform != _warpSource.transform)
     {
@@ -2126,12 +3072,15 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
     const bool mask = _gradient ? _gradient->mask : _maskSelected;
     constexpr std::array<double, 4> kBlack{0.0, 0.0, 0.0, 1.0};
     constexpr std::array<double, 4> kWhite{1.0, 1.0, 1.0, 1.0};
+    const auto* captured = _gradient && _gradient->capturedInputs ? &_gradient->capturedInputs.value() : nullptr;
+    const auto& settings = captured ? captured->settings : gradientSettings;
+    const bool white = captured ? captured->maskWhite : maskPaintWhite;
     const std::array<double, 4> foreground =
-        mask ? (maskPaintWhite ? kWhite : kBlack) : StraightColor(_foregroundArgb, 1.0);
+        mask ? (white ? kWhite : kBlack) : StraightColor(captured ? captured->foreground : _foregroundArgb, 1.0);
     const std::array<double, 4> background =
-        mask ? (maskPaintWhite ? kBlack : kWhite) : StraightColor(_backgroundArgb, 1.0);
+        mask ? (white ? kBlack : kWhite) : StraightColor(captured ? captured->background : _backgroundArgb, 1.0);
     std::array<std::array<double, 4>, 2> colors{foreground, foreground};
-    if (gradientSettings.style == GradientStyle::ForegroundToBackground)
+    if (settings.style == GradientStyle::ForegroundToBackground)
     {
         colors[1] = background;
     }
@@ -2139,7 +3088,7 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
     {
         colors[1][3] = 0.0;
     }
-    if (gradientSettings.reversed)
+    if (settings.reversed)
     {
         std::swap(colors[0], colors[1]);
     }
@@ -2154,6 +3103,14 @@ bool DocumentSession::BeginGradient(Vec2 point)
 bool DocumentSession::BeginDeferredGradient(Vec2 point)
 {
     return BeginGradientImpl(point, true);
+}
+
+bool DocumentSession::BeginDeferredGradient(Vec2 point, GradientEdit::CapturedInputs inputs)
+{
+    if (!BeginGradientImpl(point, true))
+        return false;
+    _gradient->capturedInputs = inputs;
+    return true;
 }
 
 bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
@@ -2200,7 +3157,7 @@ bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
         return false;
     // Vec2 and a moved shared_ptr cannot throw: no allocation is left to catch (unlike a pixel move's selection
     // copy).
-    _gradient = GradientEdit{std::move(raster), point, point, layer->id, mask, deferred, ++_gradientOpening};
+    _gradient = GradientEdit{{}, std::move(raster), point, point, layer->id, mask, deferred, ++_gradientOpening};
     return true;
 }
 
@@ -2218,15 +3175,17 @@ void DocumentSession::MoveGradient(std::optional<Vec2> start, std::optional<Vec2
     {
         _gradient->end = end.value();
     }
-    RefreshGradient();
+    RefreshGradient(false); // Pointer motion preserves the admitted opening's captured settings and palette.
 }
 
-void DocumentSession::RefreshGradient()
+void DocumentSession::RefreshGradient(bool useLiveInputs)
 {
     if (!_gradient)
     {
         return;
     }
+    if (useLiveInputs)
+        _gradient->capturedInputs.reset(); // An explicit palette/header input after opening follows the live UI.
     if (_gradient->sequence == (std::numeric_limits<std::uint64_t>::max)())
     {
         CancelGradient();
@@ -2236,7 +3195,10 @@ void DocumentSession::RefreshGradient()
     if (_gradient->deferred)
     {
         if (!_gradient->HasLine())
+        {
             _gradient->raster.reset(); // a redrag without a line must not keep the previous pixels visible
+            _gradient->display.reset();
+        }
         return;
     }
     if (!_gradient->HasLine())
@@ -2278,7 +3240,8 @@ void DocumentSession::CommitGradient()
 }
 
 bool DocumentSession::PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
-                                             std::uint64_t opening, std::uint64_t sequence) noexcept
+                                             std::uint64_t opening, std::uint64_t sequence,
+                                             std::shared_ptr<const PreparedRasterPreview> display) noexcept
 {
     if (!_gradient || !_gradient->deferred || !_gradient->HasLine() || _gradient->opening != opening || !token.target ||
         token.generation != _generation || !CanApplyJobResult(token, token.sequence) ||
@@ -2287,6 +3250,14 @@ bool DocumentSession::PublishGradientPreview(std::shared_ptr<BrushStroke>&& rast
         sequence <= _gradient->publishedSequence || !raster || !raster->IsValid() ||
         raster->LayerID() != _gradient->target || raster->IsMask() != _gradient->mask)
         return false;
+    // Completed CPU producer only: validate cached scalar identities without walking tiles on the owner.
+    if (display && (!display->memory || !display->memory->IsBound() || !display->ownershipBytes ||
+                    display->target != raster->LayerID() || display->mask != raster->IsMask() ||
+                    display->width != raster->Width() || display->height != raster->Height() ||
+                    display->transform != raster->PaintTransform() || display->fill != raster->FillValue() ||
+                    display->source != raster->SourceImage() || display->sourceRect != raster->SourceRect()))
+        return false;
+    _gradient->display = std::move(display);
     _gradient->raster = std::move(raster);
     _gradient->publishedSequence = sequence;
     _gradient->publishedGeneration = _generation;
@@ -2316,14 +3287,19 @@ bool DocumentSession::ResolveGradient()
 
 void DocumentSession::BeginShape(Vec2 point)
 {
+    BeginShape(point, shapeKind, shapeCornerRadius);
+}
+
+void DocumentSession::BeginShape(Vec2 point, ShapeKind kind, double cornerRadius)
+{
     if (!_document.has_value() || _transformEdit.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
     ++_shapeOpening;
-    _shapeDraft = ShapeDraft{shapeKind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
-                             shapeKind == ShapeKind::Rectangle ? std::max(0.0, shapeCornerRadius) : 0.0};
+    _shapeDraft = ShapeDraft{kind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
+                             kind == ShapeKind::Rectangle ? std::max(0.0, cornerRadius) : 0.0};
 }
 
 void DocumentSession::DragShape(Vec2 point, bool square, bool fromCenter)
@@ -2472,16 +3448,15 @@ void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstri
     InsertLayerAboveActive(std::move(layer), editName, dropsSelection);
 }
 
-void DocumentSession::RedrawShape(std::size_t index)
+void DocumentSession::RedrawShape(ImageLayer& layer, std::span<const ImageLayer> records)
 {
     if (HasDeferredTransform())
         return;
 
-    if (!_document.has_value() || index >= _document->layers.size())
+    if (!_document.has_value())
     {
         return;
     }
-    ImageLayer& layer = _document->layers[index];
     const std::optional<LayerShapeStyle> shape = LiveShape(layer);
     if (!shape.has_value() || !layer.asset.has_value())
     {
@@ -2489,10 +3464,14 @@ void DocumentSession::RedrawShape(std::size_t index)
     }
     const int width = std::max(1, static_cast<int>(std::lround(layer.transform.size.x)));
     const int height = std::max(1, static_cast<int>(std::lround(layer.transform.size.y)));
+    std::int64_t imageLeft = kMaxLayerPixels;
+    for (const auto& record : records)
+        if (record.id != layer.id && record.asset)
+            imageLeft -= record.asset->image.PixelCount();
     // Past the document's budget (Decision D7) the shape keeps its pixels, stretched, instead of redrawing.
     if ((width == layer.asset->image.Width() && height == layer.asset->image.Height()) ||
         static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels ||
-        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > PixelBudgetLeft(false, {layer.id}))
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > std::max<std::int64_t>(0, imageLeft))
     {
         return;
     }
@@ -2796,7 +3775,22 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         }
         const std::size_t count =
             static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
-        std::vector<std::uint8_t> bytes(base, base + count * 4u);
+        std::vector<std::uint8_t> bytes;
+        PixelBuffer ownedPixels;
+        std::uint8_t* pixels = nullptr;
+        if (_workerRasterEdit)
+        {
+            ownedPixels = PixelBuffer::TryAllocate(count * 4u);
+            if (!ownedPixels)
+                throw std::bad_alloc{};
+            pixels = ownedPixels.Data();
+            std::copy_n(base, count * 4u, pixels);
+        }
+        else
+        {
+            bytes.assign(base, base + count * 4u);
+            pixels = bytes.data();
+        }
         for (std::size_t index = 0; index < count; ++index)
         {
             if (_workerRasterEdit && index % static_cast<std::size_t>(tile.rect.width) == 0 &&
@@ -2806,7 +3800,7 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
             const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
             const int gx = tile.rect.x + px;
             const int gy = tile.rect.y + py;
-            std::uint8_t* out = bytes.data() + index * 4u;
+            std::uint8_t* out = pixels + index * 4u;
             if (!duplicate)
             {
                 // The selection becomes a hole.
@@ -2855,8 +3849,13 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
                     std::clamp(sample[static_cast<std::size_t>(channel)] + out[channel] * hold, 0.0, 255.0)));
             }
         }
-        tile.image =
-            Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        tile.image = _workerRasterEdit ? Raster::Adopt(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888,
+                                                       std::move(ownedPixels), _workOutputLifetime)
+                                       : Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888,
+                                                      bytes.data(), bytes.size());
+        if (!tile.image.HasStorage())
+            return false;
+        RefreshTileOwnership(tile);
         tile.touched = true;
         tile.changed = true;
         if (_workerRasterEdit && _workProgress)
@@ -3065,12 +4064,12 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
                                           PreparedRasterEdit* publication)
 {
     if (!token.target || token.generation != _generation || !CanApplyJobResult(token, token.sequence) || _brush ||
-        _warp || (_pixelMove && !pixelMoveCommit) || _transformEdit || (_gradient && !gradientCommit) ||
+        HasPendingWarp() || (_pixelMove && !pixelMoveCommit) || _transformEdit || (_gradient && !gradientCommit) ||
         HasColorEdit() || _activeLayerID != token.target->layerId || _maskSelected != mask)
         return false;
     if (pixelMoveCommit && (!_pixelMove || !_pixelMove->deferred || mask || !movedSelection || !_document->selection))
         return false;
-    ImageLayer* const current = MutableLayer(token.target->layerId);
+    const ImageLayer* const current = FindLayer(token.target->layerId);
     if (!current || prepared.id != current->id || prepared.name != current->name ||
         prepared.visible != current->visible || prepared.parentID != current->parentID ||
         prepared.isGroup != current->isGroup || prepared.opacity != current->opacity ||
@@ -3109,13 +4108,13 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
         return false;
     if (publication)
     {
-        if (!history.CanPublish(publication->_history) || !history.Publish(publication->_history))
+        if (!publication->_document || !history.CanPublish(publication->_history) ||
+            !history.Publish(publication->_history))
             return false;
         // Every operation after validation is nonthrowing. The caller's aggregate now retains the old layer,
         // selection and history containers until its worker release; no destructor walks a large graph here.
-        std::swap(*current, prepared);
-        if (pixelMoveCommit)
-            std::swap(_document->selection.value(), *movedSelection);
+        std::swap(_document, publication->_document);
+        publication->_applied = true;
         std::swap(_lastBrushCommit, publication->_retiredBrushCommit);
         if (gradientCommit)
             std::swap(_gradient, publication->_retiredGradient);
@@ -3125,10 +4124,20 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
     }
     else
     {
-        BeginEdit(std::move(name));
-        *current = std::move(prepared);
+        const auto index = IndexOf(_document.value().layers, prepared.id);
+        if (!index)
+            return false;
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+        if (!draft)
+            return false;
+        draft.value().EditLayers()[index.value()] = std::move(prepared);
         if (pixelMoveCommit)
-            _document->selection = std::move(*movedSelection);
+            draft.value().DocumentState().selection = std::move(*movedSelection);
+        auto after = draft.value().Seal();
+        if (!after)
+            return false;
+        BeginEdit(std::move(name));
+        std::swap(_document.value(), after.value());
         _lastBrushCommit.reset(); // an older gradient/stroke preview cannot be adopted for this prepared edit
         EndEdit();
     }
@@ -3149,13 +4158,23 @@ void DocumentSession::DeleteLayerMask()
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    const ImageLayer* layer = FindLayer(_activeLayerID.value());
     if (layer == nullptr || !layer->mask.has_value())
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask.reset();
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Delete Layer Mask");
-    layer->mask.reset();
+    std::swap(_document.value(), after.value());
     _maskSelected = false;
     ++_editRevision;
     EndEdit();
@@ -3192,12 +4211,12 @@ void DocumentSession::DeleteKeyPressed()
 
 bool DocumentSession::CanInvert() const noexcept
 {
-    if (!_document.has_value() || _brush || _warp || _pixelMove)
+    if (!_document.has_value() || _brush || HasPendingWarp() || _pixelMove)
     {
         return false;
     }
     const ImageLayer* layer = ActiveLayer();
-    if (layer == nullptr || (layer->isGroup && !_maskSelected) || !EffectivelyVisible(_document.value(), layer->id))
+    if (layer == nullptr || (layer->isGroup && !_maskSelected) || !EffectivelyVisible(_document->layers, layer->id))
     {
         return false;
     }
@@ -3277,8 +4296,8 @@ bool DocumentSession::BeginPixelMoveImpl(bool duplicate, bool deferred)
         raster->SetEditName(duplicate ? L"Duplicate Pixels" : L"Move Pixels");
     }
     // Pixel and immutable selection handles are shared with the document until the move is committed.
-    _pixelMove = PixelMove{std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0}, layer->id,
-                           deferred,          ++_pixelMoveOpening};
+    _pixelMove = PixelMove{{},        std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0},
+                           layer->id, deferred,          ++_pixelMoveOpening};
     _pixelMove->openingGeneration = _generation;
     return true;
 }
@@ -3302,7 +4321,10 @@ void DocumentSession::MovePixels(double dx, double dy)
         _pixelMove->offset = rounded;
         ++_pixelMove->sequence;
         if (!_pixelMove->HasOffset())
+        {
             _pixelMove->raster.reset(); // an older worker cannot resurrect a zero-offset preview
+            _pixelMove->display.reset();
+        }
         return;
     }
     if (!_pixelMove->raster->MoveLifted(rounded, _pixelMove->duplicate))
@@ -3311,6 +4333,15 @@ void DocumentSession::MovePixels(double dx, double dy)
         return;
     }
     _pixelMove->offset = rounded;
+}
+
+SelectionDisplayValue DocumentSession::DisplayedSelectionValue() const
+{
+    if (_pixelMove && !HasDeferredTransform())
+        return {_pixelMove->origin, _pixelMove->offset};
+    if (HasCurrentDeferredSelectionMoveSource())
+        return {_selectionMoveOrigin, _selectionMoveOffset.value()};
+    return {DisplayedSelection(), {}};
 }
 
 std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
@@ -3323,6 +4354,12 @@ std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
     if (!_document.has_value())
     {
         return std::nullopt;
+    }
+    if (HasCurrentDeferredSelectionMoveSource())
+    {
+        DocumentSelection moved = _selectionMoveOrigin.value();
+        moved.loops = SelectionGeometry::Translated(moved.loops, _selectionMoveOffset->x, _selectionMoveOffset->y);
+        return moved; // Numeric reference only; production readers use DisplayedSelectionValue.
     }
     if (_pixelMove)
     {
@@ -3373,7 +4410,8 @@ void DocumentSession::CancelPixelMove() noexcept
 }
 
 bool DocumentSession::PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,
-                                              std::uint64_t opening, std::uint64_t sequence) noexcept
+                                              std::uint64_t opening, std::uint64_t sequence,
+                                              std::shared_ptr<const PreparedRasterPreview> display) noexcept
 {
     if (!_pixelMove || !_pixelMove->deferred || !_pixelMove->HasOffset() || _pixelMove->opening != opening ||
         _pixelMove->openingGeneration != _generation || sequence <= _pixelMove->publishedSequence ||
@@ -3382,6 +4420,14 @@ bool DocumentSession::PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& str
         _activeLayerID != _pixelMove->target || _maskSelected || !stroke || !stroke->IsValid() ||
         stroke->LayerID() != _pixelMove->target || stroke->IsMask())
         return false;
+    // Completed CPU producer only: validate cached scalar identities without walking tiles on the owner.
+    if (display && (!display->memory || !display->memory->IsBound() || !display->ownershipBytes ||
+                    display->target != stroke->LayerID() || display->mask != stroke->IsMask() ||
+                    display->width != stroke->Width() || display->height != stroke->Height() ||
+                    display->transform != stroke->PaintTransform() || display->fill != stroke->FillValue() ||
+                    display->source != stroke->SourceImage() || display->sourceRect != stroke->SourceRect()))
+        return false;
+    _pixelMove->display = std::move(display);
     _pixelMove->raster = std::move(stroke);
     _pixelMove->publishedSequence = sequence;
     _pixelMove->publishedGeneration = _generation;
@@ -3433,7 +4479,7 @@ void DocumentSession::AddMask(bool revealing)
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    const ImageLayer* layer = FindLayer(_activeLayerID.value());
     if (layer == nullptr || layer->mask.has_value())
     {
         return;
@@ -3486,9 +4532,20 @@ void DocumentSession::AddMask(bool revealing)
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask =
+        LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer->name}, true, std::nullopt, true};
+    draft.value().DocumentState().selection.reset();
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Add Mask from Selection");
-    layer->mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer->name}, true, std::nullopt, true};
-    _document->selection.reset();
+    std::swap(_document.value(), after.value());
     _maskSelected = true;
     ++_editRevision;
     EndEdit();
@@ -3568,15 +4625,32 @@ void DocumentSession::BeginSelectionTransform()
     floating.parentID = source.parentID;
     floating.opacity = source.opacity;
     floating.blendMode = source.blendMode;
-    _document->layers.insert(_document->layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, floating);
-    SetActiveLayerID(floating.id);
-    _maskSelected = false;
     TransformEdit edit;
     edit.layerID = floating.id;
     edit.draft = floating.transform;
     edit.persistent = true;
     edit.floating = FloatingTransform{
         source.id, before, beforeActive, floating.transform, lifted->image.Width(), lifted->image.Height()};
+    const Guid floatingId = floating.id;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size() + 1);
+    if (!draft || !draft.value().Insert(index.value() + 1, std::move(floating)))
+    {
+        _document = *before;
+        SetActiveLayerID(beforeActive);
+        EndEdit();
+        return;
+    }
+    auto after = draft.value().Seal();
+    if (!after)
+    {
+        _document = *before;
+        SetActiveLayerID(beforeActive);
+        EndEdit();
+        return;
+    }
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(floatingId);
+    _maskSelected = false;
     _transformEdit = std::move(edit);
     NoteDocumentMutation();
 }
@@ -3602,7 +4676,7 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         {
             break;
         }
-        std::vector<ImageLayer>& layers = _document->layers;
+        const auto& layers = _document->layers;
         const std::optional<std::size_t> floatingIndex = IndexOf(layers, edit.layerID);
         const std::optional<std::size_t> sourceIndex = IndexOf(layers, floating.sourceID);
         if (!floatingIndex.has_value() || !sourceIndex.has_value() ||
@@ -3728,17 +4802,25 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
             moved = std::move(selection);
         }
         const std::wstring name = source.name;
-        layers.erase(layers.begin() + static_cast<std::ptrdiff_t>(floatingIndex.value()));
-        const std::optional<std::size_t> target = IndexOf(layers, floating.sourceID);
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), layers.size());
+        if (!draft || !draft.value().Erase(floatingIndex.value()))
+            break;
+        const std::optional<std::size_t> target = IndexOf(draft.value().ReadLayers(), floating.sourceID);
         if (!target.has_value())
         {
             break;
         }
-        ImageLayer& installed = layers[target.value()];
-        installed.asset = RasterAsset{image, {}, name};
-        installed.transform = mergedTransform;
-        installed.mask = mask;
-        _document->selection = moved;
+        {
+            ImageLayer& installed = draft.value().EditLayers()[target.value()];
+            installed.asset = RasterAsset{image, {}, name};
+            installed.transform = mergedTransform;
+            installed.mask = mask;
+        }
+        draft.value().DocumentState().selection = moved;
+        auto after = draft.value().Seal();
+        if (!after)
+            break;
+        std::swap(_document.value(), after.value());
         SetActiveLayerID(floating.sourceID);
         _maskSelected = false;
         merged = true;
@@ -4046,4 +5128,150 @@ void DocumentSession::LayerViaCopy()
         return;
     }
     AddPixelLayer(copied->image, copied->origin, NextLayerName(), L"Layer via Copy", true, std::nullopt);
+}
+
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324) // SLIST node requires 16-byte alignment.
+struct RetiredBrushOwner final : DeferredReleaseNode
+{
+    std::unique_ptr<BrushStroke> stroke;
+};
+#pragma warning(pop)
+
+void DestroyRetiredBrushOwner(DeferredReleaseNode* node) noexcept
+{
+    const std::unique_ptr<RetiredBrushOwner> owner(static_cast<RetiredBrushOwner*>(node));
+    // The graphics borrow ended before publication to the retirement consumer. The whole tile/vector/hash
+    // graph and all retained rasters are destroyed here, before this owner's admission acknowledgement.
+    assert(!owner->stroke->HasCoverageEngineForTest());
+}
+
+void ReleasePrivateBrushOwner(RetiredBrushOwner* raw) noexcept
+{
+    std::unique_ptr<RetiredBrushOwner> owner(raw);
+    owner->stroke->ReleaseCoverageEngine();
+    const std::uint64_t bytes = owner->stroke->RetirementMemoryBytes();
+    // MakeForWork accepts only complete cached source graphs. Its worker opening produces bounded contiguous
+    // selection/sample rasters; every tile producer maintains this complete cache. Losing that invariant is
+    // a producer bug, never permission to publish an unknown or invented retirement charge.
+    if (bytes == 0 || bytes > (std::numeric_limits<std::uint64_t>::max)() - sizeof(RetiredBrushOwner) - 128)
+        std::terminate();
+    owner->bytes = bytes + sizeof(RetiredBrushOwner) + 128;
+    owner->destroy = &DestroyRetiredBrushOwner;
+    if (TryDeferRelease(*owner, DeferredReleasePolicy::AlwaysOnOwner))
+        (void)owner.release();
+}
+} // namespace
+
+std::shared_ptr<BrushStroke> BrushStroke::MakeForWork(const ImageLayer& layer, bool mask, const BrushSettings& settings,
+                                                      int canvasWidth, int canvasHeight, BrushKind kind,
+                                                      SpotHealingMode healing)
+{
+    // Worker only. Allocation failures propagate to the original admitted job's bad_alloc boundary.
+    // No GPU/context is constructed or borrowed here.
+    const Raster source =
+        mask ? (layer.mask ? layer.mask->asset.image : Raster{}) : (layer.asset ? layer.asset->image : Raster{});
+    if (source.HasStorage() && source.RetirementMemoryBytes() == 0)
+        return nullptr;
+    auto owner = std::make_unique<RetiredBrushOwner>();
+    owner->stroke =
+        std::make_unique<BrushStroke>(layer, mask, settings, canvasWidth, canvasHeight, nullptr, kind, healing);
+    if (!owner->stroke->IsValid() || !owner->stroke->RetirementMemoryBytes())
+        return nullptr;
+    owner->stroke->_privateWorkerOwner = true;
+    BrushStroke* const draft = owner->stroke.get();
+    // shared_ptr construction invokes its supplied deleter if allocating the control block fails. Transfer
+    // exactly once before that construction; retaining the unique_ptr would double-destroy on that path.
+    RetiredBrushOwner* const transferred = owner.release();
+    return std::shared_ptr<BrushStroke>(draft, [transferred](BrushStroke*) noexcept
+                                        { ReleasePrivateBrushOwner(transferred); });
+}
+
+bool BrushStroke::AttachCoverageForOpening(BrushCoverageEngine* engine) noexcept
+{
+    if (!_valid || _failed || _detachedFinish || _workerRasterEdit || _engine != &CpuBrushCoverage::Shared() ||
+        !_samples.empty() || !_tiles.empty() || !_finalCoverageOrder.empty())
+        return false;
+    ReleaseCoverageEngine();
+    _engine = engine != nullptr ? engine : &CpuBrushCoverage::Shared();
+    _usesCpuPermanent = _engine->UsesCpuPermanent();
+    _coverageOwner = std::this_thread::get_id();
+    _engine->BeginStroke();
+    return true;
+}
+
+bool BrushStroke::RetainOpeningMemory(SharedRetainedMemoryLease&& lease) noexcept
+{
+    if (!_privateWorkerOwner || !_valid || _failed || _openingMemory || !lease || !_engine ||
+        (_engine != &CpuBrushCoverage::Shared() && _coverageOwner != std::this_thread::get_id()) || !_samples.empty() ||
+        !_tiles.empty())
+        return false;
+    _openingMemory = std::move(lease);
+    return true;
+}
+
+bool BrushStroke::BeginWarpReplayForWork(std::shared_ptr<const PreparedWarpPreview> preview, bool computeCoverage,
+                                         CancelToken cancellation)
+{
+    if (!_privateWorkerOwner || !_valid || _failed || _mask || _kind != BrushKind::Paint ||
+        _engine != &CpuBrushCoverage::Shared() || _workerRasterEdit || _detachedFinish || _detachedSample ||
+        !_tiles.empty() || !_samples.empty() || _sample || _warpSample || !preview ||
+        preview->ownerThread == std::this_thread::get_id() || preview->source.width != _canvasWidth ||
+        preview->source.height != _canvasHeight || cancellation.IsCancelled())
+        return false;
+    auto reader = std::make_unique<WarpPreviewReader>(preview);
+    if (!reader->IsValidForWork() || !reader->RetirementMemoryBytes())
+        return false;
+    ReleaseCoverageEngine(); // The worker factory's CPU engine has no graphics state.
+    _warpSample = std::move(reader);
+    _warpReplayOwner = preview->ownerThread;
+    _usesCpuPermanent = !computeCoverage;
+    _workerRasterEdit = true;
+    _warpReplay = true;
+    _replaces = true;
+    _workCancellation = std::move(cancellation);
+    return true;
+}
+
+std::optional<BrushStroke::SampleCoverage> BrushStroke::PrepareWarpReplaySampleForWork(Vec2 point,
+                                                                                       CancelToken cancellation)
+{
+    if (!_warpReplay || !_warpSample || _engine || !_valid || _failed || _detachedFinish ||
+        _warpReplayOwner == std::this_thread::get_id() || _sampleSequence == UINT64_MAX ||
+        (_sampleCoveragePrepared && !_sampleCoverageComplete) || !std::isfinite(point.x) || !std::isfinite(point.y))
+        return std::nullopt;
+    if (cancellation.IsCancelled())
+    {
+        _failed = true;
+        return std::nullopt;
+    }
+    _detachedSample = true;
+    _sampleCoveragePrepared = false;
+    _sampleCoverageComplete = false;
+    ++_sampleSequence;
+    // The unchanged scalar Append ignores finite centers beyond 1e7. Preserve a previously painted prefix,
+    // without replacing its last-four curve controls, and still acknowledge this accepted replay phase.
+    if (std::abs(point.x) > 1e7 || std::abs(point.y) > 1e7)
+    {
+        _workCancellation = std::move(cancellation);
+        _sampleCoveragePrepared = true;
+        SampleCoverage noop;
+        noop.sequence = _sampleSequence;
+        noop.params = KernelParams();
+        return noop;
+    }
+    _samplePoint = point;
+    return PrepareSampleCoverage(std::move(cancellation));
+}
+
+std::optional<BrushStroke::FinalCoverage> BrushStroke::PrepareWarpReplayFinishForWork(CancelToken cancellation)
+{
+    if (!_warpReplay || !_warpSample || _engine || !_valid || _failed || _detachedFinish ||
+        _warpReplayOwner == std::this_thread::get_id() || (_sampleCoveragePrepared && !_sampleCoverageComplete))
+        return std::nullopt;
+    _detachedSample = false;
+    _detachedFinish = true;
+    return PrepareFinalCoverage(std::move(cancellation));
 }

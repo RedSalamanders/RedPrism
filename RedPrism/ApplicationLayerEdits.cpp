@@ -30,19 +30,21 @@ void Application::RenameActiveLayer() noexcept
     // The card renames the layer it opened for, whichever layer is active when it commits.
     _renameLayer = active->id;
     _chrome->OpenRenameCard(active->name);
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnLayerInvoked(Guid id) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.HasColorEdit() ||
+         _session.PendingGradient() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerInvokeInput{id}));
         return;
     }
     // A double-click on a row renames that layer (legacy: the inline editor of the layer list).
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     _session.SelectLayer(id);
     SyncChrome();
     RenameActiveLayer();
@@ -91,121 +93,145 @@ const ImageLayer* Application::OpacityEditLayer() noexcept
         _opacityEdit.reset();
         return nullptr;
     }
-    for (const ImageLayer& layer : _session.Document().value().layers)
+    const ImageLayer* layer = _session.Document()->layers.FindKey(_opacityEdit->layer);
+    if (layer != nullptr && !layer->isGroup && layer->opacity == _opacityEdit->shown &&
+        _opacityEdit->documentSerial == _session.DocumentSerial())
     {
-        if (layer.id == _opacityEdit->layer)
-        {
-            if (layer.isGroup || layer.opacity != _opacityEdit->shown)
-            {
-                break;
-            }
-            return &layer;
-        }
+        return layer;
     }
     _opacityEdit.reset();
     return nullptr;
 }
 
-void Application::CloseOpacityEdit() noexcept
+bool Application::CloseOpacityEdit() noexcept
 {
+    if (!_opacityEdit)
+        return true;
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
-    {
-        return; // the selected continuation settles it after the admitted predecessor finishes
-    }
+        return false; // The selected continuation owns the acknowledged settlement.
     const ImageLayer* layer = OpacityEditLayer();
     if (layer == nullptr)
+        return true; // Only expired scalar invocation state was discarded.
+    if (_opacityEdit->shown == _opacityEdit->start)
     {
-        return;
+        _opacityEdit.reset();
+        return true;
     }
-    const OpacityEdit edit = _opacityEdit.value();
-    _opacityEdit.reset();
-    if (edit.shown == edit.start)
+    // A changed edit is closed only by the typed worker acknowledgement. Never
+    // construct or publish a history entry from a synchronous caller fallback.
+    if (_hostExecuting)
+        _hostExecutionError = E_UNEXPECTED;
+    return false;
+}
+
+bool Application::NewerOpacityInputPending(Guid target, OpacityInputOrder::Stamp order) const noexcept
+{
+    if (!order.stream)
+        return false;
+    for (std::size_t i = 0; i < _hostRequests.Size(); ++i)
     {
-        return;
+        const auto* entry = _hostRequests.PendingAt(i);
+        const auto* input = std::get_if<HostLayerOpacityInput>(&entry->input.Input());
+        // Another accepted input owns a barrier; a later field stream cannot erase its predecessor.
+        if (!input || entry->documentSerial != _session.DocumentSerial() || input->id != target ||
+            input->order.stream != order.stream)
+            return false;
+        if (input->order.sequence > order.sequence)
+            return true;
     }
-    // History still holds the start value: the previewed one becomes its own entry before anything else records.
-    // The field keeps its text, so its Enter or focus loss may still commit this value.
-    if (!_session.PreviewLayerOpacity(edit.layer, edit.start))
+    return false;
+}
+
+void Application::AcknowledgeOpacityMetadata(Guid target, double value, OpacityMetadataContext context) noexcept
+{
+    if (!_opacityEdit || _opacityEdit->opening != context.opening || _opacityEdit->layer != target ||
+        _opacityEdit->documentSerial != _session.DocumentSerial())
+        return;
+    if (context.action == OpacityAcknowledgement::Preview)
+        _opacityEdit->shown = value;
+    else
     {
-        return;
+        if (context.action == OpacityAcknowledgement::Close)
+            _opacityRecorded = value;
+        _opacityEdit.reset();
     }
-    _session.BeginEdit(L"Layer Opacity");
-    (void)_session.PreviewLayerOpacity(edit.layer, edit.shown);
-    _session.EndEdit();
-    _opacityRecorded = edit.shown;
-    DocumentChanged();
+}
+
+HRESULT Application::StartOpacityClosure() noexcept
+{
+    if (!OpacityEditLayer())
+        return S_OK;
+    const auto edit = _opacityEdit.value();
+    const auto previousResume = _hostAfterPrerequisite;
+    const auto result = StartLayerMetadata(LayerMetadataKind::SetOpacity, edit.layer, {}, edit.shown,
+                                           LayerBlendMode::Normal, OpacityMetadataIntent::TypedCommit, edit.start,
+                                           OpacityMetadataContext{edit.opening, {}, OpacityAcknowledgement::Close});
+    _hostAfterPrerequisite = previousResume;
+    return result;
 }
 
 void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.PendingGradient() || _activeHostRequest || _hostRequests.Size()))
+    // The disabled stepper must not settle another panel implicitly.
+    if (!std::isfinite(opacity) || (_session.HasColorEdit() && phase != ChromeEditPhase::Cancel))
+        return;
+    if (const auto id = _session.ActiveLayerID())
+        ReportHostAdmission(QueueHostInput(HostLayerOpacityInput{id.value(), opacity, phase}));
+}
+
+void Application::ExecuteLayerOpacityInput(const HostLayerOpacityInput& request) noexcept
+{
+    const double opacity = request.opacity;
+    const auto phase = request.phase;
+    if (!_activeHostRequest)
     {
-        if (const auto id = _session.ActiveLayerID())
-            ReportHostAdmission(QueueHostInput(HostLayerOpacityInput{id.value(), opacity, phase}));
+        _hostExecutionError = E_UNEXPECTED;
         return;
     }
-    // An open panel owns the document (the stepper is disabled then): a typed opacity would fold into its entry.
-    if (!std::isfinite(opacity) || (_session.HasColorEdit() && phase != ChromeEditPhase::Cancel))
+    const auto* input = std::get_if<HostLayerOpacityInput>(&_activeHostRequest->input.Input());
+    if (!input || input->order.sequence == 0)
     {
+        _hostExecutionError = E_INVALIDARG;
         return;
     }
     const double value = std::clamp(opacity, 0.0, 1.0);
-    const std::optional<double> recorded = std::exchange(_opacityRecorded, std::nullopt);
+    const auto recorded = std::exchange(_opacityRecorded, std::nullopt);
     const ImageLayer* layer = OpacityEditLayer();
-    switch (phase)
+    if (phase == ChromeEditPhase::Preview && !layer)
     {
-    case ChromeEditPhase::Preview:
-        // Typing previews on the layer the edit started on, outside history; the first preview remembers the value
-        // history holds. No transaction stays open, so an edit that ends without a word (the value typed back to
-        // where it started) leaves history as it was.
-        if (layer == nullptr)
+        layer = _session.ActiveLayer();
+        if (!layer || layer->isGroup)
+            return;
+        if (_opacityOpening == UINT64_MAX)
         {
-            layer = _session.ActiveLayer();
-            if (layer == nullptr || layer->isGroup)
-            {
-                return;
-            }
-            _opacityEdit = OpacityEdit{layer->id, layer->opacity, layer->opacity};
-        }
-        if (!_session.PreviewLayerOpacity(layer->id, value))
-        {
-            _opacityEdit.reset();
+            _hostExecutionError = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             return;
         }
-        _opacityEdit->shown = value;
-        break;
-    case ChromeEditPhase::Commit:
-        if (layer != nullptr)
-        {
-            // One entry from the value before the first preview to the committed one (none when they are equal).
-            const OpacityEdit edit = _opacityEdit.value();
-            _opacityEdit.reset();
-            if (!_session.PreviewLayerOpacity(edit.layer, edit.start))
-            {
-                break;
-            }
-            _session.BeginEdit(L"Layer Opacity");
-            (void)_session.PreviewLayerOpacity(edit.layer, value);
-            _session.EndEdit();
-        }
-        else if (recorded != value)
-        {
-            // A button, an arrow key or RequestValue: the active layer, one entry.
-            _session.SetOpacity(value);
-        }
-        break;
-    case ChromeEditPhase::Cancel:
-    default:
-        // Escape restores the value history holds; an edit that already closed keeps its entry.
-        if (layer != nullptr)
-        {
-            (void)_session.PreviewLayerOpacity(_opacityEdit->layer, _opacityEdit->start);
-        }
-        _opacityEdit.reset();
-        break;
+        _opacityEdit =
+            OpacityEdit{layer->id, layer->opacity, layer->opacity, ++_opacityOpening, _session.DocumentSerial()};
     }
-    DocumentChanged();
+    if (layer)
+    {
+        const auto edit = _opacityEdit.value();
+        const bool commit = phase == ChromeEditPhase::Commit;
+        const bool cancel = phase == ChromeEditPhase::Cancel;
+        const double final = cancel ? edit.start : value;
+        _hostExecutionError =
+            StartLayerMetadata(LayerMetadataKind::SetOpacity, edit.layer, {}, final, LayerBlendMode::Normal,
+                               commit ? OpacityMetadataIntent::TypedCommit : OpacityMetadataIntent::Preview,
+                               commit ? std::optional(edit.start) : std::nullopt,
+                               OpacityMetadataContext{edit.opening, input->order,
+                                                      cancel   ? OpacityAcknowledgement::Cancel
+                                                      : commit ? OpacityAcknowledgement::Commit
+                                                               : OpacityAcknowledgement::Preview});
+    }
+    else if (phase == ChromeEditPhase::Commit && recorded != value)
+    {
+        if (const auto* active = _session.ActiveLayer(); active && !active->isGroup)
+            _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetOpacity, active->id, {}, value);
+    }
+    if (FAILED(_hostExecutionError))
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
 }
 
 void Application::MergeLayersCommand() noexcept
@@ -419,9 +445,11 @@ int Application::RunLayerEditsSelfTest() noexcept
     // Typed back to its start value ("100" → "10" → "100", Enter): the field sends no commit at all.
     int entries = _session.history.UndoCount();
     OnLayerOpacity(0.1, ChromeEditPhase::Preview);
+    settle();
     const bool previewed = opacityOf(target) == 0.1;
     OnLayerOpacity(1.0, ChromeEditPhase::Preview);
     OnCommand(ChromeHost::kCommandNewLayer);
+    settle();
     if (!previewed || !_session.history.CanUndo() || _session.history.UndoName() != L"New Blank Layer" ||
         _session.history.UndoCount() != entries + 1 || opacityOf(target) != 1.0)
     {
@@ -441,6 +469,7 @@ int Application::RunLayerEditsSelfTest() noexcept
     OnLayerOpacity(0.4, ChromeEditPhase::Preview);
     OnCommand(ChromeHost::kCommandNewFolder);
     OnLayerOpacity(0.4, ChromeEditPhase::Commit);
+    settle();
     const bool folderLast = _session.history.UndoName() == L"New Folder" && _session.history.CanUndo() &&
                             _session.history.UndoCount() == entries + 2 && opacityOf(target) == 0.4;
     OnCommand(ChromeHost::kCommandUndo);
@@ -463,6 +492,7 @@ int Application::RunLayerEditsSelfTest() noexcept
         return 5;
     _forcedDiscard.reset();
     OnLayerOpacity(0.3, ChromeEditPhase::Commit);
+    settle();
     const ImageLayer* fresh = _session.ActiveLayer();
     if (fresh == nullptr || fresh->opacity != 1.0 || _session.history.IsModified() ||
         _session.history.UndoName() != L"New Canvas")
@@ -478,11 +508,13 @@ int Application::RunLayerEditsSelfTest() noexcept
     entries = _session.history.UndoCount();
     OnLayerOpacity(0.6, ChromeEditPhase::Preview);
     OnLayerOpacity(1.0, ChromeEditPhase::Cancel);
+    settle();
     const bool cancelled =
         opacityOf(freshId) == 1.0 && _session.history.UndoCount() == entries && !_session.history.IsModified();
     OnLayerOpacity(0.2, ChromeEditPhase::Preview);
     OnLayerOpacity(0.25, ChromeEditPhase::Preview);
     OnLayerOpacity(0.25, ChromeEditPhase::Commit);
+    settle();
     const bool committed = opacityOf(freshId) == 0.25 && _session.history.UndoCount() == entries + 1 &&
                            _session.history.UndoName() == L"Layer Opacity";
     OnCommand(ChromeHost::kCommandUndo);

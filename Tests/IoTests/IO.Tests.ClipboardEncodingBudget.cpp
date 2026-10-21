@@ -164,10 +164,12 @@ int RunClipboardEncodingBudgetTests()
     constexpr std::uint64_t kAtCap = 1'090'902'248;
     constexpr std::uint64_t kAfterCap = 1'090'902'248;
     constexpr std::uint64_t kPngEncodedCapacityCap = 536'870'912;
-    Expect(kBeforeCap < kNearCap && kNearCap < kAtCap && kAtCap == kAfterCap, "png-capacity-monotonic-break");
-    Expect(kFixtures[5].pngCapacity < kPngEncodedCapacityCap && kFixtures[6].pngCapacity == kPngEncodedCapacityCap &&
-               kFixtures[7].pngCapacity == kPngEncodedCapacityCap,
-           "literal-512-mib-png-cap");
+    static_assert(kBeforeCap < kNearCap && kNearCap < kAtCap && kAtCap == kAfterCap);
+    static_assert(kFixtures[5].pngCapacity < kPngEncodedCapacityCap &&
+                  kFixtures[6].pngCapacity == kPngEncodedCapacityCap &&
+                  kFixtures[7].pngCapacity == kPngEncodedCapacityCap);
+    Expect(true, "png-capacity-monotonic-break"); // Compile-time literal witnesses; actual planner checks follow.
+    Expect(true, "literal-512-mib-png-cap");
     Expect(ClipboardEncodingBudget(30'000, 2'218) < ClipboardEncodingBudget(30'000, 2'219) &&
                ClipboardEncodingBudget(30'000, 2'219) < ClipboardEncodingBudget(30'000, 2'220),
            "planner-monotonic-before-cap");
@@ -181,11 +183,10 @@ int RunClipboardEncodingBudgetTests()
     constexpr std::uint64_t kNormalBandOtherDemands = 26'412'072;
     const std::uint64_t wideRowPeak = ClipboardEncodingBudget(30'000, 1);
     const std::uint64_t normalBandPeak = ClipboardEncodingBudget(1'024, 64);
-    Expect(120'000 > 65'536 && wideRowPeak >= kWideRowOtherDemands && normalBandPeak >= kNormalBandOtherDemands &&
+    static_assert(120'000 > 65'536);
+    Expect(wideRowPeak >= kWideRowOtherDemands && normalBandPeak >= kNormalBandOtherDemands &&
                wideRowPeak - kWideRowOtherDemands == 185'536 && normalBandPeak - kNormalBandOtherDemands == 131'072,
            "scratch-wide-one-row-versus-normal-band");
-    Expect(kClipboardEncodingFixedMetadataBytes == 1024 &&
-               kClipboardEncodingFixedMetadataBytes >= kNamedFixedObjectBytes,
-           "fixed-metadata-covers-named-objects");
+    Expect(true, "fixed-metadata-covers-named-objects"); // Both exact assertions are enforced at file scope.
     return gFailures;
 }

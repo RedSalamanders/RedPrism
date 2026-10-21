@@ -5,6 +5,8 @@
 #include "Runtime.Tests.ColorWorkTestGate.h"
 #include "resource.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -257,6 +259,8 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
             if (status >= 0)
             {
                 _colorCommitTicket = ticket;
+                if (_uiBenchmark)
+                    NoteUiCancellationCommitAdmitted(ticket, edit.value().openingSequence);
             }
         }
     }
@@ -279,7 +283,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
     if (_colorPreviewTicket)
     {
         (void)_jobs.Cancel(_colorPreviewTicket.value());
-        _colorPreviewTicket.reset();
+        // The cancelled preview ticket is retained until its exact acknowledgement.
     }
     // UI synchronization is outside the failure boundary. An admitted job keeps its barrier through apply/drop.
     // The opening histogram remains independent and may finish without changing settings.
@@ -294,7 +298,11 @@ void Application::CancelColorCommit() noexcept
         (void)_historyWork.RequestCancel();
         if (_colorCommitTicket)
         {
-            (void)_jobs.Cancel(_colorCommitTicket.value());
+            const auto original = _colorCommitTicket.value();
+            const auto begin = _uiBenchmark ? BeginUiCancellationStop(original) : -1;
+            const bool accepted = _jobs.Cancel(original);
+            if (_uiBenchmark)
+                NoteUiCancellationToken(original, accepted, begin);
         }
         // A late successful worker still drops. Keep the barrier until its UI completion acknowledges that drop.
     }
@@ -383,15 +391,15 @@ int Application::RunColorCommitSelfTest() noexcept
     constexpr std::array<std::uint8_t, 16> pixels{0,   0,   0,   255, 64,  64,  64,  255,
                                                   128, 128, 128, 255, 255, 255, 255, 255};
     const Raster source = Raster::Make(4, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
-    CanvasDocument document;
-    document.id = Guid::Generate();
-    document.width = 4;
-    document.height = 1;
+    DocumentFixture documentFixture;
+    documentFixture.id = Guid::Generate();
+    documentFixture.width = 4;
+    documentFixture.height = 1;
     ImageLayer layer = ImageLayer::Blank(L"Ordered color work", Vec2{4, 1});
     const Guid active = layer.id;
     layer.asset = RasterAsset{source, source, layer.name};
-    document.layers.push_back(std::move(layer));
-    ReplaceDocument(std::move(document), active, {});
+    documentFixture.layers.push_back(std::move(layer));
+    ReplaceDocument(std::move(documentFixture).Seal(), active, {});
     const auto cleanup = wil::scope_exit(
         [&]() noexcept
         {
@@ -502,7 +510,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"The identity/stale commit fixture did not start.\n");
     }
-    _session.EditForTest([&](CanvasDocument& value) { value.layers.front().transform.origin.x += 1; });
+    EditLayerRecordsForTest(_session, [](DocumentFixture& fixture) { fixture.layers.front().transform.origin.x += 1; });
     (void)SetEvent(_colorWorkTestGate->release.get());
     if (!settled() || _colorCommitOutcome != HostOutcome::Stale || _historyWork.Busy() || _session.HasColorEdit() ||
         _session.ActiveLayer()->asset->image != source || _session.history.UndoCount() != cancelledHistory ||
@@ -510,7 +518,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"A stale identity result was mistaken for a successful settlement.\n");
     }
-    _session.EditForTest([](CanvasDocument& value) { value.layers.front().transform.origin.x = 0; });
+    EditLayerRecordsForTest(_session, [](DocumentFixture& fixture) { fixture.layers.front().transform.origin.x = 0; });
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels) || start() != HostOutcome::Pending)
     {
         return fail(L"The current identity commit fixture did not start.\n");
@@ -591,7 +599,9 @@ int Application::RunColorCommitSelfTest() noexcept
     const Raster replacement = SolidRaster(4, 1, 0xFF112233u);
     CanvasDocument reopened = _session.Document().value(); // Deliberately reuse its persisted document/layer IDs.
     reopened.selection.reset();
-    reopened.layers.front().asset = RasterAsset{replacement, replacement, reopened.layers.front().name};
+    EditDocumentFixture(
+        reopened, [&](DocumentFixture& fixture)
+        { fixture.layers.front().asset = RasterAsset{replacement, replacement, fixture.layers.front().name}; });
     ReplaceDocument(std::move(reopened), active, {});
     if (!settled() || _colorCommitOutcome != HostOutcome::Cancelled || _historyWork.Busy() ||
         _session.DocumentSerial() == oldSerial || _session.ActiveLayer()->asset->image != replacement ||
@@ -700,9 +710,9 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"The missing adjustment target fixture did not open.\n");
     }
-    _session.EditForTest(
-        [&](CanvasDocument& value)
-        { std::erase_if(value.layers, [&](const ImageLayer& item) { return item.id == adjustmentId; }); });
+    EditLayerRecordsForTest(
+        _session, [&](DocumentFixture& fixture)
+        { std::erase_if(fixture.layers, [&](const ImageLayer& item) { return item.id == adjustmentId; }); });
     const int staleMetadataHistory = _session.history.UndoCount();
     if (start() != HostOutcome::Stale || _historyWork.Busy() || ColorCommitBusy() || !_session.HasColorEdit() ||
         _session.history.UndoCount() != staleMetadataHistory || _session.Document()->layers.size() != 1 ||

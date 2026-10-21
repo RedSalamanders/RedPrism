@@ -4,6 +4,7 @@
 #include "../../Common/ContinuationQueue.h"
 #include "../../Common/HistoryWork.h"
 #include "../../Common/PreviewMailbox.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>
@@ -39,15 +40,15 @@ void SetFixturePixels(DocumentSession& session)
     bytes[6] = 60;
     bytes[7] = 255;
     const Raster fixture = Raster::Make(4, 2, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            if (!document.layers.empty())
-            {
-                ImageLayer& layer = document.layers.back();
-                layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                if (!document.layers.empty())
+                                {
+                                    ImageLayer& layer = document.layers.back();
+                                    layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
+                                }
+                            });
 }
 
 std::array<std::uint8_t, 4> ActivePixel(const DocumentSession& session, int x, int y) noexcept

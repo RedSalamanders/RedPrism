@@ -1,8 +1,10 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ProjectStore.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
+#include "Runtime.Tests.LayerMetadataTestGate.h"
 
 #include <array>
 #include <cstdio>
@@ -49,6 +51,7 @@ int Application::RunColorCancellationSelfTest() noexcept
             if (!settle())
                 std::_Exit(5);
             _colorWorkTestGate.reset();
+            _layerMetadataTestGate.reset();
             _session.CancelColorEdit(); // reference teardown only after every admitted owner acknowledges
             CancelSizeCard();
         });
@@ -61,9 +64,10 @@ int Application::RunColorCancellationSelfTest() noexcept
     const auto prepare = [&](std::size_t kind) -> bool
     {
         _colorWorkTestGate.reset();
-        _session.CancelColorEdit(); // no worker exists at this independent fixture construction boundary
+        _layerMetadataTestGate.reset(); // drop only the previous original-ticket weak observation
+        _session.CancelColorEdit();     // no worker exists at this independent fixture construction boundary
         CancelSizeCard();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -72,7 +76,7 @@ int Application::RunColorCancellationSelfTest() noexcept
         const Guid id = layer.id;
         layer.asset = RasterAsset{source, {}, layer.name};
         document.layers.push_back(std::move(layer));
-        ReplaceDocument(std::move(document), id, {});
+        ReplaceDocument(std::move(document).Seal(), id, {});
         if (kind < adjustmentKinds.size())
             _session.AddAdjustment(adjustmentKinds[kind]);
         _session.SetOpacity(0.75);
@@ -115,6 +119,8 @@ int Application::RunColorCancellationSelfTest() noexcept
         {
             if (!prepare(kind))
                 return fail(L"A production Cancel fixture could not prepare its panel.\n");
+            if (!_chrome || !_chrome->AdjustPanelOpen())
+                return fail(L"The cancellation feedback fixture did not expose its original card.\n");
             const bool metadata = kind < adjustmentKinds.size();
             const auto before = _session.Document();
             const auto generation = _session.Generation();
@@ -146,6 +152,15 @@ int Application::RunColorCancellationSelfTest() noexcept
             else
                 receipt = QueuePanelCancel(opening);
             _hostAdmissionAllocationFailureForTest = false;
+            const bool refusedAdmission = mode == Mode::AdmissionFailure;
+            if (_chrome->AdjustPanelOpen() != refusedAdmission ||
+                _chrome->AdjustInspectorForTest().filter.has_value() != refusedAdmission ||
+                _session.Document() != before || !_session.HasColorEdit())
+                return fail(
+                    L"Cancel feedback did not hide only its accepted matching card while retaining the source.\n");
+            std::fprintf(stderr, "PASS color-cancel-feedback.admission kind=%zu mode=%u\n", kind,
+                         static_cast<unsigned int>(mode));
+
             if (mode == Mode::AdmissionFailure)
             {
                 if (receipt.Read() != ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} ||
@@ -207,6 +222,14 @@ int Application::RunColorCancellationSelfTest() noexcept
                          (expected == HostOutcome::Failed && receipt.Read().error != E_OUTOFMEMORY))
                     return fail(L"Refused Cancel destroyed or changed the live panel, redo or source error.\n");
             }
+            const bool panelRemains = mode != Mode::Cancel;
+            if (_chrome->AdjustPanelOpen() != panelRemains ||
+                _chrome->AdjustInspectorForTest().filter.has_value() != panelRemains ||
+                _chrome->AdjustInspectorForTest().busy || _session.HasColorEdit() != panelRemains)
+                return fail(L"Terminal Cancel feedback did not restore its refused/stale card or keep successful close "
+                            L"hidden.\n");
+            std::fprintf(stderr, "PASS color-cancel-feedback.terminal kind=%zu mode=%u\n", kind,
+                         static_cast<unsigned int>(mode));
             std::fprintf(stderr, "PASS color-cancel-host kind=%zu mode=%u\n", kind, static_cast<unsigned int>(mode));
         }
     }
@@ -236,6 +259,11 @@ int Application::RunColorCancellationSelfTest() noexcept
             const auto cancel = QueuePanelCancel(opening);
             const auto repeat = QueuePanelCancel(opening);
             const Guid id = _session.ActiveLayerID().value();
+            // The canceled OK contributes no history; its younger successful rename still owns its
+            // immutable publication. Observe that original ticket without delaying the ordered rename.
+            _layerMetadataTestGate = std::make_shared<LayerMetadataTestGate>();
+            _layerMetadataTestGate->hold = false;
+            const auto renameGate = _layerMetadataTestGate;
             const auto rename = QueueHostInput(HostLayerRenameInput{id, L"After acknowledged Cancel"});
             if (ok.Read().outcome != HostOutcome::Pending || cancel.Read().outcome != HostOutcome::Pending ||
                 repeat.Read().outcome != HostOutcome::Pending || rename.Read().outcome != HostOutcome::Pending ||
@@ -247,8 +275,9 @@ int Application::RunColorCancellationSelfTest() noexcept
                 cancel.Read().outcome != HostOutcome::Succeeded || repeat.Read() != cancel.Read() ||
                 rename.Read().outcome != HostOutcome::Succeeded || _session.HasColorEdit() ||
                 _session.ActiveLayer()->name != L"After acknowledged Cancel" ||
-                _session.Document()->layers.front().asset->image != source || _jobs.ReservedMemoryBytes() != 0 ||
-                _historyWork.Busy() || _session.history.CurrentRevision() == revision)
+                _session.Document()->layers.front().asset->image != source || !renameGate->originalAccountingBound ||
+                renameGate->accountingOutputBytes == 0 || !MetadataAccountingSettledForTest() || _historyWork.Busy() ||
+                _session.history.CurrentRevision() == revision)
                 return fail(
                     L"Held OK pixels escaped cancellation or a younger rename crossed close acknowledgement.\n");
             _session.Undo(); // independent expected entry: only the younger rename, never the canceled OK
@@ -405,5 +434,122 @@ int Application::RunColorCancellationSelfTest() noexcept
         _session.Document() != newDocument || ColorControlsFrozen())
         return fail(L"A stale cancellation closed or froze a reopened panel.\n");
     std::fprintf(stderr, "PASS color-cancel-host stale-opening\n");
+
+    // Immediate discarded feedback is checked before the held predecessor can acknowledge.
+    for (const bool heldOk : {false, true})
+    {
+        if (!prepare(adjustmentKinds.size()))
+            return fail(L"The discarded Cancel feedback fixture could not open.\n");
+        const auto before = _session.Document();
+        const auto history = _session.history.CaptureState();
+        const auto revision = _session.history.CurrentRevision();
+        const auto generation = _session.Generation();
+        const auto sequence = _session.ColorEditSequence();
+        const auto opening = _session.PendingColorEdit()->openingSequence;
+        ContinuationReceipt predecessor;
+        std::optional<HistoryWorkStamp> originalStamp;
+        std::shared_ptr<ColorWorkTestGate> gate;
+        if (heldOk)
+        {
+            gate = std::make_shared<ColorWorkTestGate>();
+            gate->kind = ColorWorkTestKind::Commit;
+            _colorWorkTestGate = gate;
+            predecessor = QueuePanelCommit(opening);
+            if (!WaitForColorWorkTestEvent(_jobs, gate->entered.get(), DispatchMessageThunk, this) ||
+                predecessor.Read().outcome != HostOutcome::Pending || !_colorCommitStamp || !_historyWork.Busy())
+                return fail(L"The discarded feedback predecessor did not hold its original owner.\n");
+            originalStamp = _colorCommitStamp;
+        }
+        const auto discarded = QueuePanelCancel(opening);
+        if (discarded.Read().outcome != HostOutcome::Pending || _hostRequests.Size() != 1 || !_session.HasColorEdit() ||
+            !ColorCancelPending() || _chrome->AdjustPanelOpen())
+            return fail(L"Accepted queued Cancel did not hide only its retained current panel.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.queued-accepted held=%u\n", static_cast<unsigned int>(heldOk));
+        CancelHostContinuations();
+        if (discarded.Read().outcome != HostOutcome::Cancelled || _hostRequests.Size() != 0 || ColorCancelPending() ||
+            !_chrome->AdjustPanelOpen() || !_session.HasColorEdit() || _session.Document() != before ||
+            !_session.history.IsCurrent(history) || ColorControlsFrozen() != heldOk ||
+            _chrome->AdjustInspectorForTest().busy != heldOk ||
+            (heldOk && (_colorCommitStamp != originalStamp || !_historyWork.Busy() ||
+                        !_historyWork.CancelRequested(originalStamp.value()) ||
+                        predecessor.Read().outcome != HostOutcome::Pending)))
+            return fail(L"Discarded Cancel did not restore the card before its original held owner acknowledged.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.queued-discarded-before-ack held=%u\n",
+                     static_cast<unsigned int>(heldOk));
+        if (gate)
+            (void)SetEvent(gate->release.get());
+        if (!settle() || (heldOk && predecessor.Read().outcome != HostOutcome::Cancelled) ||
+            discarded.Read().outcome != HostOutcome::Cancelled || _colorCommitStamp || _historyWork.Busy() ||
+            !_session.HasColorEdit() || _session.PendingColorEdit()->openingSequence != opening ||
+            _session.Document() != before || _session.Generation() != generation ||
+            _session.ColorEditSequence() != sequence || !_session.history.IsCurrent(history) ||
+            _session.history.CurrentRevision() != revision || !_chrome->AdjustPanelOpen() ||
+            !_chrome->AdjustInspectorForTest().filter || ColorControlsFrozen())
+            return fail(L"Discarded Cancel changed its retained panel or history after original acknowledgement.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.queued-discarded-after-ack held=%u\n",
+                     static_cast<unsigned int>(heldOk));
+    }
+    {
+        const auto before = _session.Document();
+        const auto history = _session.history.CaptureState();
+        const auto currentOpening = _session.PendingColorEdit()->openingSequence;
+        const auto settings = _session.PendingColorEdit()->settings;
+        // Use the full production admission/feedback path, not QueueHostInput's unmarked test route above.
+        const auto unrelated = QueuePanelCancel(oldOpening);
+        if (unrelated.Read().outcome != HostOutcome::Pending || ColorCancelPending() || ColorControlsFrozen() ||
+            !_chrome->AdjustPanelOpen() || _session.PendingColorEdit()->openingSequence != currentOpening ||
+            _session.PendingColorEdit()->settings != settings || _session.Document() != before)
+            return fail(L"An unrelated admitted opening hid or changed the current card.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.stale-opening-admission\n");
+        if (!settle() || unrelated.Read().outcome != HostOutcome::Stale || !_session.HasColorEdit() ||
+            _session.PendingColorEdit()->openingSequence != currentOpening ||
+            _session.PendingColorEdit()->settings != settings || _session.Document() != before ||
+            !_session.history.IsCurrent(history) || !_chrome->AdjustPanelOpen() || ColorControlsFrozen())
+            return fail(L"An unrelated opening's terminal publication changed the current card or history.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.stale-opening-terminal\n");
+    }
+    {
+        if (!prepare(adjustmentKinds.size()))
+            return fail(L"The old-document feedback fixture could not open.\n");
+        const auto oldSerial = _session.DocumentSerial();
+        const auto opening = _session.PendingColorEdit()->openingSequence;
+        auto gate = std::make_shared<ColorWorkTestGate>();
+        gate->kind = ColorWorkTestKind::Commit;
+        _colorWorkTestGate = gate;
+        const auto oldCancel = QueuePanelCancel(opening);
+        if (!WaitForColorWorkTestEvent(_jobs, gate->entered.get(), DispatchMessageThunk, this) || !_colorCommitStamp)
+            return fail(L"The old-document cancellation did not retain its original worker.\n");
+        // Independent lifetime-invalidating reference fixture; ordinary replacements remain ordered.
+        DocumentFixture replacement;
+        replacement.id = Guid::Generate();
+        replacement.width = 4;
+        replacement.height = 1;
+        ImageLayer replacementLayer = ImageLayer::Blank(L"Current feedback source", Vec2{4, 1});
+        const Guid replacementActive = replacementLayer.id;
+        replacementLayer.asset = RasterAsset{source, {}, replacementLayer.name};
+        replacement.layers.push_back(std::move(replacementLayer));
+        _session.ReplaceDocument(std::move(replacement).Seal(), replacementActive);
+        _session.BeginColorEdit(FilterKind::Exposure, true);
+        DocumentChanged();
+        if (!_session.PendingColorEdit())
+            return fail(L"The replacement reference fixture could not open its current panel.\n");
+        const auto before = _session.Document();
+        const auto history = _session.history.CaptureState();
+        const auto currentOpening = _session.PendingColorEdit()->openingSequence;
+        const auto settings = _session.PendingColorEdit()->settings;
+        if (_session.DocumentSerial() == oldSerial || oldCancel.Read().outcome != HostOutcome::Pending ||
+            ColorCancelPending() || !_chrome->AdjustPanelOpen() || !_historyWork.Busy() || !_session.HasColorEdit())
+            return fail(
+                L"An old-document pending cancellation hid the current card or released its original barrier.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.stale-document-before-ack\n");
+        (void)SetEvent(gate->release.get());
+        if (!settle() || oldCancel.Read().outcome != HostOutcome::Stale || !_session.HasColorEdit() ||
+            _session.PendingColorEdit()->openingSequence != currentOpening ||
+            _session.PendingColorEdit()->settings != settings || _session.Document() != before ||
+            !_session.history.IsCurrent(history) || !_chrome->AdjustPanelOpen() || ColorControlsFrozen() ||
+            _historyWork.Busy())
+            return fail(L"An old-document acknowledgement changed the current panel/source/history.\n");
+        std::fprintf(stderr, "PASS color-cancel-feedback.stale-document-after-ack\n");
+    }
     return 0;
 }

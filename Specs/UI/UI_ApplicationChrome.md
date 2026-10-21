@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-08
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -148,6 +148,11 @@ waits for acknowledgement and observes the restored state; document replacement/
 queued lineage. An empty stack or an open transaction preserves the ignored-key behavior and crop without
 capturing history. Current failure posts the localized history-restore notice and preserves the document.
 
+An admitted ordinary brush whose pointer input is sealed is no longer an uncommitted gesture consumed by
+Escape or the first Undo. Escape preserves that original stroke and clears other queued inputs; Undo/Redo
+queues behind its commit and observes history at dequeue. This applies while worker opening is pending as
+well as after preview starts, and while the stroke waits behind an older opacity or sampling request.
+
 ## Move tool
 
 With the Move tool the header is the transform inspector and the canvas shows the active layer's box through
@@ -204,7 +209,22 @@ a STRINGTABLE entry (`IDS_SELECTION_*`, `IDS_WAND_*`).
 The dash offset steps one DIP every 120 ms through its 8 DIP cycle (legacy `EditorCanvas` ants timer) while a
 non-empty outline is showing and the window is visible, powered, and not occluded: the frame loop waits for the
 next step with a timed message wait and presents one frame per step, never a frame per vsync; each step's dash style
-is made once and kept. The path geometry is rebuilt only when the selection or the view mapping changes. A settled
+is made once and kept. The overlay holds its immutable source loops and caches points relative to the source's
+construction-cached minimum bounds. Pixel Move carries its rounded offset separately. Pan, zoom, DPI and Pixel
+Move offsets update only the scalar world mapping; they neither translate the loop arrays nor rebuild the path.
+The white stroke and black 4/4 dash use fixed stroke transforms: their width and dash lengths stay in DIP while
+the geometry follows the view. The path is rebuilt when its source identity or Direct2D factory changes; the
+cache retains both owners to prevent address reuse. Explicit empty selection remains distinct from no selection;
+either stops animation and releases the preceding path. The pinned single-threaded factory remains owner-only.
+The two admitted Wand jobs prepare numeric outline points on a worker, subtracting the double anchor before
+float narrowing. Their original descriptor admits the output node/control and exact-reserve point/header
+bound plus replaced reference buffers; an actual output exceeding that bound fails before allocation.
+Successful publication adopts those same buffers only when their held source identity matches the displayed
+selection. Cached point counts update chrome statistics; replaced reference buffers move into the original
+worker payload, and prepared nodes defer their final owner-thread release. Empty point output is retired
+immediately so an absent selection cannot pin its accounting until another edit. No-op, failed, cancelled
+or stale Wand results publish no numeric outline. Other producers still use the reference conversion route.
+Direct2D path construction, factory/path retirement and the other producers remain P1/S5 work. A settled
 document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
 polylines, the polygonal rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle
 or ellipse) is a white line over a dark one. Outline and draft changes re-composite chrome only, never the document.
@@ -238,6 +258,9 @@ and Ctrl+V cut, copy, copy merged and paste (`ApplicationClipboardJobs` admits t
 `ClipboardTransfer` publishes PNG and a 32-bit DIB with straight alpha or reads another app's owned PNG/DIB on a
 worker. Foreign pixels are centered on the canvas; a sealed receipt binds the private copy to system content.
 A private copy that could not reach the system clipboard remains the newest until the system changes again.
+Only a nonzero matching clipboard sequence may prove that private preference. A zero/unavailable query
+must continue through the ordinary worker inspection and bounded retries, never substitute private pixels
+for an offered foreign image. Inspection's no-image fall-through and malformed-image refusal remain unchanged.
 Acquisition retries retain the original job and reservation, with at most six total Inspect/Copy acquisitions.
 Copy and Copy
 Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends
@@ -291,7 +314,9 @@ press starts a stroke on the active layer, or on its mask when the mask is selec
 line from the end of the previous stroke on that target); moving adds samples and shows them at once through the
 composition's stroke preview; release, the pointer capture or the focus going elsewhere (a dialog, a menu, another
 app; [`UI_Windowing.md`](UI_Windowing.md)), the pointer leaving the window once no drag holds the capture, and
-switching tools each commit one history entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke. The Eraser and the Brush's Erase mode both
+switching tools each commit one history entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke while
+its pointer sampling remains open. After accepted release/loss, Escape preserves the recorded prefix through
+worker acknowledgement and Undo queues behind its commit. The Eraser and the Brush's Erase mode both
 erase; a mask is never erased but painted black or white. A stroke over the pixel budget or an engine failure is
 dropped with `IDS_ERROR_BRUSH_BUDGET`. A press does nothing on a folder without its mask, a hidden or adjustment
 layer, a disabled mask or an empty selection.
@@ -348,7 +373,8 @@ menu. Its cursor, and the Gradient's and Shape's, is the crosshair. Every string
 ## Adjustment panel
 
 Every color adjustment and filter edits in one card (`ChromeHost::BuildAdjustPanel`, `ChromeHostAdjust.cpp`) that
-floats over the top-right of the canvas hole below the header while a session edit is open (`AdjustInspectorState`
+floats over the top-right of the canvas hole below the header while a session edit is open, except during its
+accepted matching cancellation (`AdjustInspectorState`
 mirrors the session; the panel never re-lays out inside a drag callback). It shows the edit's title (`<Kind>
 Adjustment` when an adjustment layer is edited), the kind's controls, a Preview checkbox, a `Limited to the
 selection` note for a pixel layer with a selection, and Cancel / OK (Enter and Escape do the same, with the canvas
@@ -367,6 +393,13 @@ commit. Numeric text follows the existing focus rule: partial text stays while e
 parsed value, and a complete decimal such as `2.5` keeps that value. This control contract is
 used by normal OK/write callers through the ordered engine and their owned continuations. An accepted OK freezes
 mutation callbacks immediately, before the source admits its worker snapshot. Cancel stays available.
+
+An accepted Cancel or Escape hides that exact opening's card immediately. The logical panel, source, settings,
+original ticket and history barrier remain owned until the closure acknowledges its outcome. A refused admission
+leaves the card visible. A failed or stale closure, or a queued cancellation that is discarded, restores the still-open
+card with its unchanged values and normal prerequisites; pending display is requested again through its admitted
+owner route. Another opening or document is never hidden by an old receipt. Shutdown does not reopen or refresh
+chrome. Visibility feedback does not acknowledge pixel work, native I/O, GPU use or resource retirement.
 
 - **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
   points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the
@@ -619,12 +652,61 @@ self-test itself (`_errorsShown`, `_budgetNotices`, and so on), unconditionally,
 
 ## Layers panel
 
+`Application::SyncChrome` synchronizes retained values and layout geometry without painting the chrome surface.
+`Renderer::Render` performs `ChromeHost::Prepare` at the frame boundary before canvas composition and chrome
+composition. Worker-result publication and command dispatch therefore do not run that preparation; accessibility
+publication still follows a coherent prepared view. Explicit harness preparation remains permitted.
+After all retained pushes, SyncChrome finishes arranging bounds and acknowledges interaction through the pinned
+DxUi PrepareInteraction boundary at the last painted extent/DPI. Rapid gestures then use current live bounds while
+pixels stay dirty for the next frame. This does not publish UIA/text geometry or allocate a surface. A new or failed
+view, resize, hide/zero extent and device replacement still require full frame preparation before interaction.
+
 The layers Tree lists rows top-first (`DocumentSession::LayerRows`): names, `(hidden)` annotation for rows whose
 effective visibility is off, a folder glyph for groups (Segoe Fluent Icons when that font is installed), and depth
 indentation. Selecting a row selects the layer; toggling a group's expander updates
 `DocumentSession::CollapsedGroupIDs` (rows carry `HierarchyEntry::collapsed`). Dragging a row previews an insertion
 line and, on release, calls `DocumentSession::PlaceLayer`: the top or bottom of a row inserts beside it, the middle
 of a folder drops inside it, and Escape or capture loss cancels. A folder cannot be dropped into its own descendant.
+
+The experimental prepared-row path, currently enabled only explicitly by self-tests, shares one immutable
+`PreparedLayerRows` graph between the Application publisher, Chrome's Tree model and UIA snapshots. On replacement
+or detach, Chrome drops its model reference before the Application drops its cache reference; older snapshots may
+continue to retain the old epoch. Its original admission remains charged while any reader owns the graph, and the
+complete graph is retired and acknowledged only after its final owner releases it. During same-document refresh,
+previous labels may remain visible but the stale tree is disabled:
+selection, reorder and mask-badge hits cannot mutate through its obsolete hierarchy. Document replacement clears
+old labels immediately. A candidate publishes only against its exact current document/generation/collapse/read
+authority/root. Prepared top-first depth, inherited visibility, collapsed descendants, localized hidden labels
+and mask flags preserve `HierarchyEntries` semantics. Active selection uses the owning Guid index; a collapsed
+descendant has no selected row. An unchanged borrowed graph/active target causes no row rewrite.
+Process-startup localization supplies the hidden pattern once; per-row painting and settled sync do not load it.
+If preparation fails or replacement admission refuses, a STRINGTABLE-named Retry layers button replaces the
+opacity control in the layer header. One explicit press requests one new original ticket; further input while
+that ticket is pending is ignored. Memory events or unchanged-key sync alone do not retry. Success restores the
+opacity control. Retry changes derived display state and does not settle or mutate an open document edit.
+Full interaction, accessibility/reentrancy, largest-count/name owner cost, production activation and G1 remain
+separate qualification requirements; prepared publication alone does not close them.
+
+In the experimental prepared mode, the same immutable `PreparedLayerRows` owner backs the Application publisher,
+Chrome's Tree model and DxUi's UIA snapshots. Its semantic source contains every visible model row, including
+offscreen rows, with the full localized display name; UIA capture retains that owner instead of copying rows or
+reading the live Tree model. A provider may therefore keep an older row epoch alive across replacement or shutdown.
+The production flag remains false, and this consumer behavior remains draft pending the RedPrism matrix,
+client-reentrant UIA and latency, largest-count/name owner-cost, activation and G1 qualification.
+
+In the experimental prepared path, a Tree item identity belongs to a layer Guid within one document serial;
+visible position is not its identity. The Application reserves a monotonically advancing, checked 64-bit range
+only after original job admission succeeds. Values begin at 2^32, remain disjoint from legacy ordinal IDs, and
+are never reused after failure, cancellation or document replacement. Worker preparation preserves IDs for
+surviving Guids in the same serial, including hidden collapsed descendants. Exact admitted arrays provide
+visible-index-to-ID access and logarithmic ID/Guid lookup; a newly published epoch stores copied identities
+rather than retaining a chain of previous epochs. Tree selection, expansion, drag/drop and UIA all resolve the
+same map. Rename and reorder preserve a surviving layer's runtime identity. A hidden or deleted layer's old
+provider reports UIA_E_ELEMENTNOTAVAILABLE and cannot select a different layer. Reopening a collapsed group
+restores its surviving child's identity. Replacing the document, even with identical Guids, gives fresh IDs and
+invalidates old providers. Range overflow refuses before document capture, keeps the prior admitted epoch, and
+uses the existing explicit Retry layers action. Independent actual-provider tests and the complete matrix,
+owner cost, production activation and G1 remain required; the path stays disabled in production.
 
 Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`ITreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
@@ -684,6 +766,14 @@ layer opacity waits for its OK or Cancel, as legacy `canEditAppearance`: the ste
 digits change nothing and `DocumentSession::SetOpacity` refuses, so no opacity folds into the panel's entry and its
 Cancel leaves the opacity as it was.
 
+A changed typed opacity closes through its admitted worker acknowledgement. Synchronous closure callers MUST
+NOT construct a history entry as a fallback. Closure reports whether the prerequisite is satisfied; layer
+selection/target/reorder/invocation, a mutating command, tool switch, write, replacement, Image Size and a canvas
+mutation stop before their dependent action when it is not. A selected continuation reports the unexpected
+unacknowledged prerequisite through its retained failure result. Read-only pan and sampling remain available.
+An absent, unchanged or expired scalar invocation needs no history construction. Target validation retains the
+immutable layer root and uses its Guid index, checking layer kind, displayed opacity and document serial.
+
 ## Palette and color picker
 
 The palette (opaque ARGB foreground and background) is session state outside history
@@ -697,6 +787,23 @@ host-sampled colors (`ChromeHost::SampleColor`, the eyedropper feed) preview int
 (`ChromeEvents::OnPickerColor`, which reports every change of the one picker with its `PickerTarget`: a well, a
 Gradient Map end, the Canvas Size custom color); Cancel, Escape (also when a picker child has focus) or capture loss
 restore the well.
+Canvas-fed samples update DxUi's chosen color through `SampleColor`; `PickerColor` reads `GetColor`. Its
+`GetCurrentColor`/`SetCurrentColor` swatch is the original opening color reserved for Cancel, not the sampled
+choice. Sampling MUST NOT replace that original. OK commits the chosen sample; Cancel restores the opening value.
+Deferred sampled-picker publication can use `CapturePickerSampleAuthority` and `ApplySampledPickerColor`.
+`CapturePickerIntentAuthority` and `IsPickerIntentCurrent` separately track explicit input. A successful checked
+sample renews full publication authority through its own Preview callback while retaining explicit intent.
+Public sampling, raw pointer/key/character input and Open/Close/Detach advance explicit intent, including equal
+values and A–B–A. Opening lifetime changes remain explicit even during a callback. Foreground/background Preview
+updates chosen chrome color only; the session palette changes on Commit.
+Authority identifies the exact chrome owner, target and input revision. Opening, closing, detaching and every
+manual/DxUi or direct sampled write advance the revision, including equal colors and A–B–A input. Pointer
+interaction in the picker and keyboard/text input in its focused subtree also invalidate
+older samples even when an equal or unfinished typed value emits no change callback. Canvas pointer sampling and
+view input outside the card do not advance this manual-input authority. Checked success renews the caller's
+authority; stale/foreign/closed/reopened results change no color. Counter exhaustion permanently
+refuses checked publication. These fixed scalar guards add no control, worker, timer or allocation per input and
+do not activate the asynchronous canvas sampler by themselves.
 Pointer input inside the card belongs to chrome even though it lies in the hole; a canvas click outside it focuses
 the canvas and leaves the picker open. Captions come from the STRINGTABLE (`IDS_PICKER_*`, `IDS_PALETTE_*`).
 With a layer's mask targeted, the swap and reset (the keys and the rail's hot zones alike) act on the mask palette
@@ -800,7 +907,11 @@ posts an existing localized notice on failure; it never opens a modal from the c
 runs as an owned Io worker after file selection and document settlement; its receipt, ordinal and memory
 reservation remain held through publication and cancellation acknowledgement. PNG/JPEG export uses asynchronous
 utility readback and detached worker encoding under the same owned continuation. Project open and image import
-inspect/decode on workers. Clipboard processing awaits its later P1.7 slice.
+inspect/decode on workers. Copy/Cut/Paste and Copy Merged use admitted worker preparation and owned OS
+clipboard transfers under the selected ordinal; retries preserve the original ticket and reservation with
+six total acquisition attempts. New Canvas opens immediately and requests guarded metadata-only prefill.
+Private Copy/Cut application survives later OS-mirror failure; a successful Empty starts one irreversible
+publication attempt. Complete session-end/contention and measured P1/G1 qualification remain separate.
 
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 New, accepted New Canvas Create and Close Project retain their selected request and history ordinal through
@@ -902,12 +1013,15 @@ are reused. Load failures post one localized notice per failed file; unsupported
 formatted from the posted payload when the notice is delivered. Clipboard, wand/clone and other
 readback callers remain later P1.7/P1 work.
 
-When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
-work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")
-that Windows shows while it waits, and the save prompt above runs from the message queue; Save or Don't Save closes
-the window without asking again and Windows goes on, Cancel keeps it and the user cancels the end in Windows. A
-critical end is never refused. The settings are saved when the session ends, as a close saves them; the message
-handling lives in [`UI_Windowing.md`](UI_Windowing.md).
+When Windows ends the session (sign-out, restart, shutdown, an installer's restart request), a document with unsaved
+work still refuses a noncritical end with `IDS_SHUTDOWN_UNSAVED`, which Windows shows while the queued Save/Don't
+Save/Cancel prompt runs. Save or Don't Save closes the window and permits Windows to continue; Cancel keeps it.
+A critical end is never refused. A queued or writing project save, or an export already
+writing, also refuses a noncritical query with the localized saving reason; an earlier unsaved prompt remains
+pending. Confirmed end waits at most 1500 ms total for queued/writing Save or entered export writers, without pumping UI or applying
+their results. Export still in readback is cancelled if that wins before writer entry. A cancelled session waits for
+no worker. Settings are saved on confirmed end as on close. The message and worker policy lives in
+[`UI_Windowing.md`](UI_Windowing.md).
 
 Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Images added as
 layers center on the drop point (`DragQueryPoint` mapped through the viewport) when the drop lands on the canvas —
@@ -915,6 +1029,20 @@ the hole, not a floating card — and on the canvas's middle otherwise (legacy `
 holds a project, or opens a new project, centers them, as the point belongs to the document it landed on. Load failures
 report the `ProjectIoStatus` through a localized message (unsupported version names the version); `--screenshot`
 runs suppress dialogs.
+
+### Pending Hue and preserving-panel Wand controls
+
+Ordinary Hue input uses the admitted recorded readback route after successful application startup. The
+preserving-panel Wand route retains its separate activation contract. Queued/selected Hue input or an enabled
+preserving-panel Wand freezes mutating color controls while Cancel retains its existing action. A consumed Hue
+press, including a refusal,
+must not fall through to another canvas tool. Capacity and admission errors use the existing localized Busy
+or error feedback. Transparent/near-neutral samples leave panel settings unchanged. Complete prepared display
+startup and first-frame/G1 qualification retain their separate delivery gates.
+
+After the acknowledged Wand, color controls resume on the same panel. Preview and OK keep that panel's
+opening coverage, and Cancel keeps the completed Wand selection. A later panel starts from the current
+selection. A delayed pre-Wand histogram cannot leave an otherwise valid Levels panel permanently unready.
 
 ## Validation
 
@@ -996,3 +1124,9 @@ under an open adjustment panel (the digit, the stepper and a typed preview; Canc
 a key the layout does not name (VK_E7), and show the layout's key names, the STRINGTABLE modifiers and replacements in
 the Command List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string
 table (every command caption's column is its first default chord), the key names, the catalog and the binding table.
+
+### Initial Layers viewport publication
+
+During an ordinary initial startup with a positive client extent, SyncChrome arranges the existing controls at the actual extent/DPI before publishing direct or prepared layer rows. Tree selection scrolls immediately; selecting into the initial zero-width/negative-height layout can retain a one-row scroll offset after painting. The first row must remain below the Layers title/opacity band before the first preparation and after rendering. Reuse the existing single Layout call per sync; add no geometry traversal, extra preparation, pixel work or frame submission. Model ownership, interaction epochs and prepared-row activation keep their existing contracts.
+
+The initial-positive-extent correction is qualified separately from minimized/zero-size restoration, later large-model scrolling/resize, prepared-consumer activation, UIA and H4/G1. [Evidence](../TestRuns/P1InitialLayerViewport_2026-10-18.md).

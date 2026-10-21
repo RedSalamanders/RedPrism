@@ -1,5 +1,6 @@
 #include "Document.Tests.TransformPreviewWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DistortWork.h"
 #include "Document.h"
 #include "Executor.h"
@@ -10,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <span>
@@ -63,14 +65,14 @@ LayerTransform Transform(Vec2 origin, Vec2 size)
 
 CanvasDocument Document(std::vector<ImageLayer> layers, int width = 64, int height = 48)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = width;
     document.height = height;
     document.layers = std::move(layers);
     document.selection =
         DocumentSelection{true, SelectionLoops{SelectionLoop{Vec2{2, 3}, Vec2{9, 3}, Vec2{9, 11}, Vec2{2, 11}}}};
-    return document;
+    return std::move(document).Seal();
 }
 
 const ImageLayer* Find(const CanvasDocument* document, const Guid& id) noexcept
@@ -610,7 +612,8 @@ void RefuseStaleForeignAndInvalidInputs()
 {
     InlineExecutor executor;
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         auto newer = fixture.session.PendingTransformEdit()->draft;
         newer.origin.x += 1;
@@ -621,7 +624,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "newer-draft-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.CancelTransform();
         fixture.session.BeginTransform();
@@ -631,9 +635,11 @@ void RefuseStaleForeignAndInvalidInputs()
                "closed-and-reopened-transform-refuses-stale-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
-        fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().name = L"changed"; });
+        EditLayerRecordsForTest(fixture.session,
+                                [](DocumentFixture& document) { document.layers.front().name = L"changed"; });
         const auto current = fixture.session.Document().value();
         Expect(prepared.publication &&
                    !fixture.session.ApplyPreparedTransformPreviewIfCurrent(prepared.publication.value()) &&
@@ -641,7 +647,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-source-document-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.SelectLayer(fixture.sibling);
         const auto active = fixture.session.ActiveLayerID();
@@ -651,7 +658,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-active-target-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.history.Reset();
         Expect(prepared.publication &&
@@ -659,7 +667,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-history-state-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         CanvasDocument replacement = fixture.session.Document().value();
         fixture.session.ReplaceDocument(std::move(replacement), fixture.id);
@@ -668,15 +677,18 @@ void RefuseStaleForeignAndInvalidInputs()
                "same-id-document-replacement-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
-        SessionFixture foreign;
+        auto foreignOwner = std::make_unique<SessionFixture>();
+        auto& foreign = *foreignOwner;
         Expect(prepared.publication &&
                    !foreign.session.ApplyPreparedTransformPreviewIfCurrent(prepared.publication.value()),
                "foreign-session-refuses-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto input = fixture.session.PrepareTransformPreviewInput();
         Expect(input.has_value(), "preview-input-captured-for-move-only-check");
         if (input)
@@ -691,7 +703,8 @@ void RefuseStaleForeignAndInvalidInputs()
         }
     }
     {
-        DocumentSession empty;
+        auto emptyOwner = std::make_unique<DocumentSession>();
+        auto& empty = *emptyOwner;
         Expect(empty.TransformPreviewPreparationMemoryBytes() == 0 && !empty.PrepareTransformPreviewInput(),
                "preview-input-refused-without-open-transform");
     }

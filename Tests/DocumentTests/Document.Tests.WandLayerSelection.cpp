@@ -1,5 +1,7 @@
 #include "Document.Tests.WandLayerSelection.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "Selection.h"
 #include "WandLayerSelectionWork.h"
@@ -46,12 +48,51 @@ bool LiteralRect(const std::optional<DocumentSelection>& selection, double x, do
     return selection->loops.Get().front() == expected;
 }
 
+// Boolean geometry preserves exact clockwise corners but does not specify the first vertex. Existing
+// wand trace goldens retain LiteralRect's exact ordering.
+bool BooleanLiteralRect(const std::optional<DocumentSelection>& selection, double x, double y, double width,
+                        double height, bool antialiased)
+{
+    if (!selection || selection->antialiased != antialiased || selection->loops.size() != 1)
+        return false;
+    const auto& original = selection->loops.Get().front();
+    SelectionLoop loop;
+    for (std::size_t index = 0; index < original.size(); ++index)
+    {
+        const auto& before = original[(index + original.size() - 1) % original.size()];
+        const auto& point = original[index];
+        const auto& after = original[(index + 1) % original.size()];
+        const double dx = point.x - before.x;
+        const double dy = point.y - before.y;
+        const double nextDx = after.x - point.x;
+        const double nextDy = after.y - point.y;
+        // Collinear intermediate edge points are permitted; reversals and off-edge vertices are retained.
+        if (dx * nextDy - dy * nextDx != 0 || dx * nextDx + dy * nextDy <= 0)
+            loop.push_back(point);
+    }
+    const std::array expected{Vec2{x, y}, Vec2{x + width, y}, Vec2{x + width, y + height}, Vec2{x, y + height}};
+    if (loop.size() == expected.size())
+        for (std::size_t start = 0; start < expected.size(); ++start)
+        {
+            bool matches = true;
+            for (std::size_t index = 0; index < expected.size(); ++index)
+                matches = matches && loop[(start + index) % expected.size()] == expected[index];
+            if (matches)
+                return true;
+        }
+    std::printf("actual boolean rectangle AA=%d, vertices=%zu:", selection->antialiased, loop.size());
+    for (const auto& point : loop)
+        std::printf(" (%.17g, %.17g)", point.x, point.y);
+    std::printf("\n");
+    return false;
+}
+
 constexpr std::array<std::uint8_t, 16> kTwoByTwo{10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255};
 
 DocumentSession SourceSession(bool visible = true, double opacity = 1.0, bool withMask = false, bool translated = true)
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 4;
@@ -76,7 +117,7 @@ DocumentSession SourceSession(bool visible = true, double opacity = 1.0, bool wi
     distractor.asset = RasterAsset{
         Raster::Make(1, 1, RasterFormat::Bgra8888, otherPixel.data(), otherPixel.size()), {}, distractor.name};
     document.layers.push_back(std::move(distractor));
-    session.ReplaceDocument(std::move(document), activeID);
+    session.ReplaceDocument(std::move(document).Seal(), activeID);
     return session;
 }
 
@@ -129,13 +170,25 @@ std::optional<PreparedWandLayerSelection> Prepare(DocumentSession& session, Vec2
                                                   WandSettings settings = Settings(), bool antialiased = false,
                                                   WandFailure* failure = nullptr, CancelToken cancel = {},
                                                   DocumentHistory::PrepareObserver historyObserver = {},
-                                                  const WandLayerSelectionObserver* observer = nullptr)
+                                                  const WandLayerSelectionObserver* observer = nullptr,
+                                                  SelectionMode mode = SelectionMode::New)
 {
-    auto input = session.PrepareWandLayerSelectionInput(point, settings, antialiased);
+    auto input = session.PrepareWandLayerSelectionInput(point, settings, antialiased, mode);
     if (!input)
         return std::nullopt;
     return DocumentSession::PrepareWandLayerSelectionPublication(std::move(input.value()), failure, cancel,
                                                                  historyObserver, observer);
+}
+
+std::optional<PreparedWandLayerSelection> PrepareComposite(DocumentSession& session, Raster composite, Vec2 point,
+                                                           WandSettings settings, bool antialiased, SelectionMode mode,
+                                                           WandFailure* failure = nullptr, CancelToken cancel = {})
+{
+    auto input = session.PrepareWandCompositeSelectionInput(point, settings, antialiased, mode);
+    if (!input)
+        return std::nullopt;
+    return DocumentSession::PrepareWandCompositeSelectionPublication(std::move(input.value()), std::move(composite),
+                                                                     failure, cancel);
 }
 
 bool FullCanvas(const std::optional<DocumentSelection>& selection, bool antialiased = false)
@@ -175,7 +228,8 @@ void ActiveLayerLiteralAndCapturedSettings()
                                                       70, 80, 90, 255, 100, 110, 120, 255};
     const Raster tile = Raster::Make(2, 2, RasterFormat::Bgra8888, tilePixels.data(), tilePixels.size());
     const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, Raster{}, 0, 0, {RasterTile{0, 0, tile}}, 0);
-    sparseSession.EditForTest([&](CanvasDocument& document) { document.layers[0].asset->image = sparse; });
+    EditLayerRecordsForTest(sparseSession,
+                            [&](DocumentFixture& document) { document.layers[0].asset->image = sparse; });
     auto sparseInput = sparseSession.PrepareWandLayerSelectionInput(Vec2{1.5, 1.5}, Settings(), false);
     auto sparsePrepared = sparseInput
                               ? DocumentSession::PrepareWandLayerSelectionPublication(std::move(sparseInput.value()))
@@ -191,7 +245,7 @@ void TransparentAndContiguousGoldens()
          {WandSampleSize::Point, WandSampleSize::ThreeByThree, WandSampleSize::FiveByFive})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
@@ -199,7 +253,7 @@ void TransparentAndContiguousGoldens()
         layer.isGroup = true;
         const Guid active = layer.id;
         document.layers.push_back(std::move(layer));
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         auto prepared = Prepare(session, Vec2{2.5, 1.5}, Settings(sample, false));
         Expect(prepared && session.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value()) &&
                    FullCanvas(session.Selection()),
@@ -210,13 +264,13 @@ void TransparentAndContiguousGoldens()
     for (const bool noActive : {false, true})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
         document.layers.push_back(ImageLayer::Blank(L"Blank transparent", Vec2{4, 4}));
         const std::optional<Guid> active = noActive ? std::nullopt : std::optional<Guid>{document.layers.front().id};
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         if (noActive)
             session.SelectLayer(std::nullopt);
         auto prepared = Prepare(session, Vec2{0.5, 0.5}, Settings(WandSampleSize::Point, true));
@@ -233,7 +287,7 @@ void TransparentAndContiguousGoldens()
     for (const bool contiguous : {true, false})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 5;
         document.height = 2;
@@ -243,7 +297,7 @@ void TransparentAndContiguousGoldens()
         layer.transform.size = Vec2{5, 2};
         layer.transform.sampling = LayerSampling::Nearest;
         document.layers.push_back(std::move(layer));
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         auto prepared = Prepare(session, Vec2{0.5, 0.5}, Settings(WandSampleSize::Point, contiguous));
         const bool applied = prepared && session.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value());
         const std::vector<SelectionLoop> disconnected{SelectionLoop{{0, 0}, {2, 0}, {2, 2}, {0, 2}},
@@ -256,10 +310,153 @@ void TransparentAndContiguousGoldens()
     }
 }
 
+void CapturedSelectionModes()
+{
+    // Matched mode AA comes from the captured option (Selection.swift:227), not the old selection.
+    DocumentSession invalidMode = SourceSession();
+    const State invalidModeState(invalidMode);
+    Expect(!invalidMode.PrepareWandLayerSelectionInput(Vec2{1.5, 1.5}, Settings(), true,
+                                                       static_cast<SelectionMode>(255)) &&
+               SameState(invalidMode, invalidModeState),
+           "mode.invalid-mode-refuses-capture-without-changing-document-or-history");
+
+    DocumentSession add = SourceSession();
+    const auto addBefore = Rect(1, 0, 1, 1, true);
+    add.SetSelection(addBefore, L"Add seed");
+    auto addPrepared = Prepare(add, Vec2{1.5, 1.5}, Settings(), false, nullptr, {}, {}, nullptr, SelectionMode::Add);
+    Expect(addPrepared && add.ApplyPreparedWandLayerSelectionIfCurrent(addPrepared.value()) &&
+               BooleanLiteralRect(add.Selection(), 1, 0, 1, 2, false) && add.history.UndoName() == L"Magic Wand",
+           "mode.add-captured-unions-literal-geometry-and-uses-captured-antialiasing");
+    add.Undo();
+    Expect(add.Selection() == addBefore && add.history.RedoName() == L"Magic Wand",
+           "mode.add-undo-restores-exact-prior-selection");
+
+    DocumentSession staleAdd = SourceSession();
+    staleAdd.SetSelection(addBefore, L"Stale add seed");
+    auto staleAddPrepared =
+        Prepare(staleAdd, Vec2{1.5, 1.5}, Settings(), false, nullptr, {}, {}, nullptr, SelectionMode::Add);
+    staleAdd.SetSelection(Rect(0, 0, 1, 1), L"Intervening selection");
+    const State staleAddState(staleAdd);
+    Expect(staleAddPrepared && !staleAdd.ApplyPreparedWandLayerSelectionIfCurrent(staleAddPrepared.value()) &&
+               staleAdd.Selection() == Rect(0, 0, 1, 1) && SameState(staleAdd, staleAddState),
+           "mode.add-stale-selection-authority-rejects-without-overwrite");
+
+    DocumentSession cancelledAdd = SourceSession();
+    cancelledAdd.SetSelection(addBefore, L"Cancelled add seed");
+    const State cancelledAddState(cancelledAdd);
+    CancelSource addCancellation;
+    static_cast<void>(addCancellation.Cancel());
+    WandFailure addCancellationFailure = WandFailure::None;
+    auto cancelledAddPrepared = Prepare(cancelledAdd, Vec2{1.5, 1.5}, Settings(), false, &addCancellationFailure,
+                                        addCancellation.Token(), {}, nullptr, SelectionMode::Add);
+    Expect(!cancelledAddPrepared && addCancellationFailure == WandFailure::Cancelled &&
+               SameState(cancelledAdd, cancelledAddState),
+           "mode.add-cancellation-preserves-old-selection-and-history");
+
+    DocumentSession subtract = SourceSession();
+    const auto subtractBefore = Rect(1, 1, 2, 1, true);
+    subtract.SetSelection(subtractBefore, L"Subtract seed");
+    auto subtractPrepared =
+        Prepare(subtract, Vec2{1.5, 1.5}, Settings(), false, nullptr, {}, {}, nullptr, SelectionMode::Subtract);
+    Expect(subtractPrepared && subtract.ApplyPreparedWandLayerSelectionIfCurrent(subtractPrepared.value()) &&
+               BooleanLiteralRect(subtract.Selection(), 2, 1, 1, 1, false) &&
+               subtract.history.UndoName() == L"Magic Wand",
+           "mode.subtract-captured-subtracts-literal-geometry-and-uses-captured-antialiasing");
+    subtract.Undo();
+    Expect(subtract.Selection() == subtractBefore && subtract.history.RedoName() == L"Magic Wand",
+           "mode.subtract-undo-restores-exact-prior-selection");
+}
+
+void UnmatchedSelectionModes()
+{
+    constexpr std::array<std::uint8_t, 36> sampledPixels{100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255,
+                                                         100, 100, 100, 255, 109, 109, 109, 255, 100, 100, 100, 255,
+                                                         100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255};
+    DocumentSession addNoMatch;
+    DocumentFixture addNoMatchDocument;
+    addNoMatchDocument.id = Guid::Generate();
+    addNoMatchDocument.width = 3;
+    addNoMatchDocument.height = 3;
+    ImageLayer addNoMatchLayer = ImageLayer::Blank(L"No match", Vec2{3, 3});
+    const Guid addNoMatchID = addNoMatchLayer.id;
+    addNoMatchLayer.asset =
+        RasterAsset{Raster::Make(3, 3, RasterFormat::Bgra8888, sampledPixels.data(), sampledPixels.size()),
+                    {},
+                    addNoMatchLayer.name};
+    addNoMatchLayer.transform.size = Vec2{3, 3};
+    addNoMatchDocument.layers.push_back(std::move(addNoMatchLayer));
+    addNoMatch.ReplaceDocument(std::move(addNoMatchDocument).Seal(), addNoMatchID);
+    const auto addNoMatchOriginal = Rect(0, 0, 1, 1, true);
+    addNoMatch.SetSelection(addNoMatchOriginal, L"No-match seed");
+    const State addNoMatchState(addNoMatch);
+    auto addNoMatchPrepared = Prepare(addNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0),
+                                      false, nullptr, {}, {}, nullptr, SelectionMode::Add);
+    Expect(addNoMatchPrepared && !addNoMatchPrepared->ChangesSelection() &&
+               addNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(addNoMatchPrepared.value()) &&
+               addNoMatch.Selection() == addNoMatchOriginal && SameState(addNoMatch, addNoMatchState),
+           "mode.add-no-match-preserves-old-selection-aa-and-history");
+    auto subtractNoMatchPrepared = Prepare(addNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0),
+                                           false, nullptr, {}, {}, nullptr, SelectionMode::Subtract);
+    Expect(subtractNoMatchPrepared && !subtractNoMatchPrepared->ChangesSelection() &&
+               addNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(subtractNoMatchPrepared.value()) &&
+               addNoMatch.Selection() == addNoMatchOriginal && SameState(addNoMatch, addNoMatchState),
+           "mode.subtract-no-match-preserves-old-selection-aa-and-history");
+
+    DocumentSession explicitEmptyNoMatch = addNoMatch;
+    const DocumentSelection oldEmpty{true, {}};
+    explicitEmptyNoMatch.SetSelection(oldEmpty, L"Explicit empty no-match seed");
+    auto explicitEmptyNoMatchPrepared =
+        Prepare(explicitEmptyNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0), false, nullptr,
+                {}, {}, nullptr, SelectionMode::Add);
+    Expect(explicitEmptyNoMatchPrepared && !explicitEmptyNoMatchPrepared->ChangesSelection() &&
+               explicitEmptyNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(explicitEmptyNoMatchPrepared.value()) &&
+               explicitEmptyNoMatch.Selection() == oldEmpty,
+           "mode.add-no-match-preserves-explicit-empty-and-its-antialiasing");
+    auto explicitEmptySubtractPrepared =
+        Prepare(explicitEmptyNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0), false, nullptr,
+                {}, {}, nullptr, SelectionMode::Subtract);
+    Expect(explicitEmptySubtractPrepared && !explicitEmptySubtractPrepared->ChangesSelection() &&
+               explicitEmptyNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(explicitEmptySubtractPrepared.value()) &&
+               explicitEmptyNoMatch.Selection() == oldEmpty,
+           "mode.subtract-no-match-preserves-explicit-empty-and-its-antialiasing");
+    addNoMatch.Deselect();
+    const State noSelectionNoMatchState(addNoMatch);
+    auto noSelectionNoMatchPrepared =
+        Prepare(addNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0), false, nullptr, {}, {},
+                nullptr, SelectionMode::Add);
+    Expect(noSelectionNoMatchPrepared && !noSelectionNoMatchPrepared->ChangesSelection() &&
+               addNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(noSelectionNoMatchPrepared.value()) &&
+               !addNoMatch.Selection() && SameState(addNoMatch, noSelectionNoMatchState),
+           "mode.add-no-match-preserves-nullopt");
+    auto noSelectionSubtractPrepared =
+        Prepare(addNoMatch, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0), false, nullptr, {}, {},
+                nullptr, SelectionMode::Subtract);
+    Expect(noSelectionSubtractPrepared && !noSelectionSubtractPrepared->ChangesSelection() &&
+               addNoMatch.ApplyPreparedWandLayerSelectionIfCurrent(noSelectionSubtractPrepared.value()) &&
+               !addNoMatch.Selection() && SameState(addNoMatch, noSelectionNoMatchState),
+           "mode.subtract-no-match-preserves-nullopt");
+
+    DocumentSession explicitEmpty = SourceSession();
+    const DocumentSelection emptySelection{true, {}};
+    explicitEmpty.SetSelection(emptySelection, L"Explicit empty seed");
+    auto emptyAdd =
+        Prepare(explicitEmpty, Vec2{1.5, 1.5}, Settings(), false, nullptr, {}, {}, nullptr, SelectionMode::Add);
+    Expect(emptyAdd && explicitEmpty.ApplyPreparedWandLayerSelectionIfCurrent(emptyAdd.value()) &&
+               BooleanLiteralRect(explicitEmpty.Selection(), 1, 1, 1, 1, false),
+           "mode.add-from-explicit-empty-selects-outline-and-uses-captured-antialiasing");
+
+    DocumentSession noSelection = SourceSession();
+    auto emptySubtract =
+        Prepare(noSelection, Vec2{1.5, 1.5}, Settings(), true, nullptr, {}, {}, nullptr, SelectionMode::Subtract);
+    Expect(emptySubtract && !emptySubtract->ChangesSelection() &&
+               noSelection.ApplyPreparedWandLayerSelectionIfCurrent(emptySubtract.value()) && !noSelection.Selection(),
+           "mode.subtract-from-nullopt-preserves-no-selection");
+}
+
 void DeselectNoMatchNoopUndoAndSavedMarker()
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 3;
     document.height = 3;
@@ -272,9 +469,10 @@ void DeselectNoMatchNoopUndoAndSavedMarker()
         Raster::Make(3, 3, RasterFormat::Bgra8888, sampledPixels.data(), sampledPixels.size()), {}, layer.name};
     layer.transform.size = Vec2{3, 3};
     document.layers.push_back(std::move(layer));
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     const auto original = Rect(0, 0, 1, 1);
     session.SetSelection(original, L"Seed selection");
+
     session.history.MarkSaved();
     const Guid savedRevision = session.history.CurrentRevision();
     auto prepared = Prepare(session, Vec2{1.5, 1.5}, Settings(WandSampleSize::ThreeByThree, true, 0));
@@ -321,6 +519,118 @@ void DeselectNoMatchNoopUndoAndSavedMarker()
     saved.Undo();
     Expect(saved.history.CurrentRevision() == inFlightRevision && !saved.history.IsModified(),
            "history.undo-after-save-in-flight-restores-saved-revision");
+}
+
+void CompositeSelectionPreparationCases()
+{
+    std::array<std::uint8_t, 64> compositePixels{};
+    for (std::size_t pixel = 0; pixel < 16; ++pixel)
+    {
+        compositePixels[pixel * 4] = 20;
+        compositePixels[pixel * 4 + 1] = 40;
+        compositePixels[pixel * 4 + 2] = 60;
+        compositePixels[pixel * 4 + 3] = 255;
+    }
+    // One independently specified red pixel at canvas coordinate (1, 1), in BGRA byte order.
+    compositePixels[(1 * 4 + 1) * 4] = 0;
+    compositePixels[(1 * 4 + 1) * 4 + 1] = 0;
+    compositePixels[(1 * 4 + 1) * 4 + 2] = 255;
+    const Raster composite = Raster::Make(4, 4, RasterFormat::Bgra8888, compositePixels.data(), compositePixels.size());
+    auto compositeSettings = Settings();
+    compositeSettings.sampleAllLayers = true;
+
+    DocumentSession add = SourceSession();
+    const auto addBefore = Rect(1, 0, 1, 1, true);
+    add.SetSelection(addBefore, L"Composite add seed");
+    auto addPrepared = PrepareComposite(add, composite, {1.5, 1.5}, compositeSettings, false, SelectionMode::Add);
+    Expect(addPrepared && addPrepared->ChangesSelection() &&
+               add.ApplyPreparedWandLayerSelectionIfCurrent(addPrepared.value()) &&
+               BooleanLiteralRect(add.Selection(), 1, 0, 1, 2, false),
+           "composite.add-unions-pixel-1-1-with-seed-to-rect-1-0-through-2-2-and-captures-aa-false");
+
+    DocumentSession subtract = SourceSession();
+    const auto subtractBefore = Rect(1, 1, 2, 1, true);
+    subtract.SetSelection(subtractBefore, L"Composite subtract seed");
+    auto subtractPrepared =
+        PrepareComposite(subtract, composite, {1.5, 1.5}, compositeSettings, false, SelectionMode::Subtract);
+    Expect(subtractPrepared && subtractPrepared->ChangesSelection() &&
+               subtract.ApplyPreparedWandLayerSelectionIfCurrent(subtractPrepared.value()) &&
+               BooleanLiteralRect(subtract.Selection(), 2, 1, 1, 1, false),
+           "composite.subtract-pixel-1-1-from-seed-rect-1-1-through-3-2-leaves-rect-2-1-through-3-2");
+
+    constexpr std::array<std::uint8_t, 36> noMatchPixels{100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255,
+                                                         100, 100, 100, 255, 109, 109, 109, 255, 100, 100, 100, 255,
+                                                         100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255};
+    const Raster noMatchComposite =
+        Raster::Make(3, 3, RasterFormat::Bgra8888, noMatchPixels.data(), noMatchPixels.size());
+    DocumentSession noMatch;
+    DocumentFixture noMatchDocument;
+    noMatchDocument.id = Guid::Generate();
+    noMatchDocument.width = 3;
+    noMatchDocument.height = 3;
+    noMatchDocument.layers.push_back(ImageLayer::Blank(L"Composite no-match", Vec2{3, 3}));
+    noMatch.ReplaceDocument(std::move(noMatchDocument).Seal(), std::nullopt);
+    auto noMatchSettings = Settings(WandSampleSize::ThreeByThree, true, 0);
+    noMatchSettings.sampleAllLayers = true;
+
+    const auto nonempty = Rect(0, 0, 1, 1, true);
+    noMatch.SetSelection(nonempty, L"Composite nonempty no-match seed");
+    const State nonemptyBefore(noMatch);
+    for (const SelectionMode mode : {SelectionMode::Add, SelectionMode::Subtract})
+    {
+        auto prepared = PrepareComposite(noMatch, noMatchComposite, {1.5, 1.5}, noMatchSettings, false, mode);
+        Expect(prepared && !prepared->ChangesSelection() &&
+                   noMatch.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value()) &&
+                   noMatch.Selection() == nonempty && SameState(noMatch, nonemptyBefore),
+               mode == SelectionMode::Add ? "composite.add-no-match-retains-nonempty-selection-and-aa"
+                                          : "composite.subtract-no-match-retains-nonempty-selection-and-aa");
+    }
+
+    const DocumentSelection explicitEmpty{true, {}};
+    noMatch.SetSelection(explicitEmpty, L"Composite explicit-empty no-match seed");
+    const State emptyBefore(noMatch);
+    for (const SelectionMode mode : {SelectionMode::Add, SelectionMode::Subtract})
+    {
+        auto prepared = PrepareComposite(noMatch, noMatchComposite, {1.5, 1.5}, noMatchSettings, false, mode);
+        Expect(prepared && !prepared->ChangesSelection() &&
+                   noMatch.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value()) &&
+                   noMatch.Selection() == explicitEmpty && SameState(noMatch, emptyBefore),
+               mode == SelectionMode::Add ? "composite.add-no-match-retains-explicit-empty-selection-and-aa"
+                                          : "composite.subtract-no-match-retains-explicit-empty-selection-and-aa");
+    }
+
+    noMatch.Deselect();
+    const State nullBefore(noMatch);
+    for (const SelectionMode mode : {SelectionMode::Add, SelectionMode::Subtract})
+    {
+        auto prepared = PrepareComposite(noMatch, noMatchComposite, {1.5, 1.5}, noMatchSettings, false, mode);
+        Expect(prepared && !prepared->ChangesSelection() &&
+                   noMatch.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value()) && !noMatch.Selection() &&
+                   SameState(noMatch, nullBefore),
+               mode == SelectionMode::Add ? "composite.add-no-match-retains-null-selection"
+                                          : "composite.subtract-no-match-retains-null-selection");
+    }
+
+    DocumentSession staleAdd = SourceSession();
+    staleAdd.SetSelection(Rect(1, 0, 1, 1), L"Composite stale add seed");
+    auto stalePrepared =
+        PrepareComposite(staleAdd, composite, {1.5, 1.5}, compositeSettings, false, SelectionMode::Add);
+    staleAdd.SetSelection(Rect(0, 0, 1, 1), L"Composite intervening selection");
+    const State staleBefore(staleAdd);
+    Expect(stalePrepared && !staleAdd.ApplyPreparedWandLayerSelectionIfCurrent(stalePrepared.value()) &&
+               staleAdd.Selection() == Rect(0, 0, 1, 1) && SameState(staleAdd, staleBefore),
+           "composite.add-stale-target-rejects-publication-and-preserves-intervening-selection");
+
+    DocumentSession cancelledAdd = SourceSession();
+    cancelledAdd.SetSelection(Rect(1, 0, 1, 1), L"Composite cancelled add seed");
+    const State cancelledBefore(cancelledAdd);
+    CancelSource cancellation;
+    static_cast<void>(cancellation.Cancel());
+    WandFailure failure = WandFailure::None;
+    auto cancelled = PrepareComposite(cancelledAdd, composite, {1.5, 1.5}, compositeSettings, false, SelectionMode::Add,
+                                      &failure, cancellation.Token());
+    Expect(!cancelled && failure == WandFailure::Cancelled && SameState(cancelledAdd, cancelledBefore),
+           "composite.add-cancellation-preserves-selection-and-history");
 }
 
 void CaptureAndInputOwnership()
@@ -665,7 +975,8 @@ void MemoryPlansAndProducerCapacities()
     DocumentSession sparseSession = SourceSession();
     const Raster tile = sparseSession.Document()->layers.front().asset->image;
     const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, tile}}, 0);
-    sparseSession.EditForTest([&](CanvasDocument& document) { document.layers.front().asset->image = sparse; });
+    EditLayerRecordsForTest(sparseSession,
+                            [&](DocumentFixture& document) { document.layers.front().asset->image = sparse; });
     const auto sparsePlan = sparseSession.PlanWandLayerSelectionMemory({1, 1}, Settings());
     Expect(sparsePlan && sparsePlan->privateSourceBytes == PixelBuffer::RequiredBytes(16) &&
                sparsePlan->sourcePhaseBytes >= sparsePlan->sampledPixelsBytes + sparsePlan->privateSourceBytes &&
@@ -804,6 +1115,201 @@ void WorkerPublicationAndAggregateRetirement()
                      : "worker.applied-whole-result-retires-after-owner-close-on-worker");
     }
 }
+// Independent pixel thresholds and placements, including source dimensions larger than the canvas.
+void LoadedLayerSelectionCases()
+{
+    const auto make = [](bool sparse)
+    {
+        DocumentSession session;
+        DocumentFixture document;
+        document.id = Guid::Generate();
+        document.width = 2;
+        document.height = 2;
+        ImageLayer layer = ImageLayer::Blank(L"Loaded source", {3, 2});
+        const auto id = layer.id;
+        constexpr std::array<std::uint8_t, 24> pixels{0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 0, 128,
+                                                      0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 255};
+        const auto image = Raster::Make(3, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+        const auto source =
+            sparse ? Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, image}}, 0) : image;
+        layer.asset = RasterAsset{source, {}, layer.name};
+        layer.visible = false;
+        layer.opacity = 0;
+        layer.transform.origin = {-1, 0};
+        layer.transform.size = {3, 2};
+        constexpr std::array<std::uint8_t, 6> maskBytes{255, 255, 127, 255, 255, 128};
+        const auto mask = Raster::Make(3, 2, RasterFormat::Gray8, maskBytes.data(), maskBytes.size());
+        layer.mask = LayerMask{RasterAsset{mask, mask, L"Threshold mask"}, true, std::nullopt, true};
+        document.layers.push_back(std::move(layer));
+        session.ReplaceDocument(std::move(document).Seal(), id);
+        session.selectionAntialiased = false;
+        session.history.Reset();
+        session.history.MarkSaved();
+        return session;
+    };
+    const auto prepare = [](DocumentSession& session, bool mask, CancelToken cancellation = {},
+                            const WandLayerSelectionObserver* observer = nullptr)
+    {
+        auto input = session.PrepareLoadedLayerSelectionInput(mask);
+        return input ? DocumentSession::PrepareWandLayerSelectionPublication(std::move(input.value()), nullptr,
+                                                                             cancellation, {}, observer)
+                     : std::optional<PreparedWandLayerSelection>{};
+    };
+    for (const bool sparse : {false, true})
+    {
+        auto session = make(sparse);
+        const auto source = session.ActiveLayer()->asset->image;
+        const auto before = State(session);
+        const auto plan = session.PlanLoadedLayerSelectionMemory(false);
+        std::uint64_t admitted = 0;
+        Expect(plan && plan->requiresCanvasClip && !plan->transparentShortcut &&
+                   plan->sampledPixelsBytes == PixelBuffer::RequiredBytes(24) && plan->vertexBytes == 12 &&
+                   plan->booleanWorkspaceBytes != 0 && plan->booleanOutputBytes != 0 && plan->floodGrowthBytes == 0 &&
+                   EvaluateWandLayerSelectionAdmission(plan.value(), SelectionMode::New, false, admitted) ==
+                       WandLayerSelectionAdmission::Ready &&
+                   admitted == plan->reservationBytes && SameState(session, before),
+               sparse ? "load.sparse-source-sized-complete-clip-admission"
+                      : "load.source-sized-complete-clip-admission");
+        if (plan)
+        {
+            auto incomplete = plan.value();
+            incomplete.booleanWorkspaceBytes = 0;
+            Expect(EvaluateWandLayerSelectionAdmission(incomplete, SelectionMode::New, false, admitted) ==
+                           WandLayerSelectionAdmission::UnknownClipperWorkspace &&
+                       admitted == 0,
+                   sparse ? "load.sparse-new-refuses-incomplete-clip-plan" : "load.new-refuses-incomplete-clip-plan");
+        }
+        auto result = prepare(session, false);
+        Expect(result && SameState(session, before),
+               sparse ? "load.sparse-worker-preparation-is-private" : "load.worker-preparation-is-private");
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   BooleanLiteralRect(session.Selection(), 1, 0, 1, 2, false) &&
+                   session.history.UndoName() == L"Load Layer Selection" && session.history.IsModified(),
+               sparse ? "load.sparse-alpha-128-included-127-excluded-ignores-visibility-opacity-mask"
+                      : "load.alpha-128-included-127-excluded-ignores-visibility-opacity-mask");
+        Expect(!sparse || !source.IsMaterialized(), "load.source-cache-never-published");
+        session.Undo();
+        Expect(!session.Selection() && !session.history.IsModified() &&
+                   session.history.RedoName() == L"Load Layer Selection",
+               sparse ? "load.sparse-undo-restores-absent-and-saved-marker"
+                      : "load.undo-restores-absent-and-saved-marker");
+        session.Redo();
+        Expect(BooleanLiteralRect(session.Selection(), 1, 0, 1, 2, false),
+               sparse ? "load.sparse-redo-restores-literal-alpha" : "load.redo-restores-literal-alpha");
+    }
+    for (const bool linked : {false, true})
+    {
+        auto session = make(false);
+        if (!linked)
+            EditLayerRecordsForTest(session,
+                                    [](DocumentFixture& document)
+                                    {
+                                        LayerTransform placed;
+                                        placed.origin = {0, 1};
+                                        placed.size = {3, 2};
+                                        placed.flipX = true;
+                                        document.layers.front().mask->linked = false;
+                                        document.layers.front().mask->placement = placed;
+                                    });
+        auto result = prepare(session, true);
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   BooleanLiteralRect(session.Selection(), linked ? 1 : 0, linked ? 0 : 1, 1, 1, false) &&
+                   session.history.UndoName() == L"Load Mask Selection",
+               linked ? "load.linked-mask-127-included-128-excluded" : "load.unlinked-flipped-mask-placement");
+    }
+    {
+        auto session = make(false);
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document) { document.layers.front().transform.origin = {4, 0}; });
+        auto result = prepare(session, false);
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) && session.Selection() &&
+                   session.Selection()->IsEmpty() && session.history.UndoName() == L"Load Layer Selection",
+               "load.off-canvas-opaque-source-publishes-present-empty-not-absent");
+    }
+    for (const bool mask : {false, true})
+    {
+        auto session = make(true);
+        session.SetSelection(Rect(0, 0, 1, 1), L"Keep selected");
+        session.SetSelection(Rect(1, 1, 1, 1), L"Keep redo");
+        session.Undo();
+        EditLayerRecordsForTest(session,
+                                [mask](DocumentFixture& document)
+                                {
+                                    if (mask)
+                                    {
+                                        constexpr std::array<std::uint8_t, 6> white{255, 255, 255, 255, 255, 255};
+                                        document.layers.front().mask->asset.image =
+                                            Raster::Make(3, 2, RasterFormat::Gray8, white.data(), white.size());
+                                    }
+                                    else
+                                        document.layers.front().asset->image =
+                                            Raster::Make(3, 2, RasterFormat::Bgra8888);
+                                });
+        const State before(session);
+        auto result = prepare(session, mask);
+        Expect(result && !result->ChangesSelection() &&
+                   session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) && SameState(session, before),
+               mask ? "load.all-white-mask-preserves-selection-redo-and-generation"
+                    : "load.zero-alpha-preserves-selection-redo-and-generation");
+    }
+    for (const bool mask : {false, true})
+    {
+        auto session = make(true);
+        const State before(session);
+        std::stop_source stop;
+        stop.request_stop();
+        auto result = prepare(session, mask, CancelToken(stop.get_token()));
+        Expect(!result && SameState(session, before),
+               mask ? "load.mask-pre-cancel-is-atomic" : "load.alpha-pre-cancel-is-atomic");
+        result = prepare(session, mask);
+        session.SelectLayerTarget(session.ActiveLayerID().value(), true);
+        const State afterTarget(session);
+        Expect(result && !session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   SameState(session, afterTarget),
+               mask ? "load.mask-stale-target-refuses-publication" : "load.alpha-stale-target-refuses-publication");
+    }
+    {
+        auto session = make(false);
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document)
+                                {
+                                    document.layers.front().asset.reset();
+                                    document.layers.front().mask.reset();
+                                });
+        Expect(!session.PrepareLoadedLayerSelectionInput(false) && !session.PrepareLoadedLayerSelectionInput(true) &&
+                   !session.PlanLoadedLayerSelectionMemory(false) && !session.PlanLoadedLayerSelectionMemory(true),
+               "load.missing-source-refuses-before-capture");
+    }
+    for (const bool mask : {false, true})
+    {
+        for (const auto stage : {WandLayerSelectionStage::SourceReady, WandLayerSelectionStage::OutlineReady,
+                                 WandLayerSelectionStage::SelectionReady, WandLayerSelectionStage::DocumentReady})
+        {
+            auto session = make(true);
+            const State before(session);
+            struct StopAt final
+            {
+                std::stop_source stop;
+                WandLayerSelectionStage stage;
+                unsigned int hits = 0;
+            } state{{}, stage};
+            const WandLayerSelectionObserver observer{&state, [](void* opaque, WandLayerSelectionStage reached) noexcept
+                                                      {
+                                                          auto& state = *static_cast<StopAt*>(opaque);
+                                                          if (state.stage == reached)
+                                                          {
+                                                              ++state.hits;
+                                                              state.stop.request_stop();
+                                                          }
+                                                      }};
+            auto result = prepare(session, mask, CancelToken(state.stop.get_token()), &observer);
+            const auto label = std::format("load.{}.cancel-at-stage-{}-preserves-complete-owner-state",
+                                           mask ? "mask" : "alpha", static_cast<unsigned int>(stage));
+            Expect(!result && state.hits == 1 && SameState(session, before), label.c_str());
+        }
+    }
+}
+
 } // namespace
 
 int RunWandLayerSelectionTests()
@@ -812,12 +1318,16 @@ int RunWandLayerSelectionTests()
     gFailures = 0;
     ActiveLayerLiteralAndCapturedSettings();
     TransparentAndContiguousGoldens();
+    CapturedSelectionModes();
+    UnmatchedSelectionModes();
     DeselectNoMatchNoopUndoAndSavedMarker();
+    CompositeSelectionPreparationCases();
     CaptureAndInputOwnership();
     StaleAuthorityAndSessionOwnership();
     CancellationAndHistoryFailures();
     MemoryPlansAndProducerCapacities();
     WorkerPublicationAndAggregateRetirement();
+    LoadedLayerSelectionCases();
     std::printf("wand-layer.summary assertions=%d failures=%d\n", gAssertions, gFailures);
     return gFailures;
 }

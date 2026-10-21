@@ -1,5 +1,6 @@
 #include "Document.Tests.ExportMemory.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ExportWork.h"
 
 #include <array>
@@ -61,14 +62,15 @@ void RefusesInvalidDimensionsPathsAndOversizedCanvas()
 void LayerAndCurveLimitsAreEnforced()
 {
     CanvasDocument tooManyLayers = EmptyDocument();
-    tooManyLayers.layers.resize(static_cast<std::size_t>(kMaxLayerCount) + 1);
+    EditDocumentFixture(tooManyLayers, [](DocumentFixture& document)
+                        { document.layers.resize(static_cast<std::size_t>(kMaxLayerCount) + 1); });
     Expect(ExportReadbackMemoryBytes(tooManyLayers, 1) == 0, "layer-count-over-10000-refused");
 
     CanvasDocument invalidCurve = EmptyDocument();
     ImageLayer layer = ImageLayer::Blank(L"Curve", Vec2{1, 1});
     layer.adjustment.emplace();
     layer.adjustment.value().curves.channels[0].resize(33);
-    invalidCurve.layers.push_back(layer);
+    EditDocumentFixture(invalidCurve, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     Expect(ExportReadbackMemoryBytes(invalidCurve, 1) == 0, "curve-channel-over-32-points-refused");
 }
 
@@ -79,9 +81,11 @@ void PathAndLayerMetadataIncreaseTheReservation()
     const std::uint64_t longPathBytes = ExportReadbackMemoryBytes(document, 32728);
     Expect(longPathBytes > shortPathBytes, "longer-path-increases-reservation");
 
-    document.layers.push_back(ImageLayer::Blank(L"Layer one", Vec2{1, 1}));
+    EditDocumentFixture(document, [](DocumentFixture& fixture)
+                        { fixture.layers.push_back(ImageLayer::Blank(L"Layer one", Vec2{1, 1})); });
     const std::uint64_t oneLayerBytes = ExportReadbackMemoryBytes(document, 260);
-    document.layers.push_back(ImageLayer::Blank(L"Layer two", Vec2{1, 1}));
+    EditDocumentFixture(document, [](DocumentFixture& fixture)
+                        { fixture.layers.push_back(ImageLayer::Blank(L"Layer two", Vec2{1, 1})); });
     const std::uint64_t twoLayerBytes = ExportReadbackMemoryBytes(document, 260);
     Expect(oneLayerBytes > 0 && twoLayerBytes > oneLayerBytes, "additional-layer-metadata-increases-reservation");
 }
@@ -107,7 +111,7 @@ void SparseRasterIdentityIsPreserved()
     CanvasDocument document = EmptyDocument(2, 2);
     ImageLayer layer = ImageLayer::Blank(L"Sparse", Vec2{1, 1});
     layer.asset = RasterAsset{sparse, {}, layer.name};
-    document.layers.push_back(layer);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
 
     const std::uint64_t reservation = ExportReadbackMemoryBytes(document, 260);
     Expect(reservation != 0 && sparse.IsSparse(), "sparse-source-reservation-succeeds");

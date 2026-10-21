@@ -1,5 +1,7 @@
 #include "Document.Tests.SelectionPreserve.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "BrushStroke.h"
 #include "Document.h"
 #include "Selection.h"
@@ -49,7 +51,7 @@ void ExpectDetail(bool condition, const char* name, const char* detail) noexcept
 DocumentSession Session()
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 4;
@@ -66,7 +68,7 @@ DocumentSession Session()
     source.mask = LayerMask{RasterAsset{mask, mask, L"Independent 4x4 mask"}, true, std::nullopt, true};
     document.layers.push_back(std::move(source));
     document.layers.push_back(ImageLayer::Blank(L"Independent target", Vec2{4, 4}));
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     session.SetSelection(DocumentSelection{false, {SelectionLoop{Vec2{1, 1}, Vec2{3, 1}, Vec2{3, 3}, Vec2{1, 3}}}},
                          L"Literal 2x2 selection");
     return session;

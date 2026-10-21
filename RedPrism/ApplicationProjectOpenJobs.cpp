@@ -9,6 +9,8 @@
 #include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -337,7 +339,16 @@ HRESULT Application::StartProjectOpen(const std::wstring& path) noexcept
     if (!_activeHostRequest || _projectOpenTicket ||
         !std::holds_alternative<HostPathsInput>(_activeHostRequest->input.Input()))
         return E_UNEXPECTED;
-    std::array<wchar_t, 32768> resolved{};
+    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
+    try
+    {
+        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
+    }
+    auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path.c_str(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -478,6 +489,7 @@ int Application::RunProjectOpenSelfTest() noexcept
     const auto settle = [this]() noexcept
     { return SettleJobs(_jobs, 20000, DispatchMessageThunk, this) == SettleResult::Settled; };
     const auto priorDiscard = _forcedDiscardAnswer;
+    const auto priorSmearMode = _session.smearMode;
     const auto* priorPrompts = _prompts;
     const auto parent = std::filesystem::weakly_canonical(std::filesystem::temp_directory_path());
     const auto leaf = L"RedPrism.ProjectOpenHost." + Guid::Generate().ToString();
@@ -496,6 +508,7 @@ int Application::RunProjectOpenSelfTest() noexcept
                 std::_Exit(5);
             _projectOpenTestGate.reset();
             _forcedDiscardAnswer = priorDiscard;
+            _session.smearMode = priorSmearMode;
             _prompts = priorPrompts;
             std::error_code error;
             const auto actual = std::filesystem::weakly_canonical(root, error);
@@ -505,14 +518,15 @@ int Application::RunProjectOpenSelfTest() noexcept
         });
     const std::array<std::uint8_t, 8> fileBytes{191, 191, 191, 255, 23, 45, 67, 255};
     const auto fileImage = Raster::Make(2, 1, RasterFormat::Bgra8888, fileBytes.data(), fileBytes.size());
-    CanvasDocument fileDocument;
-    fileDocument.id = Guid::Generate();
-    fileDocument.width = 2;
-    fileDocument.height = 1;
+    DocumentFixture fileFixture;
+    fileFixture.id = Guid::Generate();
+    fileFixture.width = 2;
+    fileFixture.height = 1;
     ImageLayer fileLayer = ImageLayer::Blank(L"Loaded literal", Vec2{2, 1});
     const auto fileId = fileLayer.id;
     fileLayer.asset = RasterAsset{fileImage, fileImage, fileLayer.name};
-    fileDocument.layers.push_back(std::move(fileLayer));
+    fileFixture.layers.push_back(std::move(fileLayer));
+    const CanvasDocument fileDocument = std::move(fileFixture).Seal();
     const auto project = (root / L"source.prism").wstring();
     if (SaveProject(project.c_str(), fileDocument, fileId, true) != ProjectIoStatus::Ok)
         return 5;
@@ -558,19 +572,21 @@ int Application::RunProjectOpenSelfTest() noexcept
                 if (mode == Mode::MaskOnly)
                 {
                     const auto selected = _session.ActiveLayerID().value();
-                    _session.EditForTest(
-                        [&](CanvasDocument& document)
-                        {
-                            for (auto& layer : document.layers)
-                                if (layer.id == selected)
-                                {
-                                    const std::uint8_t byte = 173;
-                                    const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
-                                    LayerMask placed;
-                                    placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
-                                    layer.mask = std::move(placed);
-                                }
-                        });
+                    EditLayerRecordsForTest(_session,
+                                            [&](DocumentFixture& fixture)
+                                            {
+                                                for (auto& layer : fixture.layers)
+                                                    if (layer.id == selected)
+                                                    {
+                                                        const std::uint8_t byte = 173;
+                                                        const Raster mask =
+                                                            Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                                        LayerMask placed;
+                                                        placed.asset =
+                                                            RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                                        layer.mask = std::move(placed);
+                                                    }
+                                            });
                     _session.SelectLayerTarget(selected, true);
                 }
                 if (historyFailure || scopeStale || mode == Mode::CaptureAllocation)
@@ -599,7 +615,7 @@ int Application::RunProjectOpenSelfTest() noexcept
                     case 5:
                         return _session.PendingLasso().has_value();
                     case 6:
-                        return _session.PendingWarp() != nullptr;
+                        return _session.HasPendingWarp();
                     case 7:
                         return _session.PendingShape().has_value();
                     case 8:
@@ -641,8 +657,14 @@ int Application::RunProjectOpenSelfTest() noexcept
                         _session.ExtendLasso({4, 2});
                         break;
                     case 6:
+                        // ClearDocument preserves tool settings. The preceding Smear test can leave Blur,
+                        // whose ordinary path is a brush; this fixture explicitly exercises a live Warp.
+                        _session.smearMode = SmearMode::Liquify;
                         if (!_session.BeginWarp({2, 2}))
+                        {
+                            std::fprintf(stderr, "FAIL project-open-host.fixture-warp-opening\n");
                             return 5;
+                        }
                         break;
                     case 7:
                         _session.BeginShape({0, 0});
@@ -752,14 +774,15 @@ int Application::RunProjectOpenSelfTest() noexcept
                 if (mode == Mode::Cancel)
                     correct = correct && state.cancellationPending;
                 if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-                    correct = correct && actual.error == E_ABORT;
+                    correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
                 if (younger)
                     correct = correct && younger.value().Read().outcome == HostOutcome::Stale;
                 const bool failed = expected == HostOutcome::Failed;
                 correct = correct && _errorsShown == errors + static_cast<int>(failed);
                 if (failed)
                     correct = correct && _lastErrorId == IDS_ERROR_OPEN_PROJECT &&
-                              actual.error == (mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY);
+                              actual.error ==
+                                  static_cast<std::int32_t>(mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY);
                 std::fprintf(stderr, "%s project-open-host.phase=%u after=%u case=%u\n", correct ? "PASS" : "FAIL",
                              static_cast<unsigned int>(phase), after ? 1U : 0U, static_cast<unsigned int>(mode));
                 if (!correct)
@@ -865,9 +888,13 @@ int Application::RunProjectOpenSelfTest() noexcept
         return 5;
     auto larger = fileDocument;
     larger.width = 5;
-    auto& largerLayer = larger.layers.front();
-    largerLayer.asset = RasterAsset{SolidRaster(5, 1, 0xFF575757), fileImage, largerLayer.name};
-    largerLayer.transform.size = {5, 1};
+    EditDocumentFixture(larger,
+                        [&](DocumentFixture& fixture)
+                        {
+                            auto& largerLayer = fixture.layers.front();
+                            largerLayer.asset = RasterAsset{SolidRaster(5, 1, 0xFF575757), fileImage, largerLayer.name};
+                            largerLayer.transform.size = {5, 1};
+                        });
     const auto firstPath = (root / L"batch-first.prism").wstring();
     const auto missing = (root / L"missing.prism").wstring();
     const auto unsupported = (root / L"unsupported.prism").wstring();
@@ -952,13 +979,14 @@ int Application::RunProjectOpenSelfTest() noexcept
             correct = correct && state.noticeReceived && state.formattedNotice &&
                       state.noticeVersion == (mode == BatchMode::UnsupportedZero ? 0 : 99);
         if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-            correct = correct && actual.error == E_ABORT;
+            correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
         if (failed)
             correct = correct &&
-                      actual.error == (mode == BatchMode::WorkerFailure     ? E_ACCESSDENIED
-                                       : mode == BatchMode::DecodeAdmission ? E_OUTOFMEMORY
-                                       : mode == BatchMode::Growth          ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                                                            : E_FAIL) &&
+                      actual.error == static_cast<std::int32_t>(mode == BatchMode::WorkerFailure     ? E_ACCESSDENIED
+                                                                : mode == BatchMode::DecodeAdmission ? E_OUTOFMEMORY
+                                                                : mode == BatchMode::Growth
+                                                                    ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                    : E_FAIL) &&
                       _lastErrorId == static_cast<UINT>(versionNotice               ? IDS_ERROR_UNSUPPORTED_VERSION
                                                         : mode == BatchMode::Growth ? IDS_ERROR_TOO_LARGE
                                                                                     : IDS_ERROR_OPEN_PROJECT);

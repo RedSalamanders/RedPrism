@@ -3,7 +3,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $qwordRepo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $qwordRepo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $qwordRepo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-QwordStackRaxCase([string]$Name,[string]$Fault='',[int]$Maximum=64) {
     $case=New-SyntheticCase ($Name+'Seed') -PdbData

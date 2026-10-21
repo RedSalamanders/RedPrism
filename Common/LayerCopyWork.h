@@ -67,6 +67,17 @@ class PreparedLayerCopy final
     PreparedLayerCopy(PreparedLayerCopy&&) noexcept = default;
     PreparedLayerCopy& operator=(PreparedLayerCopy&&) = delete;
 
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept
+    {
+        return _publication.TryAcquireHistoryResidency(permit);
+    }
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {})
+    {
+        return _publication.RefreshHistoryResidency(cancellation, observer);
+    }
+
   private:
     friend class DocumentSession;
     PreparedLayerCopy(PreparedImageImport publication, std::optional<Guid> expandParent) noexcept

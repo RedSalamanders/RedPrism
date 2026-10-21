@@ -4,6 +4,7 @@
 #include "ContinuationRequests.h"
 #include "Document.h"
 #include "GpuWork.h"
+#include "UiCancellationBenchmark.h"
 #include "UiTiming.h"
 
 #include <array>
@@ -30,7 +31,9 @@ struct UiBenchmarkState final
         std::uint64_t elapsedUs = 0;
         std::uint64_t frames = 0;
         GpuReadbackStatistics readback;
+        std::uint64_t sizeFinalPublications = 0;
     };
+    std::unique_ptr<UiCancellationBenchmark> cancellation;
     CanvasDocument fixture;
     CanvasDocument imageImportBaseline;
     Guid activeLayer;
@@ -42,7 +45,24 @@ struct UiBenchmarkState final
     unsigned int trial = 0; // zero is the excluded warmup
     unsigned int runs = 10;
     bool smoke = false; // bounded correctness harness; may render while session display power is off
+    BenchmarkDisplayContinuity displayContinuity;
+    std::uintptr_t initialMonitorIdentity = 0;
+    bool displayContinuityCaptured = false; // sealed once after setup, before any measured operation
+    bool displayAuthorityKnown = false;     // monitor identity, device name, and rational refresh all resolved
+    bool RejectPerformanceForDisplayChange() const noexcept
+    {
+        return !smoke && displayContinuityCaptured && displayContinuity.invalidated;
+    }
+    bool RejectPerformanceForUnknownDisplayAuthority() const noexcept
+    {
+        return !smoke && displayContinuityCaptured && !displayAuthorityKnown;
+    }
+    bool preparedDisplay = false; // experimental benchmark route; ordinary startup remains separate
+    bool sizeOnly = false;        // explicit prepared Size final-publication benchmark roster
+    bool samplerOnly = false;     // same production loop and fixture; skips unrelated operation setup
+    std::uint64_t sizeFinalPublications = 0, previousSizeFinalPublications = 0;
     std::uint64_t previousPresents = 0;
+    std::uint64_t previousReservedMemoryBytes = 0; // settled prepared caches; never an allowance for a sampler leak
     std::int64_t requestedAt = 0;
     std::uint64_t fixtureChecksum = 0;
     Guid previousRevision;
@@ -78,4 +98,5 @@ struct UiBenchmarkState final
     std::optional<ContinuationReceipt> pngExportReceipt;
     std::optional<ContinuationReceipt> importReceipt;
     std::optional<ContinuationReceipt> gradientApplyReceipt;
+    std::optional<ContinuationReceipt> samplerReceipt;
 };

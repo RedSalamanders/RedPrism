@@ -19,6 +19,20 @@ constexpr double kInfinity = std::numeric_limits<double>::infinity();
 
 using Index = std::int64_t;
 
+struct Work final
+{
+    const CancelToken& cancellation;
+    WorkObserver observer;
+    [[nodiscard]] bool Continue(WorkStage stage) const noexcept
+    {
+        if (cancellation.IsCancelled())
+            return false;
+        if (observer.checkpoint)
+            observer.checkpoint(observer.context, stage);
+        return !cancellation.IsCancelled();
+    }
+};
+
 [[nodiscard]] std::uint32_t HashKey(std::uint32_t x) noexcept
 {
     x ^= x >> 16;
@@ -47,7 +61,7 @@ using Index = std::int64_t;
 // Mean squared difference between the ring around the spot and the ring around the patch offset by (dx, dy).
 // Infinite when the patch would overlap the spot or leave the image.
 [[nodiscard]] double Score(const std::uint8_t* rgba, std::size_t stride, const std::uint8_t* role, Index wx0, Index wy0,
-                           Index ww, Index wh, Index dx, Index dy, Index W, Index H) noexcept
+                           Index ww, Index wh, Index dx, Index dy, Index W, Index H, const Work* work) noexcept
 {
     if (std::llabs(dx) < ww && std::llabs(dy) < wh)
     {
@@ -61,6 +75,8 @@ using Index = std::int64_t;
     Index n = 0;
     for (Index y = 0; y < wh; ++y)
     {
+        if (work && !work->Continue(WorkStage::PatchSearch))
+            return kInfinity;
         for (Index x = 0; x < ww; ++x)
         {
             if (role[static_cast<std::size_t>(y * ww + x)] != kRing)
@@ -82,7 +98,7 @@ using Index = std::int64_t;
 
 // Solves for smooth values over HOLE pixels, fixed to the RING values around them. A coarser copy is solved first
 // and used as the starting point, so large spots settle in few passes.
-void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
+[[nodiscard]] bool Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth, const Work* work)
 {
     int iterations = 300;
     if (w > 32 && h > 32 && depth < 16)
@@ -93,6 +109,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
         std::vector<std::uint8_t> coarseRole(static_cast<std::size_t>(cw * ch), 0);
         for (Index y = 0; y < ch; ++y)
         {
+            if (work && !work->Continue(WorkStage::SolveCoarse))
+                return false;
             for (Index x = 0; x < cw; ++x)
             {
                 int known = 0;
@@ -147,9 +165,12 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
                 }
             }
         }
-        Solve(coarse.data(), coarseRole.data(), cw, ch, depth + 1);
+        if (!Solve(coarse.data(), coarseRole.data(), cw, ch, depth + 1, work))
+            return false;
         for (Index y = 0; y < h; ++y)
         {
+            if (work && !work->Continue(WorkStage::Solve))
+                return false;
             for (Index x = 0; x < w; ++x)
             {
                 const std::size_t p = static_cast<std::size_t>(y * w + x);
@@ -167,6 +188,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     {
         for (Index y = 0; y < h; ++y)
         {
+            if (work && !work->Continue(WorkStage::Solve))
+                return false;
             for (Index x = 0; x < w; ++x)
             {
                 const std::size_t p = static_cast<std::size_t>(y * w + x);
@@ -208,15 +231,18 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
             }
         }
     }
+    return !work || !work->cancellation.IsCancelled();
 }
 
 [[nodiscard]] bool HealUnchecked(std::uint8_t* rgba, const std::uint8_t* coverage, std::size_t width,
                                  std::size_t height, std::size_t stride, float opacity, SpotHealingMode mode,
-                                 std::uint32_t seed)
+                                 std::uint32_t seed, const Work* work)
 {
     const Index W = static_cast<Index>(width);
     const Index H = static_cast<Index>(height);
-    const Bounds bounds = CoverageBounds(coverage, width, height, width);
+    const Bounds bounds = CoverageBounds(coverage, width, height, width, work ? work->cancellation : CancelToken{});
+    if (work && work->cancellation.IsCancelled())
+        return false;
     if (bounds.Empty())
     {
         return true;
@@ -248,6 +274,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     std::vector<float> value(wn * 4, 0.0f);
     for (Index y = 0; y < wh; ++y)
     {
+        if (work && !work->Continue(WorkStage::Role))
+            return false;
         for (Index x = 0; x < ww; ++x)
         {
             role[static_cast<std::size_t>(y * ww + x)] =
@@ -258,6 +286,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     // The ring: pixels within `ring` of the spot (a square dilation, row pass then column pass).
     for (Index y = 0; y < wh; ++y)
     {
+        if (work && !work->Continue(WorkStage::RingRows))
+            return false;
         prefix[0] = 0;
         for (Index x = 0; x < ww; ++x)
         {
@@ -274,6 +304,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     }
     for (Index x = 0; x < ww; ++x)
     {
+        if (work && !work->Continue(WorkStage::RingColumns))
+            return false;
         prefix[0] = 0;
         for (Index y = 0; y < wh; ++y)
         {
@@ -294,6 +326,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     Index ringCount = 0;
     for (std::size_t p = 0; p < wn; ++p)
     {
+        if (work && p % static_cast<std::size_t>(ww) == 0 && !work->Continue(WorkStage::Statistics))
+            return false;
         ringCount += role[p] == kRing ? 1 : 0;
     }
     if (!ringCount)
@@ -314,12 +348,14 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
         {
             for (int a = 0; a < 24; ++a)
             {
+                if (work && !work->Continue(WorkStage::PatchSearch))
+                    return false;
                 const double angle = a * kPi / 12.0;
                 const Index dx =
                     static_cast<Index>(std::lround(std::cos(angle) * factors[f] * static_cast<double>(ww)));
                 const Index dy =
                     static_cast<Index>(std::lround(std::sin(angle) * factors[f] * static_cast<double>(wh)));
-                double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, dx, dy, W, H);
+                double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, dx, dy, W, H, work);
                 if (!std::isfinite(score))
                 {
                     continue;
@@ -339,12 +375,14 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
             // Fine-tune the alignment so repeating texture lines up.
             const Index cx = ox;
             const Index cy = oy;
-            double refined = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, cx, cy, W, H);
+            double refined = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, cx, cy, W, H, work);
             for (Index j = -3; j <= 3; ++j)
             {
                 for (Index i = -3; i <= 3; ++i)
                 {
-                    const double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, cx + i, cy + j, W, H);
+                    if (work && !work->Continue(WorkStage::PatchSearch))
+                        return false;
+                    const double score = Score(rgba, stride, role.data(), wx0, wy0, ww, wh, cx + i, cy + j, W, H, work);
                     if (score < refined)
                     {
                         refined = score;
@@ -363,6 +401,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     double detail[3] = {0, 0, 0};
     for (Index y = 0; y < wh; ++y)
     {
+        if (work && !work->Continue(WorkStage::Statistics))
+            return false;
         for (Index x = 0; x < ww; ++x)
         {
             const std::size_t p = static_cast<std::size_t>(y * ww + x);
@@ -412,6 +452,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     }
     for (std::size_t p = 0; p < wn; ++p)
     {
+        if (work && p % static_cast<std::size_t>(ww) == 0 && !work->Continue(WorkStage::Statistics))
+            return false;
         if (role[p] == kHole)
         {
             for (int c = 0; c < 4; ++c)
@@ -420,7 +462,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
             }
         }
     }
-    Solve(value.data(), role.data(), ww, wh, 0);
+    if (!Solve(value.data(), role.data(), ww, wh, 0, work))
+        return false;
     for (int c = 0; c < 3; ++c)
     {
         detail[c] = std::sqrt(detail[c] / static_cast<double>(ringCount)) * 0.9;
@@ -428,6 +471,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
 
     for (Index y = 0; y < wh; ++y)
     {
+        if (work && !work->Continue(WorkStage::Output))
+            return false;
         for (Index x = 0; x < ww; ++x)
         {
             const std::size_t p = static_cast<std::size_t>(y * ww + x);
@@ -465,7 +510,7 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
             }
         }
     }
-    return true;
+    return !work || !work->cancellation.IsCancelled();
 }
 } // namespace
 
@@ -500,6 +545,25 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
     return Bounds{x0, y0, x1, y1};
 }
 
+bool HealForWork(std::span<std::uint8_t> bgra, std::span<const std::uint8_t> coverage, std::size_t width,
+                 std::size_t height, std::size_t stride, float opacity, SpotHealingMode mode, std::uint32_t seed,
+                 const CancelToken& cancellation, WorkObserver observer)
+{
+    if (cancellation.IsCancelled() || bgra.empty() || coverage.empty() || width == 0 || height == 0 ||
+        width > static_cast<std::size_t>(kMaxCanvasSide) || height > static_cast<std::size_t>(kMaxCanvasSide) ||
+        width * height > static_cast<std::size_t>(kMaxLayerPixels) || stride < width * 4 ||
+        (height > 1 && stride > ((std::numeric_limits<std::size_t>::max)() - width * 4) / (height - 1)) ||
+        !std::isfinite(opacity) || opacity < 0 || opacity > 1 ||
+        (mode != SpotHealingMode::ContentAware && mode != SpotHealingMode::CreateTexture &&
+         mode != SpotHealingMode::ProximityMatch))
+        return false;
+    const auto pixelExtent = (height - 1) * stride + width * 4;
+    if (bgra.size() < pixelExtent || coverage.size() < width * height)
+        return false;
+    const Work work{cancellation, observer};
+    return HealUnchecked(bgra.data(), coverage.data(), width, height, stride, opacity, mode, seed, &work);
+}
+
 bool Heal(std::uint8_t* bgra, const std::uint8_t* coverage, std::size_t width, std::size_t height, std::size_t stride,
           float opacity, SpotHealingMode mode, std::uint32_t seed)
 {
@@ -509,7 +573,7 @@ bool Heal(std::uint8_t* bgra, const std::uint8_t* coverage, std::size_t width, s
     }
     try
     {
-        return HealUnchecked(bgra, coverage, width, height, stride, opacity, mode, seed);
+        return HealUnchecked(bgra, coverage, width, height, stride, opacity, mode, seed, nullptr);
     }
     catch (const std::bad_alloc&)
     {

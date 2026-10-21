@@ -48,6 +48,32 @@ void DocumentReadbackJob::TransferReadbackOwners(CanvasDocument& document, Pixel
     std::swap(_image, image);
 }
 
+bool DocumentReadbackJob::ContinuePixelReadback(JobTicket ticket, unsigned int x, unsigned int y) noexcept
+{
+    if (!_detachedReady || _phase != Phase::ProcessDetached || ticket != _ticket || _rows.data || _utilityAcquired ||
+        _region.right - _region.left != 1 || _region.bottom - _region.top != 1 || _document.width <= 0 ||
+        _document.height <= 0 || x >= static_cast<unsigned int>(_document.width) ||
+        y >= static_cast<unsigned int>(_document.height))
+        return false;
+    const D3D11_BOX previous = _region;
+    const HRESULT previousError = _error;
+    const bool previousReset = _resetOutput;
+    _region = {x, y, 0, x + 1, y + 1, 1};
+    _phase = Phase::Prepare;
+    _resetOutput = true; // The next worker drops the previous pixel/result, never the input callback.
+    _error = S_OK;
+    _detachedReady = false;
+    if (_scheduler.Resume(ticket))
+        return true;
+    // A refused resume has launched no worker. Restore the complete suspended request for its owner.
+    _region = previous;
+    _phase = Phase::ProcessDetached;
+    _resetOutput = previousReset;
+    _error = previousError;
+    _detachedReady = true;
+    return false;
+}
+
 std::uint64_t DocumentReadbackJob::RequiredMemory(const D3D11_BOX& region) noexcept
 {
     if (region.front != 0 || region.back != 1 || region.right <= region.left || region.bottom <= region.top ||
@@ -184,7 +210,13 @@ bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) no
         return true;
     }
     if (_phase == Phase::ProcessDetached)
-        return DeferDetachedCompletion(result, ticket); // no GPU rows/utility ownership cross this boundary
+    {
+        _detachedReady = true;
+        const bool deferred = DeferDetachedCompletion(result, ticket);
+        if (!deferred)
+            _detachedReady = false;
+        return deferred; // no GPU rows/utility ownership cross this boundary
+    }
     if (_phase == Phase::Copy)
     {
         const HRESULT failure = FAILED(_error)                                   ? _error

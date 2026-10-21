@@ -1,8 +1,12 @@
 #include "CanvasRenderer.h"
+#include "GpuRecordingCommands.h"
 
 #include "Adjust.h"
 #include "Jobs.h"
+#include "RecordedPixelPreview.h"
 #include "Shaders/CompositionShared.h"
+#include "UiTiming.h"
+#include "WarpPreviewWork.h"
 
 #include "CompositionBlitPixelShader.h"
 #include "CompositionPixelShader.h"
@@ -15,9 +19,39 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <type_traits>
 
 namespace
 {
+// Optional thread-local/ETW diagnostics. No active sink/provider means no clock read or allocation.
+// Nested resource scopes are inclusive and must never be summed to infer frame duration.
+HRESULT TimedCreateTexture2D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE2D_DESC* description,
+                             _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
+                             _COM_Outptr_ ID3D11Texture2D** texture) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::TextureCreate, 2};
+    return device->CreateTexture2D(description, initial, texture);
+}
+HRESULT TimedCreateTexture3D(_In_ ID3D11Device* device, _In_ const D3D11_TEXTURE3D_DESC* description,
+                             _In_opt_ const D3D11_SUBRESOURCE_DATA* initial,
+                             _COM_Outptr_ ID3D11Texture3D** texture) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::TextureCreate, 3};
+    return device->CreateTexture3D(description, initial, texture);
+}
+HRESULT TimedCreateShaderResourceView(_In_ ID3D11Device* device, _In_ ID3D11Resource* texture,
+                                      _In_opt_ const D3D11_SHADER_RESOURCE_VIEW_DESC* description,
+                                      _COM_Outptr_ ID3D11ShaderResourceView** view) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::ShaderViewCreate};
+    return device->CreateShaderResourceView(texture, description, view);
+}
+void TimedGenerateMips(_In_ ID3D11DeviceContext* context, _In_ ID3D11ShaderResourceView* view) noexcept
+{
+    const ScopedUiTiming timing{UiTimingKind::MipGeneration};
+    context->GenerateMips(view);
+}
+
 constexpr std::array<float, 4> kClearZero{0, 0, 0, 0};
 constexpr double kPi = 3.14159265358979323846;
 // Stroke tiles are this many grid pixels on a side (BrushStroke's tile grid): a reduced stroke texture starts its part
@@ -144,6 +178,8 @@ CanvasRenderer::~CanvasRenderer()
 
 void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 {
+    _recordedDisplaySealed = false;
+    _recordedOwnerThread = 0;
     _adjustmentPreviewSurface = {};
     _adjustmentPreviewDirty = true;
     for (auto& [id, texture] : _rasters)
@@ -189,6 +225,7 @@ void CanvasRenderer::ReleaseDeviceResources() noexcept
     ReleaseUtilitySurfaces();
     _layerConstants.reset();
     _blitConstants.reset();
+    _selectionOutlineBlend.reset();
     _rasterizer.reset();
     _pointSampler.reset();
     _linearSampler.reset();
@@ -197,6 +234,7 @@ void CanvasRenderer::ReleaseDeviceResources() noexcept
     _vertexShader.reset();
     _context = nullptr;
     _device = nullptr;
+    _recordingCommands = nullptr;
 }
 
 void CanvasRenderer::SetTextureLimitForTest(int limit) noexcept
@@ -300,8 +338,22 @@ HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document, const
     return S_OK;
 }
 
-HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context) noexcept
+HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context,
+                                                GpuRecordingCommands* recording) noexcept
 {
+    if (recording)
+    {
+        const HRESULT policy = recording->ContextStatusForWork(device, context);
+        if (FAILED(policy))
+            return policy;
+    }
+    else if (!context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
+        return E_INVALIDARG;
+    wil::com_ptr_nothrow<ID3D11Device> contextDevice;
+    context->GetDevice(contextDevice.put());
+    if (!device || device != contextDevice.get())
+        return E_INVALIDARG;
+
     static_assert(sizeof(LayerConstants) % 16 == 0);
     static_assert(sizeof(BlitConstants) % 16 == 0);
     ReleaseDeviceResources();
@@ -309,6 +361,8 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
     {
         return E_INVALIDARG;
     }
+    _recordingCommands = recording;
+    _recordedDisplaySealed = false;
     _device = device;
     _context = context;
 
@@ -353,6 +407,7 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
     raster.FillMode = D3D11_FILL_SOLID;
     raster.CullMode = D3D11_CULL_NONE;
     raster.DepthClipEnable = TRUE;
+    raster.ScissorEnable = recording ? TRUE : FALSE;
     result = device->CreateRasterizerState(&raster, _rasterizer.put());
     if (FAILED(result))
     {
@@ -375,6 +430,19 @@ HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11Device
     {
         return result;
     }
+    D3D11_BLEND_DESC outlineBlend{};
+    auto& outlineTarget = outlineBlend.RenderTarget[0];
+    outlineTarget.BlendEnable = TRUE;
+    outlineTarget.SrcBlend = D3D11_BLEND_ONE;
+    outlineTarget.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOp = D3D11_BLEND_OP_ADD;
+    outlineTarget.SrcBlendAlpha = D3D11_BLEND_ONE;
+    outlineTarget.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    outlineTarget.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    outlineTarget.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    result = device->CreateBlendState(&outlineBlend, _selectionOutlineBlend.put());
+    if (FAILED(result))
+        return result;
     _documentDirty = true;
     return S_OK;
 }
@@ -392,20 +460,20 @@ HRESULT CanvasRenderer::CreateSurface(UINT width, UINT height, DXGI_FORMAT forma
     description.SampleDesc.Count = 1;
     description.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
     description.MiscFlags = mips ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0u;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, surface.texture.texture.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
     if (FAILED(result) && mips)
     {
         // Without generated mips the zoomed-out blit samples the top level only.
         description.MipLevels = 1;
         description.MiscFlags = 0;
-        result = _device->CreateTexture2D(&description, nullptr, surface.texture.texture.put());
+        result = TimedCreateTexture2D(_device, &description, nullptr, surface.texture.texture.put());
         mips = false;
     }
     if (FAILED(result))
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(surface.texture.texture.get(), nullptr, surface.texture.srv.put());
+    result = TimedCreateShaderResourceView(_device, surface.texture.texture.get(), nullptr, surface.texture.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -527,14 +595,14 @@ HRESULT CanvasRenderer::CreateMippedTexture(int width, int height, bool gray, Gp
     description.SampleDesc.Count = 1;
     description.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     description.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, gpu.texture.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
     bool mipped = true;
     if (FAILED(result))
     {
         description.MipLevels = 1;
         description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         description.MiscFlags = 0;
-        result = _device->CreateTexture2D(&description, nullptr, gpu.texture.put());
+        result = TimedCreateTexture2D(_device, &description, nullptr, gpu.texture.put());
         mipped = false;
         if (FAILED(result))
         {
@@ -556,7 +624,7 @@ void CanvasRenderer::GenerateMipsFor(const GpuTexture& gpu) noexcept
 {
     if (gpu.mipped && gpu.srv)
     {
-        _context->GenerateMips(gpu.srv.get());
+        GenerateRecordedMips(gpu.srv.get());
     }
 }
 
@@ -572,6 +640,7 @@ std::array<float, 4> CanvasRenderer::RectFor(const GpuTexture& texture) noexcept
 
 template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, Reader&& read) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::RasterUpload};
     const int channels = gpu.gray ? 1 : 4;
     const int scale = std::max(1, gpu.scale);
     const std::size_t rowBytes = static_cast<std::size_t>(gpu.regionWidth) * static_cast<std::size_t>(channels);
@@ -601,7 +670,16 @@ template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, R
         const int bandTexels = std::min(texelRowsPerBand, gpu.height - texelRow);
         const int firstRow = texelRow * scale;
         const int rowCount = std::min(bandTexels * scale, gpu.regionHeight - firstRow);
-        read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
+        if constexpr (std::is_same_v<std::invoke_result_t<Reader&, int, int, int, int, std::uint8_t*, std::size_t>,
+                                     HRESULT>)
+        {
+            const HRESULT status =
+                read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
+            if (FAILED(status))
+                return status; // No upload from an incomplete source band.
+        }
+        else
+            read(gpu.originX, gpu.originY + firstRow, gpu.regionWidth, rowCount, rows.data(), rowBytes);
         const std::uint8_t* data = rows.data();
         std::size_t pitch = rowBytes;
         if (scale > 1)
@@ -614,7 +692,9 @@ template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, R
         const D3D11_BOX box{
             0, static_cast<UINT>(texelRow), 0, static_cast<UINT>(gpu.width), static_cast<UINT>(texelRow + bandTexels),
             1};
-        _context->UpdateSubresource(gpu.texture.get(), 0, &box, data, static_cast<UINT>(pitch), 0);
+        UpdateRecorded(gpu.texture.get(), 0, &box, data, static_cast<UINT>(pitch), 0);
+        if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+            return _recordingCommands->StatusForWork();
     }
     return S_OK;
 }
@@ -651,7 +731,9 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
         {
             const D3D11_BOX box{static_cast<UINT>(left - gpu.originX),  static_cast<UINT>(top - gpu.originY),    0,
                                 static_cast<UINT>(right - gpu.originX), static_cast<UINT>(bottom - gpu.originY), 1};
-            _context->UpdateSubresource(gpu.texture.get(), 0, &box, at(left, top), static_cast<UINT>(stride), 0);
+            UpdateRecorded(gpu.texture.get(), 0, &box, at(left, top), static_cast<UINT>(stride), 0);
+            if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+                return _recordingCommands->StatusForWork();
             continue;
         }
         // Reduced: the texels whose whole block of pixels lies in the tile (a block the region's own edge cuts
@@ -686,7 +768,9 @@ HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> 
                      _scratch.data(), texelRowBytes);
         const D3D11_BOX box{static_cast<UINT>(texelLeft),  static_cast<UINT>(texelTop),    0,
                             static_cast<UINT>(texelRight), static_cast<UINT>(texelBottom), 1};
-        _context->UpdateSubresource(gpu.texture.get(), 0, &box, _scratch.data(), static_cast<UINT>(texelRowBytes), 0);
+        UpdateRecorded(gpu.texture.get(), 0, &box, _scratch.data(), static_cast<UINT>(texelRowBytes), 0);
+        if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+            return _recordingCommands->StatusForWork();
     }
     return S_OK;
 }
@@ -732,7 +816,7 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
     }
     const float level = fill / 255.0f;
     const std::array<float, 4> clear{level, level, level, level};
-    _context->ClearRenderTargetView(target.get(), clear.data());
+    ClearRecorded(target.get(), clear.data());
     if (baseTexture != nullptr)
     {
         const int left = std::max(0, baseX);
@@ -743,8 +827,8 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
         {
             const D3D11_BOX box{static_cast<UINT>(left - baseX),  static_cast<UINT>(top - baseY),    0,
                                 static_cast<UINT>(right - baseX), static_cast<UINT>(bottom - baseY), 1};
-            _context->CopySubresourceRegion(gpu.texture.get(), 0, static_cast<UINT>(left), static_cast<UINT>(top), 0,
-                                            baseTexture->texture.get(), 0, &box);
+            CopyRecorded(gpu.texture.get(), 0, static_cast<UINT>(left), static_cast<UINT>(top), 0,
+                         baseTexture->texture.get(), 0, &box);
         }
     }
     result = WriteTiles(gpu, tiles, gray);
@@ -753,7 +837,7 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
         gpu = {};
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         gpu = {};
@@ -765,6 +849,7 @@ HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, co
 
 HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::RasterUpload};
     gpu = {};
     if (!raster.HasStorage())
     {
@@ -794,8 +879,8 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
         return result;
     }
     const D3D11_BOX box{0, 0, 0, static_cast<UINT>(gpu.width), static_cast<UINT>(gpu.height), 1};
-    _context->UpdateSubresource(gpu.texture.get(), 0, &box, raster.Data(), static_cast<UINT>(raster.Stride()), 0);
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    UpdateRecorded(gpu.texture.get(), 0, &box, raster.Data(), static_cast<UINT>(raster.Stride()), 0);
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -949,7 +1034,7 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -1035,7 +1120,9 @@ HRESULT CanvasRenderer::MaskView(const ImageLayer& layer, TextureView& view) noe
 
 HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
 {
-    if (preview.width < 1 || preview.height < 1)
+    if (preview.width < 1 || preview.height < 1 ||
+        ((preview.warpSource || preview.pixelSource) && !_recordingCommands) ||
+        (preview.warpSource && preview.pixelSource))
     {
         return E_INVALIDARG;
     }
@@ -1045,23 +1132,142 @@ HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
     return S_OK;
 }
 
+HRESULT CanvasRenderer::PrepareRecordedStrokeForWork(const CanvasDocument& document, const StrokePreview& preview,
+                                                       std::span<const RasterTile> changed,
+                                                       const CanvasRenderer* publishedSeed, bool& inherited) noexcept
+{
+    inherited = false;
+    if (!_recordingCommands || _recordedDisplaySealed || !_device || !_context ||
+        FAILED(_recordingCommands->ContextStatusForWork(_device, _context)) || document.width < 1 ||
+        document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide ||
+        preview.width < 1 || preview.height < 1 || preview.width > kMaxCanvasSide || preview.height > kMaxCanvasSide)
+        return E_INVALIDARG;
+    const auto* target = document.layers.FindKey(preview.layerID);
+    if (!target || target->isGroup || target->adjustment || (preview.mask && !target->mask))
+        return E_INVALIDARG;
+    const auto expectedFormat = preview.mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888;
+    const Raster original = preview.mask ? target->mask->asset.image : target->asset ? target->asset->image : Raster{};
+    const bool uniformMask = preview.mask && !preview.source.HasStorage() && original.Width() == 1 &&
+                             original.Height() == 1 && original.Format() == RasterFormat::Gray8;
+    if ((!uniformMask && preview.source != original) ||
+        (preview.source.HasStorage() && preview.source.Format() != expectedFormat) || preview.sourceWidth < 0 ||
+        preview.sourceHeight < 0 || preview.sourceWidth > kMaxCanvasSide || preview.sourceHeight > kMaxCanvasSide ||
+        ((preview.sourceWidth == 0) != (preview.sourceHeight == 0)) ||
+        (!preview.source.HasStorage() && (preview.sourceWidth || preview.sourceHeight)))
+        return E_INVALIDARG;
+    if (preview.pixelSource && (!changed.empty() || !RecordedPixelPreviewMatchesForWork(document, preview)))
+        return E_INVALIDARG;
+    if (preview.warpSource)
+    {
+        const auto& source = preview.warpSource->source;
+        WarpPreviewReader reader(preview.warpSource);
+        const LayerTransform documentGrid{
+            Vec2{0, 0}, Vec2{static_cast<double>(document.width), static_cast<double>(document.height)}};
+        if (preview.mask || !reader.IsValidForWork() || source.image != original ||
+            source.placement != target->transform || source.width != document.width ||
+            source.height != document.height || preview.width != document.width || preview.height != document.height ||
+            preview.transform != documentGrid || preview.sourceX || preview.sourceY || preview.sourceWidth ||
+            preview.sourceHeight || preview.fill)
+            return E_INVALIDARG;
+    }
+    if (uniformMask)
+    {
+        std::uint8_t tone = 0;
+        original.ReadRegion(0, 0, 1, 1, &tone, 1, 0);
+        if (preview.fill != tone)
+            return E_INVALIDARG;
+    }
+    // Validate every complete immutable tile before recording a prefix. No materialization is needed.
+    for (const auto& tile : changed)
+        if (!tile.pixels.HasStorage() || tile.pixels.Format() != expectedFormat || tile.x < 0 || tile.y < 0 ||
+            tile.x > preview.width || tile.y > preview.height || tile.Width() < 1 || tile.Height() < 1 ||
+            tile.Width() > preview.width - tile.x || tile.Height() > preview.height - tile.y || tile.sourceX < 0 ||
+            tile.sourceY < 0 || tile.sourceX > tile.pixels.Width() || tile.sourceY > tile.pixels.Height() ||
+            tile.Width() > tile.pixels.Width() - tile.sourceX || tile.Height() > tile.pixels.Height() - tile.sourceY)
+            return E_INVALIDARG;
+    _documentWidth = document.width;
+    _documentHeight = document.height;
+    _displayScale = ScaleToFit(document.width, document.height);
+    bool compatibleStroke = false;
+    if (publishedSeed && publishedSeed->_stroke && !preview.pixelSource)
+    {
+        const auto& old = *publishedSeed->_stroke;
+        compatibleStroke = publishedSeed->_device == _device && publishedSeed->_recordedDisplaySealed &&
+                           publishedSeed->_strokeTexture.srv && publishedSeed->_documentWidth == document.width &&
+                           publishedSeed->_documentHeight == document.height &&
+                           publishedSeed->_displayScale == _displayScale && old.layerID == preview.layerID &&
+                           old.mask == preview.mask && old.width == preview.width && old.height == preview.height &&
+                           old.transform == preview.transform && old.source == preview.source &&
+                           old.sourceX == preview.sourceX && old.sourceY == preview.sourceY && old.fill == preview.fill;
+        compatibleStroke =
+            compatibleStroke && old.sourceWidth == preview.sourceWidth && old.sourceHeight == preview.sourceHeight;
+        compatibleStroke = compatibleStroke &&
+                           static_cast<bool>(old.warpSource) == static_cast<bool>(preview.warpSource) &&
+                           static_cast<bool>(old.pixelSource) == static_cast<bool>(preview.pixelSource);
+        if (compatibleStroke && preview.warpSource)
+        {
+            const auto& previous = old.warpSource->source;
+            const auto& current = preview.warpSource->source;
+            compatibleStroke = previous.image == current.image && previous.placement == current.placement &&
+                               previous.width == current.width && previous.height == current.height;
+        }
+        if (!compatibleStroke)
+            return E_INVALIDARG; // Changed tiles cannot reconstruct an incompatible previous working grid.
+    }
+    HRESULT result = BeginStroke(preview);
+    if (FAILED(result))
+        return result;
+    if (compatibleStroke)
+    {
+        const auto& seed = publishedSeed->_strokeTexture;
+        GpuTexture next;
+        result = CreateMippedTexture(seed.width, seed.height, seed.gray, next);
+        if (FAILED(result))
+            return result;
+        next.originX = seed.originX;
+        next.originY = seed.originY;
+        next.regionWidth = seed.regionWidth;
+        next.regionHeight = seed.regionHeight;
+        next.sourceWidth = seed.sourceWidth;
+        next.sourceHeight = seed.sourceHeight;
+        next.scale = seed.scale;
+        const D3D11_BOX full{0, 0, 0, static_cast<UINT>(seed.width), static_cast<UINT>(seed.height), 1};
+        CopyRecorded(next.texture.get(), 0, 0, 0, 0, seed.texture.get(), 0, &full);
+        result = _recordingCommands->StatusForWork();
+        if (FAILED(result))
+            return result;
+        result = TimedCreateShaderResourceView(_device, next.texture.get(), nullptr, next.srv.put());
+        if (FAILED(result))
+            return result;
+        _strokeTexture = std::move(next);
+        inherited = true;
+    }
+    return UpdateStrokeTiles(changed);
+}
+
 HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) noexcept
 {
     const StrokePreview& stroke = _stroke.value();
     const bool gray = stroke.mask;
     PixelRect region{0, 0, stroke.width, stroke.height};
     int scale = 1;
-    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit)
+    const int sourceWidth = stroke.sourceWidth ? stroke.sourceWidth : stroke.source.Width();
+    const int sourceHeight = stroke.sourceHeight ? stroke.sourceHeight : stroke.source.Height();
+    const bool stretched =
+        stroke.source.HasStorage() && (sourceWidth != stroke.source.Width() || sourceHeight != stroke.source.Height());
+    if (stroke.width <= _textureLimit && stroke.height <= _textureLimit && !stroke.warpSource && !stroke.pixelSource)
     {
         // The whole grid, assembled on the GPU from the source's own texture and the tiles.
-        const HRESULT result = CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX,
-                                                   stroke.sourceY, stroke.fill, tiles, _strokeTexture);
+        const HRESULT result =
+            stretched ? E_NOTIMPL
+                      : CreateSparseTexture(stroke.width, stroke.height, gray, stroke.source, stroke.sourceX,
+                                            stroke.sourceY, stroke.fill, tiles, _strokeTexture);
         if (result != E_NOTIMPL)
         {
             return result;
         }
     }
-    else
+    else if (stroke.width > _textureLimit || stroke.height > _textureLimit)
     {
         // A grid larger than the device: the part the display shows (the whole document at its proxy scale), on the
         // tile grid, reduced to fit.
@@ -1096,31 +1302,104 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     gpu.sourceHeight = stroke.height;
     gpu.scale = scale;
     const int channels = gray ? 1 : 4;
-    result = UploadRows(gpu,
-                        [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
-                        {
-                            for (int row = 0; row < height; ++row)
-                            {
-                                std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
-                                            static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
-                            }
-                            if (!stroke.source.HasStorage())
-                            {
-                                return;
-                            }
-                            const int left = std::max(x, stroke.sourceX);
-                            const int top = std::max(y, stroke.sourceY);
-                            const int right = std::min(x + width, stroke.sourceX + stroke.source.Width());
-                            const int bottom = std::min(y + height, stroke.sourceY + stroke.source.Height());
-                            if (right > left && bottom > top)
-                            {
-                                stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left,
-                                                         bottom - top,
-                                                         out + static_cast<std::size_t>(top - y) * stride +
-                                                             static_cast<std::size_t>(left - x) * channels,
-                                                         static_cast<int>(stride), stroke.fill);
-                            }
-                        });
+    if (stroke.pixelSource)
+    {
+        if (!_recordingCommands || !stroke.pixelSource->IsValidForWork())
+            return E_INVALIDARG;
+        result = UploadRows(
+            gpu,
+            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
+            {
+                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+                const std::span<std::uint8_t> band{out, bytes};
+                for (int row = 0; row < height; row += 256)
+                    for (int column = 0; column < width; column += 256)
+                    {
+                        const HRESULT status = _recordingCommands->StatusForWork();
+                        if (FAILED(status))
+                            return status;
+                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                        const auto offset =
+                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                        if (!stroke.pixelSource->Read({x + column, y + row, columns, rows}, band.subspan(offset),
+                                                      stride, _recordingCommands->CancellationForWork()))
+                            return E_ABORT;
+                    }
+                return _recordingCommands->StatusForWork();
+            });
+    }
+    else if (stroke.warpSource)
+    {
+        if (!_recordingCommands)
+            return E_INVALIDARG; // Warp sampling must never run on the application owner.
+        WarpPreviewReader reader(stroke.warpSource);
+        result = UploadRows(
+            gpu,
+            [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept -> HRESULT
+            {
+                const auto bytes = static_cast<std::size_t>(height - 1) * stride + static_cast<std::size_t>(width) * 4;
+                const std::span<std::uint8_t> band{out, bytes};
+                for (int row = 0; row < height; row += 256)
+                    for (int column = 0; column < width; column += 256)
+                    {
+                        const HRESULT status = _recordingCommands->StatusForWork();
+                        if (FAILED(status))
+                            return status;
+                        const int columns = std::min(256, width - column), rows = std::min(256, height - row);
+                        const auto offset =
+                            static_cast<std::size_t>(row) * stride + static_cast<std::size_t>(column) * 4;
+                        if (!reader.Read({x + column, y + row, columns, rows}, band.subspan(offset), stride))
+                            return E_ABORT;
+                    }
+                return _recordingCommands->StatusForWork();
+            });
+    }
+    else
+        result =
+            UploadRows(gpu,
+                       [&](int x, int y, int width, int height, std::uint8_t* out, std::size_t stride) noexcept
+                       {
+                           for (int row = 0; row < height; ++row)
+                           {
+                               std::memset(out + static_cast<std::size_t>(row) * stride, stroke.fill,
+                                           static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
+                           }
+                           if (!stroke.source.HasStorage())
+                           {
+                               return;
+                           }
+                           const int left = std::max(x, stroke.sourceX);
+                           const int top = std::max(y, stroke.sourceY);
+                           const int right = std::min(x + width, stroke.sourceX + sourceWidth);
+                           const int bottom = std::min(y + height, stroke.sourceY + sourceHeight);
+                           if (right > left && bottom > top)
+                           {
+                               if (!stretched)
+                                   stroke.source.ReadRegion(left - stroke.sourceX, top - stroke.sourceY, right - left,
+                                                            bottom - top,
+                                                            out + static_cast<std::size_t>(top - y) * stride +
+                                                                static_cast<std::size_t>(left - x) * channels,
+                                                            static_cast<int>(stride), stroke.fill);
+                               else
+                                   for (int row = top; row < bottom; ++row)
+                                   {
+                                       if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+                                           return;
+                                       const int sy = static_cast<int>(static_cast<std::int64_t>(row - stroke.sourceY) *
+                                                                       stroke.source.Height() / sourceHeight);
+                                       for (int column = left; column < right; ++column)
+                                       {
+                                           const int sx =
+                                               static_cast<int>(static_cast<std::int64_t>(column - stroke.sourceX) *
+                                                                stroke.source.Width() / sourceWidth);
+                                           stroke.source.ReadRegion(sx, sy, 1, 1,
+                                                                    out + static_cast<std::size_t>(row - y) * stride +
+                                                                        static_cast<std::size_t>(column - x) * channels,
+                                                                    channels, stroke.fill);
+                                       }
+                                   }
+                           }
+                       });
     if (FAILED(result))
     {
         return result;
@@ -1130,7 +1409,7 @@ HRESULT CanvasRenderer::CreateStrokeTexture(std::span<const RasterTile> tiles) n
     {
         return result;
     }
-    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    result = TimedCreateShaderResourceView(_device, gpu.texture.get(), nullptr, gpu.srv.put());
     if (FAILED(result))
     {
         return result;
@@ -1187,8 +1466,8 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
                                 static_cast<UINT>(left + committed->Width()),
                                 static_cast<UINT>(top + committed->Height()),
                                 1};
-            _context->CopySubresourceRegion(adopted.texture.get(), 0, 0, 0, 0, _strokeTexture.texture.get(), 0, &box);
-            if (SUCCEEDED(_device->CreateShaderResourceView(adopted.texture.get(), nullptr, adopted.srv.put())))
+            CopyRecorded(adopted.texture.get(), 0, 0, 0, 0, _strokeTexture.texture.get(), 0, &box);
+            if (SUCCEEDED(TimedCreateShaderResourceView(_device, adopted.texture.get(), nullptr, adopted.srv.put())))
             {
                 GenerateMipsFor(adopted);
                 adopted.keepAlive = *committed;
@@ -1214,37 +1493,62 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
 HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInputs& inputs,
                                   ID3D11RenderTargetView* target) noexcept
 {
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(result))
-    {
-        return result;
-    }
-    std::memcpy(mapped.pData, &constants, sizeof(constants));
-    _context->Unmap(_layerConstants.get(), 0);
+    const UINT fullWidth = static_cast<UINT>(constants.canvasSize[0]);
+    const UINT fullHeight = static_cast<UINT>(constants.canvasSize[1]);
+    if (_recordingCommands && FAILED(_recordingCommands->StatusForWork()))
+        return _recordingCommands->StatusForWork();
+    const UINT chunkWidth = _recordingCommands ? GpuRecordingCommands::kTileSide : fullWidth;
+    const UINT chunkHeight = _recordingCommands ? GpuRecordingCommands::kTileSide : fullHeight;
+    if (!chunkWidth || !chunkHeight)
+        return E_INVALIDARG;
+    for (UINT y = 0; y < fullHeight; y += chunkHeight)
+        for (UINT x = 0; x < fullWidth; x += chunkWidth)
+        {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            if (FAILED(result))
+            {
+                return result;
+            }
+            std::memcpy(mapped.pData, &constants, sizeof(constants));
+            _context->Unmap(_layerConstants.get(), 0);
 
-    ID3D11RenderTargetView* views[] = {target};
-    _context->OMSetRenderTargets(1, views, nullptr);
-    const D3D11_VIEWPORT viewport =
-        MakeViewport(static_cast<UINT>(constants.canvasSize[0]), static_cast<UINT>(constants.canvasSize[1]));
-    _context->RSSetViewports(1, &viewport);
-    _context->RSSetState(_rasterizer.get());
-    _context->IASetInputLayout(nullptr);
-    _context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    _context->VSSetShader(_vertexShader.get(), nullptr, 0);
-    _context->PSSetShader(_pixelShader.get(), nullptr, 0);
-    ID3D11Buffer* buffers[] = {_layerConstants.get()};
-    _context->VSSetConstantBuffers(0, 1, buffers);
-    _context->PSSetConstantBuffers(0, 1, buffers);
-    ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live,
-                                        inputs.folder, inputs.lut,  inputs.cube};
-    _context->PSSetShaderResources(0, 7, srvs);
-    ID3D11SamplerState* samplers[] = {_linearSampler.get(), _pointSampler.get()};
-    _context->PSSetSamplers(0, 2, samplers);
-    _context->Draw(3, 0);
-    ID3D11ShaderResourceView* none[] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
-    _context->PSSetShaderResources(0, 7, none);
-    _context->OMSetRenderTargets(0, nullptr, nullptr);
+            ID3D11RenderTargetView* views[] = {target};
+            _context->OMSetRenderTargets(1, views, nullptr);
+            const D3D11_VIEWPORT viewport =
+                MakeViewport(static_cast<UINT>(constants.canvasSize[0]), static_cast<UINT>(constants.canvasSize[1]));
+            _context->RSSetViewports(1, &viewport);
+            _context->RSSetState(_rasterizer.get());
+            _context->IASetInputLayout(nullptr);
+            _context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            _context->VSSetShader(_vertexShader.get(), nullptr, 0);
+            _context->PSSetShader(_pixelShader.get(), nullptr, 0);
+            ID3D11Buffer* buffers[] = {_layerConstants.get()};
+            _context->VSSetConstantBuffers(0, 1, buffers);
+            _context->PSSetConstantBuffers(0, 1, buffers);
+            ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live,
+                                                inputs.folder, inputs.lut,  inputs.cube};
+            _context->PSSetShaderResources(0, 7, srvs);
+            ID3D11SamplerState* samplers[] = {_linearSampler.get(), _pointSampler.get()};
+            _context->PSSetSamplers(0, 2, samplers);
+            if (_recordingCommands)
+            {
+                const D3D11_RECT region{static_cast<LONG>(x), static_cast<LONG>(y),
+                                        static_cast<LONG>((std::min)(fullWidth, x + chunkWidth)),
+                                        static_cast<LONG>((std::min)(fullHeight, y + chunkHeight))};
+                _context->RSSetScissorRects(1, &region);
+            }
+            _context->Draw(3, 0);
+            ID3D11ShaderResourceView* none[] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+            _context->PSSetShaderResources(0, 7, none);
+            _context->OMSetRenderTargets(0, nullptr, nullptr);
+            if (_recordingCommands)
+            {
+                _recordingCommands->CheckpointForWork();
+                if (FAILED(_recordingCommands->StatusForWork()))
+                    return _recordingCommands->StatusForWork();
+            }
+        }
     return S_OK;
 }
 
@@ -1369,10 +1673,10 @@ HRESULT CanvasRenderer::LayerCoverage(const Guid& id, int depth, int& index) noe
         return E_OUTOFMEMORY;
     }
     ID3D11RenderTargetView* target = _coverage[static_cast<std::size_t>(index)].rtv.get();
-    _context->ClearRenderTargetView(target, kClearZero.data());
-    if (layer == nullptr || !layer->asset.has_value())
+    ClearRecorded(target, kClearZero.data());
+    if (layer == nullptr || (!layer->asset.has_value() && !DrawsStrokeImage(*layer)))
     {
-        // A blank source covers nothing: the clipped layer is hidden entirely (legacy draws nothing).
+        // A blank source covers nothing until its admitted stroke texture supplies the image.
         return S_OK;
     }
     int upstream = kNoCoverage;
@@ -1466,7 +1770,7 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
     if (maskView.srv == nullptr)
     {
         // The folder's mask lies outside this window: folder coverage is 0 outside the mask's rectangle.
-        _context->ClearRenderTargetView(target, kClearZero.data());
+        ClearRecorded(target, kClearZero.data());
         return S_OK;
     }
     LayerConstants constants{};
@@ -1715,12 +2019,12 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             if (!entry->lut.srv)
             {
                 GpuTexture lut;
-                HRESULT result = _device->CreateTexture2D(&desc, nullptr, lut.texture.put());
+                HRESULT result = TimedCreateTexture2D(_device, &desc, nullptr, lut.texture.put());
                 if (FAILED(result))
                 {
                     return result;
                 }
-                result = _device->CreateShaderResourceView(lut.texture.get(), nullptr, lut.srv.put());
+                result = TimedCreateShaderResourceView(_device, lut.texture.get(), nullptr, lut.srv.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1765,7 +2069,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             {
                 wil::com_ptr_nothrow<ID3D11Texture3D> texture;
                 wil::com_ptr_nothrow<ID3D11ShaderResourceView> srv;
-                HRESULT result = _device->CreateTexture3D(&desc, nullptr, texture.put());
+                HRESULT result = TimedCreateTexture3D(_device, &desc, nullptr, texture.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1774,7 +2078,7 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
                 view.Format = desc.Format;
                 view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
                 view.Texture3D.MipLevels = 1;
-                result = _device->CreateShaderResourceView(texture.get(), &view, srv.put());
+                result = TimedCreateShaderResourceView(_device, texture.get(), &view, srv.put());
                 if (FAILED(result))
                 {
                     return result;
@@ -1786,9 +2090,8 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
             if (values->size() !=
                 static_cast<std::size_t>(Adjust::kCubeDimension * Adjust::kCubeDimension * Adjust::kCubeDimension * 4))
                 return E_INVALIDARG;
-            _context->UpdateSubresource(entry->cubeTexture.get(), 0, nullptr, values->data(),
-                                        Adjust::kCubeDimension * 16,
-                                        Adjust::kCubeDimension * Adjust::kCubeDimension * 16);
+            UpdateRecorded(entry->cubeTexture.get(), 0, nullptr, values->data(), Adjust::kCubeDimension * 16,
+                           Adjust::kCubeDimension * Adjust::kCubeDimension * 16);
             ++_adjustmentTextureUpdates;
         }
         if (!usesLut)
@@ -1851,7 +2154,7 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
         return result;
     }
     _stackFront = 0;
-    _context->ClearRenderTargetView(_stack[0].rtv.get(), kClearZero.data());
+    ClearRecorded(_stack[0].rtv.get(), kClearZero.data());
     bool drawn = false;
     result =
         DrawLayerPass(base, kCompositionPassStackBegin, nullptr, _stack[0].rtv.get(), kNoCoverage, kNoCoverage, drawn);
@@ -1949,6 +2252,9 @@ HRESULT CanvasRenderer::PrepareView(int originX, int originY, int scale, UINT wi
 
 HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
 {
+    if (_recordedDisplaySealed)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE); // A published graph is replaced, never re-composed.
+
     if (!_device || !_context)
     {
         return E_UNEXPECTED;
@@ -1984,6 +2290,7 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
 
 HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::CompositionRecord};
     _composeId = ++_composeSerial;
     if (!_utilityRecording)
     {
@@ -2012,8 +2319,8 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
         return E_OUTOFMEMORY;
     }
 
-    _context->ClearRenderTargetView(_canvas[0].rtv.get(), kClearZero.data());
-    _context->ClearRenderTargetView(_canvas[1].rtv.get(), kClearZero.data());
+    ClearRecorded(_canvas[0].rtv.get(), kClearZero.data());
+    ClearRecorded(_canvas[1].rtv.get(), kClearZero.data());
     _front = 0;
 
     HRESULT result = S_OK;
@@ -2258,9 +2565,13 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
                                        const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                                        float holeHeight) noexcept
 {
-    if (!_context || !target || !_canvas[_front].texture.srv)
+    if (_recordingCommands || (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    if (!_context || !target || !_canvas[_front].texture.srv || targetWidth == 0 || targetHeight == 0 ||
+        holeWidth <= 0.0f || holeHeight <= 0.0f)
     {
-        return S_OK;
+        // Successful no-op remains distinct from an actual draw for the first visible source-frame proof.
+        return S_FALSE;
     }
     const double scale = viewport.ViewScale();
     const double devicePixelsPerTexel = scale * _viewScale;
@@ -2268,7 +2579,7 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     if (reduces && _canvasMipsStale)
     {
         // Zoomed out: reduce the new composite through its mips, once per change (RF-412).
-        _context->GenerateMips(_canvas[_front].texture.srv.get());
+        GenerateRecordedMips(_canvas[_front].texture.srv.get());
         _canvasMipsStale = false;
     }
     BlitConstants constants{};
@@ -2305,6 +2616,11 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     const D3D11_VIEWPORT view = MakeViewport(targetWidth, targetHeight);
     _context->RSSetViewports(1, &view);
     _context->RSSetState(_rasterizer.get());
+    if (_recordedDisplaySealed)
+    {
+        const D3D11_RECT full{0, 0, static_cast<LONG>(targetWidth), static_cast<LONG>(targetHeight)};
+        _context->RSSetScissorRects(1, &full);
+    }
     _context->IASetInputLayout(nullptr);
     _context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     _context->VSSetShader(_vertexShader.get(), nullptr, 0);
@@ -2322,8 +2638,104 @@ HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT target
     return S_OK;
 }
 
+HRESULT CanvasRenderer::DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                       unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                       ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                       unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                       const std::array<float, 4>* clip) noexcept
+{
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, solid, dashes, maskWidth, maskHeight, pixelLeft,
+                                   pixelTop, clip, false);
+}
+HRESULT CanvasRenderer::DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                 unsigned int targetHeight, ID3D11ShaderResourceView* color,
+                                                 unsigned int width, unsigned int height, float pixelLeft,
+                                                 float pixelTop, const std::array<float, 4>* clip) noexcept
+{
+    return DrawViewOverlayToTarget(target, targetWidth, targetHeight, color, nullptr, width, height, pixelLeft,
+                                   pixelTop, clip, true);
+}
+HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                                  unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                                  ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                                  unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                                  const std::array<float, 4>* clip, bool colorDraft) noexcept
+{
+    if (_recordingCommands || (_context && _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE) ||
+        (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    if (!_context || !target || !solid || (!colorDraft && !dashes) || !_selectionOutlineBlend || !targetWidth ||
+        !targetHeight)
+        return S_FALSE;
+    constexpr unsigned int sideLimit = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    constexpr std::uint64_t pixelLimit = 64ull * 1024ull * 1024ull;
+    if (targetWidth > sideLimit || targetHeight > sideLimit || !maskWidth || !maskHeight || maskWidth > sideLimit ||
+        maskHeight > sideLimit || maskWidth > pixelLimit / maskHeight || !std::isfinite(pixelLeft) ||
+        !std::isfinite(pixelTop) || std::floor(pixelLeft) != pixelLeft || std::floor(pixelTop) != pixelTop)
+        return E_INVALIDARG;
+    if (clip && (!std::isfinite((*clip)[0]) || !std::isfinite((*clip)[1]) || !std::isfinite((*clip)[2]) ||
+                 !std::isfinite((*clip)[3]) || (*clip)[0] < 0 || (*clip)[1] < 0 || (*clip)[2] > maskWidth ||
+                 (*clip)[3] > maskHeight || (*clip)[2] <= (*clip)[0] || (*clip)[3] <= (*clip)[1]))
+        return E_INVALIDARG;
+    LayerConstants constants{};
+    if (clip)
+    {
+        constants.flags = kCompositionFlagSelectionClip;
+        std::copy(clip->begin(), clip->end(), std::begin(constants.sourceRect));
+    }
+    constants.canvasSize[0] = static_cast<float>(targetWidth);
+    constants.canvasSize[1] = static_cast<float>(targetHeight);
+    constants.layerSize[0] = static_cast<float>(maskWidth);
+    constants.layerSize[1] = static_cast<float>(maskHeight);
+    constants.viewOrigin[0] = pixelLeft;
+    constants.viewOrigin[1] = pixelTop;
+    constants.passMode = colorDraft ? kCompositionPassLassoDraft : kCompositionPassSelectionOutline;
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT result = _context->Map(_layerConstants.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(result))
+        return result;
+    std::memcpy(mapped.pData, &constants, sizeof(constants));
+    _context->Unmap(_layerConstants.get(), 0);
+    // Consumers explicitly bind their own pipeline, like the existing blit. Remove both borrowed inputs and
+    // restore the ordinary disabled blend state before a later composition, readback or chrome consumer.
+    const auto reset = wil::scope_exit(
+        [this]() noexcept
+        {
+            ID3D11ShaderResourceView* none[3]{};
+            _context->PSSetShaderResources(0, 3, none);
+            _context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
+        });
+    ID3D11RenderTargetView* targets[] = {target};
+    _context->OMSetRenderTargets(1, targets, nullptr);
+    _context->OMSetDepthStencilState(nullptr, 0);
+    _context->OMSetBlendState(_selectionOutlineBlend.get(), nullptr, 0xFFFFFFFFu);
+    const auto viewport = MakeViewport(targetWidth, targetHeight);
+    _context->RSSetViewports(1, &viewport);
+    _context->RSSetState(_rasterizer.get());
+    if (_recordedDisplaySealed)
+    {
+        const D3D11_RECT full{0, 0, static_cast<LONG>(targetWidth), static_cast<LONG>(targetHeight)};
+        _context->RSSetScissorRects(1, &full);
+    }
+    _context->IASetInputLayout(nullptr);
+    _context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    _context->VSSetShader(_vertexShader.get(), nullptr, 0);
+    _context->PSSetShader(_pixelShader.get(), nullptr, 0);
+    ID3D11Buffer* buffers[] = {_layerConstants.get()};
+    _context->VSSetConstantBuffers(0, 1, buffers);
+    _context->PSSetConstantBuffers(0, 1, buffers);
+    ID3D11ShaderResourceView* inputs[] = {solid, nullptr, dashes};
+    _context->PSSetShaderResources(0, 3, inputs);
+    _context->Draw(3, 0);
+    return S_OK;
+}
+
 HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UINT width, UINT height) noexcept
 {
+    if (!_context || _recordingCommands || _context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE ||
+        (_recordedDisplaySealed && _recordedOwnerThread != GetCurrentThreadId()))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID); // No READ Map/resource creation on the recorder.
+
     ID3D11Texture2D* front = _canvas[_front].texture.texture.get();
     if (front == nullptr || width > _canvasWidth || height > _canvasHeight)
     {
@@ -2340,13 +2752,13 @@ HRESULT CanvasRenderer::ReadCanvas(std::uint8_t* out, std::size_t outStride, UIN
     description.Usage = D3D11_USAGE_STAGING;
     description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     wil::com_ptr_nothrow<ID3D11Texture2D> staging;
-    HRESULT result = _device->CreateTexture2D(&description, nullptr, staging.put());
+    HRESULT result = TimedCreateTexture2D(_device, &description, nullptr, staging.put());
     if (FAILED(result))
     {
         return result;
     }
     const D3D11_BOX box{0, 0, 0, width, height, 1};
-    _context->CopySubresourceRegion(staging.get(), 0, 0, 0, 0, front, 0, &box);
+    CopyRecorded(staging.get(), 0, 0, 0, 0, front, 0, &box);
     D3D11_MAPPED_SUBRESOURCE mapped{};
     result = _context->Map(staging.get(), 0, D3D11_MAP_READ, 0, &mapped);
     if (FAILED(result))
@@ -2459,4 +2871,94 @@ std::uint64_t CanvasRenderer::UtilitySurfaceBytes() const noexcept
                                       : 0;
     }
     return bytes;
+}
+
+void CanvasRenderer::ClearRecorded(ID3D11RenderTargetView* target, const float* color) noexcept
+{
+    if (_recordingCommands)
+        _recordingCommands->ClearForWork(target, color);
+    else
+        _context->ClearRenderTargetView(target, color);
+}
+void CanvasRenderer::UpdateRecorded(ID3D11Resource* resource, UINT subresource, const D3D11_BOX* region,
+                                      const void* data, UINT rowPitch, UINT depthPitch) noexcept
+{
+    if (_recordingCommands)
+        _recordingCommands->UpdateForWork(resource, subresource, region, data, rowPitch, depthPitch);
+    else
+        _context->UpdateSubresource(resource, subresource, region, data, rowPitch, depthPitch);
+}
+void CanvasRenderer::CopyRecorded(ID3D11Resource* destination, UINT destinationSubresource, UINT x, UINT y, UINT z,
+                                    ID3D11Resource* source, UINT sourceSubresource, const D3D11_BOX* region) noexcept
+{
+    if (_recordingCommands)
+        _recordingCommands->CopyForWork(destination, destinationSubresource, x, y, z, source, sourceSubresource,
+                                        region);
+    else
+        _context->CopySubresourceRegion(destination, destinationSubresource, x, y, z, source, sourceSubresource,
+                                        region);
+}
+void CanvasRenderer::GenerateRecordedMips(ID3D11ShaderResourceView* source) noexcept
+{
+    if (_recordingCommands)
+        _recordingCommands->GenerateMipsForWork(source);
+    else
+        TimedGenerateMips(_context, source);
+}
+HRESULT CanvasRenderer::SeedRasterResidencyForWork(const CanvasRenderer& stable) noexcept
+{
+    if (!_recordingCommands || FAILED(_recordingCommands->StatusForWork()) || !stable._recordedDisplaySealed ||
+        !stable._recordedOwnerThread || stable._recordingCommands || _device != stable._device || !_rasters.empty() ||
+        !_regions.empty())
+        return E_INVALIDARG;
+    try
+    {
+        _rasters = stable._rasters;
+        _regions = stable._regions;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Admission/construction boundary: caller fails this whole preparation.
+    }
+    for (auto& [identity, texture] : _rasters)
+    {
+        (void)identity;
+        texture.lastUse = 0;
+        texture.displayResident = false;
+    }
+    for (auto& texture : _regions)
+    {
+        texture.lastUse = 0;
+        texture.displayResident = false;
+    }
+    return S_OK;
+}
+HRESULT CanvasRenderer::SealRecordedDisplayForWork() noexcept
+{
+    if (!_recordingCommands || _recordedDisplaySealed || _utilityUsers || _documentDirty ||
+        !_canvas[_front].texture.srv)
+        return E_INVALIDARG;
+    if (_canvasHasMips && _canvasMipsStale)
+    {
+        GenerateRecordedMips(_canvas[_front].texture.srv.get());
+        _canvasMipsStale = false;
+    }
+    _recordingCommands->CheckpointForWork();
+    const auto status = _recordingCommands->StatusForWork();
+    if (SUCCEEDED(status))
+        _recordedDisplaySealed = true;
+    return status;
+}
+HRESULT CanvasRenderer::BindAcknowledgedDisplayOwner(ID3D11DeviceContext* context) noexcept
+{
+    if (!_recordedDisplaySealed || !context || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
+        return E_INVALIDARG;
+    wil::com_ptr_nothrow<ID3D11Device> device;
+    context->GetDevice(device.put());
+    if (device.get() != _device)
+        return E_INVALIDARG;
+    _recordingCommands = nullptr;
+    _context = context;
+    _recordedOwnerThread = GetCurrentThreadId();
+    return S_OK;
 }

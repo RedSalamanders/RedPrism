@@ -1,7 +1,9 @@
 #include "Document.Tests.HistoryRestore.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "HistoryRestoreWork.h"
 #include "RasterWork.h"
+#include "Selection.h"
 
 #include <algorithm>
 #include <array>
@@ -47,24 +49,24 @@ bool InstallFixture(DocumentSession& session, bool withMask = false, bool second
     if (!image.HasStorage() || (withMask && !mask.HasStorage()))
         return false;
     const Guid layerID = *session.ActiveLayerID();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == layerID)
-                {
-                    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-                    if (withMask)
-                    {
-                        LayerMask layerMask;
-                        layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
-                        layer.mask = std::move(layerMask);
-                    }
-                    break;
-                }
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == layerID)
+                                    {
+                                        layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                        if (withMask)
+                                        {
+                                            LayerMask layerMask;
+                                            layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
+                                            layer.mask = std::move(layerMask);
+                                        }
+                                        break;
+                                    }
+                                }
+                            });
     session.history.Reset();
     return session.Document()->layers.size() == (secondLayer ? 2u : 1u);
 }
@@ -215,6 +217,144 @@ void NoEntryMoveAndDefaultAuthority()
                session.history.CurrentRevision() == revision && !session.history.CanUndo() &&
                !session.history.CanRedo(),
            "no-entry.moved-from-refused-and-moved-noop-succeeds");
+}
+
+void PreparedRestoreResidencyAndNoopSingleUseGuards()
+{
+    using Validation = DocumentHistory::ResidencyValidation;
+    constexpr std::array<std::uint8_t, 4> historicalPixel{41, 73, 109, 255};
+    constexpr std::array<std::uint8_t, 4> livePixel{3, 5, 7, 255};
+    const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, historicalPixel.data(), historicalPixel.size());
+    const Raster historicalSparse =
+        Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, 0);
+    const Raster liveImage = Raster::Make(1, 1, RasterFormat::Bgra8888, livePixel.data(), livePixel.size());
+    const DocumentSelection historicalSelection{false, SelectionGeometry::Rect(0, 0, 1, 1)};
+    DocumentSession session(4 + historicalSelection.loops.StorageBytes());
+    session.CreateDocument(2, 1, true);
+    if (!session.Document() || !session.ActiveLayerID() || !leaf.HasStorage() || !historicalSparse.HasStorage() ||
+        !liveImage.HasStorage())
+    {
+        Expect(false, "residency.fixture");
+        return;
+    }
+
+    const Guid active = session.ActiveLayerID().value();
+    session.EditForTest(
+        [&](CanvasDocument& document)
+        {
+            auto fixture = DocumentFixture::Copy(document);
+            fixture.layers.front().asset = RasterAsset{historicalSparse, Raster{}, L"Historical sparse"};
+            fixture.selection = historicalSelection;
+            document = std::move(fixture).Seal();
+        });
+    session.history.Reset();
+    const Guid originalRevision = session.history.CurrentRevision();
+    session.history.Begin(L"Replace with live image", session.Document(), session.ActiveLayerID());
+    session.EditForTest(
+        [&](CanvasDocument& document)
+        {
+            auto fixture = DocumentFixture::Copy(document);
+            fixture.width = 1;
+            fixture.height = 1;
+            fixture.layers.front().asset = RasterAsset{liveImage, liveImage, L"Live image"};
+            fixture.selection.reset();
+            document = std::move(fixture).Seal();
+        });
+    session.history.End(session.Document(), session.ActiveLayerID());
+    const Guid liveRevision = session.history.CurrentRevision();
+    const auto liveDocument = session.Document();
+    auto undo = Prepare(session);
+    Expect(undo.has_value() && session.history.CurrentRevision() == liveRevision &&
+               session.Document() == liveDocument && session.history.UndoName() == L"Replace with live image",
+           "residency.undo-prepare-preserves-live-revision");
+    if (!undo)
+        return;
+
+    const std::uint64_t epoch = Raster::ResidencyEpoch();
+    const std::uint8_t* assembled = historicalSparse.Data();
+    const bool cacheGrew = assembled && historicalSparse.ByteSize() == 8 && assembled[0] == historicalPixel[0] &&
+                           assembled[1] == historicalPixel[1] && assembled[2] == historicalPixel[2] &&
+                           assembled[3] == historicalPixel[3] && assembled[4] == 0 && assembled[5] == 0 &&
+                           assembled[6] == 0 && assembled[7] == 0 && Raster::ResidencyEpoch() == epoch + 1;
+    DocumentHistory::ResidencyPermit permit;
+    const auto initialTry = undo.value().TryAcquireHistoryResidency(permit);
+    const auto beforeCancelledRefresh = session.history.CaptureState();
+    CancelSource cancellation;
+    (void)cancellation.Cancel();
+    const bool cancelled = !undo.value().RefreshHistoryResidency(cancellation.Token());
+    const auto afterCancelledRefresh = session.history.CaptureState();
+    const bool cancelledPreserves = cancelled &&
+                                    undo.value().TryAcquireHistoryResidency(permit) == Validation::Refresh &&
+                                    session.Document() == liveDocument && session.ActiveLayerID() == active &&
+                                    session.history.CurrentRevision() == liveRevision &&
+                                    afterCancelledRefresh.PastCount() == beforeCancelledRefresh.PastCount() &&
+                                    afterCancelledRefresh.FutureCount() == beforeCancelledRefresh.FutureCount() &&
+                                    afterCancelledRefresh.Revision() == beforeCancelledRefresh.Revision() &&
+                                    afterCancelledRefresh.UndoName() == beforeCancelledRefresh.UndoName();
+    Expect(cacheGrew, "residency.undo-sparse-cache-grows-after-prepare");
+    Expect(initialTry == Validation::Refresh, "residency.undo-owner-try-requests-refresh");
+    Expect(cancelledPreserves, "residency.undo-cancelled-refresh-preserves-session-history-and-revision");
+
+    const bool refreshed = undo.value().RefreshHistoryResidency();
+    const auto ready = undo.value().TryAcquireHistoryResidency(permit);
+    const bool applied =
+        refreshed && ready == Validation::Ready && session.ApplyPreparedHistoryRestoreIfCurrent(undo.value());
+    bool restoredLiteral = false;
+    if (applied)
+    {
+        const auto& restored = session.Document().value();
+        const Raster contiguous = ContiguousRasterForWork(restored.layers.front().asset.value().image);
+        restoredLiteral = restored.width == 2 && restored.height == 1 && contiguous.HasStorage() &&
+                          contiguous.Stride() == 8 && contiguous.ByteSize() == 8 &&
+                          std::equal(historicalPixel.begin(), historicalPixel.end(), contiguous.Data()) &&
+                          contiguous.Data()[4] == 0 && contiguous.Data()[5] == 0 && contiguous.Data()[6] == 0 &&
+                          contiguous.Data()[7] == 0 && restored.selection == std::optional{historicalSelection} &&
+                          session.ActiveLayerID() == active && session.history.CurrentRevision() == originalRevision &&
+                          session.history.CanRedo() && session.history.RedoName() == L"Replace with live image" &&
+                          !session.history.CanUndo() && session.history.RetainedBytes(session.Document()) == 4;
+    }
+    const bool appliedRefusal = applied && undo.value().TryAcquireHistoryResidency(permit) == Validation::Invalid &&
+                                !undo.value().RefreshHistoryResidency();
+    Expect(applied && restoredLiteral,
+           "residency.undo-refreshed-permit-applies-original-pixels-selection-revision-and-live-exclusion");
+    Expect(appliedRefusal, "residency.undo-applied-output-refuses-residency-reuse");
+    permit.Reset();
+    if (!applied)
+        return;
+
+    auto redo = Prepare(session, true);
+    DocumentHistory::ResidencyPermit redoPermit;
+    const auto redoReady = redo ? redo->TryAcquireHistoryResidency(redoPermit) : Validation::Invalid;
+    const bool redoApplied = redo.has_value() && redoReady == Validation::Ready &&
+                             session.ApplyPreparedHistoryRestoreIfCurrent(redo.value());
+    const bool redoLiteral = redoApplied && session.Document().value().width == 1 &&
+                             session.Document().value().height == 1 &&
+                             PixelEquals(session.Document().value().layers.front().asset.value().image, livePixel) &&
+                             !session.Document().value().selection.has_value() && session.ActiveLayerID() == active &&
+                             session.history.CurrentRevision() == liveRevision && !session.history.CanRedo();
+    Expect(redoApplied && redoLiteral, "residency.redo-ready-permit-restores-live-pixels-selection-and-revision");
+
+    DocumentSession empty;
+    auto noOp = Prepare(empty);
+    DocumentHistory::ResidencyPermit noOpPermit;
+    const auto noOpReady = noOp ? noOp->TryAcquireHistoryResidency(noOpPermit) : Validation::Invalid;
+    Expect(noOp.has_value() && noOpReady == Validation::Ready && !empty.history.CanUndo() && !empty.history.CanRedo(),
+           "residency.noop-empty-stack-output-is-ready");
+    if (!noOp)
+        return;
+    PreparedHistoryRestore movedNoOp(std::move(noOp.value()));
+    const bool movedSourceRefusal = noOp.value().TryAcquireHistoryResidency(noOpPermit) == Validation::Invalid &&
+                                    !noOp.value().RefreshHistoryResidency();
+    const Guid emptyRevision = empty.history.CurrentRevision();
+    const bool noOpApplied = empty.ApplyPreparedHistoryRestoreIfCurrent(movedNoOp) &&
+                             empty.history.CurrentRevision() == emptyRevision && !empty.Document() &&
+                             !empty.history.CanUndo() && !empty.history.CanRedo();
+    const bool noOpAppliedRefusal = movedNoOp.TryAcquireHistoryResidency(noOpPermit) == Validation::Invalid &&
+                                    !movedNoOp.RefreshHistoryResidency() &&
+                                    !empty.ApplyPreparedHistoryRestoreIfCurrent(movedNoOp);
+    Expect(movedSourceRefusal, "residency.noop-moved-source-refuses-residency-operations");
+    Expect(noOpApplied && noOpAppliedRefusal,
+           "residency.noop-applied-output-refuses-residency-operations-and-republication");
 }
 
 void OpenTransactionRefusesUndoAndRedoPreparation()
@@ -535,6 +675,7 @@ int RunHistoryRestoreTests()
     UndoRedoPublishesLiteralDocumentAndMetadata();
     SavedRevisionChangesAfterPreparation();
     NoEntryMoveAndDefaultAuthority();
+    PreparedRestoreResidencyAndNoopSingleUseGuards();
     OpenTransactionRefusesUndoAndRedoPreparation();
     LassoInvalidatesPreparedRestoreWithoutGenerationChange();
     ActiveChangeDropsMaskAndCropRules();

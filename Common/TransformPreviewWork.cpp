@@ -1,4 +1,5 @@
 #include "TransformPreviewWork.h"
+#include "DocumentDraft.h"
 
 #include "FloatingPixelsWork.h"
 
@@ -138,8 +139,10 @@ TransformDisplayResult PrepareTransformDisplay(const CanvasDocument& source, con
                 if (edit.group->originals[j].first == edit.group->originals[i].first)
                     return {};
         }
-    auto display = source;
-    for (auto& layer : display.layers)
+    auto draft = CanvasDocumentDraft::Clone(source, source.layers.size(), cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? DistortWorkStatus::Cancelled : DistortWorkStatus::Invalid};
+    for (auto& layer : draft.value().EditLayers())
     {
         if (!Checkpoint(observer, TransformPreviewStage::Layer, cancellation))
             return {DistortWorkStatus::Cancelled};
@@ -212,18 +215,21 @@ TransformDisplayResult PrepareTransformDisplay(const CanvasDocument& source, con
     }
     if (!Checkpoint(observer, TransformPreviewStage::Selection, cancellation))
         return {DistortWorkStatus::Cancelled};
-    if (edit.floating && display.selection &&
-        !PrepareFloatingSelectionOutline(display.selection.value(), edit, cancellation))
+    if (edit.floating && draft.value().DocumentState().selection &&
+        !PrepareFloatingSelectionOutline(draft.value().DocumentState().selection.value(), edit, cancellation))
         return {cancellation.IsCancelled() ? DistortWorkStatus::Cancelled : DistortWorkStatus::Invalid};
     if (!Checkpoint(observer, TransformPreviewStage::Publication, cancellation))
         return {DistortWorkStatus::Cancelled};
-    return {DistortWorkStatus::Ready, std::move(display)};
+    auto display = draft.value().Seal(cancellation);
+    if (!display)
+        return {cancellation.IsCancelled() ? DistortWorkStatus::Cancelled : DistortWorkStatus::Invalid};
+    return {DistortWorkStatus::Ready, std::move(display.value())};
 }
 
 std::uint64_t DocumentSession::TransformPreviewPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
-        _selectionMoveOrigin || _lassoDraft)
+    if (!_document || !_transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit ||
+        _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return 0;
     auto bytes = TransformDisplayMemoryBytes(_document.value(), _transformEdit.value());
     const auto retirement = ImageImportRetirementMemoryBytes();
@@ -264,7 +270,7 @@ bool DocumentSession::ApplyPreparedTransformPreviewIfCurrent(PreparedTransformPr
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     if (prepared._consumed || !prepared._display || !_transformEdit || _editRevision != prepared._revision ||
-        _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft || _selectionMoveOrigin ||
+        _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft || _selectionMoveOrigin ||
         _lassoDraft || !CanApplyImageImport(prepared._authority) || !history.IsCurrent(prepared._history))
         return false;
     std::swap(_displayCopy, prepared._display);

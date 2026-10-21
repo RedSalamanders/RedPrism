@@ -1,4 +1,5 @@
-#include "Document.h"
+#include "../../Common/AddressSanitizerProbe.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "../Support/Support.Tests.FailureReports.h"
 #include "Adjust.h"
 #include "BrushStroke.h"
@@ -7,14 +8,72 @@
 #include "Document.Tests.AdjustmentClosure.h"
 #include "Document.Tests.AdjustmentNested.h"
 #include "Document.Tests.AdjustmentOpening.h"
+#include "Document.Tests.BoundedLassoGesture.h"
+#include "Document.Tests.BoundedLassoPoints.h"
+#include "Document.Tests.BoundedLassoTicket.h"
 #include "Document.Tests.ClipboardCommand.h"
 #include "Document.Tests.ClipboardPaste.h"
+#include "Document.Tests.CollapseRevision.h"
 #include "Document.Tests.ColorDismissal.h"
+#include "Document.Tests.ColorDisplayPublication.h"
+#include "Document.Tests.ColorDisplayWork.h"
 #include "Document.Tests.ColorEditDeferred.h"
 #include "Document.Tests.ColorEditWork.h"
+#include "Document.Tests.ContinuingPublication.h"
 #include "Document.Tests.CopyPixels.h"
 #include "Document.Tests.CopyPixelsTransform.h"
+#include "Document.Tests.DeferredSelectionMove.h"
+#include "Document.Tests.DistortRead.h"
 #include "Document.Tests.DistortWork.h"
+#include "Document.Tests.EllipseFinishPlan.h"
+#include "Document.Tests.FreehandPlan.h"
+#include "Document.Tests.HostLassoInput.h"
+#include "Document.Tests.HueSampleScalar.h"
+#include "Document.Tests.LassoConditionalInput.h"
+#include "Document.Tests.LassoFinishGeometry.h"
+#include "Document.Tests.LassoGestureAuthority.h"
+#include "Document.Tests.LassoOpeningSettings.h"
+#include "Document.Tests.LassoSessionBridge.h"
+#include "Document.Tests.MarqueeModePlan.h"
+#include "Document.Tests.PolygonalDispatcher.h"
+#include "Document.Tests.PolygonalDrawingParent.h"
+#include "Document.Tests.PolygonalPlan.h"
+#include "Document.Tests.RectangleFinishPlan.h"
+#include "Document.Tests.RectangleGestureParent.h"
+#include "Document.Tests.SelectionCommand.h"
+#include "Document.Tests.SelectionCommandMemory.h"
+#include "Document.Tests.SelectionCursorProbe.h"
+#include "Document.Tests.SelectionGestureAbort.h"
+#include "Document.Tests.SelectionGestureAdmission.h"
+#include "Document.Tests.SelectionGestureAdmissionAuthority.h"
+#include "Document.Tests.SelectionGestureParent.h"
+#include "Document.Tests.SelectionGestureResidency.h"
+#include "Document.Tests.SelectionHistoryBoundLifetime.h"
+#include "Document.Tests.SelectionHistoryOwnership.h"
+#include "Document.Tests.SelectionHitWork.h"
+#include "Document.Tests.SelectionMoveClosure.h"
+#include "Document.Tests.SelectionMoveGeometryLifetime.h"
+#include "Document.Tests.SelectionMoveOpening.h"
+#include "Document.Tests.SelectionNudge.h"
+#include "Document.Tests.SelectionPhysicalPrefix.h"
+#include "Document.Tests.SelectionPreserve.h"
+#include "Document.Tests.SelectionPressInput.h"
+#include "Document.Tests.SelectionStorage.h"
+#include "Document.Tests.SessionGeneration.h"
+#include "Document.Tests.ShapeEditWork.h"
+#include "Document.Tests.TransformCancellationWork.h"
+#include "Document.Tests.TransformCommitWork.h"
+#include "Document.Tests.TransformDeferred.h"
+#include "Document.Tests.TransformDeferredGuard.h"
+
+#include "Document.Tests.BrushRetirementBounds.h"
+#include "Document.Tests.CapturedCloneOffset.h"
+#include "Document.Tests.ColorTargetCapture.h"
+#include "Document.Tests.CopyPixelsLifetime.h"
+#include "Document.Tests.CropLifetime.h"
+#include "Document.Tests.DeferredPixelMoveOpening.h"
+#include "Document.Tests.DocumentDraft.h"
+#include "Document.Tests.DocumentFixture.h"
 #include "Document.Tests.DocumentLifecycle.h"
 #include "Document.Tests.DocumentSizeHistory.h"
 #include "Document.Tests.DocumentSizingWork.h"
@@ -28,58 +87,135 @@
 #include "Document.Tests.GradientResource.h"
 #include "Document.Tests.GradientState.h"
 #include "Document.Tests.GradientWork.h"
+#include "Document.Tests.HealWork.h"
 #include "Document.Tests.HistoryAccounting.h"
 #include "Document.Tests.HistoryEntries.h"
+#include "Document.Tests.HistoryOriginalTicket.h"
 #include "Document.Tests.HistoryPreparationFault.h"
+#include "Document.Tests.HistoryPublicationLifetime.h"
+#include "Document.Tests.HistoryReferenceTopology.h"
+#include "Document.Tests.HistoryResidencyDelta.h"
 #include "Document.Tests.HistoryRestore.h"
 #include "Document.Tests.HistoryRetirementBound.h"
 #include "Document.Tests.HistoryRevision.h"
 #include "Document.Tests.HistoryStateView.h"
+#include "Document.Tests.HistoryTopologyDelta.h"
 #include "Document.Tests.HistoryWork.h"
 #include "Document.Tests.ImportHistory.h"
 #include "Document.Tests.ImportPublication.h"
+#include "Document.Tests.InverseSelection.h"
 #include "Document.Tests.LayerCopyWork.h"
+#include "Document.Tests.LayerIndex.h"
+#include "Document.Tests.LayerMetadataWork.h"
+#include "Document.Tests.LayerOpacityWork.h"
+#include "Document.Tests.LayerReadView.h"
+#include "Document.Tests.LayerRowsWork.h"
 #include "Document.Tests.LiftReference.h"
+#include "Document.Tests.LiveAdjustmentTargetCapture.h"
 #include "Document.Tests.MaskEditWork.h"
 #include "Document.Tests.MaskEditWorkExtra.h"
+#include "Document.Tests.MaskSampleWork.h"
 #include "Document.Tests.MergeHistory.h"
 #include "Document.Tests.MergePlanProbe.h"
 #include "Document.Tests.OptionalImageThumbnail.h"
+#include "Document.Tests.OwnedMetadataJobsR4.h"
+#include "Document.Tests.OwnedRecordRoot.h"
+#include "Document.Tests.PanelWand.h"
+#include "Document.Tests.PanelWandAuthority.h"
+#include "Document.Tests.PanelWandFollowthrough.h"
+#include "Document.Tests.PendingDisplaySource.h"
+#include "Document.Tests.PersistentHistory.h"
+#include "Document.Tests.PersistentOwnerIndex.h"
+#include "Document.Tests.PixelFinalDelegate.h"
+#include "Document.Tests.PixelMoveClosure.h"
+#include "Document.Tests.PixelMoveLiftPrelude.h"
 #include "Document.Tests.PixelMoveOpening.h"
 #include "Document.Tests.PixelMoveOpeningWork.h"
+#include "Document.Tests.PixelMoveOutputLifetime.h"
+#include "Document.Tests.PixelMovePreview.h"
 #include "Document.Tests.PixelMoveState.h"
 #include "Document.Tests.PixelMoveWork.h"
+#include "Document.Tests.PixelPreviewDescriptor.h"
+#include "Document.Tests.PlacedRasterWork.h"
 #include "Document.Tests.PreparedColorHistory.h"
 #include "Document.Tests.PreparedHistory.h"
 #include "Document.Tests.PreparedHistoryFollowing.h"
 #include "Document.Tests.PreparedRasterHistory.h"
+#include "Document.Tests.PreparedRasterPreview.h"
+#include "Document.Tests.PreservedLayerMetadata.h"
+#include "Document.Tests.PreservedLayerOpacity.h"
+#include "Document.Tests.PreviewMetadataAdmission.h"
+#include "Document.Tests.ProjectSaveCachedPlan.h"
 #include "Document.Tests.ProjectSaveMemory.h"
+#include "Document.Tests.PublicationAllocation.h"
+#include "Document.Tests.PublicationBudget.h"
 #include "Document.Tests.RasterConcurrency.h"
 #include "Document.Tests.RasterEditWork.h"
+#include "Document.Tests.RasterJournalIntegration.h"
+#include "Document.Tests.RasterResidencyJournal.h"
+#include "Document.Tests.RasterResidencyManifest.h"
+#include "Document.Tests.RasterResidencyPlan.h"
+#include "Document.Tests.RasterUploadLayout.h"
+#include "Document.Tests.RasterUploadReductionWork.h"
+#include "Document.Tests.RasterUploadWork.h"
 #include "Document.Tests.RasterWork.h"
-#include "Document.Tests.SelectionCommand.h"
-#include "Document.Tests.SelectionMoveClosure.h"
-#include "Document.Tests.SelectionMoveOpening.h"
-#include "Document.Tests.SelectionNudge.h"
-#include "Document.Tests.SelectionPreserve.h"
-#include "Document.Tests.SelectionStorage.h"
-#include "Document.Tests.SessionGeneration.h"
-#include "Document.Tests.ShapeEditWork.h"
-#include "Document.Tests.TransformCancellationWork.h"
-#include "Document.Tests.TransformCommitWork.h"
-#include "Document.Tests.TransformDeferred.h"
-#include "Document.Tests.TransformDeferredGuard.h"
+#include "Document.Tests.RecordLookup.h"
+#include "Document.Tests.RecordOwnershipBounds.h"
+#include "Document.Tests.RecordRoot.h"
+#include "Document.Tests.RecordRootAdopt.h"
+#include "Document.Tests.RecordRootBench.h"
+#include "Document.Tests.SelectionDisplayValue.h"
+#include "Document.Tests.SelectionGeometryLifetime.h"
+#include "Document.Tests.SelectionOffsetCoreFaults.h"
+#include "Document.Tests.SelectionOffsetCoreNumeric.h"
+#include "Document.Tests.SelectionOffsetFaults.h"
+#include "Document.Tests.SelectionOffsetLarge.h"
+#include "Document.Tests.SelectionOffsetNumeric.h"
+#include "Document.Tests.SelectionOutline.h"
+#include "Document.Tests.SelectionOutlineAllocation.h"
+#include "Document.Tests.SelectionOutlineRaster.h"
+#include "Document.Tests.SelectionOutlineRasterViews.h"
+#include "Document.Tests.SelectionPixelJournal.h"
+#include "Document.Tests.SelectionPixelParent.h"
+#include "Document.Tests.SizeFinalSource.h"
+#include "Document.Tests.SparseRegionReads.h"
+#include "Document.Tests.SparseWindowBounds.h"
+#include "Document.Tests.StrokeFinalCoverage.h"
+#include "Document.Tests.StrokeFinishPlan.h"
+#include "Document.Tests.StrokeFinishPublication.h"
+#include "Document.Tests.StrokeOpening.h"
+#include "Document.Tests.StrokeOpeningMemory.h"
+#include "Document.Tests.StrokeSample.h"
+#include "Document.Tests.StrokeSampleSession.h"
 #include "Document.Tests.TransformPixelsWork.h"
 #include "Document.Tests.TransformPreviewWork.h"
+#include "Document.Tests.WandBooleanAdmission.h"
+#include "Document.Tests.WandBooleanGeometry.h"
+#include "Document.Tests.WandBoundedPlan.h"
 #include "Document.Tests.WandCancellation.h"
 #include "Document.Tests.WandChunkBoundary.h"
+#include "Document.Tests.WandCompositeSelection.h"
 #include "Document.Tests.WandLayerSelection.h"
+#include "Document.Tests.WarpFinish.h"
+#include "Document.Tests.WarpFinishAdmission.h"
+#include "Document.Tests.WarpLazyTiles.h"
+#include "Document.Tests.WarpOpening.h"
+#include "Document.Tests.WarpPreviewReader.h"
+#include "Document.Tests.WarpReplay.h"
+#include "Document.Tests.WarpRetirement.h"
+#include "Document.Tests.WarpSamplePlan.h"
+#include "Document.Tests.WarpSampleSession.h"
+#include "Document.Tests.WarpWorkerCancellation.h"
+#include "Document.Tests.WarpWorkerSnapshots.h"
+#include "Document.h"
 #include "ImageFilters.h"
+#include "RasterWork.h"
 #include "Selection.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
 
+#include "Document.Tests.LassoDraftRaster.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -95,6 +231,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -219,21 +356,21 @@ void TestLiveMask()
 
 void TestValidate()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.width = 20;
     document.height = 10;
     ImageLayer folder = ImageLayer::Blank(L"Folder", Vec2{20, 10});
     folder.isGroup = true;
     folder.opacity = 0.5;
     document.layers.push_back(folder);
-    Expect(ValidateDocument(document) == DocumentStatus::Invalid, "validate.group-opacity");
+    Expect(ValidateDocument(document.Seal()) == DocumentStatus::Invalid, "validate.group-opacity");
 
     folder.opacity = 1;
     document.layers[0] = folder;
-    Expect(ValidateDocument(document, 1) == DocumentStatus::Invalid, "validate.v1-group");
-    Expect(ValidateDocument(document, 7) == DocumentStatus::Ok, "validate.v7-group");
+    Expect(ValidateDocument(document.Seal(), 1) == DocumentStatus::Invalid, "validate.v1-group");
+    Expect(ValidateDocument(document.Seal(), 7) == DocumentStatus::Ok, "validate.v7-group");
 
-    CanvasDocument masked;
+    DocumentFixture masked;
     masked.width = 8;
     masked.height = 8;
     ImageLayer layer = RasterLayer(8, 8, L"Paint");
@@ -242,10 +379,10 @@ void TestValidate()
     mask.asset.name = L"Layer Mask";
     layer.mask = mask;
     masked.layers.push_back(layer);
-    Expect(ValidateDocument(masked, 3) == DocumentStatus::Invalid, "validate.v4-mask-too-old");
-    Expect(ValidateDocument(masked, 4) == DocumentStatus::Ok, "validate.v4-mask");
+    Expect(ValidateDocument(masked.Seal(), 3) == DocumentStatus::Invalid, "validate.v4-mask-too-old");
+    Expect(ValidateDocument(masked.Seal(), 4) == DocumentStatus::Ok, "validate.v4-mask");
 
-    CanvasDocument folderMask;
+    DocumentFixture folderMask;
     folderMask.width = 8;
     folderMask.height = 8;
     ImageLayer group = ImageLayer::Blank(L"Folder", Vec2{8, 8});
@@ -254,15 +391,15 @@ void TestValidate()
     groupMask.asset.image = Raster::Make(8, 8, RasterFormat::Gray8);
     group.mask = groupMask;
     folderMask.layers.push_back(group);
-    Expect(ValidateDocument(folderMask, 5) == DocumentStatus::Invalid, "validate.v6-folder-mask-too-old");
-    Expect(ValidateDocument(folderMask, 6) == DocumentStatus::Ok, "validate.v6-folder-mask");
+    Expect(ValidateDocument(folderMask.Seal(), 5) == DocumentStatus::Invalid, "validate.v6-folder-mask-too-old");
+    Expect(ValidateDocument(folderMask.Seal(), 6) == DocumentStatus::Ok, "validate.v6-folder-mask");
 
     CanvasDocument huge;
     huge.width = 30'001;
     huge.height = 1;
     Expect(ValidateDocument(huge) == DocumentStatus::TooLarge, "validate.dimension");
 
-    CanvasDocument adjustmentDoc;
+    DocumentFixture adjustmentDoc;
     adjustmentDoc.width = 4;
     adjustmentDoc.height = 4;
     ImageLayer adjustment = ImageLayer::Blank(L"Levels", Vec2{4, 4});
@@ -271,16 +408,16 @@ void TestValidate()
     levels.kind = AdjustmentKind::Levels;
     adjustment.adjustment = levels;
     adjustmentDoc.layers.push_back(adjustment);
-    Expect(ValidateDocument(adjustmentDoc, 7) == DocumentStatus::Invalid, "validate.adjustment-on-group");
+    Expect(ValidateDocument(adjustmentDoc.Seal(), 7) == DocumentStatus::Invalid, "validate.adjustment-on-group");
 
-    CanvasDocument color;
+    DocumentFixture color;
     color.width = 4;
     color.height = 4;
     ImageLayer paint = RasterLayer(4, 4, L"Paint");
     paint.blendMode = LayerBlendMode::Multiply;
     color.layers.push_back(paint);
-    Expect(ValidateDocument(color, 2) == DocumentStatus::Invalid, "validate.v2-blend");
-    Expect(ValidateDocument(color, 3) == DocumentStatus::Ok, "validate.v3-blend");
+    Expect(ValidateDocument(color.Seal(), 2) == DocumentStatus::Invalid, "validate.v2-blend");
+    Expect(ValidateDocument(color.Seal(), 3) == DocumentStatus::Ok, "validate.v3-blend");
 
     LayerMask colorMask;
     colorMask.asset.image = Raster::Make(4, 4, RasterFormat::Bgra8888);
@@ -300,10 +437,10 @@ void TestSessionGroups()
     Expect(session.ActiveLayer() != nullptr && session.ActiveLayer()->parentID == inner, "session.child-parent");
     Expect(!session.PlaceLayer(outer, inner), "session.reject-outer-into-inner");
     Expect(!session.PlaceLayer(inner, inner), "session.reject-self-parent");
-    session.CollapsedGroupIDs().insert(outer);
+    session.SetGroupCollapsed(outer, true);
     const std::vector<HierarchyEntry> collapsed = session.LayerRows();
     Expect(collapsed.size() == 1 && collapsed[0].id == outer, "session.collapse-hides-children");
-    session.CollapsedGroupIDs().erase(outer);
+    session.SetGroupCollapsed(outer, false);
     const std::vector<HierarchyEntry> expanded = session.LayerRows();
     Expect(expanded.size() == 3 && expanded[0].depth == 0 && expanded[1].depth == 1 && expanded[2].depth == 2,
            "session.expand-depths");
@@ -438,7 +575,7 @@ void TestHistoryBounds()
            "history.uint64-limit-preserved-entry-clamped");
 
     DocumentHistory limited(2, 0);
-    CanvasDocument doc;
+    DocumentFixture doc;
     doc.width = 64;
     doc.height = 32;
     ImageLayer layer = RasterLayer(8, 8, L"Shared");
@@ -446,17 +583,17 @@ void TestHistoryBounds()
     const Guid id = layer.id;
     for (const wchar_t* name : {L"A", L"B", L"C"})
     {
-        limited.Begin(L"Rename", doc, id);
+        limited.Begin(L"Rename", doc.Seal(), id);
         doc.layers[0].name = name;
-        limited.End(doc, id);
+        limited.End(doc.Seal(), id);
     }
     Expect(limited.UndoCount() == 2, "history.entry-limit");
-    Expect(limited.RetainedBytes(doc) == 0, "history.shared-raster-zero-retained");
-    limited.Begin(L"Delete", doc, id);
+    Expect(limited.RetainedBytes(doc.Seal()) == 0, "history.shared-raster-zero-retained");
+    limited.Begin(L"Delete", doc.Seal(), id);
     doc.layers.clear();
-    limited.End(doc, std::nullopt);
+    limited.End(doc.Seal(), std::nullopt);
     Expect(limited.UndoCount() == 0, "history.zero-budget-drops-unique");
-    Expect(limited.RetainedBytes(doc) == 0, "history.zero-budget-bytes");
+    Expect(limited.RetainedBytes(doc.Seal()) == 0, "history.zero-budget-bytes");
 }
 
 void TestHistoryTrim256MiB()
@@ -473,7 +610,7 @@ void TestHistoryTrim256MiB()
         history.Begin(L"Replace", document, selection);
         ImageLayer layer = RasterLayer(kWidth, kHeight, L"Unique");
         selection = layer.id;
-        document.value().layers = {std::move(layer)};
+        EditDocumentFixture(document.value(), [&](DocumentFixture& fixture) { fixture.layers = {std::move(layer)}; });
         history.End(document, selection);
     }
     Expect(history.RetainedBytes(document) <= static_cast<std::size_t>(kHistoryRetainedByteLimit),
@@ -591,14 +728,14 @@ void TestCollapsedRows()
     session.AddBlankLayer();
     std::vector<HierarchyEntry> rows = session.LayerRows();
     Expect(rows.size() == 2 && rows[0].isGroup && !rows[0].collapsed, "rows.expanded-flag");
-    session.CollapsedGroupIDs().insert(folder);
+    session.SetGroupCollapsed(folder, true);
     rows = session.LayerRows();
     Expect(rows.size() == 1 && rows[0].collapsed && rows[0].isGroup, "rows.collapsed-flag");
     Expect(!HierarchyEntries(session.Document().value().layers)[0].collapsed, "rows.default-not-collapsed");
     // RF-907: a row carries its layer's mask for the layers panel's badge, and whether the mask is on.
     rows = session.LayerRows();
     const bool bare = rows.size() == 1 && !rows[0].hasMask && rows[0].maskEnabled;
-    session.CollapsedGroupIDs().clear();
+    session.ClearCollapsedGroups();
     session.SelectLayer(session.LayerRows()[1].id);
     session.AddLayerMask(true);
     session.ToggleLayerMask(session.ActiveLayerID().value());
@@ -635,7 +772,7 @@ void TestNamingAndInsertion()
     const Guid first = session.Document().value().layers.front().id;
     session.SelectLayer(first);
     session.AddBlankLayer();
-    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    const auto& layers = session.Document().value().layers;
     Expect(layers.size() == 4 && layers[0].name == L"Layer 1" && layers[1].name == L"Layer 4" &&
                layers[2].name == L"Layer 2" && layers[3].name == L"Layer 3",
            "insert.above-selection");
@@ -651,7 +788,7 @@ void TestNamingAndInsertion()
     session.SelectLayer(folder);
     session.AddBlankLayer();
     const Guid inner2 = session.ActiveLayerID().value();
-    const std::vector<ImageLayer>& after = session.Document().value().layers;
+    const auto& after = session.Document().value().layers;
     std::size_t index1 = 0;
     std::size_t index2 = 0;
     for (std::size_t i = 0; i < after.size(); ++i)
@@ -673,7 +810,7 @@ void TestNamingAndInsertion()
     {
         three.AddBlankLayer();
     }
-    const std::vector<ImageLayer> before = three.Document().value().layers;
+    const auto before = three.Document().value().layers;
     three.SelectLayer(before[1].id);
     three.DeleteLayer(before[0].id);
     Expect(three.ActiveLayerID() == before[1].id, "delete.keeps-active-when-other-deleted");
@@ -710,6 +847,484 @@ void TestPaletteColors()
            "palette.reset");
     Expect(session.history.CanUndo() == couldUndo && session.history.IsModified() == modified,
            "palette.outside-history");
+}
+
+void TestPaletteSampleAuthority()
+{
+    DocumentSession session;
+    session.CreateDocument(2, 2, true);
+    const Guid revision = session.history.CurrentRevision();
+    const auto generation = session.Generation();
+    const auto undoCount = session.history.UndoCount();
+    auto authority = session.CapturePaletteSampleAuthority();
+    const auto first = authority;
+    Expect(session.ApplySampledForegroundColor(authority, 0x003366CCu) && session.ForegroundColor() == 0xFF3366CCu &&
+               authority != first,
+           "palette-authority.current-sample-publishes-opaque-and-renews-own-stamp");
+    Expect(session.ApplySampledForegroundColor(authority, 0xFF3366CCu) && authority != first,
+           "palette-authority.repeated-own-sample-remains-authorized");
+    auto stale = first;
+    Expect(!session.ApplySampledForegroundColor(stale, 0xFFFFFFFFu) && session.ForegroundColor() == 0xFF3366CCu &&
+               stale == first,
+           "palette-authority.old-sample-refuses-without-changing-color-or-authority");
+    session.SetForegroundColor(0xFF3366CCu);
+    Expect(!session.ApplySampledForegroundColor(authority, 0xFFFFFFFFu),
+           "palette-authority.explicit-equal-color-invalidates-older-sample");
+    authority = session.CapturePaletteSampleAuthority();
+    session.SetForegroundColor(0xFF112233u);
+    session.SetForegroundColor(0xFF3366CCu);
+    Expect(!session.ApplySampledForegroundColor(authority, 0xFFFFFFFFu) && session.ForegroundColor() == 0xFF3366CCu,
+           "palette-authority.manual-a-b-a-refuses-old-result");
+    authority = session.CapturePaletteSampleAuthority();
+    session.SetBackgroundColor(session.BackgroundColor());
+    Expect(!session.ApplySampledForegroundColor(authority, 0xFFFFFFFFu),
+           "palette-authority.explicit-background-input-invalidates-old-result");
+    authority = session.CapturePaletteSampleAuthority();
+    session.SwapPaletteColors();
+    session.SwapPaletteColors();
+    Expect(!session.ApplySampledForegroundColor(authority, 0xFFFFFFFFu) && session.ForegroundColor() == 0xFF3366CCu,
+           "palette-authority.double-swap-cannot-rebind-old-result");
+    session.ResetPaletteColors();
+    authority = session.CapturePaletteSampleAuthority();
+    session.ResetPaletteColors();
+    Expect(!session.ApplySampledForegroundColor(authority, 0xFF3366CCu),
+           "palette-authority.equal-reset-invalidates-old-result");
+    authority = session.CapturePaletteSampleAuthority();
+    DocumentSession copied = session;
+    auto copiedAuthority = authority;
+    Expect(!copied.ApplySampledForegroundColor(copiedAuthority, 0xFF3366CCu),
+           "palette-authority.copied-session-refuses-original-owner-stamp");
+    const auto beforeMove = copied.CapturePaletteSampleAuthority();
+    DocumentSession moved = std::move(copied);
+    auto movedAuthority = beforeMove;
+    auto movedFromAuthority = beforeMove;
+    Expect(!moved.ApplySampledForegroundColor(movedAuthority, 0xFF3366CCu) &&
+               !copied.ApplySampledForegroundColor(movedFromAuthority, 0xFF3366CCu),
+           "palette-authority.moved-session-refuses-original-owner-stamp");
+    Expect(session.history.CurrentRevision() == revision && session.Generation() == generation &&
+               session.history.UndoCount() == undoCount,
+           "palette-authority.sampling-and-input-authority-remain-outside-document-history");
+    InputRevision boundary((std::numeric_limits<std::uint64_t>::max)() - 1);
+    const auto beforeMaximum = boundary.Current();
+    boundary.Advance();
+    Expect(!boundary.Matches(beforeMaximum) && boundary.Matches((std::numeric_limits<std::uint64_t>::max)()),
+           "palette-authority.last-valid-input-refuses-preceding-stamp");
+    boundary.Advance();
+    boundary.Advance();
+    Expect(boundary.Current() == 0 && !boundary.Matches(0) && !boundary.Matches(1) &&
+               !boundary.Matches((std::numeric_limits<std::uint64_t>::max)()),
+           "palette-authority.exhaustion-permanently-refuses-instead-of-wrapping");
+}
+
+void TestPaletteIntentAuthority()
+{
+    const auto sampledOwner = std::make_unique<DocumentSession>();
+    auto& sampled = *sampledOwner;
+    sampled.CreateDocument(2, 2, true);
+    const Guid sampledRevision = sampled.history.CurrentRevision();
+    const auto sampledGeneration = sampled.Generation();
+    const int sampledUndoCount = sampled.history.UndoCount();
+    const auto manualAuthority = sampled.CapturePaletteIntentAuthority();
+    const auto originalPublication = sampled.CapturePaletteSampleAuthority();
+    auto publication = originalPublication;
+    Expect(sampled.ApplySampledForegroundColor(publication, 0x00123456u) && publication != originalPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFF123456u &&
+               sampled.brushSettings.red == 0x12 / 255.0 && sampled.brushSettings.green == 0x34 / 255.0 &&
+               sampled.brushSettings.blue == 0x56 / 255.0,
+           "palette-intent.own-foreground-sample-renews-publication-and-updates-brush-rgb");
+    const auto firstPublication = publication;
+    Expect(sampled.ApplySampledBackgroundColor(publication, 0x00654321u) && publication != firstPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFF123456u &&
+               sampled.BackgroundColor() == 0xFF654321u && sampled.brushSettings.red == 0x12 / 255.0 &&
+               sampled.brushSettings.green == 0x34 / 255.0 && sampled.brushSettings.blue == 0x56 / 255.0,
+           "palette-intent.own-background-sample-renews-same-publication-authority");
+    const auto secondPublication = publication;
+    Expect(sampled.ApplySampledForegroundColor(publication, 0x00A1B2C3u) && publication != secondPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFFA1B2C3u &&
+               sampled.brushSettings.red == 0xA1 / 255.0 && sampled.brushSettings.green == 0xB2 / 255.0 &&
+               sampled.brushSettings.blue == 0xC3 / 255.0,
+           "palette-intent.successive-own-samples-keep-original-manual-authority-current");
+
+    auto stalePublication = originalPublication;
+    const uint32_t foregroundBeforeRefusal = sampled.ForegroundColor();
+    const uint32_t backgroundBeforeRefusal = sampled.BackgroundColor();
+    const double brushRedBeforeRefusal = sampled.brushSettings.red;
+    const double brushGreenBeforeRefusal = sampled.brushSettings.green;
+    const double brushBlueBeforeRefusal = sampled.brushSettings.blue;
+    Expect(!sampled.ApplySampledBackgroundColor(stalePublication, 0x00DEADBEu) &&
+               stalePublication == originalPublication && sampled.ForegroundColor() == foregroundBeforeRefusal &&
+               sampled.BackgroundColor() == backgroundBeforeRefusal &&
+               sampled.brushSettings.red == brushRedBeforeRefusal &&
+               sampled.brushSettings.green == brushGreenBeforeRefusal &&
+               sampled.brushSettings.blue == brushBlueBeforeRefusal && sampled.IsPaletteIntentCurrent(manualAuthority),
+           "palette-intent.refused-stale-sample-changes-no-color-authority-or-brush-state");
+    Expect(sampled.history.CurrentRevision() == sampledRevision && sampled.Generation() == sampledGeneration &&
+               sampled.history.UndoCount() == sampledUndoCount,
+           "palette-intent.sampled-colors-remain-outside-document-generation-and-history");
+
+    const auto foregroundEqualOwner = std::make_unique<DocumentSession>();
+    auto& foregroundEqual = *foregroundEqualOwner;
+    foregroundEqual.CreateDocument(2, 2, true);
+    auto foregroundManual = foregroundEqual.CapturePaletteIntentAuthority();
+    auto foregroundPublication = foregroundEqual.CapturePaletteSampleAuthority();
+    const uint32_t equalForeground = foregroundEqual.ForegroundColor();
+    foregroundEqual.SetForegroundColor(equalForeground);
+    const auto foregroundPublicationAfterIntent = foregroundPublication;
+    Expect(!foregroundEqual.IsPaletteIntentCurrent(foregroundManual) &&
+               !foregroundEqual.ApplySampledForegroundColor(foregroundPublication, 0xFF102938u) &&
+               foregroundPublication == foregroundPublicationAfterIntent &&
+               foregroundEqual.ForegroundColor() == equalForeground && foregroundEqual.brushSettings.red == 0.0 &&
+               foregroundEqual.brushSettings.green == 0.0 && foregroundEqual.brushSettings.blue == 0.0,
+           "palette-intent.equal-explicit-foreground-invalidates-manual-and-publication-authority");
+
+    const auto backgroundEqualOwner = std::make_unique<DocumentSession>();
+    auto& backgroundEqual = *backgroundEqualOwner;
+    backgroundEqual.CreateDocument(2, 2, true);
+    auto backgroundManual = backgroundEqual.CapturePaletteIntentAuthority();
+    auto backgroundPublication = backgroundEqual.CapturePaletteSampleAuthority();
+    const uint32_t equalBackground = backgroundEqual.BackgroundColor();
+    backgroundEqual.SetBackgroundColor(equalBackground);
+    const auto backgroundPublicationAfterIntent = backgroundPublication;
+    Expect(!backgroundEqual.IsPaletteIntentCurrent(backgroundManual) &&
+               !backgroundEqual.ApplySampledBackgroundColor(backgroundPublication, 0xFF102938u) &&
+               backgroundPublication == backgroundPublicationAfterIntent &&
+               backgroundEqual.BackgroundColor() == equalBackground,
+           "palette-intent.equal-explicit-background-invalidates-manual-and-publication-authority");
+
+    const auto foregroundAbaOwner = std::make_unique<DocumentSession>();
+    auto& foregroundAba = *foregroundAbaOwner;
+    foregroundAba.CreateDocument(2, 2, true);
+    auto foregroundAbaManual = foregroundAba.CapturePaletteIntentAuthority();
+    auto foregroundAbaPublication = foregroundAba.CapturePaletteSampleAuthority();
+    const uint32_t foregroundOriginal = foregroundAba.ForegroundColor();
+    foregroundAba.SetForegroundColor(0xFF123456u);
+    foregroundAba.SetForegroundColor(foregroundOriginal);
+    const auto foregroundAbaPublicationBeforeRefusal = foregroundAbaPublication;
+    Expect(!foregroundAba.IsPaletteIntentCurrent(foregroundAbaManual) &&
+               !foregroundAba.ApplySampledForegroundColor(foregroundAbaPublication, 0xFF998877u) &&
+               foregroundAbaPublication == foregroundAbaPublicationBeforeRefusal &&
+               foregroundAba.ForegroundColor() == foregroundOriginal,
+           "palette-intent.foreground-a-b-a-refuses-old-manual-and-publication-authority");
+
+    const auto backgroundAbaOwner = std::make_unique<DocumentSession>();
+    auto& backgroundAba = *backgroundAbaOwner;
+    backgroundAba.CreateDocument(2, 2, true);
+    auto backgroundAbaManual = backgroundAba.CapturePaletteIntentAuthority();
+    auto backgroundAbaPublication = backgroundAba.CapturePaletteSampleAuthority();
+    const uint32_t backgroundOriginal = backgroundAba.BackgroundColor();
+    backgroundAba.SetBackgroundColor(0xFF123456u);
+    backgroundAba.SetBackgroundColor(backgroundOriginal);
+    const auto backgroundAbaPublicationBeforeRefusal = backgroundAbaPublication;
+    Expect(!backgroundAba.IsPaletteIntentCurrent(backgroundAbaManual) &&
+               !backgroundAba.ApplySampledBackgroundColor(backgroundAbaPublication, 0xFF998877u) &&
+               backgroundAbaPublication == backgroundAbaPublicationBeforeRefusal &&
+               backgroundAba.BackgroundColor() == backgroundOriginal,
+           "palette-intent.background-a-b-a-refuses-old-manual-and-publication-authority");
+
+    const auto paletteCommandsOwner = std::make_unique<DocumentSession>();
+    auto& paletteCommands = *paletteCommandsOwner;
+    paletteCommands.CreateDocument(2, 2, true);
+    auto swapManual = paletteCommands.CapturePaletteIntentAuthority();
+    paletteCommands.SwapPaletteColors();
+    Expect(!paletteCommands.IsPaletteIntentCurrent(swapManual),
+           "palette-intent.palette-swap-invalidates-manual-authority");
+    auto resetManual = paletteCommands.CapturePaletteIntentAuthority();
+    paletteCommands.ResetPaletteColors();
+    Expect(!paletteCommands.IsPaletteIntentCurrent(resetManual),
+           "palette-intent.palette-reset-invalidates-manual-authority");
+
+    const auto maskPaletteOwner = std::make_unique<DocumentSession>();
+    auto& maskPalette = *maskPaletteOwner;
+    maskPalette.CreateDocument(2, 2, true);
+    maskPalette.AddLayerMask(true);
+    const uint32_t maskForeground = maskPalette.ForegroundColor();
+    const uint32_t maskBackground = maskPalette.BackgroundColor();
+    auto maskSwapManual = maskPalette.CapturePaletteIntentAuthority();
+    maskPalette.SwapPaletteColors();
+    Expect(!maskPalette.IsPaletteIntentCurrent(maskSwapManual) && maskPalette.maskPaintWhite &&
+               maskPalette.ForegroundColor() == maskForeground && maskPalette.BackgroundColor() == maskBackground,
+           "palette-intent.mask-target-swap-invalidates-authority-without-changing-colors");
+    auto maskResetManual = maskPalette.CapturePaletteIntentAuthority();
+    maskPalette.ResetPaletteColors();
+    Expect(!maskPalette.IsPaletteIntentCurrent(maskResetManual) && !maskPalette.maskPaintWhite &&
+               maskPalette.ForegroundColor() == maskForeground && maskPalette.BackgroundColor() == maskBackground,
+           "palette-intent.mask-target-reset-invalidates-authority-without-changing-colors");
+
+    const auto ownerOwner = std::make_unique<DocumentSession>();
+    auto& owner = *ownerOwner;
+    owner.CreateDocument(2, 2, true);
+    const auto ownerManual = owner.CapturePaletteIntentAuthority();
+    const auto foreignOwner = std::make_unique<DocumentSession>();
+    auto& foreign = *foreignOwner;
+    foreign.CreateDocument(2, 2, true);
+    auto foreignManual = ownerManual;
+    auto foreignPublication = owner.CapturePaletteSampleAuthority();
+    const auto foreignPublicationBefore = foreignPublication;
+    const uint32_t foreignBackground = foreign.BackgroundColor();
+    Expect(!foreign.IsPaletteIntentCurrent(foreignManual) &&
+               !foreign.ApplySampledBackgroundColor(foreignPublication, 0xFF112233u) &&
+               foreignPublication == foreignPublicationBefore && foreign.BackgroundColor() == foreignBackground,
+           "palette-intent.foreign-session-refuses-manual-and-publication-authority");
+    const auto copiedOwner = std::make_unique<DocumentSession>(owner);
+    auto& copied = *copiedOwner;
+    Expect(!copied.IsPaletteIntentCurrent(ownerManual), "palette-intent.copied-session-refuses-manual-authority");
+    const auto movedOwner = std::make_unique<DocumentSession>(std::move(owner));
+    auto& moved = *movedOwner;
+    Expect(!moved.IsPaletteIntentCurrent(ownerManual) && !owner.IsPaletteIntentCurrent(ownerManual),
+           "palette-intent.moved-session-and-source-refuse-original-manual-authority");
+}
+
+void TestDocumentReadAuthority()
+{
+    auto empty = std::make_unique<DocumentSession>();
+    Expect(!empty->CaptureDocumentReadAuthority(), "document-read.no-document-has-no-authority");
+
+    auto owner = std::make_unique<DocumentSession>();
+    owner->CreateDocument(3, 2, true);
+    const auto captured = owner->CaptureDocumentReadAuthority();
+    if (!captured.has_value())
+    {
+        Expect(false, "document-read.created-document-captures-authority");
+        return;
+    }
+    const DocumentReadAuthority authority = captured.value();
+    const Guid historyRevision = owner->history.CurrentRevision();
+    const int undoCount = owner->history.UndoCount();
+    const std::uint64_t generation = owner->Generation();
+    const std::uint64_t documentSerial = owner->DocumentSerial();
+    Expect(owner->IsDocumentReadCurrent(authority) && authority.canvasWidth == 3 && authority.canvasHeight == 2 &&
+               authority.generation == generation && authority.documentSerial == documentSerial &&
+               owner->history.CurrentRevision() == historyRevision && owner->history.UndoCount() == undoCount,
+           "document-read.capture-check-keeps-history-state");
+
+    DocumentReadAuthority wrongOwner = authority;
+    wrongOwner.sessionIdentity = Guid::Generate();
+    DocumentReadAuthority wrongSerial = authority;
+    ++wrongSerial.documentSerial;
+    DocumentReadAuthority wrongGeneration = authority;
+    ++wrongGeneration.generation;
+    DocumentReadAuthority wrongRestore = authority;
+    ++wrongRestore.restoreSerial;
+    DocumentReadAuthority wrongWidth = authority;
+    ++wrongWidth.canvasWidth;
+    DocumentReadAuthority wrongHeight = authority;
+    ++wrongHeight.canvasHeight;
+    Expect(!owner->IsDocumentReadCurrent(wrongOwner), "document-read.foreign-owner-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongSerial), "document-read.mismatched-document-serial-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongGeneration), "document-read.mismatched-generation-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongRestore), "document-read.mismatched-restore-serial-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongWidth), "document-read.mismatched-width-refused");
+    Expect(!owner->IsDocumentReadCurrent(wrongHeight), "document-read.mismatched-height-refused");
+    Expect(owner->IsDocumentReadCurrent(authority) && owner->Generation() == generation &&
+               owner->DocumentSerial() == documentSerial && owner->history.CurrentRevision() == historyRevision &&
+               owner->history.UndoCount() == undoCount,
+           "document-read.mismatch-refusals-are-atomic");
+
+    auto foreign = std::make_unique<DocumentSession>();
+    foreign->CreateDocument(3, 2, true);
+    auto copied = std::make_unique<DocumentSession>(*owner);
+    Expect(!foreign->IsDocumentReadCurrent(authority) && !copied->IsDocumentReadCurrent(authority),
+           "document-read.foreign-and-copied-session-refuse-owner-authority");
+    auto moved = std::make_unique<DocumentSession>(std::move(*owner));
+    Expect(!moved->IsDocumentReadCurrent(authority) && !owner->IsDocumentReadCurrent(authority),
+           "document-read.moved-session-and-source-refuse-owner-authority");
+
+    auto changed = std::make_unique<DocumentSession>();
+    changed->CreateDocument(3, 2, true);
+    const auto beforeMutation = changed->CaptureDocumentReadAuthority().value();
+    changed->AddBlankLayer();
+    const auto afterMutation = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(beforeMutation) && changed->IsDocumentReadCurrent(afterMutation),
+           "document-read.real-document-mutation-invalidates-old-authority");
+    changed->Undo();
+    const auto afterUndo = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(afterMutation) && changed->IsDocumentReadCurrent(afterUndo),
+           "document-read.undo-restore-invalidates-prior-authority");
+    changed->Redo();
+    const auto afterRedo = changed->CaptureDocumentReadAuthority().value();
+    Expect(!changed->IsDocumentReadCurrent(afterUndo) && changed->IsDocumentReadCurrent(afterRedo),
+           "document-read.redo-restore-invalidates-prior-authority");
+
+    auto replaced = std::make_unique<DocumentSession>();
+    replaced->CreateDocument(3, 2, true);
+    const auto beforeReplace = replaced->CaptureDocumentReadAuthority().value();
+    const Guid originalDocumentId = replaced->Document().value().id;
+    CanvasDocument sameIdReplacement = replaced->Document().value();
+    replaced->ReplaceDocument(std::move(sameIdReplacement), std::nullopt);
+    Expect(!replaced->IsDocumentReadCurrent(beforeReplace) && replaced->Document().value().id == originalDocumentId,
+           "document-read.replace-same-document-id-invalidates-authority");
+
+    auto reopened = std::make_unique<DocumentSession>();
+    reopened->CreateDocument(3, 2, true);
+    const auto beforeReopen = reopened->CaptureDocumentReadAuthority().value();
+    const Guid closedDocumentId = reopened->Document().value().id;
+    reopened->ClearDocument();
+    reopened->CreateDocument(3, 2, true);
+    Expect(!reopened->IsDocumentReadCurrent(beforeReopen) && reopened->Document().value().id != closedDocumentId,
+           "document-read.close-and-reopen-equal-size-invalidates-authority");
+
+    auto previews = std::make_unique<DocumentSession>();
+    previews->CreateDocument(2, 2, true);
+    const std::array<std::uint8_t, 16> previewPixels{0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 32, 64, 128, 255};
+    const Raster previewSource = Raster::Make(2, 2, RasterFormat::Bgra8888, previewPixels.data(), previewPixels.size());
+    if (!previewSource.HasStorage())
+    {
+        Expect(false, "document-read.preview-fixture-raster-created");
+        return;
+    }
+    EditLayerRecordsForTest(
+        *previews, [&previewSource](DocumentFixture& fixture)
+        { fixture.layers.front().asset = RasterAsset{previewSource, {}, L"Read authority preview"}; });
+    const auto beforePaletteAndPreview = previews->CaptureDocumentReadAuthority().value();
+    const Guid previewHistoryRevision = previews->history.CurrentRevision();
+    const std::uint64_t previewGeneration = previews->Generation();
+    const int previewUndoCount = previews->history.UndoCount();
+    previews->SetForegroundColor(0xFF2468ACu);
+    const bool paletteKeptReadCurrent = previews->IsDocumentReadCurrent(beforePaletteAndPreview);
+    previews->BeginColorEdit(FilterKind::GaussianBlur);
+    FilterSettings blur;
+    blur.radius = 1.75;
+    previews->UpdateColorEdit(blur, true);
+    const bool destructivePreviewLive =
+        previews->PendingColorEdit().has_value() && previews->PendingColorEdit().value().preview;
+    const bool previewKeptReadCurrent = previews->IsDocumentReadCurrent(beforePaletteAndPreview);
+    previews->CancelColorEdit();
+    Expect(paletteKeptReadCurrent && destructivePreviewLive && previewKeptReadCurrent &&
+               previews->IsDocumentReadCurrent(beforePaletteAndPreview) &&
+               previews->history.CurrentRevision() == previewHistoryRevision &&
+               previews->Generation() == previewGeneration && previews->history.UndoCount() == previewUndoCount,
+           "document-read.palette-input-and-live-destructive-preview-do-not-require-history-restore-guard");
+}
+
+void TestCapturedToolInputs()
+{
+    constexpr GradientEdit::CapturedInputs imageInputs{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToBackground, true, 0.375}, 0xFF2468ACu,
+        0xFFCF7135u, false};
+    auto image = std::make_unique<DocumentSession>();
+    image->CreateDocument(3, 1, false);
+    image->AddBlankLayer();
+    image->SetForegroundColor(0xFF112233u);
+    image->SetBackgroundColor(0xFF445566u);
+    image->gradientSettings =
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, false, 1.0};
+    Expect(image->BeginDeferredGradient(Vec2{0, 0}, imageInputs), "captured-tool.image-deferred-opening");
+    image->MoveGradient(std::nullopt, Vec2{2, 0});
+    const GradientEdit* const imagePending = image->PendingGradient();
+    const auto imageColors = image->GradientColors();
+    Expect(imagePending != nullptr && imagePending->capturedInputs == imageInputs &&
+               imagePending->start == Vec2{0, 0} && imagePending->end == Vec2{2, 0} &&
+               imageColors[0] == std::array<double, 4>{207.0 / 255.0, 113.0 / 255.0, 53.0 / 255.0, 1.0} &&
+               imageColors[1] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 1.0},
+           "captured-tool.image-fg-bg-reverse-settings-and-move-retain-event-inputs");
+
+    constexpr GradientEdit::CapturedInputs transparentInputs{
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, true, 0.625}, 0xFF5A2DC1u,
+        0xFF19A477u, false};
+    auto transparent = std::make_unique<DocumentSession>();
+    transparent->CreateDocument(2, 1, false);
+    transparent->AddBlankLayer();
+    Expect(transparent->BeginDeferredGradient(Vec2{0, 0}, transparentInputs),
+           "captured-tool.transparent-deferred-opening");
+    transparent->MoveGradient(std::nullopt, Vec2{1, 0});
+    const auto transparentColors = transparent->GradientColors();
+    Expect(transparent->PendingGradient()->capturedInputs == transparentInputs &&
+               transparentColors[0] == std::array<double, 4>{90.0 / 255.0, 45.0 / 255.0, 193.0 / 255.0, 0.0} &&
+               transparentColors[1] == std::array<double, 4>{90.0 / 255.0, 45.0 / 255.0, 193.0 / 255.0, 1.0},
+           "captured-tool.reverse-transparent-endpoints-use-event-foreground");
+
+    auto mask = std::make_unique<DocumentSession>();
+    mask->CreateDocument(2, 1, false);
+    mask->AddBlankLayer();
+    mask->AddLayerMask(true);
+    const auto maskLayer = mask->ActiveLayerID();
+    if (maskLayer.has_value())
+        mask->SelectLayerTarget(maskLayer.value(), true);
+    mask->maskPaintWhite = false;
+    mask->SetForegroundColor(0xFF778899u);
+    mask->SetBackgroundColor(0xFFAABBCCu);
+    mask->gradientSettings =
+        GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToTransparent, false, 1.0};
+    constexpr GradientEdit::CapturedInputs maskInputs{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToBackground, true, 0.25}, 0xFF010203u,
+        0xFF040506u, true};
+    const bool maskOpened = mask->IsMaskSelected() && mask->BeginDeferredGradient(Vec2{0, 0}, maskInputs);
+    mask->MoveGradient(std::nullopt, Vec2{1, 0});
+    const auto maskColors = mask->GradientColors();
+    Expect(maskOpened && mask->PendingGradient()->capturedInputs == maskInputs &&
+               maskColors[0] == std::array<double, 4>{0.0, 0.0, 0.0, 1.0} &&
+               maskColors[1] == std::array<double, 4>{1.0, 1.0, 1.0, 1.0},
+           "captured-tool.mask-event-inputs-override-pre-opening-live-palette-and-settings");
+
+    constexpr GradientEdit::CapturedInputs initialLiveProbe{
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToTransparent, true, 0.2}, 0xFF010101u,
+        0xFF020202u, false};
+    auto live = std::make_unique<DocumentSession>();
+    live->CreateDocument(2, 1, false);
+    live->AddBlankLayer();
+    live->gradientSettings = GradientSettings{GradientShape::Linear, GradientStyle::ForegroundToBackground, false, 1.0};
+    Expect(live->BeginDeferredGradient(Vec2{0, 0}, initialLiveProbe), "captured-tool.live-refresh-opening");
+    live->SetForegroundColor(0xFF102030u);
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{16.0 / 255.0, 32.0 / 255.0, 48.0 / 255.0, 1.0},
+           "captured-tool.foreground-input-adopts-live-value");
+    live->SetBackgroundColor(0xFF405060u);
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[1] == std::array<double, 4>{64.0 / 255.0, 80.0 / 255.0, 96.0 / 255.0, 1.0},
+           "captured-tool.background-input-adopts-live-value");
+    live->SwapPaletteColors();
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{64.0 / 255.0, 80.0 / 255.0, 96.0 / 255.0, 1.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{16.0 / 255.0, 32.0 / 255.0, 48.0 / 255.0, 1.0},
+           "captured-tool.palette-swap-adopts-live-values");
+    live->ResetPaletteColors();
+    Expect(live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{0.0, 0.0, 0.0, 1.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{1.0, 1.0, 1.0, 1.0},
+           "captured-tool.palette-reset-adopts-live-values");
+    live->SetForegroundColor(0xFF2468ACu);
+    live->SetBackgroundColor(0xFFCF7135u);
+    live->gradientSettings =
+        GradientSettings{GradientShape::Radial, GradientStyle::ForegroundToTransparent, true, 0.75};
+    const bool refreshedOpening = live->BeginDeferredGradient(Vec2{0, 0}, initialLiveProbe);
+    live->RefreshGradient();
+    Expect(refreshedOpening && live->PendingGradient() != nullptr &&
+               live->PendingGradient()->capturedInputs == std::nullopt &&
+               live->GradientColors()[0] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 0.0} &&
+               live->GradientColors()[1] == std::array<double, 4>{36.0 / 255.0, 104.0 / 255.0, 172.0 / 255.0, 1.0},
+           "captured-tool.header-refresh-adopts-live-settings-and-palette");
+
+    auto click = std::make_unique<DocumentSession>();
+    click->CreateDocument(1, 1, false);
+    click->AddBlankLayer();
+    Expect(click->BeginDeferredGradient(Vec2{0, 0}, imageInputs), "captured-tool.click-opening");
+    click->EndGradientDrag();
+    Expect(click->PendingGradient() == nullptr, "captured-tool.click-without-line-drops-metadata");
+
+    auto shapes = std::make_unique<DocumentSession>();
+    shapes->CreateDocument(8, 6, false);
+    const ShapeKind originalKind = shapes->shapeKind;
+    const double originalRadius = shapes->shapeCornerRadius;
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Rectangle, 2.5);
+    const auto rectangleOpening = shapes->PendingShapeOpening();
+    Expect(rectangleOpening.has_value() &&
+               shapes->PendingShape() ==
+                   ShapeDraft{ShapeKind::Rectangle, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 2.5} &&
+               shapes->shapeKind == originalKind && shapes->shapeCornerRadius == originalRadius,
+           "captured-tool.shape-rectangle-kind-radius-and-rounded-anchor-are-event-values");
+    shapes->CancelShape();
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Ellipse, 9.0);
+    const auto ellipseOpening = shapes->PendingShapeOpening();
+    Expect(ellipseOpening.has_value() && rectangleOpening.has_value() && ellipseOpening != rectangleOpening &&
+               shapes->PendingShape() == ShapeDraft{ShapeKind::Ellipse, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 0.0} &&
+               shapes->shapeKind == originalKind && shapes->shapeCornerRadius == originalRadius,
+           "captured-tool.shape-explicit-ellipse-kind-radius-do-not-change-global-defaults");
+    shapes->CancelShape();
+    shapes->BeginShape(Vec2{2.2, 3.7}, ShapeKind::Ellipse, 9.0);
+    const auto reopenedShapeOpening = shapes->PendingShapeOpening();
+    Expect(reopenedShapeOpening.has_value() && reopenedShapeOpening != ellipseOpening &&
+               shapes->PendingShape() == ShapeDraft{ShapeKind::Ellipse, Vec2{2, 4}, SelectionBounds{2, 4, 2, 4}, 0.0},
+           "captured-tool.shape-cancel-and-equal-reopen-issue-new-opening");
 }
 
 // ── Transform (C8, ported from legacy TransformTests, MaskTransformTests and DistortTests) ────────────────
@@ -761,7 +1376,7 @@ Guid InsertPainted(DocumentSession& session, int width, int height, Vec2 origin,
     layer.asset->image = SolidRaster(width, height, 0, 0, 255, 255);
     layer.asset->thumbnail = layer.asset->image;
     layer.transform.origin = origin;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     return layer.id;
 }
@@ -1033,6 +1648,109 @@ void TestTransformSession()
            "transform.nudge-commits");
 }
 
+void TestTransformVisibility()
+{
+    DocumentSession standalone;
+    standalone.CreateDocument(200, 100, false);
+    const Guid solo = InsertPainted(standalone, 20, 20, Vec2{0, 0});
+    const auto expectSolo = [&](bool expected, const char* name)
+    {
+        const CanvasDocument& document = standalone.Document().value();
+        Expect(EffectivelyVisible(document, solo) == expected && standalone.CanTransform() == expected, name);
+    };
+
+    expectSolo(true, "transform.visibility-standalone-visible");
+    EditLayerRecordsForTest(standalone, [](DocumentFixture& document) { document.layers.back().visible = false; });
+    expectSolo(false, "transform.visibility-standalone-hidden");
+    EditLayerRecordsForTest(standalone, [](DocumentFixture& document) { document.layers.back().visible = true; });
+    expectSolo(true, "transform.visibility-standalone-shown");
+
+    const auto root = standalone.Document()->layers;
+    const std::uint64_t generation = standalone.Generation();
+    const int undoCount = standalone.history.UndoCount();
+    const Raster pixels = standalone.ActiveLayer()->asset->image;
+    bool repeated = true;
+    for (int repeat = 0; repeat < 8; ++repeat)
+        repeated = standalone.CanTransform() && EffectivelyVisible(standalone.Document().value(), solo) && repeated;
+    Expect(repeated, "transform.visibility-repeated-query");
+    const ImageLayer* after = Find(standalone.Document(), solo);
+    Expect(standalone.Document()->layers.Identity() == root.Identity() && standalone.Generation() == generation &&
+               standalone.history.UndoCount() == undoCount && after != nullptr && after->asset.has_value() &&
+               after->asset->image == pixels,
+           "transform.visibility-query-preserves-root-history-pixels");
+
+    DocumentSession nested;
+    nested.CreateDocument(200, 100, false);
+    nested.AddGroup();
+    const Guid outer = nested.ActiveLayerID().value();
+    nested.AddGroup();
+    const Guid inner = nested.ActiveLayerID().value();
+    const Guid child = InsertPainted(nested, 20, 20, Vec2{0, 0});
+    EditLayerRecordsForTest(nested, [&](DocumentFixture& document) { document.layers.back().parentID = inner; });
+    nested.SelectLayer(child);
+    Expect(ValidateHierarchy(nested.Document().value().layers) == DocumentStatus::Ok,
+           "transform.visibility-nested-fixture-valid");
+    const auto expectNested = [&](bool expected, const char* name)
+    {
+        const CanvasDocument& document = nested.Document().value();
+        Expect(EffectivelyVisible(document, child) == expected && nested.CanTransform() == expected, name);
+    };
+
+    nested.SetGroupCollapsed(outer, true);
+    const std::vector<HierarchyEntry> collapsed = nested.LayerRows();
+    Expect(collapsed.size() == 1 && collapsed.front().id == outer && collapsed.front().collapsed,
+           "transform.visibility-collapse-hides-row-subtree");
+    expectNested(true, "transform.visibility-selected-child-in-collapsed-group");
+
+    const auto setVisible = [&](const Guid& id, bool visible)
+    {
+        EditLayerRecordsForTest(nested,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == id)
+                                        {
+                                            layer.visible = visible;
+                                            return;
+                                        }
+                                    }
+                                });
+    };
+    setVisible(inner, false);
+    expectNested(false, "transform.visibility-hidden-inner-ancestor");
+    setVisible(inner, true);
+    setVisible(child, false);
+    expectNested(false, "transform.visibility-hidden-leaf");
+    setVisible(child, true);
+    setVisible(outer, false);
+    expectNested(false, "transform.visibility-hidden-outer-ancestor");
+    setVisible(outer, true);
+    expectNested(true, "transform.visibility-restored-ancestors-and-leaf");
+
+    nested.SelectLayer(outer);
+    const std::vector<Guid> expectedMembers{child};
+    Expect(nested.TransformsAsGroup() && nested.CanTransform() && nested.GroupTransformMemberIDs() == expectedMembers,
+           "transform.visibility-group-path-retains-visible-member");
+
+    DocumentSession nonPixels;
+    nonPixels.CreateDocument(20, 20, false);
+    nonPixels.AddBlankLayer();
+    const Guid blank = nonPixels.ActiveLayerID().value();
+    Expect(EffectivelyVisible(nonPixels.Document().value(), blank) && !nonPixels.CanTransform(),
+           "transform.visibility-blank-still-not-transformable");
+    LayerAdjustment adjustment;
+    adjustment.kind = AdjustmentKind::Levels;
+    EditLayerRecordsForTest(nonPixels,
+                            [&](DocumentFixture& document) { document.layers.back().adjustment = adjustment; });
+    Expect(EffectivelyVisible(nonPixels.Document().value(), blank) && !nonPixels.CanTransform(),
+           "transform.visibility-adjustment-still-not-transformable");
+    nonPixels.AddGroup();
+    const Guid emptyGroup = nonPixels.ActiveLayerID().value();
+    Expect(EffectivelyVisible(nonPixels.Document().value(), emptyGroup) && !nonPixels.CanTransform(),
+           "transform.visibility-empty-group-still-not-transformable");
+}
+
 void TestTransformDuplicate()
 {
     DocumentSession session;
@@ -1069,9 +1787,9 @@ void TestTransformGroup()
     session.AddGroup();
     const Guid folder = session.ActiveLayerID().value();
     const Guid a = InsertPainted(session, 100, 50, Vec2{10, 20}, L"A");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().parentID = folder; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().parentID = folder; });
     const Guid b = InsertPainted(session, 40, 40, Vec2{200, 100}, L"B");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().parentID = folder; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().parentID = folder; });
     session.SelectLayer(folder);
     Expect(session.TransformsAsGroup() && session.CanTransform(), "group.folder-transforms-members");
     Expect(session.GroupTransformMemberIDs().size() == 2, "group.members");
@@ -1120,7 +1838,7 @@ void TestMaskTransform()
     mask.asset.image = GrayRaster(400, 200, 255);
     mask.asset.thumbnail = mask.asset.image;
     mask.asset.name = L"mask";
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().mask = mask; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().mask = mask; });
     const LayerTransform original = session.ActiveLayer()->transform;
 
     session.SelectLayerTarget(id, true);
@@ -1200,7 +1918,7 @@ void TestFlipCommands()
     InsertPainted(session, 100, 50, Vec2{20, 30});
     LayerTransform before = session.ActiveLayer()->transform;
     before.rotation = 10;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().transform = before; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().transform = before; });
     session.FlipCanvas(true);
     const LayerTransform flipped = session.ActiveLayer()->transform;
     Expect(flipped.flipX && flipped.rotation == -10 && Near(flipped.Center().x, 400 - before.Center().x) &&
@@ -1219,8 +1937,8 @@ void TestFlipCommands()
                NearPoint(session.ActiveLayer()->transform.Center(), before.Center()) &&
                session.history.UndoName() == L"Flip Vertical",
            "flip.layer-about-center");
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.selection = DocumentSelection{true, {SelectionLoop{Vec2{10, 10}, Vec2{50, 10}, Vec2{50, 40}}}}; });
     session.FlipCanvas(true);
     Expect(session.Document().value().selection->loops[0][0] == Vec2{390, 10}, "flip.canvas-selection");
@@ -1292,7 +2010,7 @@ void TestDistortWarp()
     stroke.asset->image = Raster::Make(40, 20, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     stroke.asset->thumbnail = stroke.asset->image;
     stroke.transform.origin = Vec2{10, 10};
-    trim.EditForTest([&](CanvasDocument& document) { document.layers.push_back(stroke); });
+    EditLayerRecordsForTest(trim, [&](DocumentFixture& document) { document.layers.push_back(stroke); });
     trim.SelectLayer(stroke.id);
     trim.BeginTransform(false);
     trim.BeginDistort();
@@ -1475,7 +2193,8 @@ void TestSelectionCoverage()
 void TestSelectionSession()
 {
     // Legacy replaceAddAndSubtractCombineOutlines.
-    DocumentSession session = SelectionSession();
+    auto sessionOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& session = *sessionOwner;
     Lasso(session, Square(10, 10, 40));
     Expect(CoverageAt(session.Selection(), 100, 100, 30, 30) == 255 &&
                CoverageAt(session.Selection(), 100, 100, 70, 70) == 0,
@@ -1502,7 +2221,8 @@ void TestSelectionSession()
     Lasso(session, Square(-50, -50, 100));
     Expect(NearBounds(session.Selection(), 0, 0, 50, 50), "selection.clipped-to-canvas");
     // Legacy emptySelectionIsDistinctFromNoSelection.
-    DocumentSession empty = SelectionSession();
+    auto emptyOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& empty = *emptyOwner;
     Lasso(empty, Square(0, 0, 50), SelectionMode::Subtract);
     Expect(!empty.Selection().has_value(), "selection.subtract-from-nothing");
     Lasso(empty, Square(10, 10, 20));
@@ -1513,7 +2233,8 @@ void TestSelectionSession()
     empty.Deselect();
     Expect(!empty.Selection().has_value(), "selection.deselect");
     // Legacy clickDeselectsAndSelectionStepsUndo.
-    DocumentSession steps = SelectionSession();
+    auto stepsOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& steps = *stepsOwner;
     const int count = steps.history.UndoCount();
     Lasso(steps, Square(10, 10, 40));
     Expect(steps.history.UndoCount() == count + 1 && steps.history.UndoName() == L"Lasso", "selection.undo-entry");
@@ -1526,7 +2247,8 @@ void TestSelectionSession()
     steps.Redo();
     Expect(CoverageAt(steps.Selection(), 100, 100, 30, 30) == 255, "selection.redo");
     // Legacy polygonalCornersCanBeRemovedAndClosed.
-    DocumentSession polygon = SelectionSession();
+    auto polygonOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& polygon = *polygonOwner;
     polygon.lassoKind = LassoKind::Polygonal;
     polygon.BeginLasso(Vec2{10, 10}, SelectionMode::New);
     polygon.ExtendLasso(Vec2{90, 10});
@@ -1556,7 +2278,8 @@ void TestSelectionSession()
     Expect(polygon.PendingLasso()->points.size() == 2, "selection.skips-close-points");
     polygon.CancelLasso();
     // Legacy antialiasingControlsEdgeCoverage: the flag at the time of the outline sticks to it.
-    DocumentSession aliased = SelectionSession();
+    auto aliasedOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& aliased = *aliasedOwner;
     const std::vector<Vec2> triangle{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 100}};
     Lasso(aliased, triangle);
     Expect(aliased.Selection()->antialiased, "selection.antialiased-default");
@@ -1567,7 +2290,8 @@ void TestSelectionSession()
                CoverageAt(aliased.Selection(), 100, 100, 70, 30) == 0,
            "selection.hard-edges");
     // Legacy selectAllInverseAndToolSwitchCancelsDraft.
-    DocumentSession all = SelectionSession();
+    auto allOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& all = *allOwner;
     all.SelectAll();
     Expect(all.history.UndoName() == L"Select All" && CoverageAt(all.Selection(), 100, 100, 0, 0) == 255 &&
                CoverageAt(all.Selection(), 100, 100, 99, 99) == 255,
@@ -1578,7 +2302,8 @@ void TestSelectionSession()
                CoverageAt(all.Selection(), 100, 100, 75, 75) == 255,
            "selection.inverse");
     // Legacy cursorBadgeFollowsModifiersButKeepsAnOutlinesStartingMode.
-    DocumentSession modes = SelectionSession();
+    auto modesOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& modes = *modesOwner;
     Expect(modes.LassoCursorMode(false, false) == SelectionMode::New &&
                modes.LassoCursorMode(true, false) == SelectionMode::Add &&
                modes.LassoCursorMode(false, true) == SelectionMode::Subtract,
@@ -1600,7 +2325,8 @@ void TestSelectionSession()
                !modes.UpdateHeldSelectionKeys(false, false),
            "selection.held-released");
     // A pending transform blocks selection edits; Undo drops an outline in progress.
-    DocumentSession blocked = SelectionSession();
+    auto blockedOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& blocked = *blockedOwner;
     InsertPainted(blocked, 20, 20, Vec2{0, 0});
     blocked.BeginTransform(true);
     Expect(!blocked.CanEditSelection(), "selection.transform-blocks");
@@ -1611,7 +2337,8 @@ void TestSelectionSession()
     blocked.Undo();
     Expect(!blocked.PendingLasso().has_value(), "selection.undo-drops-draft");
     // No document: nothing happens.
-    DocumentSession none;
+    auto noneOwner = std::make_unique<DocumentSession>();
+    auto& none = *noneOwner;
     none.SelectAll();
     none.BeginLasso(Vec2{1, 1}, SelectionMode::New);
     Expect(!none.Selection().has_value() && !none.PendingLasso().has_value() && !none.CanModifySelection(),
@@ -1749,17 +2476,18 @@ Guid MaskedLayer(DocumentSession& session)
         }
     }
     const Raster mask = Raster::Make(100, 100, RasterFormat::Gray8, bytes.data(), bytes.size());
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == id)
-                {
-                    layer.mask = LayerMask{RasterAsset{mask, mask, L"mask"}, true, std::nullopt, true};
-                }
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == id)
+                                    {
+                                        layer.mask =
+                                            LayerMask{RasterAsset{mask, mask, L"mask"}, true, std::nullopt, true};
+                                    }
+                                }
+                            });
     return id;
 }
 
@@ -1788,35 +2516,36 @@ void TestSelectionLoad()
     // Legacy maskSelectionFollowsTheLayerTransformAndIgnoresAllWhiteMasks.
     DocumentSession scaled = SelectionSession(200, 200);
     const Guid scaledId = MaskedLayer(scaled);
-    scaled.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == scaledId)
-                {
-                    layer.transform.origin = Vec2{0, 0};
-                    layer.transform.size = Vec2{200, 200};
-                }
-            }
-        });
+    EditLayerRecordsForTest(scaled,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == scaledId)
+                                    {
+                                        layer.transform.origin = Vec2{0, 0};
+                                        layer.transform.size = Vec2{200, 200};
+                                    }
+                                }
+                            });
     Expect(scaled.LoadMaskSelection(scaledId) && NearBounds(scaled.Selection(), 40, 60, 80, 80),
            "load.mask-follows-transform");
     scaled.Deselect();
     scaled.AddBlankLayer();
     const Guid blank = scaled.ActiveLayerID().value();
     const Raster white = GrayRaster(1, 1, 255);
-    scaled.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == blank)
-                {
-                    layer.mask = LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
-                }
-            }
-        });
+    EditLayerRecordsForTest(scaled,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == blank)
+                                    {
+                                        layer.mask =
+                                            LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
+                                    }
+                                }
+                            });
     Expect(!scaled.LoadMaskSelection(blank) && !scaled.Selection().has_value(), "load.mask-all-white-ignored");
     Expect(!scaled.LoadMaskSelection(Guid::Generate()), "load.mask-unknown-layer");
     // Legacy cmdClickingALayerSelectsItsOpaquePixels: a 50 × 50 image, opaque ring around a transparent center,
@@ -1844,7 +2573,7 @@ void TestSelectionLoad()
     ringLayer.asset->thumbnail = ringRaster;
     ringLayer.transform.origin = Vec2{50, 50};
     ringLayer.transform.size = Vec2{100, 100};
-    layers.EditForTest([&](CanvasDocument& document) { document.layers.push_back(ringLayer); });
+    EditLayerRecordsForTest(layers, [&](DocumentFixture& document) { document.layers.push_back(ringLayer); });
     layers.SelectLayer(ringLayer.id);
     Expect(layers.LoadLayerSelection(ringLayer.id) && layers.history.UndoName() == L"Load Layer Selection" &&
                NearBounds(layers.Selection(), 70, 70, 60, 60),
@@ -1872,7 +2601,7 @@ void TestSelectionLoad()
     flippedLayer.transform.origin = Vec2{0, 0};
     flippedLayer.transform.size = Vec2{50, 50};
     flippedLayer.transform.flipX = true;
-    flipped.EditForTest([&](CanvasDocument& document) { document.layers.push_back(flippedLayer); });
+    EditLayerRecordsForTest(flipped, [&](DocumentFixture& document) { document.layers.push_back(flippedLayer); });
     flipped.SelectLayer(flippedLayer.id);
     Expect(flipped.LoadLayerSelection(flippedLayer.id) && CoverageAt(flipped.Selection(), 200, 200, 49, 0) == 0 &&
                CoverageAt(flipped.Selection(), 200, 200, 15, 15) == 255,
@@ -2160,7 +2889,7 @@ void TestWandSession()
     ImageLayer layer = RasterLayer(20, 10, L"Halves");
     layer.asset->image = halves;
     layer.asset->thumbnail = halves;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     session.AddBlankLayer();
     const std::set<int> left = Block(0, 10, 0, 10, 20);
@@ -2821,8 +3550,8 @@ void TestBrushSnapshots()
     const Raster first = session.ActiveLayer()->asset->image;
     // Supply the optional derived cache explicitly so this legacy retained-thumbnail accounting golden still
     // covers a distinct thumbnail owner after production image commits stop computing unused thumbnails.
-    session.EditForTest(
-        [](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [](DocumentFixture& document)
         { document.layers.back().asset->thumbnail = Raster::MakeThumbnail(document.layers.back().asset->image); });
     const std::size_t firstThumbnail = session.ActiveLayer()->asset->thumbnail.ByteSize();
     Expect(firstThumbnail > 0, "snapshot.optional-thumbnail-accounting-fixture-has-retained-bytes");
@@ -3061,7 +3790,7 @@ void TestBrushExpansion()
         imported.transform.sampling = LayerSampling::Nearest;
         const Raster gray = GrayRaster(1, 1, 128);
         imported.mask = LayerMask{RasterAsset{gray, gray, L"mask"}, true, std::nullopt, true};
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(imported); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(imported); });
         session.SelectLayer(imported.id);
         const std::optional<CanvasDocument> original = session.Document();
         session.brushSettings = BrushSettings{16, 1, 0, 1, 0, 1};
@@ -3095,7 +3824,7 @@ void TestBrushExpansion()
     masked.transform.size = Vec2{40, 20};
     const Raster half = GrayRaster(40, 20, 128);
     masked.mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
-    grown.EditForTest([&](CanvasDocument& document) { document.layers.push_back(masked); });
+    EditLayerRecordsForTest(grown, [&](DocumentFixture& document) { document.layers.push_back(masked); });
     grown.SelectLayer(masked.id);
     grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
     Expect(grown.BeginBrush(Vec2{20, 50}), "expand.mask-begin");
@@ -3122,7 +3851,7 @@ void TestBrushSelectionClip()
     blue.asset->thumbnail = blue.asset->image;
     blue.transform.origin = Vec2{0, 0};
     blue.transform.size = Vec2{100, 40};
-    scaled.EditForTest([&](CanvasDocument& document) { document.layers.push_back(blue); });
+    EditLayerRecordsForTest(scaled, [&](DocumentFixture& document) { document.layers.push_back(blue); });
     scaled.SelectLayer(blue.id);
     scaled.selectionAntialiased = true;
     scaled.ApplySelection({SelectionLoop{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 40}}}, SelectionMode::New, L"Select");
@@ -3168,7 +3897,7 @@ Guid InsertPixels(DocumentSession& session, const Raster& image, const wchar_t* 
     ImageLayer layer = RasterLayer(image.Width(), image.Height(), name);
     layer.asset->image = image;
     layer.asset->thumbnail = Raster::MakeThumbnail(image);
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     return layer.id;
 }
@@ -3389,18 +4118,18 @@ void TestBlurTool()
         }
     }
     const Raster halfMask = Raster::Make(40, 40, RasterFormat::Gray8, half.data(), half.size());
-    masked.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == id)
-                {
-                    layer.mask->asset.image = halfMask;
-                    layer.mask->asset.thumbnail = halfMask;
-                }
-            }
-        });
+    EditLayerRecordsForTest(masked,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == id)
+                                    {
+                                        layer.mask->asset.image = halfMask;
+                                        layer.mask->asset.thumbnail = halfMask;
+                                    }
+                                }
+                            });
     masked.SelectLayerTarget(id, true);
     masked.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1};
     Expect(masked.IsMaskSelected() && Dab(masked, Vec2{20, 20}, BrushKind::Blur) &&
@@ -3415,6 +4144,63 @@ void TestBlurTool()
 
 void TestSmearWarp()
 {
+    // Literal private-copy reference: a nested sparse tile window with an overlapping replacement.
+    // Reading the working image must not grow either source cache or history's resident charge.
+    const std::array<std::uint8_t, 16> leafBytes{1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255};
+    const Raster leaf = Raster::Make(2, 2, RasterFormat::Bgra8888, leafBytes.data(), leafBytes.size());
+    const Raster nested = Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, leaf, 1, 0, {{1, 1, leaf, 1, 1, 1, 1}}, 11);
+    const Raster sparse = Raster::MakeSparse(4, 3, RasterFormat::Bgra8888, {}, 0, 0, {{1, 1, nested, 1, 0, 2, 2}}, 5);
+    const std::array<std::uint8_t, 48> expected{5, 5, 5, 5, 5,  5,  5,  5,   5,  5,  5,  5,   5, 5, 5, 5,
+                                                5, 5, 5, 5, 1,  2,  3,  255, 4,  5,  6,  255, 5, 5, 5, 5,
+                                                5, 5, 5, 5, 10, 11, 12, 255, 10, 11, 12, 255, 5, 5, 5, 5};
+    const std::uint64_t emptyStorageBytes = sizeof(WarpStroke) + 1024;
+    const Raster onePixel = Raster::Make(1, 1, RasterFormat::Bgra8888, leafBytes.data(), 4);
+    WarpStroke emptyStroke(onePixel, SmearMode::Liquify, BrushSettings{});
+    Expect(emptyStroke.IsValid() && emptyStroke.Points().empty() &&
+               emptyStroke.RetirementMemoryBytes() > emptyStorageBytes,
+           "warp.private-source.valid-empty-stroke-retains-working-copy");
+    Expect(!sparse.IsMaterialized() && !nested.IsMaterialized() && sparse.ByteSize() == 0 && nested.ByteSize() == 0,
+           "warp.private-source.fixture-caches-unassembled");
+    for (const SmearMode mode : {SmearMode::Smudge, SmearMode::Liquify})
+    {
+        WarpStroke working(sparse, mode, BrushSettings{});
+        const Raster copied = working.Image();
+        Expect(working.IsValid() && working.Width() == 4 && working.Height() == 3 && working.Points().empty(),
+               "warp.private-source.valid-initial-copy-without-dabs");
+        Expect(copied.HasStorage() && copied.ByteSize() == expected.size() &&
+                   std::equal(expected.begin(), expected.end(), copied.Data()),
+               "warp.private-source.literal-nested-window-and-overlap-pixels");
+        Expect(!sparse.IsMaterialized() && !nested.IsMaterialized() && sparse.ByteSize() == 0 && nested.ByteSize() == 0,
+               "warp.private-source.leaves-complete-source-residency-unchanged");
+        Expect(working.TakeChangedTiles().empty(), "warp.private-source.initial-copy-has-no-dirty-preview");
+    }
+    CancelSource stopped;
+    (void)stopped.Cancel();
+    WarpStroke cancelled(sparse, SmearMode::Smudge, BrushSettings{}, stopped.Token());
+    Expect(!cancelled.IsValid() && !cancelled.Image().HasStorage() && cancelled.Points().empty() &&
+               cancelled.TakeChangedTiles().empty() && cancelled.Width() == 0 && cancelled.Height() == 0 &&
+               cancelled.RetirementMemoryBytes() == emptyStorageBytes &&
+               cancelled.RetirementMemoryBytes() < emptyStroke.RetirementMemoryBytes(),
+           "warp.private-source.cancelled-before-copy-exposes-no-partial-stroke");
+    Expect(!sparse.IsMaterialized() && !nested.IsMaterialized(),
+           "warp.private-source.cancelled-copy-leaves-source-caches-unassembled");
+    WarpStroke shutdown(sparse, SmearMode::Liquify, BrushSettings{}, CancelToken{{}, stopped.Token().LocalToken()});
+    Expect(!shutdown.IsValid() && !shutdown.Image().HasStorage() && !sparse.IsMaterialized() &&
+               shutdown.RetirementMemoryBytes() == emptyStorageBytes,
+           "warp.private-source.worker-shutdown-token-refuses-copy");
+    const Raster gray = Raster::Make(2, 2, RasterFormat::Gray8);
+    WarpStroke invalid(gray, SmearMode::Liquify, BrushSettings{});
+    Expect(!invalid.IsValid() && !invalid.Image().HasStorage() && invalid.RetirementMemoryBytes() == emptyStorageBytes,
+           "warp.private-source.gray-input-refused");
+    Raster tooDeep = leaf;
+    for (std::size_t depth = 0; depth < kRasterWorkDepthLimit; ++depth)
+        tooDeep = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, tooDeep}}, 0);
+    WarpStroke refused(tooDeep, SmearMode::Liquify, BrushSettings{});
+    Expect(!refused.IsValid() && !refused.Image().HasStorage() && refused.TakeChangedTiles().empty() &&
+               !tooDeep.IsMaterialized() && refused.Width() == 0 && refused.Height() == 0 &&
+               refused.RetirementMemoryBytes() == emptyStorageBytes &&
+               refused.RetirementMemoryBytes() < emptyStroke.RetirementMemoryBytes(),
+           "warp.private-source.depth-refusal-never-publishes-partial-pixels");
     const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
     const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
     const Raster halves = BytesRaster(60, 20, [&](int x, int) { return x < 30 ? red : blue; });
@@ -3515,7 +4301,7 @@ void TestGradientPreviewPalette()
            "gradient.layer-switch-applies");
 }
 
-void TestGradientTool()
+void TestGradientForegroundToBackground()
 {
     // Legacy foregroundToBackgroundFillsCanvasAndCommitsOneUndo (pixels within 3 levels, as Core Graphics quantizes).
     {
@@ -3537,6 +4323,10 @@ void TestGradientTool()
         session.Undo();
         Expect(!session.ActiveLayer()->asset.has_value(), "gradient.undo-restores");
     }
+}
+
+void TestGradientRadial()
+{
     // Legacy radialSpreadsFromStartToRimInEveryDirection.
     {
         DocumentSession session = GradientSession(101, 101);
@@ -3559,6 +4349,10 @@ void TestGradientTool()
                    NearPixel(ActivePixel(session, 0, 0), {255, 255, 255, 255}),
                "gradient.radial");
     }
+}
+
+void TestGradientReverseAndOpacity()
+{
     // Legacy reverseOpacityAndDirectionFollowSettings: white at the start with 50 % alpha on a blank layer.
     {
         DocumentSession session = GradientSession();
@@ -3571,6 +4365,10 @@ void TestGradientTool()
         Expect(Near(start[3], 128) && Near(start[2], start[3]) && Near(end[2], 0) && Near(end[3], 128),
                "gradient.reverse-and-opacity");
     }
+}
+
+void TestGradientForegroundToTransparent()
+{
     // Legacy foregroundToTransparentPreservesUnderlyingPixelsAndAlpha.
     {
         DocumentSession session = GradientSession();
@@ -3589,6 +4387,10 @@ void TestGradientTool()
                    middle[1] == 0 && middle[3] == 255,
                "gradient.foreground-to-transparent");
     }
+}
+
+void TestGradientCancelAndUndo()
+{
     // Legacy cancelUndoAndClicksLeaveDocumentUntouched.
     {
         DocumentSession session = GradientSession();
@@ -3603,6 +4405,10 @@ void TestGradientTool()
         session.Undo();
         Expect(session.PendingGradient() == nullptr && session.Document().value() == before, "gradient.undo-drops");
     }
+}
+
+void TestGradientRedrag()
+{
     // Legacy redraggingReplacesPendingLineWithoutAccumulating.
     {
         DocumentSession session = GradientSession();
@@ -3613,6 +4419,10 @@ void TestGradientTool()
                    NearPixel(ActivePixel(session, 100, 2), {0, 0, 0, 255}),
                "gradient.redrag-replaces");
     }
+}
+
+void TestGradientMask()
+{
     // Legacy maskGradientWritesCoverageInsideLayerBounds: the default mask palette paints black (hide) to white.
     {
         DocumentSession session = GradientSession();
@@ -3628,6 +4438,10 @@ void TestGradientTool()
                    Near(ActiveMaskValue(session, 100, 2), 255) && Near(ActiveMaskValue(session, 50, 2), 128),
                "gradient.mask");
     }
+}
+
+void TestGradientMaskPaletteColors()
+{
     // The same legacy case with a colored palette (RF-205, legacy paletteColor): a mask gradient runs from the mask
     // palette's foreground (black unless `maskPaintWhite`) to its background, whatever the RGB colors are.
     for (const bool paintWhite : {false, true})
@@ -3659,6 +4473,10 @@ void TestGradientTool()
                    (paintWhite ? std::array<double, 4>{0, 0, 1, 1} : std::array<double, 4>{1, 0, 0, 1}),
                paintWhite ? "gradient.layer-palette-colors-after-white" : "gradient.layer-palette-colors");
     }
+}
+
+void TestGradientPaletteCommands()
+{
     // X and D on a targeted mask (legacy ColorPalette.swift swapPaletteColors / resetPaletteColors) flip and reset
     // the mask palette, not the RGB colors, and a pending mask gradient follows; off the mask they change the colors.
     {
@@ -3686,6 +4504,19 @@ void TestGradientTool()
                    session.BackgroundColor() == 0xFFFF0000u,
                "palette.image-swap-leaves-mask-paint");
     }
+}
+
+void TestGradientTool()
+{
+    TestGradientForegroundToBackground();
+    TestGradientRadial();
+    TestGradientReverseAndOpacity();
+    TestGradientForegroundToTransparent();
+    TestGradientCancelAndUndo();
+    TestGradientRedrag();
+    TestGradientMask();
+    TestGradientMaskPaletteColors();
+    TestGradientPaletteCommands();
     TestGradientPreviewPalette();
 }
 
@@ -3713,7 +4544,7 @@ void TestShapeTool()
         session.SelectAll();
         const int count = session.history.UndoCount();
         DragShape(session, Vec2{10, 10}, Vec2{40, 30});
-        const std::vector<ImageLayer>& layers = session.Document().value().layers;
+        const auto& layers = session.Document().value().layers;
         Expect(layers.size() == 2 && layers[0].name == L"Layer 1" && layers[1].name == L"Rectangle 1" &&
                    session.ActiveLayer()->name == L"Rectangle 1" && session.history.UndoCount() == count + 1 &&
                    session.history.UndoName() == L"Rectangle",
@@ -4039,18 +4870,18 @@ void TestPixelEditMasksAndInvert()
     {
         DocumentSession session = PixelEditSession(100, 100);
         const Guid id = InsertPixels(session, SolidRaster(50, 50, 255, 0, 0, 255), L"Blue");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == id)
-                    {
-                        layer.transform.origin = Vec2{0, 0};
-                        layer.transform.size = Vec2{100, 100};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == id)
+                                        {
+                                            layer.transform.origin = Vec2{0, 0};
+                                            layer.transform.size = Vec2{100, 100};
+                                        }
+                                    }
+                                });
         SelectRect(session, 0, 0, 50, 50);
         session.AddMask();
         const ImageLayer* layer = session.ActiveLayer();
@@ -4292,17 +5123,17 @@ void TestClipboard()
         DocumentSession session = PixelEditSession();
         TwoColorLayer(session);
         const Guid greenLayer = InsertPixels(session, SolidRaster(20, 20, 0, 255, 0, 255), L"Green");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == greenLayer)
-                    {
-                        layer.transform.origin = Vec2{60, 10};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == greenLayer)
+                                        {
+                                            layer.transform.origin = Vec2{60, 10};
+                                        }
+                                    }
+                                });
         SelectRect(session, 55, 5, 30, 30);
         Expect(session.CopySelection(), "clipboard.active-layer-copy");
         session.Paste();
@@ -5285,6 +6116,113 @@ void TestFilters()
     }
 }
 
+// Legacy sharedEditorsKeepPixelsDynamicAndSupportCancel. Each kind is a separate fixture so the baseline
+// test image needs no indirect enum dispatch across calls that mutate the session.
+template <AdjustmentKind kind> void TestAdjustmentLayerSharedEditor()
+{
+    DocumentSession session = PixelEditSession(2, 2);
+    const Raster white = SolidStraight(2, 2, 1, 1, 1);
+    const Guid baseID = InsertPixels(session, white, L"White");
+    session.AddAdjustment(kind);
+    const std::optional<Guid> id = session.AdjustmentEditingID();
+    Expect(id.has_value() && session.ActiveLayer()->adjustment.has_value(), "adjustlayer.editor-opens");
+    const LayerAdjustment created = session.ActiveLayer()->adjustment.value();
+    Expect(session.BeginAdjustmentEditing(id.value(), white) && session.AdjustmentOriginal().has_value() &&
+               session.AdjustmentOriginal()->kind == kind,
+           "adjustlayer.editor-begins");
+    if constexpr (kind == AdjustmentKind::Levels)
+    {
+        Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady &&
+                   session.PendingColorEdit()->histogram[0][255] == 4,
+               "adjustlayer.levels-histogram");
+        LevelsSettings settings = session.PendingColorEdit()->settings.levels;
+        settings.ranges[0].outputWhite = 0;
+        session.UpdateLevels(settings, true);
+        Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
+        session.UpdateLevels(settings, false);
+        Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Curves)
+    {
+        FilterSettings settings = session.PendingColorEdit()->settings;
+        settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
+        session.UpdateColorEdit(settings, true);
+        Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Exposure || kind == AdjustmentKind::GradientMap ||
+                       kind == AdjustmentKind::Grain)
+    {
+        Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == AdjustmentFilterKind(kind),
+               "adjustlayer.filter-kind");
+        FilterSettings settings = session.PendingColorEdit()->settings;
+        if (kind == AdjustmentKind::Exposure)
+        {
+            settings.exposure.exposure = 1;
+        }
+        else if (kind == AdjustmentKind::GradientMap)
+        {
+            settings.gradientMap.reversed = true;
+        }
+        else
+        {
+            settings.grain.amount = 70;
+        }
+        session.UpdateColorEdit(settings, true);
+        const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
+        Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
+                   live.Grain() == settings.grain,
+               "adjustlayer.filter-live");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Hsv)
+    {
+        HueSaturationSettings settings = session.PendingColorEdit()->settings.hsv;
+        settings.range = ColorRange::Reds;
+        Adjust::RangeOf(settings).hue = 80;
+        Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
+        settings.invertRange = true;
+        session.UpdateHueSaturation(settings, true);
+        Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
+        session.CommitColorEdit();
+    }
+    const LayerAdjustment saved = session.ActiveLayer()->adjustment.value();
+    Expect(!session.AdjustmentEditingID().has_value() && !session.HasColorEdit() &&
+               Find(session.Document(), baseID)->asset->image == white && !session.ActiveLayer()->asset.has_value(),
+           "adjustlayer.commit-keeps-pixels-dynamic");
+    session.SetAdjustmentEditingID(id);
+    Expect(session.BeginAdjustmentEditing(id.value(), white), "adjustlayer.reopens");
+    if constexpr (kind == AdjustmentKind::Levels)
+    {
+        Expect(session.PendingColorEdit()->settings.levels == saved.levels, "adjustlayer.reopened-levels");
+        session.UpdateLevels(LevelsSettings{}, true);
+        session.CancelColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Curves || kind == AdjustmentKind::Exposure ||
+                       kind == AdjustmentKind::GradientMap || kind == AdjustmentKind::Grain)
+    {
+        const FilterSettings reopened = session.PendingColorEdit()->settings;
+        Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
+                   reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
+               "adjustlayer.reopened-filter");
+        session.UpdateColorEdit(FilterSettings{}, true);
+        session.CancelColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Hsv)
+    {
+        Expect(session.PendingColorEdit()->settings.hsv == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
+        session.UpdateHueSaturation(HueSaturationSettings{}, true);
+        session.CancelColorEdit();
+    }
+    Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
+           "adjustlayer.cancel-restores");
+    session.Undo();
+    Expect(session.ActiveLayer()->adjustment == created, "adjustlayer.undo-to-created");
+    session.Redo();
+    Expect(session.ActiveLayer()->adjustment == saved, "adjustlayer.redo-to-saved");
+}
+
 void TestAdjustmentLayers()
 {
     // Legacy adjustmentPersistsDuplicatesAndUndoRestoresSettings (the file round trip lives in IoTests).
@@ -5333,124 +6271,13 @@ void TestAdjustmentLayers()
         session.Undo();
         Expect(session.ActiveLayer()->asset->image == asset, "adjustlayer.curves-undo");
     }
-    // Legacy sharedEditorsKeepPixelsDynamicAndSupportCancel, for every kind.
-    for (const AdjustmentKind kind : {AdjustmentKind::Hsv, AdjustmentKind::Levels, AdjustmentKind::Curves,
-                                      AdjustmentKind::Exposure, AdjustmentKind::GradientMap, AdjustmentKind::Grain})
-    {
-        DocumentSession session = PixelEditSession(2, 2);
-        const Raster white = SolidStraight(2, 2, 1, 1, 1);
-        const Guid baseID = InsertPixels(session, white, L"White");
-        session.AddAdjustment(kind);
-        const std::optional<Guid> id = session.AdjustmentEditingID();
-        Expect(id.has_value() && session.ActiveLayer()->adjustment.has_value(), "adjustlayer.editor-opens");
-        const LayerAdjustment created = session.ActiveLayer()->adjustment.value();
-        Expect(session.BeginAdjustmentEditing(id.value(), white) && session.AdjustmentOriginal().has_value() &&
-                   session.AdjustmentOriginal()->kind == kind,
-               "adjustlayer.editor-begins");
-        switch (kind)
-        {
-        case AdjustmentKind::Levels:
-        {
-            Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady &&
-                       session.PendingColorEdit()->histogram[0][255] == 4,
-                   "adjustlayer.levels-histogram");
-            LevelsSettings settings = session.PendingColorEdit()->settings.levels;
-            settings.ranges[0].outputWhite = 0;
-            session.UpdateLevels(settings, true);
-            Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
-            session.UpdateLevels(settings, false);
-            Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Curves:
-        {
-            FilterSettings settings = session.PendingColorEdit()->settings;
-            settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
-            session.UpdateColorEdit(settings, true);
-            Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Exposure:
-        case AdjustmentKind::GradientMap:
-        case AdjustmentKind::Grain:
-        {
-            Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == AdjustmentFilterKind(kind),
-                   "adjustlayer.filter-kind");
-            FilterSettings settings = session.PendingColorEdit()->settings;
-            if (kind == AdjustmentKind::Exposure)
-            {
-                settings.exposure.exposure = 1;
-            }
-            else if (kind == AdjustmentKind::GradientMap)
-            {
-                settings.gradientMap.reversed = true;
-            }
-            else
-            {
-                settings.grain.amount = 70;
-            }
-            session.UpdateColorEdit(settings, true);
-            const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
-            Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
-                       live.Grain() == settings.grain,
-                   "adjustlayer.filter-live");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Hsv:
-        {
-            HueSaturationSettings settings = session.PendingColorEdit()->settings.hsv;
-            settings.range = ColorRange::Reds;
-            Adjust::RangeOf(settings).hue = 80;
-            Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
-            settings.invertRange = true;
-            session.UpdateHueSaturation(settings, true);
-            Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
-            session.CommitColorEdit();
-            break;
-        }
-        }
-        const LayerAdjustment saved = session.ActiveLayer()->adjustment.value();
-        Expect(!session.AdjustmentEditingID().has_value() && !session.HasColorEdit() &&
-                   Find(session.Document(), baseID)->asset->image == white && !session.ActiveLayer()->asset.has_value(),
-               "adjustlayer.commit-keeps-pixels-dynamic");
-        session.SetAdjustmentEditingID(id);
-        Expect(session.BeginAdjustmentEditing(id.value(), white), "adjustlayer.reopens");
-        switch (kind)
-        {
-        case AdjustmentKind::Levels:
-            Expect(session.PendingColorEdit()->settings.levels == saved.levels, "adjustlayer.reopened-levels");
-            session.UpdateLevels(LevelsSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        case AdjustmentKind::Curves:
-        case AdjustmentKind::Exposure:
-        case AdjustmentKind::GradientMap:
-        case AdjustmentKind::Grain:
-        {
-            const FilterSettings reopened = session.PendingColorEdit()->settings;
-            Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
-                       reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
-                   "adjustlayer.reopened-filter");
-            session.UpdateColorEdit(FilterSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        }
-        case AdjustmentKind::Hsv:
-            Expect(session.PendingColorEdit()->settings.hsv == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
-            session.UpdateHueSaturation(HueSaturationSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        }
-        Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
-               "adjustlayer.cancel-restores");
-        session.Undo();
-        Expect(session.ActiveLayer()->adjustment == created, "adjustlayer.undo-to-created");
-        session.Redo();
-        Expect(session.ActiveLayer()->adjustment == saved, "adjustlayer.redo-to-saved");
-    }
+    // Keep the legacy kind order and the complete shared-editor assertions for every kind.
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Hsv>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Levels>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Curves>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Exposure>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::GradientMap>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Grain>();
     // Legacy shiftPlusAndMinusStepTheActiveLayersBlendModeWhereverFocusIsExceptTextFields (the session part).
     {
         DocumentSession session = PixelEditSession(40, 20);
@@ -5879,7 +6706,7 @@ void TestSizeDrafts()
 void TestCanvasResize()
 {
     // Legacy CanvasSizeTests.everyAnchorPreservesSourceAndTransformForExpansionAndShrink.
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 64;
     document.height = 32;
@@ -5899,7 +6726,7 @@ void TestCanvasResize()
             options.height = 32 + delta;
             options.anchor = anchor;
             CanvasDocument result;
-            if (ResizeCanvas(document, options, result) != ResizeStatus::Ok || result.layers.size() != 1)
+            if (ResizeCanvas(document.Seal(), options, result) != ResizeStatus::Ok || result.layers.size() != 1)
             {
                 anchorsHold = false;
                 continue;
@@ -5980,7 +6807,7 @@ void TestImageResize()
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
     session.BeginEdit(L"Import Image");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.EndEdit();
     session.SelectLayer(layer.id);
     const std::optional<CanvasDocument> original = session.Document();
@@ -6028,12 +6855,12 @@ void TestImageResize()
     Expect(plain.Document().value().resolution == 72, "imagesize.resolution-undo");
     // Legacy rotatedHiddenLayerScalesInDocumentAxesAndInvalidSizeIsRejected: a 90-degree 64 × 32 layer becomes
     // 32 × 64, then scales 2× horizontally and 3× vertically.
-    CanvasDocument rotated = original.value();
+    DocumentFixture rotated = DocumentFixture::Copy(original.value());
     rotated.layers[0].visible = false;
     rotated.layers[0].transform.origin = Vec2{-16, 4};
     rotated.layers[0].transform.rotation = 90;
     CanvasDocument turned;
-    Expect(ResizeImage(rotated, options, turned) == ResizeStatus::Ok && !turned.layers[0].visible &&
+    Expect(ResizeImage(rotated.Seal(), options, turned) == ResizeStatus::Ok && !turned.layers[0].visible &&
                turned.layers[0].transform.rotation == 0 && std::abs(turned.layers[0].transform.size.x - 64) <= 1 &&
                std::abs(turned.layers[0].transform.size.y - 192) <= 1 && turned.layers[0].transform.origin.y < 0,
            "imagesize.rotated-hidden-box");
@@ -6041,23 +6868,23 @@ void TestImageResize()
     huge.width = 30000;
     huge.height = 30000;
     huge.resolution = 72;
-    Expect(ResizeImage(rotated, huge, turned) == ResizeStatus::TooLarge, "imagesize.rejects-megapixels");
+    Expect(ResizeImage(rotated.Seal(), huge, turned) == ResizeStatus::TooLarge, "imagesize.rejects-megapixels");
     Expect(session.Document().value().width == 128, "imagesize.rejection-leaves-document");
     // A scaled layer with a mask on its own placement keeps the mask pixels; a mask on the layer rasterizes.
-    CanvasDocument masked = original.value();
+    DocumentFixture masked = DocumentFixture::Copy(original.value());
     LayerMask mask;
     std::vector<std::uint8_t> gray(64u * 32u, 255);
     mask.asset.image = Raster::Make(64, 32, RasterFormat::Gray8, gray.data(), gray.size());
     mask.asset.thumbnail = Raster::MakeThumbnail(mask.asset.image);
     masked.layers[0].mask = mask;
     CanvasDocument maskedResult;
-    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok && maskedResult.layers[0].mask.has_value() &&
-               maskedResult.layers[0].mask->asset.image.Width() == 128 &&
+    Expect(ResizeImage(masked.Seal(), options, maskedResult) == ResizeStatus::Ok &&
+               maskedResult.layers[0].mask.has_value() && maskedResult.layers[0].mask->asset.image.Width() == 128 &&
                maskedResult.layers[0].mask->asset.image.Height() == 96 &&
                maskedResult.layers[0].mask->asset.image.Data()[0] == 255,
            "imagesize.mask-rasterizes");
     masked.layers[0].mask->placement = LayerTransform{Vec2{8, 8}, Vec2{16, 8}};
-    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok &&
+    Expect(ResizeImage(masked.Seal(), options, maskedResult) == ResizeStatus::Ok &&
                maskedResult.layers[0].mask->asset.image == mask.asset.image &&
                maskedResult.layers[0].mask->placement.has_value() &&
                maskedResult.layers[0].mask->placement->origin == Vec2{16, 24} &&
@@ -6090,7 +6917,7 @@ void TestCrop()
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
     session.BeginEdit(L"Import Image");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.EndEdit();
     session.SelectLayer(layer.id);
     const std::optional<CanvasDocument> before = session.Document();
@@ -6181,7 +7008,7 @@ void TestCrop()
     red.asset = RasterAsset{redRaster, Raster::MakeThumbnail(redRaster), red.name};
     red.transform.origin = Vec2{150, 120};
     targets.BeginEdit(L"Import Image");
-    targets.EditForTest([&](CanvasDocument& document) { document.layers.push_back(red); });
+    EditLayerRecordsForTest(targets, [&](DocumentFixture& document) { document.layers.push_back(red); });
     targets.EndEdit();
     const SnapTargets found = targets.CropSnapTargets();
     const std::set<double> xs(found.xs.begin(), found.xs.end());
@@ -6206,12 +7033,12 @@ void TestMerge()
     ImageLayer blue = RasterLayer(2, 2, L"Blue");
     blue.transform.origin = Vec2{2, 2};
     session.BeginEdit(L"Setup");
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            document.layers.push_back(red);
-            document.layers.push_back(blue);
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                document.layers.push_back(red);
+                                document.layers.push_back(blue);
+                            });
     session.EndEdit();
     session.AddBlankLayer();
     const Guid clipped = session.ActiveLayerID().value();
@@ -6278,7 +7105,7 @@ void TestMerge()
            "merge.prepared-missing-layer-refused");
     Expect(preparedSession.ApplyPreparedMerge(preparedPlan.value(), prepared.value()), "merge.prepared-applies");
     Expect(session.MergeLayers(plan.value(), composite), "merge.down-applies");
-    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    const auto& layers = session.Document().value().layers;
     const ImageLayer* merged = session.ActiveLayer();
     const ImageLayer* preparedMerged = preparedSession.ActiveLayer();
     // The blank clipped layer sits above the bottom one, so the merged layer lands at the top, in Blue's slot.
@@ -6316,7 +7143,7 @@ void TestMerge()
     ImageLayer inner = RasterLayer(4, 4, L"Inner");
     inner.parentID = folder;
     group.BeginEdit(L"Setup");
-    group.EditForTest([&](CanvasDocument& document) { document.layers.push_back(inner); });
+    EditLayerRecordsForTest(group, [&](DocumentFixture& document) { document.layers.push_back(inner); });
     group.EndEdit();
     group.SelectLayer(folder);
     const std::optional<DocumentSession::MergePlan> groupPlan = group.PlanMerge();
@@ -6507,8 +7334,8 @@ void TestStretchedMaskPainting()
     const Raster half = Raster::Make(300, 150, RasterFormat::Gray8, halves.data(), halves.size());
     DocumentSession session = PixelEditSession(600, 300);
     const Guid id = InsertPixels(session, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true}; });
     session.SelectLayerTarget(id, true);
     Expect(session.IsMaskSelected() && MaskValue(session, 280.5, 280.5) == 0 && MaskValue(session, 450.5, 200.5) == 255,
@@ -6525,8 +7352,8 @@ void TestStretchedMaskPainting()
     // Growing the image carries the stretched mask onto the new grid in place, revealing only the new area.
     DocumentSession grown = PixelEditSession(1000, 300);
     const Guid grownId = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
-    grown.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        grown, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true}; });
     grown.SelectLayer(grownId);
     grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
@@ -6596,7 +7423,7 @@ void TestActiveLayerTargets()
     // Selecting the same layer again after its mask is gone drops the target too.
     DocumentSession lost = PixelEditSession(40, 40);
     lost.AddLayerMask(true);
-    lost.EditForTest([](CanvasDocument& document) { document.layers.back().mask.reset(); });
+    EditLayerRecordsForTest(lost, [](DocumentFixture& document) { document.layers.back().mask.reset(); });
     lost.SelectLayer(lost.ActiveLayerID());
     Expect(!lost.IsMaskSelected() && lost.CanPaint(), "active.reselect-without-a-mask");
 }
@@ -6691,7 +7518,7 @@ void TestOneColorEditSession()
         session.UpdateColorEdit(changes, true);
         const bool previewed = session.PendingColorEdit()->previewRaster.HasStorage();
         // The layer moves under the open panel (a resize the host did not settle first).
-        CanvasDocument moved = session.Document().value();
+        auto moved = DocumentFixture::Copy(session.Document().value());
         for (ImageLayer& layer : moved.layers)
         {
             if (layer.id == id)
@@ -6699,7 +7526,7 @@ void TestOneColorEditSession()
                 layer.transform.origin.x += 10;
             }
         }
-        session.ApplyDocumentSize(moved, L"Canvas Size");
+        session.ApplyDocumentSize(std::move(moved).Seal(), L"Canvas Size");
         const Raster original = session.ActiveLayer()->asset->image;
         const int count = session.history.UndoCount();
         session.CommitColorEdit();
@@ -6865,12 +7692,13 @@ void TestSelectionLoadRefusals()
            "loadrefused.dark-pixels-too-detailed");
     DocumentSession session = SelectionSession(kSide, kSide);
     const Guid id = session.ActiveLayerID().value();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            document.layers.back().mask =
-                LayerMask{RasterAsset{detailed, Raster::MakeThumbnail(detailed), L"mask"}, true, std::nullopt, true};
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                document.layers.back().mask =
+                                    LayerMask{RasterAsset{detailed, Raster::MakeThumbnail(detailed), L"mask"}, true,
+                                              std::nullopt, true};
+                            });
     const int count = session.history.UndoCount();
     failure = WandFailure::None;
     Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::TooDetailed &&
@@ -6878,8 +7706,8 @@ void TestSelectionLoadRefusals()
            "loadrefused.mask-too-detailed");
     // Nothing to trace is not a refusal.
     const Raster white = GrayRaster(1, 1, 255);
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true}; });
     failure = WandFailure::TooDetailed;
     Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::None,
@@ -6926,7 +7754,7 @@ void TestCropWholePixels()
     ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     session.SetCropFrame(CropRect{8.4, 4.6, 32.2, 15.7});
     Expect(session.CommitCrop() && session.Document().value().width == 33 && session.Document().value().height == 15,
@@ -6952,8 +7780,8 @@ void TestDistortMasks()
         DocumentSession session;
         session.CreateDocument(100, 60, false);
         const Guid id = InsertPainted(session, 20, 20, Vec2{10, 10});
-        session.EditForTest(
-            [&](CanvasDocument& document)
+        EditLayerRecordsForTest(
+            session, [&](DocumentFixture& document)
             { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, false}; });
         const LayerTransform original = session.ActiveLayer()->transform;
         session.BeginTransform(false);
@@ -6976,8 +7804,8 @@ void TestDistortMasks()
         LayerTransform apart;
         apart.origin = Vec2{15, 12};
         apart.size = Vec2{20, 20};
-        session.EditForTest(
-            [&](CanvasDocument& document)
+        EditLayerRecordsForTest(
+            session, [&](DocumentFixture& document)
             { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, apart, true}; });
         const LayerTransform original = session.ActiveLayer()->transform;
         const std::array<Vec2, 4> carried = DistortWarp::Carried(apart, original, shape);
@@ -7031,9 +7859,32 @@ void TestDocumentPixelBudget()
     // enforced them only on save, where the document was then rejected), refuses when they would be exceeded and
     // reports it once through TakeBudgetRefusal.
     const Raster red = SolidRaster(100, 100, 0, 0, 255, 255);
+    for (const auto kind : {FilterKind::GaussianBlur, FilterKind::MotionBlur})
+    {
+        // The exact 100 M source fits D7; any positive blur growth exceeds the single-raster limit before
+        // the aggregate-budget branch. Empty sparse storage proves refusal without allocating its pixels.
+        DocumentSession session = PixelEditSession(4, 1);
+        auto layer = BudgetLayer(10000, 10000);
+        layer.visible = true;
+        const Guid active = layer.id;
+        const Raster source = layer.asset.value().image;
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
+        session.SelectLayer(active);
+        const auto revision = session.history.CurrentRevision();
+        const auto undos = session.history.UndoCount();
+        session.BeginColorEdit(kind, true);
+        const bool gaussian = kind == FilterKind::GaussianBlur;
+        Expect(!session.HasColorEdit() && session.TakeBudgetRefusal() && !session.TakeBudgetRefusal(),
+               gaussian ? "docbudget.gaussian-single-grid-notice-once" : "docbudget.motion-single-grid-notice-once");
+        Expect(session.ActiveLayer()->asset.value().image == source && !source.IsMaterialized() &&
+                   session.history.CurrentRevision() == revision && session.history.UndoCount() == undos,
+               gaussian ? "docbudget.gaussian-single-grid-source-history"
+                        : "docbudget.motion-single-grid-source-history");
+    }
     {
         DocumentSession session = PixelEditSession(200, 200);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 10000)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 10000)); });
         const std::size_t count = session.Document().value().layers.size();
         Expect(session.PixelBudgetLeft(false) == 0 && !session.TakeBudgetRefusal(), "docbudget.full");
         session.PasteImage(SolidRaster(20, 20, 0, 0, 255, 255));
@@ -7044,7 +7895,8 @@ void TestDocumentPixelBudget()
     {
         // 100 000 pixels left for a 300 × 300 layer (90 000): room for its own edits, not for a copy or growth.
         DocumentSession session = PixelEditSession(300, 300);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9990)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9990)); });
         InsertPixels(session, SolidRaster(300, 300, 0, 0, 255, 255), L"Red");
         const std::size_t count = session.Document().value().layers.size();
         session.DuplicateActiveLayer();
@@ -7082,7 +7934,7 @@ void TestDocumentPixelBudget()
             LayerMask{RasterAsset{Raster::MakeSparse(10000, 10000, RasterFormat::Gray8, Raster{}, 0, 0, {}, 255),
                                   Raster::Make(1, 1, RasterFormat::Gray8), L"mask"},
                       true, std::nullopt, true};
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(masked); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(masked); });
         InsertPixels(session, red, L"Red");
         SelectRect(session, 10, 10, 20, 20);
         session.AddMask(true);
@@ -7096,20 +7948,21 @@ void TestDocumentPixelBudget()
     }
     {
         DocumentSession session = PixelEditSession(200, 200);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9999)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9999)); });
         const Guid a = InsertPixels(session, SolidRaster(20, 20, 0, 0, 255, 255), L"A");
         const Guid b = InsertPixels(session, SolidRaster(20, 20, 255, 0, 0, 255), L"B");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == b)
-                    {
-                        layer.transform.origin = Vec2{180, 180};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == b)
+                                        {
+                                            layer.transform.origin = Vec2{180, 180};
+                                        }
+                                    }
+                                });
         const std::optional<DocumentSession::MergePlan> plan = session.PlanMerge();
         std::vector<std::uint8_t> bytes(200u * 200u * 4u, 0);
         for (const int corner : {0, 180})
@@ -7131,7 +7984,8 @@ void TestDocumentPixelBudget()
     {
         DocumentSession session;
         session.CreateDocument(200, 200, false);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9999)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9999)); });
         InsertPainted(session, 20, 20, Vec2{10, 10});
         session.BeginTransform(false);
         session.BeginDistort();
@@ -7331,11 +8185,17 @@ int wmain(int argc, wchar_t** argv)
     {
         return RedPrismTestFailureReports::RunSelfTest();
     }
+    if (argc == 2 && std::wstring_view(argv[1]) == L"--asan-probe")
+    {
+        return RunAddressSanitizerProbe();
+    }
+    if (argc == 2 && std::wstring_view(argv[1]) == L"--bench-record-roots")
+        return RunRecordRootBench();
     if (argc > 1)
     {
         if (argc != 2 || std::wstring_view(argv[1]) != L"--stress")
         {
-            std::fprintf(stderr, "Usage: DocumentTests.exe [--stress]\n");
+            std::fprintf(stderr, "Usage: DocumentTests.exe [--stress | --bench-record-roots]\n");
             return 2;
         }
         const int failures = RunRasterConcurrencyTests(256);
@@ -7358,10 +8218,15 @@ int wmain(int argc, wchar_t** argv)
     TestDeleteClearsClipping();
     TestNamingAndInsertion();
     TestPaletteColors();
+    TestPaletteSampleAuthority();
+    TestPaletteIntentAuthority();
+    TestDocumentReadAuthority();
+    TestCapturedToolInputs();
     TestTransformGeometry();
     TestTransformDrag();
     TestTransformSnap();
     TestTransformSession();
+    TestTransformVisibility();
     TestTransformDuplicate();
     TestTransformGroup();
     TestMaskTransform();
@@ -7377,16 +8242,54 @@ int wmain(int argc, wchar_t** argv)
     TestWandKernel();
     TestWandSession();
     TestSparseRaster();
+    gFailures += RunSparseRegionReadsTests();
     TestPixelBuffer();
+    gFailures += RunHealWorkChecks();
+    gFailures += RunBrushRetirementBoundsTests();
+    gFailures += RunSparseWindowBoundsTests();
+    gFailures += RunDocumentMaskSampleWorkTests();
+    gFailures += RunStrokeFinalCoverageTests();
+    gFailures += RunDocumentStrokeSampleTests();
+    gFailures += RunStrokeSampleSessionTests();
+    gFailures += RunStrokeFinishPublicationTests();
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
     gFailures += RunHistoryStateViewTests();
     gFailures += RunHistoryEntriesTests();
+    gFailures += RunRecordRootTests();
+    gFailures += RunRecordLookupTests();
+    gFailures += RunLayerIndexTests();
+    gFailures += RunStrokeFinishPlanTests();
+    gFailures += RunStrokeOpeningTests();
+    gFailures += RunStrokeOpeningMemoryTests();
+    gFailures += RunRecordOwnershipBoundsTests();
+    gFailures += RunColorDisplayWorkTests();
+    gFailures += RunColorDisplayPublicationTests();
+    gFailures += RunRecordRootAdoptTests();
+    gFailures += RunDocumentDraftTests();
+    gFailures += RunDocumentFixtureTests();
+    gFailures += RunLayerMetadataWorkTests();
+    gFailures += RunPreservedLayerMetadataTests();
+    gFailures += RunPreservedLayerOpacityTests();
+    gFailures += RunLayerOpacityWorkTests();
+    gFailures += RunLayerReadViewTests();
     gFailures += RunOptionalImageThumbnailTests();
     gFailures += RunPreparedHistoryTests();
     gFailures += RunHistoryPreparationFaultTests();
     gFailures += RunHistoryRetirementBoundTests();
     gFailures += RunPreparedRasterHistoryTests();
+    gFailures += RunPersistentOwnerIndexTests();
+    gFailures += RunPersistentHistoryTests();
+    gFailures += RunRasterResidencyJournalTests();
+    gFailures += RunRasterJournalIntegrationTests();
+    gFailures += RunHistoryResidencyDeltaTests();
+    gFailures += RunHistoryTopologyDeltaTests();
+    gFailures += RunOwnedRecordRootTests();
+    gFailures += RunPublicationAllocationTests();
+    gFailures += RunPublicationBudgetTests();
+    gFailures += RunHistoryReferenceTopologyTests();
+    gFailures += RunOwnedMetadataJobsR4Tests();
+    gFailures += RunHistoryOriginalTicketTests();
     gFailures += RunPreparedColorHistoryTests();
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
@@ -7396,6 +8299,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();
     gFailures += RunWandLayerSelectionTests();
+    gFailures += RunPanelWandTests();
+    gFailures += RunPanelWandAuthorityTests();
+    gFailures += RunPanelWandFollowthroughTests();
+    gFailures += RunWandBooleanAdmissionTests();
+    gFailures += RunWandCompositeSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
     gFailures += RunSelectionMoveOpeningTests();
     gFailures += RunColorDismissalTests();
@@ -7407,9 +8315,45 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryRestoreTests();
     gFailures += internal::RunImportHistoryTests();
     gFailures += internal::RunImportPublicationTests();
+    gFailures += RunRasterUploadWorkTests();
+    gFailures += RunRasterUploadReductionWorkTests();
+    gFailures += RunRasterUploadLayoutTests();
+    gFailures += RunRasterResidencyPlanTests();
+    gFailures += RunRasterResidencyManifestTests();
+    gFailures += RunCollapseRevisionTests();
+    gFailures += RunLayerRowsWorkTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
+    gFailures += RunPendingDisplaySourceDescriptorTests();
+    gFailures += RunPreparedRasterPreviewTests();
+    gFailures += RunPreviewMetadataAdmissionTests();
+    gFailures += RunSelectionDisplayValueTests();
+    gFailures += RunSelectionOutlineTests();
+    gFailures += RunInverseSelectionTests();
+    gFailures += RunSelectionOffsetNumericTests();
+    gFailures += RunSelectionOffsetFaultTests();
+    gFailures += RunSelectionOffsetLargeTests();
+    gFailures += RunSelectionOffsetCoreNumericTests();
+    gFailures += RunSelectionOffsetCoreFaultTests();
+    gFailures += RunWarpWorkerCancellationTests();
+    gFailures += RunWarpWorkerSnapshotsTests();
+    gFailures += RunWarpOpeningTests();
+    gFailures += RunWarpLazyTilesTests();
+    gFailures += RunWarpSamplePlanTests();
+    gFailures += RunWarpSampleSessionTests();
+    gFailures += RunWarpPreviewReaderTests();
+    gFailures += RunWarpReplayTests();
+    gFailures += RunWarpFinishTests();
+    gFailures += RunWarpFinishAdmissionTests();
+    gFailures += RunWarpRetirementCoreTests();
+    gFailures += RunPlacedRasterWorkTests() ? 0 : 1;
     gFailures += RunRasterWorkTests();
+    gFailures += RunCropLifetimeTests();
+    gFailures += RunCopyPixelsLifetimeTests();
+    gFailures += RunSelectionGeometryLifetimeTests();
+    gFailures += RunHistoryPublicationLifetimeTests();
+    gFailures += RunWandBoundedPlanTests();
+    gFailures += RunDocumentWandBooleanTests();
     gFailures += RunRasterEditWorkTests();
     gFailures += RunGradientWorkTests();
     gFailures += RunGradientStateTests();
@@ -7419,6 +8363,17 @@ int wmain(int argc, wchar_t** argv)
     PixelMoveWorkTests::Run(gFailures);
     PixelMoveOpeningTests::Run(gFailures);
     PixelMoveOpeningWorkTests::Run(gFailures);
+    PixelMoveLiftPreludeTests::Run(gFailures);
+    DeferredPixelMoveOpeningTests::Run(gFailures);
+    PixelMovePreviewTests::Run(gFailures);
+    PixelMoveClosureTests::Run(gFailures);
+    ColorTargetCaptureTests::Run(gFailures);
+    LiveAdjustmentTargetCaptureTests::Run(gFailures);
+    PixelFinalDelegateTests::Run(gFailures);
+    SizeFinalSourceTests::Run(gFailures);
+    gFailures += RunSelectionPixelJournalTests();
+    PixelMoveOutputLifetimeTests::Run(gFailures);
+    PixelPreviewDescriptorTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
     gFailures += RunClipboardCommandTests();
@@ -7428,6 +8383,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunMaskEditWorkExtraTests();
     gFailures += RunLayerCopyWorkTests();
     gFailures += RunDistortWorkTests();
+    gFailures += RunDistortReadTests();
     gFailures += RunTransformPixelsWorkTests();
     gFailures += RunTransformCommitWorkTests();
     gFailures += RunTransformCancellationWorkTests();
@@ -7462,6 +8418,7 @@ int wmain(int argc, wchar_t** argv)
     TestBrushSelectionClip();
     TestSpotHealing();
     TestCloneStamp();
+    gFailures += RunDocumentTestsCapturedCloneOffset();
     TestBlurTool();
     TestSmearWarp();
     TestGradientTool();
@@ -7475,6 +8432,7 @@ int wmain(int argc, wchar_t** argv)
     TestLevels();
     TestHueSaturation();
     TestHueRangesAndSampling();
+    gFailures += RunHueSampleScalarTests();
     TestImageAdjustments();
     TestFilters();
     TestAdjustmentLayers();
@@ -7503,6 +8461,51 @@ int wmain(int argc, wchar_t** argv)
     TestDistortMasks();
     TestDocumentPixelBudget();
     TestPixelMoveTiles();
+    gFailures += RunProjectSaveCachedPlanTests();
+    gFailures += RunSelectionOutlineAllocationTests();
+    gFailures += RunSelectionOutlineRasterTests();
+    gFailures += RunSelectionOutlineRasterViewsTests();
+    gFailures += RunBoundedLassoPointTests();
+    gFailures += RunBoundedLassoTicketTests();
+    gFailures += RunBoundedLassoGestureTests();
+    gFailures += RunLassoFinishGeometryTests();
+    gFailures += RunLassoSessionBridgeTests();
+    gFailures += RunHostLassoInputTests();
+    gFailures += RunLassoConditionalInputTests();
+    gFailures += RunLassoDraftRasterTests();
+    gFailures += RunDocumentDeferredSelectionMoveTests();
+    gFailures += RunSelectionHitWorkTests();
+    gFailures += RunSelectionPressInputTests();
+    gFailures += RunSelectionMoveGeometryLifetimeTests();
+    gFailures += RunDocumentSelectionHistoryOwnershipTests();
+    gFailures += RunDocumentContinuingPublicationTests();
+    gFailures += RunDocumentSelectionHistoryBoundLifetimeTests();
+    gFailures += RunDocumentSelectionCommandMemoryTests();
+    gFailures += RunDocumentSelectionGestureParentTests();
+    gFailures += RunSelectionGestureAbortTests();
+    gFailures += RunDocumentSelectionPhysicalPrefixTests();
+    gFailures += RunDocumentSelectionGestureAdmissionTests();
+    gFailures += RunDocumentSelectionGestureAdmissionAuthorityTests();
+    gFailures += RunDocumentSelectionGestureResidencyTests();
+    gFailures += RunLassoOpeningSettingsTests();
+    gFailures += RunLassoGestureAuthorityTests();
+    gFailures += RunRectangleFinishPlanTests();
+    gFailures += RunLassoIntentCleanupTests();
+    gFailures += RunRectangleGestureParentTests();
+    gFailures += RunSelectionPixelParentTests();
+    gFailures += RunEllipseFinishPlanTests();
+    gFailures += RunEllipseGestureParentTests();
+    gFailures += RunMarqueeModePlanTests();
+    gFailures += RunMarqueeModeParentTests();
+    gFailures += RunSelectionCursorProbeTests();
+    gFailures += RunFreehandPlanTests();
+    gFailures += RunFreehandGestureParentTests();
+    gFailures += RunPreparedPolygonAuthorityTests();
+    gFailures += RunPolygonalPlanTests();
+    gFailures += RunPolygonalDrawingParentTests();
+    gFailures += RunPolygonalDispatcherTests();
+    gFailures += RunPolygonalPreRecordedTerminalTests();
+    gFailures += RunPolygonalHostGateTests();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.MaskWorkTestGate.h"
 #include "Selection.h"
@@ -86,7 +88,8 @@ int Application::RunMaskWorkSelfTest() noexcept
             state.cancelledRetained = state.receipt.Read().outcome == HostOutcome::Pending && owner._maskTicket;
         }
         else if (state.mode == Mode::StaleSource)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
         else if (state.mode == Mode::StaleSelection)
             owner._session.Deselect();
         else if (state.mode == Mode::StaleHistory)
@@ -231,5 +234,5 @@ int Application::RunMaskWorkSelfTest() noexcept
             }
     std::printf("mask-host summary: %u checks, %d failures\n", checks, failures);
     std::fflush(stdout);
-    return failures ? 5 : 0;
+    return failures ? 5 : RunImageWrapperResidencySelfTest(0);
 }

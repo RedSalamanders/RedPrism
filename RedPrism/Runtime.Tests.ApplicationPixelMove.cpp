@@ -1,9 +1,14 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.PixelMoveWorkTestGate.h"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -94,13 +99,13 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
             break;
         case Mode::Replace:
         {
-            CanvasDocument replacement;
+            DocumentFixture replacement;
             replacement.id = Guid::Generate();
             replacement.width = 3;
             replacement.height = 1;
             replacement.layers.push_back(ImageLayer::Blank(L"Replacement", Vec2{3, 1}));
             const Guid active = replacement.layers.front().id;
-            owner.ReplaceDocument(std::move(replacement), active, {});
+            owner.ReplaceDocument(std::move(replacement).Seal(), active, {});
             break;
         }
         case Mode::YoungerUndo:
@@ -185,7 +190,8 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
             _pixelMoveWorkTestGate->status = RasterEditStatus::Unchanged;
         return static_cast<bool>(_pixelMoveWorkTestGate->release);
     };
-    const auto open = [&]() noexcept
+    constexpr std::size_t kLargeMetadataUnits = 1'048'576;
+    const auto open = [&](bool largeMetadata = false) noexcept
     {
         _session.CreateDocument(16, 1, true);
         constexpr std::array<std::uint8_t, 16> bytes{10, 20, 30, 255, 40,  50,  60,  255,
@@ -193,14 +199,24 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         const Raster image = Raster::Make(4, 1, RasterFormat::Bgra8888, bytes.data(), bytes.size());
         if (!image.HasStorage())
             return false;
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                auto& layer = document.layers.front();
-                layer.transform.size = Vec2{4, 1};
-                layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-                document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
-            });
+        constexpr std::uint8_t white = 255;
+        const Raster mask = largeMetadata ? Raster::Make(1, 1, RasterFormat::Gray8, &white, 1) : Raster{};
+        if (largeMetadata && !mask.HasStorage())
+            return false;
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    auto& layer = document.layers.front();
+                                    layer.transform.size = Vec2{4, 1};
+                                    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                    if (largeMetadata)
+                                    {
+                                        layer.asset->name.assign(kLargeMetadataUnits, L'P');
+                                        layer.mask = LayerMask{RasterAsset{mask, mask, {}}};
+                                        layer.mask->asset.name.assign(kLargeMetadataUnits, L'M');
+                                    }
+                                    document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
+                                });
         _session.history.Reset();
         DocumentChanged();
         BeginPixelDrag(Vec2{1.5, 0.5}, false);
@@ -221,7 +237,7 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         CancelPixelDrag();
         const bool initialSettled = settle();
         const bool initialGate = initialSettled && gate(PixelMoveWorkTestKind::Preview, Mode::Success, true);
-        const bool initialOpened = initialGate && open();
+        const bool initialOpened = initialGate && open(mode == Mode::Success);
         if (!initialOpened)
         {
             std::printf("FAIL pixelmove-host.setup settled=%d gate=%d opened=%d\n", initialSettled, initialGate,
@@ -285,12 +301,36 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         }
         if (mode == Mode::Success)
         {
+            const bool workerTarget = _pixelMoveWorkTestGate->rootOnlyCapturedOnOwner &&
+                                      _pixelMoveWorkTestGate->targetCapturesOnOwner.load() == 0 &&
+                                      _pixelMoveWorkTestGate->targetCapturesOnWorker.load() == 1;
+            std::printf("%s pixelmove-host.commit-full-target-captured-on-worker-from-charged-root owner=%u worker=%u "
+                        "rootOwner=%d\n",
+                        workerTarget ? "PASS" : "FAIL", _pixelMoveWorkTestGate->targetCapturesOnOwner.load(),
+                        _pixelMoveWorkTestGate->targetCapturesOnWorker.load(),
+                        _pixelMoveWorkTestGate->rootOnlyCapturedOnOwner);
+            if (!workerTarget)
+                return failure(__LINE__);
             constexpr std::array<std::uint8_t, 16> expectedBytes{10, 20, 30, 255, 0,   0,   0,   0,
                                                                  40, 50, 60, 255, 100, 110, 120, 255};
             std::array<std::uint8_t, 16> actual{};
             _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 4, 1, actual.data(), 16, 0);
             if (actual != expectedBytes || _session.history.UndoCount() != 1 ||
                 _session.history.UndoName() != L"Move Pixels" || _session.PendingPixelMove() || _composition.HasStroke())
+                return failure(__LINE__);
+            const auto* target = _session.ActiveLayer();
+            const bool metadataPreserved =
+                target && target->asset && target->mask &&
+                _pixelMoveWorkTestGate->capturedImageNameUnits.load() == kLargeMetadataUnits &&
+                _pixelMoveWorkTestGate->capturedMaskNameUnits.load() == kLargeMetadataUnits &&
+                target->asset->name == target->name && target->mask->asset.name.size() == kLargeMetadataUnits &&
+                std::all_of(target->mask->asset.name.begin(), target->mask->asset.name.end(),
+                            [](wchar_t c) { return c == L'M'; });
+            std::printf(
+                "%s "
+                "pixelmove-host.large-source-names-captured-on-worker-and-committed-metadata-matches-existing-policy\n",
+                metadataPreserved ? "PASS" : "FAIL");
+            if (!metadataPreserved)
                 return failure(__LINE__);
             _session.Undo();
             if (_session.ActiveLayer()->asset->image != source)
@@ -414,13 +454,13 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
     _pixelMoveWorkTestGate.reset();
     _session.CreateDocument(2048, 2048, true);
     const Raster largeImage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-    _session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            auto& layer = document.layers.front();
-            layer.asset = RasterAsset{largeImage, Raster::MakeThumbnail(largeImage), layer.name};
-            document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
-        });
+    EditLayerRecordsForTest(_session,
+                            [&](DocumentFixture& document)
+                            {
+                                auto& layer = document.layers.front();
+                                layer.asset = RasterAsset{largeImage, Raster::MakeThumbnail(largeImage), layer.name};
+                                document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
+                            });
     _session.history.Reset();
     if (!largeImage.HasStorage() || !gate(PixelMoveWorkTestKind::Commit, Mode::LateCancel, true) ||
         !_session.BeginDeferredPixelMove())

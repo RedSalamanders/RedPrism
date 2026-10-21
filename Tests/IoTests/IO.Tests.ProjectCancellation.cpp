@@ -1,5 +1,7 @@
 #include "IO.Tests.ProjectCancellation.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "ImageCodecs.h"
@@ -235,7 +237,7 @@ struct TreeEntry
     const Raster image = FixtureRaster(replacement);
     layer.asset = RasterAsset{image, Raster{}, layer.name};
     layer.opacity = replacement ? 0.625 : 0.75;
-    document.layers.push_back(std::move(layer));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(std::move(layer)); });
     return document;
 }
 
@@ -265,7 +267,7 @@ struct TreeEntry
     layer.id = Guid::Generate();
     const Raster image = Raster::Make(kWidth, kHeight, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     layer.asset = RasterAsset{image, Raster{}, layer.name};
-    document.layers.push_back(std::move(layer));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(std::move(layer)); });
     return document;
 }
 

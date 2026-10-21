@@ -59,6 +59,18 @@ enum class Fault : std::uint8_t
     Close,
 };
 
+enum class NativeCall : std::uint8_t
+{
+    Open,
+    RegisterFormat,
+    Read,
+    Size,
+    Lock,
+    Enumerate,
+    Close,
+    Window,
+};
+
 struct Observer final
 {
     void* context = nullptr;
@@ -66,6 +78,8 @@ struct Observer final
     // Nonzero injects an error before the named native call. Close reports an error after actually closing,
     // so a harness failure cannot leave the clipboard locked. Never fake a successful publication.
     std::uint32_t (*fault)(void*, Fault) noexcept = nullptr;
+    // Failure diagnostics capture GetLastError at the native call before cleanup. No status/retry changes.
+    void (*nativeFailure)(void*, NativeCall, std::uint32_t format, std::uint32_t error) noexcept = nullptr;
 };
 
 struct Publication final

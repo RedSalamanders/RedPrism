@@ -15,7 +15,7 @@ while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs'))) {
 }
 
 # Reuse the PE/PDB/listing fixture writer and parser-only Invoke-Control helper.
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-ClGuardedTerminalDwordCase {
     param(

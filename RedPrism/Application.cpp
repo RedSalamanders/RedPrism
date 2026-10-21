@@ -1,7 +1,10 @@
 #include "Application.h"
+#include "Runtime.Tests.ViewportFixture.h"
+
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "DocumentDraft.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
-#include "Runtime.Tests.ViewportFixture.h"
 #include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
@@ -30,6 +33,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <format>
 #include <new>
@@ -133,15 +137,19 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
     layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
     layer.transform.origin = origin;
     layer.transform.rotation = rotation;
-    CanvasDocument document = session.Document().value();
-    document.layers.push_back(layer);
-    return session.ApplyImportedDocument(std::move(document), layer.id, L"Import Image") ? layer.id : Guid{};
+    auto draft = CanvasDocumentDraft::Clone(session.Document().value(), session.Document()->layers.size() + 1);
+    if (!draft || !draft.value().Append(layer))
+        return Guid{};
+    auto document = draft.value().Seal();
+    return document && session.ApplyImportedDocument(std::move(document.value()), layer.id, L"Import Image") ? layer.id
+                                                                                                             : Guid{};
 }
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
                          const wchar_t* demo, const wchar_t* bench) noexcept
     : _instance(instance), _session(HostHistoryLimit()), _forceWarp(forceWarp)
 {
+    _session.SetColorDisplayJobsEnabled(true);
     if (demo != nullptr && demo[0] != L'\0')
     {
         _demo = demo;
@@ -158,7 +166,7 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
         // A run that closes before its capture has failed it (exit 9), whatever else happened.
         _screenshotResult = E_PENDING;
     }
-    if (screenshotDpi == 96 || screenshotDpi == 144)
+    if (screenshotDpi == 96 || screenshotDpi == 144 || screenshotDpi == 192)
     {
         _screenshotDpi = screenshotDpi;
     }
@@ -185,7 +193,10 @@ HRESULT Application::InitializeProcessing() noexcept
     };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
-    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    RETURN_IF_FAILED(PrepareUiCancellationObservation());
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(
+        _processingTestProbe ? _processingTestProbe->workerCount : 0, {JobNoticeThunk, this},
+        _processingTestProbe ? _processingTestProbe->memory : MemorySource{}, UiCancellationObserver())));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
@@ -211,6 +222,14 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_OUTOFMEMORY;
     }
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Recycling));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_pathReadWait.Initialize(
+        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->pathReadWait : PathReadWaitObserver{})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::NativeRead));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_utilityReadback.InitializeOwner(_jobs, _ownerWork)));
+    _utilityReadbackInitialized = true;
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::UtilityReadback));
+    RETURN_IF_FAILED(InitializeRecordedCommandsOwner());
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::RecordedCommands));
     return S_OK;
 }
 
@@ -241,7 +260,7 @@ void Application::RequestFrameThunk(void* context) noexcept
     auto* application = static_cast<Application*>(context);
     if (application)
     {
-        application->_frameInvalidated = true;
+        application->InvalidateFrame();
     }
 }
 
@@ -283,6 +302,27 @@ int Application::Run(int showCommand) noexcept
     }
     ApplySettings(_settings);
 
+    // Arm the qualified history-only maintenance source before accepting startup paths or ordinary input.
+    // Failed subscription/route admission is a startup failure; Shutdown joins notices before the pool closes.
+    if (!_historyResidencySource.Start())
+    {
+        OutputDebugStringW(L"History residency subscription failed.\n");
+        return 5;
+    }
+    if (_processingTestProbe &&
+        (_processingTestProbe->responsiveSourcesForTest || _processingTestProbe->responsiveSelectionSourcesForTest) &&
+        !InitializeResponsiveSourcesOwner(false, _processingTestProbe->responsiveSelectionSourcesForTest))
+        return 5;
+    // Cursor containment is independently admitted by the compute scheduler. It needs neither prepared GPU
+    // display nor stroke activation; every ordinary input path uses its latest-request worker after startup.
+    _asyncSelectionCursorEnabled = true;
+    // Recorded Hue sampling uses the common admitted utility route already initialized by processing.
+    // Its scalar press queues an original host request; no synchronous readback fallback is enabled.
+    _hueReadbackEnabled = true;
+    if (_processingTestProbe && _processingTestProbe->afterRuntimeSources &&
+        FAILED(static_cast<HRESULT>(_processingTestProbe->afterRuntimeSources(_processingTestProbe->context))))
+        return 5;
+
     if (_startupPaths)
     {
         const auto receipt = QueueHostRequest(std::move(_startupPaths.value()));
@@ -301,7 +341,7 @@ int Application::Run(int showCommand) noexcept
         // The capture timer starts after the first frame that reached the display (RenderFrame, RF-409).
         ShowWindow(_window.get(), SW_SHOWNOACTIVATE);
         _windowVisible = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         if (_chrome)
         {
             _chrome->SetVisible(true);
@@ -376,13 +416,13 @@ int Application::Run(int showCommand) noexcept
             if (phase != _chrome->SelectionAntPhase())
             {
                 _chrome->SetSelectionAntPhase(phase);
-                _frameInvalidated = true;
+                InvalidateFrame();
             }
             waitTimeout = MillisecondsToNextAntStep(now);
         }
         if (_chrome && _chrome->NeedsPreparation())
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
 
         HostFrameState state;
@@ -417,7 +457,8 @@ int Application::Run(int showCommand) noexcept
                 (void)WaitUntilMessage();
                 continue;
             }
-            _frameInvalidated = true;
+            ReleaseSurfacesWhileUnseen(); // The actual occlusion probe permits one display resume transition.
+            InvalidateFrame();
             frameAction = HostFrameAction::Render;
         }
 
@@ -468,15 +509,46 @@ int Application::ExitCode(int quitCode) const noexcept
     return quitCode;
 }
 
+void Application::InvalidateFrame() noexcept
+{
+    _frameInvalidated = true;
+    NoteUiFrameInvalidation();
+}
+
+const CanvasDocument* Application::DirectDisplayDocumentForFrame() const
+{
+    // Accepted Cancel hides useful preview immediately; the panel and its cached display stay owned
+    // until the original closure acknowledges. Refused, stale and discarded Cancel retain the preview.
+    const auto& document = _session.Document();
+    return ColorCancelPending() ? (document ? &document.value() : nullptr) : _session.DisplayDocument();
+}
+
 void Application::RenderFrame() noexcept
 {
+    const auto previousPresents = _renderer.PresentCount();
     BindCompositionDevice();
-    HRESULT result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    bool cancellationSourceSelected = false;
+    const auto render = [this, &cancellationSourceSelected]() noexcept
+    {
+        auto* pending = _pendingDisplayInitialized ? _pendingDisplay.GraphForFrameOwner() : nullptr;
+        auto* graph = _acknowledgedStrokePreview ? _acknowledgedStrokePreview
+                      : pending                  ? pending
+                                                 : _acknowledgedCommittedDisplay;
+        const auto* direct = _committedDisplayInitialized ? nullptr : DirectDisplayDocumentForFrame();
+        // Bind the actual source argument for THIS rendering attempt, including a device-rebuild retry.
+        cancellationSourceSelected =
+            _uiBenchmark && UiCancellationSourceSelected(_committedDisplayInitialized ? graph : nullptr, direct);
+        return _committedDisplayInitialized ? _renderer.Render(_chrome.get(), nullptr, &_viewport, nullptr, graph,
+                                                               _selectionOutlineInitialized ? this : nullptr)
+                                            : _renderer.Render(_chrome.get(), &_composition, &_viewport, direct, nullptr,
+                                                               _selectionOutlineInitialized ? this : nullptr);
+    };
+    HRESULT result = render();
     if (result == S_FALSE)
     {
         // A stage found the device removed and the renderer rebuilt it: rebind and draw on the new device.
         BindCompositionDevice();
-        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        result = render();
     }
     if (FAILED(result))
     {
@@ -485,6 +557,7 @@ void Application::RenderFrame() noexcept
         ++_failedFrames;
         _lastFrameFailure = result;
         _frameInvalidated = false;
+        AbandonUiFrameLatency();
         OutputDebugStringW(L"Frame rendering failed.\n");
         if (_failedFrames >= kFailedFramesBeforeClose)
         {
@@ -499,7 +572,24 @@ void Application::RenderFrame() noexcept
         return;
     }
     _frameInvalidated = false;
-    ReportCanvasFailure(_renderer.CanvasFailure());
+    if (_renderer.PresentCount() > previousPresents)
+    {
+        NoteUiFramePresentation();
+        if (_uiBenchmark)
+            NoteUiCancellationPresentation(cancellationSourceSelected);
+    }
+    else
+        AbandonUiFrameLatency(); // An occluded Present is not a completed visible frame.
+    const HRESULT committedFailure = _committedDisplayInitialized ? CurrentCommittedDisplayFailureOwner() : S_OK;
+    HRESULT canvasFailure = FAILED(committedFailure) ? committedFailure : _renderer.CanvasFailure();
+    if (_pendingDisplayInitialized && _pendingDisplayFailureKey && FAILED(_pendingDisplayFailure))
+    {
+        CommittedDisplayDescriptor current;
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(current) &&
+            current.key == _pendingDisplayFailureKey.value())
+            canvasFailure = _pendingDisplayFailure;
+    }
+    ReportCanvasFailure(canvasFailure);
     // The screenshot capture waits for a frame that reached the display (RF-409).
     if (!_screenshotPath.empty() && !_screenshotArmed && _window && _renderer.PresentCount() > 0)
     {
@@ -546,6 +636,13 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
     const bool displayOff = !_displayPoweredOn && !(_uiBenchmark && _uiBenchmark->smoke);
     const bool unseen =
         _screenshotPath.empty() && (!_windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
+    if (_committedDisplayInitialized)
+    {
+        _committedDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
+        _pendingDisplay.SetSuspendedOwner(unseen && !_committedDisplayAllowHiddenForTest);
+    }
+    if (_selectionOutlineInitialized)
+        _selectionOutlineDisplay.SetSuspendedOwner(unseen && !_selectionOutlineAllowHiddenForTest);
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -635,8 +732,7 @@ int Application::RunSelfTest() noexcept
     _quietUi = true;
     _prompts = &QuietPrompts();
     // Nor does it read the user's keyboard: its drivers hold the keys each step names (KeyboardState.h, RF-1110).
-    KeyboardState::UseSynthetic(true);
-    const auto realKeyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
+    const KeyboardState::ScopedSynthetic syntheticKeyboard;
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     HRESULT result = RegisterWindowClass();
@@ -658,17 +754,45 @@ int Application::RunSelfTest() noexcept
     const SIZE expectedClientSize = ScaleDefaultClientSize(windowDpi);
     const DWORD windowStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
     const DWORD windowExtendedStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
-    const BOOL clientAreaRead = GetClientRect(_window.get(), &clientBounds);
+    const bool clientBoundsAvailable = GetClientRect(_window.get(), &clientBounds) != FALSE;
+    const DWORD clientBoundsError = clientBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    RECT windowBounds{};
+    const bool windowBoundsAvailable = GetWindowRect(_window.get(), &windowBounds) != FALSE;
+    const DWORD windowBoundsError = windowBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    MONITORINFO monitor{sizeof(monitor)};
+    const bool monitorAvailable =
+        GetMonitorInfoW(MonitorFromWindow(_window.get(), MONITOR_DEFAULTTONEAREST), &monitor) != FALSE;
+    const DWORD monitorError = monitorAvailable ? ERROR_SUCCESS : GetLastError();
+    SIZE requestedWindowSize{};
+    const HRESULT requestedWindowResult =
+        CalculateWindowSizeForDpi(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP,
+                                  windowDpi, requestedWindowSize);
+    // Retain every original predicate. The hosted ARM64 failure combined several independent
+    // facts; report the actual values before choosing a DPI, style or OS sizing repair.
+    std::printf("INFO default-client window-dpi=%u system-dpi=%u style=0x%08lX extended-style=0x%08lX "
+                "client-ok=%d client-error=%lu client=[%ld,%ld,%ld,%ld] expected=[%ld,%ld] "
+                "outer-ok=%d outer-error=%lu outer=[%ld,%ld,%ld,%ld] requested-hr=0x%08lX requested=[%ld,%ld] "
+                "monitor-ok=%d monitor-error=%lu monitor=[%ld,%ld,%ld,%ld] work=[%ld,%ld,%ld,%ld] "
+                "max-track=[%d,%d]\n",
+                windowDpi, GetDpiForSystem(), windowStyle, windowExtendedStyle, clientBoundsAvailable,
+                clientBoundsError, clientBounds.left, clientBounds.top, clientBounds.right, clientBounds.bottom,
+                expectedClientSize.cx, expectedClientSize.cy, windowBoundsAvailable, windowBoundsError,
+                windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom,
+                static_cast<unsigned long>(requestedWindowResult), requestedWindowSize.cx, requestedWindowSize.cy,
+                monitorAvailable, monitorError, monitor.rcMonitor.left, monitor.rcMonitor.top, monitor.rcMonitor.right,
+                monitor.rcMonitor.bottom, monitor.rcWork.left, monitor.rcWork.top, monitor.rcWork.right,
+                monitor.rcWork.bottom, GetSystemMetricsForDpi(SM_CXMAXTRACK, windowDpi),
+                GetSystemMetricsForDpi(SM_CYMAXTRACK, windowDpi));
     const bool hiddenFixture = !IsWindowVisible(_window.get());
     if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 ||
-        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientAreaRead || !hiddenFixture ||
+        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientBoundsAvailable || !hiddenFixture ||
         clientBounds.right - clientBounds.left != expectedClientSize.cx ||
         clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
         SelfTestFailure(std::format(L"The default client area does not match the current monitor DPI: dpi={}, "
                                     L"read={}, client={}x{}, expected={}x{}, style=0x{:08X}, extended=0x{:08X}, "
                                     L"desktop={}x{}, hidden={}.\n",
-                                    windowDpi, clientAreaRead != FALSE, clientBounds.right - clientBounds.left,
+                                    windowDpi, clientBoundsAvailable, clientBounds.right - clientBounds.left,
                                     clientBounds.bottom - clientBounds.top, expectedClientSize.cx,
                                     expectedClientSize.cy, windowStyle, windowExtendedStyle,
                                     GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hiddenFixture));
@@ -706,6 +830,19 @@ int Application::RunSelfTest() noexcept
 
     BindCompositionDevice();
     SyncChrome();
+    // The first model publication must use the real viewport before Tree selects/scrolls its first row.
+    const float initialLayerTitleBottom =
+        ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kLayersTitleDip;
+    const auto initialLayerRow = _chrome->LayerRowBoundsDip(0);
+    if (initialLayerRow.bottom <= initialLayerRow.top || initialLayerRow.top < initialLayerTitleBottom)
+    {
+        std::fprintf(stderr, "DIAG initial-layer-row before-prepare top=%.2f bottom=%.2f titleBottom=%.2f\n",
+                     static_cast<double>(initialLayerRow.top), static_cast<double>(initialLayerRow.bottom),
+                     static_cast<double>(initialLayerTitleBottom));
+        SelfTestFailure(L"The first layer row overlaps the title/opacity band before preparation.\n");
+        return 5;
+    }
+    std::puts("PASS layers.initial-row-below-header-before-prepare");
     const CanvasDocument* document = _session.DisplayDocument();
     result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result))
@@ -713,6 +850,13 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"Self-test Present failed.\n");
         return 5;
     }
+    const auto preparedLayerRow = _chrome->LayerRowBoundsDip(0);
+    if (preparedLayerRow.bottom <= preparedLayerRow.top || preparedLayerRow.top < initialLayerTitleBottom)
+    {
+        SelfTestFailure(L"The first layer row overlaps the title/opacity band after preparation.\n");
+        return 5;
+    }
+    std::puts("PASS layers.initial-row-below-header-after-prepare");
     const DxUi::EmbeddedStatistics visible = _chrome->Statistics();
     if (visible.surfaceBytes == 0 || visible.composites == 0)
     {
@@ -981,7 +1125,36 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The color picker opened at the top of the canvas instead of beside the wells.\n");
             return 5;
         }
+        const auto pickerOpening = _chrome->CapturePickerSampleAuthority();
+        if (!pickerOpening)
+        {
+            SelfTestFailure(L"The visible picker has no sampling authority.\n");
+            return 5;
+        }
+        auto sampleAuthority = pickerOpening.value();
+        if (!_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF102030u) ||
+            !_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF203040u) ||
+            sampleAuthority == pickerOpening.value() || _chrome->PickerColor() != 0xFF203040u)
+        {
+            SelfTestFailure(L"The picker did not renew its own sampled-color authority.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.own-samples-renew-exact-input-stamp\n");
+        auto foreignPicker = sampleAuthority;
+        foreignPicker.host = Guid::Generate();
+        if (_chrome->ApplySampledPickerColor(foreignPicker, 0xFFFFFFFFu) || _chrome->PickerColor() != 0xFF203040u)
+        {
+            SelfTestFailure(L"The picker accepted a foreign host's sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.foreign-host-refused-without-color-change\n");
         _chrome->SampleColor(0xFF336699u);
+        if (_chrome->ApplySampledPickerColor(sampleAuthority, 0xFFFFFFFFu) || _chrome->PickerColor() != 0xFF336699u)
+        {
+            SelfTestFailure(L"A delayed sample overwrote a newer picker input.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.manual-input-refuses-older-sample\n");
         _chrome->CloseColorPicker(true);
         if (_chrome->ColorPickerOpen() || _session.ForegroundColor() != 0xFF336699u)
         {
@@ -989,6 +1162,32 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
+        auto backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
+        _chrome->SampleColor(DocumentSession::kDefaultBackgroundArgb);
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
+            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"An equal explicit picker input rebound an older sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.equal-manual-input-refuses-older-sample\n");
+        backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
+        if (!_chrome->ApplySampledPickerColor(backgroundAuthority, 0x00445566u) ||
+            _chrome->PickerColor() != 0xFF445566u)
+        {
+            SelfTestFailure(L"The background picker did not select its own opaque sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.background-sample-selects-opaque-chosen-value\n");
+        _chrome->SampleColor(0xFF112233u);
+        _chrome->SampleColor(0xFF445566u);
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) || _chrome->PickerColor() != 0xFF445566u)
+        {
+            SelfTestFailure(L"An equal-color picker A-B-A edit rebound an older sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.manual-a-b-a-refuses-older-sample\n");
+        backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
         _chrome->SampleColor(0xFF112233u);
         _chrome->CloseColorPicker(false);
         if (_chrome->ColorPickerOpen() || _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
@@ -996,6 +1195,30 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Cancelling the color picker changed the palette.\n");
             return 5;
         }
+        if (_chrome->CapturePickerSampleAuthority() ||
+            _chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u))
+        {
+            SelfTestFailure(L"A closed picker accepted a delayed sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.closed-card-refuses-delayed-sample\n");
+        _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
+            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"Reopening an equal picker rebound an old sampling opening.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.equal-target-reopen-refuses-older-sample\n");
+        _chrome->CloseColorPicker(false);
+        if (!RunSamplerIntentHostSelfTest())
+            return 5;
+        if (RunSamplerHostSelfTest() != 0)
+            return 5;
+        if (RunSamplerCallerSelfTest() != 0)
+            return 5;
+        if (RunHueReadbackHostSelfTest() != 0)
+            return 5;
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
         if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
@@ -1129,6 +1352,11 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The opacity stepper refused a value.\n");
             return 5;
         }
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The opacity stepper did not acknowledge its worker.\n");
+            return 5;
+        }
         const ImageLayer* layer = _session.ActiveLayer();
         if (layer == nullptr || std::fabs(layer->opacity - 0.5) > 1e-9 || !_session.history.CanUndo() ||
             _session.history.UndoName() != L"Layer Opacity")
@@ -1246,6 +1474,15 @@ int Application::RunSelfTest() noexcept
             !closeTo(box->maxY, 100.0) || _session.history.UndoName() != L"Rectangular Marquee" ||
             _session.PendingLasso().has_value())
         {
+            std::fprintf(stderr,
+                         "self-test.marquee synthetic=%u shift=%u control=%u alt=%u tool=%u kind=%u selected=%u "
+                         "bounds=%.3f,%.3f,%.3f,%.3f pending-lasso=%u history-busy=%u host-active=%u host-queued=%zu\n",
+                         KeyboardState::Detail::g_synthetic.active ? 1u : 0u, KeyboardState::Held(VK_SHIFT) ? 1u : 0u,
+                         KeyboardState::Held(VK_CONTROL) ? 1u : 0u, KeyboardState::Held(VK_MENU) ? 1u : 0u,
+                         static_cast<unsigned int>(_tool), static_cast<unsigned int>(_session.marqueeKind),
+                         box.has_value() ? 1u : 0u, box ? box->minX : 0.0, box ? box->minY : 0.0, box ? box->maxX : 0.0,
+                         box ? box->maxY : 0.0, _session.PendingLasso().has_value() ? 1u : 0u,
+                         _historyWork.Busy() ? 1u : 0u, _activeHostRequest.has_value() ? 1u : 0u, _hostRequests.Size());
             SelfTestFailure(L"Dragging the Marquee did not select a whole-pixel rectangle.\n");
             return 5;
         }
@@ -1315,19 +1552,76 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A click inside the selection did not deselect.\n");
             return 5;
         }
-        InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
-        DocumentChanged();
-        OnTool(EditorTool::Wand);
-        pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
-        pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
-        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
-            return 5;
-        box = bounds();
-        if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
-            _session.history.UndoName() != L"Magic Wand")
+        const Guid swatchId = InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
+        const ImageLayer* swatch = _session.ActiveLayer();
+        if (swatchId == Guid{} || swatch == nullptr || swatch->id != swatchId)
         {
-            SelfTestFailure(L"The Magic Wand did not select the painted layer's pixels exactly.\n");
+            SelfTestFailure(L"The Magic Wand Swatch layer was not inserted and made active.\n");
             return 5;
+        }
+        DocumentChanged();
+        {
+            _traceWandForTest = true;
+            const auto clearTrace = wil::scope_exit([this]() noexcept { _traceWandForTest = false; });
+            OnTool(EditorTool::Wand);
+            std::printf("WAND FIXTURE before-pointer tool=%u queued=%zu active=%d history_busy=%d opacity=%d "
+                        "all_layers=%d tolerance=%d\n",
+                        static_cast<unsigned int>(_tool), _hostRequests.Size(), _activeHostRequest.has_value(),
+                        _historyWork.Busy(), _opacityEdit.has_value(), _session.wandSettings.sampleAllLayers,
+                        _session.wandSettings.tolerance);
+            const Vec2 expectedView = _viewport.ViewFromDocument(Vec2{100.0, 80.0}, DocumentSize());
+            const LPARAM clickLParam = MAKELPARAM(static_cast<int>(std::lround(hole.left + expectedView.x)),
+                                                  static_cast<int>(std::lround(hole.top + expectedView.y)));
+            const std::uint64_t generationBeforeClick = _session.Generation();
+            const WandSettings wandSettingsBeforeClick = _session.wandSettings;
+            const bool antialiasedBeforeClick = _session.selectionAntialiased;
+            pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
+            pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
+            if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+                return 5;
+            box = bounds();
+            if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
+                _session.history.UndoName() != L"Magic Wand")
+            {
+                const auto actual = box.value_or(SelectionBounds{});
+                const ImageLayer* active = _session.ActiveLayer();
+                const bool hasRaster = active != nullptr && active->asset.has_value();
+                const int rasterWidth = hasRaster ? active->asset->image.Width() : 0;
+                const int rasterHeight = hasRaster ? active->asset->image.Height() : 0;
+                const std::wstring activeLayerId = active != nullptr ? active->id.ToString() : L"<none>";
+                const std::wstring undoName = _session.history.UndoName();
+                std::fprintf(stderr,
+                             "WAND SWATCH failure bounds_present=%d bounds=[%.3f,%.3f,%.3f,%.3f] "
+                             "undo='%ls' active_id='%ls' inserted_id='%ls' raster_present=%d raster=%dx%d "
+                             "origin=(%.3f,%.3f) rotation=%.3f wand={tolerance=%d sample_size=%d radius=%d "
+                             "contiguous=%d sample_all_layers=%d antialiased=%d} generation_before=%llu "
+                             "generation_after=%llu down_lParam=0x%08lX down_client=(%d,%d) "
+                             "up_lParam=0x%08lX up_client=(%d,%d) expected_document_click=(100,80)\n",
+                             box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY, undoName.c_str(),
+                             activeLayerId.c_str(), swatchId.ToString().c_str(), hasRaster, rasterWidth, rasterHeight,
+                             active != nullptr ? active->transform.origin.x : 0.0,
+                             active != nullptr ? active->transform.origin.y : 0.0,
+                             active != nullptr ? active->transform.rotation : 0.0, wandSettingsBeforeClick.tolerance,
+                             static_cast<int>(wandSettingsBeforeClick.sampleSize), wandSettingsBeforeClick.Radius(),
+                             wandSettingsBeforeClick.contiguous, wandSettingsBeforeClick.sampleAllLayers,
+                             antialiasedBeforeClick, static_cast<unsigned long long>(generationBeforeClick),
+                             static_cast<unsigned long long>(_session.Generation()),
+                             static_cast<unsigned long>(static_cast<std::uint32_t>(clickLParam)),
+                             static_cast<int>(static_cast<short>(LOWORD(clickLParam))),
+                             static_cast<int>(static_cast<short>(HIWORD(clickLParam))),
+                             static_cast<unsigned long>(static_cast<std::uint32_t>(clickLParam)),
+                             static_cast<int>(static_cast<short>(LOWORD(clickLParam))),
+                             static_cast<int>(static_cast<short>(HIWORD(clickLParam))));
+                SelfTestFailure(std::format(L"The Magic Wand did not select the painted layer's pixels exactly "
+                                            L"(has bounds {}, [{}, {}, {}, {}], history '{}', tool {}, queued {}, "
+                                            L"active {}, history busy {}, opacity {}, host error {:08X}).\n",
+                                            box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY,
+                                            _session.history.UndoName(), static_cast<unsigned int>(_tool),
+                                            _hostRequests.Size(), _activeHostRequest.has_value(), _historyWork.Busy(),
+                                            _opacityEdit.has_value(), static_cast<std::uint32_t>(_hostExecutionError))
+                                    .c_str());
+                return 5;
+            }
         }
         if (!hostKey('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
             !hostKey('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
@@ -1345,7 +1639,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 400.0, 300.0);
         pointer(WM_LBUTTONDOWN, 0, 400.0, 400.0);
         pointer(WM_LBUTTONUP, 0, 400.0, 400.0);
-        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->points.size() != 3 ||
+        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->PointCount() != 3 ||
             !hostKey(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
             _session.history.UndoName() != L"Polygonal Lasso")
         {
@@ -1354,6 +1648,8 @@ int Application::RunSelfTest() noexcept
         }
         OnSelectionAction(SelectionAction::SetExpandAmount, 5.0);
         OnSelectionAction(SelectionAction::Expand, 0.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (_session.history.UndoName() != L"Expand Selection" || !box.has_value() || !closeTo(box->minX, 295.0))
         {
@@ -1382,12 +1678,17 @@ int Application::RunSelfTest() noexcept
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
+        bool pointerAcknowledged = true;
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
             OnPointer(message, wParam,
                       MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                  static_cast<int>(std::lround(hole.top + view.y))));
+            // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
+            // suite proves that the real callback returns before the worker and keeps view input live.
+            pointerAcknowledged =
+                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
@@ -1417,7 +1718,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 200.0, 600.0);
-        if (_session.PendingBrush() == nullptr || !_composition.HasStroke())
+        if (!pointerAcknowledged || _session.PendingBrush() == nullptr || !_composition.HasStroke())
         {
             SelfTestFailure(L"Pressing with the Brush did not start a stroke with a live preview.\n");
             return 5;
@@ -1499,7 +1800,7 @@ int Application::RunSelfTest() noexcept
         _forcedDiscard.reset();
         const bool strokeLive = _session.PendingBrush() != nullptr;
         pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
-        if (!stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
+        if (!pointerAcknowledged || !stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
             _session.history.UndoName() != L"Brush Stroke")
         {
             SelfTestFailure(L"The save prompt did not ask for a live stroke on a clean document, or its Cancel did "
@@ -1519,12 +1820,17 @@ int Application::RunSelfTest() noexcept
         RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
+        bool pointerAcknowledged = true;
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
         {
             const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
             OnPointer(message, wParam,
                       MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
                                  static_cast<int>(std::lround(hole.top + view.y))));
+            // These compatibility fixtures inspect completed previews/edits. The separate event-gated opening
+            // suite proves that the real callback returns before the worker and keeps view input live.
+            pointerAcknowledged =
+                SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled && pointerAcknowledged;
         };
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
@@ -1547,7 +1853,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
         std::array<int, 4> mark{};
-        if (_session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) || mark[2] < 250 || mark[1] > 5)
+        if (!pointerAcknowledged || _session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) ||
+            mark[2] < 250 || mark[1] > 5)
         {
             SelfTestFailure(L"The red mark for the retouch block did not paint.\n");
             return 5;
@@ -1570,6 +1877,11 @@ int Application::RunSelfTest() noexcept
         _session.SetCloneSource(Vec2{100, 100});
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 260.0, 200.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"Clone Stamp's admitted source did not acknowledge before the live crosshair check.\n");
+            return 5;
+        }
         const std::optional<D2D1_POINT_2F> sourceMark = _chrome->CloneSourceMarkDip();
         const Vec2 sourceView = _viewport.ViewFromDocument(Vec2{160, 100}, DocumentSize());
         const float sourceDip = _chrome->LayoutDpi() > 0.0f ? 96.0f / _chrome->LayoutDpi() : 1.0f;
@@ -1580,6 +1892,11 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 260.0, 200.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"Clone Stamp's accepted release did not acknowledge.\n");
+            return 5;
+        }
         std::array<int, 4> stamped{};
         if (_session.history.UndoName() != L"Clone Stamp" || !pixelAt(200, 200, stamped) || stamped[2] < 250 ||
             stamped[1] > 5)
@@ -1612,8 +1929,8 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONUP, 0, 130.0, 100.0);
         std::array<int, 4> smudged{};
-        if (_session.PendingWarp() != nullptr || _session.history.UndoName() != L"Smudge" ||
-            !pixelAt(115, 100, smudged) || smudged[2] <= smudged[0])
+        if (_session.HasPendingWarp() || _session.history.UndoName() != L"Smudge" || !pixelAt(115, 100, smudged) ||
+            smudged[2] <= smudged[0])
         {
             SelfTestFailure(L"Smudge did not drag the red mark along.\n");
             return 5;
@@ -1621,7 +1938,7 @@ int Application::RunSelfTest() noexcept
         _session.smearMode = SmearMode::Blur;
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
-        if (_session.history.UndoName() != L"Blur")
+        if (!pointerAcknowledged || _session.history.UndoName() != L"Blur")
         {
             SelfTestFailure(L"Blur did not commit.\n");
             return 5;
@@ -1802,17 +2119,19 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A dropped shape draft still made a layer.\n");
             return 5;
         }
-        // Eyedropper: pressing reads the canvas into the foreground; releasing ends the sampling.
+        // Eyedropper: pressing admits sampling; Up hides the ring and acknowledges its accepted color prefix.
         OnTool(EditorTool::Eyedropper);
         _session.SetForegroundColor(0xFF000000u);
         pointer(WM_LBUTTONDOWN, 0, 40.0, 35.0);
-        if (!std::holds_alternative<ColorSampling>(_drag) || _session.ForegroundColor() != 0xFF3366CCu)
+        if (!std::holds_alternative<ColorSampling>(_drag))
         {
             SelfTestFailure(L"The Eyedropper did not sample the shape's color.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 40.0, 35.0);
-        if (std::holds_alternative<ColorSampling>(_drag))
+        if (std::holds_alternative<ColorSampling>(_drag) ||
+            SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+            _session.ForegroundColor() != 0xFF3366CCu)
         {
             SelfTestFailure(L"Releasing the Eyedropper did not end sampling.\n");
             return 5;
@@ -2296,6 +2615,84 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
+    std::printf("BEGIN self-test.RunInverseSelectionHostSelfTest\n");
+    if (const int inverse = RunInverseSelectionHostSelfTest(); inverse != 0)
+        return inverse;
+    std::printf("BEGIN self-test.RunInverseSelectionFailureSelfTest\n");
+    if (const int failures = RunInverseSelectionFailureSelfTest(); failures != 0)
+        return failures;
+    std::printf("BEGIN self-test.RunSelectionOffsetHostSelfTest\n");
+    if (const int offset = RunSelectionOffsetHostSelfTest(); offset != 0)
+        return offset;
+    std::printf("BEGIN self-test.RunSelectionOffsetFailureSelfTest\n");
+    if (const int offset = RunSelectionOffsetFailureSelfTest(); offset != 0)
+        return offset;
+    std::printf("BEGIN self-test.RunSelectionOffsetLargeOutputSelfTest\n");
+    if (const int large = RunSelectionOffsetLargeOutputSelfTest(); large != 0)
+        return large;
+    std::printf("BEGIN self-test.RunLayerMetadataSelfTest\n");
+    if (const int metadata = RunLayerMetadataSelfTest(); metadata != 0)
+        return metadata;
+    std::printf("BEGIN self-test.RunLayerOpacityHostSelfTest\n");
+    if (const int opacity = RunLayerOpacityHostSelfTest(); opacity != 0)
+        return opacity;
+    std::printf("BEGIN self-test.RunLayerOpacityContextsSelfTest\n");
+    if (const int opacityContexts = RunLayerOpacityContextsSelfTest(); opacityContexts != 0)
+        return opacityContexts;
+    std::printf("BEGIN self-test.RunCanvasBrushOpacitySelfTest\n");
+    if (const int canvasBrush = RunCanvasBrushOpacitySelfTest(); canvasBrush != 0)
+        return canvasBrush;
+    std::printf("BEGIN self-test.RunCloneReadbackSelfTest\n");
+    if (const int cloneReadback = RunCloneReadbackSelfTest(); cloneReadback != 0)
+        return cloneReadback;
+    std::printf("BEGIN self-test.RunCloneLayerSourceSelfTest\n");
+    if (const int cloneSource = RunCloneLayerSourceSelfTest(); cloneSource != 0)
+        return cloneSource;
+    std::printf("BEGIN self-test.RunCloneLayerSourceCaptureFailureSelfTest\n");
+    if (const int cloneCapture = RunCloneLayerSourceCaptureFailureSelfTest(); cloneCapture != 0)
+        return cloneCapture;
+    std::printf("BEGIN self-test.RunStrokeOpeningHostSelfTest\n");
+    if (RunStrokeOpeningHostSelfTest() != 0)
+        return 5;
+    std::printf("BEGIN self-test.RunSealedStrokeHostSelfTest\n");
+    if (RunSealedStrokeHostSelfTest() != 0)
+        return 5;
+    std::printf("BEGIN self-test.RunSealedCloneHostSelfTest\n");
+    if (RunSealedCloneHostSelfTest() != 0)
+        return 5;
+    std::printf("BEGIN self-test.RunCloneInputPolicySelfTest\n");
+    if (const int clonePolicy = RunCloneInputPolicySelfTest(); clonePolicy != 0)
+        return clonePolicy;
+    std::printf("BEGIN self-test.RunCanvasBrushCancellationSelfTest\n");
+    if (const int canvasCancellation = RunCanvasBrushCancellationSelfTest(); canvasCancellation != 0)
+        return canvasCancellation;
+    std::printf("BEGIN self-test.RunCanvasBrushPaletteSelfTest\n");
+    if (const int canvasPalette = RunCanvasBrushPaletteSelfTest(); canvasPalette != 0)
+        return canvasPalette;
+    std::printf("BEGIN self-test.RunCanvasBrushCompetingSelfTest\n");
+    if (const int canvasCompeting = RunCanvasBrushCompetingSelfTest(); canvasCompeting != 0)
+        return canvasCompeting;
+    std::printf("BEGIN self-test.RunCanvasBrushMaskPaletteExtensionSelfTest\n");
+    if (const int canvasMaskPalette = RunCanvasBrushMaskPaletteExtensionSelfTest(); canvasMaskPalette != 0)
+        return canvasMaskPalette;
+    std::printf("BEGIN self-test.RunCanvasBrushBoundarySelfTest\n");
+    if (const int canvasBoundary = RunCanvasBrushBoundarySelfTest(); canvasBoundary != 0)
+        return canvasBoundary;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeCancelSelfTest\n");
+    if (const int canvasLifetimeCancel = RunCanvasBrushLifetimeCancelSelfTest(); canvasLifetimeCancel != 0)
+        return canvasLifetimeCancel;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAcceptedSelfTest\n");
+    if (const int canvasLifetimeAccepted = RunCanvasBrushLifetimeAcceptedSelfTest(); canvasLifetimeAccepted != 0)
+        return canvasLifetimeAccepted;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeModalSelfTest\n");
+    if (const int canvasLifetimeModal = RunCanvasBrushLifetimeModalSelfTest(); canvasLifetimeModal != 0)
+        return canvasLifetimeModal;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAuthoritySelfTest\n");
+    if (const int canvasLifetimeAuthority = RunCanvasBrushLifetimeAuthoritySelfTest(); canvasLifetimeAuthority != 0)
+        return canvasLifetimeAuthority;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeWindowSelfTest\n");
+    if (const int canvasLifetimeWindow = RunCanvasBrushLifetimeWindowSelfTest(); canvasLifetimeWindow != 0)
+        return canvasLifetimeWindow;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -2305,6 +2702,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
     if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
         return followup;
+    std::printf("BEGIN self-test.RunPanelWandHostSelfTest\n");
+    if (const int panelWand = RunPanelWandHostSelfTest(); panelWand != 0)
+        return panelWand;
+    std::printf("BEGIN self-test.RunPanelWandLifecycleSelfTest\n");
+    if (const int panelWandLifecycle = RunPanelWandLifecycleSelfTest(); panelWandLifecycle != 0)
+        return panelWandLifecycle;
     std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;
@@ -2320,6 +2723,18 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionNewCanvasFaultSelfTest\n");
     if (const int newCanvasFault = RunSelectionNewCanvasFaultSelfTest(); newCanvasFault != 0)
         return newCanvasFault;
+    std::printf("BEGIN self-test.RunSelectionCloseProjectLiteralSelfTest\n");
+    if (const int closeProjectOutline = RunSelectionCloseProjectLiteralSelfTest(); closeProjectOutline != 0)
+        return closeProjectOutline;
+    std::printf("BEGIN self-test.RunSelectionCloseProjectFaultSelfTest\n");
+    if (const int closeProjectFault = RunSelectionCloseProjectFaultSelfTest(); closeProjectFault != 0)
+        return closeProjectFault;
+    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineLiteralSelfTest\n");
+    if (const int lifecycleOutlineLiteral = RunSelectionLifecycleOutlineLiteralSelfTest(); lifecycleOutlineLiteral != 0)
+        return lifecycleOutlineLiteral;
+    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineFaultSelfTest\n");
+    if (const int lifecycleOutlineFault = RunSelectionLifecycleOutlineFaultSelfTest(); lifecycleOutlineFault != 0)
+        return lifecycleOutlineFault;
     std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
     if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
     {
@@ -2331,6 +2746,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
+    std::printf("BEGIN self-test.RunWandCompositeHostSelfTest\n");
+    if (const int wandComposite = RunWandCompositeHostSelfTest(); wandComposite != 0)
+        return wandComposite;
     std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
@@ -2353,6 +2771,9 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
         return transformWork;
     }
+    std::printf("BEGIN self-test.RunTransformShapeRedrawSelfTest\n");
+    if (const int shapeRedraw = RunTransformShapeRedrawSelfTest(); shapeRedraw != 0)
+        return shapeRedraw;
     std::printf("BEGIN self-test.RunTransformPreviewSelfTest\n");
     if (const int transformPreview = RunTransformPreviewSelfTest(); transformPreview != 0)
     {
@@ -2429,6 +2850,9 @@ int Application::RunSelfTest() noexcept
     {
         return cancellation;
     }
+    std::printf("BEGIN self-test.RunUiCancellationDispatchSelfTest\n");
+    if (const int dispatch = RunUiCancellationDispatchSelfTest(); dispatch != 0)
+        return dispatch;
     std::printf("BEGIN self-test.RunAdjustmentOpeningSelfTest\n");
     if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
     {
@@ -2462,6 +2886,10 @@ int Application::RunSelfTest() noexcept
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)
         return exported;
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
+    std::printf("BEGIN self-test.RunPreparedLayerRowsSelfTest\n");
+    if (const int rows = RunPreparedLayerRowsSelfTest(); rows != 0)
+        return rows;
+
     std::printf("BEGIN self-test.RunChromeSyncSelfTest\n");
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
@@ -2500,6 +2928,12 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-fault.\n");
         return clipboardFault;
     }
+    std::printf("BEGIN self-test.RunClipboardEndSessionSelfTest\n");
+    if (const int clipboardEndSession = RunClipboardEndSessionSelfTest(); clipboardEndSession != 0)
+        return clipboardEndSession;
+    std::printf("BEGIN self-test.RunFileEndSessionSelfTest\n");
+    if (const int fileEndSession = RunFileEndSessionSelfTest(); fileEndSession != 0)
+        return fileEndSession;
     std::printf("BEGIN self-test.RunSessionSelfTest\n");
     if (const int session = RunSessionSelfTest(); session != 0)
     {
@@ -2663,7 +3097,14 @@ HRESULT Application::InitializeRenderer() noexcept
         return result;
     }
     _rendererReady = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
+    if (_committedDisplayInitialized)
+    {
+        // The first admitted display needs this actual queue context before its initial source request.
+        // Waiting for RenderFrame would settle that request without a graph and bind only afterwards.
+        BindCompositionDevice();
+        RETURN_IF_FAILED(_gpuBindingError);
+    }
     return S_OK;
 }
 
@@ -2683,41 +3124,45 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetOwnerWindow(_window.get());
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
-    _frameInvalidated = true;
+    InvalidateFrame();
     return S_OK;
 }
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
     }
     // A typed opacity belongs to the layer it started on: it records its entry before another is active.
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     _session.SelectLayer(id);
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
     }
     // A stroke or warp in progress keeps its target (legacy selectLayerTarget waits for it).
-    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr)
+    if (_session.PendingBrush() != nullptr || _session.HasPendingWarp())
     {
         return;
     }
     // As a command does: a typed opacity records its entry and a pending transform applies (legacy clickedLayer);
     // the session applies a pending gradient on a target switch (Decision D3).
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     _session.SelectLayerTarget(id, mask);
     if (toggleMask && _session.IsMaskSelected())
@@ -2731,26 +3176,30 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 {
     if (expanded)
     {
-        _session.CollapsedGroupIDs().erase(id);
+        _session.SetGroupCollapsed(id, false);
     }
     else
     {
-        _session.CollapsedGroupIDs().insert(id);
+        _session.SetGroupCollapsed(id, true);
     }
+    if (_session.CollapsedGroupIDs().contains(id) != !expanded)
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_ROWS);
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                    DxUi::TreeDropPlace place) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+                            _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() ||
+                            _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
     }
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return;
     bool moved = false;
     if (place == DxUi::TreeDropPlace::Inside)
     {
@@ -2772,6 +3221,8 @@ void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid>
 
 void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint32_t argb) noexcept
 {
+    if (phase != ChromeEditPhase::Preview)
+        SealSamplerForBoundary(); // A terminal picker callback ends its exact physical sampling target.
     switch (target)
     {
     case PickerTarget::Foreground:
@@ -2795,7 +3246,7 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
             }
             RefreshGradientJobs();
             _layoutDirty = true;
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return;
     case PickerTarget::GradientShadows:
@@ -2811,7 +3262,7 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
 void Application::OnChromeLayout() noexcept
 {
     _layoutDirty = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 HRESULT Application::InitializeDocument() noexcept
@@ -2843,15 +3294,30 @@ Vec2 Application::DocumentSize() const noexcept
 
 void Application::DocumentChanged() noexcept
 {
+    if (!_shutdownStarted && _polygonalPressState && _polygonalPressState->controller &&
+        _polygonalPressState->admissionSource &&
+        _polygonalPressState->admissionSource->document.documentSerial != _session.DocumentSerial())
+    {
+        // A replaced/cleared document supplies readiness even when no further raw input can reach
+        // this parked original. Cancel and resume its existing ticket; never mutate the new session
+        // through the old writer or wait for another pointer event to release its retained owners.
+        (void)_jobs.Cancel(_polygonalPressState->original);
+        if (_polygonalPressState->waiting)
+            (void)_jobs.Resume(_polygonalPressState->original);
+    }
+    if (_committedDisplayInitialized)
+        _committedDisplay.RequestOwner();
+    _historyResidencySource.RetryDeferred();
     RefreshColorJobs();
     SyncColorLookupPreview();
     _composition.InvalidateDocument();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::SyncChrome() noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::ChromeSync};
     RefreshGradientJobs();
     RefreshPixelMoveJobs();
     RefreshTransformPreviewJobs();
@@ -2887,7 +3353,6 @@ void Application::SyncChrome() noexcept
     const ImageLayer* maskOwner = _session.ActiveLayer();
     const bool hasMask = maskOwner != nullptr && maskOwner->mask.has_value();
     const bool maskTargeted = hasMask && _session.IsMaskSelected();
-    _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked,
                              !hasMask || maskOwner->mask->enabled);
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
@@ -2915,9 +3380,16 @@ void Application::SyncChrome() noexcept
                                        : std::nullopt);
 
     // The canvas hole follows the layout the pushes above asked for, and the overlays below follow the hole: lay out,
-    // push the rest, then prepare once, so the frame after this finds the chrome prepared (RF-1001).
+    // push the rest. Renderer::Render prepares the chrome once at the frame boundary (RF-1001).
+    // Command dispatch and completed-result publication must not paint a chrome surface here.
     const float dpi = ChromeDpi();
     _chrome->Layout(_renderer.Width(), _renderer.Height(), dpi);
+    // Tree selection scrolls immediately. Publish rows only after its actual viewport is arranged;
+    // publication into the initial zero-size bounds leaves a stale one-row scroll offset.
+    if (_preparedLayerRowsEnabled)
+        SyncPreparedLayerRows();
+    else
+        _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
     const CanvasHole hole = _chrome->HolePixels();
     _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
                      DocumentSize());
@@ -2945,10 +3417,10 @@ void Application::SyncChrome() noexcept
     selection.canModify = _session.CanModifySelection();
     selection.expandAmount = _selectionExpandAmount;
     selection.contractAmount = _selectionContractAmount;
-    // The outline follows a pixel move and the floating pixels of a selection transform.
-    const std::optional<DocumentSelection> current = _session.DisplayedSelection();
-    selection.hasSelection = current.has_value();
-    selection.isEmpty = current.has_value() && current->IsEmpty();
+    // The overlay shares the original pixel-move geometry; dragging changes only its scalar mapping.
+    const SelectionDisplayValue current = _session.DisplayedSelectionValue();
+    selection.hasSelection = current.selection.has_value();
+    selection.isEmpty = current.selection.has_value() && current.selection->IsEmpty();
     _chrome->SetSelectionInspector(selection);
     SyncSelectionOverlay(&current);
 
@@ -3000,7 +3472,9 @@ void Application::SyncChrome() noexcept
     SyncCropChrome();
     SyncToolOverlays();
     SyncStrokePreview();
-    (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi);
+    // Rapid independent gestures need current live bounds before the next frame. This acknowledges layout only;
+    // painting, surface allocation and accessibility/text-geometry publication stay in the frame preparation.
+    (void)_chrome->PrepareInteraction(_renderer.Width(), _renderer.Height(), dpi);
 }
 
 void Application::SyncView() noexcept
@@ -3018,7 +3492,7 @@ void Application::SyncView() noexcept
     SyncBrushCursor();
     SyncCropChrome();
     SyncToolOverlays();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 float Application::ChromeDpi() const noexcept
@@ -3172,56 +3646,99 @@ void Application::SyncTransformOverlay() noexcept
     _chrome->SetTransformOverlay(_overlayGeometry, _guideXs, _guideYs);
 }
 
-void Application::SyncSelectionOverlay(const std::optional<DocumentSelection>* shown) noexcept
+bool Application::AdoptPreparedSelectionOutlineOwner(PreparedSelectionOutline outline,
+                                                     std::vector<CanvasOverlay::OutlineLoop>& retired) noexcept
 {
+    if (!_chrome || !_session.Document() || !outline.HasStorage() || _selectionOutlineInitialized)
+        return false; // The original numeric result retires in its original worker; no unused owner cache.
+    const auto shown = _session.DisplayedSelectionValue();
+    const auto identity = shown.selection ? shown.selection->loops.Identity() : nullptr;
+    if (outline.SourceIdentity() != identity)
+        return false; // Another displayed edit cannot adopt a different source's points.
+    const auto anchor = outline.Anchor();
+    if (!_chrome->SetPreparedSelectionOutline(std::move(outline), retired))
+        return false;
+    _overlaySelection = shown.selection;
+    _overlaySelectionAnchor = anchor;
+    _overlayScale = 0; // Force the existing scalar mapping update at the ensuing SelectionChanged sync.
+    return true;
+}
+
+void Application::SyncSelectionOverlay(const SelectionDisplayValue* shown) noexcept
+{
+    if (_selectionOutlineInitialized)
+    {
+        SyncPreparedSelectionOutlineOwner(shown);
+        return;
+    }
     const bool hasDocument = _session.Document().has_value();
-    // A view change keeps the selection shown last (`shown` null): only the mapping moved.
-    const std::optional<DocumentSelection>& current = shown != nullptr ? *shown : _overlaySelection;
+    const auto& current = shown ? shown->selection : _overlaySelection;
+    const Vec2 translation = shown ? shown->translation : _overlaySelectionTranslation;
     const Vec2 documentSize = DocumentSize();
     const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
     const double scale = _viewport.ViewScale();
-    // The frame loop steps the ants only while a non-empty outline shows (RF-408): read here, never per loop pass.
     _marchingAnts = hasDocument && current.has_value() && !current->IsEmpty();
-    // The outline geometry is rebuilt only when the selection or the view mapping changes (the chrome converts the
-    // device pixels to DIPs, so a new display scale rebuilds it too).
+    // Source identity is held by the cache. View and pixel-move changes never compare or convert every point.
+    const bool geometryChanged =
+        shown && (current.has_value() != _overlaySelection.has_value() ||
+                  (current && current.value().loops.Identity() != _overlaySelection.value().loops.Identity()));
     if (!hasDocument)
     {
-        if (_overlaySelection.has_value())
+        if (_overlaySelection)
         {
             _overlaySelection.reset();
+            _overlaySelectionTranslation = {};
+            _overlaySelectionAnchor = {};
             _chrome->SetSelectionOutline({});
         }
     }
-    else if ((shown != nullptr && *shown != _overlaySelection) ||
-             (current.has_value() &&
-              (origin != _overlayOrigin || scale != _overlayScale || _viewport.backingScale != _overlayBacking)))
+    else if (geometryChanged)
     {
-        // (Without a selection a new view mapping draws nothing new: the outline stays empty.)
         std::vector<std::vector<D2D1_POINT_2F>> loops;
-        if (current.has_value())
+        _overlaySelectionAnchor = {};
+        if (current)
         {
-            loops.reserve(current->loops.size());
-            for (const SelectionLoop& loop : current->loops)
+            if (const auto bounds = current.value().Bounds())
+                _overlaySelectionAnchor = {bounds->minX, bounds->minY};
+            loops.reserve(current.value().loops.size());
+            for (const SelectionLoop& loop : current.value().loops)
             {
                 std::vector<D2D1_POINT_2F> converted;
                 converted.reserve(loop.size());
                 for (const Vec2& point : loop)
-                {
-                    converted.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
-                                                      static_cast<float>(origin.y + point.y * scale)));
-                }
+                    converted.push_back(D2D1::Point2F(static_cast<float>(point.x - _overlaySelectionAnchor.x),
+                                                      static_cast<float>(point.y - _overlaySelectionAnchor.y)));
                 loops.push_back(std::move(converted));
             }
         }
-        if (shown != nullptr)
-        {
-            _overlaySelection = *shown;
-        }
+        _overlaySelection = current;
+        _chrome->SetSelectionOutline(std::move(loops));
+    }
+    if (hasDocument && (geometryChanged || origin != _overlayOrigin || scale != _overlayScale ||
+                        _viewport.backingScale != _overlayBacking || translation != _overlaySelectionTranslation))
+    {
+        // Add the anchor in double before narrowing; large translated coordinates do not cancel in float.
+        const Vec2 mapped{origin.x + (_overlaySelectionAnchor.x + translation.x) * scale,
+                          origin.y + (_overlaySelectionAnchor.y + translation.y) * scale};
+        _chrome->SetSelectionMapping(mapped, scale, ChromeDpi());
         _overlayOrigin = origin;
         _overlayScale = scale;
         _overlayBacking = _viewport.backingScale;
-        _chrome->SetSelectionOutline(std::move(loops));
+        _overlaySelectionTranslation = translation;
     }
+    SyncLassoOverlay();
+}
+
+void Application::SyncLassoOverlay() noexcept
+{
+    if (_lassoDraftDisplayEnabled)
+    {
+        SyncPreparedLassoDraftOwner();
+        return;
+    }
+    const bool hasDocument = _session.Document().has_value();
+    const Vec2 origin = _viewport.DocumentRectOrigin(DocumentSize());
+    const double scale = _viewport.ViewScale();
     std::optional<CanvasOverlay::Draft> draft;
     if (hasDocument && _session.PendingLasso().has_value())
     {
@@ -3250,16 +3767,28 @@ void Application::BindCompositionDevice() noexcept
     ID3D11DeviceContext* context = _renderer.Context();
     if (!device || !context)
     {
+        _strokeFinishSource.PrepareDeviceReplacementOwner();
         _gpuWork.RetireDevice();
         _gpuBindingError = E_UNEXPECTED;
         _composition.ReleaseDeviceResources();
         DropBrushEngine();
         _boundDeviceGeneration = 0;
+        if (_recordedCommandsInitialized)
+            _recordedCommands.DeviceChangedOwner();
+        if (_committedDisplayInitialized)
+        {
+            _committedDisplay.DeviceChangedOwner();
+            _pendingDisplay.DeviceChangedOwner();
+        }
+        if (_selectionOutlineInitialized)
+            _selectionOutlineDisplay.RetryOwner();
+        _strokeFinishSource.DeviceChangedOwner();
         return;
     }
     // A rebuilt device can come back at the old one's address: the generation tells them apart.
     if (_composition.Device() != device || _boundDeviceGeneration != _renderer.DeviceGeneration())
     {
+        _strokeFinishSource.PrepareDeviceReplacementOwner();
         _boundDeviceGeneration = _renderer.DeviceGeneration();
         _gpuBindingError = _composition.CreateDeviceResources(device, context);
         if (_gpuWorkInitialized)
@@ -3273,6 +3802,16 @@ void Application::BindCompositionDevice() noexcept
         DropBrushEngine();
         (void)_brushEngine.Initialize(device, context);
         _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
+        if (_recordedCommandsInitialized)
+            _recordedCommands.DeviceChangedOwner();
+        if (_committedDisplayInitialized)
+        {
+            _committedDisplay.DeviceChangedOwner();
+            _pendingDisplay.DeviceChangedOwner();
+        }
+        if (_selectionOutlineInitialized)
+            _selectionOutlineDisplay.RetryOwner();
+        _strokeFinishSource.DeviceChangedOwner();
     }
 }
 
@@ -3290,6 +3829,7 @@ void Application::CloseMainWindow() noexcept
 
 void Application::Shutdown() noexcept
 {
+    DisarmUiCancellationTimer(); // The diagnostic event/log remain owned until after the scheduler joins Close.
     if (_jobs.InUiCallback())
     {
         _shutdownDeferred = true;
@@ -3301,6 +3841,22 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    _selectionCursorRequests.Close();
+    if (_selectionCursorTicket)
+        (void)_jobs.Cancel(_selectionCursorTicket.value());
+    if (_selectionOutlineInitialized)
+        _selectionOutlineDisplay.StopOwner();
+    if (_utilityReadbackInitialized)
+        _utilityReadback.StopOwner();
+    if (_committedDisplayInitialized)
+    {
+        _pendingDisplay.StopOwner();
+        _committedDisplay.StopOwner();
+    }
+    if (_recordedCommandsInitialized)
+        _recordedCommands.StopOwner();
+    _historyResidencySource.StopNotifications();
+    _layerRowsSource.StopNotifications();
     StopHostContinuations();
     CancelColorJobs();
     CancelGradientJobs();
@@ -3313,6 +3869,7 @@ void Application::Shutdown() noexcept
     {
         ShowWindow(_window.get(), SW_HIDE);
     }
+    _pathReadWait.StopNotifications();
     _retryWait.StopNotifications();
     _gpuWork.StopNotifications();
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
@@ -3324,10 +3881,29 @@ void Application::Shutdown() noexcept
              // Producer callbacks and their wrappers have joined; graphics ownership remains here.
              if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
                  probe->checkJoined(probe->checkContext);
+             // The native callback joined, but its event remains alive through final worker IO acknowledgement.
+             owner._pathReadWait.DetachJoinedOwner();
              // Detach engines without CancelBrush's synchronous CPU-graph destruction.
              owner._session.DetachCoverageForShutdown();
              owner._brushEngine.Release();
              owner._retryWait.CloseAfterWorkers();
+             owner.ClearPreparedLayerRows();
+             // Retire the owner-held semantic snapshot while the full-graph sink/pool still exist. External
+             // providers retain their independent immutable source and endpoint through later disconnection.
+             if (owner._chrome)
+                 owner._chrome->DetachAccessibility();
+             owner._layerRowsSource.CloseAfterWorkers();
+             owner._historyResidencySource.CloseAfterWorkers();
+             owner.PrepareStrokeFinishJoinedShutdownOwner();
+             if (owner._recordedCommandsInitialized)
+                 owner._recordedCommands.AcknowledgeJoinedShutdownOwner();
+             if (owner._committedDisplayInitialized)
+             {
+                 owner._pendingDisplay.JoinedShutdownOwner();
+                 owner._committedDisplay.JoinedShutdownOwner();
+             }
+             if (owner._selectionOutlineInitialized)
+                 owner._selectionOutlineDisplay.JoinedShutdownOwner();
              owner._gpuWork.CloseAfterWorkers();
              owner._gpuWorkInitialized = false;
              owner._shapeCommitPreview.reset();
@@ -3349,13 +3925,22 @@ void Application::Shutdown() noexcept
          [](void* opaque) noexcept
          {
              auto& owner = *static_cast<Application*>(opaque);
+             if (owner._committedDisplayInitialized)
+             {
+                 owner._pendingDisplay.RetireShutdownForWork();
+                 owner._committedDisplay.RetireShutdownForWork();
+             }
+             if (owner._selectionOutlineInitialized)
+                 owner._selectionOutlineDisplay.RetireShutdownForWork();
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
+             owner._canvasCloneSample.reset();
              // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
              // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
              owner._drag.emplace<std::monostate>();
              owner._overlaySelection.reset();
+             owner._overlayLassoDraft.reset();
              if (owner._uiBenchmark)
              {
                  // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
@@ -3385,10 +3970,58 @@ void Application::Shutdown() noexcept
              }
          },
          this});
+    _pathClassificationTicket.reset();
+    _pathReadWait.CloseAfterFinalWorkers();
+    // Real Close has returned from final worker retirement; no useful parent or borrowed route remains.
+    if (_utilityReadbackInitialized)
+    {
+        if (!_utilityReadback.ReleaseJoinedChargesOwner() || !_utilityReadback.CloseOwner())
+            std::terminate();
+        _utilityReadbackInitialized = false;
+    }
+    if (_selectionOutlineInitialized)
+    {
+        if (!_selectionOutlineDisplay.CloseAfterWorkersOwner())
+            std::terminate();
+        _selectionOutlineInitialized = false;
+        _selectionOutlineViewValid = false;
+        _lassoDraftDisplayEnabled = false;
+        _lassoDraftViewValid = false;
+    }
+    _finalPublicationShutdownGpu.ResetOwner();
+    _strokeFinishShutdownGpu.ResetOwner();
+    _strokeFinishShutdownDisplayGpu.ResetOwner();
+    if (_committedDisplayInitialized)
+    {
+        if (!_pendingDisplay.CloseAfterWorkersOwner() || !_committedDisplay.CloseAfterWorkersOwner())
+            std::terminate();
+        _pendingDisplayInitialized = false;
+        _committedDisplayInitialized = false;
+        _committedDisplayAllowHiddenForTest = false;
+        _acknowledgedCommittedDisplay = nullptr;
+    }
+    if (_recordedCommandsInitialized)
+    {
+        if (!_recordedCommands.CloseOwner())
+            std::terminate();
+        _recordedCommandsInitialized = false;
+    }
     if (_clipboardStamp)
         (void)_historyWork.Finish(_clipboardStamp.value());
     _clipboardStamp.reset();
     _clipboardTicket.reset();
+    // Suppressed file completions keep their exact writer/stamp alive until this completed join.
+    if (_projectSaveStamp)
+        (void)_historyWork.Finish(_projectSaveStamp.value());
+    _projectSaveStamp.reset();
+    _projectSaveTicket.reset();
+    _projectSaveWrite.reset();
+    if (_exportStamp)
+        (void)_historyWork.Finish(_exportStamp.value());
+    _exportStamp.reset();
+    _exportTicket.reset();
+    _exportWrite.reset();
+    ClearEndSessionWriteBlock();
     _shapeTicket.reset();
     _maskTicket.reset();
     _maskStamp.reset();
@@ -3399,10 +4032,91 @@ void Application::Shutdown() noexcept
     // Close joins and retires every job while deliberately suppressing completion callbacks. Clear the
     // preview's owner ticket only after that acknowledgement; CancelTransformPreviewJobs closed its mailbox.
     _transformPreviewTicket.reset();
+    // Cancellation retains these admitted records until acknowledgement. Close deliberately suppresses
+    // Completed callbacks, so its producer/retirement join is the shutdown acknowledgement instead.
+    _colorPreviewTicket.reset();
+    _colorHistogramTicket.reset();
+    // Close suppresses callbacks; the joined worker retirement is this exact cursor request acknowledgement.
+    if (const auto request = _selectionCursorRequests.Active())
+        (void)_selectionCursorRequests.Acknowledge(request.value(), std::nullopt);
+    _selectionCursorTicket.reset();
     if (_documentLifecycleStamp)
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Undo/Redo completion is suppressed by Close too. Its joined retirement acknowledges the original
+    // restore record; retain both fields until that join, then finish only its exact history stamp.
+    if (_historyRestoreStamp)
+        (void)_historyWork.Finish(_historyRestoreStamp.value());
+    _historyRestoreTicket.reset();
+    _historyRestoreStamp.reset();
+    // Close suppresses Inverse completions. Its joined retirement acknowledges the original selection
+    // record; finish its exact stamp and clear the ticket only after all producers and payloads join.
+    if (_inverseSelectionStamp)
+        (void)_historyWork.Finish(_inverseSelectionStamp.value());
+    _inverseSelectionStamp.reset();
+    _inverseSelectionTicket.reset();
+    if (_lassoOpeningStamp)
+        (void)_historyWork.Finish(_lassoOpeningStamp.value());
+    if (_lassoFinishStamp)
+        (void)_historyWork.Finish(_lassoFinishStamp.value());
+    _lassoOpeningStamp.reset();
+    _lassoFinishStamp.reset();
+    _lassoOpeningTicket.reset();
+    _lassoFinishTicket.reset();
+    if (_lassoInput.Busy())
+        (void)_lassoInput.Drop(_lassoInput.Opening());
+    _lassoAcquiredOpening = 0;
+    _lassoSessionOpening = 0;
+    _lassoFinishQueued = false;
+    if (_selectionOffsetStamp)
+        (void)_historyWork.Finish(*_selectionOffsetStamp);
+    _selectionOffsetStamp.reset();
+    _selectionOffsetTicket.reset();
+    // Close suppresses useful completion callbacks. Its joined retirement acknowledges the original
+    // selection-press parent; only now finish its exact barrier and discard a never-started prefix.
+    assert(!_selectionPressState || !_selectionPressState->controller);
+    if (_selectionPressStamp)
+        (void)_historyWork.Finish(*_selectionPressStamp);
+    _selectionPressStamp.reset();
+    // Joined Close suppresses useful Polygonal notifications too; only its acknowledgement releases this stamp.
+    assert(!_polygonalPressState || !_polygonalPressState->controller);
+    if (_polygonalPressStamp)
+        (void)_historyWork.Finish(*_polygonalPressStamp);
+    _polygonalPressStamp.reset();
+    _polygonalPressState.reset(); // Joined producer/retirement acknowledgement precedes borrowed-family destruction.
+    if (_polygonalPressInput.Busy())
+    {
+        while (_polygonalPressInput.Take(_polygonalPressFamily))
+        {
+        }
+        if (!_polygonalPressInput.Closed())
+            (void)_polygonalPressInput.CloseInput(_polygonalPressFamily);
+        if (!_polygonalPressInput.Finish(_polygonalPressFamily))
+            std::terminate();
+    }
+    assert(!_polygonalDrawing || !_polygonalDrawing->controller);
+    if (_polygonalStamp)
+        (void)_historyWork.Finish(_polygonalStamp.value());
+    _polygonalStamp.reset();
+    if (_selectionPressInput.Busy())
+        (void)_selectionPressInput.Drop(_selectionPressInput.Opening());
+    // Utility completions are suppressed by Close too. Its join is the acknowledgement for retained
+    // readback/export/merge/clone tickets; retire their exact history stamp only after producers/maps join.
+    if (_utilityStamp)
+        (void)_historyWork.Finish(_utilityStamp.value());
+    _utilityStamp.reset();
+    _utilityTicket.reset();
+    // Close suppresses Completed callbacks. Its completed worker/retirement join acknowledges the sampler's
+    // original record; clearing these earlier would let its borrowed source or opening retire before that join.
+    assert(_samplerHostJob == nullptr);
+    if (_samplerHostStamp)
+        (void)_historyWork.Finish(_samplerHostStamp.value());
+    _samplerHostStamp.reset();
+    _samplerHostTicket.reset();
+    SweepSamplerOpenings();
+    if (_samplerState)
+        _samplerState->palettePrefix.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3413,6 +4127,10 @@ void Application::Shutdown() noexcept
     _jobIndicatorTimer.reset();
     SaveSettings();
     StopSettingsWatch();
+    if (_historyResidencyStamp)
+        (void)_historyWork.Finish(_historyResidencyStamp.value());
+    _historyResidencyTicket.reset();
+    _historyResidencyStamp.reset();
     _displayPowerNotification.reset();
     if (_window)
     {
@@ -3450,11 +4168,12 @@ void Application::Shutdown() noexcept
 bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
     // The job event and settings watch wait beside messages, including while hidden. No periodic job timer.
-    HANDLE handles[2]{};
+    HANDLE handles[3]{};
     DWORD count = 0;
     const DWORD noIndex = MAXDWORD;
     DWORD jobIndex = noIndex;
     DWORD watchIndex = noIndex;
+    DWORD observationIndex = noIndex;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
     {
         jobIndex = count;
@@ -3465,12 +4184,19 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
         watchIndex = count;
         handles[count++] = watch;
     }
+    if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
+    {
+        observationIndex = count;
+        handles[count++] = observation;
+    }
     const DWORD waitResult =
         MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0 + count || waitResult == WAIT_TIMEOUT)
     {
         return true;
     }
+    if (observationIndex != noIndex && waitResult == WAIT_OBJECT_0 + observationIndex)
+        return true; // Read fixed samples only in the outer owner loop.
     if (jobIndex != noIndex && waitResult == WAIT_OBJECT_0 + jobIndex)
     {
         return true; // drain only after returning to the outer loop
@@ -3492,8 +4218,9 @@ bool Application::WaitForFrameLatency() noexcept
     {
         return true;
     }
-    HANDLE handles[3]{};
+    HANDLE handles[4]{};
     DWORD count = 0;
+    DWORD observationIndex = MAXDWORD;
     DWORD jobIndex = MAXDWORD;
     DWORD watchIndex = MAXDWORD;
     if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
@@ -3508,11 +4235,18 @@ bool Application::WaitForFrameLatency() noexcept
         watchIndex = count;
         handles[count++] = watch;
     }
+    if (const HANDLE observation = UiCancellationWakeHandle(); observation != nullptr)
+    {
+        observationIndex = count;
+        handles[count++] = observation;
+    }
     const DWORD waitResult = MsgWaitForMultipleObjectsEx(count, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0 + frameIndex)
     {
         return true;
     }
+    if (observationIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + observationIndex)
+        return false;
     if (jobIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + jobIndex)
     {
         return false;
@@ -3541,7 +4275,7 @@ void Application::CheckDeviceAdapter() noexcept
     if (result == S_OK)
     {
         BindCompositionDevice();
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     if (FAILED(result))
@@ -3560,6 +4294,13 @@ void Application::ZoomBy(double factor) noexcept
 
 void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->cancellation && message != WM_MOUSEMOVE && message != WM_MOUSELEAVE)
+    {
+        _uiBenchmark->cancellation->ambientInput = true;
+        FailUiBenchmark("cancel-ambient-pointer-input");
+        return;
+    }
+
     if (!_chrome)
     {
         return;
@@ -3568,6 +4309,15 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     DxUi::PointerEvent event{};
     event.modifiers = GET_KEYSTATE_WPARAM(wParam) | KeyModifiers();
     POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    if (_traceWandForTest)
+    {
+        const CanvasHole hole = _chrome->HolePixels();
+        const Vec2 view{point.x - hole.left, point.y - hole.top};
+        const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+        const bool inside = view.x >= 0 && view.y >= 0 && view.x < hole.width && view.y < hole.height;
+        std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n", message,
+                    point.x, point.y, pixel.x, pixel.y, event.modifiers, inside);
+    }
     if (message == WM_MOUSEWHEEL)
     {
         POINT screen{point};
@@ -3582,6 +4332,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_MOUSELEAVE)
     {
         event.action = DxUi::PointerAction::Leave;
+        if (_asyncSelectionCursorEnabled)
+            InvalidateSelectionCursorOwner();
         _mouseTracked = false;
         if (GetCapture() == _window.get())
         {
@@ -3597,9 +4349,13 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP)
     {
         event.action = DxUi::PointerAction::Up;
-        if (GetCapture() == _window.get())
+        if (GetCapture() == _window.get() &&
+            !(message == WM_RBUTTONUP &&
+              (_canvasBrushInput.Sampling() || _canvasPanLast || _selectionPressInput.Sampling() ||
+               (_polygonalPressInput.Busy() && _polygonalPressLeftDown))))
         {
-            // This release is not a capture loss: the button-up below ends the drag.
+            // A refused right gesture cannot release an admitted left path's capture. Its own left release
+            // below ends that path; this release is not a capture loss.
             _releasingCapture = true;
             ReleaseCapture();
             _releasingCapture = false;
@@ -3619,6 +4375,32 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     event.xPixels = static_cast<float>(point.x);
     event.yPixels = static_cast<float>(point.y);
+    if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    if (RoutePolygonalPressOwner(event, message, point))
+        return;
+    if (RouteSelectionPressOwner(event, message))
+        return;
+    if (RouteDeferredCanvasPan(event, message))
+        return;
+    if (_canvasBrushInput.Busy() && event.action != DxUi::PointerAction::Wheel)
+    {
+        const CanvasHole capturedHole = _chrome->HolePixels();
+        const Vec2 capturedView{event.xPixels - capturedHole.left, event.yPixels - capturedHole.top};
+        if (event.action == DxUi::PointerAction::Down)
+        {
+            // A repeated left press is a refused new gesture. Seal the accepted prefix before its later
+            // indistinguishable moves can append to this opening. Right-button input leaves the left path live.
+            if (message == WM_LBUTTONDOWN)
+                LoseCanvasBrush();
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        }
+        else if (event.action == DxUi::PointerAction::Move || message == WM_LBUTTONUP)
+            RecordCanvasBrush(event, capturedView);
+        else if (event.action == DxUi::PointerAction::Leave && !(_canvasLifetime && _canvasLifetime->presenting))
+            LoseCanvasBrush(true);
+        return; // A canvas press owns its captured samples over chrome until its terminal is acknowledged.
+    }
     if (event.action == DxUi::PointerAction::Down && !PointerBusy())
     {
         // RF-907 (legacy NativeLayerList's thumbnails): a press on a layer row's Mask badge targets that mask, Shift
@@ -3631,7 +4413,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             TargetLayer(target->id, target->mask, target->mask && (event.modifiers & MK_SHIFT) != 0);
             if (target->mask)
             {
-                _frameInvalidated = true;
+                InvalidateFrame();
                 return;
             }
         }
@@ -3642,7 +4424,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         PointerBusy() && (event.action == DxUi::PointerAction::Move || event.action == DxUi::PointerAction::Up);
     if (!canvasDrag && _chrome->DispatchPointer(event))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         // DxUi takes every leave for its hover; the canvas still hears it (the tip circle and a drag end there).
         if (event.action != DxUi::PointerAction::Leave)
         {
@@ -3678,8 +4460,17 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     case DxUi::PointerAction::Down:
         if (inHole)
         {
-            // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
-            CloseOpacityEdit();
+            if (message == WM_LBUTTONDOWN && !_spacePan && QueueCanvasBrush(event, view))
+                return;
+            // Read-only pan/sampling input remains available while a typed edit is settling.
+            // A mutation press must obtain the acknowledged prerequisite or explicitly refuse admission.
+            const bool viewPress = _spacePan || _tool == EditorTool::Hand || SamplesColor();
+            if (!viewPress && !CloseOpacityEdit())
+            {
+                if (!_hostExecuting)
+                    ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
+                return;
+            }
             if (!PointerBusy())
             {
                 PressCanvas(event, message, view, point);
@@ -3706,8 +4497,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 
 bool Application::PointerBusy() const noexcept
 {
-    return !std::holds_alternative<std::monostate>(_drag) || _session.PendingBrush() != nullptr ||
-           _session.PendingWarp() != nullptr || _session.PendingShape().has_value();
+    return (_polygonalPressInput.Busy() && _polygonalPressLeftDown) || !std::holds_alternative<std::monostate>(_drag) ||
+           _session.PendingBrush() != nullptr || _session.HasPendingWarp() || _session.PendingShape().has_value();
 }
 
 void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept
@@ -3715,7 +4506,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     if (_spacePan || _tool == EditorTool::Hand)
     {
         _drag = PanDrag{view};
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     // An open panel's armed eyedropper or targeted adjustment takes the press first.
@@ -3723,21 +4514,37 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         return;
     }
-    if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
-    {
-        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
-        return;
-    }
     const bool left = message == WM_LBUTTONDOWN;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if (left && SamplesColor())
     {
-        // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
-        ColorSampling sampling;
-        sampling.original = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
-        sampling.composite = WandComposite();
-        _drag = std::move(sampling);
-        SampleColorAt(view);
+        // Only a scalar descriptor is captured here. One admitted original root serves this accepted prefix.
+        const auto opening = CanQueueSampler() ? BeginSamplerOpening(pixel) : std::nullopt;
+        if (!opening)
+        {
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+            return;
+        }
+        const auto* source = FindSamplerOpening(opening.value());
+        _drag = ColorSampling{source->originalArgb, std::nullopt, pixel, opening};
+        _layoutDirty = true;
+        InvalidateFrame();
+        return;
+    }
+    // A multi-click continuation belongs to its original input even while an ordered Save is busy.
+    // mayReplay yields its fixed records before older mutating descriptors; this accepts no foreign edit.
+    if (left && PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        SelectionPress(view, event.modifiers, client);
+        return;
+    }
+    if (left && QueuePolygonalPressOwner(event, message, view, client))
+        return;
+    if (left && EditorToolIsSelection(_tool) && QueueSelectionPressOwner(pixel, event.modifiers))
+        return;
+    if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
     if (left && EditorToolIsBrush(_tool))
@@ -3752,9 +4559,11 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
         {
             BeginWarpStroke(view);
         }
-        else
+        else if (_session.CanPaint() && !(_tool == EditorTool::Heal && _session.IsMaskSelected()))
         {
-            BeginBrushStroke(view, event.modifiers);
+            // Accepted paint/erase/healing/blur presses already entered QueueCanvasBrush. A refused or
+            // unsupported opening cannot fall through to owner coverage/sample construction.
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         }
         return;
     }
@@ -3787,7 +4596,7 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         _drag = ZoomDrag{view, _viewport.zoom, false};
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexcept
@@ -3798,7 +4607,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
         return false;
     }
     // The session's own drags: a warp, a stroke, a shape draft.
-    if (_session.PendingWarp() != nullptr)
+    if (_session.HasPendingWarp())
     {
         ContinueWarpStroke(view);
         if (release)
@@ -3930,6 +4739,18 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
     }
     if (const HueTargetDrag* hue = std::get_if<HueTargetDrag>(&_drag))
     {
+        if (hue->opening)
+        {
+            const auto opening = hue->opening.value();
+            if (release)
+            {
+                _drag = PointerDrag{};
+                SealHueInputOwner(opening, false);
+            }
+            else
+                RecordHueMoveOwner(opening, view.x, (event.modifiers & MK_CONTROL) != 0);
+            return true;
+        }
         // A targeted Hue/Saturation drag changes the picked color's saturation, or its hue with Ctrl, measured from
         // where it started.
         if (release)
@@ -3973,6 +4794,24 @@ void Application::HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool i
 
 void Application::EndPointerDrag(PointerEnd end) noexcept
 {
+    if (_polygonalPressInput.Busy())
+    {
+        if (std::holds_alternative<PanDrag>(_drag))
+        {
+            _drag = PointerDrag{};
+            return; // A temporary view drag ends without generic settlement of the prepared Polygonal writer.
+        }
+        if (end == PointerEnd::Lost || _polygonalPressLeftDown)
+            LosePolygonalPressOwner();
+        return; // Outside leave is cursor metadata, not a lost multi-click family.
+    }
+    if (_selectionPressInput.Busy() || (_selectionPressState && _selectionPressState.value().controller))
+    {
+        // The original admitted parent owns loss, rollback and its writer/history acknowledgement.
+        // Generic cleanup must not cancel that writer before its accepted Lost reaches the parent.
+        LoseSelectionPressOwner();
+        return;
+    }
     const bool lost = end == PointerEnd::Lost;
     // A warp and a stroke keep what they painted either way (Decision D10); a shape draft adds its layer as a release
     // would, and drops when the pointer was lost.
@@ -4043,10 +4882,14 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     {
         EndColorSampling();
     }
-    else if (std::holds_alternative<HueTargetDrag>(_drag))
+    else if (const auto* hue = std::get_if<HueTargetDrag>(&_drag))
     {
+        const auto opening = hue->opening;
         _drag = PointerDrag{};
-        _session.EndHueTargeting();
+        if (opening)
+            SealHueInputOwner(opening.value(), true);
+        else
+            _session.EndHueTargeting();
     }
     else
     {
@@ -4106,6 +4949,29 @@ bool Application::SkipsTransformSettle(int command) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    if (command == ChromeHost::kCommandRetryLayerList)
+    {
+        RetryPreparedLayerRows();
+        return; // Derived display retry neither settles nor changes an open editing transaction.
+    }
+    if (!_hostExecuting &&
+        (command == ChromeHost::kCommandSwapPalette || command == ChromeHost::kCommandResetPalette) &&
+        CanChangePaletteDuringSampling())
+    {
+        if (_chrome && _chrome->ColorPickerOpen())
+            _chrome->CloseColorPicker(false);
+        if (command == ChromeHost::kCommandSwapPalette)
+            _session.SwapPaletteColors();
+        else
+            _session.ResetPaletteColors();
+        RefreshGradientJobs();
+        _layoutDirty = true;
+        InvalidateFrame();
+        return; // Explicit input invalidates old sample publication at event time, outside document history.
+    }
+    if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
+        CancelCanvasBrush(true))
+        return; // Pointer-down cancels its draft; a sealed stroke retains its ordinal and queues Undo below.
     // View/chrome commands keep pumping. Every document mutation waits behind admitted history/input, preserving
     // its event-time command instead of settling a panel inline and falling through on failure.
     const bool view = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual ||
@@ -4125,15 +4991,17 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    const bool settledSelection =
-        (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect) &&
-        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    const bool loadedSelection =
+        command == ChromeHost::kCommandLoadLayerSelection || command == ChromeHost::kCommandLoadMaskSelection;
+    const bool settledSelection = (command == ChromeHost::kCommandSelectAll ||
+                                   command == ChromeHost::kCommandDeselect || command == ChromeHost::kCommandInverse) &&
+                                  _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
     const auto selectedTool = ChromeHost::ToolForSelectCommand(command);
     const bool closesOutline =
         _session.IsMovingSelection() &&
         (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || closesOutline ||
-                            command == ChromeHost::kCommandFreeTransform))
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || loadedSelection ||
+                            closesOutline || command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4218,8 +5086,9 @@ void Application::OnCommand(int command) noexcept
         return;
     }
     if (!_hostExecuting && !view && !file &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+        (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() ||
+         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
+         _activeHostRequest || _hostRequests.Size()))
     {
         if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             _duplicateGesture->pointerDown = false;
@@ -4232,7 +5101,8 @@ void Application::OnCommand(int command) noexcept
     // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
     if (!view)
     {
-        CloseOpacityEdit();
+        if (!CloseOpacityEdit())
+            return;
     }
     // Commands that change layers or files settle a pending transform first, as Enter would; view, history and About
     // do not.
@@ -4345,8 +5215,10 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandToggleLayerVisibility:
         if (_session.ActiveLayerID().has_value())
         {
-            _session.ToggleVisibility(_session.ActiveLayerID().value());
-            DocumentChanged();
+            _hostExecutionError =
+                StartLayerMetadata(LayerMetadataKind::ToggleVisibility, _session.ActiveLayerID().value());
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
         }
         break;
     case ChromeHost::kCommandMoveOutOfGroup:
@@ -4404,7 +5276,7 @@ void Application::OnCommand(int command) noexcept
         }
         _session.SwapPaletteColors();
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         break;
     case ChromeHost::kCommandResetPalette:
         if (_chrome != nullptr && _chrome->ColorPickerOpen())
@@ -4413,7 +5285,7 @@ void Application::OnCommand(int command) noexcept
         }
         _session.ResetPaletteColors();
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         break;
     case ChromeHost::kCommandNudgeSelectionLeft:
     case ChromeHost::kCommandNudgeSelectionRight:
@@ -4472,8 +5344,16 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandBlendPrevious:
     case ChromeHost::kCommandBlendNext:
-        _session.StepBlendMode(command == ChromeHost::kCommandBlendNext);
-        DocumentChanged();
+        if (const auto* layer = _session.ActiveLayer(); layer && !layer->isGroup && !_session.HasColorEdit())
+        {
+            const int direction = command == ChromeHost::kCommandBlendNext ? 1 : -1;
+            const int count = LayerBlendModeCount();
+            const auto mode =
+                static_cast<LayerBlendMode>((static_cast<int>(layer->blendMode) + direction + count) % count);
+            _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetBlendMode, layer->id, {}, 1.0, mode);
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
+        }
         break;
     case ChromeHost::kCommandDeleteKey:
         if (_session.Selection())
@@ -4486,10 +5366,14 @@ void Application::OnCommand(int command) noexcept
         DocumentChanged();
         break;
     case ChromeHost::kCommandToggleMarqueeKind:
+        if (_lassoInput.Busy())
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
         _session.ToggleMarqueeKind();
         SyncChrome();
         break;
     case ChromeHost::kCommandToggleLassoKind:
+        if (_lassoInput.Busy())
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
         _session.ToggleLassoKind();
         SyncChrome();
         break;
@@ -4522,12 +5406,28 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandFlipLayerHorizontal:
-        _session.FlipLayers(true);
-        DocumentChanged();
-        break;
     case ChromeHost::kCommandFlipLayerVertical:
-        _session.FlipLayers(false);
-        DocumentChanged();
+        if (!_hostExecuting)
+        {
+            ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+            break;
+        }
+        if (_session.ActiveLayerID() && _session.history.CaptureState().Depth() == 0 &&
+            _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) && !_session.TransformsAsGroup())
+        {
+            // Complete admission precedes immutable capture. Record cloning, mask placement and history
+            // preparation run on the existing metadata worker; failure never falls back to owner work.
+            const auto kind = command == ChromeHost::kCommandFlipLayerHorizontal ? LayerMetadataKind::FlipHorizontal
+                                                                                 : LayerMetadataKind::FlipVertical;
+            _hostExecutionError = StartLayerMetadata(kind, _session.ActiveLayerID().value());
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
+        }
+        else
+        {
+            _session.FlipLayers(command == ChromeHost::kCommandFlipLayerHorizontal);
+            DocumentChanged();
+        }
         break;
     case ChromeHost::kCommandFlipCanvasHorizontal:
         _session.FlipCanvas(true);
@@ -4640,7 +5540,7 @@ void Application::OnCommand(int command) noexcept
         // Not under a stroke or warp in progress (legacy canEditLayers), whose layer and mask they change.
         if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value() &&
                                                                _session.PendingBrush() == nullptr &&
-                                                               _session.PendingWarp() == nullptr)
+                                                               !_session.HasPendingWarp())
         {
             // The link and the switch change what the layer shows: a pending gradient applies first (Decision D3).
             const Guid id = active->id;
@@ -4678,41 +5578,51 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandInverse:
-        EndSelectionInteraction(false);
-        _session.InvertSelection();
-        SelectionChanged();
+        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+        {
+            _hostExecutionError = StartInverseSelection();
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+        }
+        else
+        {
+            // Live selection/stroke closure retains the reference route until ordered replay qualifies.
+            EndSelectionInteraction(false);
+            _session.InvertSelection();
+            SelectionChanged();
+        }
         break;
     case ChromeHost::kCommandLoadLayerSelection:
     case ChromeHost::kCommandLoadMaskSelection:
-        EndSelectionInteraction(false);
-        if (_session.ActiveLayerID().has_value())
+        if (!_hostExecuting)
         {
-            // An outline the tracer refuses says why, as the wand does (RF-217); nothing to trace stays silent.
-            WandFailure failure = WandFailure::None;
-            const Guid layer = _session.ActiveLayerID().value();
-            static_cast<void>(command == ChromeHost::kCommandLoadMaskSelection
-                                  ? _session.LoadMaskSelection(layer, SelectionMode::New, &failure)
-                                  : _session.LoadLayerSelection(layer, SelectionMode::New, &failure));
-            if (failure != WandFailure::None)
-            {
-                ShowError(failure == WandFailure::TooDetailed ? IDS_ERROR_SELECTION_DETAILED : IDS_ERROR_WAND_MEMORY);
-            }
+            _hostExecutionError = E_ABORT;
+            return; // Ordinary commands must retain their original ordered request through acknowledgement.
         }
-        SelectionChanged();
+        _hostExecutionError = StartLoadedLayerSelection(command == ChromeHost::kCommandLoadMaskSelection);
+        if (FAILED(_hostExecutionError))
+        {
+            ++_errorsShown;
+            _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
+                                                                                           : IDS_ERROR_SELECTION_EDIT;
+            _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+        }
         break;
     default:
         break;
     }
 }
 
-void Application::SettleInteractions(bool applyPanels) noexcept
+bool Application::SettleInteractions(bool applyPanels) noexcept
 {
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return false;
     CloseRenameCard();
     EndCanvasEdits(applyPanels ? EditEnd::ToolSwitch : EditEnd::DocumentGoes);
     _session.ClearSnapGuides();
     // What is left in flight views or samples the canvas (a pan, a zoom drag, the eyedropper): it ends where it is.
     EndPointerDrag(PointerEnd::Left);
+    return true;
 }
 
 bool Application::EditUnderWay(CanvasEdit edit) const noexcept
@@ -4726,7 +5636,7 @@ bool Application::EditUnderWay(CanvasEdit edit) const noexcept
     case CanvasEdit::PixelMove:
         return _session.PendingPixelMove() != nullptr || std::holds_alternative<PixelDrag>(_drag);
     case CanvasEdit::Warp:
-        return _session.PendingWarp() != nullptr;
+        return _session.HasPendingWarp();
     case CanvasEdit::Brush:
         return _session.PendingBrush() != nullptr;
     case CanvasEdit::Shape:
@@ -4734,7 +5644,7 @@ bool Application::EditUnderWay(CanvasEdit edit) const noexcept
     case CanvasEdit::OutlineMove:
         return _session.IsMovingSelection();
     case CanvasEdit::Lasso:
-        return _session.PendingLasso().has_value();
+        return _session.PendingLasso().has_value() || _lassoInput.Busy();
     case CanvasEdit::Gradient:
         return _session.PendingGradient() != nullptr;
     case CanvasEdit::Transform:
@@ -4856,11 +5766,15 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         }
         if (end == EditEnd::Enter)
         {
-            _session.FinishLasso();
+            if (!QueueLassoFinishOwner(_session.selectionAntialiased))
+                _session.FinishLasso();
         }
         else
         {
-            _session.CancelLasso();
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            else
+                _session.CancelLasso();
         }
         DropDrag<DraftDrag>();
         SelectionChanged();
@@ -4956,8 +5870,9 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+        (PolygonalInputOwner(_lassoInput.Opening()) || _historyWork.Busy() || _session.IsMovingSelection() ||
+         _session.HasColorEdit() || _session.PendingGradient() || _session.PendingTransformEdit() || _opacityEdit ||
+         _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -4965,7 +5880,8 @@ void Application::OnTool(EditorTool tool) noexcept
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
-        SettleInteractions(true);
+        if (!SettleInteractions(true))
+            return;
         _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
         if (tool == EditorTool::Crop)
         {
@@ -4981,7 +5897,7 @@ void Application::OnTool(EditorTool tool) noexcept
         _chrome->SetTool(tool);
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::NewDocument() noexcept
@@ -5085,6 +6001,13 @@ LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM 
 
 LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->displayContinuityCaptured)
+    {
+        const bool monitorIdentityChanged =
+            message == WM_MOVE && reinterpret_cast<std::uintptr_t>(MonitorFromWindow(window, MONITOR_DEFAULTTONULL)) !=
+                                      _uiBenchmark->initialMonitorIdentity;
+        _uiBenchmark->displayContinuity.ObserveMessage(message, monitorIdentityChanged);
+    }
     switch (message)
     {
     case kUiBenchmarkMessage:
@@ -5179,6 +6102,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         break;
     case WM_SHOWWINDOW:
         _windowVisible = wParam != FALSE;
+        ReleaseSurfacesWhileUnseen();
         if (_chrome)
         {
             _chrome->SetVisible(_windowVisible);
@@ -5189,7 +6113,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         if (_windowVisible)
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     case WM_DROPFILES:
@@ -5299,6 +6223,8 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         break;
     case WM_TIMER:
+        if (_uiBenchmark && OnUiCancellationTimer(wParam))
+            return 0;
         if (wParam == kUiBenchmarkTimerId && _uiBenchmark)
         {
             (void)KillTimer(window, kUiBenchmarkTimerId);
@@ -5337,9 +6263,10 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 DWORD displayStatus = 0;
                 std::memcpy(&displayStatus, setting->Data, sizeof(displayStatus));
                 _displayPoweredOn = displayStatus != 0;
+                ReleaseSurfacesWhileUnseen();
                 if (_displayPoweredOn)
                 {
-                    _frameInvalidated = true;
+                    InvalidateFrame();
                 }
             }
         }
@@ -5350,7 +6277,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
-        _frameInvalidated = true;
+        InvalidateFrame();
         ValidateRect(window, nullptr);
         return 0;
     case WM_CLOSE:
@@ -5378,7 +6305,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         if (_prompts->ShowNotice(_chrome.get(),
                                  FormatPostedNotice(static_cast<UINT>(wParam), static_cast<int>(lParam))))
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     case WM_DESTROY:
@@ -5410,6 +6337,7 @@ LRESULT Application::OnSize(UINT width, UINT height) noexcept
     }
 
     const HRESULT result = _renderer.Resize(width, height);
+    ReleaseSurfacesWhileUnseen();
     if (width == 0 || height == 0)
     {
         // Minimized: nothing presents, and no document surfaces wait for a frame that cannot show (RF-411).
@@ -5418,7 +6346,7 @@ LRESULT Application::OnSize(UINT width, UINT height) noexcept
     if (SUCCEEDED(result) && width != 0 && height != 0)
     {
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (FAILED(result))
     {
@@ -5470,7 +6398,7 @@ LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noex
         return 0;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
     return 0;
 }
 
@@ -5609,6 +6537,12 @@ void Application::ApplyDemo() noexcept
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
 {
+    if (!_hostExecuting && PolygonalInputOwner(_lassoInput.Opening()) && action != TransformAction::AutoSelect &&
+        action != TransformAction::ShowControls && action != TransformAction::LockRatio)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return; // Selected Polygonal scope does not admit a competing transform writer.
+    }
     if (!_hostExecuting && (action == TransformAction::Apply || action == TransformAction::Cancel))
     {
         (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
@@ -5635,7 +6569,7 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
     case TransformAction::ShowControls:
         _showsTransformControls = value != 0.0;
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     case TransformAction::LockRatio:
         _locksTransformRatio = value != 0.0;
@@ -6149,6 +7083,8 @@ bool Application::CursorPressesLayer(Vec2 pixel, bool control) noexcept
 
 bool Application::CursorOverSelection(Vec2 pixel) noexcept
 {
+    if (_asyncSelectionCursorEnabled)
+        return PreparedCursorOverSelection(pixel);
     CursorProbe& probe = _selectionProbe;
     if (probe.valid && probe.revision == _cursorRevision && probe.pixel == pixel)
     {
@@ -6162,7 +7098,7 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
         const std::optional<DocumentSelection>& selection = _session.Selection();
         if (selection.has_value() && !selection->loops.empty())
         {
-            _selectionReach = SelectionGeometry::Bounds(selection->loops);
+            _selectionReach = selection->Bounds();
         }
     }
     // The winding test counts a point on the outline (within 1e-9) as inside: the bounds keep a margin for it.
@@ -6182,6 +7118,26 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_polygonalPressInput.Busy() || PolygonalInputOwner(_lassoInput.Opening())))
+    {
+        if (action == SelectionAction::Deselect)
+        {
+            ReportHostAdmission(QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect}));
+            return;
+        }
+        if (action == SelectionAction::Expand || action == SelectionAction::Contract)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
+            return; // Never fall through to owner geometry or a second serial selection producer.
+        }
+    }
+    if (!_hostExecuting && (action == SelectionAction::Expand || action == SelectionAction::Contract) &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    {
+        const int amount = action == SelectionAction::Expand ? _selectionExpandAmount : -_selectionContractAmount;
+        ReportHostAdmission(QueueHostInput(HostSelectionOffsetInput{amount}));
+        return;
+    }
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
@@ -6260,14 +7216,29 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
+    if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind == LassoKind::Polygonal)
+        {
+            const Vec2 first = _viewport.ViewFromDocument(_lassoInputFirstPoint, documentSize);
+            const bool nearFirst = std::hypot(view.x - first.x, view.y - first.y) <= _viewport.DipToView(8.0);
+            RecordLassoPolygonPressOwner(pixel, nearFirst, doubleClick, _session.selectionAntialiased);
+        }
+        else
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_BUSY)));
+        return;
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
-    if (draft.has_value() && draft->kind == LassoKind::Polygonal && !draft->points.empty())
+    if (draft.has_value() && draft->kind == LassoKind::Polygonal && draft->PointCount() != 0)
     {
         // Polygonal adds a corner per click and closes on a click near the first corner or a double-click.
-        const Vec2 first = _viewport.ViewFromDocument(draft->points.front(), documentSize);
+        const Vec2 first = _viewport.ViewFromDocument(draft->FirstPoint().value(), documentSize);
         const double closeDistance = _viewport.DipToView(8.0);
         if (doubleClick ||
-            (draft->points.size() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
+            (draft->PointCount() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
         {
             _session.FinishLasso();
         }
@@ -6277,6 +7248,17 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
         }
         SelectionChanged();
         return;
+    }
+    if (_polygonalDrawingTestEnabled && _tool == EditorTool::Lasso && _session.lassoKind == LassoKind::Polygonal)
+    {
+        const auto mode = _session.SelectionModeFor(shift, alt);
+        const auto& selection = _session.Selection();
+        if ((modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL) ||
+            (mode == SelectionMode::New && selection && !selection.value().IsEmpty()))
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
+            return; // Until the exact worker hit/lift dispatcher exists, refuse before any owner containment walk.
+        }
     }
     // Ctrl-drag inside the selection cuts and moves its pixels (Photoshop's temporary Move tool); Alt duplicates.
     const bool control = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
@@ -6296,6 +7278,13 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     if (_tool == EditorTool::Wand)
     {
         RunMagicWand(pixel, mode);
+        return;
+    }
+    if (QueueLassoOpeningOwner(pixel, mode, _tool == EditorTool::Marquee))
+    {
+        if (_lassoInput.Busy())
+            _drag = DraftDrag{std::nullopt, !shift};
+        SelectionChanged();
         return;
     }
     if (_tool == EditorTool::Marquee)
@@ -6349,6 +7338,28 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
         outline->offset = Vec2{std::round(dx), std::round(dy)};
         _session.MoveSelection(dx, dy);
         SelectionChanged();
+        return true;
+    }
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        auto* drawing = std::get_if<DraftDrag>(&_drag);
+        if (!captured)
+            return true;
+        if (captured->kind == LassoKind::Freehand && drawing)
+            RecordLassoInputOwner(_lassoInput.Point(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
+        else if (captured->kind == LassoKind::Polygonal)
+            RecordLassoInputOwner(_lassoInput.Cursor(_lassoInput.Opening(), pixel, NextLassoSampleOrdinalOwner()));
+        else if (drawing)
+        {
+            if (!shift)
+                drawing->constrainArmed = true;
+            drawing->marqueePixel = pixel;
+            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), pixel, drawing->constrainArmed && shift,
+                                                      false, NextLassoSampleOrdinalOwner()));
+        }
+        if (changed)
+            SelectionChanged();
         return true;
     }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
@@ -6410,12 +7421,15 @@ void Application::SelectionRelease(Vec2 view) noexcept
             SelectionChanged();
             return;
         }
-        if (CanQueueSelectionMoveClick() && (_tool != EditorTool::Wand || !_session.wandSettings.sampleAllLayers))
+        const auto wand =
+            _tool == EditorTool::Wand
+                ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings, _session.selectionAntialiased,
+                                                      SelectionMode::New, _session.CapturePanelWandOpening()})
+                : std::nullopt;
+        if (CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr) &&
+            (!wand || !wand->settings.sampleAllLayers || wand->panelOpening))
         {
-            (void)QueueSelectionMoveClick(_tool == EditorTool::Wand
-                                              ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings,
-                                                                                    _session.selectionAntialiased})
-                                              : std::nullopt);
+            (void)QueueSelectionMoveClick(wand);
             SelectionChanged();
             return;
         }
@@ -6429,6 +7443,15 @@ void Application::SelectionRelease(Vec2 view) noexcept
         }
         return;
     }
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind != LassoKind::Polygonal)
+            (void)QueueLassoFinishOwner(_session.selectionAntialiased);
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return;
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && draft->kind != LassoKind::Polygonal)
     {
@@ -6440,7 +7463,29 @@ void Application::SelectionRelease(Vec2 view) noexcept
 
 void Application::EndSelectionInteraction(bool keepDraft) noexcept
 {
+    if (_polygonalPressInput.Busy())
+    {
+        if (!keepDraft)
+            LosePolygonalPressOwner();
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return; // The original's acknowledgment alone clears its prepared writer; leave preserves the draft.
+    }
+    if (PolygonalInputOwner(_lassoInput.Opening()))
+    {
+        if (!keepDraft)
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return; // Original completion/join alone may clear its prepared writer; pointer leave preserves it.
+    }
     // Capture lost or a tool change: a polygonal outline survives a pointer leave, a drag does not.
+    if (_lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (!captured || !keepDraft || captured->kind != LassoKind::Polygonal)
+            CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+    }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && (!keepDraft || draft->kind != LassoKind::Polygonal))
     {
@@ -6478,7 +7523,12 @@ void Application::UpdateSelectionModifiers() noexcept
         {
             drawing->constrainArmed = true;
         }
-        _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
+        if (_lassoInput.Busy())
+            RecordLassoInputOwner(_lassoInput.Marquee(_lassoInput.Opening(), drawing->marqueePixel.value(),
+                                                      drawing->constrainArmed && shift, false,
+                                                      NextLassoSampleOrdinalOwner()));
+        else
+            _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
         changed = true;
     }
     if (changed)
@@ -6490,16 +7540,37 @@ void Application::UpdateSelectionModifiers() noexcept
 void Application::SelectionChanged() noexcept
 {
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 {
-    if (mode == SelectionMode::New && !_session.wandSettings.sampleAllLayers &&
-        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (mode > SelectionMode::Subtract)
     {
-        ReportHostAdmission(
-            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased}));
+        ReportHostAdmission(ContinuationReceipt::Failure(E_INVALIDARG));
+        return; // No source capture, readback or synchronous reference for an invalid physical mode.
+    }
+    if (auto panel = _session.CapturePanelWandOpening())
+    {
+        ReportHostAdmission(QueueHostInput(HostWandLayerNewInput{
+            pixel, _session.wandSettings, _session.selectionAntialiased, mode, std::move(panel)}));
+        return;
+    }
+    if (_traceWandForTest)
+        std::printf("WAND ROUTE point=%.3f,%.3f mode=%u all_layers=%d applicable_history=%d generation=%llu\n", pixel.x,
+                    pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,
+                    _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()),
+                    static_cast<unsigned long long>(_session.Generation()));
+    if (mode <= SelectionMode::Subtract && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    {
+        const auto receipt = _session.wandSettings.sampleAllLayers
+                                 ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings,
+                                                                            _session.selectionAntialiased, mode})
+                                 : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings,
+                                                                        _session.selectionAntialiased, mode});
+        if (_traceWandForTest)
+            std::printf("WAND ADMISSION outcome=%u\n", static_cast<unsigned int>(receipt.Read().outcome));
+        ReportHostAdmission(receipt);
         return;
     }
     std::optional<Raster> composite;
@@ -6540,6 +7611,13 @@ std::optional<Raster> Application::WandComposite() noexcept
 
 void Application::OnBrushAction(BrushAction action, double value) noexcept
 {
+    if (PolygonalInputOwner(_lassoInput.Opening()) &&
+        ((action == BrushAction::SetMaskPaint && _session.PendingGradient()) ||
+         (action == BrushAction::SetSmearMode && _session.HasPendingWarp())))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     // Reached from inside a DxUi callback: chrome re-syncs on the next frame rather than re-entering Prepare.
     switch (action)
     {
@@ -6592,7 +7670,7 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
         break;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 namespace
@@ -6628,26 +7706,41 @@ namespace
 
 void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
 {
+    BeginBrushStrokeAt(_viewport.DocumentFromView(view, DocumentSize()), modifiers, BrushKindFor());
+}
+
+void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
+                                     const CanvasBrushContext* captured, const Raster* cloneComposite) noexcept
+{
     if (!_session.Document().has_value() || _session.PendingBrush() != nullptr)
     {
         return;
     }
-    // The stroke's coverage and its preview live on the current device.
-    BindCompositionDevice();
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const BrushKind kind = BrushKindFor();
+    // Clone is image-only. Refuse a mask before preparing graphics or a committed source.
+    if (kind == BrushKind::Clone && _session.IsMaskSelected())
+        return;
     const bool couldPaint = _session.CanPaint();
-    if (kind == BrushKind::Clone && !_session.CloneStrokeOffset(pixel).has_value())
+    if (kind == BrushKind::Clone && !(captured && captured->cloneOffset) &&
+        !_session.CloneStrokeOffset(pixel).has_value())
     {
         ShowError(IDS_ERROR_CLONE_SOURCE);
         return;
     }
-    std::optional<Raster> composite;
-    if (kind == BrushKind::Clone && _session.cloneSettings.sampleAllLayers)
+    if (kind == BrushKind::Clone && !cloneComposite)
     {
-        composite = WandComposite();
+        // Every host Clone stroke requires its admitted source. A refused or unsupported input must
+        // not fall through to owner layer sampling or synchronous composition/readback.
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
     }
-    const Raster* sample = composite.has_value() ? &composite.value() : nullptr;
+    // The stroke's coverage and its preview live on the current device.
+    BindCompositionDevice();
+    const auto begin = [this, kind, cloneComposite, captured](Vec2 point)
+    {
+        return captured ? _session.BeginBrush(point, kind, cloneComposite, captured->settings, captured->maskWhite,
+                                              captured->cloneOffset)
+                        : _session.BeginBrush(point, kind, cloneComposite);
+    };
     bool begun = false;
     if ((modifiers & MK_SHIFT) != 0)
     {
@@ -6655,7 +7748,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         const std::optional<Vec2> start = _session.ShiftLineStart();
         if (start.has_value())
         {
-            begun = _session.BeginBrush(start.value(), kind, sample);
+            begun = begin(start.value());
             if (begun)
             {
                 _session.ContinueBrush(pixel);
@@ -6664,7 +7757,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     }
     if (!begun)
     {
-        begun = _session.BeginBrush(pixel, kind, sample);
+        begun = begin(pixel);
     }
     const BrushStroke* stroke = _session.PendingBrush();
     if (!begun || stroke == nullptr)
@@ -6690,11 +7783,40 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     }
 }
 
+void Application::BeginPreparedBrushStrokeAt(Vec2 pixel, unsigned int modifiers) noexcept
+{
+    auto* stroke = _session.MutableBrush();
+    if (!stroke || _session.PendingBrushOpening() != _canvasBrushSessionOpening)
+        return;
+    // Empty typed worker draft is already attached under current authority. The accepted press supplies
+    // the first sample; opening never deposits density. Shift preserves the existing endpoint rule.
+    const auto start = (modifiers & MK_SHIFT) != 0 ? _session.ShiftLineStart() : std::nullopt;
+    (void)_composition.BeginStroke(PreviewFor(*stroke));
+    _previewSource.reset();
+    if (start)
+        _session.ContinueBrush(start.value());
+    if (_session.PendingBrush())
+        _session.ContinueBrush(pixel);
+    _brushHover = pixel;
+    if (_session.PendingBrush())
+        PushPreviewTiles();
+    else
+    {
+        _composition.EndStroke();
+        DocumentChanged();
+    }
+    SyncBrushCursor();
+}
+
 void Application::PushPreviewTiles() noexcept
 {
+    // A detached Warp retains its last immutable preview. Never infer settlement or walk another draft
+    // while its original worker exclusively owns the mutable tiles.
+    if (_session.HasPendingWarp() && !_session.PendingWarp())
+        return;
     if (!_composition.HasStroke())
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         return;
     }
     std::vector<RasterTile> tiles;
@@ -6720,7 +7842,7 @@ void Application::PushPreviewTiles() noexcept
         }
         if (raster == nullptr)
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
             return;
         }
         if (_composition.StrokeTextureMissing())
@@ -6741,16 +7863,20 @@ void Application::PushPreviewTiles() noexcept
     {
         (void)_composition.UpdateStrokeTiles(tiles);
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::ContinueBrushStroke(Vec2 view) noexcept
+{
+    ContinueBrushStrokeAt(_viewport.DocumentFromView(view, DocumentSize()));
+}
+
+void Application::ContinueBrushStrokeAt(Vec2 pixel) noexcept
 {
     if (_session.PendingBrush() == nullptr)
     {
         return;
     }
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     _brushHover = pixel;
     _session.ContinueBrush(pixel);
     if (_session.PendingBrush() == nullptr)
@@ -6832,6 +7958,18 @@ void Application::EndStrokePreview(const std::optional<BrushCommitInfo>& commit)
 
 void Application::SyncStrokePreview() noexcept
 {
+    if (_pendingDisplayInitialized)
+    {
+        _pendingDisplay.RequestOwner(); // Also excludes a closed/zero-input opening from future frames.
+        if ((_session.PendingGradient() && _session.PendingGradient()->deferred) ||
+            (_session.PendingPixelMove() && _session.PendingPixelMove()->deferred))
+        {
+            // Completed immutable metadata is consumed by the admitted recorder. No owner tile walk,
+            // BeginStroke upload, TakeChanged or mutable CPU preview crosses this route.
+            InvalidateFrame();
+            return;
+        }
+    }
     // A pending gradient or lifted pixels show their raster; a new one (a new line, another layer or target) ends
     // the preview of the one before, adopting its texture only for its own commit, and begins afresh (RF-407).
     BrushStroke* raster = nullptr;
@@ -6864,10 +8002,10 @@ void Application::SyncStrokePreview() noexcept
     // The one teardown: with no raster edit under way (a stroke or warp dropped or committed, a gradient applied,
     // cancelled or undone, pixels put down) the preview ends, adopting its texture only for the commit the session
     // just made on its own layer and target.
-    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && _session.PendingWarp() == nullptr)
+    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && !_session.HasPendingWarp())
     {
         EndStrokePreview(_session.TakeLastBrushCommit());
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
 }
 
@@ -6901,7 +8039,7 @@ void Application::SyncBrushCursor() noexcept
         cursor = circle;
     }
     _chrome->SetBrushCursor(cursor);
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 namespace
@@ -6934,7 +8072,16 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
-    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke")
+    if (_bench == L"layer-rows" || _bench == L"layer-rows-smoke")
+    {
+        return RunLayerRowsBenchmark();
+    }
+    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke" ||
+        _bench == L"ui-size-prepared" || _bench == L"ui-size-prepared45" || _bench == L"ui-size-prepared100" ||
+        _bench == L"ui-size-prepared-smoke" || _bench == L"ui-sampler" || _bench == L"ui-sampler45" ||
+        _bench == L"ui-sampler100" || _bench == L"ui-sampler-smoke" || _bench == L"ui-prepared" ||
+        _bench == L"ui-prepared45" || _bench == L"ui-prepared100" || _bench == L"ui-prepared-smoke" ||
+        IsUiCancellationBenchmark(_bench))
     {
         return RunUiBenchmark();
     }
@@ -7059,10 +8206,8 @@ int Application::RunBenchmark() noexcept
 
 // ── Retouch tools (C11) ───────────────────────────────────────────────────
 
-namespace
-{
 // Shift constrains a gradient line to 45° steps around the other end, as in Photoshop.
-[[nodiscard]] Vec2 Snapped(Vec2 point, Vec2 anchor) noexcept
+Vec2 Application::SnappedGradientPoint(Vec2 point, Vec2 anchor) noexcept
 {
     const double dx = point.x - anchor.x;
     const double dy = point.y - anchor.y;
@@ -7071,7 +8216,6 @@ namespace
     const double angle = std::round(std::atan2(dy, dx) / step) * step;
     return Vec2{anchor.x + std::cos(angle) * length, anchor.y + std::sin(angle) * length};
 }
-} // namespace
 
 BrushKind Application::BrushKindFor() const noexcept
 {
@@ -7097,7 +8241,7 @@ bool Application::WarpsWithSmear() const noexcept
 
 void Application::BeginWarpStroke(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value() || _session.PendingWarp() != nullptr || _session.PendingBrush() != nullptr)
+    if (!_session.Document().has_value() || _session.HasPendingWarp() || _session.PendingBrush() != nullptr)
     {
         return;
     }
@@ -7153,6 +8297,12 @@ void Application::ContinueWarpStroke(Vec2 view) noexcept
 
 void Application::FinishWarpStroke() noexcept
 {
+    const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+    if (_asyncWarpLiveEnabled && captured && captured->tool == EditorTool::Smear && captured->smear != SmearMode::Blur)
+    {
+        SealCanvasBrushForBoundary();
+        return;
+    }
     if (_session.PendingWarp() == nullptr)
     {
         return;
@@ -7166,6 +8316,12 @@ void Application::FinishWarpStroke() noexcept
 
 void Application::CancelWarpStroke() noexcept
 {
+    const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+    if (_asyncWarpLiveEnabled && captured && captured->tool == EditorTool::Smear && captured->smear != SmearMode::Blur)
+    {
+        (void)CancelCanvasBrush(false);
+        return;
+    }
     if (_session.PendingWarp() == nullptr)
     {
         return;
@@ -7215,7 +8371,7 @@ void Application::OnGradientAction(GradientAction action, double value) noexcept
     }
     _session.RefreshGradient();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::BeginGradientDrag(Vec2 view) noexcept
@@ -7265,7 +8421,7 @@ void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
     Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if ((modifiers & MK_SHIFT) != 0)
     {
-        pixel = Snapped(pixel, handle == 0 ? pending->end : pending->start);
+        pixel = SnappedGradientPoint(pixel, handle == 0 ? pending->end : pending->start);
     }
     if (handle == 0)
     {
@@ -7285,7 +8441,7 @@ void Application::EndGradientDrag() noexcept
     DropDrag<GradientDrag>();
     _session.EndGradientDrag();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CommitGradient() noexcept
@@ -7336,7 +8492,7 @@ int Application::RunRenderingSelfTest() noexcept
     }
     const auto fresh = [&](int width, int height)
     {
-        SettleInteractions(false);
+        (void)SettleInteractions(false); // Reference rendering fixture replaces the document immediately.
         _session.CreateDocument(width, height, false);
         _session.history.MarkSaved();
         _viewport.followsFit = true;
@@ -7364,7 +8520,7 @@ int Application::RunRenderingSelfTest() noexcept
     };
     const auto frame = [&]()
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
         RenderFrame();
     };
 
@@ -7476,7 +8632,7 @@ int Application::RunRenderingSelfTest() noexcept
                                             !_chrome->SizeCardOpen();
         const HRESULT reattached = _chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         if (!allClosedWhileDetached || FAILED(reattached))
         {
             SelfTestFailure(std::format(L"A detached chrome did not read every card as closed, or did not "
@@ -7722,14 +8878,14 @@ int Application::RunRenderingSelfTest() noexcept
         // lower one): what the adopted texture draws equals the committed raster.
         const auto offBy = [&](const Guid& shown) -> int
         {
-            _session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    for (ImageLayer& layer : document.layers)
-                    {
-                        layer.visible = layer.id == shown;
-                    }
-                });
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (ImageLayer& layer : document.layers)
+                                        {
+                                            layer.visible = layer.id == shown;
+                                        }
+                                    });
             DocumentChanged();
             frame();
             std::vector<std::uint8_t> bgra;
@@ -7935,12 +9091,12 @@ int Application::RunRefusalSelfTest() noexcept
     const auto addLayer = [&](ImageLayer layer, bool bottom)
     {
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                std::vector<ImageLayer>& layers = document.layers;
-                layers.insert(bottom ? layers.begin() : layers.end(), layer);
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    std::vector<ImageLayer>& layers = document.layers;
+                                    layers.insert(bottom ? layers.begin() : layers.end(), layer);
+                                });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();
@@ -7974,14 +9130,17 @@ int Application::RunRefusalSelfTest() noexcept
         (void)addLayer(std::move(layer), false);
         const int errors = _errorsShown;
         OnCommand(ChromeHost::kCommandLoadMaskSelection);
-        const bool maskRefused = _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
-                                 !_session.Selection().has_value();
+        const bool maskAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool maskRefused = maskAcknowledged && _errorsShown == errors + 1 &&
+                                 _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
-        const bool layerRefused = _errorsShown == errors + 2 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
-                                  !_session.Selection().has_value();
+        const bool layerAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool layerRefused = layerAcknowledged && _errorsShown == errors + 2 &&
+                                  _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandNewLayer);
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
-        const bool emptySilent = _errorsShown == errors + 2 && !_session.Selection().has_value();
+        const bool emptyAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool emptySilent = emptyAcknowledged && _errorsShown == errors + 2 && !_session.Selection().has_value();
         if (!maskRefused || !layerRefused || !emptySilent)
         {
             SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "
@@ -8079,7 +9238,7 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
         break;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CancelShapeDraft() noexcept
@@ -8091,7 +9250,7 @@ void Application::CancelShapeDraft() noexcept
     }
     _session.CancelShape();
     SyncToolOverlays();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::FinishShapeDraft() noexcept
@@ -8107,19 +9266,25 @@ void Application::FinishShapeDraft() noexcept
     {
         _shapeCommitPreview = _session.PendingShape();
         _shapePreviewDocumentSerial = _session.DocumentSerial();
+        _shapePreviewArgb = _session.ForegroundColor();
         CancelShapeDraft(); // The owned release keeps its event-time geometry/color through ordered settlement.
     }
 }
 
 bool Application::SamplesColor() const noexcept
 {
-    if (_tool == EditorTool::Eyedropper)
+    return SamplesColor(_tool);
+}
+
+bool Application::SamplesColor(EditorTool tool) const noexcept
+{
+    if (tool == EditorTool::Eyedropper)
     {
         return true;
     }
     // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
     const bool alt = KeyboardState::Held(VK_MENU);
-    return alt && (_tool == EditorTool::Brush || _tool == EditorTool::Heal || _tool == EditorTool::Gradient) &&
+    return alt && (tool == EditorTool::Brush || tool == EditorTool::Heal || tool == EditorTool::Gradient) &&
            _session.PendingBrush() == nullptr && !std::holds_alternative<GradientDrag>(_drag);
 }
 
@@ -8132,6 +9297,13 @@ void Application::SampleColorAt(Vec2 view) noexcept
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     sampling->point = pixel;
+    if (sampling->opening)
+    {
+        RecordSamplerPoint(sampling->opening.value(), pixel);
+        _layoutDirty = true;
+        InvalidateFrame();
+        return;
+    }
     if (sampling->composite.has_value())
     {
         const std::optional<uint32_t> color = DocumentSession::SampleCompositeColor(sampling->composite.value(), pixel);
@@ -8148,18 +9320,21 @@ void Application::SampleColorAt(Vec2 view) noexcept
         }
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::EndColorSampling() noexcept
 {
-    if (!std::holds_alternative<ColorSampling>(_drag))
+    const auto* sampling = std::get_if<ColorSampling>(&_drag);
+    if (!sampling)
     {
         return;
     }
+    if (sampling->opening)
+        SealSamplerOpening(sampling->opening.value()); // Up/leave/loss seal; they never add a release coordinate.
     _drag = PointerDrag{};
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::SyncToolOverlays() noexcept
@@ -8195,7 +9370,11 @@ void Application::SyncToolOverlays() noexcept
         overlay.ellipse = shape->kind == ShapeKind::Ellipse;
         overlay.rect = D2D1::RectF(a.x, a.y, b.x, b.y);
         overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.ViewScale());
-        overlay.argb = _session.ForegroundColor();
+        const auto* captured = _canvasBrushInput.CapturedContext(_canvasBrushInput.Opening());
+        overlay.argb = !pendingShape && committedShape ? _shapePreviewArgb
+                       : _canvasBrushReplayed && captured && captured->tool == EditorTool::Shape
+                           ? _canvasResolvedForeground
+                           : _session.ForegroundColor();
         draft = overlay;
     }
     _chrome->SetShapeDraft(draft);

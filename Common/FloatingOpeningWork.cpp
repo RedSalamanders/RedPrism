@@ -26,7 +26,7 @@ bool Checkpoint(FloatingOpeningObserver observer, FloatingOpeningStage stage, Ca
 std::uint64_t DocumentSession::FloatingOpeningPreparationMemoryBytes() const noexcept
 {
     if (!CanTransformSelection() || !_document || !_activeLayerID || _transformDuplicate || _gradient || _pixelMove ||
-        _brush || _warp || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin ||
+        _brush || HasPendingWarp() || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin ||
         history.CaptureState().Depth() == (std::numeric_limits<int>::max)() ||
         _generation == (std::numeric_limits<std::uint64_t>::max)())
         return 0;
@@ -117,8 +117,8 @@ bool DocumentSession::ApplyPreparedFloatingOpeningIfCurrent(PreparedFloatingOpen
     static_assert(std::is_nothrow_swappable_v<std::optional<TransformEdit>>);
     static_assert(std::is_nothrow_swappable_v<SnapGuides>);
     if (!prepared._restore || !prepared._edit || !prepared._edit->floating || !CanTransformSelection() ||
-        _editRevision != prepared._revision || _transformDuplicate || _gradient || _pixelMove || _brush || _warp ||
-        _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin ||
+        _editRevision != prepared._revision || _transformDuplicate || _gradient || _pixelMove || _brush ||
+        HasPendingWarp() || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin ||
         !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
     std::swap(_transformEdit, prepared._edit);

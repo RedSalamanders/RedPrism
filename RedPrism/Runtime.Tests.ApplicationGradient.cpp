@@ -1,13 +1,17 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.GradientWorkTestGate.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <string>
 
 int Application::RunGradientWorkSelfTest() noexcept
 {
@@ -103,13 +107,13 @@ int Application::RunGradientWorkSelfTest() noexcept
             owner._session.Deselect();
             break;
         case Mode::StaleTarget:
-            owner._session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    for (auto& layer : document.layers)
-                        if (layer.id == owner._session.ActiveLayerID())
-                            layer.transform.origin.x += 1;
-                });
+            EditLayerRecordsForTest(owner._session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (auto& layer : document.layers)
+                                            if (layer.id == owner._session.ActiveLayerID())
+                                                layer.transform.origin.x += 1;
+                                    });
             break;
         case Mode::Restore:
             owner._session.Undo();
@@ -117,13 +121,13 @@ int Application::RunGradientWorkSelfTest() noexcept
             break;
         case Mode::Replace:
         {
-            CanvasDocument replacement;
+            DocumentFixture replacement;
             replacement.id = Guid::Generate();
             replacement.width = 3;
             replacement.height = 1;
             replacement.layers.push_back(ImageLayer::Blank(L"Replacement", Vec2{3, 1}));
             const Guid active = replacement.layers.front().id;
-            owner.ReplaceDocument(std::move(replacement), active, {});
+            owner.ReplaceDocument(std::move(replacement).Seal(), active, {});
             break;
         }
         case Mode::StaleMetadata:
@@ -209,7 +213,7 @@ int Application::RunGradientWorkSelfTest() noexcept
                !_activeHostRequest && _hostRequests.Size() == 0 && !_hostInputBudget.Used() &&
                _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0;
     };
-    const auto startLine = [&](bool mask, bool restorable) noexcept
+    const auto startLine = [&](bool mask, bool restorable, bool longAssetNames = false) noexcept
     {
         _session.CreateDocument(4, 1);
         const Guid layer = InsertPaintedLayer(_session, L"Gradient source", 4, 1, Vec2{0, 0}, 0.0, 0xFF000000u);
@@ -217,25 +221,47 @@ int Application::RunGradientWorkSelfTest() noexcept
         _session.SelectLayer(layer);
         if (mask)
         {
-            _session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    const std::array<std::uint8_t, 4> zero{};
-                    const Raster image = Raster::Make(4, 1, RasterFormat::Gray8, zero.data(), 4);
-                    for (ImageLayer& candidate : document.layers)
-                    {
-                        if (candidate.id == layer)
-                        {
-                            candidate.mask = LayerMask{RasterAsset{image, image, L"Gradient mask"}};
-                            break;
-                        }
-                    }
-                });
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        const std::array<std::uint8_t, 4> zero{};
+                                        const Raster image = Raster::Make(4, 1, RasterFormat::Gray8, zero.data(), 4);
+                                        for (ImageLayer& candidate : document.layers)
+                                        {
+                                            if (candidate.id == layer)
+                                            {
+                                                candidate.mask = LayerMask{RasterAsset{image, image, L"Gradient mask"}};
+                                                break;
+                                            }
+                                        }
+                                    });
             _session.SelectLayerTarget(layer, true);
             _session.maskPaintWhite = false;
         }
         else
             _session.SelectLayerTarget(layer, false);
+        std::wstring imageAssetName;
+        std::wstring maskAssetName;
+        constexpr std::size_t kAssetNameUnits = 1'048'576;
+        if (longAssetNames)
+        {
+            imageAssetName.assign(kAssetNameUnits, L'P');
+            maskAssetName.assign(kAssetNameUnits, L'M');
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (ImageLayer& candidate : document.layers)
+                                        {
+                                            if (candidate.id == layer)
+                                            {
+                                                candidate.asset->name = imageAssetName;
+                                                if (candidate.mask)
+                                                    candidate.mask->asset.name = maskAssetName;
+                                                break;
+                                            }
+                                        }
+                                    });
+        }
         _session.SetForegroundColor(0xFF000000u);
         _session.SetBackgroundColor(0xFFFFFFFFu);
         _session.gradientSettings = GradientSettings{};
@@ -282,7 +308,8 @@ int Application::RunGradientWorkSelfTest() noexcept
         CancelGradient();
         CancelGradientJobs();
         if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            !setGate(GradientWorkTestKind::Preview, Mode::Success, true) || !startLine(mask, mode == Mode::Restore))
+            !setGate(GradientWorkTestKind::Preview, Mode::Success, true) ||
+            !startLine(mask, mode == Mode::Restore, mode == Mode::Success))
             return 5;
         const auto source = _session.ActiveLayer()->asset->image;
         auto revision = _session.history.CurrentRevision();
@@ -342,7 +369,7 @@ int Application::RunGradientWorkSelfTest() noexcept
         if (mode == Mode::Memory)
             correct = correct && result.error == E_OUTOFMEMORY;
         if (mode == Mode::TooLarge)
-            correct = correct && result.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            correct = correct && result.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
 
         if (mode == Mode::Success)
         {
@@ -358,6 +385,18 @@ int Application::RunGradientWorkSelfTest() noexcept
             }
             correct = correct && state.changedPalette && _session.history.UndoCount() == count + 1 &&
                       _session.history.UndoName() == L"Gradient";
+            const auto& gate = *_gradientWorkTestGate;
+            const bool rootOnlyCaptured = gate.rootOnlyCapturedOnOwner;
+            const bool targetCopiedOnWorker =
+                gate.targetCapturesOnOwner.load() == 0 && gate.targetCapturesOnWorker.load() == 1;
+            const bool fullMetadataCaptured =
+                gate.capturedImageNameUnits.load() == 1'048'576 && gate.capturedMaskNameUnits.load() == 0;
+            std::printf("%s gradient-host.capture.root-only-owner.image-commit\n", rootOnlyCaptured ? "PASS" : "FAIL");
+            std::printf("%s gradient-host.capture.target-worker-only.image-commit\n",
+                        targetCopiedOnWorker ? "PASS" : "FAIL");
+            std::printf("%s gradient-host.capture.full-image-name.image-commit\n",
+                        fullMetadataCaptured ? "PASS" : "FAIL");
+            correct = correct && rootOnlyCaptured && targetCopiedOnWorker && fullMetadataCaptured;
             _session.Undo();
             std::array<std::uint8_t, 16> restored{};
             _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 4, 1, restored.data(), 16, 0);
@@ -417,7 +456,7 @@ int Application::RunGradientWorkSelfTest() noexcept
     CancelGradient();
     CancelGradientJobs();
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled ||
-        !setGate(GradientWorkTestKind::Preview, Mode::Mask, true) || !startLine(true, false))
+        !setGate(GradientWorkTestKind::Preview, Mode::Mask, true) || !startLine(true, false, true))
         return 5;
     State maskPreview{*this,
                       Mode::Mask,
@@ -444,6 +483,22 @@ int Application::RunGradientWorkSelfTest() noexcept
         maskCommit.receipt.Read().outcome != HostOutcome::Succeeded || !maskCommit.visited || !maskCommit.held ||
         !terminal() || !_session.ActiveLayer()->mask || _session.history.UndoName() != L"Gradient Mask")
         return 5;
+    const auto& maskGate = *_gradientWorkTestGate;
+    const bool maskRootOnlyCaptured = maskGate.rootOnlyCapturedOnOwner;
+    const bool maskTargetCopiedOnWorker =
+        maskGate.targetCapturesOnOwner.load() == 0 && maskGate.targetCapturesOnWorker.load() == 1;
+    const bool maskFullMetadataCaptured =
+        maskGate.capturedImageNameUnits.load() == 1'048'576 && maskGate.capturedMaskNameUnits.load() == 1'048'576;
+    std::printf("%s gradient-host.capture.root-only-owner.mask-commit\n", maskRootOnlyCaptured ? "PASS" : "FAIL");
+    std::printf("%s gradient-host.capture.target-worker-only.mask-commit\n",
+                maskTargetCopiedOnWorker ? "PASS" : "FAIL");
+    std::printf("%s gradient-host.capture.full-image-and-mask-names.mask-commit\n",
+                maskFullMetadataCaptured ? "PASS" : "FAIL");
+    if (!maskRootOnlyCaptured || !maskTargetCopiedOnWorker || !maskFullMetadataCaptured)
+    {
+        SelfTestFailure(L"Gradient mask target capture did not remain worker-owned or preserve full metadata.\n");
+        return 5;
+    }
     std::array<std::uint8_t, 4> maskPixels{};
     _session.ActiveLayer()->mask->asset.image.ReadRegion(0, 0, 4, 1, maskPixels.data(), 4, 255);
     if (maskPixels != std::array<std::uint8_t, 4>{0, 85, 170, 255})
@@ -514,18 +569,38 @@ int Application::RunGradientWorkSelfTest() noexcept
                     _session.history.CurrentRevision(),
                     _session.ActiveLayer()->asset->image,
                     _gradientPreviewOpening};
-    if (SettleJobs(_jobs, 15000, dispatch, &coalesced) != SettleResult::Settled || !coalesced.visited ||
-        !coalesced.held || !coalesced.firstPreviewShown || _gradientWorkTestGate->visits.load() != 2 || !terminal() ||
+    const auto coalescedSettled = SettleJobs(_jobs, 15000, dispatch, &coalesced);
+    if (coalescedSettled != SettleResult::Settled || !coalesced.visited || !coalesced.held ||
+        !coalesced.firstPreviewShown || _gradientWorkTestGate->visits.load() != 2 || !terminal() ||
         _session.history.UndoCount() != 0 || !_session.PendingGradient() ||
         _session.PendingGradient()->publishedSequence != _session.PendingGradient()->sequence)
+    {
+        const auto* pending = _session.PendingGradient();
+        std::fprintf(stderr,
+                     "gradient-host.coalesced settled=%u visited=%u held=%u first-shown=%u visits=%u terminal=%u "
+                     "undo=%d pending=%u published=%llu sequence=%llu\n",
+                     static_cast<unsigned int>(coalescedSettled), coalesced.visited ? 1U : 0U, coalesced.held ? 1U : 0U,
+                     coalesced.firstPreviewShown ? 1U : 0U, _gradientWorkTestGate->visits.load(), terminal() ? 1U : 0U,
+                     _session.history.UndoCount(), pending ? 1U : 0U,
+                     static_cast<unsigned long long>(pending ? pending->publishedSequence : 0),
+                     static_cast<unsigned long long>(pending ? pending->sequence : 0));
+        SelfTestFailure(L"The coalesced gradient preview lost its held intermediate publication or ownership.\n");
         return 5;
+    }
     const auto latest = _session.PendingGradient()->raster->PaintSnapshot();
     std::array<std::uint8_t, 16> latestBytes{};
     if (latest)
         latest->image.ReadRegion(0, 0, 4, 1, latestBytes.data(), 16, 0);
     if (!latest || latestBytes != std::array<std::uint8_t, 16>{0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255,
                                                                255, 255, 255, 255})
+    {
+        std::fprintf(stderr, "gradient-host.coalesced latest=%u bytes=", latest ? 1U : 0U);
+        for (const auto byte : latestBytes)
+            std::fprintf(stderr, "%u,", static_cast<unsigned int>(byte));
+        std::fprintf(stderr, "\n");
+        SelfTestFailure(L"The coalesced gradient preview did not match the independent latest endpoint bytes.\n");
         return 5;
+    }
     std::printf("PASS gradient-host.latest-preview\n");
     _gradientWorkTestGate.reset();
     return 0;

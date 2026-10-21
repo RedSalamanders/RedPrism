@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CancellationObservation.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
@@ -18,7 +20,10 @@ class CancelToken final
     }
     [[nodiscard]] bool IsCancelled() const noexcept
     {
-        return _local.stop_requested() || _shutdown.stop_requested();
+        const bool cancelled = _local.stop_requested() || _shutdown.stop_requested();
+        if (cancelled)
+            CancellationObservation::ReportCancelled();
+        return cancelled;
     }
     // Worker-side IO registers both stop states after issuing overlapped work. The registration and IO owners
     // must outlive acknowledgement; a requested stop alone never permits destroying pending buffers/handles.

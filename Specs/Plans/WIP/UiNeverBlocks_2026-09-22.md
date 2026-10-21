@@ -1,720 +1,1178 @@
-# Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
+# P1 — Responsive raster editor delivery milestone
 
-## Implementation checklist
+## Main consolidation — 21 October 2026
 
-- [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions
-  pass in x64 Debug/Release/ASan. Fixture helpers follow the existing 30-attempt/100 ms event-wait policy;
-  production retry limits, sealed authority and literal assertions remain unchanged.
-- [x] Current P1 functional integration, 2026-10-02 — Ordinary deferred transforms, admitted worker
-  New/New Canvas/Close, acknowledged session CPU retirement, suspended/prequeued shutdown and bounded folder
-  staging publication pass the clean x64 matrix and all ARM64 cross-builds. Strict CL/R8, compact RCX and R10/AL
-  ISA proofs preserve the runtime allowlist. Exact 582 inputs and 327 evidence files are byte/SHA verified
-  ([qualification](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)); original failures remain preserved.
-- [x] P1 shutdown CPU roots — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
-  are preserved before repair; the complete private WARP candidate passes all 52 and existing application suites.
-  The fresh native matrix passes all six profiles against 582 unchanged inputs: 52 shutdown controls and full
-  suites in each x64 configuration, plus all ARM64 cross-builds. The benchmark state/timing/metadata remain valid
-  ([qualification](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)).
-  Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
-- [x] P1 shutdown acquired-prefix initialization: primary-owned controls cover eight
-  successful-stage checkpoints, sixteen retry event/registration seams, successful and never-started processing.
-  Its complete private Debug WARP application passes all 390 controls and unchanged suites; exact private proof
-  is archived before native activation. Review confirms the 26-case prefix/count/lifetime expectations.
-  The native candidate passes all six forced-rebuild profiles against 584 unchanged inputs, with 390 processing
-  and unchanged 52 shutdown controls in each full x64 suite. Exact sources/products/receipts are archived
-  ([qualification](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)). These controls
-  do not qualify native allocation/pool/GPU API failures or broader A3.
-  Native r1 passes all ARM64 cross-builds and full x64 ASan, then Release's actual self-test crashes before
-  buffered output reaches its log; x64 Debug does not run. Exact 584 inputs, 230 evidence files and PID 108148's
-  dump are archived before repair. Symbol/disassembly and retained build timestamps show Release reused the
-  pre-probe `Application.obj` with the older member layout: private file copying preserved source timestamps
-  older than that object. A supplementary 162-entry tracking archive is retained. Move stdout configuration
-  before all standalone tests and force a six-profile rebuild; the buffering issue is not the crash cause.
-- [x] P1 live shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
-  the reviewed isolated Debug WARP candidate passes all 432 controls, unchanged 390 processing/52 shutdown checks
-  and the full existing application suite at `2026-10-02T14:26:05.1417394Z`. Exact 562 private inputs and 25 evidence
-  entries are archived before native activation. Eight reviewed files are activated with current write timestamps;
-  six forced-rebuild profiles are required before completion/commit. GPU/event/clipboard leases, API faults and
-  timing remain open.
-  The fresh six-profile forced rebuild passes at `2026-10-02T15:06:20.9478751Z`; each full x64 suite passes
-  all 432 live-owner controls and unchanged startup/shutdown checks. Exact 585 inputs and 327 evidence files
-  are byte/SHA verified before the next private build
-  ([qualification](../../TestRuns/P1LiveShutdown_2026-10-02.md)). This closes A3c only.
-- [x] P1 shutdown GPU/retry lease slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
-  standalone Application cases, with 56 event-gated assertions, in a private tree. Observe mapped-row
-  acknowledgement before queue fallback cleanup, retain literal bytes through cancellation and device
-  retirement, and join held/ready-undrained retry producers before receiver destruction. Preserve the first
-  private link failure before serializing shared DxUi builds. Clipboard leases, actual API faults and timings
-  remain separate; private runtime and native qualification are pending.
-  The complete private Debug WARP application now passes all 56 actual map/retry controls and unchanged suites;
-  exact 563 inputs and 40 evidence entries are archived before activating seven reviewed native files.
-  Native r1 passes all ARM64 cross-builds, then stops at x64 ASan's linked ISA check before runtime;
-  x64 Release/Debug do not build or run. Exact 586 inputs and 243 evidence files are preserved before repair.
-  The reported instruction bytes belong to an eleven-entry terminal DWORD switch table; the observed matching
-  RSP+disp32 guard needs a narrow data proof. Private controls pass without changing the runtime allowlist.
-  Original-image recheck and fresh six-profile qualification remain required; A3d/P1/G1 stay open.
-  The private proof now passes the exact original image and all parser controls: only three rows inside two
-  bounded terminal tables change classification; runtime/tier/EVEX policy is unchanged. Exact proof sources and
-  evidence are archived before activation. Fresh native r2 is running all six forced-rebuild profiles.
-  Native r2 now passes all six profiles against 587 unchanged inputs; each full x64 suite passes all 56 lease
-  and 54 new strict ISA controls, with existing goldens unchanged. Independent source/evidence verification
-  retains 587 inputs and 325 evidence files
-  ([qualification](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). Broader A3/P1/G1 remain open.
-- [x] P1 wand/trace cancellation foundation — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
-  prepares sparse reads without source-cache publication and bounded explicit-loop cancellation checkpoints.
-  Primary reviews the cheaper agent's literal/checkpoint tests, fixes the actual corner-touch case and adds
-  owner-driven local/shutdown cancellation. Private full DocumentTests and paired Release kernel measurements
-  precede activation and a fresh native matrix. Ordered host/GPU caller migration and G1 remain separate.
-  Private Release r1 passes all 54 cancellation checks and existing document goldens, but paired 45 MP medians
-  regress by 34% matching, 39% flood and 19% trace. Exact inputs, image/PDB, compiler tracking, logs and machine
-  metadata are preserved before tuning. Chunked r2 passes again; matching/trace regress by about 3%, flood by
-  18%, so it also stays private and is archived. Further tuning and reviewed odd-width/tail checkpoint tests
-  precede qualification; no production selection route has changed.
-  Private r6 now passes all 54 cancellation and 17 boundary checks, unchanged document goldens and two paired
-  measurements. Final matching medians add 2.9–4.2%; flood varies from 5.4% faster to 4.7% slower, solid trace
-  adds 0.6–1.6%, and fragmented stripe trace varies from 3.1% faster to 1.3% slower. Retain shared-desktop outliers;
-  these are kernel costs, not G1 qualification. Exact 289 inputs and 199 evidence entries are archived before
-  activating nine reviewed native files with current write timestamps. The fresh six-profile forced rebuild is
-  running; S4a remains unchecked until its native matrix and archive pass.
-  The native matrix now passes all six profiles at `2026-10-02T17:49:56.7560093Z`: each full x64 suite passes
-  all 71 named controls and unchanged goldens; ARM64 is build-only. Exact 591 frozen inputs and 328 evidence
-  files are independently SHA-verified before another build
-  ([qualification](../../TestRuns/WandCancellation_2026-10-02.md)). This completes S4a only.
-- [x] Active-layer New publication core — S4b prepares settled active-layer New sampling/trace and
-  complete history publication with captured point/settings/AA. A transparent-source rectangle shortcut and
-  cheaper-agent literal/authority/history tests were reviewed and corrected. The final private Debug suite passes
-  117 unique controls plus existing goldens; exact 296 inputs and 136 evidence files are archived before native
-  activation. Capacity planning carries sparse-copy recycling through later phases; actual worker retirement
-  releases the test's observation owners first. Native r1 passes ARM64 and full x64 ASan, then Release stops
-  before runtime at an unrecognized RDI-indexed adjustment switch table in the linked ISA scan. Exact 595 inputs
-  and 297 evidence files retain the failure before repair. The unchanged-image recheck and strict parser controls
-  precede a fresh native matrix. Combined r2 now passes all six profiles with 117 exact wand checks in every
-  full x64 suite. Independent source/control verification and archival retain 598 inputs and 7,223 evidence files
-  ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)). Host ordering, live gestures, All Layers, booleans and G1 stay open.
-- [x] Preserving selection authority — S2a adds separate weak opening identity for live brush/warp/shape without
-  weakening settled history restore. A primary-reviewed private Debug suite passes 136 unique controls, including
-  literal committed pixels and separate Undo steps proving the original stroke clip survives Select All/Deselect.
-  Exact 299 inputs and 137 evidence files are archived; original fixture/compile failures remain retained. S4b and
-  this core share the fresh native qualification matrix. Production pointer buffering and writer barriers stay open.
-  Combined native r2 now qualifies all 136 named controls in each full x64 suite and all ARM64 cross-builds;
-  exact source parity and independent evidence hashes pass ([record](../../TestRuns/SelectionPreservation_2026-10-02.md)).
-- [x] Settled selection host route — S2b is qualified: admit before owner capture,
-  prepare history on the worker, retain the selected ordinal/input until apply/drop, and retire the aggregate
-  off owner. Actual Application ordering/fault/pump/authority tests precede native activation. Header inputs,
-  live brush/warp/shape, lasso/move closure, broader writer barriers and G1 remain separate requirements.
-  Private r1 compiler failure, r2's unreached mask-target fixture and r3's clipboard setup ordering failure are
-  archived before each correction. The r3 selection stage passes 162 exact named checks, but the full application
-  suite fails: its pending-gradient fixture began pointer input before queued Deselect acknowledged. The fixture
-  now waits through the existing asynchronous command helper; production clipboard/gradient logic is unchanged.
-  The revised full private Debug suite must pass and be archived before native activation.
-  Private r4 now passes the full WARP application suite and all 162 named selection checks across 28 modes.
-  Exact 471 inputs and 188 evidence files are independently SHA-verified and archived before eleven native
-  activations. A fresh serialized six-profile forced rebuild is running; S2b remains unchecked until exact native
-  controls, source parity and archival pass ([record](../../TestRuns/SelectionHost_2026-10-02.md)).
-  Native r1 stops in ARM64 ASan HostTests: its string catalogue's declared size omits the newly added ID. No
-  complete profile qualifies. Exact 601 inputs and 3,850 evidence files are retained before a single-byte test
-  count correction; private application inputs/qualification are unchanged. Native r2 runs the full fresh matrix.
-  All ARM64 cross-builds and the complete x64 ASan suite now pass, including actual sanitizer detection,
-  full WARP application controls and corpus/screenshot gates. x64 Release/Debug, independent verification and
-  archival remain required before checking S2b.
-  Native r2 now passes all six profiles at `2026-10-02T21:48:10.2541344Z`. Each full x64 suite passes the exact
-  162 unique actor checks; ARM64 is cross-build only. Independent source/control verification and immutable
-  archival retain 601 inputs and 2,858 evidence files, including a separately verified 45-file private runtime
-  supplement for omitted archive log entries. Only the settled Select All/Deselect host boundary is complete;
-  S2/S3b, broader P1 and measured G1 remain open.
-- [x] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
-  are frozen. Own point/settings/AA at event time; use the qualified capacity planner before capture, worker
-  sampling/flood/trace/history, current-only apply and aggregate retirement. Preserve queue coalescing/receipts,
-  literal output, no-op/error/cancel semantics and the actual application caller. All Layers, Add/Subtract,
-  outline/lasso closure, broader pointer acceptance/writer barriers and G1 remain separate migrations. Private
-  code review, full application proof, archival and native qualification precede activation.
-  Primary review strengthens the cheaper-agent test draft with distinct latest-click literals, a real shared-
-  ordinal gap, a window message observed before worker release, event-time settings changed before capture,
-  queued outside/nonfinite/empty acknowledgements and actual record-table refusal/recovery. The isolated source
-  has sixteen test modes, independently qualified below.
-  The complete private Debug/WARP application now passes all 86 new controls, unchanged selection/compatibility
-  suites and all 49 registered stages. Exact 475 inputs and 197 evidence files are archived before nine reviewed
-  native activations. All six forced native rebuild profiles, full x64 suites and ARM64 cross-builds pass. Exact
-  control/source verification and independent archival retain 604 inputs and 877 evidence files; each x64 run
-  passes 86/16 wand-host controls and 162 retained selection-host controls. Only this settled host boundary is
-  complete ([record](../../TestRuns/WandLayerHost_2026-10-03.md)); all broader P1/G1 requirements stay open.
-- [x] Outline-move opening core authority — S3b0 qualifies the private core prerequisite: a bounded scalar opening
-  identifies the exact gesture before capture and survives equal-geometry reopen/refusal cases. Preserve all
-  prepared End/Cancel generation/history semantics and account complete original-outline retirement. Private
-  source, reviewed literal/state-machine controls and full core/native qualification precede host closure;
-  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core passes 66 unique
-  new checks and the complete DocumentTests suite, retaining all 185 closure controls and original goldens.
-  Failed attempts are archived before corrections; final proof retains 554 inputs and 145 evidence files before
-  eight reviewed native activations. The fresh forced six-profile matrix passes at `2026-10-02T23:17:48.9451202Z`;
-  exact native controls/source verification and archival retain 606 inputs and 913 evidence files
-  ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). Production outline closure remains open.
-- [x] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
-  under the shared ordinal, stops later pointer samples and retains draft/history until acknowledgement.
-  The primary-reviewed private full WARP Application proof passes 242 unique controls across 31 modes and all
-  50 stages; its 618 exact inputs/199 evidence files are archived before nine host activations. The native
-  r1 matrix freezes 609 inputs; ARM64 cross-builds and x64 ASan pass, then Release's ISA gate rejects a
-  vector-looking OnCommand table row. Exact failed inputs/products and 4,286 evidence files are archived before
-  scanner diagnosis. The unchanged failed image and all nine parser suites now pass the narrow RDI-base
-  proof, including 56 new controls without changing the allowlist. Its immutable archive retains 13 inputs
-  and 238 evidence files. Native r2 is running against 610 frozen inputs; verification/archive remain required
-  Native r2 now passes all six profiles at `2026-10-03T01:07:26.4741875Z`, with 242 exact host controls, 56
-  ISA controls and all 50 Application stages in each full x64 suite. Independent source/control verification
-  and immutable archival retain 610 inputs and 1,298 evidence files
-  ([record](../../TestRuns/SelectionMoveHost_2026-10-03.md)). S3b1b still requires no-move follow-ups and the
-  remaining concrete End/Cancel callers while preserving Save/Enter and nested history. Broader P1 and measured
-  G1 remain open; the private structural proof does not close them.
-- [x] Ordered outline callers — S3b1b0 binds known End-before-command/tool events to their exact outline
-  opening and preserves selected first Undo/Redo cancellation, same-tool behavior and capture loss.
-  - [x] Full private Debug/WARP proof: 276 unique checks across 49 modes, all 51 Application stages and retained
-    host checks. Exact 621 inputs/435 evidence files are archived before seven byte-identical activations;
-    the two new Select All fixture failures are preserved before correcting their AA expectation.
-  - [x] Full native matrix: all six forced-rebuild profiles pass with 276 unique caller checks/49 modes and
-    retained suites in every x64 gate. ARM64 is cross-build only. Exact verification and immutable archival
-    retain 611 inputs/1,546 evidence files; 57 refined ISA controls keep the scanner/allowlist unchanged
-    ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)).
-- [x] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
-  one selected request, retaining event-time point/settings/AA and the ordinal through both worker phases.
-  Primary-owned isolated code and 16 reviewed modes are prepared. Private r1's missing-enum-header compiler
-  failure retains 623 exact inputs/413 evidence files before correction. Private r2's full WARP suite passes
-  84 unique checks/16 modes; 623 inputs/436 evidence files are archived before seven exact activations.
-  Native r1 passes all ARM64 builds, then fails x64 ASan's linked ISA scan; 612 inputs/5,850 evidence files
-  and the failed EXE/PDB are archived before diagnosis ([record](../../TestRuns/SelectionMoveFollowups_2026-10-03.md)).
-  The narrow QWORD-stack/RAX table proof now passes 73 new controls and both unchanged failed images;
-  its immutable archive and all 57 retained RDI controls verify before activation. Native r2 passes all six
-  profiles at `2026-10-03T03:46:41.3855104+00:00`, with exact 84/16 follow-up and retained controls in every
-  full x64 suite. Independent verification and archival retain 613 inputs/21,605 evidence files at
-  `2026-10-03T03:51:14.2165680+00:00`. All Layers, remaining header/close callers and measured G1 remain open.
-- [x] Idle outline header follow-ups — S3b1b1b0 owns kind/Deselect event-time values through acknowledged End
-  at one ordinal. Primary-reviewed isolated code passes the full private Debug/WARP suite: 126 unique checks
-  across 21 modes and 53 ordered Application stages, with retained suites/goldens unchanged. Exact 625 inputs/
-  216 evidence files are archived at `2026-10-03T03:57:49.3365819+00:00` before seven byte-identical activations
-  ([record](../../TestRuns/SelectionMoveHeaders_2026-10-03.md)). All six native profiles pass at
-  `2026-10-03T04:29:21.8934408+00:00`; independent verification and immutable archival retain 614 inputs/
-  20,351 evidence files at `2026-10-03T04:39:26.9716006+00:00`. Coexisting header/size/lifecycle policies and
-  measured G1 stay open.
+The user explicitly requested: "Merge P1 in main keep pause I will start again P1 from the new main".
+This authorizes source/history consolidation and its integration checks only. P1 execution remains **HOLD**;
+ordinary activation, product implementation, benchmark qualification and the delivery gates below do not resume.
+After this integration lands, restart from freshly fetched `origin/main` on a new focused branch, rather than
+from the older worktree paths in the historical checkpoint. Preserve that checkpoint's private drafts and receipts.
 
-- [x] Selection nudge core — S1c1 privately qualifies 80 unique geometry/history/cancellation/worker controls;
-  exact 629 inputs/158 evidence files are archived before eight native activations
-  ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). All six native profiles pass at
-  `2026-10-03T06:34:34.8129025+00:00`; independent verification/archive retain 619 inputs/23,770 evidence files
-  at `2026-10-03T06:41:31.8464318+00:00`. Typed keyboard host routing, other selection geometry and G1 stay open.
-  Native r1 passes ARM64 cross-builds and full x64 ASan, then Release's ISA scan refuses terminal switch data;
-  actual exit 1 and the exact failed image/618 sources/24,357 evidence files are archived before private repair.
+- [x] Preserve original dirty checkouts, P1 tips and recovery bundles before integration.
+- [x] Reconcile canonical paused tip `85de11d481630d51a7e550f01065dbd22d6eafbd` with main maintenance tip
+  `a6800c2bfdd5ab095cd1baaf1a5c770fefcaf9a1`, including the hosted viewport fixture, scoped testing, archive
+  tooling, build-number/attestation checks and the fragment workflow. Keep P1's pinned DxUi API3 dependency.
+- [x] Normalize active native test filenames and references; retain historical receipt bytes unchanged.
+- [x] Give independent tooling one owner. Keep UI cancellation/layer-row smoke in their native profiles,
+  while parser controls and other independent checks run once in validation.
+- [x] Review integration validation, formatting and the stable x64 Release build/selected functional suites;
+  retain failed attempts separately. [Exact scope](../../TestRuns/P1MainIntegration_2026-10-21.md).
+- [x] Retain satellite histories without restoring their older or unqualified production source (`aeb9d69`, unchanged tree).
+- [x] Route restart to freshly fetched main and keep P1 and every unfinished acceptance gate paused.
 
-- [x] Selection nudge host — S1c2 full private WARP proof passes 84 literal checks/11 modes and 173 fault/order
-  checks/26 modes. Exact 635 inputs/216 evidence files are archived before ten byte-identical activations
-  ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)). Native r1 starts at
-  `2026-10-03T07:01:39.6988523+00:00` against 623 frozen inputs. All six profiles pass; actual exit 0 at
-  `2026-10-03T07:30:25.0520148+00:00`. Independent verification/archive retain 623 inputs/1,064 evidence files
-  at `2026-10-03T07:36:56.8764451+00:00`. Other selection producers and measured G1 remain open.
+The [satellite source inventory](P1MainIntegration_2026-10-21/satellite-source-inventory.json) binds every
+satellite-touched path to both source blobs before naming migration. `IDENTICAL` means exact Git blob equality;
+`DIVERGENT_RETAIN_CURRENT` records a difference, not a claim of semantic equivalence or completed feature adoption.
+All touched paths exist in the canonical checkpoint. An ancestry-only consolidation preserves the alternative
+source for later review; it does not adopt private residual code or qualify it.
 
-- [x] Eligible Canvas/Image Size outline closure — S3b1b1b1a private r3 passes 46 literal and 242 fault/order
-  checks, all 57 registered stages and exact retained suites. Immutable archival retains 637 inputs/214 evidence
-  files before ten byte-identical activations; independent preflight verifies 468 unchanged counterparts.
-  Native r1 PID 110580 starts at `2026-10-03T08:01:51.9057802+00:00` against 625 frozen inputs
-  ([record](../../TestRuns/SelectionSizeOutline_2026-10-03.md)). Six profiles and independent archive remain required.
-  Native r1 stops after ARM64 cross-builds and the passing new size controls: x64 ASan's existing clipboard fault
-  fixture cannot acquire the clipboard. Its exact 625 inputs/4,374 evidence files are archived before two setup
-  helpers adopt thirty readiness attempts. Native r2 PID 66964 starts at `2026-10-03T08:32:45.4833456+00:00`;
-  r2 is interrupted without an actual exit receipt. Its 625 inputs/4,377 evidence files are archived
-  unqualified, preserving the unknown exit. Fresh r3 PID 82736 starts at
-  `2026-10-03T09:11:22.7778174+00:00` through a hidden durable launcher after exact preflight (466 unchanged
-  counterparts). All six profiles and independent verification/archive are still required.
-  Detached r3 returns actual exit 1 before compilation because rg is absent from its PATH. Its 625 unchanged
-  inputs/33 evidence files are archived; r4 supplies explicit tool paths for the fresh complete matrix.
-  R4 preflight passes; PID 91044 starts at `2026-10-03T09:21:55.6955366+00:00`. Qualification remains pending.
-  ARM64 builds and the complete x64 Asan suite pass; Release/Debug and independent archive remain required.
-  Primary review adds opacity/Crop authority guards in the private follow-up before size-card completion.
-  R4 now passes all six profiles, actual exit 0 at `2026-10-03T09:56:45.0024453+00:00`; independent archival
-  retains 625 inputs/1,739 evidence files at `2026-10-03T10:02:54.6386235+00:00`. The guard correction is next.
-- [x] Eligible New Canvas outline closure — S3b1b1b1b has a separate source-only 511-input seed. Primary prepares
-  Save/Discard/Cancel phases, exact opening/card/coexisting authority and one-ordinal close/write/replacement.
-  Two reviewed literal scenarios and 52 primary fault/order scenarios include the shared size authority correction
-  ([record](../../TestRuns/SelectionNewCanvasOutline_2026-10-03.md)). P1/G1 remain open.
-  The qualified size r4 archive is pinned. Private r1's missing enum include is preserved before correction;
-  fresh r2 is building. Runtime qualification and exact archive remain required.
-  R2's ten history-observer fixture failures are archived before correction. Private r3 Rebuild and full WARP
-  runtime pass: all 59 stages, 20 literal assertions and 536 fault/order assertions. Immutable archival retains
-  639 inputs/216 evidence files at `2026-10-03T10:25:34.5400849+00:00`. Fresh native qualification remains required.
-  Production and numeric legacy goldens remain unchanged by this fixture repair.
-  Eight exact native activations and independent 472-counterpart preflight pass. Native r1 PID 23260 starts
-  at `2026-10-03T10:36:27.9675830+00:00`, freezing 627 inputs for all six profiles. Eligible Close Project
-  preparation has a separate 513-source seed; its compiler waits for this native proof/archive.
-  All six profiles pass at `2026-10-03T11:05:34.9785354+00:00`; independent verification and immutable archival
-  retain 627 inputs/23,056 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
-  `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. This also qualifies the shared size guard.
-- [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
-  - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
-  - [x] Capture the 4K and 45 MP before measurements on R1.
-  - [ ] Add the remaining UI, ETW, IO and operation-classification measurements.
-  - [x] Add private ETW capture/decode and the marked local-drive perf-root resolver for the P0.7 free gate.
-  - [x] P0.1a — Instrument message dispatch, window handlers, completion drains, individual result apply, UI actions and frame recording with optional allocation-free timing capture and ETW; validate a WPR profile. Full x64 gates and all ARM64 cross-builds passed; disabled scope costs 4.4 ns median, capture 42–43 ns.
-  - [ ] P0.1b — Drive operation and UI/IO scenarios, record machine metadata and baseline distributions, and classify each §5 row.
-    - [x] Implement the real application-loop driver, machine report and 15 operation smoke scenarios; all x64 gates and ARM64 cross-builds pass.
-    - [x] Acquire five per-file CC0 RAW samples and verify sizes, SHA-256 and signatures; inspect the tiled DNG layout. Offline downloader controls pass.
-    - [x] Expand the local corpus to all nine planned v1 extensions, with smaller correctness files, additional compression/layout candidates, and saved CC0 legal text/per-file provenance. Decode/develop qualification remains P4 work.
-    - [x] Complete the benchmark driver configuration gates, including ASan, offline corpus controls and the tightened ISA parser.
-    - [x] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. All six size/device scenarios complete with 15 operation rows each.
-    - [ ] Extend baseline coverage to the remaining §5 operations, I/O and the non-cancellable calls before their migrations.
-- [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
-  - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
-  - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
-  - [x] Pass the extended 256-round stress and full ASan gate.
-- [x] P0.3 — Add `PixelBuffer`, `TryAllocate` and `Raster::Adopt`; remove result copies. Pixel equality and paired result-production timings verified; full x64 gates passed.
-  - [x] Implement aligned ownership and no-copy raster adoption with ownership and size tests.
-  - [x] Convert adjustment/filter/resize, WIC decode and production composition readback outputs.
-  - [x] Preserve legacy numeric goldens in the complete Debug and Release gates.
-  - [x] Compare all 26 before/after checksums and record alternating ownership timings with matching pixels.
-  - [x] Finish ASan qualification.
-- [x] P0.4 — Add document generations and tokens; route mutations through validated paths. Full x64 gates and all ARM64 cross-builds passed.
-  - [x] Close mutable document/layer access; cover committed changes and changes inside open edits.
-  - [x] Add session document serials and owning result tokens with stale-result checks.
-  - [x] Share immutable selection loops across snapshots without changing selection goldens.
-  - [x] Mark the revision actually saved, including a save completed after another edit.
-  - [x] Migrate imports, opacity previews and test/benchmark fixtures; run the full validation matrix.
-- [x] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling. Full x64 gates and all ARM64 cross-builds passed.
-  - [x] Implement the private worker and wait pools, cancellation, tile execution, COM lifetime and QoS. Full x64 matrix passed.
-  - [x] Prove saturated-pool, nested execution, cancellation and shutdown behavior with independent state-machine tests. Extended ASan stress passed.
-  - [x] Extend crash handling for competing worker faults and the worker probe. Both child probes passed in all x64 configurations.
-  - [x] Add concurrency annotations and the analysis build, including guarded/unguarded compiler controls.
-  - [x] Complete the final Debug, Release, ASan stress and native-analysis regression gates.
-  - [x] Record executor overhead, cancel-check cost and remaining qualification limits. Synthetic row polling gap: 16.2 µs on R1.
-- [x] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order. Full x64 gates, native analysis and all ARM64 cross-builds passed.
-  - [x] Define the bounded scheduler, intrusive completion channel and seven job classes.
-  - [x] Wire the shared pump and event waits into the host, including hidden-window completion priority.
-  - [x] Verify cancellation, FIFO, progress, modal reentrancy, failed jobs and all-exit shutdown with event gates.
-  - [x] Pass the configuration matrix and update normative contracts for the completed slice.
-- [x] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state. Full x64 gates, native analysis and all ARM64 cross-builds passed.
-  - [x] Implement the one-active/latest-pending preview mailbox and ordered eight-command queue.
-  - [x] Implement the cross-class history barrier and retained stroke-replay states.
-  - [x] Wire scheduler activity into the one-shot busy deadline and localized DxUi progress control.
-  - [x] Verify state machines, document replay, observer lifetime, DPI layout and event-driven activity; complete all configuration gates.
-  - [x] Update normative contracts and the validation record for the completed slice.
-- [x] P0.7 — Add memory admission, deferred release and justified recycling. Full x64 gates, native analysis and all ARM64 cross-builds passed.
-  - [x] Add the pure admission policy and whole-reservation accounting with overflow-safe boundaries.
-  - [x] Measure fresh-buffer page-touch and free costs against reuse before deciding the recycling policy. Three confirming 10-pair runs: fresh touch 16.64–17.51 ms versus reused 6.51–6.73 ms; free 6.02–6.36 ms. Implement a bounded recycle pool.
-  - [x] Gate dispatch on whole-graph reservations and retry from release/pressure events. Debug event/state tests pass, including an empty-frame-drain no-polling regression.
-  - [x] Transfer large buffer/storage destruction to a non-cancellable worker release queue; prove teardown lifetime. Debug tests and actual ETW positive controls pass.
-  - [x] Trace and stress admission, allocation failure and deferred frees; complete the validation matrix. 307 checks in Release, actual ETW byte counts and sanitizer poison checks pass.
-- [x] P0.8 — Add scalar kernel dispatch and the x64 VEX scan. Full x64 gates, all-image instruction scans and all ARM64 cross-builds passed.
-  - [x] Implement startup tier selection and scalar entry points without changing legacy pixel math. All six bodies and five helpers match the prior source exactly after whitespace/namespace normalization.
-  - [x] Add strict `--isa` parsing and forced-tier tests; reject unavailable/unimplemented tiers. Only Scalar is implemented in this foundation slice.
-  - [x] Scan decoded executable instructions, attribute them through PDB section contributions, and prove the gate with positive/negative compiled fixtures. All five images pass in every x64 configuration; exact runtime-owner exceptions and EVEX controls verified.
-  - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
-- [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
-  - [x] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior. Full x64 gates and all ARM64 cross-builds passed; 63 new document checks and the WARP save-path checks pass.
-  - [x] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels. Full x64 gates and all ARM64 cross-builds passed; all 13 measured 4K kernel checksums match the baseline.
-    - [x] Add private cancellable sparse reads and thread cancellation through filters, coverage, blending, cropping, masks and thumbnails.
-    - [x] Declare the complete commit allocation peak and cache selection point counts for constant-time admission estimates.
-    - [x] Complete numeric/cancellation/peak tests, Release cancellation measurements and all configuration gates. Maximum observed stop-to-return was 9.659 ms on the measured inputs; this is not a worst-case cancellation guarantee.
-  - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
-    - [x] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Full x64 gates and all ARM64 cross-builds passed.
-    - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
-    - [x] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation. Full x64 gates and all ARM64 cross-builds passed.
-    - [x] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
-      - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
-      - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
-      - [x] P1.1c.3c — Production migration qualified in all x64 test configurations and ARM64 cross-builds. Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
-        - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration and its initial bridge are tracked below; production caller activation remains open.
-        - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
-        - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
-        - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
-        - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
-        - [x] Qualify capacity-based request admission and a combined queued/active byte budget, with immutable retained input and release after publication. Full x64 gates and all ARM64 cross-builds passed; actual production producer activation remains open.
-        - [x] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
-          - [x] Qualify borrowed-input builders and request-owned selected paths: all x64 gates and ARM64 cross-builds passed, with 77 request checks per normal run and 154 with ASan stress; producer/staged-runner migration remains open.
-      - [x] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
-    - [x] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
-    - [x] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency; all six configurations passed and all 15 Release 4K operations completed. Residual costs keep P1/G1 open.
-  - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
-    - [x] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures and worker-built lookups. All x64 tests and ARM64 cross-builds pass. Release 4K Levels preview: 78.856 → 5.718 ms; CPU commit reuse tradeoff recorded; G1 remains open.
-    - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
-      - [x] P1.3a–c foundation — Capability route selection, resumable reservations/FIFO, shared event waits and bounded staging with native monitored-fence/lent-device/shutdown qualification; all x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuCompletionFoundation_2026-09-30.md)). Explicit fallback runtime coverage remains in the child plan.
-      - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
-        - [x] Qualify separate utility targets, tiled adopted worker outputs, bounded rebind restart, explicit EnqueueSetEvent fallback, and Merge/adjustment-opening continuations. All x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuUtilityReadback_2026-09-30.md)).
-        - [x] Migrate PNG/JPEG export through detached worker encoding and qualify bounded additional-event recovery on actual hardware and both completion routes; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md).
-        - [ ] Copy Merged qualifies below. Migrate wand, clone and sampler callers; measure the real loop before P1.3 closeout.
-  - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
-    - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
-    - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
-      - [x] A1/A2 — Basic Fill, Clear/selected Delete and Invert preparation and host activation; exact pixels, cancellation/staleness and ordered history pass all configurations ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
-      - [ ] A3 — Basic raster-edit real-loop timing; six-profile functional qualification passed, but the display-off presentation guard refused measurement. Preserved qualified binaries await an active desktop; [raster-edit child](AsyncRasterEdits_2026-10-01.md). Owner/history/upload bounds remain P1.9/G1.
-      - [x] A4.1–A4.5 — Ordered worker gradient previews/commits, deferred metadata and cancellation/stale/resource gates pass all configurations; 105 new document checks and 33 production host scenarios ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
-      - [x] A5.1 — Detached lift/move preparation, private cancellation/admission and missing numeric references qualify with clean configuration rebuilds ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).
-      - [x] A5.2.1 / A5.3 — Deferred production pixel-move previews and ordered pointer/nudge commits, exact ownership/staleness/cancellation and input-time Shift pass all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Gradient benchmark scenarios/runner controls also qualify functionally.
-      - [x] A5.2a — Immutable opening coverage/lift reuse, exact cache authority, one preparation across previews/commit and complete retirement qualify in the frozen six-configuration matrix: 33 independent assertions plus actual host controls ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)). Drag/geometry/upload measurements remain open.
-      - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
-      - [x] A5.4b — Atomic private Copy/Copy Merged/Cut and exact Clear/Fill Mask history publication, sealed
-        composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
-        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers qualify below;
-        constant-time capture and G1 remain open.
-      - [x] A7.1/A7.2a — Worker Shape release with exact pixels, owned event-time geometry/color, complete
-        document/history publication and actual pointer/cancellation/retirement controls qualifies in all six
-        profiles: 76 document controls and 199 host checks against 487 frozen inputs
-        ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, live producer settlement and measured G1 remain open; settled masks/Layer via Copy qualify below.
-      - [x] A7.3a.1 — Worker selection/uniform masks with eager semantic thumbnail and joint target/selection/
-        history publication qualify settled production callers in all six profiles: 84 document controls and
-        201 host checks against 496 inputs ([record](../../TestRuns/MaskWorkers_2026-10-01.md)). Live gesture
-        settlement and measured capture/apply/upload/G1 remain A7.3a.2/P1.4/A6/S3.
-      - [x] A7.3b.1 — Settled Layer via Copy/Ctrl+J worker preparation and publication qualify against 503 frozen
-        inputs in all three x64 suites and all three ARM64 cross-builds: 34 document and 214 host controls per
-        x64 profile ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)). Live producer settlement,
-        source capture/history/chrome/upload/G1 and the full P1 clean exit remain open.
-      - [x] A6.1 / A6.2 core — Detached distortion, transform pixels/publication, floating opening/merge/restore
-        and exact-predecessor history qualify in all six clean profiles against 529 frozen inputs, including
-        409 independent controls per x64 suite and unchanged legacy goldens
-        ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)). Worker Clear preserves committed pixel
-        limits without charging source-external scratch tiles. Production transform callers, bounded previews,
-        settlement and G1 remain open.
-      - [x] A6.3 T1 core — Sealed transform cancellation and nested floating closures qualify in all six
-        profiles against 533 inputs: 467 core controls per x64 suite
-        ([record](../../TestRuns/TransformCancellation_2026-10-02.md)). Persistent host rollback ownership,
-        production routing, preview/settlement, retirement gates and G1 remain open.
-      - [x] A6.3 T3 core — Complete sealed display-only previews qualify in all six profiles against 537 inputs:
-        44 new assertions plus the prior 467 core controls per x64 suite
-        ([record](../../TestRuns/TransformPreviewCore_2026-10-02.md)). Color and mask previews cap both dimensions
-        at 1024; sparse assembly stays private. Production coalescing, deferred display, settlement and G1 remain open.
-      - [x] A6.3 settlement foundation — Selected transform release/header/command, input-time nudge and
-        floating opening/merge/cancel routes qualify against 540 frozen inputs in all six profiles: 344 real
-        host controls and unchanged existing tests ([record](../../TestRuns/TransformSettlement_2026-10-02.md)).
-        Deferred preview/inline-bypass/Alt-duplicate/device/shutdown/G1 and the full P1 clean exit remain open.
-      - [x] A6.3 deferred preview foundation — The opt-in model, writer/outline guards and preview host pass
-        all three clean x64 runtime suites and all three ARM64 cross-builds against 548 inputs: 147 model/guard
-        controls, 90 preview host controls and the existing 344 settlement controls
-        ([record](../../TestRuns/DeferredTransformPreview_2026-10-02.md)). Production ordinary-transform policy,
-        Alt-duplicate/device/shutdown/G1 and the complete P1 exit remain open.
-      - [x] A6.3 duplicate gesture — Same-ordinal worker source settlement/opening, latest pointer metadata,
-        event-time release/Escape and prepaid rollback qualify in six clean profiles against 559 frozen inputs:
-        82 core and 131 duplicate host controls plus the prior preview/settlement/goldens
-        ([record](../../TestRuns/DuplicateGestureWorkers_2026-10-02.md)). The approved DxUi API-revision-3
-        update and both strict ISA parser patterns qualify together. Ordinary deferred policy, remaining
-        duplicate stale/distort/lifetime scenarios and measured G1 are separate unfinished gates.
-    - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
-      [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
-      gesture/source acquisition and required admission/cancellation proof.
-      - [x] S0a/S1a/S3a core — Complete Select All/Deselect and outline-move End/Cancel preparation, exact
-        authority/history and retained retirement pass 312 checks in every x64 suite and all three ARM64 clean
-        cross-builds against 423 frozen inputs ([evidence](../../TestRuns/SelectionCommandPreparation_2026-10-01.md)).
-        Host routing, live gesture/stroke ordering, Clipper/coverage/display bounds and G1 remain open.
-  - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
-    - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
-      - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.
-      - [x] F3a/F4a/F4a.1 — Cancellable project helpers and direct bounded file/ZIP asset streams pass all x64 suites and ARM64 cross-builds; [evidence](../../TestRuns/ProjectStreams_2026-09-30.md). Three 4K/45 MP Release observations per mode quantify memory retention and staging IO; production host graphs remain open.
-      - [x] F3a.1 — Refuse oversized later project assets from frame dimensions before allocating output, using independent remaining image/mask totals; all x64 suites and ARM64 cross-builds pass ([evidence](../../TestRuns/ProjectPixelBudgets_2026-10-01.md)). Adaptive admission and open/import host jobs remain F3b.
-      - [x] F3b.1/F3b.2 — Adaptive project metadata probes/reopened decode ceilings and detached ordered import preparation pass all configurations; 69 load/resource and 31 import checks ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)). Production open/import workers and measured admission/apply remain F3b.3.
-      - [x] F3b.3a — Production project opening, separate probe/decode reservations, 45 host gates and replacement continuation pass all configurations and 22-row hardware/WARP runs; [evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md). Warm opening: 18.675 ms at hardware 4K / 120.355 ms at 45 MP; 5.079 ms apply / 50.517 ms frame at 45 MP keep G1 open.
-      - [x] F3b.3b — Detached image-import probe/preparation/apply, opened-source caps and 130 host cases pass all configurations and 24-row hardware 4K/45 MP/100 MP and WARP 4K measurements; [evidence](../../TestRuns/ImageImportJobs_2026-10-01.md). Warm 45 MP new-canvas import: 169.732 ms; existing-layer apply 11.403 ms leaves P1.9/G1 open.
-      - [x] F4b.1/F4b.2 — Project-save and PNG/JPEG export graphs pass all x64 suites, ARM64 cross-builds and 21-row hardware 4K/45 MP and WARP 4K measurements; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md). Save retains captured revision/publication truth; export detaches GPU resources before encoding and cannot replay writes after device changes. Remaining IO faults and measured 2 ms overruns keep F4/P1/G1 open.
-      - [x] F5a/F6a — Detached clipboard byte/metadata helpers and folder rotation/recovery faults, including allocation-safe bounded cleanup and backup-only retries; all 77 new checks and configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production clipboard migration qualifies below; pending IO waits, intermittent real save cause and measured cancellation bounds remain open.
-      - [x] F5b.1 / A5.4a / owner routing primitive — Native Copy pixel, sealed Win32 transfer and fixed owner
-        multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
-        against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
-        ([record](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production callers and G1 stay open.
-      - [x] F5b.2a — Registered receipt and worker SHA-256 payload binding, exact partial publication and
-        private-origin controls qualify in all six configurations against 456 frozen inputs: 25/45/34 new
-        assertions plus all 125 transfer controls ([record](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md)).
-        Full host/codec admission, production callers, retries and G1 remain open.
-      - [x] F5b.2b.1 — Capped memory PNG/JPEG encoding with pre-growth derived/lower ceilings, bounded commits,
-        cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
-        six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
-        Detached Paste and production clipboard admission/callers/retries qualify below; remaining file timing and lifecycle gates stay open.
-      - [x] F5b.2b.2 — Detached Paste candidate document/history, guarded publication and producer-order clipboard
-        inspection qualify in all six profiles: 62 Paste, 45 availability and unchanged 125 transfer controls
-        ([record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md)). Actual host graphs remain F5b.2b.3.
-      - [x] F5b.2b.3 / A5.4c / F5c.2 — Native Copy/Cut/Paste/Copy Merged and metadata-only New Canvas graphs
-        qualify against 480 frozen inputs: all three x64 gates and all three ARM64 clean builds pass. Native
-        control sets contain 268 command, 61 prefill, 41 delayed-render and 88 publication-fault checks
-        ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). F5d/P1.9/G1 remain open.
-      - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
-        six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
-        ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.
-      - [x] F6a.1 — Bounded native rollback recovery and real child/directory-reader release/exhaustion controls; all configurations and 33 rotation checks pass ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)). External reader/filter identity and overall F6 remain open; timer resource faults qualify below.
-      - [x] F6a.2 — Native recovery timer create/arm/wait resource faults, healthy-path avoidance and backup-only retry qualify in all configurations; 40 rotation controls pass ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)). Original save causes and overall F6 remain open.
-      - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all
-        six configurations with 52 real reader/fault assertions per x64 profile. Old bytes and injected final
-        failures are preserved ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
-      - [x] F6a.4 — Bounded native staging-publication retry and complete backup/foreign-destination preservation;
-        269 controls pass in every x64 profile and all ARM64 clean builds qualify ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
-      - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
-      - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
-    - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
-      - [x] Qualify cancellable resizers, immutable size jobs, peak reservations and event-gated host tests. All x64 suites and ARM64 cross-builds pass; hardware 4K/45 MP and WARP 4K each complete 18 operations. [Size child](AsyncDocumentSizing_2026-09-30.md) and [evidence](../../TestRuns/AsyncSizing_2026-09-30.md).
-      - [ ] Meet the measured 2 ms apply target; history/chrome/first-upload work remains P1.9.
-    - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
-      - [x] P1.9a — Explicit unsigned 64-bit session limit min(physical RAM / 4, 2 GiB), 256 MiB query fallback/class default, retained legacy trim golden and machine host wiring. Full matrix passes; the previously failed 45 MP sizing benchmark now retains its undo and completes.
-      - [x] P1.9b — Retained immutable selection capacity and safe pending/restore snapshot moves pass all x64 suites and ARM64 cross-builds; [history child](HistoryStorageAccounting_2026-09-30.md), [evidence](../../TestRuns/HistoryStorage_2026-09-30.md). Hardware 4K/45 MP each complete 18 operations. Incremental accounting, thumbnails, uploads and the 2 ms apply target remain open.
-      - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, constant-time capture, incremental accounting and the measured G1 exit remain open; Undo/Redo qualification is recorded below.
-      - [x] P1.9 H1 destructive color — Prepared after-layer/history, admitted capture and actual host failure gates pass all profiles ([evidence](../../TestRuns/ColorHistoryPublication_2026-10-01.md)). Adjustment-layer closure remains separate.
-      - [x] P1.9 H1 size cards — Admitted capture, complete document/history publication and retirement pass all profiles; 50 independent assertions and 22 host scenarios ([evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md)). Measured apply remains open.
-      - [x] P1.9 H1 merge — Admitted metadata probe, full survivor/history publication and complete deferred CPU
-        retirement pass the frozen six-profile matrix; 71 document assertions and 17 host modes
-        ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)). Failed scheduler-wait, process-exit
-        observation and IO rotation attempts remain preserved; the rotation cause, other callers and G1 remain open.
-      - [x] P1.9 H1 Undo/Redo — Complete restore/history and deferred retirement pass the frozen six-configuration
-        matrix: 63 document assertions and 28 host scenarios in every x64 suite
-        ([evidence](../../TestRuns/HistoryRestorePublication_2026-10-01.md)). The preserved first crop shortcut
-        failure is corrected by waiting for acknowledgement without changing its expectations. Other callers,
-        metadata capture/accounting, uploads and measured G1 remain open.
-      - [x] P1.9 H1 import/project open — Saved-baseline/edit/reset publication and complete session/path/draft
-        retirement qualify in the frozen six-configuration matrix: 55 history/157 session assertions plus
-        70 project/155 image-import host cases per x64 suite
-        ([evidence](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)). Separate file-operation authority
-        preserves live edits on failure and retires them on successful replacement; Undo remains settled-only.
-        The history child retains original host/fixture/ISA failure evidence. Other H1 callers, H2/H3/H4 and G1 remain open.
-      - [x] P1.9 H1 lifecycle primitive — Optional New/Close saved history, preallocated retirement and exact
-        refusal/publication pass 65 independent controls per x64 suite and all six clean profiles against
-        561 frozen inputs ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). Production default
-        New, New Canvas card and Close Project activation remains in
-        [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md); H2/H3/H4 and G1 remain open.
-      - [x] P1.9 H1 lifecycle host — Production New/New Canvas/Close, sealed admitted capture, saved optional
-        history and worker retirement qualify in all six profiles: 115/58/85 actual application controls
-        ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader live contexts, H2/H3/H4 and G1 remain open.
-      - [x] P1.9 H2.1 / H4.1 — Immutable history-container roots and optional image thumbnails qualify in the
-        frozen six-configuration matrix: 28 root/30 producer assertions and 331 parser controls per x64 suite
-        ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
-        Capture shares immutable stack roots; image caches are optional and semantic mask thumbnails stay eager.
-        The initial mask-fixture and ASan instruction-proof failures remain preserved in the history child.
-        Full document
-        capture, incremental accounting, first uploads and measured G1 remain separate.
-      - [x] P1.9 H1 adjustment panels — Prepare Begin and OK/Cancel history before owner publication;
-        coalesce Cancel, acknowledge prior OK drops, audit dependent callers and retire complete preview owners.
-        - [x] H1.6a/H1.6c — Production opening and metadata OK qualify in all six clean configurations:
-          515 closure, 210 opening and 58 nested assertions, plus 146 actual host cases in each x64 profile
-          ([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)).
-        - [x] H1.6b/H1.6d–e — Production Cancel routing and combined caller qualification pass all six clean
-          configurations: 264 dismissal assertions and 70 actual Cancel host rows per x64 profile
-          ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)). Measured owner costs,
-          other H1 callers, full record capture/accounting and uploads remain separate in the
-          [history child](HistoryStorageAccounting_2026-09-30.md).
-    - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
-- [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
-- [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
-- [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
-  - [x] Specify file-backed RAW qualification and review ViewerImgRaw's decode/resource/cancellation patterns; provenance checks alone do not qualify decoded pixels.
-  - [ ] Run real decode/reference tests for every `gating`/`correctness` input across all nine extensions, CFA/linear/YCC layouts and compression variants; verify the RAFs' actual CFA patterns. The five large files additionally retain their performance roles.
-  - [ ] Run malformed/truncated/source-length/overflow and allocation-budget tests, cancellation and late-result gates, and preview/full-result distinction.
-  - [ ] Run RAW open → develop → editable bake → save → reopen/export tests through the real host, including Cancel, failure and ordered batches.
-  - [ ] Require the complete corpus for P4/P5 closeout; record each file's status, dimensions, decoded checksum, numeric reference and CPU/GPU tolerances, with no qualification SKIPs.
-- [ ] P5 — Optimize RAW performance to the Photoshop targets.
-- [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
-- [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
+| Preserved branch | Tip | Identical / divergent paths | Decision |
+| --- | --- | --- | --- |
+| `codex/p1-sampler` | `8f5110d` | 3 / 1 | Fixture and two evidence/plan files already match exactly; retain current index. |
+| `codex/p1-sampler-callers` | `3f49ea2` | 12 / 40 | Retain current canonical source. The private pause record explicitly forbids wholesale transfer; residency/Warp/mask residuals remain review work on resume. |
+| `ej/p1-selection-gesture-prerequisites` | `819e604` | 52 / 31 | Preserve canonical selection/host evolution and exact shared prerequisites. Reinspect divergent original-ticket/Rectangle/Ellipse details when P1 resumes. |
+| `codex/ui-never-blocks-paused-2026-10-03` | `97dd25b` | 14 / 11 | Documentation/evidence checkpoint only; preserve current continuation and contracts. |
 
-Implementation started 2026-09-27. Slices P0.2–P0.8 are complete on x64; the P0 phase remains open. ARM64
-Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
+Current integration validation must retain every failure. In particular, the paused ISA scanner is not made
+green by relaxing its negative controls, allowlist or frozen expected manifests. No historical Full receipt
+qualifies the changed integration tree. Hosted billing failures and unavailable native ARM64 execution are not passes.
 
-Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
-updated during work and each completed, validated slice committed and pushed. This supersedes the former P6
-authorization restriction. Record concrete decisions in §11 as their phases begin, and expand P6 into its child
-plan before coding the format/depth transition. Continue between slices without another implementation approval.
-Hardware qualification and Photoshop comparisons remain measured exit criteria; implementation alone cannot
-check those boxes. Smaller agents handle bounded changes and independent checks; the primary reviews them and
-owns scheduler, GPU, storage, and RAW architecture.
+## Saved continuation — 21 October 2026
 
-RAW corpus source, 2026-09-27: the user explicitly selected publicly licensed test samples. Store verified source
-URLs, license terms and file hashes in the corpus manifest when acquiring ARW, CR3, NEF, RAF and tiled DNG fixtures.
-RAW test scope, 2026-09-30: the user requested explicit RAW file tests and suggested RedSalamander's ViewerImgRaw
-as inspiration. §6.9 records the file-backed matrix and applicable source patterns. The five existing downloads
-are verified inputs; RAW decode, develop and round-trip qualification remain P4 work.
-RAW acquisition scope, 2026-09-30: the user requested local samples and licenses for every supported RAW format,
-plus some large performance inputs. The manifest's default selection now includes all `correctness` files in
-addition to the five `gating` files. This covers the nine planned v1 extensions, without expanding decoder scope.
-The local corpus includes exact CC0 legal text and manifest snapshots; see
-[the acquisition record](../../TestRuns/RawCorpus_2026-09-30.md) for identities and remaining layout qualification.
+Execution is **HOLD at the user's request to continue later**. P1 remains **WIP**. This section supersedes
+earlier active-job, next-step and estimate text. Do not start implementation, benchmarks or CI until the
+user resumes. The opening delivery checklist and §14 remain the completion authority; a checkpoint is no
+qualification waiver. The older [06:35 handoff](../../TestRuns/P1SessionCheckpoint_2026-10-21.md) is historical.
 
-Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
-benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
-raster publication, buffer ownership and adoption, the concurrency tests and the paired benchmark, and ran the gates.
-P0.2 uses a standard per-storage mutex to keep `Document.h` independent of Windows types; only a first assembly
-takes it. All readers use the acquire/release pointer from §4.6. The new stress covers competing readers of one
-sparse storage and two sparse storages sharing a base. P0.1 measurement coverage remains open. The P0.3 buffer
-and adoption APIs, filter/resize/WIC conversions and production composition readback preserve kernel arithmetic.
-All 26 before/after checksums match. Alternating ownership comparisons showed a median paired saving of 51.349 ms
-for a 45 MP Levels result, with one fewer 170.75 MiB pixel buffer. This measures result production; full host
-commit latency, responsiveness and the G2/G3 targets remain open. See the
-[foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) for controls, noise and qualification limits.
+### Checkout, publication and operating rules
 
-P0.4 progress, 2026-09-27: session writes now pass through tracked APIs, result tokens retain their inputs and
-reject stale/session-mismatched results, selections share immutable geometry, and history can mark a captured
-saved revision. All x64 gates and ARM64 cross-builds passed, including 120 new checks. The
-[P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md) documents the reviewed fixes and remaining limits.
+Use `C:\Users\eric\.codex\worktrees\p1-opacity-host-proof\RedPrism`, branch `codex/p1-opacity-host-proof`,
+remote `https://github.com/RedSalamanders/RedPrism.git`. `Z:\src\RedPrism` is the older evidence-host checkout,
+not the current source. Do not reset unrelated `rf/*` worktrees or `Z:\src\DxUi`.
 
-P0.5 progress, 2026-09-27: worker/wait ownership, nested tile execution, cancellation and competing-fault crash
-handling are implemented. Full Release native analysis and its positive/negative controls passed. The checked
-synthetic fill takes 2.360 ms at 32 threads versus 6.228 ms inline; this is an executor measurement, with no claim
-about real image operations or Photoshop. The full x64 Debug, Release and ASan gates passed, including worker
-stress, both crash probes and 27 harness screenshots. All three ARM64 cross-builds passed. See the
-[worker record](../../TestRuns/WorkerExecution_2026-09-27.md) for controls, metrics and remaining qualification.
+Published this session: `d3fb3dc7479f2daa88a108345f6a857b38f48beb` contains the compiler/diagnostic/host-default
+batch; `9a750512a4f6eb143467ad25ce29bc071ca86aa2` contains pinned native CI provisioning, regression controls
+and contracts. The checkpoint commit containing this section also saves the focused flip code/tests/docs.
+Its exact final HEAD/remote/clean-state receipt is in `final-publication.json` in the backup folder below;
+do not make a follow-up commit solely to insert this checkpoint's own SHA.
 
-P0.6a progress, 2026-09-27: the bounded scheduler and shared message/completion/action pump now serve the host,
-including hidden-window completion delivery and shutdown on every mode exit. The complete x64 matrix, native
-analysis with its compiler controls, and all ARM64 cross-builds passed. Release synthetic scheduler dispatch
-through completion and payload release measured 19.3 µs median and 53.4 µs p95. The
-[scheduler record](../../TestRuns/JobScheduler_2026-09-27.md) gives the state-based tests, measurement scope and
-qualification limits. Image commands remain synchronous until their P1 migrations; G1 is still open.
-This completed slice was committed and pushed to `origin/main` as `048b1cd`.
+- One coordinator; at most two helpers concurrently, finite deliverables and observed time/token limits.
+  Main owns concurrency, admission, GPU, publication/retirement and performance decisions, and verifies helpers.
+- Use focused diagnostics while repairing; run complete matrices at coherent integration batches and keep
+  all mandatory completion gates. Read complete failure logs; retain original failures and independent goldens.
+- Reuse existing runners/readers. Publish implementation, tests, contracts and evidence together. No new
+  qualification framework for each repair and no preceding-SHA-only follow-up commits.
+- Keep MSVC **14.52.37025** and matching dependency identity explicit. Old 14.51 receipts cannot qualify it.
+  The production DxUi pin is API3 `8e8994079e82f79e6765e6a885c03fc687957591`.
+- Keep one short live table: `Z:\src\RedPrism\.build\P1Drafts\P1-LIVE-STATUS.md`. No quiet-window question or
+  keyboard restriction remains pending. No automation or separate chat was created to resume work.
+- The conditional **4–6 focused working day** target remains **unconfirmed**. Actual row-path usefulness and
+  native toolchain installation are unresolved; reassess the integration/architecture premise when resumed.
+- Do not kill a running product to build. Generated files stay under ignored `.build` paths. No additional
+  managed worktree, API4 pin adoption or library publication is authorized by this checkpoint.
 
-P0.6b progress, 2026-09-27: preview coalescing, queued command ownership, shared history/stroke ordering and
-the delayed busy indicator passed 269 new policy/ordering checks plus the full x64 gates. The WARP self-test covers
-production activity notifications, exact visibility boundaries, 96/144 DPI and held chrome clicks. Native analysis
-and all ARM64 cross-builds passed. See the [input-policy record](../../TestRuns/JobInputPolicies_2026-09-27.md).
-P1 still owns actual tool snapshot/worker/apply migration, stroke sample storage and file-flow wiring; these
-foundation gates do not claim that image processing is already nonblocking.
-This slice was committed and pushed to `origin/main` as `3bdc87a`.
+### Saved files and recovery boundaries
 
-P0.7 progress, 2026-09-27: whole-graph admission, event-only retries, large deferred releases and bounded recycling
-passed the full x64 matrix, native analysis and all ARM64 cross-builds. The actual ETW stream has two positive
-controls and no UI free of 16 MiB or more for direct/adopted/vector releases. Recycled 45 MP buffers measure
-6.669 ms full touch and 7.95 µs UI ownership retirement (enqueue only), with matching checksums and zero warm
-page faults. The [memory record](../../TestRuns/MemoryPipeline_2026-09-27.md) gives controls, after measurements,
-review corrections and qualification limits. P1 still owns every operation's declared peak and async migration.
-This slice was committed and pushed to `origin/main` as `c16f5b6`.
+Primary backup: `S:\CodexEvidence\RedPrism\P1_2026-10-21\P1SessionCheckpoint-20261021T121547Z`.
+`S:\CodexEvidence\RedPrism\P1_2026-10-21\latest-checkpoint-path.txt` points to it.
+The initial snapshot verifies 51 files: all 14 then-dirty RedPrism paths, all 16 dirty/untracked DxUi paths,
+continuation scripts and the unfinished scanner/test drafts. `saved-files-manifest.json` has SHA-256
+`2D80CA0A3AF233E948E4BDE3F165112DF60E2B4BD25035A6B2041F3CC48B4D96`.
+Supplemental binary Git patches do not replace the complete untracked-file copies. Final checkpoint
+documents and source/remote/process receipts are preserved separately in the same folder.
 
-P0.8 progress, 2026-09-27: the immutable Scalar dispatch table, guarded CPU/OS detection and strict `--isa` path
-passed the full x64 gates and all ARM64 cross-builds. All five linked x64 images pass the PDB-attributed VEX/EVEX
-gate in each configuration. Compiled controls prove baseline leaks, EVEX in AVX2, overbroad runtime exemptions
-and missing/mismatched PDBs are rejected. See the [dispatch record](../../TestRuns/KernelDispatch_2026-09-27.md).
-Only Scalar is implemented; P2 owns actual SIMD acceleration. P0.1 UI/IO measurements and the P1 migrations are next.
-This slice was committed and pushed to `origin/main` as `a7c886c`.
+The incomplete scanner is deliberately **private and unqualified**, not published without its tests:
 
-P0.1a progress, 2026-09-27: allocation-free timing scopes now cover production dispatch, WndProc, drain, result
-apply, deferred actions and frame construction. All 82 timing/histogram/trace checks pass in each x64 run,
-including actual private ETW decode and sanitizer stress. The full x64 gates and all ARM64 cross-builds passed.
-Three Release runs measured 4.4 ns median disabled and 42–43 ns with histogram capture. The
-[timing record](../../TestRuns/UiTiming_2026-09-27.md) documents scope boundaries and limitations. P0.1b owns
-real-loop operation/IO scenarios and baseline classification; P1 still owns asynchronous image work.
-This slice was committed and pushed to `origin/main` as `db7fd52`.
+- Main draft: `UnqualifiedIsaRepair/Main/Build/IsaScan.cs`, SHA-256
+  `37A31D1D4AC8FF79E64F5455436A745D7DFD3965E5A767C4D37B38185002A0C4`, plus its exact patch.
+- Helper draft: `UnqualifiedIsaRepair/HelperDraft/Tests/BuildProcessTests/IsaRsiDwordTests.ps1`, SHA-256
+  `03F7A5ECB3E23D3EDE78D15F19778661F8526080DE99C2829C968D82D0AC3DC8`.
+- Live private workspace: `S:\CodexEvidence\RedPrism\P1_2026-10-21\p1-settled-layer-flips-r1\IsaSilDraft`.
+  It still holds the **old** scanner, SHA-256 `58EE0D00D88DCE02BCE83F968A3046BD50FB8B56433623B389A20CC4A193E405`.
+  The source checkout is restored to those exact original scanner bytes after verifying backup and filtered
+  HEAD identity. The first no-filters comparison refused on line-ending identity; the refusal is retained.
+- The helper authors 323 SIL controls, preserving existing RSI controls/summary, and observes a clean
+  PowerShell parse. **No new parser control or Main C# compilation executes before stopping.** Review and
+  qualify both drafts together; do not mistake authored counts for observed passing results.
 
-P0.1b progress, 2026-09-28: the real-loop driver exercises 15 commands through posted messages, validates results
-and waits for idle jobs plus Present before accepting each sample. Full x64 Debug, Release and ASan gates and all
-ARM64 cross-builds pass. The [baseline record](../../TestRuns/PipelineBaseline_2026-09-27.md) preserves complete
-hardware and WARP 4K/45 MP/100 MP runs. The original incomplete WARP 100 MP run
-is retained separately from its successful retry. Public CC0 ARW, CR3, NEF, RAF and tiled DNG files
-are acquired with matching upstream SHA-256 values; see the [corpus record](../../TestRuns/RawCorpus_2026-09-27.md).
-The 100 MP Gaussian scenario explicitly measures the existing pixel-budget refusal, not an absent preview.
-The x64 scan exposed compiler-generated switch-table data that decodes as VEX; a narrowly validated dispatch/table
-recognizer replaces that false positive without adding an object or procedure exception.
-All 13 parser controls and the current-image scans pass. The driver/corpus slice is qualified; P0.1 stays open for
-the remaining operation and I/O baselines. No RAW decode or Photoshop speed comparison is claimed.
-The driver/corpus slice was committed and pushed as `e114b9e`; the final WARP 45 MP run completed immediately after.
+Retained evidence roots remain accessible through `Z:\src\RedPrism\.build\P1Evidence\` junctions; current
+diagnostics, flips and native r6/r7 physically live under `S:\CodexEvidence\RedPrism\P1_2026-10-21`.
+The diagnostics packet's 86,300 files / 65,176,337,090 bytes are independently hash-identical on S:.
+Automatic approval review **blocked deletion** of the old Z: duplicate as policy; it remains at
+`p1-default-client-diagnostics-r1-relocation-source`. Do not retry or bypass that deletion.
+Z: has only a few MB free. New generated fixtures use the existing C: access path through the S: scratch root
+`S:\CodexScratch\RedPrism\P1_2026-10-21\BuildProcessTests`; all 1,588 legacy child targets are preserved.
+`BuildProcessTests-before-S-20261021` retains the original C: junction. No fixture data is deleted or moved.
 
-P1.1a progress, 2026-09-28: immutable filter input/result types and the shared Prepare/Run/Apply path are integrated,
-including opening-input validation, successful full-grid preview reuse, eager carried-mask thumbnails and budget
-rechecks. Processing failure keeps the panel and last-applied settings; Save/Export stop when the panel cannot
-apply. All 63 new document checks, the WARP save-path checks and existing numeric goldens pass in full x64 Debug,
-Release and ASan gates; all ARM64 cross-builds pass. See the [work-split record](../../TestRuns/ColorEditWork_2026-09-28.md).
-P1.1b owns bounded inner-kernel cancellation and peak reservations, and P1.1c owns asynchronous host wiring.
-P1.1a was committed and pushed as `c41805d`.
+### Exact current evidence and the next repair
 
-P1.1b progress, 2026-09-28: private worker reads avoid shared sparse materialization; filters, histogram, coverage,
-blending, trim, carried masks and eager thumbnails now propagate cancellation. Large scratch arrays initialize in
-bounded chunks. Selection coverage applies the transform per edge without copying the outline; hard coverage uses
-cancellable in-place sorting. The allocation estimate covers each stage's live scratch and final result, including
-rounding and sparse input copies, and avoids charging a resident exact preview again. All final x64 gates and all
-ARM64 cross-builds passed, including curve-allocation and finite-coordinate-overflow review corrections. All 13
-4K benchmark checksums match the original baseline; observed cancellation returns and their limits are recorded
-in the [P1.1b record](../../TestRuns/FilterCancellation_2026-09-28.md). The host still invokes the graph synchronously
-until P1.1c. P1.1b was committed and pushed as `c859bd0`.
+**Compiler/diagnostic batch:** all three full x64 profiles and all three ARM64 cross profiles pass independent
+source/object/link/PE-PDB/runtime readback. The post-default 1,904-input freeze is
+`E81E1645C5130105EBECC8AD2FD43FB00C99C584312BE52F2B1C5DCBCF3660BF`.
+Attempts are `host1d1`, `host1r1`, `host1a1`, `host1armd1`, `host1armr1`, `host1arma1`; the same-attempt ASan
+archive is recovered without substituting another native run. Release verifies 1,022 compiler records plus
+23 selected dependency members. The preceding `dpi1an1` Release analysis retains its earlier exact 1,903-input
+scope. These historical matrices do not qualify the later flip or private scanner drafts.
+See [diagnostic evidence](../../TestRuns/P1DefaultClientDiagnostics_2026-10-21.md).
 
-P1.1c.1 progress, 2026-09-28: deferred panel metadata, worker padding/preview/histogram graphs, lifetime/sequence
-validation, source-cache rules and preparation reservations are implemented. The direct API uses the same graph;
-its existing document goldens pass. A cheaper agent supplied cached selection bounds and another supplied
-the independent deferred-state tests; the primary owns the worker and publication logic and reviews their changes.
-All x64 configuration gates and all ARM64 cross-builds passed. The benchmark no longer requires unused identity
-preview preparation; the ISA gate now verifies an additional compiler switch-table pattern without an object
-allowlist exception. Evidence is in the [P1.1c.1 record](../../TestRuns/ColorPanelWork_2026-09-28.md).
-Production job/continuation wiring follows this boundary and is not yet complete.
+**Settled layer flips:** ordinary single-layer Horizontal/Vertical commands enter the existing ordered
+queue/admitted original-ticket metadata worker. Core numeric expectations come from legacy LayerFlip/LayerMask;
+preserving-gesture/group/canvas/header behavior remains outside this migration. `flipdevr3` passes Release
+build/ISA and focused DocumentTests: every 24,035 predecessor PASS occurrence is retained plus exactly 289
+additions (266 flip, 22 joined-Close, one summary), total 24,324. Main independently verifies the Counters.
+Its first hidden Application run fails because the new fixture incorrectly expects an assetless blank layer
+to transform. The repaired fixture uses real pixels and rotation 12.5 to -12.5, with explicit assetless no-ops.
+`flipdevr4` hidden Application PID 75032 exits 0: all 158 flip checks / 28 cases pass with 1,905 source and
+EXE/PDB bookends. Fixture-level joined Close is not actual public-command Application Close qualification.
 
-P1.1c.1 was committed and pushed as `6a6443c`. P1.1c.2 is complete on x64: the host selects deferred
-panels, submits one-active/latest-pending previews and once-per-opening histograms, and invalidates tickets on
-panel/document/shutdown transitions. Its WARP test gates actual production jobs and checks input dispatch,
-coalescing and Cancel/reopen. The UI benchmark also waits for the frame invalidated by job publication. Commit and
-owned file/close continuations remain P1.1c.3; no whole-host nonblocking claim is made at this boundary. All three
-x64 test configurations, skill validation, formatting and all ARM64 cross-builds passed. Evidence is in the
-[P1.1c.2 record](../../TestRuns/ColorPanelHost_2026-09-28.md).
+`flipdevr4` still **fails the mandatory ISA build gate**. The same image/PDB SHA-256 values are
+`70DDADBEDC9C06A0EB34164D0C8E2508AC5A9345D529C604F116E3D115ECF9F4` /
+`A94E146C090C3CEECB9940FB6A960F92438D700C6CE80BD37B2E26791268CAE5`.
+Its failed 3,247-file archive manifest is `9ABB0BD8F6FE12AA49943F0AACA332FB051966D3CBD9F06C6C5BC98FA19D49F9`;
+source freeze `98DD15FB0F804D2F8B950DCD7CF861C8D92F34368A714CE7104E6B5C473C1B61`.
+Focused runtime after a failed build does not qualify that build or a full profile. All earlier compile,
+storage and fixture failures remain retained. See [flip scope/evidence](../../TestRuns/P1SettledLayerFlip_2026-10-21.md).
 
-P1.1c.3a–b preparation, 2026-09-30: the busy-panel contract and ordered worker engine passed all x64 test
-configurations, skill/format checks and all ARM64 cross-builds. Evidence is in the
-[ordered commit record](../../TestRuns/OrderedColorCommit_2026-09-30.md).
-A cheaper agent supplied bounded embedded-host input tests; the primary reviewed the patch, preserved concurrent
-engine changes, strengthened restored-input/prerequisite checks, and implemented the commit engine and its event
-gates directly. Production OK/write callers remain inline until their owned continuations activate together;
-P1.1c.3 is not complete. No G1 or Photoshop speed claim follows from this preparation.
-The indexed [completed continuation child plan](../Done/ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
-request ownership, staged settlement, caller inventory, repeated history acquisitions and activation gates for
-P1.1c.3c–d. Its later stroke resolution remains integrated with P1.4; it does not claim that replay is implemented.
+The ISA refusal is table data in `Application::OnAdjustAction`, PDB module 332 / `ApplicationAdjust.obj`:
+procedure `[0x1402a0c20,0x1402a1d28)`, MOVZX ESI,DL at `0x1402a0c5d`, SIL <=36 guard at `0x1402a0d00`,
+RDX-base/RSI-index/EAX-result dispatch at `0x1402a0d20`, RET `0x1402a1c93`, anonymous 37-DWORD table
+`[0x1402a1c94,0x1402a1d28)`. Entry 9 is `c5 13 2a 00`, RVA `0x002a13c5`; linear decoding labels it
+`vcvtsi2sd` at `0x1402a1cb8`. All 37 actual destinations are decoded body boundaries. The old RSI form
+expects a different producer/ESI guard/ECX result; generic matching lacks `8b 84 b2`. Do not add an ISA allowance.
+Read the retained matching PE, PDB, complete disassembly/contributions/symbols under `Archives/flipdevr4/IsaScan/RedPrism`.
 
-P1.1c.3 activation, 2026-09-30: the full typed production runner and caller migration passed all x64 test
-configurations and ARM64 cross-builds. [Activation evidence](../../TestRuns/HostContinuationActivation_2026-09-30.md)
-records the 84 caller outcome cases, owned Shape release, bounded direct input readers and session-end message
-controls. Release's real 4K loop completed all 15 operations; Levels commit dispatch max was 0.083 ms, apply max
-3.658 ms and action max 5.898 ms. Invert/Fill/Clear still block for 187/243/270 ms in this run. P1.2–P1.9 and
-G1 remain open. The primitive notes below record the state before activation.
+Next, review the private exact producer/prelude/guard/body/terminal proof. Require complete nonoverlapping
+decoded rows matching PE, zero upper RSI bits, Win64 nonvolatile preservation through known external calls,
+correct unsigned guard/default and all targets, same anonymous-data/procedure/contribution owner and end,
+no incoming guard/table entry, and real adjacent VEX/EVEX refusal. Copy the Main scanner into the private
+test workspace only after verifying both source hashes; its current helper scanner is the old one.
+Use a fresh PowerShell process because `Add-Type` caches the scanner type. Run the existing focused
+`Tests/BuildProcessTests/IsaRsiDwordTests.ps1`, then all scanner predecessors and the unchanged failed-image
+replay. Its helper supports synthetic tests; real-image replay also needs the unchanged discovery module
+imported by `Build/IsaScan.psm1`. Only then integrate code/tests/contracts together and retry a focused
+canonical Release build. Latest complete integration gates remain due.
 
-P1.1c.3c primitive progress, 2026-09-30: the stable UI-action source and repeated history acquisitions passed the
-full x64 gates and all ARM64 cross-builds. Final review strengthened independent owner/document stamp tests.
-Release link-layout changes exposed a switch-table ISA scanner false positive; exact PE/PDB and branch proof now
-recognizes its observed hoisted image-base setup, with positive/negative controls and an unchanged allowlist.
-Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). The ownership and host
-bridge records below extend these primitives; write/discard stages and production caller activation remain open.
-P1 and G1 remain open.
-Per-entry continuation retirement also passed the full x64 gates and all ARM64 cross-builds; the
-[retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md) proves each dropped entry's ownership and
-observable outcome through the callback. The [owned request/receipt record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md)
-also qualifies the actual model in all configurations, with 85 receipt and 21 typed-input assertions per HostTests
-invocation (the ASan suite runs both normal and stress).
-Production producer admission, staged publication and caller activation remain with the runner.
-The [Application bridge record](../../TestRuns/HostContinuationBridge_2026-09-30.md) qualifies real owned numeric
-panel requests, registered source ownership, admission/full refusal, exact completion wake-up, success/failure,
-late cancellation/replacement, metadata settlement and shutdown in all configurations. All asynchronous history
-finishers must notify the common hook after apply/drop; other kinds currently use explicit finisher test seams.
-Cancel after acknowledged panel work preserves its known result. The full multi-stage prompt/write/discard runner,
-variable-length payload admission and production caller activation remain open; P1/G1 and P2–P6 are not complete.
+**Native ARM64:** r5 source/products/rosters are independently verified as a preserved 14.51 sizing failure;
+there is still no exact native failed sizing predicate. r6 `39591618490` on `d3fb3dc` correctly refuses the
+image's default 14.51 before canonical work; 2,090 opening source inputs and its three artifacts are verified.
+The pinned 14.52 CI setup in `9a75051` passes 74 exact-function stand-in controls, retaining all preceding 60;
+Main verifies four source bookends, nine case entries and five actual child receipts. No stand-in executes
+native compiler/MSBuild. See [provisioning contract/evidence](../../TestRuns/P1NativeToolchainProvisioning_2026-10-21.md).
 
-Code drift checked against the current source: the later review already added display proxies and tiled
-full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
-export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
-they must not reintroduce the older limitations described in the original survey.
+Run [39597475207](https://github.com/RedSalamanders/RedPrism/actions/runs/39597475207), attempt 1 / job
+119213278997, is **cancelled for this requested checkpoint**, terminal at 12:15:38 UTC. It starts the pinned
+installer on image `20261013.183.4`; input/signature receipt and installer logs are retained, but there is no
+installer-result, selected toolset, canonical child or native product/runtime receipt. Do not call it a failed
+installation, passing provisioning or native qualification. Its 8,436,793-byte artifact 12345065882 is downloaded
+and all 15 extracted files match ZIP bytes; ZIP SHA-256
+`C082FC64499C0C371F163474CEE1109DB0D1A36726C36FAD40623BB295C261F4`.
+Full installer-log interpretation and exact opening-source semantic readback remain due if useful. On resume,
+dispatch one fresh bounded workflow after reviewing the saved logs; preserve the exact 14.52 guard and inspect
+actual selected compiler/dependency products before interpreting native DPI behavior. No guessed second resize,
+OS-clamp claim, weakened client-size assertion or old-toolchain qualification is authorized.
 
-Validation progress: the complete x64 Debug, Release and ASan gates, skill validation and formatting check passed.
-ASan includes the extended 256-round concurrency stress and a real detection probe. The kernel smoke gate runs
-13 operations and three copy/adopt comparisons on 32×24 pixels in every configuration. The review confirmed the existing fatal
-`std::bad_alloc` policy still reaches `CopyFrame` and `CommitColorEdit` through allocation of storage headers,
-thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
-boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
+**DxUi repaint experiment:** only `Z:\src\RedPrism\.build\dxui-p1-paint-r1`, branch
+`ej/p1-bounded-embedded-repaint`, base `f65e4a4b9311370b3e3070088e2a8abe29adcb27` (API4), is authorized.
+Its 16 changed/untracked paths are copied with exact base/branch and binary patch. Candidate-r2 passes all
+six local profiles: 19 normal scopes/zero skips in each x64 profile, actual sanitizer detection and all 336
+library compiler records at 14.52; ARM profiles are cross-builds. Evidence:
+`Z:\src\RedPrism\.build\P1Evidence\dxui-bounded-repaint-matrix-r1`, especially both Main profile readbacks,
+`source-binding.json`, and per-profile manifests. Bounded correctness, alpha/clip/z-order/reentrancy/lifetime
+proof is real; the generic benchmark observes 33 bounded updates. Unpaired warm medians 973.05 versus
+1026.95 microseconds and worse cold 6106 versus 5068 microseconds qualify **no speedup**. Foreground,
+native ARM64, CI, paired performance and explicit library/API4 publication/adoption remain open.
 
-- **Status**: ACTIVE. P0.2–P0.8 and the P0.1 driver/corpus gates are complete on x64; all ARM64 cross-builds passed.
-  D1, D2, D3, D8 and the staged D12 policy are recorded. P0.1 coverage and P1.1 implementation are in progress.
-  The open decisions in §11 gate the other slices:
+The actual 10,000-row path still calls ordinary Prepare. `SetPreparedLayers` notifies model/selection;
+API4 `Tree::NotifyDataChanged` invalidates geometry/model revision, forcing full preparation. A consumer-only
+skip-Notify idea is withdrawn: BorrowedControlModelGuard/UIA does not compare the prepared row owner, so
+replacing it under the same model pointer/geometry leaves an old semantic capture apparently current.
+Strong ownership protects text lifetime, not semantic coherence. No UAF is established. A library-supported
+semantic revision boundary plus exact displayed-predecessor proof is needed before a bounded row update.
+Retain availability disable/re-enable, selected-row EnsureVisible/scroll, tooltip/typeahead/rainbow and animation
+rules. Compare every ordered non-name field, not only IDs/count; add nested callback/query/UIA rejection tests.
+RedPrism API3 internals differ and cannot inherit an API4 proof. Do not adopt the pin until concrete qualified
+benefit and the required approval exist.
 
-  | Decisions | Gate |
-  | --- | --- |
-  | D8 | P0.5–P0.7 (the AGENTS golden amendment lands in P0.5) |
-  | D2, D3 | P0.6b |
-  | D1, D2, D3, D12 | P1 |
-  | D1, D12 | P2, P3 |
-  | D1, D5, D6 (v1), D8, D14, D15 | P4 |
-  | D4, D9, D11, D13, D16, D17 | The targets and records they name |
-  | D6 (v2), D7, D14 | P6 |
+### Remaining P1 delivery work — all unchecked
 
-  A decision is recorded in §11's "Decided" column, with the date, before its first gated slice starts.
-- **Priority**: P0
-- **Planned at**: 2026-09-22, after the splitter drag fix. Rewritten 2026-09-23 from a code survey of every
-  kernel, the host command path, the composition, file I/O, tests, the legacy oracle and external research. It was
-  then revised twice. The first revision used 89 findings from an adversarial review in seven lenses, each
-  checked by an independent verifier. The second used a recheck of every accepted finding plus an
-  internal-consistency pass. The 2026-09-22 text (one worker, move the blocking commands) is superseded. Its
-  rule, STOP list and Done line survive in §3, §13 and §14.
-- **Owning specs**: `Core/Core_PerformanceAndResources.md`, `Core/Core_Architecture.md`, `Core/Core_CrashHandling.md`,
-  `Document/Document_Model.md`, `Document/Document_History.md`, `Document/Document_Tools.md`,
-  `Rendering/Rendering_Composition.md`, `Rendering/Rendering_Brush.md`, `IO/IO_ImageCodecs.md`,
-  `IO/IO_ProjectFormat.md`, `Build/Build_Toolchain.md`, `Build/Build_Packaging.md`, `Testing/Testing_Validation.md`,
-  `UI/UI_ApplicationChrome.md`, `UI/UI_Windowing.md`, `Specs/README.md` and `AGENTS.md`. New specs:
-  `IO/IO_RawDecode.md` and `Rendering/Rendering_RawDevelop.md` (P4).
-- **Depends on**: nothing outside this plan. The pinned DxUi (`c403052`) already ships `ProgressBar`
-  (determinate and indeterminate).
+1. [ ] Complete the strict ISA repair and full coherent flip qualification, including actual public-command
+   joined Close and remaining group/live-gesture integration obligations; keep legacy numeric behavior.
+2. [ ] Complete native 14.52 installation/product/runtime observation and exact sizing diagnosis/repair;
+   retain D9/native availability decisions and all earlier cancelled/failed receipts.
+3. [ ] Resolve actual row/chrome Prepare cost before ordinary prepared activation. Preserve hardware initial/
+   first-rename 6.383/8.621 ms and WARP 7.387/6.520 ms misses; Apply maxima 0.260/0.240 ms do not close G1.
+4. [ ] Complete ordinary rows/display/selection-pixel-final/Gradient/Pixel Move/stroke/Shape/Warp consumers,
+   readiness and phase admission. Shared startup still only runs for the explicit processing probe. Its
+   order is rows -> committed/pending display -> stroke -> optional outline, with prefix shutdown guards.
+   History/cursor/recorded Hue already have independent ordinary startup; do not duplicate their workers.
+   `_selectionPixelFinalPublicationEnabled` remains false ordinarily; SizeJobs CPU fallback and explicit
+   Size benchmark enablement are not proof of general activation. Inspect `ApplicationSizeJobs.cpp` and
+   `ApplicationFinalPublicationPlan.cpp` before changing flags. A Present alone is weaker than committed/
+   pending/recorded/row-key readiness. StrokeFinish still needs cold-row held/refused/replaced/cancel/Close
+   first-stroke and Warp consumer proof. Gradient/Shape need complete source/output/display/row overlap bounds.
+5. [ ] Complete real GPU utility/readback/composition callers, device loss/recovery, suspend/restart,
+   cancellation, utility admission and joined shutdown grids using the existing queues and event waits.
+6. [ ] Close remaining Wand/selection overlap/geometry/coverage/outline, deferred transform settlement,
+   files/clipboard full phase/admission bounds and historical failure investigation in their child plans.
+7. [ ] Complete constant-time immutable capture, actual H3 caller migration, residency journal/memory bounds,
+   original-ticket strong/weak/cache/late-source retention and off-owner release. Existing persistent-index/
+   history primitives are real; do not build a second indexing/accounting framework.
+8. [ ] Qualify Image Size inclusive Apply <=2 ms and every original P1-due 45 MP/100 MP R1/WARP G1 operation,
+   owner/frame/latency/cancellation budgets and explicit original phase exceptions. No invented deferral closes
+   a miss. Record R2/R3 unavailability and D9 exactly as §14 requires.
+9. [ ] Run latest integrated full x64 Debug/Release/real ASan, Release analysis with actual concurrency controls,
+   all three ARM64 cross profiles, native host acceptance, ISA/provenance, skills/formatting, sanitizer/stress/
+   crash probes and harness captures. Reconcile contracts/user guide/child plans, publish code/tests/docs and
+   verify remote identity. Move P1 to Done only after every original §14 gate closes; P2–P6/RAW remain later.
 
-This file is a non-normative execution record. A rule written here as MUST becomes normative only when the slice
-that lands it moves the text into the owning spec (§9).
+### Restart commands and reader reuse
+
+First verify HEAD/branch/remote/status against `final-publication.json` and the saved file manifests; reconcile
+unexpected edits instead of resetting them. No source freeze or local P1 build/test/observer is active at stop.
+Read current `AGENTS.md`, `Specs/README.md`, relevant repo skills, this section and §14. Recheck disk free bytes
+with `System.IO.DriveInfo`; keep new evidence/scratch on S:. Do not rerun one-shot scripts into existing folders.
+
+Reusable tools are under `Z:\src\RedPrism\.build\P1Drafts\DefaultClientDiagnostics-Main-r1`:
+`run-canonical.py`, `archive.py`, `verify-profile-main-r1.py`, `verify-runtime-main-r1.py` and analysis reader.
+The canonical runner/archiver/profile reader accept `REDPRISM_P1_EVIDENCE_ROOT` (absolute path). The profile
+reader also accepts an explicit triple, for example `new-attempt build x64 Release`; its 1,022 records/five
+PE-PDB/ISA proof is unchanged. Give every run a **new** attempt name. The runtime reader's old exact roster is
+not a flip reader: reuse neutral clean/Counter helpers and explicitly prove additions without weakening
+predecessors. Preserve both streams and actual PID/exit/source/product bookends even when a native test fails.
+
+Use `C:\Program Files\PowerShell\7\pwsh.exe` (7.6.7) and
+`C:\Users\eric\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
+JSON may have a BOM (`utf-8-sig`); set Python stdout UTF-8 before Unicode output. The selected shell's version
+can differ from system PowerShell. GitHub connector was disconnected; the existing authenticated `gh` CLI
+dispatch/download fallback works. Neutral native identity helpers are in `P1Drafts\ObservedArmSuccessReader-Main-r1`;
+use only the neutral functions for failed/cancelled jobs, never a success-only reader.
+
+After focused repair, use unchanged repository entrypoints for a coherent integration batch:
+`validate-skills.ps1`, `format.ps1 -Check`, full `test.ps1 -Platform x64` Debug/Release/ASan Debug,
+`build.ps1 -Platform x64 -Configuration Release -Analyze`, and ARM64 Debug/Release/ASan Debug cross-builds.
+`test.ps1` has no filters/SkipBuild option; `build.ps1` repeats mandatory ISA parser controls. Do not invent
+a skipped gate or stitched full pass. Reuse already-qualified unchanged predecessors where identity matches.
+
+## Current delivery checklist — 2026-10-21
+
+- [x] Resume the saved checkpoint at `4fffd37`: verify the clean source/remote branch and all six DxUi experiment source/backup hashes. Execution resumed at the user's request on 21 October; the [saved checkpoint](../../TestRuns/P1SessionCheckpoint_2026-10-21.md) remains the restart/evidence reference. P1 remains WIP.
+- [x] Independently qualify failed native ARM64 r5 identity and observed facts: 2,084 exact commit inputs, 36 artifacts, native environment/toolchain, five AA64/full-PDB pairs and all four suite rosters. Preserve canonical exit 1 / Application exit 2 and the combined default-client assertion; the precise failed predicate remains unknown. [Failure verification and diagnostics](../../TestRuns/P1DefaultClientDiagnostics_2026-10-21.md).
+- [ ] Qualify exact DPI/style/client/outer/monitor diagnostics with all original assertions retained, then use native evidence to select a repair. No guessed sizing change or native success is claimed.
+- [x] Qualify the repaired MSVC 14.52 diagnostic source in full x64 Debug/Release/real ASan, Release analysis with real concurrency controls and all three ARM64 cross-builds. Original failed keyboard guards remain retained; post-default full Debug/Release/real ASan and all three ARM cross profiles are separately verified. [Current evidence](../../TestRuns/P1DefaultClientDiagnostics_2026-10-21.md#current-repaired-source-qualification).
+- [x] Integrate and qualify the compiler-host batch: scoped unset-X64 default and 11 exact-entrypoint controls pass; all three post-default ARM cross profiles and full Debug/Release/real ASan qualify, including actual Release compiler/dependency selection. The native 14.52 default-version preflight passes 60 exact-function controls and preserves original native failure assertions. Code, tests, contracts and evidence publish together; earlier x86-host/fallback receipts and the ASan archive storage failure remain retained.
+- [ ] Qualify the settled single-layer Flip Horizontal/Vertical migration: focused DocumentTests preserves all 24,035 predecessors and adds 289 facts; the corrected hidden Application exits 0 with 158 checks / 28 cases and exact bookends. The current Release build still fails its ISA gate on an OnAdjustAction table; partial scanner/test drafts are saved privately and unqualified. Full integration, actual-command Close, group/live-edit completeness, G1 and P1 remain open. [Current scope](../../TestRuns/P1SettledLayerFlip_2026-10-21.md).
+- [x] Commit/push the seven-profile-qualified Load Layer/Mask Selection and exact inline-table scanner correction as `f4c712c21c0cfcacdeaf16db9e1e225662bd38a9`; the approved branch destination SHA is verified. Formatting/skills pass, compiled qualification inputs are unchanged, and P1 remains WIP. [Component publication](../../TestRuns/P1LoadedLayerSelection_2026-10-21.md#publication).
+- [x] Preserve the new Release ISA refusal and privately qualify the exact unsigned R9D/RCX/R8 table proof: all 4,368 scanner predecessors plus 85 encoded controls and unchanged failed-image replay pass. Canonical current-source integration now passes with the complete seven-profile load-selection matrix; this scanner correction changes neither the DxUi pin/library nor the allowlist. [Evidence](../../TestRuns/IsaR9dRcxR8_2026-10-21.md).
+- [x] Qualify ordinary settled **Load Layer Selection / Load Mask Selection** through admitted workers: all seven local profiles pass on the same 1,901 inputs, with 32 new Document facts and 102 actual-command stderr facts / 14 cases while preserving every predecessor. The synchronous inline source path is removed from these handlers. Full remaining caller/phase/G1 and current-source native runtime remain open. [Implementation and validation](../../TestRuns/P1LoadedLayerSelection_2026-10-21.md).
+- [x] Request the guarded renewed native ARM64 Release run as `c805d5d638eda67858a4d39f838f3656a5e78298`, after all 30 wrapper controls and three typed refusal children pass. [Run 39541110772](https://github.com/RedSalamanders/RedPrism/actions/runs/39541110772) completed with canonical exit 1 / Application exit 2 at the default-client/DPI assertion, after passing the observed 729 dispatch / 1,002 press controls. Failure artifacts are preserved; source/environment/products qualification and cause investigation remain open.
+- [x] Publish the locally qualified Polygonal DPI fixture as `ef1b2850971d4f5c449d8ab094dd5417951797f3`; approved branch destination SHA verified. Request and independently qualify renewed native Release next; full P1 remains WIP.
+- [x] Qualify the Polygonal DPI fixture portability change in full x64 Debug/Release/real ASan and all three ARM64 cross-builds: retain all 12,298 Application predecessors plus exactly three setup facts (12,301 total), 155 stages and all four suite rosters. Preserve the original native failure and independent clamp reference; renewed native Release remains open below. [Fixture and validation](../../TestRuns/P1PolygonalDpiFixture_2026-10-21.md).
+- [x] Commit/push the qualified Undo/Redo shutdown step as `d9295d9fc6e6d746e58ba5d6e6a87f4eb5291f4a`; the approved branch destination SHA is verified. Native runtime, ordinary activation and parent P1 gates remain open.
+- [x] Qualify the actual Undo/Redo joined-shutdown repair. Preserve the original four-boundary failure; the exact post-Close acknowledgement and shutdown-event witness pass all 36 new facts plus all 12,262 Application predecessors in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source Release analysis (1,022 TUs). Native ARM64 runtime and parent delivery gates remain open. [Reproduction and validation](../../TestRuns/P1HistoryRestoreShutdown_2026-10-21.md).
+- [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
+- [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
+- [x] Qualify the preceding Size integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
+- [x] Verify genuine ASan detection, stress, crash probes, complete predecessor rosters and nine harness captures. No personal ARM64 host is available. The first hosted Release attempt timed out; the later native-hosted run reached the suites and failed one cancellation fixture assertion. Cross-builds establish no runtime result; the failed native attempt is recorded below.
+- [x] Record the six selected Release Size profiles: inclusive Apply maxima 40–554 µs. Retain all initial-display, warmup, frame and drain misses; these samples do not qualify complete G1.
+- [x] Commit/push the qualified Size recovery step as `aa8dd94`; verify the branch destination SHA `aa8dd945c023549f17aefe82396cef0b086f1e51`.
+- [ ] Resolve remaining owner/frame costs, complete phase admission and ordinary activation, and close every delivery gate below before P1 Done.
+
+- [x] Qualify monitor-specific refresh/continuity, the shared normal/cancellation endpoint check and independent ordinary cursor startup in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source `m1an2` Release analysis with strict SAL:
+  1,022 TUs, 155 Application stages and 12,251 Application facts. Preserve `m1r1`'s fixture sequencing failures, the ASan reader-only footer refusal/recovery, and the failed `m1an1` disk-exhaustion receipt and approved fixture-storage transition ([preserved analysis refusal](../../TestRuns/P1MonitorAndCursor_2026-10-20.md#preserved-failed-analysis-and-recovery-boundary)).
+  [Evidence](../../TestRuns/P1MonitorAndCursor_2026-10-20.md). Native ARM64 runtime for this source, complete ordinary prepared activation and G1 remain open. Commit/push verified as `76b7af0bea0f5f4a1a2f087baf6b65fa0bb65866` on `codex/p1-opacity-host-proof`. The parent P1 delivery gates remain open.
+- [x] Reconcile 70 existing prepared-row functional controls across the same-source full x64 Debug/Release/real-ASan logs: provider lifetime 17, capacity 12, notifications 11, stable identity 21 and grouping 9. [Receipts](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-functional-receipt-reconciliation--2026-10-20). Preparation misses, external-client latency, complete consumer admission and ordinary activation remain open.
+
+- [x] Record exact-product hardware/WARP 10,000-layer cost diagnostics: 11 boundaries and 99 timing rows per device, with initial and first-rename Prepare intervals retained (hardware 6.383 / 8.621 ms; WARP 7.387 / 6.520 ms). Apply maxima are 0.260 / 0.240 ms. [Evidence](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-exact-product-cost-diagnostics--2026-10-20).
+- [x] Verify exact-product CPU stack attribution for the remaining row Prepare path: 1,293 primary-thread samples independently match WPA count/weight; 156 Prepare samples separate EndDraw/flush, other painting and accessibility costs. The current DxUi pin is unchanged. Raw QPC is unavailable and an external PresentMon process is observed, so no per-trial or G1 timing qualification follows. [Attribution and limits](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#current-release-cpu-stack-attribution--2026-10-21).
+- [x] Verify the matching RTX 5080 diagnostic against the same product: 1,840 primary-thread samples independently match WPA count/weight, including 123 exact Prepare samples. Preserve first/first-rename misses and shared painting/UIA costs; these unpaired instrumented captures qualify no timing or speedup. [Hardware attribution](../../TestRuns/P1LayerRowsCosts_2026-10-06.md#matching-hardware-diagnostic).
+- [x] Resolve the bounded repaint experiment's scope: the human explicitly approved one temporary DxUi checkout at `Z:/src/RedPrism/.build/dxui-p1-paint-r1`. Candidate-r2 now passes all six local library profiles with independent source/artifact/compiler/sanitizer readback. The generic fixture observes 33 bounded mutations; its unpaired timings prove no speedup, and actual row notification still requires full preparation. Model-epoch coherence prevents a consumer notification bypass. Paired performance, publication and explicit API4 adoption remain open; RedPrism's API3 pin is unchanged.
+- [ ] Fix the remaining Prepare cost, then qualify ordinary prepared-row startup, capture readiness, consumer bounds and complete G1. Opt-in layout/DxUi/accessibility phase attribution and public surface/cache statistics pass the canonical Release build, 1,022-TU profile and five PE/full-PDB checks; enabled hardware/WARP diagnostic runs and the disabled-attribution smoke now pass with original timing/pixel/history/provider checks retained. Latest-source local runtime qualification now passes with the captured-binding repair; the measured cost repair remains due. The private startup candidate remains unbuilt and unadopted.
+
+- [x] Independently verify failed native ARM64 Release run `39429595846`: exact 2,073-file commit/source bookends, five AA64/full-PDB pairs, successful Host/Document footers and the single retained cancellation fixture failure. [Native evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
+- [x] Qualify the adopted event-publication fixture repair in the complete latest-source local matrix, preserving all 41 original assertions. [Current repair evidence](../../TestRuns/P1CapturedBindingRepair_2026-10-20.md). The earlier failed native attempt remains separate evidence.
+- [ ] Finish native ARM64 validation. Preserve the incomplete run `39479072110`. The observed followup [39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) closes its source/environment/product receipts and passes all four suite rosters, 41 cancellation controls and 14 pending-raster cleanups, then exits on one Polygonal DPI assertion (Application 5, canonical 1). A portable fixture candidate is prepared; native cause and passing qualification remain open. [Preserved evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
+
+- [x] Preserve and diagnose the preceding-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
+  and the exact dump/PDB resolves `PreparedCommittedDisplay::PrepareForWork` querying the live immediate context
+  on a worker. The earlier Release run passes; the ASan attempt and later unstarted profiles remain unqualified.
+- [x] Qualify the captured-binding repair and ten independent immutable binding controls in complete latest-source
+  x64 Debug/Release/real ASan, analysis and all three ARM64 cross-builds. Worker preparation compares owner-captured
+  identities without invoking the immediate context. No current-generation or completion authority is inferred
+  from that comparison. Original failed receipts remain retained.
+- [x] Commit/push the qualified repair as `202c52be8043cd532ab0b33d1751a034009e362c`; the approved branch destination SHA is verified. Repaired-source native ARM64 validation remains open above.
+
+- [x] Qualify independent ordinary recorded Hue startup with eleven actual-Run controls and every
+  predecessor in complete same-source x64 Debug/Release/real ASan, all three ARM64 cross-builds and
+  canonical Release analysis: 1,022 TUs, 155 Application stages and 12,262 facts. All original failures and
+  focused receipts remain preserved. [Complete local matrix](../../TestRuns/P1OrdinaryHueStartup_2026-10-20.md#complete-same-source-local-qualification).
+  The common utility routes were already acquired; this step enables no other prepared GPU consumer.
+  Complete phase/resource timing, full-display activation, native ARM64 runtime and parent delivery gates remain open.
+
+- [x] Reconcile D13 with the existing host RAM budget, unchanged class default and ten independently verified boundary facts per qualified x64 profile. Full H3 admission/caller/cost work remains open. [Decision evidence](../../TestRuns/P1HistoryBudgetDecision_2026-10-20.md).
+
+- [x] Qualify the utility-owner routing fixture repair in the complete same-source local matrix:
+  preserve all 8,425 Composition predecessors and add exactly three explicit memory-notification/drain facts.
+  Retain `oh3a1`'s failure/archive and the unchanged original idle predicate. [Evidence](../../TestRuns/P1UtilityIdleNotification_2026-10-20.md).
+- [x] Commit/push the qualified ordinary-Hue, utility-fixture and existing D13/H3 core reconciliation step as `a2f56263c7a36a9d5bfb24c1c18cb297885bbae6`; verify the approved branch destination SHA. Complete H3 and parent P1 delivery gates remain open.
+
+- [x] Adopt and qualify the scanner fixture extraction and native ARM64 terminal/progress tooling in
+  the authoritative checkout: 4,350 parser PASS records / 4,305 distinct records, all 15 named compiled
+  controls, and 30 native-wrapper regression controls with three typed refusal children. Keep every
+  product assertion, the 1,200-second default, all historical failures and unchanged workflow guards.
+  The native-only 5,400-second failure backstop is an observation bound, not a causal repair or G1 result.
+  [Affected tooling evidence](../../TestRuns/P1ValidationTooling_2026-10-21.md).
+- [x] Publish the qualified tooling step as `d6231b07f68eac678c43577c4cb2a99c7636d771`; approved branch destination SHA is verified and the guarded native job [39511554815](https://github.com/RedSalamanders/RedPrism/actions/runs/39511554815) correctly skips this unmarked mixed commit.
+- [x] Request the separately guarded native ARM64 Release attempt as `43725c68817eb303b519f9837064d03bb77a148c`; exact remote helper/workflow blobs are verified and all 30 wrapper controls pass again. [Run 39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) completes with the preserved DPI assertion failure below.
+- [x] Independently verify that native run's actual failed terminal result, complete source/environment
+  bookends, five AA64/full-PDB pairs, four complete suite rosters and observed Application subset. The sole
+  Polygonal DPI assertion remains failed; later Application stages and full native qualification remain open.
+
+## Remaining gates before P1 Done
+
+- [ ] **Display and tool activation:** finish Gradient/Pixel Move qualification, live strokes, Shape/Warp and all display consumers; enable the complete route in ordinary application use after its admission, failure and lifetime gates pass (P1.3–P1.5, H4).
+- [ ] **GPU utilities and recovery:** finish real readback/composition callers, hidden completion, device rebuild, restart, cancellation and shutdown with bounded original-ticket ownership (P1.3d–f).
+- [ ] **Selection and transforms:** finish large-image Wand admission and overlapping gestures/writers; remove remaining owner geometry/coverage/outline construction and complete deferred transform settlement. Ordinary CPU cursor startup is qualified above; remaining selection input/display activation and S5/G1 stay open (P1.5–P1.6, S5).
+- [ ] **Clipboard and files:** retain the receipt, real contention, delayed-render, cancellation, native-fault and session-end controls preserved by the current full x64 matrix. Finish complete operation phase/admission bounds, controlled investigation of the retained historical save failures and measured G1 (P1.7, F3–F6); later passing repeats establish no historical cause.
+- [ ] **Capture, history and memory:** complete constant-time immutable capture, incremental accounting, source/cache/weak-owner retention and all operation phase bounds (P1.9, H1–H3).
+- [ ] **First display and chrome:** finish first uploads, prepared rows, complete consumer admission, epoch exhaustion/retry, UI Automation ownership and large-owner retirement; qualify ordinary activation (H4).
+- [ ] **Image Size publication:** meet the 2 ms Apply target including history, chrome and first-display ownership (P1.8–P1.9).
+- [ ] **Measured G1:** run every P1-due operation on R1/W with documents A/B, fix owner/apply/cancellation overruns and preserve the specified frame exceptions and unavailable-host limits (§1.2, §14).
+- [ ] **Final qualification and integration:** exact latest-source Debug/Release/real ASan, analysis, ARM64 cross-builds, formatting/skills, host acceptance and native integration; reconcile domain specs, guide and child plans.
+- [ ] **Done:** commit/push the qualified milestone, move this plan to Done and update the indexes only when the above delivery areas and §14 are closed.
+
+## Historical progress checkpoints
+
+### Prior delivery checkpoint entries
+
+These entries preserve earlier sequencing and evidence. Later qualification above resolves earlier future-tense caveats; the current delivery checklist and remaining gates govern the present status.
+
+- [x] Commit/push the six-profile qualified Ctrl CPU/GPU foundation as `ac17fee` and verify the remote SHA.
+- [x] Adopt the reviewed physical Ctrl/Polygonal host,42-fact typed pixel journal and colour target/final-source changes after their separate private native/CPU proofs. [Host evidence](../../TestRuns/P1CtrlPixelHost_2026-10-19.md), [colour/capture evidence](../../TestRuns/P1ColorTargetCapture_2026-10-19.md).
+- [x] Qualify all three ARM64 cross-builds of the preceding1,010-TU source; native ARM64 runtime remains unavailable.
+- [x] Fix the private original-ticket publication fixture's retirement transfer boundary; all242 WARP/hardware ASan facts pass, including acquired-prefix and active-worker Close. Production host integration and the complete failure/Close grid remain open.
+- [x] Adopt deferred live-adjustment target capture after1,650 exact private Release/ASan facts, including25 new independent assertions.
+- [x] Qualify the combined1,011-TU source in full x64 Debug/Release/real ASan and all three ARM64 cross-builds, with exact source/archive/compiler/link/full-PDB proof. [Current six-profile evidence](../../TestRuns/P1CtrlCaptureMatrix_2026-10-20.md). Native ARM64 runtime remains unavailable.
+- [x] Commit/push the qualified 1,011-TU capture/journal step as `10e5fde`; verify the remote SHA.
+- [x] Qualify original-parent final CPU/history/rows/GPU publication in focused real ASan:325 exact host facts, including real device rebuild memory refusal and explicit retry; preserve both earlier occupied-slot failures. [Publication evidence](../../TestRuns/P1OriginalFinalPublication_2026-10-20.md).
+- [x] Qualify the CPU delegate and immutable Size final-source/output lifetime prerequisites:24,003 Document facts and a genuine ASan detection probe. Adopt the reviewed code, component/host tests and actual project registrations; private Main selectors are excluded.
+- [x] Preserve the first combined ASan/ARM64 Release build failures and their verified archives; repair the composition test project's pinned public-header import and key current display errors to their original source/device.
+- [x] Qualify the integrated 1,021-TU publication baseline in full x64 Debug/Release/real ASan and all three ARM64 cross-builds, including Busy-residency and suspended-slot controls. Preserve failed analysis f1an1 and the Debug reader recovery separately. Native ARM64 runtime remains unavailable.
+- [x] Reproduce the actual Chrome-row handoff failure, then qualify its repair and first-row resume/cancel/failure/Close in 473 focused ASan facts; qualify first-worker Size payload allocation in the full private ASan Application run.
+- [x] Adopt the reviewed Chrome/first-row, worker-allocation and four analysis repairs; keep warning limits, goldens, dependency pins and ordinary activation unchanged.
+- [x] Qualify the followthrough in current full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 1,021 TUs, 154 Application stages, 12,026 Application facts and 473 original-publication facts. Native ARM64 runtime remains unavailable.
+- [x] Privately qualify the generic Image Size final-publication path in real ASan: 129 Size and all 473 Pixel facts, including first-row resume/cancel/failure/Close, foreign restore and late cancellation. Native adoption and its complete matrix remain due.
+- [x] Commit/push the qualified publication step as `bd65f11` and verify the remote SHA.
+- [x] Adopt the reviewed generic Image Size final-publication path and 129 actual-host controls; preserve all 473 Pixel predecessors and remove private absolute fixture includes.
+- [x] Qualify the 1,022-TU / 155-stage Image Size integration in full native x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 12,155 Application facts, including all 129 Size and 473 Pixel predicates. Native ARM64 runtime remains unavailable.
+- [x] Privately qualify five additional actual Size slot/device recovery cases: 52 new facts plus all 129 Size and 473 Pixel predecessors (181/473). These controls remain a separate next adoption.
+- [x] Commit/push the qualified Image Size final-publication step as `088a3d7` and verify the remote SHA.
+- [x] Qualify the reproduced ISA runtime-object casing repair with the full existing control suite, seven identity controls and the unchanged originally refused image; exact function/contribution checks and the allowlist remain unchanged. [Evidence](../../TestRuns/IsaRuntimeObjectCase_2026-10-20.md).
+- [ ] Complete remaining Size recovery/phase bounds/2 ms and the other P1 delivery gates before ordinary activation and Done.
+- [ ] Finish Image Size host publication, complete phase bounds, ordinary activation, measured G1 and all nine P1 delivery gates. Retain the earlier input-guard failure without claiming a historical cause.
+
+- [x] Adopt the reviewed Size recovery, predelegate worker retirement, row-holder worker allocation and actual Size benchmark after private ASan proof: 191 Size, 473 Ctrl and 123 layer-row assertions; the corrected complete Application roster is 12,233 facts. Boundary/direct/sampler smoke is separately qualified.
+- [x] Qualify the latest 1,022-TU Size recovery integration in full x64 Debug/Release/real ASan, canonical Release analysis and all three ARM64 cross-builds: 155 Application stages, 12,233 Application facts, 191 Size / 473 Ctrl / 123 row assertions. [Current matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20). No native ARM64 runtime host is available.
+- [x] Commit/push the qualified Size recovery step as `aa8dd94` and verify the destination SHA. Remaining P1 delivery gates continue above.
+- [x] Record selected Size setup/warmup/scored owner costs for all six hardware/WARP Release profiles in [the Size recovery and cost evidence](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md); Apply maxima are 40–554 µs. Initial-display/excluded-warmup costs remain in the evidence.
+- [ ] Resolve measured frame/drain overruns and complete phase bounds; ordinary activation and complete P1 G1 remain open.
+
+
+### Earlier integration ledger
+
+Native baseline before the current caller adoption (2026-10-17): full canonical Release Rebuild/Analyze r1091 is independently qualified:
+actual parent exit 0, 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled/project/toolchain
+inputs, five exact PE/PDB pairs and zero ISA violations. The original H10 long-path reader refusal is retained;
+extended-path access reproduces the original checks against the same evidence without rerunning analysis.
+H10/H11 transport freeze: `BF07A1ECE3272C40A5D41FAFF21C008065E660BB5EFD42E5F583FF1FD9D677DB`.
+Full Release r1092 now independently qualifies 1,800 archive files, 953 compiler records and its complete runtime roster. The original archive-copy disk refusal and stale roster-transport metadata refusal are retained; recovery repeats no build or runtime. r1089's actual compiler-space failure and
+1,805-file archive remain retained; r1090 never launched. ARM64 Debug/Release/instrumented-ASan r1086–r1088
+already pass as cross-builds; native ARM64 runtime is unavailable. Earlier entries below retain their historical status.
+
+The newer Hue, preserving-panel Wand, hard Paint parity, direct-distortion read and panel follow-through
+integration passes full Debug r1052: 21,863 Document facts, 142 Application stages, 9,023 Host PASS records plus
+Hue summary, 7,391 composition and 1,953 I/O records. Main verifies its 1,805-file archive, 945 actual compiler
+records and five executable/PDB identities. [Debug evidence](../../TestRuns/P1PanelWandFollowthroughDebug_2026-10-16.md).
+
+The following native analysis r1053 fails on two C6262 test fixture stack frames. Main verifies all 1,780 failed
+archive files and preserves the actual diagnostics; r1054–r1058 were never launched. The repair heap-owns the
+large fixture sessions and preserves every test expression/label after reversing only ownership edits. Warning
+limits, goldens, dependency pins and ISA policy are unchanged.
+[Failure and repair evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md).
+
+Private S5 Release and real ASan now pass all 22,010 assertions (21,863 predecessors plus 147 new facts).
+This includes scalar movement, prepared opening/closure, exact cancellable containment, bounded physical input
+and translated geometry/weak-control lifetime. A controlled finite-offset parity failure is preserved before
+the correction; all other 22,009 records pass in that failing run.
+[Private model evidence](../../TestRuns/P1DeferredSelectionCore_2026-10-16.md).
+
+Main adopts the reviewed S5 core together with the fixture repairs in 29 code/test/project paths and updates
+three owning contracts. Skills (15), format (1,241 files) and diff checks pass. Analysis r1059 then fails on a
+shared helper omitted from three test subsets and two constant-condition fixture warnings; Main independently
+verifies all 1,821 copied evidence/input files and preserves the failed run. r1060–r1065 never launch.
+
+The shared builder now lives in the geometry TU compiled by all five images. The exact capacity predicate is
+proved by `static_assert`, with runtime tokens/labels retained. Fresh canonical analysis r1066 passes on the repaired 1,393-input freeze: 1,810 copied archive inputs/evidence,
+953 compiler records and all five image/PDB pairs pass independent checks. Full Release r1067 also qualifies
+22,010 Document facts, 142 Application stages and its complete archive/953 compiler records/five image-PDB pairs.
+Debug r1068 reaches all tests but its wrapper refuses two uncompiled, misplaced helper files; the complete attempt is retained without an inferred numeric child exit. Fresh clean-snapshot canonical Debug r1073 exits 1 on the post-close clipboard replacement predicate; all 1,820 archive files are verified. Source inspection finds the attempted-publication test gate can release on Busy before a close. The separate successful-publication phase and forced two-busy-retry regression preserve the original assertions and now pass full native Debug r1074 and real ASan r1075. ASan r1069 and ARM64 r1070–r1072 never launch. Fresh ARM64 r1076–r1078, analysis r1079 and Release r1080 remain due.
+The private actual-host scalar closure now qualifies 71 stronger facts and every predecessor Application
+assertion in 143 stages (R8). Main verifies 2,006 archived copies, 336 frozen objects, exact PE/PDB identity,
+zero ISA violations, worker allocation and final zero reserved/releasing bytes. Its isolated real-ASan host R4 independently qualifies all 71 stronger facts and 143 stages after serialized diagnostics; the earlier delayed-clipboard failure remains preserved without a causal claim. This host change is not yet adopted into the native source. Actual selection-press dispatch,
+ordinary activation and all nine delivery areas above remain open.
+[Private host evidence](../../TestRuns/P1ScalarSelectionClosureHost_2026-10-16.md).
+
+- [x] Qualify the original full Debug r1052 and retain its complete predecessor/delta evidence.
+- [x] Preserve and independently read failed native analysis r1053; stop all later gates.
+- [x] Independently qualify private S5 Release/real-ASan, including the retained failed parity predicate.
+- [x] Adopt the reviewed model core and assertion-preserving stack repairs; reconcile owning contracts.
+- [x] Preserve failed r1059, adopt the shared-helper/constant-proof repairs and retain all expectations.
+- [x] Qualify fresh exact-source analysis r1066 and independently review its complete archive/artifacts.
+- [x] Qualify private scalar closure on the actual two-worker/WARP host, including worker allocation, original-ticket retention, final refunds and all predecessor Application assertions.
+- [x] Independently qualify the stronger private actual host under real ASan (R4), including all predecessor assertions, actual instrumentation, diagnostic-only compile delta and exact artifact/archive identity.
+- [ ] Adopt the reviewed scalar closure production/test changes with owning contracts and fresh native qualification.
+- [x] Qualify the private selected history ownership extension in CPU Release and real ASan: 23 new facts plus all 22,010 predecessors, with the original ASan reader refusal preserved and Main's full-stream profile correction independently checked; [evidence](../../TestRuns/P1SelectionHistoryOwnership_2026-10-16.md).
+- [ ] Close the retained private ASan clipboard failure with diagnostics and serialized clipboard suites; qualify its actual host and adopt the separately qualified ownership API.
+- [x] Preserve and independently verify the real r1073 Debug clipboard failure; retain the original assertions while preparing the separate successful-publication gate and forced busy-retry regression.
+- [x] Qualify the successful-publication clipboard repair in full native Debug r1074, including the forced two-busy retry regression, all predecessor facts and exact archive/953 compiler/five executable-PDB checks. Reader-only refusals remain retained; no runtime repeated.
+- [x] Qualify the clipboard repair in full native real ASan r1075: actual parent exit 0, all 953 instrumented compiler records, five exact executable/PDB pairs and all 1,782 archive files independently verified. Both genuine ASan poisoning checks and source-defined WARP callback ordering pass strict readers; no runtime repeated.
+- [x] Qualify ARM64 Debug r1086 after independently preserving the r1076 disk-full failure: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs verified; all compiled inputs are unchanged.
+- [x] Qualify ARM64 Release r1087: all 1,463 archived files, 953 compiler records and five exact ARM64 executable/PDB pairs independently verified.
+- [x] Qualify instrumented ARM64 ASan r1088: 1,467 archived files, 953 actual instrumented compiler records and five exact ARM64 executable/PDB pairs independently checked; all three ARM64 cross-builds pass.
+- [x] Qualify canonical full Release Rebuild/Analyze r1091: 1,813 archived files, 953 compiler records, all 1,389 unchanged compiled inputs, five exact PE/PDB pairs and zero ISA violations; the original long-path reader refusal is retained. [Evidence](../../TestRuns/P1SelectionCoreNative_2026-10-16.md#canonical-release-rebuildanalyze-r1091-qualified-2026-10-17).
+- [x] Qualify full native Release r1092: 22,010 Document facts, 142 Application stages, all Host/composition/I/O records, 1,800 archived files and 953 compiler records; archive-copy and stale-reader-metadata refusals are retained and recovered without rerunning tests. The complete current native baseline now passes; ARM64 remains cross-build only.
+- [x] Qualify full native Release r1067 on that same source, with all runtime/artifact/archive checks.
+- [x] Qualify the current native x64 Debug and real-ASan repair; the remaining cross-build/analysis/Release row above tracks the rest of this exact compiled source.
+- [x] Qualify the private continuing-output/history ownership prerequisite in Release: 67 new checks plus all 22,033 predecessors, including saturated terminal slots and weak owners; [evidence](../../TestRuns/P1ContinuingPublication_2026-10-16.md).
+- [x] Qualify the same extended prerequisite under real ASan: all 22,100 facts, 265 instrumented compiler records, its own actual UAF probe, exact executable/PDB and all 1,604 archive files independently verified.
+- [x] Qualify private original-parent/charged-command/opaque-cleanup Release R3: 120 new assertions plus all 22,100 predecessors, with both failed attempts retained and 1,602 archived files/268 compiler records/exact executable-PDB independently checked; [evidence](../../TestRuns/P1SelectionGestureParent_2026-10-16.md).
+- [x] Close the reviewed geometry-control undercount and qualify moved-loss/post-Close final-refund witnesses in corrected private Release R4 and real ASan R2: all 22,228 assertions, complete archives, actual compiler reuse, UAF probe and exact artifacts independently verified. Earlier R3 remains functional evidence only.
+- [x] Commit/push the tested 26-path code/test prerequisite and five owning contract updates on isolated candidate branch `ej/p1-selection-gesture-prerequisites` (`92782fd`), preserving the active native validation checkout.
+- [ ] Adopt the reviewed 26-path prerequisite after the current native matrix closes, qualify fresh native code/tests/contracts, then complete actual S5 physical dispatch, display/admission/lifecycle consumers and all remaining parent delivery areas.
+
+### Latest qualified checkpoint
+
+Latest native checkpoint (2026-10-16): the combined startup, long-path I/O and lasso retirement
+source `67a77dd` passes canonical Release analysis r1034, complete x64 Release r1035 / Debug r1036 /
+real ASan r1041, and ARM64 Debug r1042 / Release r1043 / instrumented ASan r1044 cross-builds.
+All x64 profiles retain 139 Application stages, 21,720 DocumentTests, 7,391 composition and 1,953 I/O
+records; ASan also passes concurrent raster stress and its actual detection probe. Main verifies all
+archives, 932 compiler command records and five executable/PDB identities per profile.
+[X64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md);
+[completed ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+
+Contract reconciliation: the architecture/resource summaries now consistently state eleven owner-router
+leaves, matching `OwnerWorkMultiplexer::kCapacity`, its literal eleven/admitted-twelfth-refusal tests and
+the already-qualified complete startup. The obsolete ten-leaf summaries are corrected; no routing code changes.
+
+ASan r1037 was interrupted during compilation on October 14: no completed child receipt exists and no test
+or compiler process remains. Its 2,404-file partial source/object/product snapshot is preserved with independent readback hashes,
+without an inferred exit or success. Fresh full x64 ASan r1041 and all three ARM64 cross-builds
+r1042-r1044 pass serially on the same frozen source. Native ARM64 runtime is unavailable and is not claimed.
+Complete caller admission/retirement, ordinary activation and measured S5/G1 remain open. P1 is not Done.
+The earlier six-profile lasso checkpoint remains [historical evidence](../../TestRuns/P1LassoNativeIntegration_2026-10-13.md).
+
+Earlier private prerequisites (now included in the qualified matrix above):
+
+Latest I/O checkpoint: actual R7 real ASan independently passes 1,953 ordered records in each C:/explicit-Z:
+process, including all nine original failed predicates. Source/dependency/product bookends and the 3,036-file
+archive pass. Main selectively adopts ten code/test/project paths. The complete combined native matrix
+now passes; wider F6 delivery cases remain open.
+[Private I/O evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
+Complete-startup R4 independently passes all 139 application stages and 282 new controls; its 1,982-file
+archive passes. R1-R3 consumer precondition refusals remain retained. Seven source/test/project paths are
+selectively adopted, preserving the I/O entries. DxUi stays at 8e899407/API3.
+[Startup evidence](../../TestRuns/P1CompleteResponsiveStartup_2026-10-14.md).
+
+Retained I/O failure history (superseded by R7 above): the private long-path C++ build, real ASan probe, ISA scan and ordinary C: TEMP
+process pass. The runner then fails with WinError206 while creating the long Z: directory, before any Z:
+test child launches; its 1,669-file source/product archive is retained. The replacement changes only runner
+directory creation to an explicit extended-length API spelling, keeping process TEMP and all 57 new/1,823
+predecessor assertions unchanged. At this failed attempt, complete two-profile qualification and native adoption
+were still open; the successful R7 and current native progress are recorded above.
+The replacement launches the Z: child, which exits1 on the unchanged environment check and eight 247/248
+boundary predicates. Its 1,671-file archive is retained. Direct Windows observation shows TMP/TEMP retain
+311 units while `GetTempPathW` selects the 14-unit user-profile path. The next candidate selects the long
+fixture root explicitly and bounds the staging filename component; independent tests, actual runtime,
+native adoption and complete F6 qualification remain due.
+The R6 replacement stops at compilation on two narrow-to-wide filename arguments in the new fixture; its
+2,981-file source/product archive is retained and no runtime follows it. Main uses explicit wide filename
+stems in the fresh R7 copy, preserving every expected label, pixel, boundary and fault predicate. Verification
+metadata ordering and predecessor JSON-shape refusals are also retained; their corrections pass independent
+source/roster rejection controls before this replacement build.
+
+- [x] Commit/push the x64-qualified native lasso host/display code, tests and contracts (`451ec70`).
+- [x] Finish the exact current ARM64 Debug/Release/instrumented-ASan matrix and independently review its artifacts (r1031-r1033).
+- [x] Qualify the private long-path I/O candidate: R7 actual real ASan passes C:/explicit-Z: with all 1,823 predecessors and 130 long-path facts (1,953 each), exact readback and verified archive.
+- [x] Qualify the selectively adopted native I/O code/tests with canonical analysis, full x64 profiles and ARM64 cross-builds.
+- [x] Reconcile the existing F6 native header-read migration: production yields its compute lane to the shared
+  event-wait route and retains the original ticket through acknowledgement. Main rereads all 184 actual
+  current-source path-read controls in archived Release/Debug/real-ASan outputs. The old compute-wait summary
+  described the direct reference helper; complete phase bounds, OS stop-to-return and F6/G1 remain open.
+- [ ] Finish the remaining F6 delivery cases; explicit TMP fixtures and the OS-selected predecessor root remain distinct.
+- [x] Qualify private complete responsive cold-start acquisition: R4 all 139 application stages/282 controls and verified archive pass.
+- [x] Qualify the combined native startup/I/O integration on the complete current matrix.
+- [ ] Complete production caller admission/retirement and ordinary activation.
+- [x] Qualify private draft-specific retirement refusal/retry and joined Close: R10 actual WARP verifies all 50 controller facts/7,391 composition records; the 1,707-file archive passes. Original failed predicate is preserved with the corrected fair two-pass fixture setup.
+- [x] Qualify combined-source canonical Release analysis r1034: all 1,360 frozen inputs, SAL controls,
+  five linked ISA scans and eight scan rejection controls pass; Main verifies the 1,775-file archive
+  (`B57A0B8802205F63906F5B3823A9A0421E866D1DD42FF1050F8636734F654CB8`).
+- [x] Qualify full x64 Release r1035 on that same source: 139 application stages, 21,720 document,
+  7,391 composition and 1,953 I/O records pass; Main verifies all 932 actual compiler commands,
+  five binary/PDB pairs and the 1,763-file archive (`0F5DF9ED...`).
+- [x] Qualify full x64 Debug r1036 on the same source: exact predecessor/delta rosters, all 932 actual
+  compiler commands, five binary/PDB pairs and the 1,783-file archive independently pass (`895332FF...`).
+- [x] Qualify fresh full real ASan r1041 after preserving interrupted r1037: all original suites/stages,
+  stress, real probe, 932 instrumented command records, five binary/PDB pairs and the 1,747-file archive pass.
+- [x] Qualify ARM64 Debug r1042 on the same combined repository inputs: complete build, source/archive
+  readback, actual compile commands and five ARM64 executable/PDB identities pass; no native execution.
+  [ARM64 Debug evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Debug_2026-10-16.md).
+- [x] Qualify ARM64 Release r1043 on the same combined source: all 932 compiler records, five ARM64
+  executable/PDB identities and the 1,430-file archive pass.
+  [ARM64 Release evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Release_2026-10-16.md).
+- [x] Qualify instrumented ARM64 ASan r1044 on the exact combined source: actual exit, all 932 instrumented
+  command records, five ARM64 executable/PDB identities and complete archive pass. Main reads the full
+  six-profile closeout. [ARM64 matrix evidence](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+- [x] Commit/push the x64-qualified combined code, tests, contracts, guide and evidence (`67a77dd`).
+  ARM64 is recorded separately when its cross-build matrix completes; ordinary activation and G1 remain open.
+
+Latest private caller checkpoint (2026-10-16): Hue R4 passes all three actual builds/ISA scans and all
+DocumentTests/HostTests/Application processes. The original failed targeting predicate and every later Hue
+case pass unchanged. Main independently reads all 55 scalar, 70 Host Hue and 28 caller facts, all 138 private
+base stages, product/source bookends, three executable/PDB identities and all 2,451 archive files (completion
+`DBB9D7EAEEB4A4954600E27446FC18FD6D4D179B98AB961A4DD8F69D314DD28A`).
+The redundant older-source Wand private build stops before compilation. All its planned assertions join the
+current combined native candidate, with hard Paint parity and private direct-distortion source tests. The
+complete current-source native matrix must qualify that integration; ordinary activation and G1 remain open.
+[Scoped Hue evidence](../../TestRuns/P1HueCallerQualification_2026-10-16.md).
+
+Retained private refusal (2026-10-16): Hue R3 builds all three executables and passes all three
+ISA scans plus actual DocumentTests/HostTests, then the actual Application exits 5 at
+`hue-host.target.literal-blue-range-physical-saturation-15-hue-minus10-no-release-sample`.
+Main independently verifies the complete 2,443-file failed archive (completion
+`F3FE301372975223CB2AED2DA767D196C41A2A5E8CC0450FA01D74AC72807458`). Source inspection finds
+`FinishHostContinuation` re-arms queued commands and lasso input but omits acquired Hue input, allowing
+its accepted scalar prefix to lose its wake after the readback request ends. Fresh R4 adds that condition
+to the existing action, preserving every assertion, numeric reference and lifetime predicate. Its actual
+private qualification passes as recorded above; the dependent Wand attempt originally refused before compilation. No candidate code is
+adopted and the qualified native source remains `67a77dd`.
+[Retained Hue attempt evidence](../../TestRuns/P1HueCallerQualification_2026-10-16.md).
+
+Earlier Hue R2 stops at C4189/C2220 on an unused
+`historyCount` local in the new scalar fixture; no runtime follows it. Its complete 1,889-file archive
+is retained (completion `95B03EBE38BA6FFDE77CBC1C610263B4455D93BEB30752FABA5EC38F179A265B`).
+Main verifies `SameHuePanelState` already checks the captured history count; fresh R3 removes only the
+redundant local, retaining all 55 predicates and warnings-as-errors. Its actual build is in progress.
+The current qualified native source remains unchanged.
+
+The original Hue admission review finds invalid purpose/mode could enqueue before refusal and
+reuse the opening with later valid input. The unbuilt R1 is superseded and retained. Fresh R2 refuses invalid
+input before queue/counter effects and consumes accepted openings before binding; two new exact state tests
+join all 26 preserved Hue host facts. Source-only reader controls pass; actual compilation/runtime remain due.
+The asynchronous Hue/Saturation caller is prepared with a one-pixel committed-source
+readback, fixed physical delta/Ctrl/ordinal buffering and a separate release/loss terminal. Actual host tests
+cover literal hue/band values, idle-to-live replay, failed workers, stale document/panel openings and original
+cancellation acknowledgement. Main verified the agent's stale-opening finding and added exact cleanup and
+re-use coverage. These sources and tests are unbuilt, unadopted and disabled; production activation,
+complete caller admission/device/shutdown coverage and G1 remain open.
+
+Latest completed private step: actual host/FIFO/clock/kind-toggle repair independently passes 160
+assertions and all 138 application stages, with unchanged source/product bookends and complete archives.
+[Receipt](../../TestRuns/P1LassoKindOrdering_2026-10-13.md). Main repairs the observed lost continuation wake
+without relaxing its predicate and selectively adopts the qualified caller sources into the native worktree.
+
+Native Release analysis r1012 exits 1: C6262 reports a 147,388-byte test fixture frame; C6221 reports an
+exact HRESULT equality using two different integer types. Its complete failed source/product archive is
+retained (`92316A1F...`); no r1013-r1018 runtime/cross-build follows it. Main moves 20 fixture-owned input
+adapters to the heap and explicitly converts the expected HRESULT to the terminal's int32 type. An independent
+whole-file comparison proves both repairs preserve every assertion and lifetime. Fresh canonical analysis
+and native profiles must qualify this source; standalone compiler diagnostics are not native acceptance.
+
+The native host fixture now expects 160 facts, including 32 sample/command ordering, eight actual uint64-max
+and 24 paired kind-toggle controls. Independent CPU draft/conditional tests and WARP draft/controller tests
+are integrated. Ordinary activation, complete admission/lifetime proof, measured S5/G1 and every whole P1
+delivery gate below remain open. The native scanner/core checkpoint is pushed as `5897379`; the most recent
+scoped private evidence is pushed as `7fd8a56`. No whole delivery row is closed by that private evidence.
+
+### Earlier foundation checkpoints
+
+The following dated entries preserve prior evidence and refusals; the latest scoped proof above describes
+the current integration step.
+
+Current step (2026-10-13): committed/pushed the qualified native foundations and scanner repair as
+`e69757fd5555e007d455845cd6c00b49f8d93aec`. Release/Debug/real ASan pass with 21,447 document records,
+136 application stages, the real detection probe, analysis and three ARM64 cross-builds. Final scanner r985
+qualifies all five images, 63 new controls and exact runtime-product equivalence. Full evidence and retained
+failures are in the [gate repair record](../../TestRuns/P1NativeGateRepairs_2026-10-13.md).
+
+Latest continuation: bounded native Release analysis r1005 and full Release r1006/Debug r1007 pass;
+Main's exact roster reader preserves all 21,447 predecessors plus 226 new lasso records (21,673 total),
+with 136 application stages. Replacement real ASan r1008 passes the complete canonical suite and exact roster; all latest-script
+ARM64 cross-builds also pass. [Native checkpoint evidence](../../TestRuns/P1LassoCoreNativeQualification_2026-10-13.md). The private actual lasso renderer independently passes 137 stages and 29 new assertions;
+[its receipt](../../TestRuns/P1LassoRendererHost_2026-10-13.md) records the original-ticket, view/device,
+cancellation and joined-close evidence. The next isolated opening/replay/Finish sources compile; their actual
+host runtime, physical callers, ordinary activation and measured S5/G1 remain due. All delivery areas below
+remain open.
+
+Main now integrates the independently qualified lasso geometry/history, bounded current-only session and
+ordered input adapter into all five native targets (30 paths), with scalar Application reader migration.
+Expected DocumentTests count is 21,673, retaining every predecessor and 32/43/67/80 new component facts.
+Native analysis r986 refuses two test stack frames (175,152 and 16,440 bytes); its complete archive is retained. Main moves only fixture-owned sessions to the heap, preserving all predicates/lifetimes. Follow-up analysis r987 exposes another 263,300-byte fixture frame; its full archive is retained. Main applies the same storage repair to the remaining new lasso fixture sessions, preserving scope/order and all assertions. Repaired native Release analysis r988 passes, including all linked ISA/compiler controls. Full Release r989 passes with all 21,673 document records and 136 application stages; its full archive is retained. Debug r990 stops at stage 24 on the existing committed-display frame assertion after every lasso document record passes. Its complete failure archive is retained; ASan r991 never launches. Main instruments the unchanged frame predicates; focused runtime r996 passes all 136 stages, so its repeat establishes no cause. The revised hidden contract requires one real Present attempt, a completed canvas blit, correct visible counting for S_OK/occlusion, and zero owner composition. An explicit occlusion control makes the policy observable. Analysis r997 refuses only a signed printf diagnostic argument (C6340); its full failed archive is retained. Main casts that nonnegative counter explicitly, then runs fresh analysis and full profiles. Repaired hidden-frame analysis r998 and updated ARM64 r1002–r1004 pass with complete archives. Full Release r999 refuses MSBuild/CLR allocation with paging-file/commit-capacity errors before runtime; its full archive is retained and r1000/r1001 do not launch. Main relocates verified closed generated proof products to Z: and adds explicit test-entrypoint project/compiler caps before replacement qualification. Diagnostic build r995 is explicitly unqualified: Main changed its fixture while its source reader was finishing; its correctly refused bookend is archived. All three ARM64 cross-builds r992–r994 pass with complete archives; native ARM64 runtime remains unavailable. actual host/display and every P1 delivery gate remain open. Actual Application job acquisition/replay/
+finish, draft display, complete admission, ordinary activation and G1 remain open. See the
+[lasso child](LassoWorkers_2026-10-12.md). All nine delivery areas and Done remain unchecked.
+
+Next S5 (2026-10-12): private actual eleven-owner application r7 qualifies all 40 membership/joined-close
+facts, 47 host facts and 75 fractional/DPI frame-parity facts, preserving 133 predecessor stages. The lasso
+arena r3 qualifies 575 modeled/ticket assertions plus two summaries and all 20,782 predecessor DocumentTests
+records. Main integrates those components, CPU raster/allocation and GPU controller/clipping tests, the
+eleven-slot pump and strict ISA correction into the native candidate. These integrated foundations now pass the native profiles listed above.
+Ordinary activation, complete caller admission, opaque allocation/cancellation, lasso host/display/finish and
+G1 remain open. The Z: runtime TEMP save failure is a separate F6 case; passing C: runtime does not qualify it.
+See the [host receipt](../../TestRuns/P1SelectionOutlineHost_2026-10-12.md) and
+[lasso child](LassoWorkers_2026-10-12.md).
+
+P1 remains **WIP**. This checklist tracks the remaining delivery areas. The dated qualification ledger below records completed foundations and preserves earlier failures; its checked entries do not close these delivery areas.
+
+Earlier native H3 failures (retained): Release analysis r930 refuses compilation on three fixture include paths
+and a 98,368-byte stack frame (C6262); actual child 11100 exits 1. Its source, logs and archive are retained.
+Main corrects the includes to `../Support/DocumentFixture.h` and moves the admitted 96 KiB journal scratch
+to worker heap storage before the residency lease. Test predicates and memory limits remain unchanged.
+Full profiles r931–r933 did not launch. Fresh analysis r934 (actual child 4812) refuses the topology fixture's
+ternary-precedence diagnostic C6336; its archive is retained and no r935–r937 full profile launched. Main adds
+parentheses without changing the condition. The reviewed original-ticket fixture adds 33 controls, with real
+admission-before-capture, successful publication, old-root ownership, cancellation and joined Close. It is now
+registered, but not yet compiled or run. A fresh source freeze and analysis precede the replacement matrix.
+Analysis r938 preserves a fixture macro-redefinition failure (actual child 59508, exit 1): the project already
+defines `WIN32_LEAN_AND_MEAN`. Main removes the redundant local definition, preserving all 33 predicates.
+No r939–r941 runtime profile launched. The fresh replacement matrix uses analysis r942, Release r943,
+Debug r944 and real ASan r945; ordinary activation and every delivery gate remain open.
+
+
+
+Current continuation (2026-10-12): private clipboard r7 passes the complete hidden WARP Release suite with
+all 7,399/7,556 predecessor records, eleven new post-close foreign replacement/literal Paste controls and the
+52 guard/timing controls; reader `0912E0D8…`. Main retains r5/r6 as failed evidence and verifies the distinct held
+native clipboard owner and exact 2x1 bytes/placement. The checked opacity guard, actual outline diagnostic and
+clipboard controls are integrated in the native worktree (17 files), with ordinary startup still test-gated.
+The fresh 1,255-input/20-contract freeze is `5D84694D…`; formatting checks 1,108 files and all 15 skills pass.
+Native Release analysis r926 and full Release r927 qualify this freeze; reports `D9919747…` and `2BEEE515…`.
+Full Debug r928 qualifies (`87ADC6A8…`); real ASan r929 also qualifies (`3A058741…`), including the
+real detection probe. ARM64 r105 verifies all three successful cross-builds, 15 PE/PDB pairs and five sanitizer
+controls (`6802766D…`); native ARM64 runtime remains unavailable. Exact evidence is in the
+[native qualification receipt](../../TestRuns/P1OpacityClipboardNativeQualification_2026-10-12.md). F5, S5, G1 and P1 remain open. A cheaper agent's private 131,072-point contour diagnostic is reviewed;
+Main restores the predecessor per-contour size assertion before its future private run.
+
+The isolated raster core r3 compiles without warnings/errors and its actual DocumentTests child exits 0.
+Main's independent readback (`24BAE854…`) preserves all 9,204 original records and verifies 36 new assertions
+plus their summary. The original reader/count refusal remains preserved: its pre-runtime label extractor
+missed the existing single-letter `x-ten` component. No test predicate, pixel value or product source changes
+to obtain readback. This is CPU raster preparation evidence; opaque D2D memory/cancellation, view authority,
+GPU admission, actual host activation and S5 remain due. Main authors a private persistent identity index
+with path copying and cached retirement bounds; a cheaper agent supplies independently modeled tests.
+The private foundation now qualifies full DocumentTests and 9,055 independently modeled assertion occurrences
+plus summary (`8AC83369…`); all predecessors remain in order. The actual private history adapter qualifies
+435 additional reference controls plus summary (`602E83FC…`), with all 18,297 predecessors preserved; see
+[its receipt](../../TestRuns/P1PersistentHistoryAdapter_2026-10-12.md). The private actual Raster/history
+journal also qualifies Release (`6CA2C169…`), with all 18,733 predecessors and 50 new controls plus two summaries;
+[its receipt](../../TestRuns/P1HistoryResidencyJournal_2026-10-12.md) keeps native admission/activation open.
+Private topology r2 qualifies (`4C6CEBA3…`): direct source roots, exact scalar-source sharing, active
+parent-edge membership, sealed root/wrapper bounds and conservative node/journal scratch declarations.
+It preserves every predecessor and adds 212 controls plus summary. Main has selectively integrated the
+five Common files and six focused test pairs into native sources, retaining the complete legacy topology
+reference API and goldens. The owning history/resource contracts describe the new indexes and fixed journal.
+Fresh native qualification is pending; the earlier native/ARM checkpoint does not qualify these changed
+sources. Complete production admission/retirement cost, reference caller migration, activation, H3 and G1
+remain due. See [the topology receipt](../../TestRuns/P1HistoryTopologyDelta_2026-10-12.md).
+
+Next bounded work:
+
+- [x] Integrate checked opacity prerequisites, literal foreign clipboard Paste and outline cost diagnostics.
+- [x] Qualify changed-source Release analysis and full Release, preserving original assertions.
+- [x] Qualify changed-source full Debug and real ASan, then all three ARM64 cross-builds.
+- [x] Independently compile/run the private persistent-index tests, including cancellation, partial allocation
+  failure, original accounting-owner and weak-control lifetime. Actual H3 integration remains open; sequence in
+  [incremental history storage](IncrementalHistoryStorage_2026-10-12.md).
+- [x] Qualify the private actual raster journal and one-event history update, including stale refusal,
+  cancellation, freed/unrelated owners and the complete overflow fallback.
+- [x] Qualify private changed-owner topology and selectively integrate the index/journal/topology code and tests.
+- [ ] Qualify changed-source native configurations and complete production admission/retirement and caller costs.
+- [ ] Select and qualify the S5 rendering route with exact view/DPI behavior and complete admission.
+
+Current private checkpoint (03:12 UTC, 2026-10-12): Release r4 compiles/ISA passes and actual WARP child
+63304 exits 0. The independent reader preserves all 7,399 stdout/7,556 stderr predecessor assertions,
+131 original stages and the 52 additions/two standalone stages (`C81BF500…`). Checked opacity prerequisites
+refuse before dependent mutation, preserving original document/history/preview, and actual read-only pan
+remains usable. Default startup is exercised only in its private actual-Run fixtures; ordinary native
+activation and the full consumer/G1 requirements remain due. The real outline diagnostic exposes 7.06 ms
+path append and 51–142 ms inclusive large-grid frames, with negligible draw-call intervals; a replacement
+must address later rendering cost as well as numeric conversion. Reviewed private r5 adds ten exact
+post-close OS clipboard replacement/later literal-Paste assertions. Its build/ISA pass, but actual
+child 71688 exits 5 with two new receipt/pixel predicate failures. Source/products/logs remain preserved;
+private r6 keeps every expected value and adds actual native-error and failure-component diagnostics.
+The cause is unestablished and the clipboard gap remains open.
+
+Qualified selection checkpoint committed and pushed as
+`a70a2f21179babc719723caecf3edb2e6949ef0a` on `codex/p1-opacity-host-proof`;
+the remote branch identity matches. This closes the native Inverse/Expand/Contract checkpoint,
+with the exact source and profile evidence below. Main remains unmerged until P1 is complete.
+
+Latest checkpoint (2026-10-12): full Debug r923, Release r922 and real ASan r924
+qualify the same 1,253-input/20-contract source (`D69F9A3E…`), with all predecessor assertions
+and 131 application stages preserved. ASan child 13480 exits 0 at 02:10:15 UTC; report
+`0DAA99FC…` includes the real detection probe and stress runs. Release analysis r925 qualifies.
+The first ARM64 controller refuses its incorrect non-ASan count expectation before launch;
+Main preserves it and checks the exact ASan-specific counts. ARM64 r103 then refuses duplicate
+log creation before any compiler starts (`CreateFileW`, error 80, no child). Its original archive
+remains intact. All three corrected r104 cross-builds exit 0. Preserve the original reader's stale
+folder selector refusal; Main corroborates the actual archived path and corrects only the selector
+while retaining the original archived reader/review pins and every artifact predicate. Report
+`F1E5E23D…` verifies 15 ARM64 PE/PDB identity pairs and five real sanitizer compile/link controls;
+native ARM64 runtime is unavailable. No product source, test assertion, flag or pin changes follow
+those runner fixes. Private startup/opacity/timing Release r1 fails during compilation with C1090
+PDB API error 23 (child 46380, exit 1); no runtime starts and no source error is reported. Preserve
+that failed attempt and compiler products. Fresh unchanged-source r2 compiles with zero warnings/errors
+and passes the linked ISA scan; actual WARP child 92040 exits 5 at 02:49:33 UTC in the new outline
+fixture's owner initialization, before its diagnostics or opacity guard run. Main finds the fixture
+was placed after the main owner installs its one-per-thread deferred-release sink and registers the
+window class. Private r3 moves these independently owning fixtures to the existing standalone phase,
+retaining the synthetic keyboard, all assertions, original stage order and production initialization.
+It is prepared and running, not qualified. Current resume recovery verifies 3,077 source/protocol files
+(57,845,965 bytes), manifest `BEC8F0AF…`; products and qualification archives stay at their original
+paths. The stopped broader sweep remains an unqualified partial copy. These results close no parent
+delivery area; P1 remains WIP.
+
+Previous checkpoint (01:44 UTC, 2026-10-12): fresh full Release r922 qualifies the exact
+1,253-input/20-contract source (`D69F9A3E…`), actual child 68012 exits 0 at 01:15:45 UTC;
+report `310784E3…` preserves all original assertions and 131 stages. Preserve the first reader's
+repeat-count refusal: the new fixture intentionally reruns the original helper corpus once.
+The corrected reader verifies the complete 791-record section against genuine pre-runtime evidence;
+it changes no product assertion, source, flag or threshold. Release analysis r925 also qualifies,
+report `7688FC0E…`. Full Debug r923 is in its final application tests; real ASan r924 follows;
+current-source ARM64 remains gated. Main corrects the agent's private startup/timing composition
+before preparation and authors a checked opacity prerequisite that removes synchronous history
+fallback. These private candidates have not compiled or run. All delivery areas below remain open;
+the ordinary startup route remains unintegrated and P1 remains WIP.
+
+### Historical qualification ledger
+
+Historical Debug result: r322 passes the complete canonical test command on freeze
+`30D06FBFBFD5A1D0AB3B2982A6A09DDD031F05B4DD42F7416029A59F3AD6FC40`.
+Its archive verifies. Release r323 and real ASan r324 also pass on the same freeze;
+Release analysis r325 failed two test-fixture warnings; the failed run is archived.
+Two test-only repairs preserve all expectations; Release analysis r326 passes on revised freeze
+`776E5C51CB24B15FEC6207B927CEFAEA77C2241FA231E562A7A531720CB0CF6D` and its 1,238-copy archive verifies.
+Debug r327, Release r328, real ASan r329 and all three ARM64 r44 cross-builds pass on that revised source
+and are archived. The qualified step is committed/pushed as `0773548`. Original r320/r321 failures remain preserved in the
+[stroke work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
+Independent source-bound inventory checking passes for all three original profiles, including exact
+predecessor order/multiplicity and synthetic rejection controls. The later 945-input recorder candidate passes full
+Debug r330 and is archived; its actual-device refusal and same-ticket phase additions require fresh qualification.
+An isolated worker-recorded composition experiment also rules out one whole command list on WARP:
+45 MP submission took 168 ms. Bounded 512-square draws/clears, 1 MiB uploads and sliced mips reduce
+its measured batch p99 to 0.482 ms, maximum 6.205 ms, with matching sampled literal pixels.
+This Debug experiment ran separately from the application and overlaps qualification work; it is
+design evidence, not G1 or throughput qualification. A two-slot streaming variant also verifies nonuniform pixels across the 1 MiB band boundary,
+with actual per-batch completions and unrelated CPU work finishing under recorder backpressure.
+Its incoming command/private recording context is a third shadow owner and must be charged in
+admission. Complete graph admission, device/cancellation/shutdown ownership and actual display
+activation remain required.
+
+The private full-display graph records canvas mips before sealing. Its sparse 45 MP experiment verifies
+four independent literal pixels, including a replacement at the upload band boundary, and that the
+sparse source remains unmaterialized. Hardware and WARP pass with two transport slots and real
+per-batch acknowledgements. That experiment predates the opt-in application route qualified in full Debug r342. Normal activation,
+remaining profiles, full fault scenarios and measured G1 remain requirements.
+
+**Execution resumed on 2026-10-07 at the user's request: “continue until P1 done”.**
+The [restart checkpoint](../../TestRuns/P1Pause_2026-10-06.md) preserves the prior stop and exact evidence.
+The qualified 877-input caller slice is committed and pushed as `f585577`. Its original source freeze and
+complete qualification remain preserved; the current foundation candidate adds new source and requires fresh proof.
+No running app/build process was observed at resume. Fresh Release analysis r283 ran alone at
+`2026-10-07T06:09:10.959236Z`–`06:31:04.052839Z`, actual PID `55084`, exit 0, with compiler parallelism two.
+Its independent source/product/PDB/ISA checks and 1,180-copy archive pass. The 877-input caller slice is now
+qualified across the complete matrix; see the [closeout record](../../TestRuns/P1CallerQualification_2026-10-07.md).
+Current work is reviewed history-startup and stroke/healing/readback integration, then actual asynchronous
+stroke completion and the remaining P1 exit gates. P1 remains WIP until those gates pass.
+The [stroke host closure record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md) covers actual opening,
+finalization, admission refusal, GPU acknowledgement and shutdown; drafting or qualifying helper APIs does not
+close those application gates.
+
+Current 877-input caller candidate passes full x64 Debug r278 / Release r280 / real ASan r281 and all
+three ARM64 r40 cross-builds on identical freeze
+`14178E65857A11148E49C3D1FD548DDC39298FF2BBAFF9FFDC55244656AAABDF`.
+Independent inventory checks preserve every predecessor and require 10,394 named application controls /
+98 stages, including 80 single-layer Clone/folder, 48 clipboard and 108 file session-end additions.
+The 16 new event-protocol and two resource controls occur in both ordinary HostTests and its ASan stress run.
+ASan's r5 verifier corrects that exact stress inventory; no source or runtime expectation changes.
+All runtime/cross-build archives independently verify. Cross-builds establish no native ARM64 runtime result.
+Release analysis r282 was stopped at the user's request: actual child PID 67664 exits -1 at
+`2026-10-06T20:43:28.106340Z`. Its unchanged source and two actual `/MP2` plus `/analyze` response files remain
+preserved, but this is no analysis pass. Fresh r283 closes analysis for this exact caller slice; overall P1/G1 remains due.
+Earlier resource-capacity, compiler-service and clipboard-oracle failures remain archived with their original
+results in the [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
+
+Preceding qualified slice: All Layers Clone source readback, retained source/shutdown ownership, separate physical
+Space pan and event-time Clone input policy pass full x64 Debug r267 / Release r268 / real ASan r270,
+Release analysis r271 and all three ARM64 r38 cross-builds on 867 identical inputs, freeze
+`0236021DC5A19194AA4AC527FF628A7980A131A78D2A7337C7E40A5D157E75E4`.
+Independent proofs preserve all predecessors and verify 10,158 named application controls / 92 stages,
+110 new host checks, 12 core checks and 119 compact signed switch-table controls. All archives verify.
+The failed earlier scanner, fixture, screenshot and compiler-heap attempts remain preserved. Ordinary
+single-layer Clone, other live callers, native/resource activation and the P1/G1 exit remain open. See the
+[Clone qualification record](../../TestRuns/P1CloneReadback_2026-10-06.md).
+
+Preceding qualified slice: actual All Layers Wand pre-copy device recovery and the compact imm8 switch-table
+proof pass full x64 Debug r253 / Release r251 / real ASan Debug r254, Release analysis r249 and all
+three ARM64 r35 cross-builds on 859 identical inputs, freeze
+`4BF043FD0FD64F7B2B3614269A75D8552CB7CD7EB097E5567192975E4449E637`.
+Independent registry proofs preserve every predecessor and verify 10,048 named application controls /
+89 stages, 17 new recovery checks and 116 new scanner controls. All qualification archives verify.
+Original failed attempts remain preserved; the intermittent sampler diagnosis, complete boolean memory
+admission, Native activation and overall P1/G1 remain open. See the
+[Wand recovery record](../../TestRuns/P1WandReadbackRebind_2026-10-06.md).
+
+Earlier stable-row qualification: stable layer-row identities and 21 independent actual-provider expectations pass full Debug r226 (10,029 named controls / 89 stages), exact predecessor/registry verification r22, Release analysis r227 and all three ARM64 r31 cross-builds on 856 identical inputs, freeze `40E29DCBF3FBD59E5332BBA0C62A27F7E1D0EFA8D304D7D9E7828B1DBEADE0FF`. Full Release r228 and real ASan r229 also pass with exact strict22/archive proofs.
+
+The optional DxUi `PrepareInteraction` prerequisite is now qualified at pushed pin `8e8994079e82f79e6765e6a885c03fc687957591` (functional source `342bf1f`). Its 20-suite x64 Debug r22, Release r23 and ASan Debug r24 runs, ARM64 r25–r27 cross-builds and exact frozen-201-input comparison pass; the 158 interaction checks are included in 2,992 Embedded checks. The paired Default scene is within-noise-budget after three passes/six runs per side, with no regressed metrics. This closes the library prerequisite only.
+
+The earlier interaction consumer freeze has 858 inputs and hash `79546F7D5FDF9EA013C93B8A6FA54735DD6F726DD7A489F92E554652AA8E4F60`. The repair's six-configuration matrix plus Release analysis is complete: full x64 Debug r240 / Release r241 / real ASan Debug r242, ARM64 r33 Debug/Release/ASan Debug cross-builds and analysis r237 all exit 0; all qualification archives independently verify. Strict registry r23 preserves all predecessors and verifies 10,031 named application controls / 89 stages, including 16 visibility, 3 CLI and 20 interaction checks. The real ASan probe and 8,055 stress controls pass. Fresh hardware cost r7 and WARP r8 pass all eleven trials × nine inclusive timing kinds; their 37-copy archive supplement independently verifies; preparation overruns remain. Preserve r236's actual `IoTests` `ReleaseDirectory` failure `destination-retry.real-refusal-reached-one-bounded-wait`; that run did not launch `RedPrism.exe`. Isolated I/O r239 passes on the unchanged source and binary without relaxing an assertion; the failure was not reproduced and no root cause is established. Cost r6 is a separate helper failure before product launch. Visible-frame, external UIA, group/multiselect, native/production activation and P1/H4/G1 remain open; prepared-row production stays disabled. See the [owner-cost receipt](../../TestRuns/P1LayerRowsCosts_2026-10-06.md) and [baseline receipt record](../../TestRuns/P1SharedRowLifetime_2026-10-06.md).
+The image-wrapper residency and original worker/upload transport step is fully qualified and pushed as `74c327d`
+([evidence](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)). The terminal upload lifetime step is fully qualified and pushed as `1cd2b69`
+([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)); Native activation and G1 remain open.
+
+### Earlier delivery receipts
+
+- [x] Integrate the initial Ctrl CPU opening/closure, procedural pixel GPU foundation and original strong/weak output accounting after all3,232 private assertions pass in Debug/Release/real-ASan; register every new module in the actual suites. [Component evidence](../../TestRuns/P1CtrlPixelFoundation_2026-10-19.md).
+- [x] Qualify this 1,006-TU foundation in full canonical x64 Debug/Release/real ASan and ARM64 Debug/Release/instrumented-ASan cross-builds. Every profile has five matching executable/full-PDB pairs. Native ARM64 runtime remains unavailable. [Current evidence](../../TestRuns/P1CtrlPixelFoundation_2026-10-19.md#canonical-foundation-qualification).
+- [x] Integrate the selected actual Ctrl/frame and typed journal consumers; combined qualification is tracked above. Private CPU journal qualification passes 993 facts, including 42 new cases; the combined private native ASan host passes154 stages /11,814 facts. Current ordinary routing remains unchanged. Final atomic document/history/rows/GPU publication, Wand, ordinary activation and all nine delivery gates remain open.
+
+- [x] Qualify the latest combined capture/preflight source in full x64 Debug/Release/real-ASan and all three ARM64 cross-build profiles:994 compiler records and five PE/full-PDB pairs/profile;152 Application stages /11,527 facts, all probes/stress/captures pass in their actual profiles. Native ARM64 runtime remains unavailable. [Current canonical matrix](../../TestRuns/P1CaptureMatrix_2026-10-19.md).
+
+- [x] Qualify the corrected-source ARM64 Debug/Release/instrumented-ASan c3 matrix:994 compiler records/profile, one fresh composition fixture /993 exact inherited objects and five AA64/full-PDB pairs. Native ARM64 execution remains unavailable.
+- [ ] Resolve the retained canonical Release c3r1 panel/Wand completion failure. Current full Debug/Release/ASan validation passes; failure-only numeric diagnostics preserve every predicate/timeout. These passes establish no historical cause or causal repair.
+- [x] Qualify combined capture/preflight source in all three ARM64 cross-builds (c2armd1/c2armr1/c2arma1):994 compiler records/profile,13 fresh/981 exact inherited objects and five AA64/full-PDB pairs. Native ARM64 runtime remains unavailable; the subsequent composition fixture correction qualifies in the latest matrix above.
+- [x] Retain canonical Release c2r1's one composition charge failure and prove its actual release-worker boundary on WARP/hardware: the old exact assertion fails twice while bookkeeping is held; waiting for the real scheduler idle acknowledgment restores all44 original facts. Adopt the fixture wait only; production scheduler/controller/pixel code stays unchanged. [Evidence](../../TestRuns/P1PublicationParentRetirement_2026-10-19.md).
+- [x] Complete the corrected combined-source canonical matrix, including the composition observation and failure-only Wand diagnostics. Private initial Ctrl/lift work is not adopted or active; remaining milestone gates stay open. [Evidence](../../TestRuns/P1CaptureMatrix_2026-10-19.md).
+- [x] Integrate RasterEdit/Gradient worker target capture and allocation-free scalar preflight after independent review: complete private real-ASan Application passes152 stages /11,527 assertions, preserving11,323 predecessors. Preflight also passes focused native Debug174 /Release168 /ASan168 facts; actual thread IDs, large names, assetless/mask-only targets and legacy pixels retain their contracts. [Evidence](../../TestRuns/P1RasterCaptureAndPreflight_2026-10-19.md).
+- [x] Correct two native fixture assumptions with deterministic OS controls: clipboard inspection/read may use separate admitted tickets under the same request/history identity; genuine session-end deadline expiry may cancel a receipt after correct publication. Retain both old-predicate failures; corrected native session-end scope preserves702 predecessors and adds76 facts. Production clipboard, writer and1500ms deadline policy are unchanged.
+- [x] Qualify the integrated combined source in the current canonical x64/ARM64 matrix above. Earlier Pixel Move analysis remains scoped to its preceding source; fresh final analysis, all nine P1 delivery areas and G1 remain open.
+- [x] Adopt worker target capture for Pixel Move commits/prepared previews and 100×40 numeric move/duplicate/outline goldens after independent private Release/real-ASan qualification: 152 Application stages /11,323 facts preserve11,313 predecessors; focused PixelMoveState75 facts preserve52. Full mask metadata and existing image-name policy remain intact. [Evidence](../../TestRuns/P1PixelTargetCapture_2026-10-19.md).
+- [x] Qualify the preceding Pixel Move component in complete canonical x64 Debug p1d1 / real-ASan p1a1, ARM64 Debug/Release/instrumented-ASan cross-builds, and full Release analysis p1an1. Main verifies 994 compiler records per profile, five full PE/PDB pairs, all 14,133 default scanner controls and positive/negative concurrency SAL controls. Native ARM64 runtime remains unavailable. [Evidence](../../TestRuns/P1PixelTargetCapture_2026-10-19.md).
+- [x] Finish canonical qualification of the combined RasterEdit/Gradient capture, scalar preflight and fixture corrections. Initial Ctrl/lift, unprepared-preview capture, ordinary activation and all nine milestone delivery gates remain open.
+- [x] Complete affected validation of all exact-status/memory-predicate repairs: full Release r1153, affected Debug r1159 / real-ASan r1155 Document suites (23,614 predecessors each), ASan raster stress, and ARM64 Release/ASan cross-builds r1156/r1157. All archives, 994 compile records per build, linked objects and five full-PDB pairs qualify. Retain interrupted r1154 and storage-failed r1158. [Latest repair evidence](../../TestRuns/P1AnalysisRepairLatest_2026-10-19.md).
+- [x] Independently qualify full Debug r1152 and full ASan r1148 for the preceding 12-warning candidate, then verify that the final terminal-status TU is the only changed non-Markdown input for the affected runtime checks. Original status values, goldens and runtime memory predicates remain unchanged.
+- [ ] Finish final P1 native/performance/delivery gates after the qualified capture integration above. Full analysis still refers to the preceding source; native ARM64 runtime remains unavailable. P1 is WIP.
+- [x] Integrate current header-kind/widget/Ctrl source plus exact Application status casts in a full Release Application: 152 stages / 11,313 assertions, all 64 cases / 729 facts, predecessor roster, source/object/PE-PDB/ISA and saved/exported output pass independent readback. This is not the canonical five-suite run. [Evidence](../../TestRuns/P1AnalysisRepairs_2026-10-19.md).
+- [x] Qualify the terminal-status repairs in the current full Release analysis p1an1, preserving r1145, r1146/r1147 and r1149 as separate retained attempts. The subsequent combined Release runtime qualifies in the latest matrix above.
+- [x] Adopt existing original Polygonal Ctrl corners, including before controller admission: focused Release / real ASan pass all 64 cases / 729 facts (534 exact predecessors plus 195 new facts). The retained unchanged-product failure, source/object/PE-PDB/ISA/artifacts and saved/exported output qualify. Initial Ctrl/lift remains open. [Evidence](../../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+- [x] Fix strict AL/RCX guarded switch-table data recognition: all 14,133 default scanner records pass (14,012 exact predecessors plus 121 new controls), as does the same original Release image/full PDB. Preserve the failed scan and fixture/launcher refusals; actual vectors remain gated and the allowlist is unchanged. [Evidence](../../TestRuns/IsaAlNearRcx_2026-10-19.md).
+- [x] Adopt actual Polygonal header-widget release routing: focused Release / real ASan pass 49 cases / 534 facts, including bounded public-UIA lookup and HWND Down/Up without callback injection. Original captured canvas Up semantics and every 518 predecessor remain exact. [Evidence](../../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
+- [x] Qualify adopted keyboard/header code57d6631 in canonical ARM64 Release r1142 and instrumented ASan r1143: actual exits0, all994 compiler records/profile, five AA64 PE/PDB pairs,2 fresh/992 exact inherited objects and1881/1885 archived files independently pass. All1808 frozen inputs and4 positive/31 negative reader controls pass; original prep refusal retained. Native ARM64 runtime unavailable. [Evidence](../../TestRuns/P1PolygonalKeyboardNative_2026-10-19.md).
+- [x] Fix the selected original Polygonal header Deselect/Expand/Contract boundary: unchanged-product Deselect control fails; focused Release/real ASan pass all 47 cases / 508 facts and every 469 predecessor, exact source/351-object/PE-PDB/ISA/artifact and Save/export readback. Main corrects the cheaper fixture and static count; original refusals are retained. [Evidence](../../TestRuns/P1PolygonalHeader_2026-10-19.md).
+- [x] Adopt original header-kind cancellation: focused Release / real ASan pass 48 cases / 518 facts, preserving all 508 predecessors, exact source/object/PE-PDB/ISA/artifact and Save/export readback. The unchanged-product failure remains retained. [Evidence](../../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+- [ ] Complete remaining captured-setting and native geometry/lifetime branches; qualify the final adopted source in the complete native matrix. Ordinary activation remains open.
+- [x] Fix actual keyboard command ordering for the selected original Polygonal route: Ctrl+D/Ctrl+Z/Ctrl+Shift+Z now wait behind the same original cancellation acknowledgment. Focused Release and real ASan pass all 44 cases / 469 facts, preserving all 420 predecessors; exact 351-object lineage, frozen sources, PE/PDB/ISA and saved/exported output readback pass. Retain the unchanged-product failure, diagnostic reproduction and compile failures. [Evidence](../../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+- [x] Qualify adopted keyboard/header source `57d6631` in canonical full x64 real ASan r1144: actual exit 0; all five suites, 994 instrumented compiler records, five PE/PDB pairs, 152 Application stages / 11,092 stdout assertions, 47 dispatcher cases / 508 facts, stress, genuine UAF and both crash probes, nine fresh captures and 1,768 archived files independently pass. [Evidence](../../TestRuns/P1PolygonalKeyboardFullAsan_2026-10-19.md).
+- [x] Repair the 12 r1145 diagnostics and latent r1149 terminal-status diagnostic with exact predicates; affected native checks qualify above. Latest full analysis and final milestone matrix remain open.
+- [x] Qualify latest viewport code (`4d7fac8`, source `710bf4c`) in ARM64 Release `r1139` and instrumented ASan `r1140`: actual exits 0; all 994 compiler records, five AA64 PE/PDB pairs, 1 fresh / 993 exact inherited objects and 1,560 / 1,564 archived files per profile pass independent readback. All 1,487 frozen inputs and four positive / 31 negative controls pass. Native ARM64 runtime remains unavailable. [Evidence](../../TestRuns/P1InitialLayerViewport_2026-10-18.md).
+- [x] Qualify current 41-case / 420-fact dispatcher tests and both Layers startup assertions in full canonical x64 ASan `r1141`: actual exit 0; all five suites, 994 real-ASan compiler records, five PE/PDB pairs, 152 Application stages / 11,004 stdout facts, 256-round raster / 64-worker stress, genuine UAF and both crash probes, all nine fresh captures and 1,766 archive files independently pass. Private keyboard extensions are not included. [Evidence](../../TestRuns/P1LatestFullNativeAsan_2026-10-18.md).
+- [x] Resolve the earlier private geometry diagnostic's direct RBX switch-table ISA rejection: the complete final suite passes all 14,012 records (13,892 exact predecessors plus 120 new controls), the same original image/full PDB, strict unknown-effect refusals and preserved real vectors. Main corrects and retains the cheaper fixture refusals. No DxUi/allowlist change. [Evidence](../../TestRuns/IsaRbxDirectGuard_2026-10-18.md).
+- [x] Qualify previous `9ce8b62` in canonical ARM64 Release `r1137` and instrumented ASan `r1138`: actual exits 0, all 994 compiler records, five AA64 PE/PDB pairs and 1,559 / 1,563 archived files independently pass. One fresh fixture / 993 byte-exact inherited objects per profile; 1,486 frozen inputs and four positive / 31 negative reader controls. Preserve the stale baseline-size reader refusal and fix its reference using the original pre-build hash-bound bytes without build replay. Native ARM64 runtime remains unavailable. [Evidence](../../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).
+- [x] Fix exact joint unsigned switch-tail ISA data recognition: all 94 added encoded controls, all 13,795 existing Release scanner PASS records and the unchanged originally rejected ASan image/PDB pass. Main owns the paired guard/body proof, reviews/corrects the cheaper fixture, verifies exact source/log/input hashes and retains original failures. No DxUi or allowlist change. [Evidence](../../TestRuns/IsaSplitUnsignedTail_2026-10-18.md).
+- [x] Adopt six selected dispatcher test cases for typed Deselect/Undo/Redo ordering and prepared-worker foreign history/crop/mask authority: all 41 cases / 420 facts preserve the 35 / 338 predecessor facts in focused Release and real ASan. Main independently reviews, verifies exact source/object lineage, PE/PDB/ISA, archives and saved files; production code is unchanged. This is focused qualification; the full Application/native matrix for this extension and physical menu/keyboard routing remain open. [Evidence](../../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).
+- [x] Fix the initial-positive-viewport Layers overlap in ordinary host code: reuse Layout before row publication, with two first-startup geometry regressions. The unchanged-product control fails at top69/titleBottom94; focused Release and real ASan pass, exact artifacts/PE-PDB/ISA/source lineage qualify, and four fresh harness captures restore the 2-DIP inset at96/144. Preserve the driver compile/wait refusals and rejoin the same ASan child. Minimized/zero restoration, broader H4/native integration and activation remain open. [Evidence](../../TestRuns/P1InitialLayerViewport_2026-10-18.md).
+- [x] Qualify adopted `928e871` in full canonical x64 ASan `r1136`: actual exit 0; all five suites, 994 instrumented compiler records, five matching PE/PDB pairs, 152 Application stages / 10,920 stdout facts, stress suites, real UAF/crash probes and nine fresh harness captures pass independent archive/runtime readback. Preserve the supplemental reader-path refusal and correct it on the same bytes. Latest Debug/Release/analysis and final integration remain open. [Evidence](../../TestRuns/P1PolygonalFullNativeAsan_2026-10-18.md).
+- [x] Qualify and adopt the original writer's document lifetime, exports and capacity handling: 35 native cases / 338 facts preserve all 242 predecessors in complete 152-stage / 10,920-record Release and real-ASan Application runs. A focused unchanged-product control reproduces the parked replacement wake defect; the existing original now cancels/resumes across documentSerial replacement/Clear. Actual PNG/JPEG exports, quiet picker cancellation and 128 scheduler slots preserve exact state/receipts/refunds. Main corrects and independently qualifies the cheaper agent drafts, verifies 351-source parity, all copied headers, PE/PDB/ISA/artifact bytes and real saved/exported files. [Evidence](../../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+- [x] Qualify committed `928e871` in canonical ARM64 Release `r1134` and instrumented ASan `r1135`: actual exits 0, three fresh / 991 byte-exact inherited objects per profile, all 994 actual command records, five matching AA64 executable/PDB pairs and all 1,558 / 1,562 archived files pass independent readback. Preserve source-only expectations and all baseline objects; dependency setup is serialized. Native ARM64 runtime remains unavailable. [Evidence](../../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+- [ ] Audit the retained sampler-capacity ASan exit 5 at final native qualification. All 32 selected cases (308 facts) pass before the inherited failure; the original 59-file / 2,384-source failure is preserved. Failure-only diagnostics retain every predicate and the 10-second bound. Complete diagnostic and combined ASan runs pass, without establishing a historical cause or causal fix.
+- [x] Qualify integrated `29a8ac2` ARM64 Debug, Release and instrumented ASan cross-builds: all three canonical Rebuilds, 969 exact compiler records per profile, complete archives and five matching AA64 PE/PDB pairs. [Evidence](../../TestRuns/P1SelectionGestureNative_2026-10-17.md). Native ARM64 runtime is unavailable.
+- [x] Qualify the inside-outline actual caller in Release and real ASan: 41 physical, 21 joined-shutdown and 71 scalar controls plus every inherited Application record in 145 stages. Adopt the reviewed 51 paths and five CPU contracts into the native checkout. [Evidence](../../TestRuns/P1SelectionPressHost_2026-10-17.md).
+- [x] Qualify captured lasso settings/history epoch in Release and real ASan, all 22,427 facts; pushed as `e03a80d` with retained foreign-Begin failures. [Evidence](../../TestRuns/P1LassoOpeningSettings_2026-10-17.md).
+- [x] Qualify own-writer authority and bounded Rectangle/New geometry in Release and real ASan, all 22,491 facts; pushed as `e695e32`. [Evidence](../../TestRuns/P1LassoDrawingAuthority_2026-10-17.md).
+- [x] Qualify the outside-hit Rectangle/New CPU parent and exact intent cleanup in Release R5 and real ASan R2: 105 new facts and all 22,491 predecessors. Preserve the compile, cancellation-driver and physical Alt failures. Publish 14 code/test paths, four contracts and evidence as `3b7e55a`. [Evidence](../../TestRuns/P1RectangleGestureParent_2026-10-17.md).
+- [x] Independently preserve actual Rectangle Win32 R1 compile/API failure, R2 disk-preflight refusal, R3 stale-outcome fixture failure and R4 post-shutdown settlement-driver failure. Production stays unchanged through the two host fixture repairs.
+- [x] Qualify actual Rectangle Win32 Release R6: all 83 new facts and every predecessor record pass in 146 stages; retain the inherited 260-character reference-reader failure and the separate newline reader refusal. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
+- [x] Complete exact-source Rectangle Win32 real ASan: fresh 341 instrumented TUs, actual UAF detection, all 146 stages and both full archives independently pass. The 14 host paths, five contracts and evidence are pushed as `562b1b5`. [Evidence](../../TestRuns/P1RectangleSelectionHost_2026-10-17.md).
+- [x] Qualify Ellipse/New CPU Release: 20 reviewed geometry/legacy-coverage facts and 77 original-parent/authority/lifetime facts preserve all 22,596 predecessors (22,693 total); retain the artifact-reader status-literal refusal without rerunning code.
+- [x] Complete exact-source fresh 278-TU Ellipse real ASan, actual UAF control, all 22,693 assertions and complete archive/PE/PDB/ISA readback. Publish the 11 CPU code/test paths, four contracts and evidence as `cb72fb2`. [Evidence](../../TestRuns/P1EllipseGestureParent_2026-10-17.md).
+- [x] Qualify actual Ellipse Win32 Release R2: all 89 new facts, 83 Rectangle facts and the complete 147-stage predecessor roster pass; independently verify all 1,710 archive files, 341 compiler records and executable/full-PDB identity. Retain R1's new inside-generation fixture failure. Candidate `819e604` includes the reviewed code, tests, contracts and evidence. [Evidence](../../TestRuns/P1EllipseSelectionHost_2026-10-17.md).
+- [x] Qualify baseline `6a7afac` ARM64 Debug r1101, Release r1103 and instrumented ASan Debug r1105 cross-build qualification; retain explicit absence of native ARM64 runtime. [Native evidence](../../TestRuns/P1EllipseNative_2026-10-17.md).
+- [x] Qualify actual Ellipse host in full native x64 ASan r1107 on adopted source `6a7afac`: all 975 instrumented compiler records, 1,833 archive files, five exact executable/PDB pairs, 22,693 Document facts, all 147 Application stages, both stress suites, the genuine UAF diagnostic and nine harness images independently pass. Retain the r1100 disk failure and the readback-only mixed-encoding refusal. [Native evidence](../../TestRuns/P1EllipseNative_2026-10-17.md).
+- [x] Qualify and adopt the preserving Rectangle/Ellipse Add/Subtract CPU parent and adaptive cached capacity plan: 45 scalar and 268 parent facts, all 23,006 Document assertions, exact Release and real ASan (279 TUs), complete archives and actual UAF detection. Eleven CPU/test paths and four contracts are integrated; the physical extension remains separate. [Evidence](../../TestRuns/P1PreservingMarquee_2026-10-17.md).
+- [x] Qualify and adopt real external clipboard contention: four native Copy/Paste release/exhaust cases, all 53 new facts and the complete 148-stage predecessor roster pass exact Release and real ASan (342 App TUs), including actual UAF detection. Saved clipboard, original ticket/history/reservation and joined holder/worker lifetime are checked; retained reader refusal is corrected without runtime replay. [Evidence](../../TestRuns/P1ClipboardRealContention_2026-10-17.md).
+- [x] Qualify and adopt the actual Rectangle/Ellipse Add/Subtract Win32 caller: all 429 new facts over 52 cases and the complete 149-stage predecessor roster pass exact Release and real ASan (343 App TUs). Five caller/fixture paths, original-ticket memory/lifetime proofs, normal-memory large sources and four contracts are integrated. Ordinary activation and cursor work remain open. [Evidence](../../TestRuns/P1PreservingMarqueeHost_2026-10-17.md).
+- [x] Implement and independently verify the bounded cursor request-state prerequisite: 113 state-machine assertions plus the summary pass focused Release and instrumented ASan runs. The helper/test registration is adopted; complete HostTests and the physical consumer remain separate gates. [Focused evidence](../../TestRuns/P1SelectionCursorState_2026-10-17.md).
+- [x] Qualify and adopt cursor-probe cached description and post-admission immutable-root capture: all 23,039 Document assertions pass complete scoped Release and real ASan (280 TUs), including genuine UAF detection, full roster/archive/source/binary verification and retained fixture failure. Seven code/test paths and three contracts are adopted. [Model evidence](../../TestRuns/P1SelectionCursorProbe_2026-10-17.md).
+- [x] Qualify the selected cursor worker in complete private Release: all 50 cursor facts, 2 native clipboard setup controls, 53 original contention facts and the full 150-stage predecessor stream pass (9,111 stdout/7,613 stderr records). Main independently verifies the 345-record incremental object/source lineage and full archives; nine caller/fixture paths and four contracts are adopted for canonical native qualification. [Release evidence](../../TestRuns/P1SelectionCursorHost_2026-10-17.md).
+- [x] Qualify adopted cursor source in canonical ARM64 Debug Rebuild `r1111`: actual exit 0, all 1,535 archive files, 982 compiler records and five exact AA64 executable/PDB pairs independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md). ARM64 runtime is unavailable.
+- [x] Qualify adopted cursor/clipboard source in canonical full x64 ASan `r1110`: actual exit 0, all 1,866 archive files, 982 instrumented compiler records, five exact executable/PDB pairs, full 23,039-fact Document/150-stage Application/Host/WARP/I/O rosters, both stress suites, genuine UAF detection and nine harness captures independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+- [x] Qualify adopted cursor source in ARM64 Release Rebuild `r1112`: actual exit 0, all 1,535 archive files, 982 compiler records and five exact AA64 executable/PDB pairs independently verified. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+- [x] Qualify adopted cursor source in ARM64 instrumented ASan Rebuild `r1113`: actual exit 0, all 1,540 archive files, exact 982 sanitizer compiler records and five AA64 executable/full-PDB pairs independently verified. Debug/Release/ASan cross-builds now all pass; native ARM64 runtime is unavailable. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+- [x] Qualify adopted cursor source in canonical full x64 Debug `r1114`: actual exit 0, all 1,743 archive files, 982 compiler records, five exact executable/full-PDB pairs, complete five-suite roster and nine harness captures independently verified. Preserve the two reader-only refusals and corrected source/profile projection without replaying tests. [Native evidence](../../TestRuns/P1SelectionCursorNative_2026-10-17.md).
+- [ ] Complete the latest adopted milestone full x64 Debug/Release/real-ASan, Release analysis and later changed-source ARM64 gates. Baseline `d5b3f8f` now qualifies all three ARM64 profiles below; full native runtime, ordinary activation and measured G1 remain open. Native ARM64 runtime is unavailable.
+- [x] Qualify `d5b3f8f` ARM64 Debug, Release and instrumented ASan: all 987 actual compiler records per profile, 1,469 root inputs, 1,546/1,546/1,550 archive files and five matching AA64 executable/PDB pairs per profile, preserving the original failed Release attempt and exact same completed products through the independent source-order reader correction. [Evidence](../../TestRuns/P1PolygonalNative_2026-10-17.md).
+- [x] Qualify the private Freehand admission/input prerequisites in complete scoped Release and real ASan: all 23,123 assertions, exact 281-TU artifacts, full predecessor rosters and genuine sanitizer detection. The original reader-order failure is retained and repaired without replaying code. These prerequisites are now included in the qualified Freehand adoption below. [Evidence](../../TestRuns/P1FreehandPlan_2026-10-17.md).
+- [x] Qualify and adopt the Freehand original parent and actual Win32 caller: 75 plan/9 queue/110 parent/472 host facts, all 23,233 Document assertions and the complete 151-stage Application roster pass scoped Release and real ASan. Main verifies full archives, actual UAF detection, exact 627-command/object lineage, executable/PDB identities and all retained failures. The selected gate remains off for ordinary input. [Evidence](../../TestRuns/P1FreehandHost_2026-10-17.md).
+- [x] Correct exact immediate-R9 inline-table ISA recognition without changing DxUi or the allowlist: 64 new controls, the complete Release scanner suite and the unchanged original failed image pass. [Evidence](../../TestRuns/IsaR9Direct_2026-10-17.md).
+- [x] Qualify and adopt finite Polygonal planning and guarded corner/hover/Backspace primitives: 39 authority + 35 independent plan/coverage facts and all 23,307 Document assertions pass complete scoped Release and real ASan (282 TUs), with exact artifacts/archives and genuine UAF detection. The original physical parent remains a separate step. [Evidence](../../TestRuns/P1PolygonalPrimitives_2026-10-17.md).
+- [x] Qualify and adopt the drawing-only original Polygonal CPU parent: all 94 new facts and 23,307 predecessors pass complete scoped Release and real ASan (23,401 total, 284 TUs), including exact one-ticket partitioned retirement, genuine UAF detection and one-fixture/283-unchanged-object lineage. Preserve every original source-review, compiler, runtime and pre-native refusal. [Evidence](../../TestRuns/P1PolygonalDrawingParent_2026-10-17.md).
+- [x] Qualify and adopt the Polygonal terminal-before-controller bridge: fourteen independent facts preserve all 23,401 predecessors (23,415 total) in complete scoped Release and real ASan, exact 284-TU artifacts and genuine UAF detection. Preserve the final ASan reader-only 22/23-file refusal and its inventory-verified correction. [Evidence](../../TestRuns/P1PolygonalPendingTerminal_2026-10-17.md).
+- [x] Qualify and adopt Polygonal owner readiness, ordinal yielding and provisional close decisions: 39 independent facts preserve all 23,415 predecessors (23,454 total) in complete scoped Release and real ASan. Main verifies exact 284-TU source/artifact/PE/PDB/ISA/retirement evidence and genuine UAF detection; the source-only reader has four positives and thirteen refusals. [Evidence](../../TestRuns/P1PolygonalOwnerGates_2026-10-17.md).
+- [x] Correct the exact R9-byte switch two-byte-alignment ISA form: 109 added controls, the complete Release scanner regression and the unchanged original failed executable/PDB pass. Original failure retained; no DxUi or allowlist change. [Evidence](../../TestRuns/IsaR9AlignedTail_2026-10-17.md).
+- [x] Qualify and adopt the selected Polygonal Win32 caller: all 527 source-defined facts over 45 cases and the complete 152-stage Application roster pass scoped Release and real ASan with exact 349-object lineage (one failure-diagnostic test override plus 348 qualified objects) and full archive readback. Preserve the original ISA/runner and Save-fixture failures; production behavior and legacy goldens stay unchanged through the fixture correction. Eleven caller/fixture/test/project paths and five contracts are integrated; ordinary activation remains off. [Evidence](../../TestRuns/P1PolygonalPhysicalHost_2026-10-17.md).
+- [x] Qualify and adopt native PNG/JPEG export and picker cancellation while the Polygonal draft is live: twelve new cases / 186 independent facts preserve all 527 original facts (57 cases / 713 total) and the complete 152 stages / 10,296 stdout assertions in scoped Release and real ASan. Main verifies source-only reader controls, full archives, 349-object lineage, PE/PDB/ISA and retained reader refusal. Project path, dirty saved marker, original ownership and decoded output pixels pass. Production and legacy goldens are unchanged. [Evidence](../../TestRuns/P1PolygonalExport_2026-10-17.md).
+- [x] Qualify and adopt native zoom and pointer-leave/reentry on the original live Polygonal job: six new cases / 78 facts preserve all 713 predecessors (63 cases / 791 total), with the complete 152 stages / 10,374 stdout assertions passing scoped Release and real ASan. Main corrects replay timing and the agent's count, verifies source-only controls, all archives, 349-object lineage and PE/PDB/ISA; current-view corners, original writer/history, Undo/Redo and joined refunds pass. Complete DPI/device/dispatcher scope and ordinary activation remain open. [Evidence](../../TestRuns/P1PolygonalView_2026-10-17.md).
+- [x] Correct exact R8/RAX/RDX interior-table ISA recognition: all 107 new encoded controls, all 13,691 predecessor scanner PASS records and the unchanged original diagnostic image/PDB pass. Original refusal retained; no DxUi or allowlist change. [Evidence](../../TestRuns/IsaR8RaxRdx_2026-10-18.md).
+- [x] Qualify and adopt native Escape, Backspace-to-zero, short/provisional close, captured header-mode callback and harness-DPI message handling: 18 new cases / 208 facts preserve all 791 predecessors (81 cases / 999 total). Full 152-stage / 10,582-assertion Release and real-ASan streams, source-only reader controls, complete archives, 349-object lineage and PE/PDB/ISA pass. Main preserves all fixture/compile/scanner failures and corrects the actual native double-click position/flag driver. Actual widgets, OS-monitor DPI, complete dispatcher, ordinary activation and remaining P1 gates stay open. [Evidence](../../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+- [x] Complete the explicitly approved S5 cache relocation: all 7,391 files (7,031,301,120 bytes) are reverified at the C: backup, original-path junction and D: destination; only the redundant C: backup is removed. Preserve the normal-path and malformed-reader refusals; the final extended-path reader passes. [Storage evidence](../../TestRuns/P1WorktreeStorageRecovery_2026-10-18.md).
+- [x] Preserve all four old P1 checkouts, unique commits, binary patches and ignored evidence on D: 462,715 files / 10,557,623,377 bytes. Main independently verifies every TAR payload, including 340 NTFS hard links, and all four recovery bundles. [Evidence](../../TestRuns/P1WorktreeStorageRecovery_2026-10-18.md).
+- [x] Complete archival of all four preserved P1 worktrees. Remove 35 duplicate attachments from confirmed closed child agents through the supported app API; normal managed archival then completes for Wand, sampler-callers and sampler. Retain the I/O app-created snapshot and repair only its stale recovery attachment through the same API after the verified empty-directory cleanup. All four are archived, absent from Git and physically gone; the user confirms the I/O card disappeared. Only `p1-opacity-host-proof` remains active. [Closeout](../../TestRuns/P1WorktreeStorageRecovery_2026-10-18.md).
+- [x] Qualify the latest adopted `58388b3` source in canonical ARM64 Debug `r1127`: actual exit 0, all 990 compiler records, 1,550 archived files and five exact AA64 executable/full-PDB pairs pass independent readback. The initial receipt-creation disk failure stays retained. [Native evidence](../../TestRuns/P1PolygonalTerminalNative_2026-10-18.md).
+- [x] Qualify adopted `58388b3` ARM64 Release `r1125`: actual exit 0, all 990 compiler records, 1,550 archived files and five exact AA64 executable/full-PDB pairs pass independent readback. [Native evidence](../../TestRuns/P1PolygonalTerminalNative_2026-10-18.md).
+- [x] Qualify the same `58388b3` instrumented ARM64 ASan Debug `r1126`: actual exit 0, all 990 instrumented compiler records, 1,554 archived files and five exact AA64 executable/full-PDB pairs pass independent readback. Debug/Release/ASan terminal-cohort cross-builds now all pass; native ARM64 runtime is unavailable. [Evidence](../../TestRuns/P1PolygonalTerminalNative_2026-10-18.md).
+- [x] Adopt the bounded Polygonal input journal and exact event-time view snapshot: all 3,382 facts and every predecessor pass complete scoped x64 Release/real-ASan HostTests (136 TUs, 12,520/12,521 PASS lines), genuine UAF detection, ISA, source/artifact and PE/PDB checks. Main fixes the agent's import/configuration preparation and preserves all refusals. The physical dispatcher and ordinary activation remain separate. [Evidence](../../TestRuns/P1PolygonalInputJournal_2026-10-18.md).
+- [x] Qualify and adopt the original-parent Polygonal journal branch: all 105 new assertions and all 23,454 predecessors pass complete scoped Release and real ASan (285 TUs), exact source/object/archive/PE-PDB/ISA readback and genuine UAF detection. Main repairs the agent project, legacy batching regression and fixtures while retaining every refusal. The physical dispatcher and ordinary activation remain separate. [Evidence](../../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+- [x] Qualify and adopt explicit owned-predecessor transitions: 34 new assertions over ten scenarios extend the module to 139, with all 23,594 PASS records in fresh 285-TU Release/real-ASan builds. Exact source/artifact/PE-PDB/ISA and genuine UAF checks pass. Opaque move-only receipts preserve immutable Down metadata through owned selection publications; actual Win32 integration remains open. [Evidence](../../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
+- [x] Qualify and adopt the selected original physical Polygonal dispatcher: fifteen actual Win32 cases / 139 new facts preserve all 999 prior Polygonal facts and every predecessor in complete 152-stage Release/real-ASan runs (10,721 stdout PASS records). Twenty CPU hook facts preserve the complete 23,614-record / 285-TU suites, exact 351-TU host object lineage, frozen sources, full artifact/PE-PDB/ISA and genuine CPU UAF proof. Temporary pan/capture loss and right selection input preserve the original writer; ordinary activation and the remaining native grid stay open. [Evidence](../../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).
+- [x] Qualify and adopt ten additional original-caller refusal/capacity scenarios (25 cases / 212 facts total): complete scoped Release/real-ASan 152-stage / 10,794-record streams, exact 351-object lineage, full artifacts/PE-PDB/ISA and unchanged predecessors pass. An unchanged-product control reproduces the stale raw-family orphan; the correction retires it on the existing no-active source path. Memory, counters, absent document, queue-eight/raw512 loss, earlier inside Up and missing release preserve exact documents/history and refunds. [Evidence](../../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md).
+- [x] Qualify `9af34e4` in canonical ARM64 Release `r1128` and instrumented ASan `r1129`: all 994 translation units/profile, 1,485 frozen inputs, 1,558/1,562 archive files and five matching AA64 executable/full-PDB pairs pass independent readback. Native ARM64 runtime is unavailable. [Evidence](../../TestRuns/P1PolygonalLatestArm_2026-10-18.md).
+- [x] Adopt foreign-history first-parent refusal and actual inside-Save/Up ordering: three new cases / thirty facts extend the selected native fixture to 28 / 242. Complete 152-stage / 10,824-record Release and real-ASan runs, exact 351-object lineage, final artifact/PE-PDB/ISA/two-Save readback pass, with the unchanged-product control retained. [Evidence](../../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+- [x] Qualify adopted `2cb0b64` caller/fixture source in canonical ARM64 Release `r1133` and real-ASan `r1132` Build: two fresh / 992 byte-exact inherited objects per profile, all 994 actual command/source records, five exact AA64 executable/PDB pairs and 1,558/1,562 archive files pass independent readback. Preserve the earlier dependency-lock failure and byte-decoder reader refusal. Native ARM64 runtime remains unavailable. [Current-source evidence](../../TestRuns/P1PolygonalLatestArm_2026-10-18.md).
+- [ ] Audit the retained inherited inverse-selection held-gate ASan exit 5 at final native qualification. It did not recur in the complete diagnostic run; failure-only state/error logging is now retained and no causal fix is claimed.
+- [ ] Complete the remaining original Polygonal native grid: shared-ordinal exhaustion, other foreign-editor interleavings, remaining held project/export/picker, actual widget/keyboard header and Undo/Redo/Deselect routing, lifetime/DPI/device/hidden/restart cases and Ctrl/lift. Typed commands and prepared-worker foreign history/crop/mask already have focused 41-case / 420-fact qualification above; their latest full-native integration remains due. Ordinary routing is still disabled.
+- [ ] Complete every remaining delivery gate below, including ordinary routes and measured G1, before moving P1 to Done or merging main.
+
+
+## Delivery checklist
+
+- [x] Commit and push the qualified resource checkpoint as `4abdb3a`.
+- [x] Qualify the integrated layer index, cached pixel budgets and final allocation planner, including rounded pixel buffers and overlapping sparse metadata. Full Debug r327, Release r328, real ASan r329, analysis r326 and ARM64 r44 pass on the committed 933-input source (`0773548`). Preserve r299 and its reference repairs. Actual asynchronous stroke activation and final P1 gates remain open; see the [host work record](../../TestRuns/P1StrokeFinishHostWork_2026-10-07.md).
+
+- [x] Qualify and archive resource candidate Debug r294: all predecessors plus 181 exact additions,
+  five fresh linked image/PDB/ISA identities, active WARP debug layer and 99 application stages. Freeze
+  `6358FB57C725E348C079A1C5027FFC3B5D33842C860E1E2CEB9C137D4C7ACCA7`, 898 inputs; Release r295 is also independently verified and archived. ARM64 r42 all three profiles are verified/archived.
+  ASan r296 failed a sampler terminal retirement assertion; Release analysis r297 passed and is archived. Diagnostic-only ASan r298 passes strict source/product/predecessor verification and archive readback with unchanged expectations. Its sole source difference is recorded explicitly; the original intermittent failure has no established cause. Preserve this foundation/resource checkpoint, then complete actual host activation, the final current-source matrix and G1.
+  This does not close asynchronous stroke host activation or G1; see the
+  [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
+
+- [x] Enable the qualified history-residency subscriber during normal startup. The primary prepared
+  actual `Run` startup wiring and 36 real-host controls for notification-driven trimming, acquired-prefix
+  failure, full subscription/route capacity, rollback and repeated shutdown. Reviewed copies are ignored
+  under `.build/P1Drafts/HistoryResidencyStartup/Reviewed-r3`; they are integrated into the current candidate.
+  Debug r284's interrupted warning-bearing attempt is preserved; structural correction builds in r285.
+  Focused actual Run r288 passes the exact 36 new checks and every predecessor. Fresh complete matrix
+  qualification subsequently passes on the 933-input committed candidate `0773548` in Debug/Release/real ASan,
+  Release analysis and three ARM64 cross-builds; whole H3/G1 remains open. See the [foundation record](../../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
+- [x] Integrate and execute the reviewed cancellable healing kernel and 33 independent analytic/span/cancel
+  controls. Primary review strengthened the API to validate both owned spans, separated statistics from real
+  solve checkpoints and repaired the delegated large-array comparator. Reviewed copies are ignored under
+  `.build/P1Drafts/StrokeFinish/ReviewedHeal-r4`; the kernel and controls are integrated into the current candidate.
+  Compilation passes r285. Focused document r286 exposes one incorrect new Create Texture constant-fill
+  assumption; its failed receipt is preserved, and the replacement uses 25 independent legacy-equation literals.
+  No kernel or existing golden changes. Fresh canonical Debug r289 passes all 33 healing, 133 final-coverage
+  and 201 publication controls, with every predecessor preserved. Its 1,176-copy archive verifies.
+  Full Release r290 also passes every predecessor and all 471 additions; its 1,174-copy archive verifies.
+  Real ASan r291 passes the exact inventory, detection probe and 8,073 worker stress controls; its 1,177-copy
+  archive verifies. All three ARM64 r41 profiles and fresh PE/PDB/instrumentation/archive checks pass.
+  Release analysis r292 fails the healing test fixture's 222,088-byte stack warning; its exact source, responses
+  and failed archive are preserved. The primary moves the fixture arrays to the heap without changing kernels
+  or expected bytes. The corrected 898-input resource candidate adds cached bounds, GPU density clearing,
+  queue readiness and a private worker mask sampler. Debug r294 follows r293's preserved C4244 test
+  sentinel warning and explicit byte-cast repair. The later 933-input committed candidate `0773548` passes the full
+  required matrix; asynchronous application finalization remains due;
+  see the [resource record](../../TestRuns/P1StrokeResourceControls_2026-10-07.md).
+- [x] Integrate typed structured-buffer readback and deferred brush coverage recording foundations. They reuse
+  the existing bounded queue's staging cap, in-flight
+  limit, event/fence waits, exact lease acknowledgements and device-retirement owners. They preserve the shader's
+  uint coverage and move conversion to the worker. The primary reviewed the cheaper-agent WARP/core/publication
+  controls, added independent pending Undo/Redo authority checks, and integrated the foundation with the
+  typed worker publication. Focused WARP r287 passes all 1,694 predecessor controls and 68 exact additions;
+  the later committed `0773548` matrix qualifies these prerequisites. Actual asynchronous stroke application
+  activation and mouse-up latency evidence remain due.
+- [ ] Connect those foundations and private worker recording to the actual asynchronous final stroke graph.
+- [x] Qualify the integrated Save/export session-end event handling and localized saving block reason.
+  Primary-reviewed copies and 108 actual-host controls are integrated; the cheaper agent's 16 protocol controls
+  were independently repaired. Unsaved-document protection and original publication/receipt authority remain.
+  Debug r277's resource-array capacity failure is archived; the correction preserves every expectation. Fresh
+  Debug r278, Release r280 and real ASan r281 pass all 108 actual-message checks; all three ARM64 r40
+  cross-builds and their archive proofs pass. Fresh Release analysis r283 and its independent archive pass. See the
+  [file session-end record](../../TestRuns/P1FileSessionEnd_2026-10-06.md).
+- [x] Current caller slice: remove owner sampling from ordinary single-layer Clone. Capture the All Layers
+  choice in the fixed press context, use an admitted worker placement sample for the active layer, and
+  retain the original source charge through stroke/shutdown retirement. The primary-reviewed implementation
+  and 50 functional, five allocation-failure and 16 shutdown controls are registered and fully qualified.
+  Current Debug r278 / Release r280 / real ASan r281, all three ARM64 r40 cross-builds, Release analysis r283,
+  strict predecessor/product checks and every qualification archive pass.
+  Existing retouch checks pump the source and release acknowledgements before inspecting results.
+- [x] Qualify the supported prepared-folder selection/grouping route with actual host Undo/Redo and literal
+  hierarchy/pixel expectations. The nine controls are fully qualified; they do not define
+  new multi-row UI semantics. Current Debug r278 / Release r280 / real ASan r281 pass all nine. See the
+  [current source record](../../TestRuns/P1CloneLayerSource_2026-10-06.md).
+- [x] Confirmed session-end follow-up: cancel active clipboard work on `WM_ENDSESSION(TRUE)` and qualify
+  Copy/Cut before publication and after `EmptyClipboard`, plus cancelled-session preservation. Primary
+  cancellation is implemented and 48 independent real-message controls are registered after review of the
+  delegated draft. The adapter completes an irreversible attempt once. Current Debug r278 / Release r280 /
+  real ASan r281 pass all 48; Release analysis r283, ARM64 r40 and all independent archive proofs pass.
+  Save/export worker-wait and saving-reason wiring are included in this current candidate.
+- [x] Migrate eligible real Clone All Layers press to admitted tiled readback, retain its event-time offset/input and original reservation through stroke/sample retirement, and qualify literal pixels, ordering, cancellation, failure and device recovery. Sampler diagnostics preserve its literal expectation.
+  - [x] Add and qualify real capture-loss and independent shutdown coverage. Primary review found the shutdown cancellation
+    runner would retire the live Clone sample before final CPU stroke retirement; keep its original retained
+    charge through owner graphics detachment and destroy it after the session's final worker release. Current
+    r255 is the pre-repair diagnostic source and must not qualify this corrected lifetime boundary.
+  - [x] Corrected Clone slice passes full Debug r258 and independent predecessor/source/product verification:
+    865-input freeze `6C8B3AC4ADB319FB8E011092DF84F11E08707B281B8D8FF816795AD9C49C9084`, 10,116 named
+    application controls / 91 stages, 68 new host and 12 new core expectations. Verified archive has 1,143
+    copies. Release, real ASan, analysis and the complete ARM64 matrix remain due. See the
+    [Clone qualification record](../../TestRuns/P1CloneReadback_2026-10-06.md).
+  - [x] P1.4 view/input follow-up is implemented and qualified in the current complete matrix: a separate physical Space pan after Up coexists with the
+    sealed Clone FIFO and preserves its source ordinal. Full Debug r263 passes all 81 readback/pan and 15
+    input-policy controls after fixture grid alignment, preserving all literal expectations. Analysis r264
+    and all three ARM64 r37 cross-builds pass on its 867-input `AD5015…` freeze. These older receipts do not
+    qualify the later scanner repair; the complete current `023602…` matrix now passes.
+  - [x] Qualify the strict compact MOVSXD switch-table proof and its 119 independent controls. Original ASan
+    r260 and r265 refuse before application runtime; independent archived-PE/PDB proofs identify bounded
+    DWORD table data. The second image requires the exact interior-table boundary and alignment proof.
+    Focused parser controls and the complete repaired-source matrix pass; both failures remain preserved.
+- [ ] Reliability follow-up: diagnose Debug r247's sampler middle-color failure. The failed executable is byte-identical to passing r243, isolated r252 and full r253; r252/r253 preserve all 10,048 controls / 89 stages without relaxing the literal expectation, but no root cause is established. Preserve ASan r250's clipboard sequence failure and run full desktop/clipboard gates sequentially. See the [failure and reproduction record](../../TestRuns/P1WandReadbackRebind_2026-10-06.md).
+- [x] Repaired Wand source cross-compiles in ARM64 Debug/Release/ASan Debug r35 on 859 identical frozen inputs (`4BF043FD0FD64F7B2B3614269A75D8552CB7CD7EB097E5567192975E4449E637`); all three archives independently verify. This is no native runtime or P1 exit claim.
+- [x] Qualify the compact imm8 switch-table proof in the complete registered matrix. The unchanged 115 imm32 controls, 116 new imm8 controls, exact failed-image replay and independent literal PE proof pass. Full Debug r253, Release r251, real ASan r254, analysis r249 and ARM64 r35 pass on identical source; all predecessor controls and original failures are preserved. See the [record](../../TestRuns/P1WandReadbackRebind_2026-10-06.md).
+- [x] P1.3 pre-copy recovery slice: real All Layers Wand readback changes pass 17 independent checks in full Debug/Release/real ASan. One change restarts under the original capture/ticket/stamp/reservation and publishes one undoable literal outline; a third fails after two restarts with original selection/history/redo intact. All eighteen previous modes remain unchanged; worker/map/utility/reservation retirement is acknowledged. Analysis/cross-build and archive proofs pass on identical source.
+- [ ] P1.3 Add/Subtract host activation: prove and admit the complete Clipper boolean workspace/output and retained-selection graph, then qualify ordered noncoalescing commands and actual host results. The New-mode reservation is insufficient.
+
+- [x] Complete the repair's six-configuration matrix plus Release analysis on the same 858 inputs: full x64 Debug r240 / Release r241 / real ASan Debug r242, three ARM64 r33 cross-builds and analysis r237 pass. Strict registry r23 preserves all predecessors and verifies 10,031 named application controls / 89 stages, 16 visibility, 3 CLI and 20 interaction checks; the real ASan probe and 8,055 stress controls pass. All qualification archives independently verify ([anchors](../../TestRuns/P1LayerRowsCosts_2026-10-06.md)). Native ARM64 runtime qualification remains due.
+
+- [x] Measure the repaired 10,000-layer fixture on quiet hardware r7 and WARP r8; both actual children and output proofs pass all eleven trials × nine inclusive kinds. Retain maxima separately from histogram bucket bounds, including initial preparation and every rename. Preserve the failed prelaunch recorder r6 and unchanged helper r2; the immutable helper r3 reads the exact ASCII sentinel as raw bytes ([evidence](../../TestRuns/P1LayerRowsCosts_2026-10-06.md)).
+- [x] Independently verify the fresh cost archive supplement: 37 copies pass byte/hash readback, including failed recorder r6 and immutable helpers; manifest `3EA2BEBB901A6BFF1814A061D08F49AB41F81FD510E344CEC697A55DFF385F46`.
+- [ ] Resolve full preparation and visible-frame costs. Hardware/WARP full preparation maxima are 7,754 / 8,737 µs, with initial values 5,892 / 8,737 µs. No preparation-budget or overall G1 pass is claimed. External UIA, group/multiselect and native/production activation remain due.
+
+- [x] Qualify the integrated `layer-rows` / `layer-rows-smoke` diagnostic, three parser controls and registered actual smoke runner in the complete current matrix. The 10,000-layer/1,024-unit-name fixture includes the longest active-layer lookup, all offscreen full names, original shared admission, literal first/last pixels/mask and one history entry per rename. Fresh r7/r8 retain all initial/rename costs. Hidden embedded-provider measurements do not qualify visible G1, external RPC or complete GPU residency; preparation overruns remain open.
+
+- [x] Qualify the optional DxUi `PrepareInteraction` library prerequisite at pushed pin `8e8994079e82f79e6765e6a885c03fc687957591` (functional source `342bf1f`): x64 Debug/Release/ASan Debug suites, ARM64 Debug/Release/ASan Debug cross-builds, exact frozen-201-input equality and the three-pass paired Default scene pass. Native/production activation, external UIA and frame/overall G1 remain open.
+- [x] Qualify the integrated shared row functional consumer at the exact pin. Full Debug r226, Release r228 and real ASan r229 pass 10,029 named controls / 89 stages with independent strict22 proofs. Release analysis r227 and all ARM64 r31 cross-builds pass on identical 856 inputs; all archives verify. All 21 identity, 11 actual notification and nine shape checks pass in every runtime profile. Measured costs and production activation remain open. Preserve the original 848-input matrix and every failed predecessor ([receipts](../../TestRuns/P1SharedRowLifetime_2026-10-06.md)).
+- [x] Qualify the queued live-shape transform finish with independent literal redraw/mask references, held-worker view responsiveness, original reservation and one Undo/Redo. All nine expectations pass in full Debug r226, Release r228 and real ASan r229 on the same source as analysis r227 and ARM64 r31; exact predecessor and archive proofs pass. Native activation and measured G1 remain open.
+
+- [x] Qualify the repaired drag/rename and upload acknowledgement step: full Debug r193, Release r194 and real ASan r191, strict r12, Release analysis r192 and all three ARM64 r25 cross-builds pass on 846 identical frozen inputs. All 17 edit plus 26 new producer-ordering controls and every predecessor are preserved; original failures and all archive copies are verified ([record](../../TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md)). Production activation and G1 remain open.
+
+- [x] Current prepared-row extension fully qualified and pushed as `e33ab7d`: full Debug r180, Release r182 and real ASan r183 plus strict private/predecessor/registry proof pass all 18 interaction +18 retry controls (9,943 application controls /83 stages). Release analysis r181 and ARM64 r23 cross-builds pass on the same 845 frozen inputs; every archive copy verifies. Actual sanitizer diagnosis and 7,994 stress controls are preserved. Earlier r179 ISA failure remains archived; scanner rules are unchanged. Drag/rename/UIA/cost, complete consumers, Native activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
+
+- [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
+- [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
+- [x] Resume from verified clean/saved branches after the user’s instruction on 2026-10-05.
+- [x] Reconcile the existing H3 scope-bound lease, stopped-waiter, live-index maintenance/late-refresh core
+  and five semantic-thumbnail ownership cases:38 retained facts per qualified x64 profile,1,451 relevant inputs
+  unchanged, and the exact current ASan DocumentTests executable/full-PDB. [Evidence](../../TestRuns/P1HistoryResidencyCore_2026-10-21.md).
+- [ ] Complete H3 production caller admission, same-ticket host refresh/live-cache retirement, complete semantic-thumbnail caller coverage, ordinary activation and G1; the scoped existing core does not close them.
+  - [x] Earlier mutex core/mask/Warp candidate passes full managed Debug r77, Release r78 and ASan Debug r79: 6,778 document / 9,298 application controls and unchanged 79 stages; all archive copies verify. Subsequent analysis failures r80–r84 are preserved and repaired with a waitable atomic gate and explicit test ownership/initialization/null guards ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
+  - [x] Repaired core passes full Release analysis r85 and all three ARM64 cross-builds on the same 771 inputs. Full Debug r86, Release r87 and real ASan Debug r88 also pass; every archive copy and all preceding controls/routes/stages verify. Host/maintenance, Native activation and G1 remain open.
+  - [x] Qualified core committed/pushed as `ce4f8b4`; Native checklist/evidence pushed as `88b9b1b`.
+  - [x] Combined metadata/maintenance source committed and pushed as `8ab921d` after the full identical-source matrix; six sampler measurement children pass, with original first/warmup overruns retained ([record](../../TestRuns/P1SamplerMeasurements_2026-10-05.md)).
+  - [x] Qualify the integrated Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown group. Full Debug r109, Release r108 and real ASan r110 pass on the same 775 inputs as analysis r106 and all three r4 ARM64 cross-builds. All 6,841 document / 9,446 application controls and 79 stages preserve predecessors; 15 skills / 655 formatted files pass. Earlier fixture/clipboard failures remain archived; Native activation and G1 remain open ([record](../../TestRuns/P1ResidencyCore_2026-10-05.md)).
+  - [x] Integrate and qualify image import/replacement, mask, layer-copy and shape residency callers plus worker upload rows and the dormant bounded upload transport. Full Debug r122, Release r126 and real ASan r124 pass on the same 787 inputs as analysis r123 and three r7 ARM64 cross-builds: 6,963 document / 911 composition / 9,744 host controls and 79 stages. Earlier fixture and clipboard failures remain archived; 15 skills / 667 formatted files pass ([record](../../TestRuns/P1UploadCpuPreparation_2026-10-05.md)).
+  - [ ] Qualify/integrate the newer private proxy/layout, queue faults, terminal-retirement acknowledgement and upload job; then finish complete first-display resource admission, Native activation and measured G1.
+    - [x] Private scheduler terminal-acknowledgement probe passes 88 controls; original stage controls remain unchanged. Primary review added pending map/fence receiver retention and deterministic cancellation cases to the private GPU leaf. The complete new normal matrix and display activation remain open.
+    - [x] Registered lifetime Debug r130 and Release analysis r131 pass; all three ARM64 r9 cross-builds pass on the same 805 frozen inputs. Exact predecessors remain and 75 CPU/88 scheduler/308 GPU controls are added. Full Release/real ASan and consumer activation remain open ([record](../../TestRuns/P1UploadLifetime_2026-10-05.md)).
+    - [x] Complete dormant lifetime matrix closes with full Release r133 and real ASan r134. Separate ASan stress and actual sanitizer diagnostic are preserved; all 805 inputs, predecessor controls/routes/stages and archive copies verify. Production first-display/G1 remains open.
+  - [x] Qualify combined cancellation/notification/metadata refresh and scoped live-history maintenance; Debug r89/r90 fixture failures preserved and repaired; build r91 and actual host runtime r92 pass (9,362 controls / 79 stages). Full Debug r93, analysis r94, Release r95 and all ARM64 cross-builds pass on the same 774 inputs. ASan r96 also passes with all prior controls/routes/stages preserved. Undo/Redo, Select All/Deselect, nudge and actual maintenance shutdown remain drafted separately.
+
+- [x] Split this milestone from the detailed [P2–P6 acceleration and RAW roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md). The original phase requirements and references are retained there.
+- [x] P0 worker, scheduler, admission, cancellation, immutable raster publication and scalar-dispatch foundations qualified; baseline measurement coverage remains open.
+- [x] Native deferred adjustment/filter commits, GPU adjustment previews, prepared history, file operations, sizing, selection and lifecycle slices qualified within the limits in the execution ledger.
+- [x] Native fixed pointer input stream and dispatch-scoped menu timer repair qualified in all required profiles (`9e466a5`).
+- [x] Experimental immutable layer roots, typed opacity, captured brush input and modal lifetime checkpoints preserved and pushed through `b22f974`.
+- [x] Additional private lifetime authority, accepted close/end-session, failed-save and shutdown qualification: Debug/Release/ASan pass 8,962 controls/78 stages; all 520 owned inputs match and every archive copy is verified.
+- [x] Normal managed Debug build-only: all five images compile/link, matching-PDB ISA controls and actual DxUi provenance pass; 733 archived inputs are independently verified. This does not qualify runtime or native activation.
+- [x] Integrate the privately qualified lifetime source and portable project entries into the managed candidate; skills/formatting pass all 620 files.
+- [x] Fresh normal managed x64 Debug/Release/ASan suites and ARM64 cross-builds pass for the combined lifetime/build/fixture candidate. All 627 owned inputs match; exact 78-stage / 8,962-control application registry, bounds suite, scanner controls and screenshots pass. Static analysis, diagnosis of the intermittent first-clean-run Wand failure and native activation remain open; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
+- [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
+- [x] Managed default-desktop Debug analysis qualifies the repaired candidate: all five images, unchanged stack thresholds, concurrency SAL controls, ISA/PDB/scanner gates and provenance pass; r31's 754 inputs / 1,038 archive copies are verified. The full current runtime matrix and native activation remain open.
+- [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
+- [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
+- [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
+- [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
+- [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
+- [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
+- [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
+  - [x] Main-integrated immutable history-index slice passes full x64 Debug r74, Release r75 and ASan Debug r76 on identical inputs (`1936fe6`): unique Entry/Raster/Selection owners, changed-entry diffs, stable Undo/Redo membership, live-document exclusion, fresh resident-byte reads, unique retirement bounds and O(1) sealed-stack metadata. Late-cache concurrency/reprepare, remaining reference paths, full native/configuration gates, caller/delta cost and G1 remain open ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+- [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
+  - [x] Create and index the detailed [bounded upload/first-display plan](BoundedRasterUploads_2026-10-05.md); worker row-copy draft awaits registered qualification. No upload/G1 activation is claimed.
+  - [x] Review/register committed-document preparation and resource stage capture; current private proofs pass 43 CPU / 23 WARP / 31 ETL controls. Full 811-input matrix now passes: Debug r135, Release r137, real ASan r138, analysis r136 and all three ARM64 r10 cross-builds, with exact predecessor preservation. Production activation remains due ([record](../../TestRuns/P1ResidencyPlanAndStages_2026-10-05.md)).
+  - [x] Worker GPU creation/admission/adoption step qualifies full identical-source Debug r142 / Release r144 / real ASan r145, analysis r143 and ARM64 r12 cross-builds (253 new controls and every predecessor preserved); complete graph/mip/consumer/G1 work remains due ([record](../../TestRuns/P1GpuCreationAndAdmission_2026-10-05.md)).
+  - [x] Explicit per-level mip recording qualifies identical-source Debug r146 / Release r148 / real ASan r149, Release analysis r147 and ARM64 r13 cross-builds (173 new controls with exact predecessors preserved). Full document resources, actual post-mip consumers, activation and G1 remain due ([record](../../TestRuns/P1GpuMipChain_2026-10-05.md)).
+  - [x] CPU-first committed-resource manifest, prepared core wand modes and actual held-sampler Escape qualify and are pushed as `8183976` in full Debug/Release/real ASan, Release analysis and all ARM64 cross-builds on identical 829 inputs. Every predecessor and route is preserved; Native activation, host Add/Subtract, complete first-display consumers and G1 remain open ([record](../../TestRuns/P1ManifestWandEscape_2026-10-05.md)).
+- [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
+- [ ] Finish the user workflow acceptance run, lasting domain specs and guide, required validation, and commit/push the qualified milestone.
+- [ ] Move this P1 plan to Done and update its index and dependent links only after every P1 exit requirement is met.
+
+**Status: ACTIVE / P1 (user resumed 2026-10-05).** Split on 2026-10-04 at the user's request. P1 is not ready for Done yet. Checked
+items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
+is unavailable on this host; cross-build evidence does not substitute for it.
+
+Current qualified integration: `44aa123` is committed and pushed on `codex/p1-opacity-host-proof`.
+The identical 1,005-input source passes full x64 Debug/Release/real ASan, Release analysis and all three ARM64
+cross-builds. Independently verified predecessor inventories, 110 application stages and 4,850 application
+records are preserved; original failures and all receipts remain in
+[P1LiveStrokeSamples](../../TestRuns/P1LiveStrokeSamples_2026-10-08.md).
+
+The next 1,014-input integration adds separate committed/pending display owners, scalar completed-source
+borrows, additional preview admission and eight actual host cases. Debug build r428's header/optional fixture
+errors and r429's unnecessary composition source registration are archived and corrected without changing test
+expectations. Build r430 passes; Composition432 passes, while Document431 and Application433 reveal the new fixture errors
+recorded in the opening checklist. Those errors are corrected against the actual input contract and independent
+legacy linear-light reference; fresh build r434 is next. The integration remains unqualified until its runtime/profile gates pass. Ordinary recorded display, remaining consumers, measured resource peaks and active-desktop Release G1/ETW
+remain open. Checked foundation steps do not close a due P1 exit row.
+
+## What this milestone delivers
+
+A usable Windows raster editor whose supported editing, selection, merge, file and size workflows keep the
+view and chrome responsive while work runs. Users can pan/zoom, observe progress, cancel, save and close with
+ordered input, exact existing pixels, one correct undo entry per completed edit, and preserved data on failure.
+P1 changes where work runs and how its ownership is published; existing legacy pixel goldens stay unchanged.
+
+The next roadmap owns the original G2/G3 speed targets, SIMD tiers, sliced GPU kernels/tiled residency,
+camera RAW decode/develop, paired Photoshop measurements and nondestructive high-bit-depth documents.
+P1 does not claim those results. The original brush-update/distort-preview, background GPU budget and WARP
+frame targets explicitly due at P3 remain P3 requirements. P1's owner-thread/apply/frame requirements below
+are unchanged.
+
+## Completed work and remaining work by slice
+
+| Slice | Qualified work | Required before P1 Done |
+| --- | --- | --- |
+| P0 foundation | Thread-safe raster publication; buffer adoption; generations; worker/wait pools; scheduler, queues, admission, retirement and ISA floor | Remaining baseline/ETW coverage and phase-exit measurements |
+| P1.1 panels | Deferred preview/commit/histogram; staleness checks; busy state; typed command continuations and prepared history | Remaining live-context integration, ownership and measured due G1 rows |
+| P1.2 GPU adjustment preview | Per-layer preview; private recorded destructive/live parity on WARP/hardware; immutable worker ticks | Qualify the current pending host integration, remaining consumers, admission/refusal/retirement and measured G1 |
+| P1.3 GPU readback | Event-driven completion, lent slots, utility compose, merge/adjustment opening and rebind restart | Sampler, wand/clone all-layers sources, remaining callers and timing |
+| P1.4 strokes | Original-ticket private Append/Up; Paint/Eraser/masks/Heal/Blur/Clone; patterned CPU parity and actual fault/input/admission matrix | Ordinary activation, remaining tool/chaining/source consumers, complete phase peaks and timing |
+| P1.5 raster/transforms/shapes | Basic edits, gradients, prepared Copy/Cut, mask/layer copy, deferred transforms and reviewed callers | Shape redraw, remaining live producer contexts, record/display ownership and timing |
+| P1.6 selection | Worker geometry/history; cancellable wand/trace; prepared select/deselect/nudge and eligible outline callers | Remaining coexisting gestures/booleans, bounded geometry/coverage/display and timing |
+| P1.7 files | Worker classification/codecs/project/save/export/import; prepared clipboard and ordered save/lifecycle foundations | Remaining retry/prefill/fault/durability/cancellation/end-session cases and measured overruns |
+| P1.8 sizing | Functional async Image Size/Canvas Size matrix and recorded large-fixture runs | Finished-result apply within 2 ms and associated ownership/upload costs |
+| P1.9 resources | Prepared history; shared history roots; native immutable `RecordRoot<ImageLayer>` layer storage; selection budget; optional image thumbnails; settled metadata | Complete capture/retention and H3 accounting acceptance, H4 upload/chrome bounds and measured G1 |
+
+The [execution ledger](#appendix--p0p1-execution-ledger) retains completed slices, exact evidence, original failures
+and their remaining limits. Child plans are indexed in [WIP/README.md](README.md); their unchecked P1 rows remain
+requirements of this milestone. An obsolete intermediate paragraph in the historical ledger does not supersede
+a later qualification record or this current checklist.
+
+## P1 acceptance and closeout sequence
+
+1. Finish the current immutable-root/lifetime integration, then the remaining P1.3–P1.9 child rows. Validate
+   each behavior against independent state expectations and unchanged legacy numeric goldens.
+2. Exercise actual host commands: adjustment/blur OK and Cancel; brush and retouch; selection and transform;
+   copy/paste/merge; resize; project/image open; save/export; Save/Discard/Cancel before replacement/close;
+   failed save; capture loss; device loss; cancellation and shutdown with work outstanding. Window dragging,
+   pan/zoom and splitter/chrome input must continue while an admitted job is gated.
+3. Run Release timing for every due operation on G1 A and B, hardware R1 and WARP as §1.2 specifies. Fix the
+   measured owner/apply/frame overruns. Record unsupported/unavailable machine qualification explicitly under
+   D9; never infer native ARM64 timings from a cross-build.
+4. Run `validate-skills.ps1`, `format.ps1 -Check`, full x64 Debug/Release/ASan `test.ps1`, all ARM64 cross-builds,
+   native analysis and the owning resource/lifetime validation. The latest integration must be the tested source.
+5. Update owning specs and the guide, reconcile child status, capture any UX evidence with the application
+   screenshot harness, and record the exact qualified source/results. Commit and push the completed step.
+6. Only then move this plan to `Specs/Plans/Done/`, remove its WIP index row and update the P2 entry link.
+
+Execution authorization through P6, cheaper-agent delegation, checklist updates and commit/push after qualified
+steps remain in force. The user's current priority is to finish P1 as a deliverable before beginning P2.
+Open decisions retain their recorded gates; a proposed recommendation alone does not qualify a result.
 
 ## 1. Goals and how they are measured
 
@@ -728,12 +1186,7 @@ exceptions:
 - The bounded `WM_ENDSESSION` wait for a running save (§4.4).
 - `Shutdown` after the window is hidden (§4.3).
 
-**G2 — Every kernel runs at hardware speed.** Kernels use SIMD on x64 and ARM64, all cores, and the D3D11 GPU
-wherever that is the fastest correct engine. Speed never changes a committed byte that a legacy golden fixes.
-
-**G3 — Camera RAW opens and develops faster than Photoshop.** On the same machine and the same file, RAW opens and
-develops faster than Adobe Photoshop with Camera Raw: M2 and M4 in §1.2. The claim is made only from a recorded
-same-machine measurement (§7).
+G2/G3 acceleration and RAW goals are defined in the [P2–P6 roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md#1-goals-and-how-they-are-measured).
 
 ### 1.1 Reference machines
 
@@ -776,156 +1229,11 @@ W targets for the frame row, with a 4K document: frames that recompose no docume
 only touched tiles present within 2 refresh intervals. Frames that recompose a whole layer present within the
 P0.1-measured WARP compose time of that document plus one refresh interval. 45 MP on W is recorded only.
 
-**Speed (G2) on R1, Release x64, 45 MP BGRA8 layer.**
-
-| Operation | Today (est., single thread, UI thread) | Target preview | Target commit |
-| --- | --- | --- | --- |
-| Levels, Curves, Exposure, Gradient Map | 0.25–0.6 s per slider tick; 1–2 s OK | ≤ 1 frame (per-layer GPU adjust draw) | ≤ 50 ms, exact |
-| Hue/Saturation | 0.4 s per tick; ~2 s OK | ≤ 1 frame | ≤ 80 ms, exact |
-| Gaussian blur σ = 10 | 0.66 s per tick (2048 px preview); 11–22 s OK | ≤ 1 frame at view resolution | ≤ 250 ms, exact |
-| Gaussian blur σ = 250 | ~13 s per tick; ~13 min OK | ≤ 2 frames | ≤ 600 ms (needs D4) |
-| Motion blur, 96 samples | ~3 s per tick; ~50 s OK | ≤ 2 frames | ≤ 1 s, exact |
-| Add Noise (Gaussian) / Grain | 3.9 s / 2.2 s per tick at full size | ≤ 1 frame | ≤ 400 ms / ≤ 150 ms, exact |
-| Lens correction | 90 ms per tick; 1.7 s OK | ≤ 1 frame | ≤ 150 ms, exact |
-| Content-aware fill, hole = 1 % of 45 MP | 7–9 s, run twice (preview + OK) | runs once | ≤ 4 s off-thread, exact |
-| Invert / Fill / Clear, whole layer | 0.85–1.7 s | — | ≤ 60 ms, exact |
-| Gradient drag | 1.1–1.8 s per pointer move | ≤ 1 frame | ≤ 100 ms, exact |
-| Shape tool mouse-up (45 MP shape) | ~0.8 s | draft outline | ≤ 60 ms, exact |
-| Blur / Clone / Liquify stroke start | 0.9 s – 65 s at pointer-down | next frame | — |
-| Brush 800 px, 4000×4000 document (measured 2026-09-21): update 11.9 ms median alone, mouse-up ≈ 21–28 ms. A 45 MP row is measured in P0.1 | — | ≤ 4 ms UI, preview on GPU (P3) | mouse-up UI ≤ 2 ms |
-| Distort apply / preview with a linked mask | 1.4–2.3 s / 1.1 s per move | ≤ 1 frame (GPU projective pass, P3) | ≤ 250 ms, exact |
-| Image Size 45 MP → 3840 wide, High (3×3 bilinear samples per channel) | 2–3 s per layer | — | ≤ 200 ms per layer, exact |
-| Merge Down / Merge Layers / Merge Group, merge fixture | 120–700 ms | — | ≤ 150 ms total, UI ≤ 2 ms |
-| Eyedropper / wand "all layers" press | 60–120 ms full readback | — | 1×1 or ROI readback, UI ≤ 1 ms |
-| Open 45 MP JPEG | 0.5–0.9 s blocking | first pixels ≤ 150 ms | full layer ≤ 400 ms |
-| Save 45 MP one-layer `.prism` | 5–15 s blocking | — | UI ≤ 2 ms; background ≤ ½ today (≤ 1.5 s with D11) |
-| Copy to system clipboard | 2.5–6.5 s blocking | — | UI ≤ 2 ms |
-
-**RAW (G3) on R1.** One ~45 MP file per format class: Sony lossless ARW, Canon CR3, Nikon lossless NEF, Fuji
-compressed RAF, tiled DNG. M1, M2 and M4 gate on warm opens (the second open, as Puget measures); cold opens are
-recorded. M2 and M4 gate on the pair measured with sharpening 0 and noise reduction 0 in both applications (§7).
-
-| Metric (§7 defines each) | P4 target | P5 target |
-| --- | --- | --- |
-| M1 open → first pixels on screen (embedded preview) | ≤ 150 ms | ≤ 100 ms |
-| M2 open → full-quality developed, editable layer (bake included) | ≤ Photoshop for CR3 and RAF. ARW, DNG and NEF recorded (LibRaw decodes them sequentially) | ≤ 0.5 × Photoshop for all five classes |
-| M3 develop slider → presented frame | ≤ 1 frame at fit; visible region at full resolution ≤ 60 ms after the pointer settles | same |
-| M4 open with Puget's Camera Raw tone and presence values → developed layer (Photoshop reads them from an XMP sidecar) | ≤ Photoshop for CR3 and RAF; the others recorded | ≤ 0.5 × Photoshop for all five classes |
-| M5 export the developed file to JPEG, matched quality, 4:4:4 | recorded | ≤ Photoshop |
-
-For scale, Photoshop takes 1.00–1.01 s for "File Open – RAW" of a 36 MP D810 NEF in Puget Bench for Photoshop 1.0
-(Photoshop 27.6–27.10). That is an average over mixed systems; §7 replaces it with same-machine numbers.
-
+The exact CPU speed, RAW open/develop and Photoshop ratio tables are retained in the future roadmap §1.2.
+They are separate phase exits. This milestone must satisfy every reliability row above whose exit is P1.
 ## 2. Starting inventory and implementation deltas
 
-The survey below explains the work from the pre-implementation code. Current completion is tracked in the
-opening checklist and the owning specs. The 2026-09-27 deltas include atomic raster publication, adopted result
-buffers, CPU benchmark modes and the already-landed review fixes noted above. Function names for the unified
-`ColorEdit` path are updated here; proposed job APIs in later sections are still future work.
-
-These facts come from reading the code, with anchors from the working tree at `0035f1b`. Line numbers in
-`Application.cpp` drift because of uncommitted edits, so the slices cite function names.
-
-- **No image kernel uses threads or SIMD.** The only concurrency today:
-  - COM reference counting (`AccessibilityRoot`);
-  - the crash handler's interlocked guard (`CrashDumps.cpp`);
-  - the harness-only free-threaded capture pool (`WindowCapture`).
-
-  Kernels are scalar: double for blur, resample, paint and histogram; float for tables, cube, noise and grain. x64
-  builds at the SSE2 default under `/fp:precise`, ARM64 at armv8.0. Release uses `/GL` for the app only. Each test
-  project compiles its own hand-picked subset of `Common/*.cpp`; CompositionTests also compiles
-  `RedPrism/CanvasRenderer.cpp` and `BrushCompute.cpp`. The static MSVC STL already contains runtime-dispatched
-  AVX2 code (`vector_algorithms`).
-- **The message loop** (`Application::Run`) drains with an inline `PeekMessageW` loop, asks
-  `SelectHostFrameAction`, then blocks in `MsgWaitForMultipleObjectsEx(QS_ALLINPUT, MWMO_INPUTAVAILABLE)` on the
-  settings watch, plus the frame-latency waitable before a frame. The UI thread is COM STA (`Main.cpp`). The
-  self-test and the bench never enter `Run`: they call `OnCommand` and `Renderer::Render` directly and assert on the
-  next line.
-- **Every image operation is synchronous on the UI thread**, including each preview tick, every commit, stroke
-  starts and finishes, readbacks, open/import/save/export, clipboard, merge, resize, shapes and first uploads. The
-  inventory is in §5.
-- **Kernel style**:
-  - per-pixel `std::lround`, per-pixel div/mod, and `std::function` calls in `BrushStroke::PaintCanvas`;
-  - the Gaussian blur is an O(σ) direct convolution with a 16 B/px float intermediate (`ImageFilters::GaussianBlur`);
-  - panel previews re-run the CPU kernel per tick at up to 4096 px, or at full size for noise, grain and fill
-    (`AdjustEdit.cpp` preview limits);
-  - a new raster identity per tick forces a new mipped texture and a full `UpdateSubresource`
-    (`CanvasRenderer::UploadRaster`).
-- **Every result is copied twice.** `Raster::Make` copies its input, and there is no adopting constructor. Kernel
-  wrappers value-initialize a vector, `ReadRegion` memsets and blits, then `Make` copies again.
-- **`Raster::Data()` becomes a data race as soon as a second thread reads a raster.** A sparse raster assembles
-  itself lazily into `mutable std::vector bytes` / `mutable bool materialized` with no synchronization.
-  `ReadRegion` reads the same fields non-atomically, for the raster and for its base. Save calls `Data()`
-  (`EncodeToFormat`), and the assembled copy is then kept forever. `DuplicateActiveLayer` inserts a copy without
-  checking the 100 M-pixel budget.
-- **GPU**:
-  - There is one device, created with `BGRA_SUPPORT` and without `SINGLETHREADED`, so creating resources is
-    free-threaded. DxUi uses a single-threaded D2D factory on the same immediate context, so all submission stays
-    on the UI thread.
-  - Nothing uses fences, queries, `DO_NOT_WAIT`, a capability probe, a VRAM budget or tiling.
-  - Readback creates a staging texture per call and blocks in `Map(READ)` (`CanvasRenderer::Readback`). The
-    brush blocks in `Map(READ)` per tile per pointer update (`GpuBrushCoverage::Render`).
-  - Canvas and stack surfaces are document-sized BGRA8 with one mip level. A layer above 16384 px, or above the
-    per-resource guarantee (min(max(128 MB, 25 % of dedicated VRAM), 2 GB)), fails `CreateTexture2D`; Compose
-    then fails and the window closes.
-  - The device is rebuilt synchronously inside `Render` (Present reports the device lost), in `ProbeOcclusion`,
-    and in `CheckDeviceAdapter` on `WM_DPICHANGED`, `WM_EXITSIZEMOVE` and `WM_DISPLAYCHANGE`.
-  - On WARP the brush runs the compute engine; the WARP self-test requires it.
-- **Adjustment layers already run on the GPU** as pass 6/7 of `CompositionPixel.hlsl`. That pass adjusts the canvas
-  composite beneath the adjustment layer, not one layer. It has no selection-coverage input, and it keys grain in
-  document space, while destructive Grain keys it in layer pixels (`Adjust::RunFilter`). So pass 6 cannot serve
-  directly as a destructive panel preview.
-- **Mask thumbnails carry semantics.** `MaskEdgeBackground(thumbnail)` decides what a placed mask shows beyond its
-  pixels; a missing thumbnail reveals. Compose, `CommitColorEdit`, strokes and distort all read it synchronously.
-- **I/O**:
-  - WIC only; 16-bit input is truncated to 8; there is no EXIF orientation, no ICC and no RAW (the container
-    whitelist in `ImageCodecs::DecodeFromDecoder`).
-  - ZIP saves already write `dest.tmp` then call `ReplaceFileW`. Folder projects use fixed staging and rotation
-    names. Neither flushes.
-  - PNGs are encoded one after another, then libzip re-deflates each at level 9, because
-    `zip_set_file_compression` is never called.
-  - Export truncates the target with `CREATE_ALWAYS`. `MarkSaved()` marks whatever revision is current.
-  - The WIC JPEG encoder is given only `ImageQuality`, so it encodes 4:2:0.
-- **History** copies whole `CanvasDocument` values: 3 per `End`, about 4 per `Undo`. The copies include selection
-  loops of up to 8 M edges, which the 256 MiB cap does not count. The limit is an `int`. `Trim` recomputes
-  `RetainedBytes` from scratch once per dropped entry.
-- **Synchronous contracts that async work must preserve**:
-  - `ConfirmDiscardChanges` calls `SettleInteractions`, which commits the transform, stroke, warp, gradient and
-    panel, and reads `history.IsModified()` on the next line.
-  - `OnCommand` settles the transform, then runs the command.
-  - Undo drops a live stroke.
-  - `CommitStroke` refuses a stroke whose source image changed.
-- **Staleness guards before the job split**: pixel commits check image identity. The shared `CommitColorEdit` and image
-  `CommitStroke` also check the transform. Mask identity is checked only for mask strokes. `MergeLayers` checks
-  only that the ids exist. `CanvasDocument::id` persists across save, load and resize.
-- **Tests**:
-  - `DocumentTests` calls some kernels directly and many through the synchronous `DocumentSession` API
-    (`CommitColorEdit`, `MergeLayers`). It writes fixtures through the mutable `Document()` at dozens
-    of sites.
-  - `levels.histogram-ready` and `adjustlayer.levels-histogram` assert that the histogram is ready synchronously.
-  - `--self-test` asserts on the next line.
-  - `HostTests` has no window and compiles no `RedPrism/*.cpp`.
-  - GPU parity runs on WARP only.
-  - P0.1 has added `kernels`, `kernels45`, `buffers`, `buffers45` and `kernels-smoke` beside `brush`.
-    `--crash-probe` takes a directory.
-  - The fail-closed sandbox `X:\RedPrism.Perf` is specified but not implemented.
-  - There is no CI.
-- **The crash handler is single-threaded.** A second thread that faults while a dump is being written returns
-  `EXCEPTION_EXECUTE_HANDLER` and ends the process mid-dump. `std::set_terminate` is per-thread in the UCRT and is
-  installed only on the UI thread.
-- **Legacy oracle**:
-  - The Swift app ran panel previews and commits in `Task.detached`. It kept one render in flight and one pending
-    slot holding the latest settings; its authors recorded that cancelling on each slider change starved the
-    preview (`HueSaturation.swift`, `Filters.swift`).
-  - Commit disabled the panel, kept the preview visible, and applied one entry only if the layer's image identity
-    and transform were unchanged.
-  - A busy indicator appeared after 250 ms, and edits were blocked while the project was busy.
-  - I/O ran on serial actors.
-  - It had no RAW support and no depth above 8 bits, so it is no oracle for G3.
-
-  Three legacy tests that specify async behavior were never ported: `LevelsTests.stalePreviewCannotReturnAfterOffOrReopen`,
-  `ProjectTests.projectOperationsBlockEditsAndQueueImageImports` and `ImageImportTests.queuedImportsAreNotLost`.
-  `SelectionEditTests.quickOperationsNeverDimTheInterface` is timing-based and becomes a pure function.
+The original 2026-09-22 survey is retained in [the future roadmap §2](ImageProcessingAccelerationAndRaw_2026-10-04.md#2-starting-inventory-and-implementation-deltas). It is historical: current code already includes P0/P1 migrations. Read the execution ledger and current owning contracts before using a survey statement as today's implementation. The opening slice table identifies native, experimental and unqualified work separately.
 
 ## 3. Principles
 
@@ -965,6 +1273,8 @@ These become normative text in the owning specs (§9).
     intentional, measured and justified in its record.
 
 ## 4. Architecture
+
+Ownership and ordering contracts shared with later phases are retained here. Paragraphs explicitly marked P2/P3/P4 describe future dependencies; P1 closeout is governed by the phase column in §1.2 and §10's P1 exit. In particular, tiled GPU residency and GPU compute slicing do not become P1 requirements through this split.
 
 ### 4.1 Threads and owners
 
@@ -1422,7 +1732,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     engine. They run as off-screen GPU composes: whole in P1, sliced from P3.1.
 - **Tiled residency and canvas mips (P3.3)**. These keep the AGENTS rule that the composition composites only when
   the document changed.
-  - **Layer textures** become 2048² tiles: 16 MiB as BGRA8, 32 MiB as RGBA16F. That is under the 128 MB guarantee,
+  - **Layer textures** become 2048² tiles: 16 MiB as BGRA8, 32 MiB as RGBA16F. That is under the 136 MB guarantee,
     and it lifts the 16384 px limit to the 30 000 px model limit.
   - **The display canvas** is composed in document space into 2048² canvas tiles, and only for the tiles a document
     change touched: the union of the old and new bounds of the changed layers, or everything when that is unknown.
@@ -1437,86 +1747,9 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     the window. The `GPU raster residency` row of `Core_PerformanceAndResources.md` names the off-screen composite
     cache and the develop tiles, with their byte caps.
 
-### 4.8 SIMD kernel layer
+### 4.8 Scalar dispatch and future SIMD work
 
-**Tiers.**
-
-- **x64**:
-  - `Scalar`: the retained reference, and the floor.
-  - `Sse2`: always present on x64. It emulates what SSE2 lacks, exactly:
-    - trunc and floor through `cvttps2dq`/`cvttpd2dq` round trips, with the precondition |x| < 2^31, which holds
-      for every clamped kernel value;
-    - the 32-bit low multiply (Mix32) through `pmuludq` on the even and odd lanes.
-  - `Avx2`: detected by CPUID.1:ECX[12] FMA, ECX[26] XSAVE, ECX[27] OSXSAVE, ECX[28] AVX and ECX[29] F16C; CPUID.(7,0):EBX[5] AVX2 and EBX[8]
-    BMI2; and XCR0[2:1] = 11b. `__check_isa_support(__IA_SUPPORT_VECTOR256)` may replace only the AVX2 and XCR0
-    part.
-  - Optionally `Avx512` (D16).
-- **ARM64**: a `Neon` floor. FP16 and dot-product helpers are used only where `IsProcessorFeaturePresent` reports
-  them (Windows 11 24H2 and later; older builds report false, which is safe).
-- **Dispatch**: a `KernelTable` of function pointers is chosen once at startup. `--isa scalar|sse2|avx2|avx512|neon`
-  (a new harness switch) and `SetIsaForTest` force a tier.
-
-**No mixed-`/arch` translation units.**
-
-- Tier kernels are written with intrinsics, in TUs compiled at the **default** `/arch`. MSVC emits VEX/EVEX only for
-  functions that use AVX2, F16C, BMI2 or AVX-512 intrinsics. No shared COMDAT (an STL template, an implicit special
-  member, a `<cmath>` wrapper) is ever compiled for a higher ISA.
-- Every tier entry point, in any module, is an extern `__declspec(noinline)` function named
-  `Kernels_<Tier>_<Module>_<Name>` (for example `Kernels_Avx2_RawDevelop_Demosaic`, `Kernels_Avx2_RawDecode_Lj92`).
-  It lives in its own tier TU (`Kernels_<Tier>_<Module>.cpp`) and is reached only through the `KernelTable`.
-- **Mechanical check**: in every x64 configuration, `build.ps1` finds VEX/EVEX instructions by prefix (C4/C5/62) in
-  executable sections. It attributes each one to its contributing object through the linker map or PDB section
-  contributions, and fails on any that is not in a `Kernels_Avx2_*`/`Kernels_Avx512_*` object.
-  - A checked-in allowlist names `vector_algorithms.obj` from `msvcprt[d].lib` and the exact PDB procedure range
-    of runtime-dispatched `wmemchr`. MSVC emits that intrinsic inside consumer objects (observed in ImageCodecs),
-    so the function exception MUST NOT exempt that whole object. A new third-party exception needs evidence of
-    its own CPUID dispatch. P0.8 scans all five first-party images and matches PE/PDB GUID and age.
-  - P0.8 proves the current binary passes with only that allowlist.
-  - An `--isa sse2` self-test under Intel SDE with a pre-AVX CPU model is optional and recorded at closeout. An
-    `--isa sse2` run on an AVX2 host cannot detect a leak.
-
-**Exactness technique.**
-
-- Vectorize **across output pixels, never across the terms of one pixel's sum**.
-- Use only IEEE-exact vector ops: add, sub, mul, div, sqrt, and conversions with explicit rounding.
-- `min`/`max` copy the reference's `std::min`/`std::max` operand order, because `minps`/`maxps` and NEON
-  `FMIN`/`FMAX` treat NaN differently.
-- Hand-written FMA is banned wherever the reference does `a * b + c`.
-- Emulate `std::lround`/`std::round` (half away from zero) as `trunc(x) + (|x − trunc(x)| ≥ 0.5 ? sign(x) : 0)` in
-  the same precision. That is exact for every finite input; it differs only for −0.0 and NaN, which kernels clamp
-  away. Never use `cvtps2dq`, which rounds half to even.
-- `/fp:precise` stays. MSVC 14.51 does not contract under it on x64 or ARM64.
-
-**Transcendentals and parameters.**
-
-- Kernels that call the CRT per pixel get thread parallelism only: Gaussian Add Noise, the brush tip density, Spot
-  Healing's Create Texture grain, and the radial gradient's `std::hypot` (sqrt(x² + y²) is not bit-equal to it).
-- Every other kernel is split into two parts:
-  - **parameter derivation**: the CRT calls, run once per settings (blur weights, the Levels/Curves/Exposure float
-    tables, motion dx/dy, Heal's candidate offsets from `cos`/`sin` → `lround`);
-  - **a pixel stage** built only from IEEE basic operations and integer math.
-- The UCRT switches `exp`/`pow`/`log` to FMA3 implementations on CPUs that have FMA3 (`_set_FMA3_enable`), and
-  ARM64 has its own CRT. Parameters can therefore differ in the last bit between machines, so cross-architecture
-  hashes cover the pixel stage only (§8).
-
-**Exact reformulations**, each proven equal by an exhaustive or matrix test:
-
-- **Levels/Curves/Exposure**: a (value, alpha) byte LUT per channel, 3 × 65 536 bytes, built by running the scalar
-  reference over every pair. The test is exhaustive equality over all (v, a).
-- **Gradient Map**: integer SIMD.
-- **HSV cube**: float trilinear with the 8 weights hoisted and the same summation order.
-- **BlendThrough**: fused into the adjustment kernel, with the same lerp and rounding.
-- **AlphaBounds**: a min/max reduction.
-- **Premultiply/unpremultiply**: integer reciprocal tables.
-- **Invert, Fill, Clear, Delete**: integer blends `(c·s + o·(255−s) + 127) / 255`, because every factor is m/255,
-  opacity is 1 and the color alpha is 1. The exact value is N/255, which is never within 1/510 of a half-integer.
-  The proof and an exhaustive (c, o, s) test per mode go in `Document_Tools.md`.
-- **Gradients**: the linear gradient keeps the double formula, vectorized lane by lane. The radial gradient calls
-  scalar `std::hypot` per pixel. Both have a tier-equality test.
-- **Not an exact reformulation**: the Levels histogram. Its integer form is a redefinition (the D12 spec change).
-
-**Half floats**: F16C (`_mm256_cvtph_ps`) and NEON `vcvt_f32_f16` in the RAW CPU path. Scalar DirectXPackedVector
-conversion is never used in a hot loop.
+P0.8's scalar dispatch and ISA floor remain P1 prerequisites. Detailed tier detection, noinline entry points, exactness proofs, matrix and SIMD kernels are retained in [the future roadmap §4.8](ImageProcessingAccelerationAndRaw_2026-10-04.md#48-simd-kernel-layer) for P2. P1 keeps committed kernel arithmetic unchanged.
 
 ### 4.9 Observability
 
@@ -1681,466 +1914,17 @@ unchanged.
 - **No UI-thread file I/O**: `LooksLikeProjectPath` and `PathLooksLikeZipProject` read the file, and can stall for
   seconds on a cloud placeholder or network path. They move into the Io job; the UI decides by extension only.
 
-## 6. RAW pipeline
+## 6. RAW work follows P1
 
-### 6.1 Scope of v1
+The complete decoder/develop math, formats, statuses, precision, budgets, patch/license contracts, file-backed corpus and ViewerImgRaw references are in [the future roadmap §6](ImageProcessingAccelerationAndRaw_2026-10-04.md#6-raw-pipeline). The [RAW acquisition record](../../TestRuns/RawCorpus_2026-09-30.md) and checked-in downloader remain available. RAW correctness/develop/round-trip and performance qualification are P4/P5 work, not P1 Done conditions.
 
-- **Layouts** (`RawInfo.layout`):
-  - **`BayerCfa` and `XTransCfa`**:
-    - Canon CR2 and CR3;
-    - Nikon NEF (lossless compressed, compressed, uncompressed);
-    - Sony ARW (compressed, lossless);
-    - Fuji RAF (compressed, uncompressed);
-    - Panasonic RW2, Olympus/OM ORF, Pentax PEF;
-    - DNG with a CFA.
-  - **`LinearRaw(n)`**: linear DNG, including phone files and DNG Converter "linear" output. LibRaw leaves
-    `raw_image` null and fills `color3_image`/`color4_image`.
-  - **`YccRgb`**: Sony YCC pseudo-RAW. LibRaw decodes it as 3-channel RGB that is already white-balanced.
-- **Out of v1.** Each returns a clean status (`RawUnsupportedCompression` or `RawUnsupportedCamera`) and offers the
-  embedded preview:
-  - Nikon HE/HE* (TicoRAW patents; D15);
-  - DNG 1.7 JPEG XL (libjxl, a P5 option);
-  - lossy (JPEG) DNG, unless D5 enables LibRaw's `dng-lossy`;
-  - Nikon sRAW, unless routed through `YccRgb`;
-  - Apple ProRAW local tone maps (`ProfileGainTableMap`);
-  - Sony ARW 6.0 lossy and Fuji lossy RAF.
-- **Already white-balanced files**: `RawInfo.whiteBalanceApplied` comes from `imgdata.color.as_shot_wb_applied`.
-  This covers Canon, Nikon and Pentax multi-exposure files and the YCC files.
-- **Size** (D14): any RAW whose oriented, cropped frame exceeds 100 000 000 pixels returns `TooLarge`, with the
-  embedded preview offered as an 8-bit layer. That includes GFX100 (101.8 MP), X2D (101.9 MP) and IQ4 (151.3 MP).
-  Files are limited to ≤ 512 MiB.
+## 7. Photoshop comparison follows RAW qualification
 
-### 6.2 Decoder stack
-
-**LibRaw ≥ 0.22.2**, the 2026-07-16 security release (the pinned baseline has 0.22.1), comes in through an overlay
-port, `Build/vcpkg-ports/libraw`:
-
-- LibRaw-cmake with `ENABLE_OPENMP=OFF`, `ENABLE_LCMS=OFF` and `ENABLE_JASPER=OFF`. Jasper is unused from 0.22 on.
-  OpenMP spin-waits by default and is incompatible with ASan.
-- zlib is kept for deflate DNG. `dng-lossy` only under D5.
-- RedPrism links only `raw_r` (`libraw::libraw_r`). The non-`_r` `raw` library is built with `LIBRAW_NOTHREADS` and
-  keeps static decoder state.
-- LibRaw is a DLL (LGPL-2.1 compliance; the CDDL alternative stays available), built in the x64-windows-asan tree
-  too. The patch is published with the LGPL notice.
-
-**The `LIBRAW_USE_CALLBACK_PARALLEL` patch** replaces LibRaw's OpenMP loops with a RedPrism-supplied parallel-for.
-Nothing may escape from it into RedPrism code.
-
-- **Hook ABI**: `int (*)(void* ctx, void (*body)(void* bodyCtx, int64_t begin, int64_t end), void* bodyCtx,
-  int64_t count)`.
-  - It returns 0 when every iteration ran and 1 when `ParallelFor` stopped early on cancel.
-  - Neither pointer type carries `noexcept`; the no-throw rule is part of the contract.
-  - RedPrism implements the hook with `ParallelFor`.
-- **Loops covered**:
-  - `fuji_decode_loop` (768 px strips);
-  - `crxLoadDecodeLoop` and `crxLoadFinalizeLoopE3` (CR3 planes);
-  - `pana8`'s stripe loop (RW2 encoding 8).
-- **Exceptions stay in the DLL.** Each body keeps the OpenMP-mode handling: a try/catch per iteration and an atomic
-  error count. After the join, on the calling thread and still inside the DLL, LibRaw rethrows (for example
-  `LIBRAW_EXCEPTION_IO_EOF`), or throws `LIBRAW_EXCEPTION_CANCELLED_BY_CALLBACK` when the hook returned 1. The
-  public API then returns an error code. `derror()` state updates become atomic.
-- **Stream serialization**: RedPrism opens files through `open_datastream` with a `LibRaw_buffer_datastream`
-  subclass whose `lock()`/`unlock()` take an SRWLOCK. This is LibRaw's documented extension point: the base
-  `lock()` is a no-op, and without it parallel strips would race on the shared read cursor.
-- **Allocator**: `LibRaw_memmgr::mem_ptr`/`forget_ptr` take an SRWLOCK in this mode. Fuji strips `calloc` through
-  it.
-- **Cancel**: `fuji_decode_strip`, `crxDecodePlane` and `pana8_decode_strip` poll once per decoded line or block.
-  The poll reads `_exitflag` and does not clear it; `checkCancel` would clear it.
-- **Not covered**: the LJ92 decoders (`sony_ljpeg_load_raw`, `lossless_dng_load_raw`) and `nikon_load_raw`. They
-  have no OpenMP loop and walk tiles or rows through one shared bit reader, so they stay sequential in LibRaw. That
-  is why ARW, DNG and NEF reach their M2 targets only in P5.
-
-**Wrapper** `Common/RawDecode.{h,cpp}`, a header with fixed-width types only:
-
-- `RawProbe(bytes) → RawInfo`: make, model, dimensions, `layout`, CFA pattern, levels, white balance,
-  `whiteBalanceApplied`, color data, orientation and the thumbnail list.
-- `RawExtractPreview(bytes, maxSide)`: the smallest embedded JPEG at or above `maxSide`.
-- `RawDecode(bytes, executor, token) → RawPlanes`: a `uint16` CFA, or linear planes, adopted into `PixelBuffer`s.
-
-The file is read once into a buffer. `setCancelFlag` is driven by the job token. `LIBRAW_UNSUFFICIENT_MEMORY` fails
-the job. `max_raw_memory_mb` and dimension caps apply before any allocation.
-
-**DNG specifics**:
-
-- LibRaw applies the DNG `LinearizationTable` through `imgdata.color.curve` during unpack. `RawDecode` saves that
-  table after `open_datastream`, whose identify step loads it for the selected IFD, and sets the curve to the
-  identity before `unpack()`. `raw_image` (or `color3/4_image` for `LinearRaw`) then holds the stored values, and
-  the develop linearizes itself in spec order (§6.4). Non-DNG camera curves stay inside the decoder.
-- LibRaw keeps only the rounded mean of `BlackLevelDeltaH/V` and parses no profile tables. A RedPrism **DNG tag
-  reader** therefore reads:
-  - `BlackLevel` and `BlackLevelDeltaH/V`;
-  - `ProfileHueSatMapDims`/`Data1`/`Data2`/`Data3` and `ProfileHueSatMapEncoding`;
-  - `ProfileLookTableDims`/`Data` and `ProfileLookTableEncoding`;
-  - `BaselineExposure` and `BaselineExposureOffset`;
-  - the calibration signatures and `ForwardMatrix1/2`.
-- Opcode lists come from `dng_levels.rawopcodes[0..2]`.
-- The tag reader is fuzzed from P4 on.
-
-**RedPrism fast decoders (P5)** replace LibRaw's decode where it is the critical path. Each must produce a buffer
-bit-identical to LibRaw's output for every corpus file: `raw_image` (identity curve for DNG, camera curve otherwise)
-or `color3/4_image`. That is the golden, and a perfect oracle.
-
-- **LJ92 tile decoder** for Sony lossless ARW (512² tiles) and DNG lossless tiles. Tiles decode in parallel with a
-  64-bit bit reservoir and multi-symbol Huffman lookup tables. Estimate: 45 MP in ≈ 65–90 ms on R1, against ≈ 1 s
-  sequentially in LibRaw.
-- **Sequential LUT Huffman decoder** for NEF lossless (with its per-row vertical predictor) and CR2. A CR2 is one
-  lossless-JPEG scan with no independent entry points, so it gets no tile parallelism. Estimate: 150–250 MP/s, or
-  0.2–0.3 s for 45 MP. A speculative self-synchronizing parallel decode (Weißenberger & Schmidt, ICPP 2018) is
-  attempted only if the LUT decoder misses M2.
-- **CR3 CRX**: more than 4-way parallelism, if the tiles prove independent (verify against `crx.cpp` and the lclevy
-  notes).
-
-**Security**: RAW files are untrusted input parsed in-process.
-
-- The LibRaw pin tracks security releases.
-- The RedPrism decoders and the DNG tag reader get fuzz targets.
-- Hostile-file tests cover truncation, huge dimensions, recursive IFDs and zero-size tiles.
-- The multi-thread crash handler (§4.1) dumps a decoder crash like any other.
-
-### 6.3 Open flow and budget (R1, 45 MP Sony lossless ARW, estimates)
-
-| Step | Where | P4 | P5 |
-| --- | --- | --- | --- |
-| Read the whole file (60 MB, `FILE_FLAG_SEQUENTIAL_SCAN`, reused buffer) | Io lane | ≤ 6 ms warm; cold depends on the drive (recorded in P0.1) | same |
-| `RawProbe` + pick the embedded preview (1616×1080) | Io lane | ≤ 5 ms | same |
-| WIC scaled JPEG decode of the preview → upload → next frame (**M1**) | Io lane + ring + UI | ≈ 40–80 ms after open | same |
-| CFA decode | Io lane + pool | ≈ 1.0 s (LibRaw, sequential LJ92 tiles) | ≈ 65–90 ms (RedPrism LJ92, pool of N) |
-| CFA upload (90 MB R16) | Worker create or ring | 5–15 ms | same |
-| GPU develop at full resolution: unpaced `SubmitGpuWork` while nothing is invalidated, otherwise ≤ 2 ms per presented frame (3–8 frames at 120 Hz) | UI records | 5–15 ms GPU | same |
-| Bake to a layer (RGBA16F → dithered sRGB8, ring readback, adopt) | GPU + R + J | 30–50 ms | same |
-| **M2 full quality, editable** | | ≈ 1.15–1.35 s | ≈ 180–300 ms |
-
-The other formats follow the same shape. CR3 through the parallel hook is estimated at 0.15–0.3 s of decode in P4. A
-40 MP RAF is ≈ 0.4 s with strips on the pool. NEF and CR2 need the P5 LUT decoder to reach 0.5 × Photoshop.
-
-### 6.4 Develop pipeline ("RedPrism Develop 1")
-
-The math is normative in `Rendering_RawDevelop.md`, with an fp32 scalar CPU reference in `Common/RawDevelop.{h,cpp}`.
-The stage order follows the DNG specification (1.6/1.7), so one pipeline is well-defined for DNG and for every
-LibRaw format. `LinearRaw` and `YccRgb` inputs skip steps 2–3 and do highlight handling in RGB.
-
-1. **Raw prepare**, in spec order, per site:
-   1. `OpcodeList1` on the stored integers (values 0…2^16−1; `FixBadPixelsConstant` compares the integer constant).
-   2. `LinearizationTable`.
-   3. Black: the `BlackLevel` repeat pattern plus per-row `BlackLevelDeltaV` and per-column `BlackLevelDeltaH`. Never
-      add LibRaw's `black`, `dng_black` or `dng_fblack` to the deltas.
-   4. Rescale by 1 / (White − max black), then clip to [0, 1], keeping a clip mask.
-   5. `OpcodeList2` (`GainMap`, `MapTable`, `MapPolynomial`, `Delta/Scale PerRow/Column`, bad-pixel lists), with a
-      clip after each opcode.
-   6. White balance **W = k · diag(1/CameraNeutral)**:
-      - CameraNeutral is `AsShotNeutral`; or the neutral that the interpolated XYZtoCamera computes for a
-        Kelvin/tint target; or auto (gray-world on the preview level).
-      - k normalizes the smallest multiplier to 1.
-      - Already-balanced files apply the requested multipliers divided by the as-shot ones.
-2. **Highlight reconstruction** on the CFA before demosaic.
-   - The default is clip-and-blend, which is exactly the identity on unclipped data.
-   - The quality mode is "inpaint opposed", darktable's method, run as two passes:
-     - A whole-image pre-pass computes the chroma correction vector from partial sums over a fixed 1024² partition,
-       merged in partition order. That partition is part of the Develop 1 definition, and the untiled CPU reference
-       uses the same partition and merge order.
-     - The vector is cached by (CFA identity, WB, clip levels). Tile, region-of-interest and level-of-detail passes
-       all consume the cached vector, so preview and bake agree.
-     - The stage cache re-runs the pre-pass when WB or the clip levels change.
-3. **Demosaic**:
-
-   | Pattern | Interactive | Final (bake, export, full-resolution refine) |
-   | --- | --- | --- |
-   | Bayer | 2×2 superpixel (½ size) at ≤ 50 % zoom; Malvar-He-Cutler 5×5 (2 px halo) above | RCD, 10 px halo |
-   | X-Trans | 3×3 superpixel (⅓ size) at ≤ 33 % zoom; Markesteijn 1-pass (or fast X-Trans bilinear) above | Markesteijn 1-pass, 12 px halo (a multiple of 6) |
-
-   - Superpixel levels involve no interpolation. They are preview levels and do not equal the final demosaic.
-   - Bake and export always demosaic at full resolution with the final method.
-   - Tiled output equals untiled output byte for byte on the CPU engine, and within the `Rendering_RawDevelop.md`
-     tolerance on the GPU (§6.8).
-4. **`OpcodeList3`** (`WarpRectilinear`, `FixVignetteRadial`) when present. Lens profiles beyond DNG opcodes are not
-   in v1: lensfun is LGPL-3 with a CC BY-SA database (D5).
-5. **Color**, fp32 unclamped, on white-balanced data:
-   1. Camera → XYZ(D50).
-      - With a `ForwardMatrix`: M = FM · D · inverse(AB · CC) · inverse(W), which reduces to FM/k when AB · CC is
-        diagonal.
-      - Without one: M = CA · inverse(AB · CC · CM) · inverse(W), where CA is the linear Bradford adaptation from
-        the white xy to D50.
-      - With two or three illuminants, CM, CC, FM and the HueSatMap data interpolate linearly in inverse correlated
-        color temperature, as the spec defines.
-      - Non-DNG files use LibRaw's `cam_xyz` (the `adobe_coeff` D65 matrix) as a single-illuminant CM through the
-        no-ForwardMatrix formula. `rgb_cam` is not used.
-   2. → linear ProPhoto → **HueSatMap**, honoring `ProfileHueSatMapEncoding`.
-   3. → exposure = `BaselineExposure` + `BaselineExposureOffset` + user EV.
-   4. → **LookTable**, honoring `ProfileLookTableEncoding`.
-   5. → Rec.2020 linear working space.
-
-   RedPrism does not ship Adobe DCP profiles and does not claim ACR color parity.
-6. **Tone and presence**, with no exposure term, fused into one per-pixel pass except for the local operator:
-   - a filmic base curve with white and black points;
-   - contrast, highlights and shadows, through a local operator on log luminance computed on a ¼-resolution
-     guided-filter pyramid, so its cost is independent of image size (the legacy `GuidedMatte` precedent);
-   - vibrance, saturation, and a point tone curve (monotone Hermite, as in `Adjust::CurveValue`).
-7. **Detail**: sharpening (a luminance unsharp mask: amount, radius, threshold) and noise reduction (luminance and
-   chroma, edge-aware, on the pyramid). Noise reduction is optional in v1.
-8. **Output**: working space → sRGB (the document's working space) → gamma encode.
-   - Baking to `Bgra8888` adds a position-hashed TPDF dither of ±0.5 LSB, keyed by document coordinates and a fixed
-     seed.
-   - For a given engine, the bytes are reproducible across tiles and threads. The GPU and CPU engines agree within
-     the `Rendering_RawDevelop.md` tolerance.
-   - Orientation and crop apply last.
-
-**Precision and formats**:
-
-- The CFA is `R16_UINT`, read through SRVs.
-- Raw prepare on the CFA uses `R32_FLOAT`.
-- The demosaic output and the color stages (steps 3–5) use `R32G32B32A32_FLOAT`.
-- Intermediates after the working-space conversion use `R16G16B16A16_FLOAT`.
-- Kernels **read SRVs and write UAVs, ping-pong style**, so only typed UAV *stores* are needed. FL11_0 guarantees
-  those for these formats; the P1.3 probe confirms them. Typed UAV loads are never required.
-- Shader math is fp32; `min16float` is not relied on.
-- The stage cache's VRAM budget counts the fp32 demosaiced tiles: 16 B/px, ≈ 720 MB for a fully resident 45 MP
-  image. It keeps only the visible levels resident.
-
-**Tiling, level of detail and region of interest**:
-
-- The pipeline runs on 1024² tiles plus the halos above.
-- The develop keeps a pyramid: full resolution, then the ½ or ⅓ superpixel level, then halvings.
-- An interactive change renders the visible region at the view's level. When the pointer settles, a Refinement job
-  renders the visible region at full resolution.
-- The whole image is rendered at full quality only for bake and export.
-
-**Stage cache**: a change re-runs only from the earliest stage it affects.
-
-| Change | Re-runs from |
-| --- | --- |
-| Tone, color or curve | Step 6, from cached tiles |
-| Exposure or profile tables | Step 5 |
-| White balance | Step 1.6, plus the highlight pre-pass |
-| Detail | Step 7 |
-
-### 6.5 CPU engine
-
-`Common/RawDevelop` holds three things:
-
-- the fp32 scalar reference;
-- the AVX2/NEON tile kernels for the same stages (`Kernels_Avx2_RawDevelop_*` / `Kernels_Neon_RawDevelop_*`), used
-  on WARP or when the probe fails;
-- the half-float helpers.
-
-The CPU engine meets G1. It is expected at 20–40 ms per full-resolution per-pixel pass at 45 MP on R1, and it is
-the parity reference for the GPU.
-
-### 6.6 Document integration
-
-- **Opening a RAW** (the open command, drag-drop, a positional path) goes through `OpenPaths` and its image-open
-  prompt: new project, or layer in the current document. Until the develop is ready, the canvas shows the embedded
-  preview with the status "Preview". Then the develop output replaces it.
-- **The Develop panel** opens with:
-  - white-balance presets, and temperature and tint;
-  - exposure, contrast, highlights, shadows, whites and blacks;
-  - vibrance, saturation and a curve;
-  - sharpening and noise reduction;
-  - a live histogram of the develop output: a GPU reduction with integer bins, reading back 4 KiB per settled change;
-  - OK and Cancel.
-- **OK bakes** the full-quality develop into a `Bgra8888` layer through a Commit job, and records one history entry,
-  "Develop RAW".
-- **Cancel** leaves the target document unchanged. For a new project, it closes the project.
-- **Develop settings** travel with the layer only once D6 (the develop layer, `.prism` v8) is decided. v1 does not
-  change the schema.
-- **While the Develop panel is open**, the document is a pending edit, like any panel: painting and history wait,
-  and the view stays live.
-
-### 6.7 Caches and multiple files
-
-- **In-memory develop cache**: the decoded planes and the demosaiced pyramid of the open RAW, bounded by the memory
-  and VRAM budgets, and freed on close or under pressure. There is no disk cache in v1.
-- **Several RAWs opened together** go through `OpenPaths`, with one image-open prompt. The first RAW becomes the
-  document (New Project) or a layer (Add Layer). The others are placed as layers through Develop panels shown one at
-  a time, in submission order. Probe, preview extraction and decode run ahead in parallel within the memory budget.
-- **Multi-document windows** are out of scope. Application owns one `DocumentSession`.
-
-### 6.8 RAW goldens (D8)
-
-**Synthetic DNGs** are generated by IoTests from code, as the rule that binaries are not committed requires.
-
-- **Contents**: 16-bit RGGB and X-Trans CFAs and a linear DNG, with known values for:
-  - `LinearizationTable`, `BlackLevel` with its deltas, and `WhiteLevel`;
-  - `AsShotNeutral`, plus `AnalogBalance` and `CameraCalibration` that are not the identity;
-  - `ColorMatrix1/2` and `ForwardMatrix1/2`;
-  - `HueSatMap` and `LookTable` in both encodings, and `BaselineExposure`;
-  - each supported opcode;
-  - a flat field, an edge and a clipped patch.
-- **Expected values** are analytic, from the DNG equations:
-  - linearize, black (with deltas), scale and each opcode are exact;
-  - an as-shot neutral patch maps to XYZ D50 (0.9642, 1, 0.8249) within 1e-5, on both matrix branches;
-  - the table order and both encodings match;
-  - the `BaselineExposure` offset is applied;
-  - every demosaic method and pattern gives flat-field equality and full channel coverage;
-  - edge profiles stay within each method's documented bound;
-  - clipped highlights are handled;
-  - the dither has the expected statistics.
-
-**Other goldens**:
-
-- **Decoder bit-exactness**: RedPrism decoders against LibRaw's output (identity-curve `raw_image` for DNG), on the
-  synthetic files and on the corpus.
-- **Tiling**: tiled develop equals untiled byte for byte on the CPU engine, and within tolerance on the GPU.
-- **GPU vs CPU reference**: per stage and per channel, |gpu − cpu| ≤ 1e-3 · |cpu| + 2^-16. In the baked 8-bit
-  output, ≤ 1/255 on 99.9 % of pixels and ≤ 3/255 max. `Rendering_RawDevelop.md` names these numbers.
-- **Corpus**: `Tests/Fixtures/raw-corpus.json` lists CC0 files from raw.pixls.us by camera, format and SHA-256. The
-  files are materialized under the fail-closed `X:\RedPrism.Perf\corpus`, which P0.1 implements. Tests that need the
-  corpus SKIP when it is absent, as the Fluent-font check does. Each P4/P5 closeout record shows that the
-  corpus-dependent tests ran (not SKIP) in x64 ASan Debug.
-
-### 6.9 File-backed RAW qualification and ViewerImgRaw reference
-
-**Implementation reference reviewed on 2026-09-30.** The user's reference is
-`Z:\src\RedSalamander\Plugins\ViewerImgRaw`, clean at RedSalamander commit
-`b5b0996292736b70983d9202f5cfedb79f12e38a`. Relevant anchors:
-
-- [Decode.cpp](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.Decode.cpp:706): cancellation through LibRaw's
-  progress callback and stale request generations; preview extraction and full decode are separate stages.
-- [Full RAW decode](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.Decode.cpp:1601): validates dimensions
-  after unpack and before process, then validates output format, checked sample/byte products and source length.
-  Its reservation scope releases on failed processing. RedPrism additionally declares the full decode peak before
-  dispatch; post-unpack validation alone does not bound unpack allocations.
-- [Resource policy](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.ResourcePolicy.h:10): checked arithmetic
-  and explicit input, image, embedded-preview and speculative-cache caps. Adapt the validation pattern to §4.6
-  and §6.1, with boundary tests; its 64 Mi-pixel/16,384-side viewer caps are separate from RedPrism's policy.
-- [Async protocol](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.AsyncProtocol.h:17): progress fields and
-  terminal sequencing deserve independent state tests. RedPrism uses its scheduler's completion/progress channel
-  and session serials, with no borrowed HWND in worker progress.
-
-The viewer requests `output_bps = 8`, optionally half-size, then converts processed data into BGRA. Its output is
-a browsing result. RedPrism retains CFA/linear precision and follows §6.4 for develop, orientation and final bake.
-The viewer's `dcraw_process()` result is not a numeric develop oracle. Keep RedPrism's §6.2 decoder build/options,
-single application GPU device, ordered imports and bounded develop cache. Do not copy plugin module/unload or
-neighbor-prefetch ownership into the editor. The reference survey ran no RedSalamander tests or RAW decodes.
-
-**Real files.** `Tests/Fixtures/raw-corpus.json` supplies the exact filenames, per-file CC0 evidence, sizes and
-SHA-256. Resolve them under the marked `X:\RedPrism.Perf\corpus`; never silently download, substitute another camera
-file or modify the source corpus during a test. Every `gating` and `correctness` manifest entry is mandatory for
-P4/P5 correctness qualification. The five large files below additionally retain their §7 performance roles.
-The ordinary developer suite may explicitly SKIP missing corpus tests; the phase qualification invocation must
-fail if any required file/reference is missing, mismatched, unsupported unexpectedly or skipped. All synthetic
-and hostile generated-file tests run without the downloaded corpus. Publish this distinction in the P4 test
-runner and `Testing_Validation.md` when implementing it.
-
-| File class / manifest ID | File-backed assertions | Owner / gate |
-| --- | --- | --- |
-| Sony lossless ARW / 4466 | Probe/preview/full decode return distinct statuses; active-area dimensions and decoded planes agree with the pinned decoder reference; full-quality develop/bake has a recorded checksum | IoTests + real host; correctness required, speed recorded under §7 |
-| Smaller ARW / 1582; Sony YCC small / 6931 | Compressed Bayer versus decoded three-channel YCC classification; no second CFA demosaic or duplicate white balance for YCC; validate actual decoded layout before accepting the candidate as coverage | IoTests + develop tests; correctness required |
-| CR2 / 1230; smaller CR3 / 4661 | Full Bayer RAW, crop and active-area reference; correct compression/frame path, full decode distinct from preview | IoTests + real host; correctness required |
-| NEF compressed / 5227, uncompressed / 5364, 12-bit lossless / 959 | Exercise all supported compression families against pinned unpack references, in addition to the large 14-bit lossless file | IoTests + real host; correctness required |
-| Uncompressed RAF / 842, 1214 | Independently verify X-Trans/Bayer classification, raw samples and orientation; do not infer CFA solely from camera name | IoTests + develop tests; correctness required |
-| Uncompressed Linear Raw DNG / 1031 | Verify actual three-channel 16-bit linear layout, profile/matrix policy, strip reads and active area against the decoder reference; no CFA demosaic; do not use excluded lossy JPEG DNG as a substitute | IoTests + develop tests + real host; correctness required |
-| RW2 / 1395; ORF / 5424; PEF / 2239; smaller CFA DNG / 943 | Probe, preview/no-preview, unpack, camera metadata, crop and develop against the applicable independent reference; each extension reaches the real host round trip | IoTests + real host; correctness required |
-| Canon CR3 / 4694 | Correct frame/active area, lossless raw samples and camera metadata; CPU/GPU develop parity; no embedded preview mistaken for full-quality readiness | IoTests + real host; §7 CR3 performance gate after correctness |
-| Nikon lossless NEF / 1840 | Unpack/sample and bit-depth reference, orientation/crop, preview/no-preview path and full-quality output; reject source truncation | IoTests + real host; correctness required, speed recorded |
-| Fuji lossless RAF / 6002 | Read actual CFA metadata and assert X-Trans only when independently confirmed; channels/edges follow the reference for the decoded layout; compressed decode matches pinned LibRaw | IoTests + develop tests; §7 RAF performance gate after correctness |
-| Pixel 8 Pro tiled DNG / 7751 | Decode the already verified 8160×6144 CFA16/JPEG7 image with 256² tiles and 768 in-file tile ranges; tile/strip-independent sample order, active crop and CPU/GPU seams agree with reference | IoTests + develop tests; actual decode required, container inspection alone insufficient |
-| Generated Bayer/X-Trans/linear DNGs | §6.8 analytic pixel/tag/profile goldens, with exact sample patterns, deterministic generator and expected sizes; the real RAF remains a separate file test | IoTests + DocumentTests + WARP; always run |
-
-The current RAF manifest marks its X-Trans pattern as expected from the camera model, not locally decoded. Verify
-the decoded CFA and store independent reference evidence before marking that real-file coverage complete. If it
-does not supply X-Trans, acquire another individually licensed/hashed file and add it to the manifest; the known
-synthetic X-Trans pattern remains mandatory. Record uncropped sensor size separately from oriented active output.
-
-**Failure, recovery and lifetime matrix.** Generate mutants into a test-owned temporary directory from synthetic
-fixtures or read-only source copies; retain the original hashes. Each row asserts the precise status named by
-`IO_RawDecode.md`, no partial successful image/document, and reservation/input retirement. Do not infer cancellation
-latency from a progress callback: record non-interruptible library regions separately under §6.2.
-
-| Scenario | Required observations |
-| --- | --- |
-| Empty/truncated header, IFD or payload; invalid/missing tile bytes | Deterministic invalid-data status; no out-of-bounds read or partial success; existing document survives |
-| Recursive IFDs, invalid offsets/counts, zero/oversized tile geometry, overflowing stride/sample products | Checked rejection within the declared admission peak; generated controls for every arithmetic boundary; ASan and fuzz seed regression |
-| Wrong extension/signature, unsupported compression/CFA/profile/opcode, excessive source bytes or active-area pixels | Distinguish invalid/unsupported/too-large cases; oversized RAW offers only the specified preview fallback, with no successful full decode |
-| No embedded preview, malformed embedded JPEG, preview succeeds then full decode fails | Supported no-preview path reaches full decode; corrupt preview has an explicit fallback/failure; thumbnail never completes the full-quality/editable receipt |
-| Memory admission refusal, decoder allocation/IO/read-count failure, failure after a reserved stage | Specific failure outcome, full request/reservation retirement, usable existing document and retry; no idle retry loop |
-| Cancel during probe/unpack/develop/bake; late success after Cancel | Event-gated cancellation acknowledges drop before releasing the barrier; no pixels/history from late work; retained input remains valid through the callback |
-| Newer settings, close/reopen, document replacement with reused persisted IDs, hidden/minimized completion, device loss | Exact session/opening/sequence/device validation, newest applicable preview only, no stale upload or repeated wake; CPU recovery policy matches §4.7 |
-| Simultaneous ARW/CR3/NEF/RAF/DNG jobs and memory pressure | Independent decoder state, bounded whole peaks, deterministic numeric results; pressure eviction releases caches without invalidating an active input |
-
-**Actual editor round trips.** A hidden application harness opens each required file through the real path, observes
-embedded preview separately, changes develop settings, commits a full-quality editable layer, saves `.prism`,
-reopens it and exports PNG/JPEG. Check decoded/developed pixel reference, oriented dimensions, working color,
-active layer, recorded revision and one Develop RAW history entry. Reopened v1 projects retain baked pixels and
-the existing project schema's document/layer metadata; RAW source/develop settings and pre-save undo history are
-not v1 persistence requirements. P6 qualifies non-destructive RAW persistence. Compare PNG pixels
-exactly at the codec boundary; JPEG uses the codec contract's lossy reference, not byte equality with PNG.
-
-Also exercise Add Layer/New Project, mixed project+RAW drops and multi-RAW batches with the one prompt and ordered
-panels; first file failure, failed required settlement, admission refusal and cancelling an intermediate panel
-must produce the specified surviving document and individually observed outcomes. Save/Discard/Cancel and failed
-Save precede replacement without losing a draft. Synthetic/reference gates run in all x64 configurations; required
-real-file cases must run without SKIP in the P4/P5 ASan qualification and Release measurements. ARM64 compilation
-is separate from native ARM64 execution. Record per-file status, reference version/options, sample hash, developed
-checksum/tolerance, dimensions, peak memory and which cases actually ran. §7 measures preview, editable bake,
-slider and export times only after these correctness gates; no wall-clock threshold belongs to unit tests.
-
-## 7. Faster-than-Photoshop protocol
-
-**Setup**
-
-- **Machine and software**: R1 first (R2 and R3 per D9).
-  - Photoshop and Camera Raw at the current release, versions recorded.
-  - Camera Raw preferences at their defaults (GPU "Auto"; the cache size is recorded). Photoshop's "Use Graphics
-    Processor" on.
-  - RedPrism Release x64 at the measured commit, with the ISA tier, pool size and FMA3 state recorded.
-- **Matched work**:
-  - Camera Raw's workflow options are pinned to sRGB, 8 bits/channel, native size.
-  - The gating pair runs with sharpening 0 and noise reduction 0 in both applications.
-  - A second pair at each application's default detail settings is recorded. For Camera Raw that is sharpening 40
-    and color noise reduction 25. That pair carries a ratio only if v1 ships chroma noise reduction.
-- **Files**: one ~45 MP file per §1.2 class, each within the 100 M-pixel budget, given to both applications.
-  Record-only extras:
-  - one file per other v1 format: CR2, RW2, ORF, PEF, compressed ARW, uncompressed RAF;
-  - one 100 MP-class file, to record the `TooLarge`-plus-embedded-preview path (M1).
-- **Cache states**:
-  - *Warm*: the same file reopened with no purge. M1, M2 and M4 gate on warm.
-  - *Cold*: the application is running and has already opened a different file of the same format. Before each run
-    the operator empties the standby list (RAMMap `-Es`, elevated) and purges the Camera Raw cache (Camera Raw
-    Preferences → Performance → Purge Cache). Cold is recorded, not gated.
-  - RedPrism's cold run: `--bench raw --bench-cold --bench-prime <other file> --bench-input <file>` opens the prime
-    file, waits for the script's event after the purge, then opens the timed file.
-
-**Timing**
-
-- **Photoshop**: a checked-in UXP script, `Build/bench/photoshop-raw.psjs`, run via File > Scripts > Browse or the
-  UXP Developer Tool.
-  - It sets `app.displayDialogs = DialogModes.NO`, opens inside `executeAsModal`, and closes each document without
-    saving before the next run.
-  - It times with `Date.now()`, unless P4.8 confirms that `performance.now()` exists in UXP.
-  - **M2**: `app.open` with default settings (Puget's "File Open – RAW").
-  - **M4**: `app.open` of the same file with Puget's Camera Raw tone and presence values in an XMP sidecar: exposure
-    −0.05, contrast 34, highlights −18, shadows 20, whites −30, blacks 3, vibrance 37, saturation 19. White balance
-    stays as shot in both applications, because Puget's temperature and tint are relative adjustments for rendered
-    documents and have no RAW equivalent.
-  - **M5**: save as JPEG quality 10 (4:4:4).
-  - **G2 filters**: Gaussian Blur, Levels, Hue/Saturation, Motion Blur and Image Size on the same 45 MP 8-bit
-    document.
-
-  The script only automates Photoshop. It is not a RedPrism test and never runs in `test.ps1`.
-- **RedPrism**:
-  - `RedPrism.exe --bench raw --bench-input <file>` measures:
-    - **M1**: QPC from the open request to the `Present` that first shows preview pixels.
-    - **M2**: from the open request to the `Present` of full quality after the bake. The bench issues OK with the
-      open request, so the bake Commit queues behind the develop and M2 contains no idle time.
-    - **M3**: a scripted slider sweep, from input timestamp to `Present`.
-    - **M4**: the M2 path with the same values from `--bench-develop <json>`.
-    - **M5**: JPEG with `WICJpegYCrCbSubsampling444`, at the `ImageQuality` whose file size is within ±5 % of
-      Photoshop's.
-  - `--bench filters --bench-input <tiff>` covers G2 on the document Photoshop used.
-  - Frame timing is cross-checked with PresentMon (ETW), never with screenshots or screen capture.
-
-**Reporting**
-
-- **Output parity**: renderings differ, because Adobe's profiles are Adobe's. The report says so. Correctness is
-  proven by §6.8, not by comparison with Photoshop.
-- **Report**: `Specs/TestRuns/RawVsPhotoshop_<date>.md` and `Filters_<date>.md`, in the brush-record format:
-  - the scenario, the `BENCH MACHINE` line, and both applications' versions and settings;
-  - warm and cold medians and p95, and the ratio per metric;
-  - the reproduce commands.
-
-  `docs/` may claim "faster than Photoshop" only for the metrics, classes and machines where a record shows it.
+The matched workflow, cold/warm definitions, cache purging, stage timing, output settings, statistics and claim restrictions remain in [the future roadmap §7](ImageProcessingAccelerationAndRaw_2026-10-04.md#7-faster-than-photoshop-protocol). P1 makes no Photoshop ratio claim.
 
 ## 8. Testing and validation
+
+This shared test map retains later phase additions for continuity. Only P0/P1 additions and the current owning contract gates are due for this milestone; exhaustive new SIMD tiers, RAW/DNG goldens and fuzz targets enter with their future phases. P1 tests must preserve all existing legacy expectations and cover every actually moved command. State/assertion counts do not substitute for §1.2 Release measurements.
 
 | Suite | Additions |
 | --- | --- |
@@ -2205,6 +1989,8 @@ host. The existing ARM64 ASan restore gap is recorded as a known exception until
 exists (`vcpkg-install.ps1` throws for non-x64 `-Asan`).
 
 ## 9. Spec changes
+
+Apply the P0/P1 portions of each row before P1 closeout. Future phase changes are retained as a dependency map and are owned by the [P2–P6 roadmap](ImageProcessingAccelerationAndRaw_2026-10-04.md); they are not P1 implementation claims.
 
 | Spec | Change | Slices |
 | --- | --- | --- |
@@ -2382,6 +2168,51 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
   - the Stroke lane and chaining, including chaining behind pending commits;
   - lazy tiled clone/blur/warp sources, async heal, and a single-pass `FinishWarp`;
   - the async mouse-up snapshot.
+
+  Remaining stroke implementation is tracked in this order; these unchecked rows are required for P1:
+
+  - [x] Prepare a cancellable worker healing kernel without changing candidate ordering, membrane solve or
+    legacy rounding. Validate pitched dimensions before allocating or reading. Allocation failure reaches the
+    scheduler's named runner boundary. A false result discards private scratch/output; it never publishes a
+    partly healed raster. Independent constant-field references, cancellation at each real work boundary and
+    invalid-input controls supplement all unchanged legacy goldens. The integrated worker kernel and controls
+    qualify in the complete `0773548` matrix; actual finalization activation is separate below.
+  - [x] Introduce a typed exclusive finished-stroke worker input and prepared publication. Preserve the exact
+    opening, document serial/generation, layer/image/transform/mask/selection and original FIFO history ordinal.
+    The owner must finish all graphics borrowing before transfer. `ReleaseCoverageEngine` currently means
+    discard-only: calling it before `Flush` is invalid. Do not replay GPU density on the CPU or change the
+    required WARP compute engine to the CPU reference. Core publication controls qualify in the `0773548` matrix.
+  - [x] Add final GPU coverage transport foundations for the existing structured preview buffers: owner records final tail
+    dispatch and copies, readiness uses the shared event wait pool, owner lends mapped rows only after readiness,
+    and a worker converts the exact coverage bytes. The current BGRA texture readback interface cannot directly
+    copy a structured buffer into a texture. Extend the typed staging protocol and admit buffer, staging, mapped
+    lease, worker output, resource/context retirement and maximum overlap before starting. No blocking Map,
+    byte conversion or CPU tile composition is allowed in the terminal owner callback. The typed transport and
+    detached epoch controls qualify in the `0773548` matrix; actual host recording remains unchecked below.
+  - [x] Implement the admitted worker finish and actual Up/capture-loss host route. `StrokeFinishWork.cpp`
+    prepares Heal, sparse output, carried-mask growth/semantic thumbnail, sealed document and history;
+    `ApplicationStrokeFinishJobs.cpp` invokes it after final coverage. The current `67a77dd` x64
+    Debug/Release/real-ASan checkpoint includes the literal finish, capture-loss prefix, queued Undo-after-Up
+    and scalar parity stages for soft Paint/Eraser, selection, masks, Blur, Clone and Heal. Main verifies the
+    source, test predicates and stage registration. [Current x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md).
+    This closes those code/correctness facts only; the complete production and measured requirements follow.
+  - [ ] Qualify production activation, full admission and retirement of the existing worker healing, sparse
+    snapshot, carried-mask/eager thumbnail, document sealing and history path. Keep the current wash or settled preview
+    visible until one current publication succeeds. Refuse cancelled, stale or failed preparation without changing
+    pixels/history/saved state. Preserve old owners for worker retirement and the captured reservation until the
+    original acknowledgement; there is no younger ticket or ordinal for the resumed phase.
+  - [ ] Complete ordinary tool/lifecycle settlement and shutdown qualification through that same closure,
+    retaining the implemented Up/capture-loss ordering. A consumed
+    terminal input does not finish its continuation while the final worker/readback is outstanding. Younger
+    history inputs remain queued; view input remains available. Detached exclusive CPU state must never retain
+    a borrowed graphics engine, mutable session pointer or live progress callback. Escape after Up keeps the
+    accepted stroke; teardown cancels and joins before releasing any borrowed fixture/host state.
+  - [ ] Finish remaining scenario and phase coverage: explicit hard-brush parity and the complete
+    allocation/readback/device-fault matrix at each final-coverage/publication boundary. Preserve the existing
+    exact soft/mask/selection/translated/growing, Clone/Blur/Heal, final-tail, worker-gate, FIFO, Undo/Redo,
+    capture-loss and shutdown controls.
+    Full same-source x64 Debug/Release/real ASan, Release analysis and ARM64 cross-builds precede the step commit.
+    Measure terminal owner work and publication on the G1 documents; structural controls alone do not close G1.
 - **P1.5 Raster edits, transforms and shapes**:
   - Invert, Fill, Clear and Delete;
   - the gradient (Interactive lane until P3), pixel move, and selection Free Transform;
@@ -2411,125 +2242,13 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
 - **R2 and R3**: recorded (D9).
 - The self-test covers every moved command, and the ported legacy async tests pass.
 
-### P2 — Fast exact CPU kernels
+### Next milestone
 
-- **P2.1 Tier infrastructure**: intrinsic tier TUs (SSE2, AVX2, NEON; AVX-512 per D16), the rounding and emulation
-  helpers, the half-float helpers, and the matrix harness.
-- **P2.2 Tables and reductions**:
-  - Levels/Curves/Exposure (v, a) LUT, gradient map, cube, fused BlendThrough, and downscale;
-  - coverage resolve by rows, and AlphaBounds;
-  - the integer histogram, with its spec change. Per-channel bins are Σ a·m in `uint64` divided once by 65025 when
-    read; the RGB bin is (N_r + N_g + N_b) / (3 × 65025). The legacy histogram goldens pass within 1e-5, AutoLevels
-    outputs are identical on those inputs, and the integer form is the scalar reference for the tier and thread
-    matrix.
-- **P2.3 Blurs, noise and grain**:
-  - the Gaussian: SIMD across pixels in double, with the same tap order and a banded intermediate;
-  - once D4 is decided, the σ > 32 approximation with its ≤ 2/255 test against the direct kernel;
-  - motion blur, lens, grain, uniform noise, and Gaussian noise (threads only).
-- **P2.4 The PaintCanvas family**:
-  - templates instead of `std::function`, and nested loops instead of div/mod;
-  - integer blends for Invert, Fill, Clear and Delete;
-  - the gradient: linear lane-wise in double, radial with scalar `hypot` and threads only;
-  - `ComposeTile`, `MoveLifted`, `LiftSelection`, the `MergeFloating` footprint, and `ShapeImage`;
-  - the `RenderLayerPixels` identity and integer-translation fast path (memcpy);
-  - the distort warp by rows, and `RenderPlaced` with separable weights and identical math.
-- **P2.5 Content-aware fill and heal**: SIMD patch SSD with the same summation order, and a precomputed patch-known
-  mask. Early exit only where it is proven to keep the same argmin and ties. Heal `Score` runs in parallel.
-- **P2.6 Conversions**: premultiply/unpremultiply tables; BGRA→BGR (AVX2 `vpshufb`, NEON `vld4`/`vst3`, SSE2 shifts
-  and masks); the DIB paths.
-
-**P2 exit (the CPU half of G2)**: the small matrix is green in all three configurations, and the Release-only 4096²
-matrix is green on every tier. `Specs/TestRuns/Kernels_<date>.md` shows the §1.2 commit targets on R1 and the
-speedup of each tier over scalar.
-
-### P3 — GPU acceleration
-
-- **P3.1 Slicing**: `GpuWorkQueue` slicing with timestamp budgets; `gpuWorkPending` and `SubmitGpuWork` in
-  `SelectHostFrameAction`, with their HostTests rows; device-loss restart; VRAM budget events. Utility composes
-  become sliced.
-- **P3.2 Compute previews**:
-  - Gaussian (groupshared separable), motion, lens, noise, gradient shade;
-  - the pixel-move composite, the distort projective pass, and clone/blur composition;
-  - brush tile composition on the GPU, with touched-tile mips.
-
-  Each has a named tolerance in `Rendering_Composition.md` and a WARP parity test.
-- **P3.3 Tiled residency**: support above 16384 px, document-space canvas tiles with per-tile mips, and the
-  document-coordinate test compose.
-- **P3.4 Worker-side texture creation** (gated by `DriverConcurrentCreates`), and `WriteToSubresource` on UMA.
-- **P3.5 GPU commit engines for blurs** with property goldens: a D1 option, taken only if P2 misses its targets.
-
-**P3 exit**:
-
-- **R1**: the §1.2 preview and GPU-budget targets hold, the brush 800 px update is ≤ 4 ms on the UI thread, and the
-  distort preview is ≤ 1 frame.
-- **W**: the frame row holds with a 4K document, against the §1.2 W targets.
-- **Size limits**: the panorama composes, and G1 document B composes on a 2 GB-VRAM adapter without closing the
-  window.
-- **R2 and R3**: recorded (D9). On R2 a cross-adapter present is measured for D10.
-
-### P4 — RAW v1 (needs D1, D5, D6 v1, D8, D14, D15)
-
-- **P4.1 Specs and the port**: the spec changes (new specs, codec policy, toolchain, packaging, the AGENTS stack
-  line, the `Specs/README.md` entry points); the overlay port with the full patch contract (§6.2); the ASan tree;
-  notices.
-- **P4.2 Wrapper and entry points**: the `RawDecode` wrapper with layouts, statuses, limits and cancel; curve
-  handling; the DNG tag reader and its fuzz target; the dialog filter extensions (`FileDialogs.cpp`
-  `kImagePatterns`); drag-drop; RAW through the positional path.
-- **P4.3 First pixels** from the embedded preview (M1).
-- **P4.4 CPU reference**: the `RawDevelop` CPU reference and the synthetic DNG goldens.
-- **P4.5 GPU develop pipeline**: stages, halos, pyramid and ROI, the highlight pre-pass, the stage cache, slicing,
-  and WARP/CPU engine selection.
-- **P4.6 Develop panel**: the live histogram, the bake Commit job, the "Develop RAW" entry, and the multi-file flow
-  of §6.7.
-- **P4.7 CPU SIMD develop engine.**
-- **P4.8 Measurement**: M1–M5 and the §7 G2 filter pairs against Photoshop on R1 (and R2/R3 per D9), in
-  `RawVsPhotoshop_<date>.md` and `Filters_<date>.md`; execute only after P4.9's correctness qualification passes.
-- **P4.9 File-backed qualification**: §6.9's required five-file decode/reference and editor round-trip matrix,
-  verified actual RAF CFA, hostile generated files, cancellation/recovery/admission and mandatory-corpus runner
-  mode. Required real-file cases run without SKIP in Release and x64 ASan qualification; ordinary developer
-  missing-corpus skips remain explicitly reported.
-
-**P4 exit**: all §6.8 goldens and §6.9 required-file correctness/round-trip/failure gates are green, with no missing,
-mismatched or skipped required corpus case; M1 and M3 are met; M2 and M4 are ≤ Photoshop for CR3 and RAF on R1,
-with ARW, DNG and NEF speeds recorded. Recorded-only speed rows still require correctness.
-
-### P5 — RAW at 0.5 × Photoshop
-
-- **P5.1 LJ92 tile decoder** (Sony lossless ARW, DNG lossless tiles), bit-exact against LibRaw.
-- **P5.2 Sequential LUT Huffman decoder** (NEF lossless, CR2). The speculative parallel decoder only if needed.
-- **P5.3 CR3 tile parallelism**, if the tiles prove independent.
-- **P5.4 FuzzTests gate** for all RedPrism parsers, and the hostile-file set.
-- **P5.5 Faster DNG and multi-file opens**: the DNG enhanced (`NewSubFileType` 16) and Fast Load Data preview paths,
-  and decode-ahead for multi-file RAW opens.
-- **P5.6 DNG 1.7 JPEG XL** (optional, D5), through a RedPrism tile reader with libjxl.
-
-**P5 exit**, all warm on R1 and recorded:
-
-- §6.8–6.9 correctness and mandatory-corpus qualification pass again for the optimized decoder paths, without
-  missing, mismatched or skipped required cases.
-- M1 ≤ 100 ms.
-- M2 and M4 ≤ 0.5 × Photoshop for all five classes.
-- M5 ≤ Photoshop.
-
-### P6 — Non-destructive develop and depth (DECISION: D6 v2, D7, D14)
-
-The user authorized P6 on 2026-09-27. Before its implementation, a linked child WIP plan specifies migration,
-memory admission, color/alpha math, compatibility and round-trip goldens for:
-
-- `.prism` v8 develop layers (source RAW embedded or referenced, settings, a rasterize command);
-- RGBA16F documents (D7);
-- raising the pixel budget (D14).
-
-Record D6 v2, D7 and D14 choices using P4/P5 measurements before this phase starts. Preserve v1/v7 read and
-export behavior while introducing v8 explicitly; never mark format/depth work complete from a decoder-only test.
-
-### Closeout
-
-- Merge the durable text into the owning specs (§9).
-- Update `docs/`: RAW, busy behavior, the Develop panel, bench usage.
-- Move this plan to Done with its closeout, and remove the index row.
+After this P1 exit qualifies, begin [P2–P6](ImageProcessingAccelerationAndRaw_2026-10-04.md#10-phases-and-slices). Each phase delivers its own independently tested value and measured exit.
 
 ## 11. Decisions
+
+The shared decision history is retained unchanged. Only decisions that gate P1 work must resolve before that slice. D9 machine availability and any missing native runtime evidence must be stated in the P1 exit record. Future phase decisions are also carried into the new roadmap and must be reconciled there as they are made.
 
 The recommended option is in bold. An empty "Decided" cell means the decision is open, and it blocks the slices in
 its "Gates" column.
@@ -2548,7 +2267,7 @@ its "Gates" column.
 | D10 | Hybrid laptops (panel on the iGPU) | Adapter-of-monitor (today; never uses the dGPU); honor the Windows "High performance" preference with a cross-adapter present | **Keep adapter-of-monitor until the P3 exit measures a cross-adapter present on R2; then decide** | none now | |
 | D11 | Save speed beyond STORE + parallel | WIC PNG only; a RedPrism PNG writer (fpng-style filter + libdeflate; output any PNG reader accepts) | **Measure after P1.7; adopt the writer only if one 45 MP layer still takes more than 1.5 s** | P1.7 target | |
 | D12 | Preview and histogram policy | Keep 4096/2048/full; view-resolution GPU previews; the legacy 8000 px histogram source; an integer histogram | **View-resolution GPU previews for filters; the per-layer adjust draw for table kinds; the histogram redefined as exact integer numerators N = Σ a·m per bin in `uint64`, with bins[c] = N_c / 65025.0 and bins[0] = (N_r + N_g + N_b) / (3 × 65025.0), each rounded once, from an 8000 px source (legacy)** | P1–P3 | 2026-09-27: adopt the recommended policy in stages. P1.1a retains existing preview grids and histogram arithmetic; P2.2 changes the histogram only with the named goldens and AutoLevels parity. P1.2/P3 add GPU previews with their parity gates. |
-| D13 | History budget | 256 MiB fixed; scale with RAM; count selections | **The host passes min(25 % of RAM, 2 GiB) as a `uint64`; the class default stays 256 MiB for the legacy test; selections are counted** | P1.9 | |
+| D13 | History budget | 256 MiB fixed; scale with RAM; count selections | **The host passes min(25 % of RAM, 2 GiB) as a `uint64`; the class default stays 256 MiB for the legacy test; selections are counted** | P1.9 |  2026-10-20: reconcile the already implemented recommendation and current Document_History contract. Host startup supplies min(RAM / 4, 2 GiB), with a 256 MiB query-failure fallback; the class default stays unchanged. Ten budget/boundary facts pass in each qualified x64 profile. Complete H3 caller/admission/cost qualification remains open. [Evidence](../../TestRuns/P1HistoryBudgetDecision_2026-10-20.md). |
 | D14 | Pixel budgets for RAW | 100 M per document (legacy); higher | **Keep 100 M until D6 v2; any RAW whose oriented, cropped frame exceeds 100 000 000 pixels returns `TooLarge`, with the embedded preview offered** | P4, P6 | |
 | D15 | Nikon HE/HE* | Ship LibRaw's decoder when it lands; refuse | **Refuse, offering the embedded preview, until a legal review of TicoRAW** | P4 | |
 | D16 | AVX-512 tier | None; opt-in tier | **Add only if it is ≥ 1.3× over AVX2 on R1 for the kernel and the exactness matrix is green** | P2 | |
@@ -2608,25 +2327,712 @@ its "Gates" column.
 - Committing camera RAW files, fuzz inputs or reference renders to the repository.
 - Killing `RedPrism.exe`.
 
-## 14. Done
+## 14. P1 Done
 
-- **G1**:
-  - With G1 documents A and B, every §5 command on R1 keeps the UI thread under 4 ms p99 and 16 ms max, frames
-    present within 2 refresh intervals while jobs run, and background GPU work stays ≤ 25 % of the refresh interval
-    per presented frame.
-  - On W, the UI-thread rows hold with A and B, and the frame row holds with a 4K document against the §1.2 W
-    targets.
-  - A 4K Gaussian blur OK returns to the pump immediately: the window still drags and paints, and Escape leaves the
-    layer unchanged. A second run, completed, records one history entry whose pixel hash equals DocumentTests' hash
-    for the same input.
-- **G2**: the §1.2 commit and preview targets are met on R1 and recorded in `Specs/TestRuns/`. Every exact kernel is
-  byte-identical to its scalar reference on every tier and at every thread count.
-- **G3**, for the five §1.2 classes on R1, with warm opens:
-  - M1 ≤ 100 ms;
-  - M2 and M4 ≤ 0.5 × Photoshop's same-machine time;
-  - M3 holds, and M5 ≤ Photoshop.
+- Every remaining P1 child row in the opening checklist has qualified implementation or an explicit original
+  phase assignment; later-phase assignment cannot be invented to avoid an overrun.
+- On R1 with G1 documents A and B, every §5 operation due at P1 meets §1.2: owner dispatch/drain/action/frame
+  CPU p99 ≤ 4 ms and max ≤ 16 ms; finished apply ≤ 2 ms with no pixel work; invalidated frames present within
+  two refresh intervals while jobs run. Escape restores the document in the next frame and the stated
+  cancellation interval holds. Brush update and distort preview remain the original P3 exit exceptions.
+- On WARP, the UI-thread and apply rows meet the original P1 requirements with A and B, unless the recorded
+  P0.1 B composition deferral applies. WARP's 4K frame gate and the background GPU budget remain P3.
+- R2/R3 runs or their unavailability and the D9 decision are explicitly recorded; ARM64 cross-builds alone
+  cannot qualify ARM64 runtime. Any unavailable required measurement remains an unchecked qualification gate.
+- Actual host acceptance covers all moved commands, ordered input, save-before-proceed, cancellation/failure,
+  device recovery and shutdown. A gated 4K Gaussian OK leaves the pump live; Cancel preserves the original;
+  a completed run records one entry with the unchanged DocumentTests reference hash.
+- The memory/admission/retirement and history accounting contracts hold on large fixtures, including late
+  sparse materialization; no CPU pixel pass or large final free is hidden in an owner publication.
+- The latest integrated source passes skills, formatting, full x64 Debug/Release/real ASan tests, ARM64
+  cross-builds, ISA/provenance and owning analysis/resource gates. Tests retain their independent goldens.
+- `Specs/TestRuns/NeverBlocks_<date>.md` records the source, fixtures, machine/settings, actual results,
+  timing/ETW evidence, original failures and qualification limits. Owning domain specs and the user guide
+  describe the delivered behavior. Completed code/spec steps are committed and pushed.
+- Move this plan to Done, remove its WIP row, reconcile child plans and update future milestone links.
 
-  These are recorded in `RawVsPhotoshop_<date>.md`, with all §6.8 goldens green. The other v1 formats are recorded
-  without a ratio claim.
-- The owning specs carry every rule in §3–§6, `docs/` describes the new behavior, the closeout matrix is green, and
-  this plan is in `Specs/Plans/Done/`.
+P1 Done is the next implementation entry for P2. G2/G3, RAW and full-program closeout remain in the future roadmap.
+
+## Appendix — P0/P1 execution ledger
+
+This chronological evidence ledger records intermediate states; use the opening checklist and later TestRuns
+records for current status. Earlier failures and narrower qualifications are retained rather than rewritten.
+## Implementation checklist
+
+- [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions
+  pass in x64 Debug/Release/ASan. Fixture helpers follow the existing 30-attempt/100 ms event-wait policy;
+  production retry limits, sealed authority and literal assertions remain unchanged.
+- [x] Current P1 functional integration, 2026-10-02 — Ordinary deferred transforms, admitted worker
+  New/New Canvas/Close, acknowledged session CPU retirement, suspended/prequeued shutdown and bounded folder
+  staging publication pass the clean x64 matrix and all ARM64 cross-builds. Strict CL/R8, compact RCX and R10/AL
+  ISA proofs preserve the runtime allowlist. Exact 582 inputs and 327 evidence files are byte/SHA verified
+  ([qualification](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)); original failures remain preserved.
+- [x] P1 shutdown CPU roots — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
+  are preserved before repair; the complete private WARP candidate passes all 52 and existing application suites.
+  The fresh native matrix passes all six profiles against 582 unchanged inputs: 52 shutdown controls and full
+  suites in each x64 configuration, plus all ARM64 cross-builds. The benchmark state/timing/metadata remain valid
+  ([qualification](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)).
+  Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
+- [x] P1 shutdown acquired-prefix initialization: primary-owned controls cover eight
+  successful-stage checkpoints, sixteen retry event/registration seams, successful and never-started processing.
+  Its complete private Debug WARP application passes all 390 controls and unchanged suites; exact private proof
+  is archived before native activation. Review confirms the 26-case prefix/count/lifetime expectations.
+  The native candidate passes all six forced-rebuild profiles against 584 unchanged inputs, with 390 processing
+  and unchanged 52 shutdown controls in each full x64 suite. Exact sources/products/receipts are archived
+  ([qualification](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)). These controls
+  do not qualify native allocation/pool/GPU API failures or broader A3.
+  Native r1 passes all ARM64 cross-builds and full x64 ASan, then Release's actual self-test crashes before
+  buffered output reaches its log; x64 Debug does not run. Exact 584 inputs, 230 evidence files and PID 108148's
+  dump are archived before repair. Symbol/disassembly and retained build timestamps show Release reused the
+  pre-probe `Application.obj` with the older member layout: private file copying preserved source timestamps
+  older than that object. A supplementary 162-entry tracking archive is retained. Move stdout configuration
+  before all standalone tests and force a six-profile rebuild; the buffering issue is not the crash cause.
+- [x] P1 live shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
+  the reviewed isolated Debug WARP candidate passes all 432 controls, unchanged 390 processing/52 shutdown checks
+  and the full existing application suite at `2026-10-02T14:26:05.1417394Z`. Exact 562 private inputs and 25 evidence
+  entries are archived before native activation. Eight reviewed files are activated with current write timestamps;
+  six forced-rebuild profiles are required before completion/commit. GPU/event/clipboard leases, API faults and
+  timing remain open.
+  The fresh six-profile forced rebuild passes at `2026-10-02T15:06:20.9478751Z`; each full x64 suite passes
+  all 432 live-owner controls and unchanged startup/shutdown checks. Exact 585 inputs and 327 evidence files
+  are byte/SHA verified before the next private build
+  ([qualification](../../TestRuns/P1LiveShutdown_2026-10-02.md)). This closes A3c only.
+- [x] P1 shutdown GPU/retry lease slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
+  standalone Application cases, with 56 event-gated assertions, in a private tree. Observe mapped-row
+  acknowledgement before queue fallback cleanup, retain literal bytes through cancellation and device
+  retirement, and join held/ready-undrained retry producers before receiver destruction. Preserve the first
+  private link failure before serializing shared DxUi builds. Clipboard leases, actual API faults and timings
+  remain separate; private runtime and native qualification are pending.
+  The complete private Debug WARP application now passes all 56 actual map/retry controls and unchanged suites;
+  exact 563 inputs and 40 evidence entries are archived before activating seven reviewed native files.
+  Native r1 passes all ARM64 cross-builds, then stops at x64 ASan's linked ISA check before runtime;
+  x64 Release/Debug do not build or run. Exact 586 inputs and 243 evidence files are preserved before repair.
+  The reported instruction bytes belong to an eleven-entry terminal DWORD switch table; the observed matching
+  RSP+disp32 guard needs a narrow data proof. Private controls pass without changing the runtime allowlist.
+  Original-image recheck and fresh six-profile qualification remain required; A3d/P1/G1 stay open.
+  The private proof now passes the exact original image and all parser controls: only three rows inside two
+  bounded terminal tables change classification; runtime/tier/EVEX policy is unchanged. Exact proof sources and
+  evidence are archived before activation. Fresh native r2 is running all six forced-rebuild profiles.
+  Native r2 now passes all six profiles against 587 unchanged inputs; each full x64 suite passes all 56 lease
+  and 54 new strict ISA controls, with existing goldens unchanged. Independent source/evidence verification
+  retains 587 inputs and 325 evidence files
+  ([qualification](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). Broader A3/P1/G1 remain open.
+- [x] P1 wand/trace cancellation foundation — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
+  prepares sparse reads without source-cache publication and bounded explicit-loop cancellation checkpoints.
+  Primary reviews the cheaper agent's literal/checkpoint tests, fixes the actual corner-touch case and adds
+  owner-driven local/shutdown cancellation. Private full DocumentTests and paired Release kernel measurements
+  precede activation and a fresh native matrix. Ordered host/GPU caller migration and G1 remain separate.
+  Private Release r1 passes all 54 cancellation checks and existing document goldens, but paired 45 MP medians
+  regress by 34% matching, 39% flood and 19% trace. Exact inputs, image/PDB, compiler tracking, logs and machine
+  metadata are preserved before tuning. Chunked r2 passes again; matching/trace regress by about 3%, flood by
+  18%, so it also stays private and is archived. Further tuning and reviewed odd-width/tail checkpoint tests
+  precede qualification; no production selection route has changed.
+  Private r6 now passes all 54 cancellation and 17 boundary checks, unchanged document goldens and two paired
+  measurements. Final matching medians add 2.9–4.2%; flood varies from 5.4% faster to 4.7% slower, solid trace
+  adds 0.6–1.6%, and fragmented stripe trace varies from 3.1% faster to 1.3% slower. Retain shared-desktop outliers;
+  these are kernel costs, not G1 qualification. Exact 289 inputs and 199 evidence entries are archived before
+  activating nine reviewed native files with current write timestamps. The fresh six-profile forced rebuild is
+  running; S4a remains unchecked until its native matrix and archive pass.
+  The native matrix now passes all six profiles at `2026-10-02T17:49:56.7560093Z`: each full x64 suite passes
+  all 71 named controls and unchanged goldens; ARM64 is build-only. Exact 591 frozen inputs and 328 evidence
+  files are independently SHA-verified before another build
+  ([qualification](../../TestRuns/WandCancellation_2026-10-02.md)). This completes S4a only.
+- [x] Active-layer New publication core — S4b prepares settled active-layer New sampling/trace and
+  complete history publication with captured point/settings/AA. A transparent-source rectangle shortcut and
+  cheaper-agent literal/authority/history tests were reviewed and corrected. The final private Debug suite passes
+  117 unique controls plus existing goldens; exact 296 inputs and 136 evidence files are archived before native
+  activation. Capacity planning carries sparse-copy recycling through later phases; actual worker retirement
+  releases the test's observation owners first. Native r1 passes ARM64 and full x64 ASan, then Release stops
+  before runtime at an unrecognized RDI-indexed adjustment switch table in the linked ISA scan. Exact 595 inputs
+  and 297 evidence files retain the failure before repair. The unchanged-image recheck and strict parser controls
+  precede a fresh native matrix. Combined r2 now passes all six profiles with 117 exact wand checks in every
+  full x64 suite. Independent source/control verification and archival retain 598 inputs and 7,223 evidence files
+  ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)). Host ordering, live gestures, All Layers, booleans and G1 stay open.
+- [x] Preserving selection authority — S2a adds separate weak opening identity for live brush/warp/shape without
+  weakening settled history restore. A primary-reviewed private Debug suite passes 136 unique controls, including
+  literal committed pixels and separate Undo steps proving the original stroke clip survives Select All/Deselect.
+  Exact 299 inputs and 137 evidence files are archived; original fixture/compile failures remain retained. S4b and
+  this core share the fresh native qualification matrix. Production pointer buffering and writer barriers stay open.
+  Combined native r2 now qualifies all 136 named controls in each full x64 suite and all ARM64 cross-builds;
+  exact source parity and independent evidence hashes pass ([record](../../TestRuns/SelectionPreservation_2026-10-02.md)).
+- [x] Settled selection host route — S2b is qualified: admit before owner capture,
+  prepare history on the worker, retain the selected ordinal/input until apply/drop, and retire the aggregate
+  off owner. Actual Application ordering/fault/pump/authority tests precede native activation. Header inputs,
+  live brush/warp/shape, lasso/move closure, broader writer barriers and G1 remain separate requirements.
+  Private r1 compiler failure, r2's unreached mask-target fixture and r3's clipboard setup ordering failure are
+  archived before each correction. The r3 selection stage passes 162 exact named checks, but the full application
+  suite fails: its pending-gradient fixture began pointer input before queued Deselect acknowledged. The fixture
+  now waits through the existing asynchronous command helper; production clipboard/gradient logic is unchanged.
+  The revised full private Debug suite must pass and be archived before native activation.
+  Private r4 now passes the full WARP application suite and all 162 named selection checks across 28 modes.
+  Exact 471 inputs and 188 evidence files are independently SHA-verified and archived before eleven native
+  activations. A fresh serialized six-profile forced rebuild is running; S2b remains unchecked until exact native
+  controls, source parity and archival pass ([record](../../TestRuns/SelectionHost_2026-10-02.md)).
+  Native r1 stops in ARM64 ASan HostTests: its string catalogue's declared size omits the newly added ID. No
+  complete profile qualifies. Exact 601 inputs and 3,850 evidence files are retained before a single-byte test
+  count correction; private application inputs/qualification are unchanged. Native r2 runs the full fresh matrix.
+  All ARM64 cross-builds and the complete x64 ASan suite now pass, including actual sanitizer detection,
+  full WARP application controls and corpus/screenshot gates. x64 Release/Debug, independent verification and
+  archival remain required before checking S2b.
+  Native r2 now passes all six profiles at `2026-10-02T21:48:10.2541344Z`. Each full x64 suite passes the exact
+  162 unique actor checks; ARM64 is cross-build only. Independent source/control verification and immutable
+  archival retain 601 inputs and 2,858 evidence files, including a separately verified 45-file private runtime
+  supplement for omitted archive log entries. Only the settled Select All/Deselect host boundary is complete;
+  S2/S3b, broader P1 and measured G1 remain open.
+- [x] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
+  are frozen. Own point/settings/AA at event time; use the qualified capacity planner before capture, worker
+  sampling/flood/trace/history, current-only apply and aggregate retirement. Preserve queue coalescing/receipts,
+  literal output, no-op/error/cancel semantics and the actual application caller. All Layers, Add/Subtract,
+  outline/lasso closure, broader pointer acceptance/writer barriers and G1 remain separate migrations. Private
+  code review, full application proof, archival and native qualification precede activation.
+  Primary review strengthens the cheaper-agent test draft with distinct latest-click literals, a real shared-
+  ordinal gap, a window message observed before worker release, event-time settings changed before capture,
+  queued outside/nonfinite/empty acknowledgements and actual record-table refusal/recovery. The isolated source
+  has sixteen test modes, independently qualified below.
+  The complete private Debug/WARP application now passes all 86 new controls, unchanged selection/compatibility
+  suites and all 49 registered stages. Exact 475 inputs and 197 evidence files are archived before nine reviewed
+  native activations. All six forced native rebuild profiles, full x64 suites and ARM64 cross-builds pass. Exact
+  control/source verification and independent archival retain 604 inputs and 877 evidence files; each x64 run
+  passes 86/16 wand-host controls and 162 retained selection-host controls. Only this settled host boundary is
+  complete ([record](../../TestRuns/WandLayerHost_2026-10-03.md)); all broader P1/G1 requirements stay open.
+- [x] Outline-move opening core authority — S3b0 qualifies the private core prerequisite: a bounded scalar opening
+  identifies the exact gesture before capture and survives equal-geometry reopen/refusal cases. Preserve all
+  prepared End/Cancel generation/history semantics and account complete original-outline retirement. Private
+  source, reviewed literal/state-machine controls and full core/native qualification precede host closure;
+  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core passes 66 unique
+  new checks and the complete DocumentTests suite, retaining all 185 closure controls and original goldens.
+  Failed attempts are archived before corrections; final proof retains 554 inputs and 145 evidence files before
+  eight reviewed native activations. The fresh forced six-profile matrix passes at `2026-10-02T23:17:48.9451202Z`;
+  exact native controls/source verification and archival retain 606 inputs and 913 evidence files
+  ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). Production outline closure remains open.
+- [x] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
+  under the shared ordinal, stops later pointer samples and retains draft/history until acknowledgement.
+  The primary-reviewed private full WARP Application proof passes 242 unique controls across 31 modes and all
+  50 stages; its 618 exact inputs/199 evidence files are archived before nine host activations. The native
+  r1 matrix freezes 609 inputs; ARM64 cross-builds and x64 ASan pass, then Release's ISA gate rejects a
+  vector-looking OnCommand table row. Exact failed inputs/products and 4,286 evidence files are archived before
+  scanner diagnosis. The unchanged failed image and all nine parser suites now pass the narrow RDI-base
+  proof, including 56 new controls without changing the allowlist. Its immutable archive retains 13 inputs
+  and 238 evidence files. Native r2 is running against 610 frozen inputs; verification/archive remain required
+  Native r2 now passes all six profiles at `2026-10-03T01:07:26.4741875Z`, with 242 exact host controls, 56
+  ISA controls and all 50 Application stages in each full x64 suite. Independent source/control verification
+  and immutable archival retain 610 inputs and 1,298 evidence files
+  ([record](../../TestRuns/SelectionMoveHost_2026-10-03.md)). S3b1b still requires no-move follow-ups and the
+  remaining concrete End/Cancel callers while preserving Save/Enter and nested history. Broader P1 and measured
+  G1 remain open; the private structural proof does not close them.
+- [x] Ordered outline callers — S3b1b0 binds known End-before-command/tool events to their exact outline
+  opening and preserves selected first Undo/Redo cancellation, same-tool behavior and capture loss.
+  - [x] Full private Debug/WARP proof: 276 unique checks across 49 modes, all 51 Application stages and retained
+    host checks. Exact 621 inputs/435 evidence files are archived before seven byte-identical activations;
+    the two new Select All fixture failures are preserved before correcting their AA expectation.
+  - [x] Full native matrix: all six forced-rebuild profiles pass with 276 unique caller checks/49 modes and
+    retained suites in every x64 gate. ARM64 is cross-build only. Exact verification and immutable archival
+    retain 611 inputs/1,546 evidence files; 57 refined ISA controls keep the scanner/allowlist unchanged
+    ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)).
+- [x] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
+  one selected request, retaining event-time point/settings/AA and the ordinal through both worker phases.
+  Primary-owned isolated code and 16 reviewed modes are prepared. Private r1's missing-enum-header compiler
+  failure retains 623 exact inputs/413 evidence files before correction. Private r2's full WARP suite passes
+  84 unique checks/16 modes; 623 inputs/436 evidence files are archived before seven exact activations.
+  Native r1 passes all ARM64 builds, then fails x64 ASan's linked ISA scan; 612 inputs/5,850 evidence files
+  and the failed EXE/PDB are archived before diagnosis ([record](../../TestRuns/SelectionMoveFollowups_2026-10-03.md)).
+  The narrow QWORD-stack/RAX table proof now passes 73 new controls and both unchanged failed images;
+  its immutable archive and all 57 retained RDI controls verify before activation. Native r2 passes all six
+  profiles at `2026-10-03T03:46:41.3855104+00:00`, with exact 84/16 follow-up and retained controls in every
+  full x64 suite. Independent verification and archival retain 613 inputs/21,605 evidence files at
+  `2026-10-03T03:51:14.2165680+00:00`. All Layers, remaining header/close callers and measured G1 remain open.
+- [x] Idle outline header follow-ups — S3b1b1b0 owns kind/Deselect event-time values through acknowledged End
+  at one ordinal. Primary-reviewed isolated code passes the full private Debug/WARP suite: 126 unique checks
+  across 21 modes and 53 ordered Application stages, with retained suites/goldens unchanged. Exact 625 inputs/
+  216 evidence files are archived at `2026-10-03T03:57:49.3365819+00:00` before seven byte-identical activations
+  ([record](../../TestRuns/SelectionMoveHeaders_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T04:29:21.8934408+00:00`; independent verification and immutable archival retain 614 inputs/
+  20,351 evidence files at `2026-10-03T04:39:26.9716006+00:00`. Coexisting header/size/lifecycle policies and
+  measured G1 stay open.
+
+- [x] Selection nudge core — S1c1 privately qualifies 80 unique geometry/history/cancellation/worker controls;
+  exact 629 inputs/158 evidence files are archived before eight native activations
+  ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T06:34:34.8129025+00:00`; independent verification/archive retain 619 inputs/23,770 evidence files
+  at `2026-10-03T06:41:31.8464318+00:00`. Typed keyboard host routing, other selection geometry and G1 stay open.
+  Native r1 passes ARM64 cross-builds and full x64 ASan, then Release's ISA scan refuses terminal switch data;
+  actual exit 1 and the exact failed image/618 sources/24,357 evidence files are archived before private repair.
+
+- [x] Selection nudge host — S1c2 full private WARP proof passes 84 literal checks/11 modes and 173 fault/order
+  checks/26 modes. Exact 635 inputs/216 evidence files are archived before ten byte-identical activations
+  ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)). Native r1 starts at
+  `2026-10-03T07:01:39.6988523+00:00` against 623 frozen inputs. All six profiles pass; actual exit 0 at
+  `2026-10-03T07:30:25.0520148+00:00`. Independent verification/archive retain 623 inputs/1,064 evidence files
+  at `2026-10-03T07:36:56.8764451+00:00`. Other selection producers and measured G1 remain open.
+
+- [x] Eligible Canvas/Image Size outline closure — S3b1b1b1a private r3 passes 46 literal and 242 fault/order
+  checks, all 57 registered stages and exact retained suites. Immutable archival retains 637 inputs/214 evidence
+  files before ten byte-identical activations; independent preflight verifies 468 unchanged counterparts.
+  Native r1 PID 110580 starts at `2026-10-03T08:01:51.9057802+00:00` against 625 frozen inputs
+  ([record](../../TestRuns/SelectionSizeOutline_2026-10-03.md)). Six profiles and independent archive remain required.
+  Native r1 stops after ARM64 cross-builds and the passing new size controls: x64 ASan's existing clipboard fault
+  fixture cannot acquire the clipboard. Its exact 625 inputs/4,374 evidence files are archived before two setup
+  helpers adopt thirty readiness attempts. Native r2 PID 66964 starts at `2026-10-03T08:32:45.4833456+00:00`;
+  r2 is interrupted without an actual exit receipt. Its 625 inputs/4,377 evidence files are archived
+  unqualified, preserving the unknown exit. Fresh r3 PID 82736 starts at
+  `2026-10-03T09:11:22.7778174+00:00` through a hidden durable launcher after exact preflight (466 unchanged
+  counterparts). All six profiles and independent verification/archive are still required.
+  Detached r3 returns actual exit 1 before compilation because rg is absent from its PATH. Its 625 unchanged
+  inputs/33 evidence files are archived; r4 supplies explicit tool paths for the fresh complete matrix.
+  R4 preflight passes; PID 91044 starts at `2026-10-03T09:21:55.6955366+00:00`. Qualification remains pending.
+  ARM64 builds and the complete x64 Asan suite pass; Release/Debug and independent archive remain required.
+  Primary review adds opacity/Crop authority guards in the private follow-up before size-card completion.
+  R4 now passes all six profiles, actual exit 0 at `2026-10-03T09:56:45.0024453+00:00`; independent archival
+  retains 625 inputs/1,739 evidence files at `2026-10-03T10:02:54.6386235+00:00`. The guard correction is next.
+- [x] Eligible New Canvas outline closure — S3b1b1b1b has a separate source-only 511-input seed. Primary prepares
+  Save/Discard/Cancel phases, exact opening/card/coexisting authority and one-ordinal close/write/replacement.
+  Two reviewed literal scenarios and 52 primary fault/order scenarios include the shared size authority correction
+  ([record](../../TestRuns/SelectionNewCanvasOutline_2026-10-03.md)). P1/G1 remain open.
+  The qualified size r4 archive is pinned. Private r1's missing enum include is preserved before correction;
+  fresh r2 is building. Runtime qualification and exact archive remain required.
+  R2's ten history-observer fixture failures are archived before correction. Private r3 Rebuild and full WARP
+  runtime pass: all 59 stages, 20 literal assertions and 536 fault/order assertions. Immutable archival retains
+  639 inputs/216 evidence files at `2026-10-03T10:25:34.5400849+00:00`. Fresh native qualification remains required.
+  Production and numeric legacy goldens remain unchanged by this fixture repair.
+  Eight exact native activations and independent 472-counterpart preflight pass. Native r1 PID 23260 starts
+  at `2026-10-03T10:36:27.9675830+00:00`, freezing 627 inputs for all six profiles. Eligible Close Project
+  preparation has a separate 513-source seed; its compiler waits for this native proof/archive.
+  All six profiles pass at `2026-10-03T11:05:34.9785354+00:00`; independent verification and immutable archival
+  retain 627 inputs/23,056 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
+  `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. This also qualifies the shared size guard.
+- [x] Eligible Close Project outline closure — S3b1b1b1c qualifies prompt-aware Cancel/Discard/Save and current-only
+  close/save/lifecycle ordering, with no size card or coexisting edit. Full private and native suites retain
+  14 literal assertions/two modes and 477 fault/order assertions/46 modes, all predecessor controls and 61
+  ordered application stages. Native r3 passes all six profiles; independent verification and immutable archival
+  retain 630 inputs/23,526 evidence files at `2026-10-03T14:18:25.4242700+00:00`, completion
+  `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`
+  ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). Original pause and ISA failure remain
+  archived; the exact padding repair retains 113 new parser controls with the allowlist unchanged.
+- [x] Eligible New/window/session outline closure — S3b1b1b1d private r2 passes all 63 stages, 43 literal
+  assertions/six real-producer routes and 1,529 fault/order assertions/127 modes. All 645 inputs and 220 evidence
+  files are independently verified and archived. All six native profiles and independent verification pass;
+  immutable archival retains 632 inputs/23,532 evidence files at `2026-10-03T15:33:16.1738417+00:00`, completion
+  `97C09D00D3CF1CD164BD0A3C11E6E0CAF1C12F7D4FA1BF210E66E7083D169E70`
+  ([candidate](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
+- [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
+  - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
+  - [x] Capture the 4K and 45 MP before measurements on R1.
+  - [ ] Add the remaining UI, ETW, IO and operation-classification measurements.
+  - [x] Add private ETW capture/decode and the marked local-drive perf-root resolver for the P0.7 free gate.
+  - [x] P0.1a — Instrument message dispatch, window handlers, completion drains, individual result apply, UI actions and frame recording with optional allocation-free timing capture and ETW; validate a WPR profile. Full x64 gates and all ARM64 cross-builds passed; disabled scope costs 4.4 ns median, capture 42–43 ns.
+  - [ ] P0.1b — Drive operation and UI/IO scenarios, record machine metadata and baseline distributions, and classify each §5 row.
+    - [x] Implement the real application-loop driver, machine report and 15 operation smoke scenarios; all x64 gates and ARM64 cross-builds pass.
+    - [x] Acquire five per-file CC0 RAW samples and verify sizes, SHA-256 and signatures; inspect the tiled DNG layout. Offline downloader controls pass.
+    - [x] Expand the local corpus to all nine planned v1 extensions, with smaller correctness files, additional compression/layout candidates, and saved CC0 legal text/per-file provenance. Decode/develop qualification remains P4 work.
+    - [x] Complete the benchmark driver configuration gates, including ASan, offline corpus controls and the tightened ISA parser.
+    - [x] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. All six size/device scenarios complete with 15 operation rows each.
+    - [ ] Extend baseline coverage to the remaining §5 operations, I/O and the non-cancellable calls before their migrations.
+- [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
+  - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
+  - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
+  - [x] Pass the extended 256-round stress and full ASan gate.
+- [x] P0.3 — Add `PixelBuffer`, `TryAllocate` and `Raster::Adopt`; remove result copies. Pixel equality and paired result-production timings verified; full x64 gates passed.
+  - [x] Implement aligned ownership and no-copy raster adoption with ownership and size tests.
+  - [x] Convert adjustment/filter/resize, WIC decode and production composition readback outputs.
+  - [x] Preserve legacy numeric goldens in the complete Debug and Release gates.
+  - [x] Compare all 26 before/after checksums and record alternating ownership timings with matching pixels.
+  - [x] Finish ASan qualification.
+- [x] P0.4 — Add document generations and tokens; route mutations through validated paths. Full x64 gates and all ARM64 cross-builds passed.
+  - [x] Close mutable document/layer access; cover committed changes and changes inside open edits.
+  - [x] Add session document serials and owning result tokens with stale-result checks.
+  - [x] Share immutable selection loops across snapshots without changing selection goldens.
+  - [x] Mark the revision actually saved, including a save completed after another edit.
+  - [x] Migrate imports, opacity previews and test/benchmark fixtures; run the full validation matrix.
+- [x] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling. Full x64 gates and all ARM64 cross-builds passed.
+  - [x] Implement the private worker and wait pools, cancellation, tile execution, COM lifetime and QoS. Full x64 matrix passed.
+  - [x] Prove saturated-pool, nested execution, cancellation and shutdown behavior with independent state-machine tests. Extended ASan stress passed.
+  - [x] Extend crash handling for competing worker faults and the worker probe. Both child probes passed in all x64 configurations.
+  - [x] Add concurrency annotations and the analysis build, including guarded/unguarded compiler controls.
+  - [x] Complete the final Debug, Release, ASan stress and native-analysis regression gates.
+  - [x] Record executor overhead, cancel-check cost and remaining qualification limits. Synthetic row polling gap: 16.2 µs on R1.
+- [x] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Define the bounded scheduler, intrusive completion channel and seven job classes.
+  - [x] Wire the shared pump and event waits into the host, including hidden-window completion priority.
+  - [x] Verify cancellation, FIFO, progress, modal reentrancy, failed jobs and all-exit shutdown with event gates.
+  - [x] Pass the configuration matrix and update normative contracts for the completed slice.
+- [x] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Implement the one-active/latest-pending preview mailbox and ordered eight-command queue.
+  - [x] Implement the cross-class history barrier and retained stroke-replay states.
+  - [x] Wire scheduler activity into the one-shot busy deadline and localized DxUi progress control.
+  - [x] Verify state machines, document replay, observer lifetime, DPI layout and event-driven activity; complete all configuration gates.
+  - [x] Update normative contracts and the validation record for the completed slice.
+- [x] P0.7 — Add memory admission, deferred release and justified recycling. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Add the pure admission policy and whole-reservation accounting with overflow-safe boundaries.
+  - [x] Measure fresh-buffer page-touch and free costs against reuse before deciding the recycling policy. Three confirming 10-pair runs: fresh touch 16.64–17.51 ms versus reused 6.51–6.73 ms; free 6.02–6.36 ms. Implement a bounded recycle pool.
+  - [x] Gate dispatch on whole-graph reservations and retry from release/pressure events. Debug event/state tests pass, including an empty-frame-drain no-polling regression.
+  - [x] Transfer large buffer/storage destruction to a non-cancellable worker release queue; prove teardown lifetime. Debug tests and actual ETW positive controls pass.
+  - [x] Trace and stress admission, allocation failure and deferred frees; complete the validation matrix. 307 checks in Release, actual ETW byte counts and sanitizer poison checks pass.
+- [x] P0.8 — Add scalar kernel dispatch and the x64 VEX scan. Full x64 gates, all-image instruction scans and all ARM64 cross-builds passed.
+  - [x] Implement startup tier selection and scalar entry points without changing legacy pixel math. All six bodies and five helpers match the prior source exactly after whitespace/namespace normalization.
+  - [x] Add strict `--isa` parsing and forced-tier tests; reject unavailable/unimplemented tiers. Only Scalar is implemented in this foundation slice.
+  - [x] Scan decoded executable instructions, attribute them through PDB section contributions, and prove the gate with positive/negative compiled fixtures. All five images pass in every x64 configuration; exact runtime-owner exceptions and EVEX controls verified.
+  - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
+- [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
+  - [x] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior. Full x64 gates and all ARM64 cross-builds passed; 63 new document checks and the WARP save-path checks pass.
+  - [x] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels. Full x64 gates and all ARM64 cross-builds passed; all 13 measured 4K kernel checksums match the baseline.
+    - [x] Add private cancellable sparse reads and thread cancellation through filters, coverage, blending, cropping, masks and thumbnails.
+    - [x] Declare the complete commit allocation peak and cache selection point counts for constant-time admission estimates.
+    - [x] Complete numeric/cancellation/peak tests, Release cancellation measurements and all configuration gates. Maximum observed stop-to-return was 9.659 ms on the measured inputs; this is not a worst-case cancellation guarantee.
+  - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
+    - [x] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Full x64 gates and all ARM64 cross-builds passed.
+    - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
+    - [x] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation. Full x64 gates and all ARM64 cross-builds passed.
+    - [x] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
+      - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
+      - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
+      - [x] P1.1c.3c — Production migration qualified in all x64 test configurations and ARM64 cross-builds. Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
+        - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration and its initial bridge are tracked below; production caller activation remains open.
+        - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
+        - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
+        - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
+        - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
+        - [x] Qualify capacity-based request admission and a combined queued/active byte budget, with immutable retained input and release after publication. Full x64 gates and all ARM64 cross-builds passed; actual production producer activation remains open.
+        - [x] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
+          - [x] Qualify borrowed-input builders and request-owned selected paths: all x64 gates and ARM64 cross-builds passed, with 77 request checks per normal run and 154 with ASan stress; producer/staged-runner migration remains open.
+      - [x] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
+    - [x] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
+    - [x] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency; all six configurations passed and all 15 Release 4K operations completed. Residual costs keep P1/G1 open.
+  - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
+    - [x] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures and worker-built lookups. All x64 tests and ARM64 cross-builds pass. Release 4K Levels preview: 78.856 → 5.718 ms; CPU commit reuse tradeoff recorded; G1 remains open.
+    - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
+      - [x] P1.3a–c foundation — Capability route selection, resumable reservations/FIFO, shared event waits and bounded staging with native monitored-fence/lent-device/shutdown qualification; all x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuCompletionFoundation_2026-09-30.md)). Explicit fallback runtime coverage remains in the child plan.
+      - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
+        - [x] Qualify separate utility targets, tiled adopted worker outputs, bounded rebind restart, explicit EnqueueSetEvent fallback, and Merge/adjustment-opening continuations. All x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuUtilityReadback_2026-09-30.md)).
+        - [x] Migrate PNG/JPEG export through detached worker encoding and qualify bounded additional-event recovery on actual hardware and both completion routes; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md).
+        - [ ] Copy Merged qualifies below. Migrate wand, clone and sampler callers; measure the real loop before P1.3 closeout.
+  - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
+    - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
+    - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
+      - [x] A1/A2 — Basic Fill, Clear/selected Delete and Invert preparation and host activation; exact pixels, cancellation/staleness and ordered history pass all configurations ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
+      - [ ] A3 — Basic raster-edit real-loop timing; six-profile functional qualification passed, but the display-off presentation guard refused measurement. Preserved qualified binaries await an active desktop; [raster-edit child](AsyncRasterEdits_2026-10-01.md). Owner/history/upload bounds remain P1.9/G1.
+      - [x] A4.1–A4.5 — Ordered worker gradient previews/commits, deferred metadata and cancellation/stale/resource gates pass all configurations; 105 new document checks and 33 production host scenarios ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
+      - [x] A5.1 — Detached lift/move preparation, private cancellation/admission and missing numeric references qualify with clean configuration rebuilds ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).
+      - [x] A5.2.1 / A5.3 — Deferred production pixel-move previews and ordered pointer/nudge commits, exact ownership/staleness/cancellation and input-time Shift pass all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Gradient benchmark scenarios/runner controls also qualify functionally.
+      - [x] A5.2a — Immutable opening coverage/lift reuse, exact cache authority, one preparation across previews/commit and complete retirement qualify in the frozen six-configuration matrix: 33 independent assertions plus actual host controls ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)). Drag/geometry/upload measurements remain open.
+      - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
+      - [x] A5.4b — Atomic private Copy/Copy Merged/Cut and exact Clear/Fill Mask history publication, sealed
+        composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
+        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers qualify below;
+        constant-time capture and G1 remain open.
+      - [x] A7.1/A7.2a — Worker Shape release with exact pixels, owned event-time geometry/color, complete
+        document/history publication and actual pointer/cancellation/retirement controls qualifies in all six
+        profiles: 76 document controls and 199 host checks against 487 frozen inputs
+        ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, live producer settlement and measured G1 remain open; settled masks/Layer via Copy qualify below.
+      - [x] A7.3a.1 — Worker selection/uniform masks with eager semantic thumbnail and joint target/selection/
+        history publication qualify settled production callers in all six profiles: 84 document controls and
+        201 host checks against 496 inputs ([record](../../TestRuns/MaskWorkers_2026-10-01.md)). Live gesture
+        settlement and measured capture/apply/upload/G1 remain A7.3a.2/P1.4/A6/S3.
+      - [x] A7.3b.1 — Settled Layer via Copy/Ctrl+J worker preparation and publication qualify against 503 frozen
+        inputs in all three x64 suites and all three ARM64 cross-builds: 34 document and 214 host controls per
+        x64 profile ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)). Live producer settlement,
+        source capture/history/chrome/upload/G1 and the full P1 clean exit remain open.
+      - [x] A6.1 / A6.2 core — Detached distortion, transform pixels/publication, floating opening/merge/restore
+        and exact-predecessor history qualify in all six clean profiles against 529 frozen inputs, including
+        409 independent controls per x64 suite and unchanged legacy goldens
+        ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)). Worker Clear preserves committed pixel
+        limits without charging source-external scratch tiles. Production transform callers, bounded previews,
+        settlement and G1 remain open.
+      - [x] A6.3 T1 core — Sealed transform cancellation and nested floating closures qualify in all six
+        profiles against 533 inputs: 467 core controls per x64 suite
+        ([record](../../TestRuns/TransformCancellation_2026-10-02.md)). Persistent host rollback ownership,
+        production routing, preview/settlement, retirement gates and G1 remain open.
+      - [x] A6.3 T3 core — Complete sealed display-only previews qualify in all six profiles against 537 inputs:
+        44 new assertions plus the prior 467 core controls per x64 suite
+        ([record](../../TestRuns/TransformPreviewCore_2026-10-02.md)). Color and mask previews cap both dimensions
+        at 1024; sparse assembly stays private. Production coalescing, deferred display, settlement and G1 remain open.
+      - [x] A6.3 settlement foundation — Selected transform release/header/command, input-time nudge and
+        floating opening/merge/cancel routes qualify against 540 frozen inputs in all six profiles: 344 real
+        host controls and unchanged existing tests ([record](../../TestRuns/TransformSettlement_2026-10-02.md)).
+        Deferred preview/inline-bypass/Alt-duplicate/device/shutdown/G1 and the full P1 clean exit remain open.
+      - [x] A6.3 deferred preview foundation — The opt-in model, writer/outline guards and preview host pass
+        all three clean x64 runtime suites and all three ARM64 cross-builds against 548 inputs: 147 model/guard
+        controls, 90 preview host controls and the existing 344 settlement controls
+        ([record](../../TestRuns/DeferredTransformPreview_2026-10-02.md)). Production ordinary-transform policy,
+        Alt-duplicate/device/shutdown/G1 and the complete P1 exit remain open.
+      - [x] A6.3 duplicate gesture — Same-ordinal worker source settlement/opening, latest pointer metadata,
+        event-time release/Escape and prepaid rollback qualify in six clean profiles against 559 frozen inputs:
+        82 core and 131 duplicate host controls plus the prior preview/settlement/goldens
+        ([record](../../TestRuns/DuplicateGestureWorkers_2026-10-02.md)). The approved DxUi API-revision-3
+        update and both strict ISA parser patterns qualify together. Ordinary deferred policy, remaining
+        duplicate stale/distort/lifetime scenarios and measured G1 are separate unfinished gates.
+    - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
+      [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
+      gesture/source acquisition and required admission/cancellation proof.
+      - [x] S0a/S1a/S3a core — Complete Select All/Deselect and outline-move End/Cancel preparation, exact
+        authority/history and retained retirement pass 312 checks in every x64 suite and all three ARM64 clean
+        cross-builds against 423 frozen inputs ([evidence](../../TestRuns/SelectionCommandPreparation_2026-10-01.md)).
+        Host routing, live gesture/stroke ordering, Clipper/coverage/display bounds and G1 remain open.
+  - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
+    - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
+      - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.
+      - [x] F3a/F4a/F4a.1 — Cancellable project helpers and direct bounded file/ZIP asset streams pass all x64 suites and ARM64 cross-builds; [evidence](../../TestRuns/ProjectStreams_2026-09-30.md). Three 4K/45 MP Release observations per mode quantify memory retention and staging IO; production host graphs remain open.
+      - [x] F3a.1 — Refuse oversized later project assets from frame dimensions before allocating output, using independent remaining image/mask totals; all x64 suites and ARM64 cross-builds pass ([evidence](../../TestRuns/ProjectPixelBudgets_2026-10-01.md)). Adaptive admission and open/import host jobs remain F3b.
+      - [x] F3b.1/F3b.2 — Adaptive project metadata probes/reopened decode ceilings and detached ordered import preparation pass all configurations; 69 load/resource and 31 import checks ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)). Production open/import workers and measured admission/apply remain F3b.3.
+      - [x] F3b.3a — Production project opening, separate probe/decode reservations, 45 host gates and replacement continuation pass all configurations and 22-row hardware/WARP runs; [evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md). Warm opening: 18.675 ms at hardware 4K / 120.355 ms at 45 MP; 5.079 ms apply / 50.517 ms frame at 45 MP keep G1 open.
+      - [x] F3b.3b — Detached image-import probe/preparation/apply, opened-source caps and 130 host cases pass all configurations and 24-row hardware 4K/45 MP/100 MP and WARP 4K measurements; [evidence](../../TestRuns/ImageImportJobs_2026-10-01.md). Warm 45 MP new-canvas import: 169.732 ms; existing-layer apply 11.403 ms leaves P1.9/G1 open.
+      - [x] F4b.1/F4b.2 — Project-save and PNG/JPEG export graphs pass all x64 suites, ARM64 cross-builds and 21-row hardware 4K/45 MP and WARP 4K measurements; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md). Save retains captured revision/publication truth; export detaches GPU resources before encoding and cannot replay writes after device changes. Remaining IO faults and measured 2 ms overruns keep F4/P1/G1 open.
+      - [x] F5a/F6a — Detached clipboard byte/metadata helpers and folder rotation/recovery faults, including allocation-safe bounded cleanup and backup-only retries; all 77 new checks and configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production clipboard migration qualifies below; pending IO waits, intermittent real save cause and measured cancellation bounds remain open.
+      - [x] F5b.1 / A5.4a / owner routing primitive — Native Copy pixel, sealed Win32 transfer and fixed owner
+        multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
+        against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
+        ([record](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production callers and G1 stay open.
+      - [x] F5b.2a — Registered receipt and worker SHA-256 payload binding, exact partial publication and
+        private-origin controls qualify in all six configurations against 456 frozen inputs: 25/45/34 new
+        assertions plus all 125 transfer controls ([record](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md)).
+        Full host/codec admission, production callers, retries and G1 remain open.
+      - [x] F5b.2b.1 — Capped memory PNG/JPEG encoding with pre-growth derived/lower ceilings, bounded commits,
+        cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
+        six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
+        Detached Paste and production clipboard admission/callers/retries qualify below; remaining file timing and lifecycle gates stay open.
+      - [x] F5b.2b.2 — Detached Paste candidate document/history, guarded publication and producer-order clipboard
+        inspection qualify in all six profiles: 62 Paste, 45 availability and unchanged 125 transfer controls
+        ([record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md)). Actual host graphs remain F5b.2b.3.
+      - [x] F5b.2b.3 / A5.4c / F5c.2 — Native Copy/Cut/Paste/Copy Merged and metadata-only New Canvas graphs
+        qualify against 480 frozen inputs: all three x64 gates and all three ARM64 clean builds pass. Native
+        control sets contain 268 command, 61 prefill, 41 delayed-render and 88 publication-fault checks
+        ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). F5d/P1.9/G1 remain open.
+      - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
+        six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
+        ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.
+      - [x] F6a.1 — Bounded native rollback recovery and real child/directory-reader release/exhaustion controls; all configurations and 33 rotation checks pass ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)). External reader/filter identity and overall F6 remain open; timer resource faults qualify below.
+      - [x] F6a.2 — Native recovery timer create/arm/wait resource faults, healthy-path avoidance and backup-only retry qualify in all configurations; 40 rotation controls pass ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)). Original save causes and overall F6 remain open.
+      - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all
+        six configurations with 52 real reader/fault assertions per x64 profile. Old bytes and injected final
+        failures are preserved ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
+      - [x] F6a.4 — Bounded native staging-publication retry and complete backup/foreign-destination preservation;
+        269 controls pass in every x64 profile and all ARM64 clean builds qualify ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
+      - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
+      - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
+    - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
+      - [x] Qualify cancellable resizers, immutable size jobs, peak reservations and event-gated host tests. All x64 suites and ARM64 cross-builds pass; hardware 4K/45 MP and WARP 4K each complete 18 operations. [Size child](AsyncDocumentSizing_2026-09-30.md) and [evidence](../../TestRuns/AsyncSizing_2026-09-30.md).
+      - [ ] Meet the measured 2 ms apply target; history/chrome/first-upload work remains P1.9.
+    - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
+      - [x] P1.9a — Explicit unsigned 64-bit session limit min(physical RAM / 4, 2 GiB), 256 MiB query fallback/class default, retained legacy trim golden and machine host wiring. Full matrix passes; the previously failed 45 MP sizing benchmark now retains its undo and completes.
+      - [x] P1.9b — Retained immutable selection capacity and safe pending/restore snapshot moves pass all x64 suites and ARM64 cross-builds; [history child](HistoryStorageAccounting_2026-09-30.md), [evidence](../../TestRuns/HistoryStorage_2026-09-30.md). Hardware 4K/45 MP each complete 18 operations. Incremental accounting, thumbnails, uploads and the 2 ms apply target remain open.
+      - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, constant-time capture, incremental accounting and the measured G1 exit remain open; Undo/Redo qualification is recorded below.
+      - [x] P1.9 H1 destructive color — Prepared after-layer/history, admitted capture and actual host failure gates pass all profiles ([evidence](../../TestRuns/ColorHistoryPublication_2026-10-01.md)). Adjustment-layer closure remains separate.
+      - [x] P1.9 H1 size cards — Admitted capture, complete document/history publication and retirement pass all profiles; 50 independent assertions and 22 host scenarios ([evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md)). Measured apply remains open.
+      - [x] P1.9 H1 merge — Admitted metadata probe, full survivor/history publication and complete deferred CPU
+        retirement pass the frozen six-profile matrix; 71 document assertions and 17 host modes
+        ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)). Failed scheduler-wait, process-exit
+        observation and IO rotation attempts remain preserved; the rotation cause, other callers and G1 remain open.
+      - [x] P1.9 H1 Undo/Redo — Complete restore/history and deferred retirement pass the frozen six-configuration
+        matrix: 63 document assertions and 28 host scenarios in every x64 suite
+        ([evidence](../../TestRuns/HistoryRestorePublication_2026-10-01.md)). The preserved first crop shortcut
+        failure is corrected by waiting for acknowledgement without changing its expectations. Other callers,
+        metadata capture/accounting, uploads and measured G1 remain open.
+      - [x] P1.9 H1 import/project open — Saved-baseline/edit/reset publication and complete session/path/draft
+        retirement qualify in the frozen six-configuration matrix: 55 history/157 session assertions plus
+        70 project/155 image-import host cases per x64 suite
+        ([evidence](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)). Separate file-operation authority
+        preserves live edits on failure and retires them on successful replacement; Undo remains settled-only.
+        The history child retains original host/fixture/ISA failure evidence. Other H1 callers, H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H1 lifecycle primitive — Optional New/Close saved history, preallocated retirement and exact
+        refusal/publication pass 65 independent controls per x64 suite and all six clean profiles against
+        561 frozen inputs ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). Production default
+        New, New Canvas card and Close Project activation remains in
+        [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md); H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H1 lifecycle host — Production New/New Canvas/Close, sealed admitted capture, saved optional
+        history and worker retirement qualify in all six profiles: 115/58/85 actual application controls
+        ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader live contexts, H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H2.1 / H4.1 — Immutable history-container roots and optional image thumbnails qualify in the
+        frozen six-configuration matrix: 28 root/30 producer assertions and 331 parser controls per x64 suite
+        ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
+        Capture shares immutable stack roots; image caches are optional and semantic mask thumbnails stay eager.
+        The initial mask-fixture and ASan instruction-proof failures remain preserved in the history child.
+        Full document
+        capture, incremental accounting, first uploads and measured G1 remain separate.
+      - [x] P1.9 H1 adjustment panels — Prepare Begin and OK/Cancel history before owner publication;
+        coalesce Cancel, acknowledge prior OK drops, audit dependent callers and retire complete preview owners.
+        - [x] H1.6a/H1.6c — Production opening and metadata OK qualify in all six clean configurations:
+          515 closure, 210 opening and 58 nested assertions, plus 146 actual host cases in each x64 profile
+          ([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)).
+        - [x] H1.6b/H1.6d–e — Production Cancel routing and combined caller qualification pass all six clean
+          configurations: 264 dismissal assertions and 70 actual Cancel host rows per x64 profile
+          ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)). Measured owner costs,
+          other H1 callers, full record capture/accounting and uploads remain separate in the
+          [history child](HistoryStorageAccounting_2026-09-30.md).
+    - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
+Implementation started 2026-09-27. Slices P0.2–P0.8 are complete on x64; the P0 phase remains open. ARM64
+Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
+
+Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
+updated during work and each completed, validated slice committed and pushed. This supersedes the former P6
+authorization restriction. Record concrete decisions in §11 as their phases begin, and expand P6 into its child
+plan before coding the format/depth transition. Continue between slices without another implementation approval.
+Hardware qualification and Photoshop comparisons remain measured exit criteria; implementation alone cannot
+check those boxes. Smaller agents handle bounded changes and independent checks; the primary reviews them and
+owns scheduler, GPU, storage, and RAW architecture.
+
+RAW acquisition and file-backed qualification details now live in the future roadmap §6.9 and its opening checklist; the original acquisition record and downloader remain unchanged.
+
+Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
+benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
+raster publication, buffer ownership and adoption, the concurrency tests and the paired benchmark, and ran the gates.
+P0.2 uses a standard per-storage mutex to keep `Document.h` independent of Windows types; only a first assembly
+takes it. All readers use the acquire/release pointer from §4.6. The new stress covers competing readers of one
+sparse storage and two sparse storages sharing a base. P0.1 measurement coverage remains open. The P0.3 buffer
+and adoption APIs, filter/resize/WIC conversions and production composition readback preserve kernel arithmetic.
+All 26 before/after checksums match. Alternating ownership comparisons showed a median paired saving of 51.349 ms
+for a 45 MP Levels result, with one fewer 170.75 MiB pixel buffer. This measures result production; full host
+commit latency, responsiveness and the G2/G3 targets remain open. See the
+[foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) for controls, noise and qualification limits.
+
+P0.4 progress, 2026-09-27: session writes now pass through tracked APIs, result tokens retain their inputs and
+reject stale/session-mismatched results, selections share immutable geometry, and history can mark a captured
+saved revision. All x64 gates and ARM64 cross-builds passed, including 120 new checks. The
+[P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md) documents the reviewed fixes and remaining limits.
+
+P0.5 progress, 2026-09-27: worker/wait ownership, nested tile execution, cancellation and competing-fault crash
+handling are implemented. Full Release native analysis and its positive/negative controls passed. The checked
+synthetic fill takes 2.360 ms at 32 threads versus 6.228 ms inline; this is an executor measurement, with no claim
+about real image operations or Photoshop. The full x64 Debug, Release and ASan gates passed, including worker
+stress, both crash probes and 27 harness screenshots. All three ARM64 cross-builds passed. See the
+[worker record](../../TestRuns/WorkerExecution_2026-09-27.md) for controls, metrics and remaining qualification.
+
+P0.6a progress, 2026-09-27: the bounded scheduler and shared message/completion/action pump now serve the host,
+including hidden-window completion delivery and shutdown on every mode exit. The complete x64 matrix, native
+analysis with its compiler controls, and all ARM64 cross-builds passed. Release synthetic scheduler dispatch
+through completion and payload release measured 19.3 µs median and 53.4 µs p95. The
+[scheduler record](../../TestRuns/JobScheduler_2026-09-27.md) gives the state-based tests, measurement scope and
+qualification limits. Image commands remain synchronous until their P1 migrations; G1 is still open.
+This completed slice was committed and pushed to `origin/main` as `048b1cd`.
+
+P0.6b progress, 2026-09-27: preview coalescing, queued command ownership, shared history/stroke ordering and
+the delayed busy indicator passed 269 new policy/ordering checks plus the full x64 gates. The WARP self-test covers
+production activity notifications, exact visibility boundaries, 96/144 DPI and held chrome clicks. Native analysis
+and all ARM64 cross-builds passed. See the [input-policy record](../../TestRuns/JobInputPolicies_2026-09-27.md).
+P1 still owns actual tool snapshot/worker/apply migration, stroke sample storage and file-flow wiring; these
+foundation gates do not claim that image processing is already nonblocking.
+This slice was committed and pushed to `origin/main` as `3bdc87a`.
+
+P0.7 progress, 2026-09-27: whole-graph admission, event-only retries, large deferred releases and bounded recycling
+passed the full x64 matrix, native analysis and all ARM64 cross-builds. The actual ETW stream has two positive
+controls and no UI free of 16 MiB or more for direct/adopted/vector releases. Recycled 45 MP buffers measure
+6.669 ms full touch and 7.95 µs UI ownership retirement (enqueue only), with matching checksums and zero warm
+page faults. The [memory record](../../TestRuns/MemoryPipeline_2026-09-27.md) gives controls, after measurements,
+review corrections and qualification limits. P1 still owns every operation's declared peak and async migration.
+This slice was committed and pushed to `origin/main` as `c16f5b6`.
+
+P0.8 progress, 2026-09-27: the immutable Scalar dispatch table, guarded CPU/OS detection and strict `--isa` path
+passed the full x64 gates and all ARM64 cross-builds. All five linked x64 images pass the PDB-attributed VEX/EVEX
+gate in each configuration. Compiled controls prove baseline leaks, EVEX in AVX2, overbroad runtime exemptions
+and missing/mismatched PDBs are rejected. See the [dispatch record](../../TestRuns/KernelDispatch_2026-09-27.md).
+Only Scalar is implemented; P2 owns actual SIMD acceleration. P0.1 UI/IO measurements and the P1 migrations are next.
+This slice was committed and pushed to `origin/main` as `a7c886c`.
+
+P0.1a progress, 2026-09-27: allocation-free timing scopes now cover production dispatch, WndProc, drain, result
+apply, deferred actions and frame construction. All 82 timing/histogram/trace checks pass in each x64 run,
+including actual private ETW decode and sanitizer stress. The full x64 gates and all ARM64 cross-builds passed.
+Three Release runs measured 4.4 ns median disabled and 42–43 ns with histogram capture. The
+[timing record](../../TestRuns/UiTiming_2026-09-27.md) documents scope boundaries and limitations. P0.1b owns
+real-loop operation/IO scenarios and baseline classification; P1 still owns asynchronous image work.
+This slice was committed and pushed to `origin/main` as `db7fd52`.
+
+P0.1b progress, 2026-09-28: the real-loop driver exercises 15 commands through posted messages, validates results
+and waits for idle jobs plus Present before accepting each sample. Full x64 Debug, Release and ASan gates and all
+ARM64 cross-builds pass. The [baseline record](../../TestRuns/PipelineBaseline_2026-09-27.md) preserves complete
+hardware and WARP 4K/45 MP/100 MP runs. The original incomplete WARP 100 MP run
+is retained separately from its successful retry. Public CC0 ARW, CR3, NEF, RAF and tiled DNG files
+are acquired with matching upstream SHA-256 values; see the [corpus record](../../TestRuns/RawCorpus_2026-09-27.md).
+The 100 MP Gaussian scenario explicitly measures the existing pixel-budget refusal, not an absent preview.
+The x64 scan exposed compiler-generated switch-table data that decodes as VEX; a narrowly validated dispatch/table
+recognizer replaces that false positive without adding an object or procedure exception.
+All 13 parser controls and the current-image scans pass. The driver/corpus slice is qualified; P0.1 stays open for
+the remaining operation and I/O baselines. No RAW decode or Photoshop speed comparison is claimed.
+The driver/corpus slice was committed and pushed as `e114b9e`; the final WARP 45 MP run completed immediately after.
+
+P1.1a progress, 2026-09-28: immutable filter input/result types and the shared Prepare/Run/Apply path are integrated,
+including opening-input validation, successful full-grid preview reuse, eager carried-mask thumbnails and budget
+rechecks. Processing failure keeps the panel and last-applied settings; Save/Export stop when the panel cannot
+apply. All 63 new document checks, the WARP save-path checks and existing numeric goldens pass in full x64 Debug,
+Release and ASan gates; all ARM64 cross-builds pass. See the [work-split record](../../TestRuns/ColorEditWork_2026-09-28.md).
+P1.1b owns bounded inner-kernel cancellation and peak reservations, and P1.1c owns asynchronous host wiring.
+P1.1a was committed and pushed as `c41805d`.
+
+P1.1b progress, 2026-09-28: private worker reads avoid shared sparse materialization; filters, histogram, coverage,
+blending, trim, carried masks and eager thumbnails now propagate cancellation. Large scratch arrays initialize in
+bounded chunks. Selection coverage applies the transform per edge without copying the outline; hard coverage uses
+cancellable in-place sorting. The allocation estimate covers each stage's live scratch and final result, including
+rounding and sparse input copies, and avoids charging a resident exact preview again. All final x64 gates and all
+ARM64 cross-builds passed, including curve-allocation and finite-coordinate-overflow review corrections. All 13
+4K benchmark checksums match the original baseline; observed cancellation returns and their limits are recorded
+in the [P1.1b record](../../TestRuns/FilterCancellation_2026-09-28.md). The host still invokes the graph synchronously
+until P1.1c. P1.1b was committed and pushed as `c859bd0`.
+
+P1.1c.1 progress, 2026-09-28: deferred panel metadata, worker padding/preview/histogram graphs, lifetime/sequence
+validation, source-cache rules and preparation reservations are implemented. The direct API uses the same graph;
+its existing document goldens pass. A cheaper agent supplied cached selection bounds and another supplied
+the independent deferred-state tests; the primary owns the worker and publication logic and reviews their changes.
+All x64 configuration gates and all ARM64 cross-builds passed. The benchmark no longer requires unused identity
+preview preparation; the ISA gate now verifies an additional compiler switch-table pattern without an object
+allowlist exception. Evidence is in the [P1.1c.1 record](../../TestRuns/ColorPanelWork_2026-09-28.md).
+Production job/continuation wiring follows this boundary and is not yet complete.
+
+P1.1c.1 was committed and pushed as `6a6443c`. P1.1c.2 is complete on x64: the host selects deferred
+panels, submits one-active/latest-pending previews and once-per-opening histograms, and invalidates tickets on
+panel/document/shutdown transitions. Its WARP test gates actual production jobs and checks input dispatch,
+coalescing and Cancel/reopen. The UI benchmark also waits for the frame invalidated by job publication. Commit and
+owned file/close continuations remain P1.1c.3; no whole-host nonblocking claim is made at this boundary. All three
+x64 test configurations, skill validation, formatting and all ARM64 cross-builds passed. Evidence is in the
+[P1.1c.2 record](../../TestRuns/ColorPanelHost_2026-09-28.md).
+
+P1.1c.3a–b preparation, 2026-09-30: the busy-panel contract and ordered worker engine passed all x64 test
+configurations, skill/format checks and all ARM64 cross-builds. Evidence is in the
+[ordered commit record](../../TestRuns/OrderedColorCommit_2026-09-30.md).
+A cheaper agent supplied bounded embedded-host input tests; the primary reviewed the patch, preserved concurrent
+engine changes, strengthened restored-input/prerequisite checks, and implemented the commit engine and its event
+gates directly. Production OK/write callers remain inline until their owned continuations activate together;
+P1.1c.3 is not complete. No G1 or Photoshop speed claim follows from this preparation.
+The indexed [completed continuation child plan](../Done/ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
+request ownership, staged settlement, caller inventory, repeated history acquisitions and activation gates for
+P1.1c.3c–d. Its later stroke resolution remains integrated with P1.4; it does not claim that replay is implemented.
+
+P1.1c.3 activation, 2026-09-30: the full typed production runner and caller migration passed all x64 test
+configurations and ARM64 cross-builds. [Activation evidence](../../TestRuns/HostContinuationActivation_2026-09-30.md)
+records the 84 caller outcome cases, owned Shape release, bounded direct input readers and session-end message
+controls. Release's real 4K loop completed all 15 operations; Levels commit dispatch max was 0.083 ms, apply max
+3.658 ms and action max 5.898 ms. Invert/Fill/Clear still block for 187/243/270 ms in this run. P1.2–P1.9 and
+G1 remain open. The primitive notes below record the state before activation.
+
+P1.1c.3c primitive progress, 2026-09-30: the stable UI-action source and repeated history acquisitions passed the
+full x64 gates and all ARM64 cross-builds. Final review strengthened independent owner/document stamp tests.
+Release link-layout changes exposed a switch-table ISA scanner false positive; exact PE/PDB and branch proof now
+recognizes its observed hoisted image-base setup, with positive/negative controls and an unchanged allowlist.
+Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). The ownership and host
+bridge records below extend these primitives; write/discard stages and production caller activation remain open.
+P1 and G1 remain open.
+Per-entry continuation retirement also passed the full x64 gates and all ARM64 cross-builds; the
+[retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md) proves each dropped entry's ownership and
+observable outcome through the callback. The [owned request/receipt record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md)
+also qualifies the actual model in all configurations, with 85 receipt and 21 typed-input assertions per HostTests
+invocation (the ASan suite runs both normal and stress).
+Production producer admission, staged publication and caller activation remain with the runner.
+The [Application bridge record](../../TestRuns/HostContinuationBridge_2026-09-30.md) qualifies real owned numeric
+panel requests, registered source ownership, admission/full refusal, exact completion wake-up, success/failure,
+late cancellation/replacement, metadata settlement and shutdown in all configurations. All asynchronous history
+finishers must notify the common hook after apply/drop; other kinds currently use explicit finisher test seams.
+Cancel after acknowledged panel work preserves its known result. The full multi-stage prompt/write/discard runner,
+variable-length payload admission and production caller activation remain open; P1/G1 and P2–P6 are not complete.
+
+Code drift checked against the current source: the later review already added display proxies and tiled
+full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
+export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
+they must not reintroduce the older limitations described in the original survey.
+
+Validation progress: the complete x64 Debug, Release and ASan gates, skill validation and formatting check passed.
+ASan includes the extended 256-round concurrency stress and a real detection probe. The kernel smoke gate runs
+13 operations and three copy/adopt comparisons on 32×24 pixels in every configuration. The review confirmed the existing fatal
+`std::bad_alloc` policy still reaches `CopyFrame` and `CommitColorEdit` through allocation of storage headers,
+thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
+boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
+
+- **Status**: ACTIVE, P1 delivery milestone; the opening checklist is the current execution status.
+- **Planned at**: 2026-09-22; detailed survey and adversarial reviews on 2026-09-23. Split into P1 and P2–P6 on 2026-10-04 at the user's request.
+- **Pinned dependency**: DxUi `8e8994079e82f79e6765e6a885c03fc687957591`, API revision 3.
+- **Authority**: This is a non-normative execution record. Current behavior lives in the owning domain specs; durable requirements land there with implementation.

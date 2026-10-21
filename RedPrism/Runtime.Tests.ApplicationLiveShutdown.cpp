@@ -239,6 +239,26 @@ int Application::RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept
                 const ULONGLONG now = GetTickCount64();
                 if (now >= deadline)
                 {
+                    // Preserve reached state before the deadlock exit. A missed prerequisite, refused capture
+                    // or preparation failure must be distinguishable from a worker/event that failed to wake.
+                    const auto ready = owner->_jobs.UiReadinessForTest();
+                    std::printf("DIAGNOSTIC application-live-shutdown.%s gate=%u captured=%d requested=%llu "
+                                "reserved=%llu releasing=%llu lifecycle-ticket=%d lifecycle-stamp=%d "
+                                "host-active=%d host-stamp=%d history-busy=%d idle=%d ui=%d "
+                                "completions=%u actions=%u source=%d resumes=%d errors=%u error-id=%u\n",
+                                scenario, gate->visits.load(), gate->captureReservationHeld.load() ? 1 : 0,
+                                static_cast<unsigned long long>(gate->reservationBytes),
+                                static_cast<unsigned long long>(owner->_jobs.ReservedMemoryBytes()),
+                                static_cast<unsigned long long>(owner->_jobs.ReleasingMemoryBytes()),
+                                owner->_documentLifecycleTicket.has_value() ? 1 : 0,
+                                owner->_documentLifecycleStamp.has_value() ? 1 : 0,
+                                owner->_activeHostRequest.has_value() ? 1 : 0,
+                                owner->_hostCommitStamp.has_value() ? 1 : 0, owner->_historyWork.Busy() ? 1 : 0,
+                                owner->_jobs.IsIdle() ? 1 : 0, owner->_jobs.HasUiWork() ? 1 : 0, ready.completions,
+                                ready.actions, ready.source ? 1 : 0, ready.resumes ? 1 : 0,
+                                static_cast<unsigned int>(owner->_errorsShown),
+                                static_cast<unsigned int>(owner->_lastErrorId));
+                    std::fflush(stdout);
                     SelfTestFailure(L"Standalone live shutdown fixture did not reach its event gate.\n");
                     std::_Exit(5);
                 }

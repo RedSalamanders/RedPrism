@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.DocumentLifecycleTestGate.h"
 #include "Selection.h"
@@ -14,18 +15,33 @@
 #include <string>
 #include <unordered_set>
 
+namespace
+{
+enum class LifecycleCloseMode : std::uint8_t
+{
+    CancelBeforePreparation,
+    CancelAfterPreparation,
+    WorkerPreparationFailure,
+    OwnerCaptureFailure,
+    AdmissionFailure,
+    ReplacementSnapshotFailure,
+    ReplacementResetFailure,
+};
+
+// Keep one bounded runtime label lookup instead of duplicating switch tables throughout the fixture body.
+__declspec(noinline) const char* LifecycleCloseCaseName(LifecycleCloseMode mode) noexcept
+{
+    static constexpr std::array<const char*, 7> names{
+        "cancel-before-prepare", "cancel-after-ready",       "worker-prepare-oom",   "owner-capture-oom",
+        "admission-oom",         "replacement-snapshot-oom", "replacement-reset-oom"};
+    const auto index = static_cast<std::uint8_t>(mode);
+    return index < names.size() ? names[index] : "unknown";
+}
+} // namespace
+
 int Application::RunDocumentLifecycleCloseSelfTest() noexcept
 {
-    enum class Mode : std::uint8_t
-    {
-        CancelBeforePreparation,
-        CancelAfterPreparation,
-        WorkerPreparationFailure,
-        OwnerCaptureFailure,
-        AdmissionFailure,
-        ReplacementSnapshotFailure,
-        ReplacementResetFailure,
-    };
+    using Mode = LifecycleCloseMode;
     struct State final
     {
         Application& owner;
@@ -62,27 +78,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         std::printf("%s lifecycle-close.%s.%s\n", condition ? "PASS" : "FAIL", caseName, fact);
         std::fflush(stdout);
     };
-    const auto caseName = [](Mode mode) noexcept -> const char*
-    {
-        switch (mode)
-        {
-        case Mode::CancelBeforePreparation:
-            return "cancel-before-prepare";
-        case Mode::CancelAfterPreparation:
-            return "cancel-after-ready";
-        case Mode::WorkerPreparationFailure:
-            return "worker-prepare-oom";
-        case Mode::OwnerCaptureFailure:
-            return "owner-capture-oom";
-        case Mode::AdmissionFailure:
-            return "admission-oom";
-        case Mode::ReplacementSnapshotFailure:
-            return "replacement-snapshot-oom";
-        case Mode::ReplacementResetFailure:
-            return "replacement-reset-oom";
-        }
-        return "unknown";
-    };
+    const auto caseName = LifecycleCloseCaseName;
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -135,7 +131,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         if (!settle())
             return false;
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 1;
         document.height = 1;
@@ -158,10 +154,10 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         document.layers.push_back(std::move(group));
         document.layers.push_back(std::move(layer));
         document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 1)};
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.history.Reset();
         _session.history.MarkSaved();
-        _session.CollapsedGroupIDs().insert(groupID);
+        _session.SetGroupCollapsed(groupID, true);
         _session.SetForegroundColor(0xFF3167A9u);
         _session.SetBackgroundColor(0xFFE2B45Cu);
         _documentPath = L"Z:\\lifecycle-close-test\\source.prism";

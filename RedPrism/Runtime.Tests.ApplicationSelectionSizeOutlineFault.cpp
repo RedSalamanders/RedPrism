@@ -496,9 +496,10 @@ int Application::RunSelectionSizeOutlineFaultSelfTest() noexcept
         (void)RunUiActions(_jobs);
     expect("scheduler-admission", "full-record-table-refuses-before-capture",
            receipt.Read().outcome == HostOutcome::Failed &&
-               receipt.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && _session.Document() == document &&
-               _session.Generation() == generation && _session.history.IsCurrent(history) &&
-               gate->captures.load() == 0 && !gate->retired.load() && !_historyWork.Busy() && SizeCardOpen());
+               receipt.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+               _session.Document() == document && _session.Generation() == generation &&
+               _session.history.IsCurrent(history) && gate->captures.load() == 0 && !gate->retired.load() &&
+               !_historyWork.Busy() && SizeCardOpen());
     if (!expect("scheduler-admission", "occupied-records-settle",
                 SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled))
         return 5;

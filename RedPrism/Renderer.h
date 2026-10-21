@@ -17,6 +17,7 @@
 
 class ChromeHost;
 class CanvasRenderer;
+class RecordedDisplayGraph;
 struct CanvasViewport;
 struct CanvasDocument;
 
@@ -34,6 +35,72 @@ class Renderer final
         ChromeComposite,
         Present,
     };
+
+    // Harness-only numeric capture of the actual completed frame before Present. No ordinary readback.
+    using FrameReadbackForTest = HRESULT (*)(void*, ID3D11Device*, ID3D11DeviceContext*,
+                                             ID3D11RenderTargetView*) noexcept;
+    void SetFrameReadbackForTest(FrameReadbackForTest callback, void* context) noexcept
+    {
+        _frameReadbackForTest = callback;
+        _frameReadbackContextForTest = context;
+    }
+    void SuppressSelectionOutlineForTest(bool suppress) noexcept
+    {
+        _suppressSelectionOutlineForTest = suppress;
+    }
+
+    struct SelectionOutlineFrame final
+    {
+        CanvasRenderer* composition = nullptr;
+        ID3D11ShaderResourceView* solid = nullptr;
+        ID3D11ShaderResourceView* dashes = nullptr;
+        unsigned int width = 0;
+        unsigned int height = 0;
+        float pixelLeft = 0.0f;
+        float pixelTop = 0.0f;
+        bool clipped = false;
+        std::array<float, 4> clip{};
+    };
+    struct LassoDraftFrame final
+    {
+        CanvasRenderer* composition = nullptr;
+        ID3D11ShaderResourceView* color = nullptr;
+        unsigned int width = 0;
+        unsigned int height = 0;
+        float pixelLeft = 0.0f;
+        float pixelTop = 0.0f;
+        bool clipped = false;
+        std::array<float, 4> clip{};
+    };
+    class SelectionOutlineFrameSource
+    {
+      public:
+        virtual ~SelectionOutlineFrameSource() = default;
+        [[nodiscard]] virtual SelectionOutlineFrame BorrowSelectionOutlineFrameOwner(float left, float top, float width,
+                                                                                     float height) noexcept = 0;
+        // Both current graph borrows occur after chrome preparation; an absent draft records no pass.
+        [[nodiscard]] virtual LassoDraftFrame BorrowLassoDraftFrameOwner(float, float, float, float) noexcept
+        {
+            return {};
+        }
+    };
+    [[nodiscard]] std::uint64_t SelectionOutlineDrawCount() const noexcept
+    {
+        return _selectionOutlineDraws;
+    }
+    [[nodiscard]] HRESULT SelectionOutlineFailure() const noexcept
+    {
+        return _selectionOutlineFailure;
+    }
+
+    [[nodiscard]] std::uint64_t LassoDraftDrawCount() const noexcept
+    {
+        return _lassoDraftDraws;
+    }
+    [[nodiscard]] HRESULT LassoDraftFailure() const noexcept
+    {
+        return _lassoDraftFailure;
+    }
 
     struct DeviceIdentity final
     {
@@ -60,7 +127,8 @@ class Renderer final
     // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
     // (CanvasFailure reports it), so the window keeps working (Decision D1).
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
-                   const CanvasDocument* document) noexcept;
+                   const CanvasDocument* document, RecordedDisplayGraph* acknowledgedDisplay = nullptr,
+                   SelectionOutlineFrameSource* selectionOutline = nullptr) noexcept;
     // The canvas stage's failure in the last Render, S_OK when the canvas drew.
     [[nodiscard]] HRESULT CanvasFailure() const noexcept
     {
@@ -71,10 +139,26 @@ class Renderer final
     {
         return _failedStage;
     }
+    // True only when this Render attempt completed a canvas blit, distinct from a chrome-only Present.
+    [[nodiscard]] bool CanvasDrawn() const noexcept
+    {
+        return _canvasDrawn;
+    }
     // Frames that reached the display (Present neither failed nor reported occlusion).
     [[nodiscard]] std::uint64_t PresentCount() const noexcept
     {
         return _presentCount;
+    }
+    // Calls to the real frame Present (excludes occlusion probes). A hidden harness may legitimately
+    // get DXGI_STATUS_OCCLUDED: that is an attempted frame, never a visible presentation.
+    [[nodiscard]] std::uint64_t PresentAttemptCount() const noexcept
+    {
+        return _presentAttemptCount;
+    }
+    // The outcome handled by the last frame Present, including an explicitly injected self-test stage.
+    [[nodiscard]] HRESULT LastPresentResult() const noexcept
+    {
+        return _lastPresentResult;
     }
     // Bumped by every device rebuild, so a borrower can tell a new device from an old one at the same address.
     [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept
@@ -151,12 +235,19 @@ class Renderer final
     [[nodiscard]] HRESULT StageResult(Stage stage, HRESULT result) noexcept;
     void RegisterOcclusionStatus() noexcept;
 
+    std::uint64_t _selectionOutlineDraws = 0;
+    std::uint64_t _lassoDraftDraws = 0;
+    HRESULT _lassoDraftFailure = S_OK;
+    HRESULT _selectionOutlineFailure = S_OK;
     HWND _window = nullptr;
     ChromeHost* _chrome = nullptr;
     bool _forceWarp = false;
     bool _suspended = true;
     bool _occluded = false;
     std::optional<bool> _occludedForTest;
+    FrameReadbackForTest _frameReadbackForTest = nullptr;
+    void* _frameReadbackContextForTest = nullptr;
+    bool _suppressSelectionOutlineForTest = false;
     UINT _width = 0;
     UINT _height = 0;
     D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_11_0;
@@ -173,7 +264,10 @@ class Renderer final
     DWORD _occlusionStatusCookie = 0;
     bool _occlusionStatusRegistered = false;
     HRESULT _canvasFailure = S_OK;
+    bool _canvasDrawn = false;
     std::uint64_t _presentCount = 0;
+    std::uint64_t _presentAttemptCount = 0;
+    HRESULT _lastPresentResult = E_PENDING;
     std::uint64_t _deviceGeneration = 0;
     Stage _injectedStage = Stage::Present;
     HRESULT _injectedResult = S_OK;

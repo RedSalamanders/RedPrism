@@ -1,5 +1,7 @@
 #include "Document.Tests.MaskEditWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "MaskEditWork.h"
@@ -44,7 +46,7 @@ Raster RedImage(int width, int height)
 DocumentSession LiteralSession(int width, int height, std::optional<LayerTransform> transform = std::nullopt)
 {
     const Raster image = RedImage(width, height);
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 160;
     document.height = 100;
@@ -56,7 +58,7 @@ DocumentSession LiteralSession(int width, int height, std::optional<LayerTransfo
     const Guid active = layer.id;
     document.layers.push_back(std::move(layer));
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     session.history.Reset();
     return session;
 }
@@ -338,7 +340,7 @@ void UnchangedMovedInputAndAdmission()
     const Raster thumbnail = Raster::Make(1, 1, RasterFormat::Gray8, &edge, 1);
     ImageLayer other = ImageLayer::Blank(L"Mask budget owner", {1, 1});
     other.mask = LayerMask{RasterAsset{occupied, thumbnail, other.name}, true, std::nullopt, true};
-    floor.EditForTest([&](CanvasDocument& document) { document.layers.push_back(std::move(other)); });
+    EditLayerRecordsForTest(floor, [&](DocumentFixture& document) { document.layers.push_back(std::move(other)); });
     floor.history.Reset();
     const auto before = floor.Document();
     const auto history = floor.history.CaptureState();
@@ -395,7 +397,8 @@ void StalePublicationRefusals()
         DocumentSession session = LiteralSession(3, 2);
         ImageLayer other = ImageLayer::Blank(L"Other", Vec2{1, 1});
         const Guid otherId = other.id;
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(std::move(other)); });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document) { document.layers.push_back(std::move(other)); });
         session.history.Reset();
         auto input = session.PrepareMaskEditInput(false);
         session.SelectLayer(otherId);

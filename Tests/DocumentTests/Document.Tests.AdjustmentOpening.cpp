@@ -1,5 +1,6 @@
 #include "Document.Tests.AdjustmentOpening.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "AdjustmentOpeningWork.h"
 #include "Executor.h"
@@ -7,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -132,7 +134,7 @@ struct Fixture final
         : kind(kind), original(LiteralAdjustment(kind)), templateSettings(LiteralGlobalTemplate()),
           source(SourceRaster())
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 2;
         document.height = 2;
@@ -145,11 +147,12 @@ struct Fixture final
         pixels.asset = RasterAsset{source, Raster::MakeThumbnail(source), pixels.name};
         document.layers.push_back(std::move(adjustment));
         document.layers.push_back(std::move(pixels));
-        session.ReplaceDocument(std::move(document), adjustmentID);
+        session.ReplaceDocument(std::move(document).Seal(), adjustmentID);
         session.filterSettings = templateSettings;
 
         session.BeginEdit(L"Seed redo");
-        session.EditForTest([&](CanvasDocument& current) { current.layers[1].name = L"Changed source fixture"; });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& current) { current.layers[1].name = L"Changed source fixture"; });
         session.EndEdit();
         session.Undo();
         baseline = session.Document();
@@ -426,10 +429,11 @@ void ExpectStale(Fixture& fixture, PreparedAdjustmentOpening& candidate, const c
            (std::string(name) + ".refusal-preserves-current-state").c_str());
 }
 
-void StaleAuthority()
+void StaleTokenAuthority()
 {
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto input = fixture.session.PrepareAdjustmentOpeningInput();
         Expect(input.has_value(), "stale.token.input");
         if (input)
@@ -443,8 +447,13 @@ void StaleAuthority()
                 ExpectStale(fixture, candidate.value(), "stale.token-generation");
         }
     }
+}
+
+void StaleDocumentGeneration()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.generation.candidate");
         if (candidate)
@@ -453,8 +462,13 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.generation");
         }
     }
+}
+
+void StaleOpeningIdentifier()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.opening-id.candidate");
         if (candidate)
@@ -463,8 +477,13 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.opening-id");
         }
     }
+}
+
+void StaleActiveLayer()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.active.candidate");
         if (candidate)
@@ -473,8 +492,13 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.active-layer");
         }
     }
+}
+
+void StaleMaskTarget()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.mask.candidate");
         if (candidate)
@@ -483,8 +507,13 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.mask-target");
         }
     }
+}
+
+void StaleCropFrame()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.crop.candidate");
         if (candidate)
@@ -493,8 +522,13 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.crop-frame");
         }
     }
+}
+
+void StaleHistoryEpoch()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.history-epoch.candidate");
         if (candidate)
@@ -509,9 +543,15 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.history-epoch");
         }
     }
+}
+
+void ForeignSessionRefusal()
+{
     {
-        Fixture source(AdjustmentKind::Levels);
-        Fixture foreign(AdjustmentKind::Levels);
+        auto sourceOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& source = *sourceOwner;
+        auto foreignOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& foreign = *foreignOwner;
         auto candidate = Prepare(source, source.source);
         Expect(candidate.has_value(), "foreign.candidate");
         if (candidate)
@@ -523,8 +563,13 @@ void StaleAuthority()
             Expect(SameLiveState(foreign.session, before), "foreign.refusal-keeps-session");
         }
     }
+}
+
+void MovedCandidateTransfer()
+{
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "moved.candidate");
         if (candidate)
@@ -535,6 +580,19 @@ void StaleAuthority()
             Expect(fixture.session.ApplyPreparedAdjustmentOpeningIfCurrent(moved), "moved.to-candidate-applies");
         }
     }
+}
+
+void StaleAuthority()
+{
+    StaleTokenAuthority();
+    StaleDocumentGeneration();
+    StaleOpeningIdentifier();
+    StaleActiveLayer();
+    StaleMaskTarget();
+    StaleCropFrame();
+    StaleHistoryEpoch();
+    ForeignSessionRefusal();
+    MovedCandidateTransfer();
 }
 
 void LaterSavedRevisionAndAbsentSession()

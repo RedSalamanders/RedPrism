@@ -1,5 +1,6 @@
 #include "Document.Tests.ColorDismissal.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "ColorDismissalWork.h"
 #include "ColorEditWork.h"
@@ -82,7 +83,7 @@ struct Fixture final
         : source(Raster::Make(4, 1, RasterFormat::Bgra8888, kSourceBytes.data(), kSourceBytes.size())),
           templateSettings(LiteralTemplate())
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -101,13 +102,14 @@ struct Fixture final
         document.layers.push_back(std::move(primary));
         document.layers.push_back(std::move(other));
         document.layers.push_back(std::move(adjustment));
-        session.ReplaceDocument(std::move(document), primaryID);
+        session.ReplaceDocument(std::move(document).Seal(), primaryID);
         session.filterSettings = templateSettings;
         session.BeginEdit(kPriorName);
         session.EditForTest([](CanvasDocument& current) { current.resolution = 144; });
         session.EndEdit();
         session.BeginEdit(kRedoName);
-        session.EditForTest([](CanvasDocument& current) { current.layers.front().name = L"Redo branch after"; });
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& current) { current.layers.front().name = L"Redo branch after"; });
         session.EndEdit();
         session.Undo();
         session.history.MarkSaved();

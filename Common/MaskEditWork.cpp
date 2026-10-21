@@ -1,5 +1,6 @@
 #include "MaskEditWork.h"
 
+#include "DocumentDraft.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -51,8 +52,8 @@ MaskEditStatus MaskDimensions(const ImageLayer& layer, bool selected, int& width
 
 std::uint64_t DocumentSession::MaskEditPreparationMemoryBytes() const noexcept
 {
-    if (!_document || !_activeLayerID || _transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
-        _shapeDraft || _selectionMoveOrigin || _lassoDraft)
+    if (!_document || !_activeLayerID || _transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() ||
+        _colorEdit || _shapeDraft || _selectionMoveOrigin || _lassoDraft)
         return 0;
     const auto* layer = ActiveLayer();
     int width = 0;
@@ -177,16 +178,25 @@ MaskEditResult DocumentSession::PrepareMaskEditPublication(MaskEditInput input, 
     const auto thumbnail = selected ? ThumbnailRasterForWork(mask, 96, cancellation) : mask;
     if (!thumbnail.HasStorage())
         return {cancellation.IsCancelled() ? MaskEditStatus::Cancelled : MaskEditStatus::Memory};
-    auto after = input._source;
-    auto& edited = after.layers[target.value()];
-    edited.mask = LayerMask{RasterAsset{mask, thumbnail, layer.name}, true, std::nullopt, true};
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size(), cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? MaskEditStatus::Cancelled : MaskEditStatus::Memory};
+    {
+        auto layers = draft.value().EditLayers();
+        if (target.value() >= layers.size())
+            return {MaskEditStatus::Invalid};
+        layers[target.value()].mask = LayerMask{RasterAsset{mask, thumbnail, layer.name}, true, std::nullopt, true};
+    }
     if (selected)
-        after.selection.reset();
+        draft.value().DocumentState().selection.reset();
     if (!MaskCheckpoint(observer, MaskWorkStage::Document, cancellation))
         return {MaskEditStatus::Cancelled};
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return {cancellation.IsCancelled() ? MaskEditStatus::Cancelled : MaskEditStatus::Memory};
     ImageImportBatchResult imported;
     imported.status = ProjectIoStatus::Ok;
-    imported.importedDocument = std::move(after);
+    imported.importedDocument = std::move(after.value());
     imported.importedActiveLayerID = input._active;
     imported.historyName = selected           ? L"Add Mask from Selection"
                            : input._revealing ? L"Add Reveal-All Mask"
@@ -206,7 +216,7 @@ MaskEditResult DocumentSession::PrepareMaskEditPublication(MaskEditInput input, 
 
 bool DocumentSession::ApplyPreparedMaskEditIfCurrent(PreparedMaskEdit& prepared) noexcept
 {
-    if (_transformEdit || _gradient || _pixelMove || _brush || _warp || _colorEdit || _shapeDraft ||
+    if (_transformEdit || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit || _shapeDraft ||
         _selectionMoveOrigin || _lassoDraft)
         return false;
     return ApplyPreparedImageImportIfCurrent(prepared._publication);

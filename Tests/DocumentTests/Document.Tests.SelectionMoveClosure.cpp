@@ -1,5 +1,7 @@
 #include "Document.Tests.SelectionMoveClosure.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
+
 #include "SelectionMoveWork.h"
 
 #include <array>
@@ -45,7 +47,7 @@ struct Fixture final
 
     Fixture()
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -63,7 +65,7 @@ struct Fixture final
         auto other = ImageLayer::Blank(L"Other selection-move layer", Vec2{4, 1});
         otherLayer = other.id;
         document.layers.push_back(std::move(other));
-        session.ReplaceDocument(std::move(document), movingLayer);
+        session.ReplaceDocument(std::move(document).Seal(), movingLayer);
 
         // Literal current selection x=1..2, with one redo entry available for closure preservation checks.
         session.SetSelection(Rect(0), L"Seed redo selection");
@@ -314,8 +316,8 @@ void StaleCandidates()
             fixture.session.SetCropFrame(CropRect{0, 0, 3, 1});
             break;
         case StaleChange::Generation:
-            fixture.session.EditForTest([](CanvasDocument& document)
-                                        { document.layers.front().name = L"Changed metadata"; });
+            EditLayerRecordsForTest(fixture.session, [](DocumentFixture& document)
+                                    { document.layers.front().name = L"Changed metadata"; });
             break;
         case StaleChange::History:
         {
@@ -452,8 +454,8 @@ void FailureAtChangedHistoryCheckpoint(DocumentHistory::PrepareStage stage, cons
     {
         // This real metadata edit is inside the Move Selection history transaction. Cancel restores only the
         // outline, so the completed transaction still differs from its opening snapshot at depth one.
-        fixture.session.EditForTest([](CanvasDocument& document)
-                                    { document.layers.front().name = L"Prior real edit"; });
+        EditLayerRecordsForTest(fixture.session,
+                                [](DocumentFixture& document) { document.layers.front().name = L"Prior real edit"; });
     }
     fixture.session.MoveSelection(1, 0);
     auto input = fixture.session.PrepareSelectionMoveClosureInput(cancelClosure);

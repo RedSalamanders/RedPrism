@@ -1,5 +1,6 @@
 #include "Document.Tests.HistoryPreparationFault.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <array>
@@ -109,22 +110,22 @@ void Expect(bool condition, Operation operation, DocumentHistory::PrepareStage s
 
 CanvasDocument MakePixelDocument(std::uint8_t blue)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     ImageLayer layer = ImageLayer::Blank(L"History fault fixture", Vec2{1, 1});
     const std::array<std::uint8_t, 4> pixels{blue, 0x35, 0x79, 0xff};
     const Raster raster = Raster::Make(1, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     layer.asset = RasterAsset{raster, raster, L"History fault fixture"};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 CanvasDocument WithPixel(const CanvasDocument& source, std::uint8_t blue)
 {
-    CanvasDocument result = source;
+    DocumentFixture result = DocumentFixture::Copy(source);
     const std::array<std::uint8_t, 4> pixels{blue, 0x35, 0x79, 0xff};
     const Raster raster = Raster::Make(1, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     result.layers.front().asset = RasterAsset{raster, raster, L"History fault fixture"};
-    return result;
+    return std::move(result).Seal();
 }
 
 bool HasPixel(const CanvasDocument& document, std::uint8_t blue) noexcept

@@ -1,5 +1,6 @@
 #include "Document.Tests.ColorEditWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "ColorEditWork.h"
 #include "Document.h"
@@ -33,7 +34,7 @@ Raster Ramp()
 
 DocumentSession Session(const Raster& image = Ramp())
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = image.Width();
     document.height = image.Height();
@@ -43,7 +44,7 @@ DocumentSession Session(const Raster& image = Ramp())
     layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), L"Ramp"};
     document.layers.push_back(std::move(layer));
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 
@@ -163,17 +164,20 @@ template <typename Mutate> void StaleSourceChangedBeforePrepare(const char* name
 
 void OpeningTokenRejectsSourceChangesBeforePrepare()
 {
-    StaleSourceChangedBeforePrepare(
-        "opening-token.layer-move-before-prepare-rejects-and-closes-old-panel", [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.layers[0].transform.origin.x += 1.0; }); });
+    StaleSourceChangedBeforePrepare("opening-token.layer-move-before-prepare-rejects-and-closes-old-panel",
+                                    [](DocumentSession& session)
+                                    {
+                                        EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                                                { document.layers[0].transform.origin.x += 1.0; });
+                                    });
     StaleSourceChangedBeforePrepare(
         "opening-token.mask-change-before-prepare-rejects-and-closes-old-panel",
         [](DocumentSession& session)
         {
             constexpr std::array<std::uint8_t, 1> maskPixel{0};
             const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, maskPixel.data(), maskPixel.size());
-            session.EditForTest([&](CanvasDocument& document)
-                                { document.layers[0].mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, true}; });
+            EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                    { document.layers[0].mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, true}; });
         });
     StaleSourceChangedBeforePrepare(
         "opening-token.selection-change-before-prepare-rejects-and-closes-old-panel",
@@ -234,8 +238,9 @@ void ChangedOtherLayerBudgetRefusesGrownBlurAtomically()
     constexpr int kGrownAdjustmentHeight = 2499; // Adds 996 sparse pixels after Prepare.
     constexpr std::array<std::uint8_t, 4> maskPixels{255, 255, 255, 255};
     const Raster mask = Raster::Make(4, 1, RasterFormat::Gray8, maskPixels.data(), maskPixels.size());
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session,
+        [&](DocumentFixture& document)
         {
             document.layers[0].mask = LayerMask{RasterAsset{mask, mask, L"Target mask"}, true};
             document.layers.push_back(SparseBudgetLayer(kNearBudgetWidth, kNearBudgetHeight, L"Large sparse"));
@@ -264,12 +269,13 @@ void ChangedOtherLayerBudgetRefusesGrownBlurAtomically()
     {
         return;
     }
-    session.EditForTest(
-        [](CanvasDocument& document)
-        {
-            document.layers.back().asset->image = Raster::MakeSparse(kAdjustmentWidth, kGrownAdjustmentHeight,
-                                                                     RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
-        });
+    EditLayerRecordsForTest(session,
+                            [](DocumentFixture& document)
+                            {
+                                document.layers.back().asset.value().image =
+                                    Raster::MakeSparse(kAdjustmentWidth, kGrownAdjustmentHeight, RasterFormat::Bgra8888,
+                                                       Raster{}, 0, 0, {}, 0);
+                            });
     const CanvasDocument beforeApply = session.Document().value();
     const Raster originalImage = session.ActiveLayer()->asset->image;
     const auto originalMask = session.ActiveLayer()->mask;
@@ -285,12 +291,12 @@ void ChangedOtherLayerBudgetRefusesGrownBlurAtomically()
 void RefusedBlurGrowthCannotCommitSmallerGrid()
 {
     DocumentSession session = Session();
-    session.EditForTest(
-        [](CanvasDocument& document)
-        {
-            document.layers.push_back(SparseBudgetLayer(10000, 9999, L"Large sparse"));
-            document.layers.push_back(SparseBudgetLayer(4, 2250, L"Budget adjustment"));
-        });
+    EditLayerRecordsForTest(session,
+                            [](DocumentFixture& document)
+                            {
+                                document.layers.push_back(SparseBudgetLayer(10000, 9999, L"Large sparse"));
+                                document.layers.push_back(SparseBudgetLayer(4, 2250, L"Budget adjustment"));
+                            });
     session.filterSettings.radius = 2.0;
     session.BeginColorEdit(FilterKind::GaussianBlur);
     Expect(session.HasColorEdit(), "grow-refusal.panel-opened");
@@ -351,7 +357,8 @@ void StaleLayerAndMaskCloseCurrentEdit()
             return;
         }
         const ColorEditJobResult result = Run(input.value());
-        session.EditForTest([](CanvasDocument& document) { document.layers.back().transform.origin.x += 1.0; });
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document) { document.layers.back().transform.origin.x += 1.0; });
         Expect(!session.ApplyColorEditResult(result) && !session.HasColorEdit() &&
                    session.history.UndoCount() == historyBefore && session.ActiveLayer()->transform.origin.x == 1.0,
                "stale-move.rejects-and-closes-matching-panel");
@@ -369,8 +376,8 @@ void StaleLayerAndMaskCloseCurrentEdit()
         const ColorEditJobResult result = Run(input.value());
         constexpr std::array<std::uint8_t, 1> maskPixel{0};
         const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, maskPixel.data(), maskPixel.size());
-        session.EditForTest(
-            [&](CanvasDocument& document)
+        EditLayerRecordsForTest(
+            session, [&](DocumentFixture& document)
             { document.layers.back().mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, true, std::nullopt, true}; });
         Expect(!session.ApplyColorEditResult(result) && !session.HasColorEdit() &&
                    session.history.UndoCount() == historyBefore && session.ActiveLayer()->mask.has_value(),
@@ -590,8 +597,8 @@ void CarriedMaskAndCompatibleMetadata()
         DocumentSession session = Session();
         constexpr std::array<std::uint8_t, 4> hidden{};
         const Raster mask = Raster::Make(4, 1, RasterFormat::Gray8, hidden.data(), hidden.size());
-        session.EditForTest([&](CanvasDocument& document)
-                            { document.layers[0].mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, false}; });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers[0].mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, false}; });
         session.BeginColorEdit(FilterKind::GaussianBlur);
         const auto input = session.PrepareColorEditCommit();
         Expect(input.has_value(), "mask.grown-input-prepared");
@@ -633,12 +640,12 @@ void CarriedMaskAndCompatibleMetadata()
             return;
         }
         const auto result = Run(input.value());
-        session.EditForTest(
-            [](CanvasDocument& document)
-            {
-                document.layers[0].name = L"Renamed";
-                document.resolution = 300;
-            });
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document)
+                                {
+                                    document.layers[0].name = L"Renamed";
+                                    document.resolution = 300;
+                                });
         Expect(session.ApplyColorEditResult(result) && session.ActiveLayer()->name == L"Renamed" &&
                    session.ActiveLayer()->asset->name == L"Renamed" && session.Document()->resolution == 300,
                "metadata.compatible-edits-survive-targeted-apply");

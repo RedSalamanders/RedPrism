@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
@@ -9,7 +11,9 @@
 #include "UiBenchmark.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -22,11 +26,19 @@
 // only admits event-time arguments. Pixel/IO snapshots are acquired after preceding history work has finished.
 void Application::ContinuationAction::Run() noexcept
 {
+    _owner.PumpFinalPublicationOwner();
     _owner.RunHostContinuation();
 }
 
 bool Application::InitializeHostContinuations() noexcept
 {
+    if (!_samplerState)
+    {
+        static_assert(std::is_nothrow_default_constructible_v<SamplerState>);
+        _samplerState.reset(new (std::nothrow) SamplerState);
+        if (!_samplerState)
+            return false;
+    }
     if (_hostSourceRegistered || !_jobs.RegisterUiActionSource(_continuationAction))
     {
         return false;
@@ -43,11 +55,13 @@ void Application::RetireHostContinuation(HostRequestQueue::Entry&& entry, Contin
 ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcept
 {
     const auto receipt = QueueHostInput(HostPanelOkInput{opening});
+    if (_uiBenchmark)
+        NoteUiCancellationApplyReceipt(opening, receipt);
     if (receipt.Read().outcome == HostOutcome::Pending)
     {
         _pendingPanelOpening = opening;
         SyncAdjustPanel();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return receipt;
 }
@@ -60,13 +74,17 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
     CancelHostContinuations();
     CancelColorCommit(); // direct engine acquisition can exist without a selected host input
     const auto receipt = QueueHostInput(HostPanelCancelInput{opening});
+    if (_uiBenchmark)
+        NoteUiCancellationReceipt(opening, receipt);
     if (receipt.Read().outcome == HostOutcome::Pending)
     {
         _pendingCancelOpening = opening;
         _pendingCancelDocumentSerial = _session.DocumentSerial();
         _pendingCancelReceipt = receipt;
+        SyncColorLookupPreview(); // Exclude useful preview; original owners retire after join.
+        _composition.InvalidateDocument();
         SyncAdjustPanel();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return receipt;
 }
@@ -97,11 +115,12 @@ ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
     return receipt;
 }
 
-bool Application::CanQueueSelectionMoveClick() const noexcept
+bool Application::CanQueueSelectionMoveClick(const HostWandLayerNewInput* wand) const noexcept
 {
     // Match the settled selection factory's gesture exclusions while this outline is still open.
-    return !_session.HasColorEdit() && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
-           !_session.PendingBrush() && !_session.PendingWarp() && !_session.PendingPixelMove() &&
+    const bool panel = wand && wand->panelOpening && _session.IsPanelWandOpeningCurrent(wand->panelOpening.value());
+    return (panel || !_session.HasColorEdit()) && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
+           !_session.PendingBrush() && !_session.HasPendingWarp() && !_session.PendingPixelMove() &&
            !_session.PendingShape() && !_session.PendingLasso();
 }
 
@@ -110,13 +129,41 @@ bool Application::CanQueueSelectionSizeOutline() const noexcept
     return CanQueueSelectionMoveClick() && !_opacityEdit && !EditUnderWay(CanvasEdit::Crop);
 }
 
+bool Application::CanQueueSelectionLifecycleOutline() const noexcept
+{
+    return CanQueueSelectionSizeOutline() && !SizeCardOpen();
+}
+
+std::optional<std::uint64_t> Application::SelectionLifecycleRequestOpening(const HostRequestInput& input) noexcept
+{
+    if (const auto* close = std::get_if<HostCloseProjectInput>(&input))
+        return close->selectionMoveOpening;
+    if (const auto* replacement = std::get_if<HostNewInput>(&input))
+        return replacement->selectionMoveOpening;
+    if (const auto* close = std::get_if<HostCloseWindowInput>(&input))
+        return close->selectionMoveOpening;
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&input))
+        return ending->selectionMoveOpening;
+    return std::nullopt;
+}
+
+bool Application::SelectionLifecycleOutlineCurrent() const noexcept
+{
+    if (!_activeHostRequest || !CanQueueSelectionLifecycleOutline())
+        return false;
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&_activeHostRequest->input.Input()))
+        return _endSessionPending && ending->generation == _endSessionGeneration;
+    return true;
+}
+
 ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept
 {
     // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
     DropDrag<OutlineDrag>();
     const auto opening = _session.SelectionMoveOpening();
-    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
-                         : wand && wand->settings.sampleAllLayers
+    const auto receipt = !opening || !CanQueueSelectionMoveClick(wand ? &wand.value() : nullptr)
+                             ? ContinuationReceipt::Failure(E_ABORT)
+                         : wand && wand->settings.sampleAllLayers && !wand->panelOpening
                              ? ContinuationReceipt::Failure(E_INVALIDARG)
                              : QueueHostInput(HostSelectionMoveClickInput{opening.value(), wand});
     ReportHostAdmission(receipt);
@@ -212,6 +259,8 @@ std::optional<std::uint64_t> Application::SelectionMoveRequestOpening(const Host
         return command->selectionMoveOpening;
     if (const auto* tool = std::get_if<HostToolInput>(&input))
         return tool->selectionMoveOpening;
+    if (const auto opening = SelectionLifecycleRequestOpening(input))
+        return opening;
     if (const auto* size = std::get_if<HostSizeApplyInput>(&input))
         return size->selectionMoveOpening;
     return std::nullopt;
@@ -222,6 +271,21 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return ContinuationReceipt::Failure(E_ABORT);
+    }
+    std::optional<OpacityInputOrder::Proposal> opacityProposal;
+    if (auto* opacity = std::get_if<HostLayerOpacityInput>(&input))
+    {
+        if (!std::isfinite(opacity->opacity) || opacity->phase > ChromeEditPhase::Cancel)
+            return ContinuationReceipt::Failure(E_INVALIDARG);
+        const OpacityProducerKey key{_session.DocumentSerial(), opacity->id};
+        const auto phase = opacity->phase == ChromeEditPhase::Preview  ? OpacityInputOrder::Phase::Preview
+                           : opacity->phase == ChromeEditPhase::Commit ? OpacityInputOrder::Phase::Commit
+                                                                       : OpacityInputOrder::Phase::Cancel;
+        auto proposed = _opacityInputOrder.Propose(phase, _opacityProducerKey == std::optional(key));
+        if (!proposed)
+            return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW));
+        opacityProposal.emplace(std::move(proposed.value()));
+        opacity->order = opacityProposal.value().Identity();
     }
     // These bounded scalar inputs bind the event's gesture before admission; later Execute cannot close a reopen.
     if (auto* command = std::get_if<HostCommandInput>(&input))
@@ -247,6 +311,30 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
                 size->extensionArgb = _session.BackgroundColor();
         }
     }
+    else if (auto* close = std::get_if<HostCloseProjectInput>(&input))
+    {
+        close->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            close->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* replacement = std::get_if<HostNewInput>(&input))
+    {
+        replacement->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            replacement->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* closingWindow = std::get_if<HostCloseWindowInput>(&input))
+    {
+        closingWindow->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            closingWindow->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* ending = std::get_if<HostEndSessionInput>(&input))
+    {
+        ending->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline() && _endSessionPending && ending->generation == _endSessionGeneration)
+            ending->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
     if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
         DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
     if (std::holds_alternative<HostSelectionMoveClickInput>(input) ||
@@ -259,7 +347,16 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
         {
             return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
         }
-        return QueueHostRequest(std::move(owned.value()));
+        const auto receipt = QueueHostRequest(std::move(owned.value()));
+        if (opacityProposal && receipt.Read().outcome == HostOutcome::Pending)
+        {
+            // Queue admission and this acknowledgement cannot dispatch or reenter the owner.
+            if (!_opacityInputOrder.Accept(opacityProposal.value()))
+                std::terminate();
+            const auto& opacity = std::get<HostLayerOpacityInput>(input);
+            _opacityProducerKey = OpacityProducerKey{_session.DocumentSerial(), opacity.id};
+        }
+        return receipt;
     }
     catch (const std::bad_alloc&)
     {
@@ -271,16 +368,42 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
 {
     const auto receipt = request.Receipt();
+    const auto* canvasInput = std::get_if<HostCanvasBrushInput>(&request.Input());
+    const bool samplerInput = canvasInput && canvasInput->kind == HostCanvasInputKind::Sampler;
+    const bool endsCanvasBrush = std::holds_alternative<HostToolInput>(request.Input()) ||
+                                 std::holds_alternative<HostLayerSelectInput>(request.Input()) ||
+                                 std::holds_alternative<HostLayerTargetInput>(request.Input()) ||
+                                 std::holds_alternative<HostWriteInput>(request.Input());
     const auto ordinal = _historyWork.NextOrdinal();
     if (_shutdownStarted || !_hostSourceRegistered || !ordinal)
     {
         (void)request.Finish(HostOutcome::Failed, !ordinal ? HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW) : E_ABORT);
         return receipt;
     }
-    const auto kind = std::holds_alternative<HostWandLayerNewInput>(request.Input()) ? ContinuationKind::WandNew
-                                                                                     : ContinuationKind::Command;
+    const auto* wand = std::get_if<HostWandLayerNewInput>(&request.Input());
+    const auto kind = wand && wand->mode == SelectionMode::New ? ContinuationKind::WandNew : ContinuationKind::Command;
+    const auto* opacity = std::get_if<HostLayerOpacityInput>(&request.Input());
+    const bool preview = opacity && opacity->phase == ChromeEditPhase::Preview;
+    const bool fieldInput = opacity != nullptr;
     const auto admission =
-        _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+        preview
+            ? _hostRequests.EnqueueAdjacent(
+                  _session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation,
+                  [](const HostRequest& previous, const HostRequest& next) noexcept
+                  {
+                      const auto* older = std::get_if<HostLayerOpacityInput>(&previous.Input());
+                      const auto* newer = std::get_if<HostLayerOpacityInput>(&next.Input());
+                      return older && newer && older->phase == ChromeEditPhase::Preview &&
+                             newer->phase == ChromeEditPhase::Preview && older->id == newer->id &&
+                             older->order.stream != 0 && older->order.stream == newer->order.stream;
+                  })
+            : _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+    if ((admission == ContinuationAdmission::Queued || admission == ContinuationAdmission::Coalesced) && !fieldInput)
+    {
+        // Generic accepted inputs are barriers. Rejected inputs consume neither field sequence nor opening.
+        (void)_opacityInputOrder.Barrier();
+        _opacityProducerKey.reset();
+    }
     if (admission != ContinuationAdmission::Queued && admission != ContinuationAdmission::Coalesced)
     {
         (void)request.Finish(HostOutcome::Failed,
@@ -289,6 +412,17 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
     else if (!_jobs.RequestUiActionSource(_continuationAction))
     {
         (void)_hostRequests.Clear(RetireHostContinuation);
+    }
+    else if (endsCanvasBrush)
+    {
+        SealCanvasBrushForBoundary();
+    }
+    if (admission == ContinuationAdmission::Queued || admission == ContinuationAdmission::Coalesced)
+    {
+        if (!samplerInput)
+            SealSamplerForBoundary();
+        if (!canvasInput || canvasInput->kind != HostCanvasInputKind::HueSample)
+            SealHueForBoundaryOwner(ordinal.value());
     }
     return receipt;
 }
@@ -337,6 +471,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         if (_window)
             (void)ShutdownBlockReasonDestroy(_window.get());
     }
+    const bool refreshCancelFeedback = ColorCancelPending();
     if (const auto* cancel = std::get_if<HostPanelCancelInput>(&_activeHostRequest->input.Input());
         cancel && _pendingCancelOpening == std::optional(cancel->opening) &&
         _pendingCancelDocumentSerial == _activeHostRequest->documentSerial)
@@ -345,6 +480,15 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     CompleteDuplicateGestureInput(result.outcome);
+    if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input()))
+    {
+        if (canvas->kind == HostCanvasInputKind::Brush)
+            RetireCanvasBrush(result.outcome, canvas->opening);
+        else if (canvas->kind == HostCanvasInputKind::Sampler)
+            RetireSamplerOpening(canvas->opening);
+        else if (canvas->kind == HostCanvasInputKind::HueSample && result.outcome != HostOutcome::Succeeded)
+            DropHueInputOwner(canvas->opening);
+    }
     if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
         close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
         _pendingSelectionMoveCloseCancel == close->cancel &&
@@ -358,9 +502,10 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     {
         _shapeCommitPreview.reset();
         SyncToolOverlays();
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     _activeHostRequest.reset();
+    SweepSamplerOpenings();
     _pendingPanelOpening.reset();
     _hostCommitStamp.reset();
     _hostFinishedStamp.reset();
@@ -373,8 +518,20 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostWriteInFlight = false;
     _hostBatchFailed = false;
     _hostBatchError = S_OK;
+    if (refreshCancelFeedback && !_shutdownStarted)
+    {
+        SyncAdjustPanel();
+        SyncColorLookupPreview(); // Re-admit useful preview after failed/stale close acknowledgement.
+        _composition.InvalidateDocument();
+        InvalidateFrame();
+    }
     _pathClassifications = {};
-    if (!_shutdownStarted && _hostRequests.Size() != 0)
+    _historyResidencySource.RetryDeferred();
+    if (!_shutdownStarted && (_polygonalPressInput.Busy() || _hostRequests.Size() != 0 || _canvasLifetime ||
+                              (_hueInput.Busy() && _hueAcquiredOpening == _hueInput.Opening() &&
+                               (_hueInput.Peek(_hueInput.Opening()) || _hueCloseAfterPrefix)) ||
+                              (_lassoInput.Busy() && _lassoAcquiredOpening == _lassoInput.Opening() &&
+                               _lassoInput.Peek(_lassoInput.Opening()))))
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
     }
@@ -386,13 +543,56 @@ void Application::RunHostContinuation() noexcept
     {
         return;
     }
+    if (_canvasLifetime && _canvasLifetime->presenting)
+        return; // A nested modal dispatch cannot select or destroy the presenter-owned request.
+    RunCanvasLifetimePreflight();
+    if (_shutdownStarted)
+        return;
+    PumpPolygonalPressOwner();
+    PumpSelectionPressOwner();
+    PumpPolygonalDrawing();
+    SweepSamplerOpenings();
+    if (_lassoInput.Busy() && !LassoInputCurrentOwner(_lassoInput.Opening()))
+    {
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Stale);
+        SelectionChanged();
+    }
+    if (!_activeHostRequest && !_historyWork.Busy() && ReplayHueInputOwner())
+        return; // Older physical deltas use this same source before younger commands.
+    if (!_activeHostRequest && !_historyWork.Busy() && ReplayLassoInputOwner())
+        return; // One accepted input operation on the existing source; no twelfth owner or extra UI source.
+    if (_activeHostRequest)
+    {
+        const auto* canvas = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input());
+        if (canvas && canvas->kind == HostCanvasInputKind::Sampler)
+        {
+            if (_samplerHostTicket)
+            {
+                AdvanceSamplerReadback();
+                return;
+            }
+            if (_hostPrerequisite.outcome != HostOutcome::Pending)
+            {
+                FinishHostContinuation(_hostPrerequisite); // Preserve the exact graph's failed/stale/cancel outcome.
+                return;
+            }
+            if (_hostStage == HostStage::Sampler)
+            {
+                ReplaySamplerOpening(canvas->opening);
+                return;
+            }
+        }
+    }
+    if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
     // Preview completion rearms this source so the old record and its full reservation retire before the next
     // capture is admitted. Accepted host mutations take precedence over starting another pending preview.
-    if (!_activeHostRequest && _hostRequests.Size() == 0)
+    if (!_activeHostRequest && _hostRequests.Size() == 0 && !_canvasLifetime)
     {
         LaunchGradientPreview();
         LaunchPixelMovePreview();
         LaunchTransformPreview();
+        RefreshColorJobs();
     }
     if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {
@@ -400,14 +600,62 @@ void Application::RunHostContinuation() noexcept
     }
     if (!_activeHostRequest)
     {
-        auto taken = _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
+        const auto* front = _hostRequests.Front();
+        const bool lifetimeNext = _canvasLifetime && (!front || _canvasLifetime->entry.ordinal < front->ordinal);
+        if (lifetimeNext)
+        {
+            if (!CanvasLifetimeCurrent())
+            {
+                FinishCanvasLifetimePreflight({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            const auto stroke = _canvasLifetime->brushReceipt.Read();
+            if (stroke.outcome == HostOutcome::Pending)
+                return;
+            if (stroke.outcome != HostOutcome::Succeeded &&
+                !(!_canvasLifetime->save && stroke.outcome == HostOutcome::Cancelled))
+            {
+                FinishCanvasLifetimePreflight(stroke);
+                return;
+            }
+            _hostSaveBeforeAction = _canvasLifetime->save;
+            _hostWriteFormat = HostWriteFormat::Project;
+            _hostAfterPrerequisite = HostStage::Execute;
+            _hostAfterPanelCancel = HostStage::TransformDiscard;
+            _hostStage = _canvasLifetime->save     ? HostStage::Settle
+                         : _session.HasColorEdit() ? HostStage::CancelPanel
+                                                   : HostStage::TransformDiscard;
+            _activeHostRequest.emplace(std::move(_canvasLifetime->entry));
+            _canvasLifetime.reset();
+        }
+        auto taken = _activeHostRequest
+                         ? HostRequestQueue::Taken{}
+                         : _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
+        // A stale queued reader has no selected job destructor to release its scalar opening.
+        SweepSamplerOpenings();
+        // TakeReady retires mismatched serials before selection. Only that exact unselected Hue
+        // opening has no original job completion available to release its fixed descriptors.
+        if (_hueInput.Busy() && !_hueReadbackTicket)
+        {
+            const auto* hue = _hueInput.CapturedContext(_hueInput.Opening());
+            if (hue && hue->document.documentSerial != _session.DocumentSerial())
+                DropHueInputOwner(_hueInput.Opening());
+        }
+        // TakeReady may retire a stale queued brush. Its fixed stream must retire in this same action,
+        // including when no selected request remains to rearm the source.
+        if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+            RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
         if (taken.stale != 0)
         {
             _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_QUEUED_STALE);
         }
-        _activeHostRequest = std::move(taken.ready);
+        if (!_activeHostRequest)
+            _activeHostRequest = std::move(taken.ready);
         if (!_activeHostRequest)
         {
+            // TakeReady can retire every stale descriptor without selecting a request/worker callback.
+            // Retire its scalar family here too; its accepted raw prefix must not remain orphaned.
+            RetirePolygonalPressOwner();
             return;
         }
     }
@@ -452,11 +700,12 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle             ? HostStage::GradientSettle
+            _hostStage = _hostStage == HostStage::OpacitySettle      ? _hostAfterOpacity
+                         : _hostStage == HostStage::Settle           ? HostStage::GradientSettle
                          : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
                          : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
                          : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
-                         : _hostStage == HostStage::SelectionMoveSettle || _hostStage == HostStage::NewCanvasOutline
+                         : _hostStage == HostStage::SelectionMoveSettle || _hostStage == HostStage::LifecycleOutline
                              ? _hostAfterPrerequisite
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
@@ -469,17 +718,21 @@ void Application::RunHostContinuation() noexcept
         const auto& input = active.input.Input();
         const auto* paths = std::get_if<HostPathsInput>(&input);
         const auto* newCanvas = std::get_if<HostSizeApplyInput>(&input);
-        const bool ownsNewCanvasOutline = newCanvas && newCanvas->draft.kind == SizeCardKind::NewCanvas &&
-                                          newCanvas->selectionMoveOpening.has_value();
-        if (ownsNewCanvasOutline && _hostStage != HostStage::Complete)
+        const auto lifecycleOpening = SelectionLifecycleRequestOpening(input);
+        const bool ownsLifecycleOutline =
+            (newCanvas && newCanvas->draft.kind == SizeCardKind::NewCanvas && newCanvas->selectionMoveOpening) ||
+            lifecycleOpening.has_value();
+        if (ownsLifecycleOutline && _hostStage != HostStage::Complete)
         {
             // The prompt precedes closure. After closure, both save and replacement require it to stay closed.
             // A nested output dialog or worker wait can admit a newer edit without changing pixel generation.
             const bool needsOpening =
                 _hostStage != HostStage::Write && _hostStage != HostStage::Execute && _hostStage != HostStage::Complete;
-            if (newCanvas->invocation != _sizeInvocation || !SizeCardOpen() || !CanQueueSelectionSizeOutline() ||
-                (needsOpening ? newCanvas->selectionMoveOpening != _session.SelectionMoveOpening()
-                              : _session.IsMovingSelection()))
+            const bool editorCurrent = lifecycleOpening ? SelectionLifecycleOutlineCurrent()
+                                                        : newCanvas->invocation == _sizeInvocation && SizeCardOpen() &&
+                                                              CanQueueSelectionSizeOutline();
+            if (!editorCurrent || (needsOpening ? SelectionMoveRequestOpening(input) != _session.SelectionMoveOpening()
+                                                : _session.IsMovingSelection()))
             {
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
@@ -488,7 +741,29 @@ void Application::RunHostContinuation() noexcept
         switch (_hostStage)
         {
         case HostStage::Begin:
+        {
+            const auto* physical = std::get_if<HostCanvasBrushInput>(&input);
+            const bool ownPolygonal = physical && physical->opening == _polygonalPressFamily &&
+                                      (physical->kind == HostCanvasInputKind::PolygonalPress ||
+                                       physical->kind == HostCanvasInputKind::PolygonalKey);
+            if (_polygonalPressState && _polygonalPressState->controller && !ownPolygonal &&
+                !PolygonalHostInputSupported(input))
+            {
+                FinishHostContinuation({HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)});
+                return;
+            }
+        }
+            if (_polygonalDrawing && _polygonalDrawing->controller && !PolygonalHostInputSupported(input))
+            {
+                FinishHostContinuation({HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)});
+                return; // Selected partial route: no foreign serial Selection admission or synchronous fallback.
+            }
             _hostAfterPrerequisite = HostStage::Execute;
+            if (std::holds_alternative<HostCanvasBrushInput>(input))
+            {
+                _hostStage = HostStage::Execute;
+                break; // Only its opacity prerequisite may run before the captured brush press.
+            }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->selectionMoveOpening &&
                 (size->draft.kind == SizeCardKind::CanvasSize || size->draft.kind == SizeCardKind::ImageSize) &&
@@ -497,6 +772,23 @@ void Application::RunHostContinuation() noexcept
             {
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
+            }
+
+            if (const auto* offset = std::get_if<HostSelectionOffsetInput>(&input))
+            {
+                if (offset->amount == 0 || offset->amount < -DocumentSession::kSelectionModifyLimit ||
+                    offset->amount > DocumentSession::kSelectionModifyLimit)
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                if (!_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // A settled header input must not implicitly commit a newly opened unrelated edit.
             }
             if (std::holds_alternative<HostSelectionNudgeInput>(input))
             {
@@ -545,12 +837,13 @@ void Application::RunHostContinuation() noexcept
             }
             if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
             {
-                if (_session.SelectionMoveOpening() != std::optional(click->opening) || !CanQueueSelectionMoveClick())
+                if (_session.SelectionMoveOpening() != std::optional(click->opening) ||
+                    !CanQueueSelectionMoveClick(click->wand ? &click->wand.value() : nullptr))
                 {
                     FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                     return;
                 }
-                if (click->wand && click->wand->settings.sampleAllLayers)
+                if (click->wand && click->wand->settings.sampleAllLayers && !click->wand->panelOpening)
                 {
                     FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
                     return;
@@ -782,6 +1075,17 @@ void Application::RunHostContinuation() noexcept
         }
         case HostStage::Settle:
         {
+            if (const auto* wand = std::get_if<HostWandLayerNewInput>(&input); wand && wand->panelOpening)
+            {
+                if (!_session.IsPanelWandOpeningCurrent(wand->panelOpening.value()))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                // Execute retains the existing opacity prerequisite. This input must never commit the panel.
+                _hostStage = HostStage::Execute;
+                break;
+            }
             const auto outcome = StartColorCommit(active.ordinal);
             if (outcome == HostOutcome::Pending)
             {
@@ -796,6 +1100,46 @@ void Application::RunHostContinuation() noexcept
             _hostStage = HostStage::GradientSettle;
             break;
         }
+        case HostStage::OpacitySettle:
+            FinishHostContinuation({HostOutcome::Failed, E_UNEXPECTED});
+            return; // Only acknowledgement may leave the held opacity prerequisite.
+        case HostStage::CanvasBrush:
+            ReplayCanvasBrush();
+            return; // One sample per owner action; pending physical input rearms an otherwise idle stream.
+        case HostStage::PolygonalConditional:
+        {
+            const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+            const auto result = canvas ? StartPolygonalConditionalOwner(canvas->opening) : E_INVALIDARG;
+            if (FAILED(result))
+            {
+                _polygonalPressFailed = true;
+                _polygonalPressFailure = {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result};
+                LosePolygonalPressOwner();
+                FinishHostContinuation(_polygonalPressFailure);
+            }
+            return;
+        }
+        case HostStage::PolygonalOpening:
+            return; // The original job's acknowledged Opened event completes only the creator receipt.
+        case HostStage::PolygonalTerminal:
+        {
+            const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+            const auto result = canvas ? StartPolygonalTerminal(canvas->opening) : E_INVALIDARG;
+            if (FAILED(result))
+            {
+                if (_polygonalDrawing && _polygonalDrawing->controller)
+                    CancelLassoInputOwner(_polygonalDrawing->opening, HostOutcome::Failed);
+                FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+            }
+            return;
+        }
+        case HostStage::Sampler:
+            if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input);
+                canvas && canvas->kind == HostCanvasInputKind::Sampler)
+                ReplaySamplerOpening(canvas->opening);
+            else
+                FinishHostContinuation({HostOutcome::Failed, E_UNEXPECTED});
+            return;
         case HostStage::GradientSettle:
         {
             const auto* command = std::get_if<HostCommandInput>(&input);
@@ -936,7 +1280,7 @@ void Application::RunHostContinuation() noexcept
                 if (_transformWorkTicket)
                     return;
             }
-            _hostStage = _hostSaveBeforeAction && ownsNewCanvasOutline ? HostStage::NewCanvasOutline
+            _hostStage = _hostSaveBeforeAction && ownsLifecycleOutline ? HostStage::LifecycleOutline
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -962,12 +1306,27 @@ void Application::RunHostContinuation() noexcept
                 if (_transformWorkTicket)
                     return;
             }
-            _hostStage = ownsNewCanvasOutline ? HostStage::NewCanvasOutline : HostStage::Execute;
+            _hostStage = ownsLifecycleOutline ? HostStage::LifecycleOutline : HostStage::Execute;
             break;
         }
         case HostStage::Write:
         {
-            if (ownsNewCanvasOutline)
+            if (OpacityEditLayer())
+            {
+                const auto result = StartOpacityClosure();
+                if (FAILED(result))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_layerMetadataTicket)
+                {
+                    _hostAfterOpacity = HostStage::Write;
+                    _hostStage = HostStage::OpacitySettle;
+                    return;
+                }
+            }
+            if (ownsLifecycleOutline)
                 _hostAfterPrerequisite = HostStage::Execute; // The close's Write resume target must not replay save.
             const auto result = WriteHostOutput(_hostWriteFormat);
             if (FAILED(result))
@@ -993,9 +1352,9 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
             break;
         }
-        case HostStage::NewCanvasOutline:
+        case HostStage::LifecycleOutline:
         {
-            if (!ownsNewCanvasOutline)
+            if (!ownsLifecycleOutline)
             {
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
@@ -1004,7 +1363,7 @@ void Application::RunHostContinuation() noexcept
             DropDrag<OutlineDrag>();
             _hostAfterPrerequisite = _hostSaveBeforeAction ? HostStage::Write : HostStage::Execute;
             const auto result =
-                StartSelectionMoveClose(newCanvas->selectionMoveOpening.value(), !_hostSaveBeforeAction);
+                StartSelectionMoveClose(SelectionMoveRequestOpening(input).value(), !_hostSaveBeforeAction);
             if (FAILED(result))
             {
                 _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
@@ -1052,8 +1411,10 @@ void Application::RunHostContinuation() noexcept
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
             }
-            const auto result = click->wand ? StartWandLayerSelection(click->wand.value())
-                                            : StartSelectionCommand(SelectionCommandKind::Deselect);
+            const auto result =
+                click->wand ? (click->wand->settings.sampleAllLayers ? StartWandCompositeSelection(click->wand.value())
+                                                                     : StartWandLayerSelection(click->wand.value()))
+                            : StartSelectionCommand(SelectionCommandKind::Deselect);
             if (FAILED(result))
             {
                 _prompts->PostNotice(_window.get(), kNoticeMessage,
@@ -1105,6 +1466,77 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
+            if (_polygonalPressState && _polygonalPressState->controller && PolygonalHostInputStops(input))
+            {
+                const auto result = StopPolygonalPressForHost();
+                if (FAILED(result))
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (_polygonalDrawing && _polygonalDrawing->controller && PolygonalHostInputStops(input))
+            {
+                const auto result = StartPolygonalHostCancel();
+                if (FAILED(result))
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                return; // Original cancellation must join before tool/history/lifecycle mutation.
+            }
+            if (const auto* brush = std::get_if<HostCanvasBrushInput>(&input);
+                brush && brush->kind == HostCanvasInputKind::Brush)
+            {
+                const auto* captured = _canvasBrushInput.CapturedContext(brush->opening);
+                if (!captured || captured->documentSerial != _session.DocumentSerial() ||
+                    _session.ActiveLayerID() != captured->target || _session.IsMaskSelected() != captured->mask ||
+                    _tool != captured->tool)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+            }
+            if (const auto* opacity = std::get_if<HostLayerOpacityInput>(&input);
+                opacity && _session.ActiveLayerID() != opacity->id)
+            {
+                // A selected row closes the previous field. Its equal late terminal acknowledges that closure;
+                // other old-target events are stale and must never edit the newly active layer.
+                if (opacity->phase == ChromeEditPhase::Commit && _opacityRecorded &&
+                    _opacityRecorded.value() == std::clamp(opacity->opacity, 0.0, 1.0))
+                {
+                    _opacityRecorded.reset();
+                    FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                }
+                else
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            if (!paths &&
+                !(std::get_if<HostCommandInput>(&input) &&
+                  (std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomFit ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomActual ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomIn ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomOut ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandAbout ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandSampleRing ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandKeyboardShortcuts)) &&
+                !std::holds_alternative<HostLayerOpacityInput>(input) && !std::holds_alternative<HostNewInput>(input) &&
+                !std::holds_alternative<HostCloseProjectInput>(input) &&
+                !std::holds_alternative<HostCloseWindowInput>(input) &&
+                !std::holds_alternative<HostEndSessionInput>(input) &&
+                !(std::get_if<HostCanvasBrushInput>(&input) &&
+                  std::get<HostCanvasBrushInput>(input).kind == HostCanvasInputKind::Sampler) &&
+                OpacityEditLayer())
+            {
+                const auto result = StartOpacityClosure();
+                if (FAILED(result))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_layerMetadataTicket)
+                {
+                    _hostAfterOpacity = HostStage::Execute;
+                    _hostStage = HostStage::OpacitySettle;
+                    return;
+                }
+            }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->selectionMoveOpening &&
                 (size->invocation != _sizeInvocation || !SizeCardOpen() || !CanQueueSelectionSizeOutline()))
@@ -1124,6 +1556,115 @@ void Application::RunHostContinuation() noexcept
                 break;
             }
             _hostExecutionError = S_OK;
+            if (const auto* canvas = std::get_if<HostCanvasBrushInput>(&input))
+            {
+                if (canvas->kind == HostCanvasInputKind::HueSample)
+                {
+                    const auto result = StartHueReadbackOwner(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        DropHueInputOwner(canvas->opening);
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return;
+                }
+                if (canvas->kind == HostCanvasInputKind::Sampler)
+                {
+                    ReplaySamplerOpening(canvas->opening);
+                    return;
+                }
+                if (canvas->kind == HostCanvasInputKind::PolygonalPress ||
+                    canvas->kind == HostCanvasInputKind::PolygonalKey)
+                {
+                    const auto result = canvas->kind == HostCanvasInputKind::PolygonalPress
+                                            ? StartPolygonalPressOwner(canvas->opening)
+                                            : StartPolygonalConditionalOwner(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        _polygonalPressFailed = true;
+                        _polygonalPressFailure = {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result};
+                        LosePolygonalPressOwner();
+                        FinishHostContinuation(_polygonalPressFailure);
+                    }
+                    return;
+                }
+                if (canvas->kind == HostCanvasInputKind::SelectionPress)
+                {
+                    const auto result = StartSelectionPressGesture(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        (void)_selectionPressInput.Drop(canvas->opening);
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return;
+                }
+                if (canvas->kind == HostCanvasInputKind::LassoOpening ||
+                    canvas->kind == HostCanvasInputKind::LassoFinish)
+                {
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && _polygonalDrawingTestEnabled &&
+                        _polygonalDrawing && _polygonalDrawing->opening == canvas->opening &&
+                        !_polygonalDrawing->controller && _polygonalDrawing->completed &&
+                        _polygonalDrawing->inputAcknowledged)
+                    {
+                        // An older accepted close may finish before a younger Enter descriptor is selected.
+                        // Acknowledge that exact owned opening; never recapture, drop a newer prefix or edit twice.
+                        const auto result = _polygonalDrawing->outcome;
+                        const auto outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
+                                             : result.status == JobStatus::Failed
+                                                 ? (result.error == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed)
+                                                 : HostOutcome::Succeeded;
+                        FinishHostContinuation({outcome, result.error});
+                        return;
+                    }
+                    if (_lassoCancelledOpening == canvas->opening)
+                    {
+                        FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
+                        return; // Exact selected cancellation precedes original creator admission/capture.
+                    }
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && PolygonalInputOwner(canvas->opening))
+                    {
+                        const auto result = StartPolygonalTerminal(canvas->opening);
+                        if (FAILED(result))
+                        {
+                            CancelLassoInputOwner(canvas->opening, HostOutcome::Failed);
+                            FinishHostContinuation(
+                                {result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                        }
+                        return; // Resolution may wait for older replay; a missing callback is not stale.
+                    }
+                    if (canvas->kind == HostCanvasInputKind::LassoFinish && canvas->lassoClosingIntent)
+                    {
+                        if (_lassoReplayedClosingIntent != canvas->lassoClosingIntent)
+                        {
+                            FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                            return;
+                        }
+                        const bool chosen = _lassoReplayedCloseChosen;
+                        _lassoReplayedClosingIntent = 0;
+                        _lassoReplayedCloseChosen = false;
+                        if (!chosen)
+                        {
+                            FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                            return; // Original click is acknowledged in order; the bounded gesture stays live.
+                        }
+                        _lassoFinishQueued = true;
+                        _lassoFinishReceipt = _activeHostRequest->input.Receipt();
+                    }
+                    const auto result = canvas->kind == HostCanvasInputKind::LassoOpening
+                                            ? StartLassoOpening(canvas->opening)
+                                            : StartLassoFinish(canvas->opening);
+                    if (FAILED(result))
+                    {
+                        CancelLassoInputOwner(canvas->opening, HostOutcome::Failed);
+                        SelectionChanged();
+                        FinishHostContinuation({result == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed, result});
+                    }
+                    return; // Original worker acknowledgement selects Complete; acquisition does not finish input.
+                }
+                _hostStage = HostStage::CanvasBrush;
+                ReplayCanvasBrush();
+                return;
+            }
             if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {
                 FinishHostContinuation({HostOutcome::Failed, FAILED(_hostBatchError)       ? _hostBatchError
@@ -1168,6 +1709,7 @@ void Application::RunHostContinuation() noexcept
 
 void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error) noexcept
 {
+    _historyResidencySource.RetryDeferred();
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return;
@@ -1178,7 +1720,7 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
         _hostCommitStamp.reset();
         _hostPrerequisite = {outcome, error};
     }
-    if (!_hostCommitStamp && (_activeHostRequest || _hostRequests.Size() != 0))
+    if (!_hostCommitStamp && (_activeHostRequest || _hostRequests.Size() != 0 || _canvasLifetime))
     {
         // A queued request may have disarmed behind any earlier history operation. Its finisher notifies here
         // after apply/drop and HistoryWork::Finish; operation migrations must wire this same hook.
@@ -1186,12 +1728,61 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
     }
 }
 
-void Application::CancelHostContinuations() noexcept
+void Application::CancelHostContinuations(bool preserveSealedStroke) noexcept
 {
+    const bool cancelFeedbackWasPending = ColorCancelPending();
+    if (_hueInput.Busy() && !_hueReadbackTicket)
+        DropHueInputOwner(_hueInput.Opening());
+    // Inspect at most the fixed eight slots before mutation. A sealed stroke may still be queued behind
+    // opacity or sampling; only its scalar key survives ClearExcept. Active requests live outside that ring.
+    const bool preserve = preserveSealedStroke && CanvasBrushSealedStrokePending();
+    const auto serial = _session.DocumentSerial();
+    const auto opening = _canvasBrushInput.Opening();
+    const auto matchesStroke = [serial, opening](const HostRequestQueue::Entry& entry) noexcept
+    {
+        const auto* input = std::get_if<HostCanvasBrushInput>(&entry.input.Input());
+        return entry.documentSerial == serial && input && input->kind == HostCanvasInputKind::Brush &&
+               input->opening == opening;
+    };
+    const bool preserveActive = preserve && _activeHostRequest && matchesStroke(_activeHostRequest.value());
+    std::uint64_t preservedOrdinal = 0;
+    if (preserve && !preserveActive)
+        for (std::size_t offset = 0; offset < _hostRequests.Size(); ++offset)
+        {
+            const auto* pending = _hostRequests.PendingAt(offset);
+            if (pending && matchesStroke(*pending))
+            {
+                preservedOrdinal = pending->ordinal;
+                break;
+            }
+        }
+    FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _shapeCommitPreview.reset();
     SyncToolOverlays();
-    (void)_hostRequests.Clear(RetireHostContinuation);
+    if (preserve)
+        (void)_hostRequests.ClearExcept(serial, preservedOrdinal, RetireHostContinuation);
+    else
+        (void)_hostRequests.Clear(RetireHostContinuation);
     _pendingPanelOpening.reset();
+    // Clear publishes queued receipt retirement synchronously. A discarded Cancel never reaches the
+    // selected finisher, so restore its still-open card here without releasing its live panel payload.
+    if (_pendingCancelOpening && _pendingCancelReceipt.Read().outcome != HostOutcome::Pending)
+    {
+        _pendingCancelOpening.reset();
+        _pendingCancelReceipt = {};
+        if (cancelFeedbackWasPending && !_shutdownStarted)
+        {
+            SyncAdjustPanel();
+            SyncColorLookupPreview(); // The discarded receipt no longer excludes its live preview.
+            _composition.InvalidateDocument();
+            InvalidateFrame();
+        }
+    }
+    if (preserveActive)
+    {
+        SweepSamplerOpenings();
+        return; // No cancellation, stage reset or receipt publication for this accepted stroke.
+    }
     if (_pathClassificationTicket)
     {
         _pathClassificationCancelled = true;
@@ -1200,7 +1791,25 @@ void Application::CancelHostContinuations() noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_clipboardTicket)
+        if (_polygonalPressState && _polygonalPressState->controller && _polygonalPressStamp == _hostCommitStamp)
+        {
+            (void)_historyWork.RequestCancel();
+            LosePolygonalPressOwner();
+            (void)_jobs.Cancel(_polygonalPressState->original);
+            if (_polygonalPressState->waiting)
+                (void)_jobs.Resume(_polygonalPressState->original);
+        }
+        else if (_selectionPressState && _selectionPressState->controller)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionPressState->original);
+            if (_selectionPressState->waiting)
+            {
+                _selectionPressState->waiting = false;
+                (void)_jobs.Resume(_selectionPressState->original);
+            }
+        }
+        else if (_clipboardTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_clipboardTicket.value());
@@ -1255,15 +1864,48 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionCommandTicket.value());
         }
+        else if (_layerMetadataTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_layerMetadataTicket.value());
+        }
         else if (_selectionMoveCloseTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionMoveCloseTicket.value());
         }
+        else if (_hueReadbackTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            CancelHueReadbackOwner();
+        }
+        else if (_samplerHostTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            CancelSamplerReadback();
+        }
         else if (_wandLayerHostTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_wandLayerHostTicket.value());
+        }
+        else if (_selectionOffsetTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(*_selectionOffsetTicket);
+        }
+        else if (_lassoOpeningTicket || _lassoFinishTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            if (_lassoInput.Busy())
+                CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+            else
+                (void)_jobs.Cancel((_lassoOpeningTicket ? _lassoOpeningTicket : _lassoFinishTicket).value());
+        }
+        else if (_inverseSelectionTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_inverseSelectionTicket.value());
         }
         else if (_rasterEditTicket)
         {
@@ -1316,10 +1958,19 @@ void Application::CancelHostContinuations() noexcept
                                 : ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT};
         FinishHostContinuation(result);
     }
+    SweepSamplerOpenings(); // Also covers requests cancelled while still queued, before a source was captured.
 }
 
 void Application::StopHostContinuations() noexcept
 {
+    if (_hueInput.Busy())
+        DropHueInputOwner(_hueInput.Opening());
+    if (_lassoInput.Busy())
+        CancelLassoInputOwner(_lassoInput.Opening(), HostOutcome::Cancelled);
+
+    _canvasPanLast.reset();
+    CancelSamplerReadback();
+    FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _startupPaths.reset();
     if (_hostSourceRegistered)
     {
@@ -1328,6 +1979,9 @@ void Application::StopHostContinuations() noexcept
     }
     (void)_hostRequests.Clear(RetireHostContinuation);
     FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
+    if (_canvasBrushInput.Busy())
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    SweepSamplerOpenings();
 }
 
 namespace
@@ -1384,7 +2038,7 @@ int Application::RunHostContinuationSelfTest() noexcept
             return false;
         }
         _colorWorkTestGate.reset();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -1392,7 +2046,7 @@ int Application::RunHostContinuationSelfTest() noexcept
         const Guid active = layer.id;
         layer.asset = RasterAsset{source, source, layer.name};
         document.layers.push_back(std::move(layer));
-        ReplaceDocument(std::move(document), active, {});
+        ReplaceDocument(std::move(document).Seal(), active, {});
         if (!BeginColorEdit(ChromeHost::kCommandLevels))
         {
             return false;
@@ -1629,6 +2283,14 @@ int Application::RunHostContinuationSelfTest() noexcept
         if (!RunUiActions(_jobs) || _activeHostRequest || RunUiActions(_jobs) || _jobs.HasUiWork() ||
             behindOtherKind.Read().outcome != HostOutcome::Pending)
         {
+            const auto readiness = _jobs.UiReadinessForTest();
+            std::printf("DIAG continuation-host.other-history kind=%u active=%u outcome=%u idle=%u "
+                        "completions=%u actions=%u source=%u resumes=%u owner=%u memory=%u\n",
+                        static_cast<unsigned int>(kind), static_cast<unsigned int>(_activeHostRequest.has_value()),
+                        static_cast<unsigned int>(behindOtherKind.Read().outcome),
+                        static_cast<unsigned int>(_jobs.IsIdle()), readiness.completions, readiness.actions,
+                        static_cast<unsigned int>(readiness.source), static_cast<unsigned int>(readiness.resumes),
+                        static_cast<unsigned int>(readiness.owner), static_cast<unsigned int>(readiness.memory));
             return fail(L"A host input selected or polled behind another history kind.\n");
         }
         // Finisher seam only; real selection/stroke/open/import jobs migrate in their own P1 slices.
@@ -1854,19 +2516,20 @@ int Application::RunHostFlowSelfTest() noexcept
             (void)DeleteFileW(output.c_str());
         });
     const auto source = SolidRaster(4, 1, 0xFF404040u);
-    CanvasDocument fixture;
-    fixture.id = Guid::Generate();
-    fixture.width = 4;
-    fixture.height = 1;
+    DocumentFixture fixtureDraft;
+    fixtureDraft.id = Guid::Generate();
+    fixtureDraft.width = 4;
+    fixtureDraft.height = 1;
     ImageLayer layer = ImageLayer::Blank(L"Host flow", Vec2{4, 1});
     const auto id = layer.id;
     layer.asset = RasterAsset{source, source, layer.name};
-    fixture.layers.push_back(std::move(layer));
+    fixtureDraft.layers.push_back(std::move(layer));
     ImageLayer other = ImageLayer::Blank(L"Other host target", Vec2{4, 1});
     const auto otherId = other.id;
     other.asset = RasterAsset{source, source, other.name};
     other.visible = false;
-    fixture.layers.push_back(std::move(other));
+    fixtureDraft.layers.push_back(std::move(other));
+    const CanvasDocument fixture = std::move(fixtureDraft).Seal();
     if (SaveProject(project.c_str(), fixture, id, true) != ProjectIoStatus::Ok ||
         ExportDocumentPng(source, 72, imagePath.c_str()) != ProjectIoStatus::Ok)
         return fail(L"Host flow fixtures failed to encode.\n");

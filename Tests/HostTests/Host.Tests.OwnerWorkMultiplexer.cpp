@@ -74,19 +74,58 @@ int RunOwnerWorkMultiplexerTests()
     g_failures = 0;
     OwnerWorkMultiplexer mux;
     Expect(!mux.HasPending() && !mux.HasReady(), "owner-work.empty-inactive");
+    static_assert(OwnerWorkMultiplexer::kCapacity == 11);
+    const volatile std::size_t observedCapacity = OwnerWorkMultiplexer::kCapacity;
+    Expect(observedCapacity == 11, "owner-work.literal-eleven-leaf-capacity");
     mux.Pump();
 
-    std::array<MockSource, 9> sources{};
-    for (std::size_t i = 0; i < 8; ++i)
-    {
+    std::array<MockSource, 12> sources{};
+    for (std::size_t i = 0; i < 12; ++i)
         sources[i].index = static_cast<int>(i);
-        Expect(mux.Attach(sources[i]), "owner-work.attach-within-capacity");
-    }
+    const bool admitted0 = mux.Attach(sources[0]);
+    Expect(admitted0, "owner-work.attach-within-capacity");
+    Expect(admitted0, "owner-work.capacity.named-leaf-00-admitted");
+    const bool admitted1 = mux.Attach(sources[1]);
+    Expect(admitted1, "owner-work.attach-within-capacity");
+    Expect(admitted1, "owner-work.capacity.named-leaf-01-admitted");
+    const bool admitted2 = mux.Attach(sources[2]);
+    Expect(admitted2, "owner-work.attach-within-capacity");
+    Expect(admitted2, "owner-work.capacity.named-leaf-02-admitted");
+    const bool admitted3 = mux.Attach(sources[3]);
+    Expect(admitted3, "owner-work.attach-within-capacity");
+    Expect(admitted3, "owner-work.capacity.named-leaf-03-admitted");
+    const bool admitted4 = mux.Attach(sources[4]);
+    Expect(admitted4, "owner-work.attach-within-capacity");
+    Expect(admitted4, "owner-work.capacity.named-leaf-04-admitted");
+    const bool admitted5 = mux.Attach(sources[5]);
+    Expect(admitted5, "owner-work.attach-within-capacity");
+    Expect(admitted5, "owner-work.capacity.named-leaf-05-admitted");
+    const bool admitted6 = mux.Attach(sources[6]);
+    Expect(admitted6, "owner-work.attach-within-capacity");
+    Expect(admitted6, "owner-work.capacity.named-leaf-06-admitted");
+    const bool admitted7 = mux.Attach(sources[7]);
+    Expect(admitted7, "owner-work.attach-within-capacity");
+    Expect(admitted7, "owner-work.capacity.named-leaf-07-admitted");
+    const bool admitted8 = mux.Attach(sources[8]);
+    Expect(admitted8, "owner-work.attach-within-capacity");
+    Expect(admitted8, "owner-work.capacity.named-leaf-08-admitted");
+    const bool admitted9 = mux.Attach(sources[9]);
+    Expect(admitted9, "owner-work.attach-within-capacity");
+    Expect(admitted9, "owner-work.capacity.named-leaf-09-admitted");
+    const bool admitted10 = mux.Attach(sources[10]);
+    Expect(admitted10, "owner-work.capacity.named-leaf-10-admitted");
     Expect(!mux.Attach(sources[0]), "owner-work.duplicate-rejected");
     Expect(!mux.Attach(mux), "owner-work.self-attach-rejected");
-    Expect(!mux.Attach(sources[8]), "owner-work.capacity-rejected");
+    Expect(!mux.Attach(sources[11]), "owner-work.capacity-rejected");
     MockSource foreign;
     Expect(!mux.Detach(foreign), "owner-work.foreign-detach-rejected");
+
+    Expect(!mux.HasPending() && !mux.HasReady(), "owner-work.capacity.eleven-idle-leaves-have-no-work");
+    mux.Pump();
+    bool idleUnused = true;
+    for (std::size_t i = 0; i < 11; ++i)
+        idleUnused = idleUnused && sources[i].pumpCalls == 0;
+    Expect(idleUnused, "owner-work.capacity.eleven-idle-leaves-consume-zero-pumps");
 
     // Waiting work keeps the aggregate pending while producing no owner-ready pass or leaf pump.
     sources[0].pending = true;

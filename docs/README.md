@@ -33,6 +33,20 @@ replaced or closed. The menus list every function of the Mac app, and Help › C
 them by name and shows its current shortcut; a function not implemented yet says so when invoked instead of doing
 nothing.
 
+Opening projects and images, importing images, saving projects and exporting PNG or JPEG run as background work.
+The progress bar at the right of the status strip appears when foreground work lasts more than a brief moment. It
+fills to show progress when that operation reports it; otherwise it indicates that work is continuing without an
+estimated percentage. Quick operations may finish before the bar appears. Escape cancels some pending actions, but
+there is no general cancel button for every file operation. Cancellation is checked at safe points, so a file or
+image-codec call already underway may finish before the operation stops.
+
+When you close a window or choose Close Project with unsaved work, RedPrism offers **Save**, **Don't Save**, and
+**Cancel**. Save writes the project first and closes only after the save succeeds; for an untitled project you choose
+where to save it. If saving fails or you cancel the file dialog, the project stays open. Don't Save closes without
+keeping the unsaved changes. Cancel leaves the project and window open. The same choices apply when replacing an
+unsaved project with New or another project. Work in an open edit panel or an unfinished canvas gesture also counts
+as unsaved work.
+
 - **Tool rail**: fifteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
   E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom). Keys apply
   when the canvas has focus; Escape returns focus to chrome. Hover a button for its name and key.
@@ -81,7 +95,9 @@ nothing.
   outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
   the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
   mask as the selection (and says so instead of silently loading nothing when the outline would be too detailed to
-  trace). Ctrl-drag inside a selection moves its pixels (Alt duplicates), Ctrl+arrows nudge them,
+  trace). Loading runs in the background and adds one Undo step when it changes the selection; a failed or
+  cancelled load keeps the previous selection. Ctrl-drag inside a selection moves its pixels (Alt duplicates),
+  Ctrl+arrows nudge them,
   Ctrl+T transforms them on a floating layer that merges back, Layer via Copy (Ctrl+J) copies them to a layer, and
   Add Mask or Add Black Mask on the Layer menu turns the selection into a mask.
 - **Brush and Eraser**: B paints with the foreground color, E erases (the Brush's header also has an Erase mode).

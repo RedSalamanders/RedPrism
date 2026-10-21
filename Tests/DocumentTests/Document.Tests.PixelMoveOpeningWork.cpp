@@ -1,5 +1,6 @@
 #include "Document.Tests.PixelMoveOpeningWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
 #include "Document.h"
@@ -102,13 +103,13 @@ void ReusedOpeningKeepsLiteralMoveResults(int& failures)
         Expect(failures, false, "reuse.fixture-session-created");
         return;
     }
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{source, thumbnail, layer.name};
-            document.selection = Rect(1, 0, 1, 1);
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{source, thumbnail, layer.name};
+                                document.selection = Rect(1, 0, 1, 1);
+                            });
     if (!session.ActiveLayer() || !session.ActiveLayer()->asset || !session.Document()->selection)
     {
         Expect(failures, false, "reuse.fixture-session-state-installed");

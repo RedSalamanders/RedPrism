@@ -1,5 +1,6 @@
 #include "Document.Tests.ImportHistory.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <algorithm>
@@ -24,7 +25,7 @@ void Expect(bool condition, const char* name) noexcept
 
 CanvasDocument PixelDocument(const wchar_t* name, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 1;
     document.height = 1;
@@ -32,26 +33,26 @@ CanvasDocument PixelDocument(const wchar_t* name, std::array<std::uint8_t, 4> bg
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     layer.asset = RasterAsset{image, image, name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 CanvasDocument WithSecondImage(const CanvasDocument& baseline, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument result = baseline;
+    DocumentFixture result = DocumentFixture::Copy(baseline);
     ImageLayer layer = ImageLayer::Blank(L"Imported image", Vec2{1, 1});
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     layer.asset = RasterAsset{image, image, layer.name};
     result.layers.push_back(std::move(layer));
-    return result;
+    return std::move(result).Seal();
 }
 
 CanvasDocument WithPixel(const CanvasDocument& source, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument result = source;
+    DocumentFixture result = DocumentFixture::Copy(source);
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     result.layers.front().asset.value().image = image;
     result.layers.front().asset.value().thumbnail = image;
-    return result;
+    return std::move(result).Seal();
 }
 
 bool HasPixel(const CanvasDocument& document, std::size_t layerIndex, std::array<std::uint8_t, 4> expected) noexcept
@@ -234,9 +235,14 @@ int RunImportHistoryTests()
         auto publication =
             DocumentHistory::PrepareReplacement(old.history.CaptureState(), baseline, baseline.layers.front().id,
                                                 baseline, baseline.layers.front().id, L"Import Image");
-        const Guid baselineRevision = publication.has_value() ? publication.value().BaselineRevision() : Guid{};
-        const bool replaced = publication.has_value() && old.history.CanPublishReplacement(publication.value()) &&
-                              old.history.PublishReplacement(publication.value());
+        Guid baselineRevision{};
+        bool replaced = false;
+        if (publication.has_value())
+        {
+            baselineRevision = publication.value().BaselineRevision();
+            replaced = old.history.CanPublishReplacement(publication.value()) &&
+                       old.history.PublishReplacement(publication.value());
+        }
         Expect(replaced && baselineRevision != Guid{} && old.history.CurrentRevision() == baselineRevision &&
                    !old.history.IsModified() && !old.history.CanUndo() && !old.history.CanRedo() &&
                    old.history.UndoCount() == 0 && old.history.CaptureState().PastCount() == 0 &&
@@ -253,9 +259,14 @@ int RunImportHistoryTests()
         const Guid importedLayer = after.layers.back().id;
         auto publication = DocumentHistory::PrepareReplacement(history.CaptureState(), baseline, baselineLayer, after,
                                                                importedLayer, L"Import Image");
-        const Guid baselineRevision = publication.has_value() ? publication.value().BaselineRevision() : Guid{};
-        const bool published = publication.has_value() && history.CanPublishReplacement(publication.value()) &&
-                               history.PublishReplacement(publication.value());
+        Guid baselineRevision{};
+        bool published = false;
+        if (publication.has_value())
+        {
+            baselineRevision = publication.value().BaselineRevision();
+            published =
+                history.CanPublishReplacement(publication.value()) && history.PublishReplacement(publication.value());
+        }
         const Guid finalRevision = history.CurrentRevision();
         Expect(published && baselineRevision != Guid{} && finalRevision != baselineRevision && history.IsModified() &&
                    history.UndoCount() == 1 && history.CanUndo() && !history.CanRedo() &&

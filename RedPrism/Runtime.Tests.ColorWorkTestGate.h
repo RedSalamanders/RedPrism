@@ -30,6 +30,7 @@ struct ColorWorkTestGate final
     JobResult releasedResult{}; // immutable after submission; harness can inject a runner failure
     bool throwAllocationFailure = false;
     bool throwCaptureFailure = false;
+    bool afterPreparation = false; // Immutable after admission; holds a completed publication before delivery.
     std::optional<DocumentHistory::PrepareStage> historyFailure;
     std::uint64_t reservationBytes = 0;
     std::atomic<bool> captureReservationHeld{false};

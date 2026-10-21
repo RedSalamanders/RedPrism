@@ -1,11 +1,13 @@
 #include "Document.Tests.PixelMoveState.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "RasterEditWork.h"
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <optional>
@@ -30,6 +32,33 @@ constexpr std::array<std::uint8_t, 16> kMovedPixels{10, 20, 30, 255, 0, 0, 0, 0,
 constexpr std::array<std::uint8_t, 16> kDuplicatedPixels{10, 20, 30, 255, 40, 50, 60, 255,
                                                          70, 80, 90, 255, 40, 50, 60, 255};
 
+constexpr int kLegacyCanvasWidth = 100;
+constexpr int kLegacyCanvasHeight = 40;
+
+constexpr std::array<std::uint8_t, kLegacyCanvasWidth * kLegacyCanvasHeight * 4> MakeLegacyTwoColorPixels()
+{
+    std::array<std::uint8_t, kLegacyCanvasWidth * kLegacyCanvasHeight * 4> pixels{};
+    for (int y = 0; y < kLegacyCanvasHeight; ++y)
+    {
+        for (int x = 0; x < kLegacyCanvasWidth; ++x)
+        {
+            const std::size_t offset = (static_cast<std::size_t>(y) * static_cast<std::size_t>(kLegacyCanvasWidth) +
+                                        static_cast<std::size_t>(x)) *
+                                       4u;
+            pixels[offset] = x < 50 ? 0 : 255;     // B
+            pixels[offset + 1] = 0;                // G
+            pixels[offset + 2] = x < 50 ? 255 : 0; // R
+            pixels[offset + 3] = 255;              // A
+        }
+    }
+    return pixels;
+}
+
+constexpr auto kLegacyTwoColorPixels = MakeLegacyTwoColorPixels();
+constexpr std::array<std::uint8_t, 4> kLegacyRedBgra{0, 0, 255, 255};
+constexpr std::array<std::uint8_t, 4> kLegacyBlueBgra{255, 0, 0, 255};
+constexpr std::array<std::uint8_t, 4> kLegacyHoleBgra{0, 0, 0, 0};
+
 DocumentSelection Rect(double x, double y, double width, double height)
 {
     return DocumentSelection{
@@ -46,6 +75,44 @@ bool PixelsAre(const Raster& raster, std::span<const std::uint8_t> expected)
     return std::equal(actual.begin(), actual.end(), expected.begin());
 }
 
+bool PixelIs(const Raster& raster, int x, int y, const std::array<std::uint8_t, 4>& expected)
+{
+    if (!raster.HasStorage() || raster.Format() != RasterFormat::Bgra8888 || x < 0 || y < 0 || x >= raster.Width() ||
+        y >= raster.Height())
+        return false;
+    std::array<std::uint8_t, 4> actual{};
+    raster.ReadRegion(x, y, 1, 1, actual.data(), 4, 0);
+    return actual == expected;
+}
+
+bool InitializeLegacyTwoColor(DocumentSession& session)
+{
+    const Raster pixels = Raster::Make(kLegacyCanvasWidth, kLegacyCanvasHeight, RasterFormat::Bgra8888,
+                                       kLegacyTwoColorPixels.data(), kLegacyTwoColorPixels.size());
+    if (!pixels.HasStorage())
+        return false;
+    session.CreateDocument(kLegacyCanvasWidth, kLegacyCanvasHeight, true);
+    if (!session.Document() || session.Document()->layers.empty())
+        return false;
+    const Raster thumbnail = Raster::MakeThumbnail(pixels);
+    if (!thumbnail.HasStorage())
+        return false;
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{pixels, thumbnail, layer.name};
+                                document.selection = Rect(10, 10, 10, 10);
+                            });
+    return session.ActiveLayer() && session.ActiveLayer()->asset &&
+           session.Document()->selection == Rect(10, 10, 10, 10);
+}
+
+bool SelectionBoundsAre(const std::optional<DocumentSelection>& selection, const SelectionBounds& expected)
+{
+    return selection && selection->Bounds() == expected;
+}
+
 bool Initialize(DocumentSession& session, bool withSelection = true)
 {
     const Raster pixels = Raster::Make(4, 1, RasterFormat::Bgra8888, kSourcePixels.data(), kSourcePixels.size());
@@ -57,14 +124,14 @@ bool Initialize(DocumentSession& session, bool withSelection = true)
     const Raster thumbnail = Raster::MakeThumbnail(pixels);
     if (!thumbnail.HasStorage())
         return false;
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{pixels, thumbnail, layer.name};
-            if (withSelection)
-                document.selection = Rect(1, 0, 1, 1);
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{pixels, thumbnail, layer.name};
+                                if (withSelection)
+                                    document.selection = Rect(1, 0, 1, 1);
+                            });
     return session.ActiveLayer() && session.ActiveLayer()->asset &&
            session.Document()->selection.has_value() == withSelection;
 }
@@ -376,13 +443,14 @@ void DeferredFinishDuplicateRedoAndLegacy(int& failures)
     {
         DocumentSession transparent;
         Expect(Initialize(transparent), "transparent.fixture", failures);
-        transparent.EditForTest(
-            [](CanvasDocument& document)
-            {
-                auto& layer = document.layers.front();
-                const Raster zero = Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
-                layer.asset = RasterAsset{zero, Raster::MakeThumbnail(zero), layer.name};
-            });
+        EditLayerRecordsForTest(transparent,
+                                [](DocumentFixture& document)
+                                {
+                                    auto& layer = document.layers.front();
+                                    const Raster zero =
+                                        Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
+                                    layer.asset = RasterAsset{zero, Raster::MakeThumbnail(zero), layer.name};
+                                });
         Expect(transparent.BeginDeferredPixelMove(), "transparent.deferred-open", failures);
         transparent.MovePixels(1, 0);
         const auto token = Token(transparent);
@@ -455,6 +523,162 @@ void DeferredFinishDuplicateRedoAndLegacy(int& failures)
     }
 }
 
+void Legacy100x40MoveNumbersAndOneUndo(int& failures)
+{
+    DocumentSession session;
+    Expect(InitializeLegacyTwoColor(session), "legacy100x40-move.fixture-red-left-blue-right", failures);
+    if (!session.Document() || !session.Document()->selection)
+        return;
+    const int history = session.history.UndoCount();
+    const bool began = session.BeginDeferredPixelMove();
+    Expect(began, "legacy100x40-move.deferred-begin", failures);
+    if (!began)
+        return;
+    session.MovePixels(30.4, 0);
+    const PixelMove* first = session.PendingPixelMove();
+    Expect(first && first->offset == Vec2{30, 0}, "legacy100x40-move.first-offset-rounds-from-original", failures);
+    session.MovePixels(60.2, 5);
+    const PixelMove* move = session.PendingPixelMove();
+    Expect(move && move->offset == Vec2{60, 5}, "legacy100x40-move.second-offset-replaces-first", failures);
+    if (!move)
+        return;
+
+    const std::uint64_t opening = move->opening;
+    const std::uint64_t sequence = move->sequence;
+    const auto token = Token(session, 173);
+    auto capturedInput = PendingInput(session);
+    Expect(token && capturedInput, "legacy100x40-move.pending-input-and-token", failures);
+    if (!token || !capturedInput)
+        return;
+    RasterEditInput input = std::move(capturedInput.value());
+    RasterEditPreviewResult preview = RunRasterEditPreview(input);
+    const auto snapshot = preview.stroke ? preview.stroke->PaintSnapshot() : std::nullopt;
+    Expect(preview.status == RasterEditStatus::Ready && snapshot && PixelIs(snapshot->image, 15, 15, kLegacyHoleBgra) &&
+               PixelIs(snapshot->image, 75, 20, kLegacyRedBgra) && PixelIs(snapshot->image, 85, 20, kLegacyBlueBgra) &&
+               PixelIs(snapshot->image, 5, 5, kLegacyRedBgra),
+           "legacy100x40-move.preview-literal-hole-landing-and-untouched-colors", failures);
+    const bool published = token && preview.pixelMoveOpening &&
+                           session.PublishPixelMovePreview(std::move(preview.stroke), token.value(), opening, sequence);
+    Expect(published && SelectionBoundsAre(session.DisplayedSelection(), SelectionBounds{70, 15, 80, 25}),
+           "legacy100x40-move.displayed-outline-at-final-preview-offset", failures);
+    input.pixelMoveOpening = preview.pixelMoveOpening;
+    RasterEditResult prepared = RunRasterEdit(input);
+    Expect(prepared.status == RasterEditStatus::Ready && prepared.layer && prepared.layer->asset &&
+               prepared.selection && PixelIs(prepared.layer->asset->image, 15, 15, kLegacyHoleBgra) &&
+               PixelIs(prepared.layer->asset->image, 75, 20, kLegacyRedBgra) &&
+               PixelIs(prepared.layer->asset->image, 85, 20, kLegacyBlueBgra) &&
+               PixelIs(prepared.layer->asset->image, 5, 5, kLegacyRedBgra) &&
+               SelectionBoundsAre(prepared.selection, SelectionBounds{70, 15, 80, 25}),
+           "legacy100x40-move.cpu-commit-literal-pixels-and-outline", failures);
+    if (!token || !prepared.layer || !prepared.selection)
+        return;
+    const bool applied = session.ApplyPixelMoveIfCurrent(
+        std::move(prepared.layer.value()), std::move(prepared.selection.value()), token.value(), opening, sequence);
+    Expect(applied && session.history.UndoCount() == history + 1 && session.history.UndoName() == L"Move Pixels" &&
+               SelectionBoundsAre(session.Document()->selection, SelectionBounds{70, 15, 80, 25}),
+           "legacy100x40-move.one-move-pixels-history-entry-and-final-selection", failures);
+    if (!applied)
+        return;
+    session.Undo();
+    const ImageLayer* restored = session.ActiveLayer();
+    Expect(session.Document() && restored && restored->asset && session.history.UndoCount() == history &&
+               SelectionBoundsAre(session.Document()->selection, SelectionBounds{10, 10, 20, 20}) &&
+               PixelIs(restored->asset->image, 15, 15, kLegacyRedBgra) &&
+               PixelIs(restored->asset->image, 75, 20, kLegacyBlueBgra),
+           "legacy100x40-move.single-undo-restores-source-destination-and-outline", failures);
+}
+
+void Legacy100x40DuplicatePreservesSourceAndUndoesTogether(int& failures)
+{
+    DocumentSession session;
+    Expect(InitializeLegacyTwoColor(session) && session.BeginDeferredPixelMove(true),
+           "legacy100x40-duplicate.fixture-and-deferred-begin", failures);
+    if (!session.PendingPixelMove())
+        return;
+    const int history = session.history.UndoCount();
+    session.MovePixels(60, 5);
+    const PixelMove* move = session.PendingPixelMove();
+    if (!move)
+        return;
+    const std::uint64_t opening = move->opening;
+    const std::uint64_t sequence = move->sequence;
+    const auto token = Token(session, 179);
+    auto capturedInput = PendingInput(session);
+    Expect(token && capturedInput, "legacy100x40-duplicate.pending-input-and-token", failures);
+    if (!token || !capturedInput)
+        return;
+    RasterEditInput input = std::move(capturedInput.value());
+    RasterEditPreviewResult preview = RunRasterEditPreview(input);
+    const auto snapshot = preview.stroke ? preview.stroke->PaintSnapshot() : std::nullopt;
+    Expect(preview.status == RasterEditStatus::Ready && snapshot && PixelIs(snapshot->image, 15, 15, kLegacyRedBgra) &&
+               PixelIs(snapshot->image, 75, 20, kLegacyRedBgra) && PixelIs(snapshot->image, 85, 20, kLegacyBlueBgra),
+           "legacy100x40-duplicate.preview-preserves-source-and-lands-red-copy", failures);
+    input.pixelMoveOpening = preview.pixelMoveOpening;
+    RasterEditResult prepared = RunRasterEdit(input);
+    Expect(prepared.status == RasterEditStatus::Ready && prepared.layer && prepared.layer->asset &&
+               PixelIs(prepared.layer->asset->image, 15, 15, kLegacyRedBgra) &&
+               PixelIs(prepared.layer->asset->image, 75, 20, kLegacyRedBgra) &&
+               PixelIs(prepared.layer->asset->image, 85, 20, kLegacyBlueBgra),
+           "legacy100x40-duplicate.commit-preserves-source-and-destination-blue", failures);
+    if (!token || !prepared.layer || !prepared.selection)
+        return;
+    const bool applied = session.ApplyPixelMoveIfCurrent(
+        std::move(prepared.layer.value()), std::move(prepared.selection.value()), token.value(), opening, sequence);
+    Expect(applied && session.history.UndoCount() == history + 1 && session.history.UndoName() == L"Duplicate Pixels",
+           "legacy100x40-duplicate.one-duplicate-pixels-history-entry", failures);
+    if (!applied)
+        return;
+    Expect(session.Document() && SelectionBoundsAre(session.Document()->selection, SelectionBounds{70, 15, 80, 25}),
+           "legacy100x40-duplicate.final-selection-translates-with-pixels", failures);
+    session.Undo();
+    const ImageLayer* restored = session.ActiveLayer();
+    Expect(session.Document() && restored && restored->asset && session.history.UndoCount() == history &&
+               PixelIs(restored->asset->image, 15, 15, kLegacyRedBgra) &&
+               PixelIs(restored->asset->image, 75, 20, kLegacyBlueBgra) &&
+               SelectionBoundsAre(session.Document()->selection, SelectionBounds{10, 10, 20, 20}),
+           "legacy100x40-duplicate.single-undo-restores-source-destination-and-selection", failures);
+}
+
+void Legacy100x40OutlineTracksPreviewAndDeferredApply(int& failures)
+{
+    DocumentSession session;
+    Expect(InitializeLegacyTwoColor(session) && session.BeginDeferredPixelMove(),
+           "legacy100x40-outline.fixture-and-deferred-begin", failures);
+    session.MovePixels(30, 0);
+    const PixelMove* move = session.PendingPixelMove();
+    const auto token = Token(session, 181);
+    Expect(move && token, "legacy100x40-outline.pending-move-and-token", failures);
+    if (!move || !token)
+        return;
+    const std::uint64_t opening = move->opening;
+    const std::uint64_t sequence = move->sequence;
+    auto capturedInput = PendingInput(session);
+    Expect(token && capturedInput, "legacy100x40-outline.pending-input-and-token", failures);
+    if (!token || !capturedInput)
+        return;
+    RasterEditInput input = std::move(capturedInput.value());
+    RasterEditPreviewResult preview = RunRasterEditPreview(input);
+    const auto snapshot = preview.stroke ? preview.stroke->PaintSnapshot() : std::nullopt;
+    const bool published = preview.status == RasterEditStatus::Ready && snapshot &&
+                           session.PublishPixelMovePreview(std::move(preview.stroke), token.value(), opening, sequence);
+    Expect(published && SelectionBoundsAre(session.DisplayedSelection(), SelectionBounds{40, 10, 50, 20}) &&
+               session.Document()->selection == Rect(10, 10, 10, 10),
+           "legacy100x40-outline.preview-displays-translated-outline-before-commit", failures);
+    input.pixelMoveOpening = preview.pixelMoveOpening;
+    RasterEditResult prepared = RunRasterEdit(input);
+    Expect(prepared.status == RasterEditStatus::Ready && prepared.selection &&
+               SelectionBoundsAre(session.DisplayedSelection(), SelectionBounds{40, 10, 50, 20}) &&
+               SelectionBoundsAre(prepared.selection, SelectionBounds{40, 10, 50, 20}),
+           "legacy100x40-outline.outline-stays-translated-while-cpu-result-awaits-owner-apply", failures);
+    if (!prepared.layer || !prepared.selection)
+        return;
+    Expect(session.ApplyPixelMoveIfCurrent(std::move(prepared.layer.value()), std::move(prepared.selection.value()),
+                                           token.value(), opening, sequence) &&
+               !session.PendingPixelMove() &&
+               SelectionBoundsAre(session.Document()->selection, SelectionBounds{40, 10, 50, 20}),
+           "legacy100x40-outline.deferred-apply-installs-translated-selection", failures);
+}
+
 void RunAll(int& failures)
 {
     DeferredBeginAndRoundedSequence(failures);
@@ -462,6 +686,9 @@ void RunAll(int& failures)
     PreparedApplyAndUndo(failures);
     PreparedApplyRefusalsRetainOwnership(failures);
     DeferredFinishDuplicateRedoAndLegacy(failures);
+    Legacy100x40MoveNumbersAndOneUndo(failures);
+    Legacy100x40DuplicatePreservesSourceAndUndoesTogether(failures);
+    Legacy100x40OutlineTracksPreviewAndDeferredApply(failures);
 }
 } // namespace
 

@@ -19,6 +19,7 @@ namespace
 #pragma warning(disable : 4324)
 struct RasterEditPayload final : DeferredReleaseNode
 {
+    bool workerTargetCapture = false;
     RasterEditInput input;
     std::optional<JobToken> token;
     RasterEditResult prepared;
@@ -142,6 +143,28 @@ class Application::RasterEditJob final : public Job
         // Recounting itself allocates bookkeeping on the worker. If it throws after preparation, keep the
         // aggregate eligible for deferral even when the opening source was tiny and the result grew large.
         _payload->bytes = (std::max)(_payload->bytes, kDeferredReleaseThreshold);
+        if (_payload->workerTargetCapture)
+        {
+            if (!_payload->source || !_payload->token)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            const auto* layer = _payload->source.value().layers.FindKey(_target);
+            if (!layer)
+                return {JobStatus::Failed, E_ABORT};
+            // Preserve assetless and mask-only targets; raster preparation validates their operation.
+            _payload->input.layer = *layer;
+            _payload->token->target = TargetIdentity{layer->id,        layer->asset ? layer->asset->image : Raster{},
+                                                     layer->transform, layer->mask,
+                                                     layer->isGroup,   layer->adjustment};
+            _payload->workerTargetCapture = false;
+            if (_gate)
+            {
+                const bool onOwner = GetCurrentThreadId() == _ownerThread;
+                _gate->targetCapturesOnOwner.fetch_add(onOwner ? 1u : 0u);
+                _gate->targetCapturesOnWorker.fetch_add(onOwner ? 0u : 1u);
+                _gate->capturedImageNameUnits.store(layer->asset ? layer->asset->name.size() : 0);
+                _gate->capturedMaskNameUnits.store(layer->mask ? layer->mask->asset.name.size() : 0);
+            }
+        }
         _payload->input.progressContext = &context;
         _payload->input.progress = [](void* value, std::size_t completed, std::size_t total) noexcept
         {
@@ -209,13 +232,15 @@ class Application::RasterEditJob final : public Job
                 _captureError = E_ABORT;
                 return false;
             }
-            _payload.reset(new RasterEditPayload);
+            _payload.reset(std::make_unique<RasterEditPayload>().release());
             _payload->retirementBytes = _retirementBytes;
             _payload->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
             _payload->gate = _gate;
             _payload->ownerThread = _ownerThread;
             auto& input = _payload->input;
-            input.layer = *layer;
+            _payload->workerTargetCapture = true;
+            if (_gate)
+                _gate->rootOnlyCapturedOnOwner = GetCurrentThreadId() == _ownerThread;
             input.selection = _owner._session.Selection();
             input.canvasWidth = _owner._session.Document()->width;
             input.canvasHeight = _owner._session.Document()->height;
@@ -232,7 +257,7 @@ class Application::RasterEditJob final : public Job
                     _fill == FillSource::Background ? !_owner._session.maskPaintWhite : _owner._session.maskPaintWhite;
                 input.color = {white ? 1.0 : 0.0, white ? 1.0 : 0.0, white ? 1.0 : 0.0, 1};
             }
-            _payload->token = _owner._session.CaptureJobToken(_target);
+            _payload->token = _owner._session.CaptureJobToken();
             _payload->name = _kind == RasterEditKind::Invert            ? (_mask ? L"Invert Mask" : L"Invert")
                              : _kind == RasterEditKind::Clear && !_mask ? L"Clear"
                                                                         : (_mask ? L"Fill Mask" : L"Fill");
@@ -291,8 +316,9 @@ class Application::RasterEditJob final : public Job
         if (outcome == HostOutcome::Failed)
         {
             ++_owner._errorsShown;
-            _owner._lastErrorId =
-                error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+            _owner._lastErrorId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                      ? IDS_ERROR_TOO_LARGE
+                                      : IDS_ERROR_PIXEL_EDIT;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, _owner._lastErrorId);
         }
         if (outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale)
@@ -304,7 +330,7 @@ class Application::RasterEditJob final : public Job
         else
         {
             _owner.SyncChrome();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         (void)_owner._historyWork.Finish(_stamp);
         _owner.ResumeHostHistory(_stamp, outcome, error);

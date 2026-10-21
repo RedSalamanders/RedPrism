@@ -1,4 +1,5 @@
 #include "Document.Tests.GradientState.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include "BrushStroke.h"
 #include "Document.h"
@@ -83,14 +84,14 @@ bool Initialize(DocumentSession& session, bool withMask = false)
         if (!maskThumbnail.HasStorage())
             return false;
     }
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{source, thumbnail, layer.name};
-            if (withMask)
-                layer.mask = LayerMask{RasterAsset{mask, maskThumbnail, L"Gradient state mask"}};
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{source, thumbnail, layer.name};
+                                if (withMask)
+                                    layer.mask = LayerMask{RasterAsset{mask, maskThumbnail, L"Gradient state mask"}};
+                            });
     session.SelectLayerTarget(target.value(), false);
     session.SetForegroundColor(0xFF000000u);
     session.SetBackgroundColor(0xFFFFFFFFu);
@@ -297,12 +298,12 @@ void PreviewPublicationUsesIndependentSequences()
     const Raster changedSource =
         Raster::Make(4, 1, RasterFormat::Bgra8888, changedSourceBytes.data(), changedSourceBytes.size());
     const Raster changedThumbnail = Raster::MakeThumbnail(changedSource);
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            document.layers.front().asset->image = changedSource;
-            document.layers.front().asset->thumbnail = changedThumbnail;
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                document.layers.front().asset->image = changedSource;
+                                document.layers.front().asset->thumbnail = changedThumbnail;
+                            });
     Expect(!session.PublishGradientPreview(std::move(staleGenerationCandidate), token.value(), opening, 3) &&
                staleGenerationCandidate.get() == generationAddress,
            "publish-stale-generation-source-refused-and-owned");

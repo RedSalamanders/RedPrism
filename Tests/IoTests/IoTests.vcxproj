@@ -92,6 +92,7 @@
     <ClInclude Include="..\..\Common\CodecFileStream.h" />
     <ClInclude Include="..\..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
+    <ClInclude Include="..\..\Common\Win32FilePath.h" />
     <ClInclude Include="..\..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\ImageImportWork.h" />
     <ClInclude Include="IO.Tests.ImageImportWork.h" />
@@ -122,6 +123,8 @@
     <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
     <ClInclude Include="IO.Tests.ClipboardTransfer.h" />
     <ClInclude Include="IO.Tests.ProjectPublicationRetry.h" />
+    <ClInclude Include="Io.Tests.ProjectDurabilityFaults.h" />
+    <ClInclude Include="Io.Tests.LongPathSave.h" />
     <ClInclude Include="IO.Tests.ClipboardAvailability.h" />
     <ClInclude Include="IO.Tests.ClipboardReceipt.h" />
     <ClInclude Include="IO.Tests.ClipboardFingerprint.h" />
@@ -129,6 +132,7 @@
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="..\..\Common\InputRevision.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IO.Tests.Runner.cpp" /><ClCompile Include="IO.Tests.ClipboardEncodingBudget.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />
@@ -143,7 +147,9 @@
     <ClCompile Include="IO.Tests.ProjectLoadWork.cpp" />
     <ClCompile Include="..\..\Common\ImageImportWork.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
+    <ClCompile Include="..\..\Common\SelectionGeometryWork.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\SharedRetainedMemory.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\UiTiming.cpp" />
     <ClCompile Include="..\..\Common\TransformEdit.cpp" />
@@ -152,12 +158,22 @@
     <ClCompile Include="..\..\Common\DocumentSizeHistory.cpp" />
     <ClCompile Include="..\..\Common\Crop.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\..\Common\StrokeFinishWork.cpp" />
     <ClCompile Include="..\..\Common\Heal.cpp" />
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\..\Common\WarpPreviewWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpPreviewWork.h" />
+    <ClCompile Include="..\..\Common\WarpFinishWork.cpp" />
+    <ClCompile Include="..\..\Common\StrokeOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\WarpFinishWork.h" />
+    <ClCompile Include="..\..\Common\PlacedRasterWork.cpp" />
+    <ClInclude Include="..\..\Common\PlacedRasterWork.h" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.cpp" />
+    <ClCompile Include="..\..\Common\BoundedClipper\clipper.engine.cpp" />
     <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
@@ -174,6 +190,20 @@
     <ClCompile Include="..\..\Common\ColorEditHistory.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\PreparedRasterPreview.cpp" />
+    <ClCompile Include="..\..\Common\SharedPublicationMemory.cpp" />
+    <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\..\Common\WorkerWake.cpp" />
+    <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClInclude Include="..\..\Common\PreparedRasterPreview.h" />
+    <ClInclude Include="..\..\Common\PublicationGraphAllocator.h" />
+    <ClInclude Include="..\..\Common\PublicationObject.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\BoundedSelectionBoolean.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\Workspace.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.core.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.engine.h" />
+    <ClInclude Include="..\..\Common\BoundedClipper\clipper.version.h" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />
     <ClCompile Include="..\..\Common\ImageImportHistory.cpp" />
@@ -191,10 +221,21 @@
     <ClCompile Include="IO.Tests.CodecMemoryStream.cpp" />
     <ClCompile Include="IO.Tests.ProjectCancellation.cpp" />
     <ClCompile Include="IO.Tests.ProjectPublicationRetry.cpp" />
+    <ClCompile Include="Io.Tests.ProjectDurabilityFaults.cpp" />
+    <ClCompile Include="Io.Tests.LongPathSave.cpp" />
     <ClCompile Include="IO.Tests.FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <ClCompile Include="..\..\Common\LassoOpeningWork.cpp" />
+    <ClInclude Include="..\..\Common\LassoOpeningWork.h" />
+    <ClCompile Include="..\..\Common\LassoFinishGeometry.cpp" />
+    <ClInclude Include="..\..\Common\LassoFinishGeometry.h" />
+    <ClCompile Include="..\..\Common\LassoFinishWork.cpp" />
+    <ClInclude Include="..\..\Common\LassoFinishWork.h" />
+    <ClInclude Include="..\..\Common\BoundedLassoGesture.h" />
+  </ItemGroup>
 </Project>

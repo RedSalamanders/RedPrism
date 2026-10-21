@@ -97,7 +97,7 @@ void Application::ApplySettings(const AppSettings& settings) noexcept
     }
     RefreshTheme();
     _layoutDirty = true;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::RefreshTheme() noexcept
@@ -122,7 +122,7 @@ void Application::RefreshTheme() noexcept
                                        : RedPrism::MakeRedPrismThemePalette(dark));
     }
     _renderer.SetClearColor(highContrast ? SystemClearColor() : dark ? kDarkClearColor : kLightClearColor);
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 bool Application::StartSettingsWatch() noexcept

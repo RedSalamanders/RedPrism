@@ -2,11 +2,13 @@
 #include "BrushStroke.h"
 #include "ColorEditWork.h"
 #include "Document.h"
+#include "DocumentDraft.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 // The panel owns metadata and immutable handles. Deferred callers prepare worker inputs explicitly; direct
 // callers run the same ColorEditWork graph inline. Neither result path may overwrite newer settings.
@@ -58,7 +60,7 @@ namespace
 
 bool DocumentSession::CanAdjustColors() const noexcept
 {
-    if (!_document.has_value() || HasColorEdit() || _brush || _warp || _pixelMove || _maskSelected)
+    if (!_document.has_value() || HasColorEdit() || _brush || HasPendingWarp() || _pixelMove || _maskSelected)
     {
         return false;
     }
@@ -107,6 +109,20 @@ bool DocumentSession::GrowFilterForBlur()
     return true;
 }
 
+bool DocumentSession::HoldColorDisplayOwners() const noexcept
+{
+    return _colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && !_adjustmentEditingID;
+}
+
+void DocumentSession::InvalidateColorPreviewOwners() noexcept
+{
+    if (HoldColorDisplayOwners())
+        return; // Visibility follows its sequence; complete owners transfer at admitted publication/dismissal.
+    _colorEdit->previewRaster = {};
+    _colorEdit->previewLookup.reset();
+    _colorEdit->previewCoverage = {};
+}
+
 bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
 {
     ColorEdit& edit = _colorEdit.value();
@@ -130,6 +146,7 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
     if (grownWidth < 1 || grownHeight < 1 || grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide ||
         grownWidth * grownHeight > 100'000'000)
     {
+        _budgetRefused = true;
         return false;
     }
     // Decision D7: the grown layer (and a mask on its grid carried onto it) fits the document's budget.
@@ -143,9 +160,18 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
         return false;
     }
     const GridRect grownRect{targetLeft, targetTop, static_cast<int>(grownWidth), static_cast<int>(grownHeight)};
+    if (HoldColorDisplayOwners() && edit.grownImage.HasStorage())
+    {
+        // An acknowledged matching publication drains this slot before installing another grown cache.
+        // Refuse an unexpected second owner instead of synchronously freeing the first one on a settings tick.
+        if (edit.retiredGrownImage.HasStorage())
+            return false;
+        std::swap(edit.grownImage, edit.retiredGrownImage);
+    }
     edit.grownGrid = ColorEditGrid{targetLeft, targetTop, grownRect.width, grownRect.height};
     edit.grownImage = {};
-    edit.previewSource = {};
+    if (!HoldColorDisplayOwners())
+        edit.previewSource = {};
     edit.previewSequence = 0;
     edit.grownTransform = PlacementOfRect(edit.transform, width, height, grownRect);
     edit.grownOffsetX = -targetLeft;
@@ -187,7 +213,13 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
     edit.original = layer->asset->image;
     edit.transform = layer->transform;
     edit.selection = _document->selection;
-    edit.sourceToken = CaptureJobToken(layer->id);
+    edit.sourceToken = CaptureJobToken(deferred ? std::nullopt : std::optional{layer->id});
+    if (deferred)
+    {
+        edit.sourceLayers = _document->layers;
+        if (edit.sourceToken)
+            edit.sourceToken->target = DescribeColorEditTarget(*layer);
+    }
     // The last applied settings; Levels and Hue/Saturation start at identity and a Gradient Map from the foreground
     // and background colors, as in Photoshop.
     edit.settings = filterSettings.Normalized();
@@ -266,9 +298,7 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     // A bigger blur needs more room around the layer than it was given.
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
     {
-        edit.previewRaster = {};
-        edit.previewLookup.reset();
-        edit.previewCoverage = {};
+        InvalidateColorPreviewOwners();
         edit.previewSequence = 0;
         edit.previewInvalidatedSequence = _colorEditSequence;
         ++_editRevision;
@@ -280,9 +310,7 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     }
     if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
-        edit.previewRaster = {};
-        edit.previewLookup.reset();
-        edit.previewCoverage = {};
+        InvalidateColorPreviewOwners();
         edit.previewSequence = 0;
         edit.previewFailed = false;
         edit.previewInvalidatedSequence = _colorEditSequence;
@@ -434,9 +462,19 @@ void DocumentSession::SampleHueRange(const Raster& composite, Vec2 point)
     {
         return;
     }
+    SampleHueRangeValue(SampledHue(composite, point));
+}
+
+void DocumentSession::SampleHueRangeValue(std::optional<double> hue)
+{
+    const ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
+    if (edit == nullptr || !edit->hueSample.has_value())
+    {
+        return;
+    }
     HueSaturationSettings settings = edit->settings.hsv;
-    const std::optional<double> hue = SampledHue(composite, point);
-    if (settings.range == ColorRange::Master || settings.colorize || !hue.has_value())
+    if (settings.range == ColorRange::Master || settings.colorize || !hue.has_value() || !std::isfinite(hue.value()) ||
+        hue.value() < 0 || hue.value() >= 360)
     {
         return;
     }
@@ -463,8 +501,14 @@ bool DocumentSession::BeginHueTargeting(const Raster& composite, Vec2 point)
     {
         return false;
     }
-    const std::optional<double> hue = SampledHue(composite, point);
-    if (!hue.has_value())
+    return BeginHueTargetingValue(SampledHue(composite, point));
+}
+
+bool DocumentSession::BeginHueTargetingValue(std::optional<double> hue)
+{
+    ColorEdit* edit = OpenColorEdit(FilterKind::HueSaturation);
+    if (edit == nullptr || !edit->targeting || edit->settings.hsv.colorize || !hue.has_value() ||
+        !std::isfinite(hue.value()) || hue.value() < 0 || hue.value() >= 360)
     {
         return false;
     }
@@ -560,12 +604,26 @@ void DocumentSession::AddAdjustment(AdjustmentKind kind)
 
 bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& value)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return false;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->adjustment.has_value() || !value.IsValid())
     {
         return false;
     }
-    layer->adjustment = value;
+    if (layer->adjustment.value() == value)
+        return true; // An exact restore/no-op keeps the immutable root and generation.
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    draft.value().EditLayers()[index.value()].adjustment = value;
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
+    std::swap(_document.value(), after.value());
     NoteDocumentMutation();
     return true;
 }
@@ -579,7 +637,7 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     {
         return false;
     }
-    const ImageLayer* layer = MutableLayer(id);
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->adjustment.has_value() || !below.HasStorage() ||
         below.Format() != RasterFormat::Bgra8888)
     {
@@ -597,6 +655,14 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     edit.settings = Adjust::AdjustmentSettings(original);
     edit.seed = original.Grain().seed;
     edit.openingSequence = ++_colorEditSequence;
+    if (deferred)
+    {
+        edit.sourceToken = CaptureJobToken(std::nullopt, edit.openingSequence);
+        if (!edit.sourceToken)
+            return false;
+        edit.sourceLayers = _document->layers;
+        edit.sourceToken->target = DescribeColorEditTarget(*layer);
+    }
     _colorEdit = std::move(edit);
     _adjustmentOriginal = original;
     BeginEdit(L"Edit " + std::wstring(FilterKindName(AdjustmentFilterKind(original.kind))) + L" Adjustment");
@@ -621,6 +687,13 @@ bool DocumentSession::PreviewAdjustmentEditing(bool preview)
     if (!_adjustmentEditingID.has_value() || !_adjustmentOriginal.has_value())
     {
         return false;
+    }
+    if (_colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred)
+    {
+        // The completed worker lookup supplies live pixels. Settings ticks retain the original immutable
+        // document; only the admitted closure constructs its committed replacement and history.
+        ++_editRevision;
+        return true;
     }
     const std::optional<LayerAdjustment> value = EditedAdjustment();
     if (!value.has_value())

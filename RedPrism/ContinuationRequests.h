@@ -5,6 +5,8 @@
 #include "ContinuationQueue.h"
 #include "ContinuationReceipt.h"
 #include "EditorTool.h"
+#include "OpacityInputOrder.h"
+#include "WandLayerSelectionWork.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -66,7 +68,12 @@ struct HostWandLayerNewInput final
     Vec2 point;
     WandSettings settings;
     bool antialiased;
+    SelectionMode mode = SelectionMode::New;
+    std::optional<PanelWandOpening> panelOpening; // physical panel identity; source authority follows older FIFO work
 };
+// Same event fields and New coalescing family. The captured All Layers setting selects the distinct
+// composite graph at execution; avoid a duplicate variant alternative and its wider STL dispatch tables.
+using HostWandCompositeNewInput = HostWandLayerNewInput;
 struct HostSelectionMoveCloseInput final
 {
     std::uint64_t opening;
@@ -124,7 +131,26 @@ struct HostLayerOpacityInput final
     Guid id;
     double opacity;
     ChromeEditPhase phase;
+    OpacityInputOrder::Stamp order{}; // producer field stream; separate from the acknowledged model opening
 };
+enum class HostCanvasInputKind
+{
+    Brush,
+    Sampler,
+    LassoOpening,
+    LassoFinish,
+    HueSample,
+    SelectionPress,
+    PolygonalPress,
+    PolygonalKey
+};
+struct HostCanvasBrushInput final
+{
+    std::uint64_t opening; // owner-only fixed stream; no borrowed pointer or later view interpretation
+    HostCanvasInputKind kind = HostCanvasInputKind::Brush;
+    std::uint64_t lassoClosingIntent = 0; // legacy close intent; PolygonalPress/Key use an opaque record identity
+};
+using HostSamplerInput = HostCanvasBrushInput;
 struct HostWriteInput final
 {
     HostWriteFormat format;
@@ -164,6 +190,10 @@ struct HostPixelNudgeInput final
 {
     Vec2 offset; // event-time Shift step; a queued press must not read newer keyboard state
 };
+struct HostSelectionOffsetInput final
+{
+    int amount; // Signed event-time header amount; positive expands, negative contracts.
+};
 struct HostSelectionNudgeInput final
 {
     int dx;
@@ -192,17 +222,21 @@ struct HostDuplicateFinishInput final
 };
 struct HostNewInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostCloseProjectInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostCloseWindowInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostEndSessionInput final
 {
     std::uint64_t generation;
     std::int64_t reasons;
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 
 using HostRequestInput =
@@ -212,7 +246,8 @@ using HostRequestInput =
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
-                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput>;
+                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput,
+                 HostSelectionOffsetInput, HostCanvasBrushInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);
@@ -644,7 +679,12 @@ class HostRequest final
     }
     HostRequest(const HostRequest&) = delete;
     HostRequest& operator=(const HostRequest&) = delete;
-    HostRequest(HostRequest&&) noexcept = default;
+    HostRequest(HostRequest&& other) noexcept
+        : _reservation(std::move(other._reservation)), _selectedOutput(std::move(other._selectedOutput)),
+          _input(std::move(other._input)), _completion(std::move(other._completion)),
+          _pathsDetached(std::exchange(other._pathsDetached, false))
+    {
+    }
     HostRequest& operator=(HostRequest&& other) noexcept
     {
         if (this != &other)
@@ -655,6 +695,7 @@ class HostRequest final
             _selectedOutput = std::move(other._selectedOutput);
             _completion = std::move(other._completion);
             _reservation = std::move(other._reservation); // old input is gone before returning its charge
+            _pathsDetached = std::exchange(other._pathsDetached, false);
         }
         return *this;
     }
@@ -666,6 +707,46 @@ class HostRequest final
     [[nodiscard]] const HostRequestInput& Input() const noexcept
     {
         return _input;
+    }
+    [[nodiscard]] std::size_t ReservedInputBytes() const noexcept
+    {
+        return _reservation._bytes;
+    }
+    // Transfer the admitted path vector after the successful joined stage. The caller supplies an empty,
+    // zero-capacity owner slot so this request never frees a previous large allocation on the transfer path.
+    // The original receipt and reservation stay with this request; only the exact pending path payload can detach.
+    [[nodiscard]] bool TryTakePaths(std::vector<std::wstring>& emptyDestination) noexcept
+    {
+        if (!emptyDestination.empty() || emptyDestination.capacity() != 0 || _pathsDetached ||
+            Receipt().Read().outcome != ContinuationOutcome::Pending)
+        {
+            return false;
+        }
+        auto* const paths = std::get_if<HostPathsInput>(&_input);
+        if (!paths)
+        {
+            return false;
+        }
+        emptyDestination.swap(paths->paths);
+        _pathsDetached = true;
+        return true;
+    }
+    // Restore the detached owner only to this still-pending request and only into its empty zero-capacity slot.
+    // Swapping preserves vector and string allocations; an empty batch remains distinguishable via the flag.
+    [[nodiscard]] bool TryRestorePaths(std::vector<std::wstring>& source) noexcept
+    {
+        if (!_pathsDetached || Receipt().Read().outcome != ContinuationOutcome::Pending)
+        {
+            return false;
+        }
+        auto* const paths = std::get_if<HostPathsInput>(&_input);
+        if (!paths || !paths->paths.empty() || paths->paths.capacity() != 0)
+        {
+            return false;
+        }
+        paths->paths.swap(source);
+        _pathsDetached = false;
+        return true;
     }
     // Selection is an active-stage operation. On refusal or allocation failure preserve the old output; the
     // replacement's reservation must coexist with it. The returned view is borrowed only while this owner lives.
@@ -769,6 +850,7 @@ class HostRequest final
     {
     }
     ContinuationCompletion _completion;
+    bool _pathsDetached = false;
 };
 
 static_assert(sizeof(HostRequest) <= sizeof(HostRequestInput) + 256);

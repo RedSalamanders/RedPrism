@@ -1,5 +1,6 @@
 #include "Document.Tests.AdjustmentNested.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "AdjustmentOpeningWork.h"
 
@@ -88,7 +89,7 @@ struct Fixture final
 {
     Fixture() : original(OriginalAdjustment()), templateSettings(LiteralGlobalTemplate()), source(MakeSource())
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 2;
         document.height = 2;
@@ -102,11 +103,12 @@ struct Fixture final
         document.layers.push_back(std::move(pixels));
         document.layers.push_back(std::move(adjustment));
 
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         session.filterSettings = templateSettings;
 
         session.BeginEdit(L"Redo seed entry");
-        session.EditForTest([&](CanvasDocument& current) { current.layers[0].name = L"Redo seed after"; });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& current) { current.layers[0].name = L"Redo seed after"; });
         session.EndEdit();
         session.Undo();
         outerBefore = session.Document();
@@ -218,12 +220,13 @@ void NamedOuterCommit(bool preview)
                HasLiteralSource(fixture.session.Document()->layers[0].asset->image),
            (prefix + ".closed-live-document-literal-and-template").c_str());
 
-    CanvasDocument expectedAfter = fixture.outerBefore.value();
+    DocumentFixture expectedAfter = DocumentFixture::Copy(fixture.outerBefore.value());
     expectedAfter.resolution = 144.0;
     expectedAfter.layers[1].adjustment = expectedAdjustment;
+    const CanvasDocument expectedDocument = std::move(expectedAfter).Seal();
     fixture.session.EndEdit();
     const auto completed = fixture.session.history.CaptureState();
-    Expect(fixture.session.Document() == std::optional(expectedAfter) && completed.Depth() == 0 &&
+    Expect(fixture.session.Document() == std::optional(expectedDocument) && completed.Depth() == 0 &&
                completed.PastCount() == 1 && completed.FutureCount() == 0 &&
                fixture.session.history.UndoName() == kOuterName,
            (prefix + ".outer-end-records-one-named-combined-entry").c_str());
@@ -231,7 +234,7 @@ void NamedOuterCommit(bool preview)
     Expect(fixture.session.Document() == fixture.outerBefore && fixture.session.history.RedoName() == kOuterName,
            (prefix + ".undo-restores-literal-outer-before-document").c_str());
     fixture.session.Redo();
-    Expect(fixture.session.Document() == std::optional(expectedAfter) &&
+    Expect(fixture.session.Document() == std::optional(expectedDocument) &&
                HasAdjustment(fixture.session.Document(), fixture.adjustmentID, expectedAdjustment),
            (prefix + ".redo-restores-literal-combined-after-document").c_str());
 }

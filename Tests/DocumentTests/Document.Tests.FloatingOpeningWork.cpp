@@ -1,5 +1,6 @@
 #include "Document.Tests.FloatingOpeningWork.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "FloatingOpeningWork.h"
 #include "Selection.h"
 
@@ -19,7 +20,7 @@ void Expect(bool value, const char* name)
 }
 void Initialize(DocumentSession& session)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 8;
     document.height = 4;
@@ -29,7 +30,7 @@ void Initialize(DocumentSession& session)
     layer.asset = RasterAsset{image, image, L"Source"};
     document.layers.push_back(layer);
     document.selection = DocumentSelection{false, SelectionGeometry::Rect(0, 0, 1, 1)};
-    session.ReplaceDocument(std::move(document), layer.id);
+    session.ReplaceDocument(std::move(document).Seal(), layer.id);
     (void)session.CopySelection();
 }
 FloatingOpeningResult Prepare(DocumentSession& session, Executor& executor, CancelToken cancellation = {},
@@ -109,7 +110,7 @@ void StaleAuthority()
         else if (mode == 1)
             session.history.Reset();
         else if (mode == 2)
-            session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+            EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
         else
         {
             auto doc = session.Document().value();
@@ -136,7 +137,7 @@ void StaleAuthority()
         if (mode == 0)
             session.history.Reset();
         else if (mode == 1)
-            session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+            EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
         else
         {
             auto doc = session.Document().value();
@@ -153,7 +154,7 @@ void NestedOpeningRestoration()
     Initialize(session);
     const auto parentOpening = session.Document().value();
     session.BeginEdit(L"Outer edit");
-    session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+    EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
     const auto childOpening = session.Document().value();
     const auto parentState = session.history.CaptureState();
     InlineExecutor executor;

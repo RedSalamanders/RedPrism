@@ -1,11 +1,13 @@
 #include "TransformEdit.h"
 
 #include "Adjust.h"
+#include "RasterWork.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <utility>
 
 namespace
 {
@@ -19,9 +21,10 @@ constexpr std::array<Vec2, 4> kSubSamples{Vec2{-0.25, -0.25}, Vec2{0.25, -0.25},
     return std::isfinite(point.x) && std::isfinite(point.y);
 }
 
-// A raster's contiguous pixels, read once: a sparse raster assembles here, and nullopt means it could not.
+// A private contiguous sampling view. Retain its raster for the complete warp; sparse source caches stay unchanged.
 struct Pixels
 {
+    Raster owner;
     const std::uint8_t* data = nullptr;
     int width = 0;
     int height = 0;
@@ -29,14 +32,16 @@ struct Pixels
     int channels = 4;
 };
 
-[[nodiscard]] std::optional<Pixels> PixelsOf(const Raster& image) noexcept
+[[nodiscard]] std::optional<Pixels> PixelsOf(const Raster& image)
 {
-    const std::uint8_t* data = image.Data();
+    Raster owner = ContiguousRasterForWork(image);
+    const std::uint8_t* data = owner.Data();
     if (data == nullptr)
     {
         return std::nullopt;
     }
-    return Pixels{data, image.Width(), image.Height(), image.Stride(), image.Format() == RasterFormat::Gray8 ? 1 : 4};
+    return Pixels{std::move(owner), data,           image.Width(),
+                  image.Height(),   image.Stride(), image.Format() == RasterFormat::Gray8 ? 1 : 4};
 }
 
 // Pixel `(x, y)` clamped to the edges.
@@ -137,7 +142,7 @@ struct WarpBounds
     {
         return std::nullopt;
     }
-    // Pixels that cannot be read (a sparse raster that could not be assembled) fail the warp, never a null read.
+    // An unreadable private source fails the warp; it never publishes a shared sparse assembly.
     const std::optional<Pixels> source = PixelsOf(image);
     if (!source.has_value())
     {

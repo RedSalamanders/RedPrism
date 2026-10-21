@@ -2,6 +2,8 @@
 
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformPreviewTestGate.h"
 #include "TransformCancellationWork.h"
@@ -99,7 +101,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const Raster mask = Raster::Make(2, 2, RasterFormat::Gray8, maskPixels.data(), maskPixels.size());
         if (!image.HasStorage() || !mask.HasStorage())
             return false;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -110,7 +112,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         layer.transform.sampling = LayerSampling::Nearest;
         const Guid target = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), target);
+        _session.ReplaceDocument(std::move(document).Seal(), target);
         _session.history.Reset();
         _session.history.MarkSaved();
         _viewport.SetZoom(1, _viewport.Center(), DocumentSize());
@@ -215,7 +217,8 @@ int Application::RunTransformPreviewSelfTest() noexcept
                 break;
             case Action::ReplaceSource:
             {
-                owner._session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+                EditLayerRecordsForTest(owner._session,
+                                        [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
                 owner.DocumentChanged();
                 owner
                     .CancelTransformPreviewJobs(); // Refuse the captured source; next-epoch refresh is a separate case.
@@ -556,13 +559,14 @@ int Application::RunTransformPreviewSelfTest() noexcept
     // Use an independent host so the rest of the full application self-test continues on its original owner.
     for (const bool after : {false, true})
     {
-        Application closing(_instance, true, nullptr, 0);
+        auto closingOwner = std::make_unique<Application>(_instance, true, nullptr, 0);
+        auto& closing = *closingOwner;
         const auto closeOwner = wil::scope_exit([&]() noexcept { closing.Shutdown(); });
         if (FAILED(closing._jobs.Initialize(1)) || !closing._jobs.RegisterOwnerWork(closing._ownerWork) ||
             FAILED(closing._retryWait.Initialize(closing._jobs, closing._ownerWork)) ||
             !closing.InitializeHostContinuations())
             return 5;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -573,7 +577,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const auto active = layer.id;
         const auto source = layer.asset->image;
         document.layers.push_back(std::move(layer));
-        closing._session.ReplaceDocument(std::move(document), active);
+        closing._session.ReplaceDocument(std::move(document).Seal(), active);
         if (!closing._session.BeginDeferredTransform(true))
             return 5;
         auto draft = closing._session.PendingTransformEdit()->draft;
@@ -613,7 +617,10 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const auto result = SettleJobs(closing._jobs, 15000, dispatch, &state);
         expect(result == SettleResult::Settled && state.visited && state.reserved && closing._shutdownComplete,
                "shutdown-joins-before-and-after-preparation-gated-preview");
-        expect(gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
+        // This independent host shares the owning thread's already-installed release sink with this harness.
+        // Its shutdown joins its producers; the harness scheduler acknowledges the detached CPU payload.
+        const bool retirementSettled = settle();
+        expect(retirementSettled && gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
                "shutdown-retires-complete-preview-payload-once-off-owner");
         expect(probe.ownerCalls == 1 && authority.unchanged,
                "shutdown-never-publishes-cancelled-preview-or-changes-source-authority");

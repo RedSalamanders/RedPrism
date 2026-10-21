@@ -13,6 +13,13 @@ constexpr float kDraftShadowWidthDip = 2.0f;
 constexpr float kDraftCornerHalfDip = 4.0f;
 constexpr float kAntsDashDip = 4.0f;
 
+[[nodiscard]] std::uint64_t SelectionCounter() noexcept
+{
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    return static_cast<std::uint64_t>(counter.QuadPart);
+}
+
 // What the overlay draws, compared value for value: an unchanged setter call must not invalidate.
 [[nodiscard]] bool Same(const D2D1_POINT_2F& left, const D2D1_POINT_2F& right) noexcept
 {
@@ -99,11 +106,46 @@ bool CanvasOverlay::SetGuides(const std::vector<float>& xs, const std::vector<fl
     return true;
 }
 
-void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops)
+void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops, std::optional<std::uint64_t> memoryBytes)
 {
+    _preparedOutline = {}; // Publication nodes defer last owner-thread buffer release.
+    _legacyOutlineBytes = memoryBytes;
     _outline = std::move(loops);
+    if (SelectionPoints().empty())
+        _outlineGeometry.reset();
     _outlineDirty = true;
     RequestInvalidate();
+}
+
+bool CanvasOverlay::SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                std::vector<OutlineLoop>& retired) noexcept
+{
+    if (!outline.HasStorage() || !retired.empty())
+        return false;
+    retired = std::move(_outline);
+    _legacyOutlineBytes = 0;
+    // No point buffers are needed for an empty outline. Drop its node through deferred retirement now,
+    // so an absent selection cannot pin output accounting until a later selection or chrome shutdown.
+    _preparedOutline = outline.PointCount() == 0 ? PreparedSelectionOutline{} : std::move(outline);
+    if (SelectionPoints().empty())
+        _outlineGeometry.reset(); // Direct2D resource retirement remains the separate S5 rendering gap.
+    _outlineDirty = true;
+    RequestInvalidate();
+    return true;
+}
+
+bool CanvasOverlay::SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept
+{
+    if (!std::isfinite(originDip.x) || !std::isfinite(originDip.y) || !std::isfinite(scale) || scale <= 0 ||
+        (Same(originDip, _selectionOrigin) && scale == _selectionScale))
+        return false;
+    _selectionOrigin = originDip;
+    _selectionScale = scale;
+    // Keep the current mapping for a later source, without repainting an absent outline.
+    if (SelectionPoints().empty())
+        return false;
+    RequestInvalidate();
+    return true;
 }
 
 void CanvasOverlay::SetAntPhase(float phase) noexcept
@@ -270,29 +312,43 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
     if (factory.get() != _factory.get())
     {
         // Geometry and stroke styles belong to the factory that made them.
-        _factory = factory;
+        wil::com_ptr_nothrow<ID2D1Factory1> selectionFactory;
+        if (FAILED(factory.query_to(selectionFactory.put())))
+            return false;
+        _factory = std::move(factory);
+        _selectionFactory = std::move(selectionFactory);
+        _selectionStyle.reset();
         _outlineGeometry.reset();
-        for (wil::com_ptr_nothrow<ID2D1StrokeStyle>& style : _antStyles)
+        for (wil::com_ptr_nothrow<ID2D1StrokeStyle1>& style : _antStyles)
         {
             style.reset();
         }
         _outlineDirty = true;
     }
-    wil::com_ptr_nothrow<ID2D1StrokeStyle>& ants = _antStyles[AntStep()];
+    if (!_selectionStyle)
+    {
+        const auto properties = D2D1::StrokeStyleProperties1(
+            D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_MITER, 10.0f,
+            D2D1_DASH_STYLE_SOLID, 0.0f, D2D1_STROKE_TRANSFORM_TYPE_FIXED);
+        if (FAILED(_selectionFactory->CreateStrokeStyle(properties, nullptr, 0, _selectionStyle.put())))
+            return false;
+    }
+    wil::com_ptr_nothrow<ID2D1StrokeStyle1>& ants = _antStyles[AntStep()];
     if (!ants)
     {
-        const D2D1_STROKE_STYLE_PROPERTIES properties = D2D1::StrokeStyleProperties(
+        const D2D1_STROKE_STYLE_PROPERTIES1 properties = D2D1::StrokeStyleProperties1(
             D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_MITER, 10.0f,
-            D2D1_DASH_STYLE_CUSTOM, static_cast<float>(AntStep()));
+            D2D1_DASH_STYLE_CUSTOM, static_cast<float>(AntStep()), D2D1_STROKE_TRANSFORM_TYPE_FIXED);
         // Dash lengths are multiples of the stroke width: four DIP on, four off.
         const float dashes[] = {kAntsDashDip, kAntsDashDip};
-        if (FAILED(_factory->CreateStrokeStyle(properties, dashes, 2, ants.put())))
+        if (FAILED(_selectionFactory->CreateStrokeStyle(properties, dashes, 2, ants.put())))
         {
             return false;
         }
     }
     if (_outlineDirty || !_outlineGeometry)
     {
+        const auto createStarted = _selectionTimingEnabledForTest ? SelectionCounter() : 0;
         _outlineGeometry.reset();
         wil::com_ptr_nothrow<ID2D1PathGeometry> geometry;
         if (FAILED(_factory->CreatePathGeometry(geometry.put())))
@@ -304,7 +360,10 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
         {
             return false;
         }
-        for (const OutlineLoop& loop : _outline)
+        const auto appendStarted = _selectionTimingEnabledForTest ? SelectionCounter() : 0;
+        if (_selectionTimingEnabledForTest)
+            _selectionTimingForTest.createTicks += appendStarted - createStarted;
+        for (const OutlineLoop& loop : SelectionPoints())
         {
             if (loop.size() < 2)
             {
@@ -314,19 +373,43 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
             sink->AddLines(loop.data() + 1, static_cast<UINT32>(loop.size() - 1));
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
         }
+        const auto closeStarted = _selectionTimingEnabledForTest ? SelectionCounter() : 0;
+        if (_selectionTimingEnabledForTest)
+            _selectionTimingForTest.appendTicks += closeStarted - appendStarted;
         if (FAILED(sink->Close()))
         {
             return false;
         }
+        if (_selectionTimingEnabledForTest)
+        {
+            _selectionTimingForTest.closeTicks += SelectionCounter() - closeStarted;
+            ++_selectionTimingForTest.builds;
+        }
         _outlineGeometry = std::move(geometry);
+        ++_selectionPathsBuilt;
         _outlineDirty = false;
     }
     return true;
 }
 
+CanvasOverlay::SelectionResourcesForTest CanvasOverlay::SelectionResourcesStateForTest() const noexcept
+{
+    SelectionResourcesForTest result;
+    result.pathsBuilt = _selectionPathsBuilt;
+    result.hasPath = _outlineGeometry != nullptr;
+    result.fixedSolid =
+        _selectionStyle && _selectionStyle->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED;
+    const auto& ants = _antStyles[AntStep()];
+    result.fixedDashes =
+        ants && ants->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED && ants->GetDashesCount() == 2;
+    if (result.fixedDashes)
+        ants->GetDashes(result.dashes.data(), 2);
+    return result;
+}
+
 void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
 {
-    if (_outline.empty() || !EnsureSelectionResources(dc))
+    if (_selectionPaintExternal || SelectionPoints().empty() || !EnsureSelectionResources(dc))
     {
         return;
     }
@@ -335,9 +418,17 @@ void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& ho
     ID2D1SolidColorBrush* black = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     D2D1_MATRIX_3X2_F previous{};
     dc->GetTransform(&previous);
-    dc->SetTransform(D2D1::Matrix3x2F::Translation(bounds.left, bounds.top) * previous);
-    dc->DrawGeometry(_outlineGeometry.get(), white, kLineWidthDip);
+    dc->SetTransform(SelectionMappingForTest() * D2D1::Matrix3x2F::Translation(bounds.left, bounds.top) * previous);
+    const auto solidStarted = _selectionTimingEnabledForTest ? SelectionCounter() : 0;
+    dc->DrawGeometry(_outlineGeometry.get(), white, kLineWidthDip, _selectionStyle.get());
+    const auto dashStarted = _selectionTimingEnabledForTest ? SelectionCounter() : 0;
     dc->DrawGeometry(_outlineGeometry.get(), black, kLineWidthDip, _antStyles[AntStep()].get());
+    if (_selectionTimingEnabledForTest)
+    {
+        _selectionTimingForTest.solidDrawTicks += dashStarted - solidStarted;
+        _selectionTimingForTest.dashDrawTicks += SelectionCounter() - dashStarted;
+        ++_selectionTimingForTest.drawPairs;
+    }
     dc->SetTransform(previous);
 }
 

@@ -1,15 +1,19 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
 #include "Runtime.Tests.RasterEditTestGate.h"
 #include "resource.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <optional>
+#include <string>
 
 int Application::RunRasterEditSelfTest() noexcept
 {
@@ -89,13 +93,14 @@ int Application::RunRasterEditSelfTest() noexcept
             state.cancelRetained = state.receipt.Read().outcome == HostOutcome::Pending && owner._rasterEditTicket;
         }
         else if (state.mode == Mode::StaleImage)
-            owner._session.EditForTest([](CanvasDocument& document)
-                                       { document.layers.back().asset->image = SolidRaster(4, 2, 0xFF0000FF); });
+            EditLayerRecordsForTest(owner._session, [](DocumentFixture& document)
+                                    { document.layers.back().asset->image = SolidRaster(4, 2, 0xFF0000FF); });
         else if (state.mode == Mode::StaleTransform)
-            owner._session.EditForTest([](CanvasDocument& document)
-                                       { document.layers.back().transform.origin.x += 1; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().transform.origin.x += 1; });
         else if (state.mode == Mode::StaleMask)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().mask->linked = false; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().mask->linked = false; });
         else if (state.mode == Mode::StaleSelection)
             owner._session.Deselect();
         else if (state.mode == Mode::StaleGeneration)
@@ -152,17 +157,33 @@ int Application::RunRasterEditSelfTest() noexcept
                     _session.CreateDocument(width, height);
                     const auto target =
                         InsertPaintedLayer(_session, L"Raster source", width, height, {0, 0}, 0, 0xFFFF0000);
-                    _session.EditForTest(
-                        [&](CanvasDocument& document)
-                        {
-                            const std::uint8_t reveal = 255;
-                            const auto image = Raster::Make(1, 1, RasterFormat::Gray8, &reveal, 1);
-                            document.layers.back().mask = LayerMask{RasterAsset{image, image, L"Raster mask"}};
-                            document.selection =
-                                DocumentSelection{false, SelectionLoops{{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}};
-                            if (large)
-                                document.selection.reset();
-                        });
+                    constexpr std::size_t kAssetNameUnits = 1'048'576;
+                    std::wstring imageAssetName;
+                    std::wstring maskAssetName;
+                    EditLayerRecordsForTest(_session,
+                                            [&](DocumentFixture& document)
+                                            {
+                                                const std::uint8_t reveal = 255;
+                                                const auto image = Raster::Make(1, 1, RasterFormat::Gray8, &reveal, 1);
+                                                document.layers.back().mask =
+                                                    LayerMask{RasterAsset{image, image, L"Raster mask"}};
+                                                document.selection = DocumentSelection{
+                                                    false, SelectionLoops{{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}};
+                                                if (large)
+                                                    document.selection.reset();
+                                            });
+                    if (mode == Mode::Success)
+                    {
+                        imageAssetName.assign(kAssetNameUnits, L'P');
+                        maskAssetName.assign(kAssetNameUnits, L'M');
+                        EditLayerRecordsForTest(_session,
+                                                [&](DocumentFixture& document)
+                                                {
+                                                    auto& layer = document.layers.back();
+                                                    layer.asset->name = imageAssetName;
+                                                    layer.mask->asset.name = maskAssetName;
+                                                });
+                    }
                     _session.SelectLayer(target);
                     if (mask)
                         _session.SelectLayerTarget(target, true);
@@ -236,7 +257,8 @@ int Application::RunRasterEditSelfTest() noexcept
                     if (mode == Mode::Invalid)
                         correct = correct && actual.error == E_INVALIDARG;
                     if (mode == Mode::TooLarge)
-                        correct = correct && actual.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+                        correct = correct &&
+                                  actual.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
                     if (large)
                         correct = correct && _rasterEditTestGate->payloadRetired.load() &&
                                   _rasterEditTestGate->payloadRetiredOffOwner.load();
@@ -280,6 +302,29 @@ int Application::RunRasterEditSelfTest() noexcept
                                                       : (mask ? L"Fill Mask" : L"Fill");
                         correct = correct && _session.history.UndoCount() == count + 1 &&
                                   _session.history.UndoName() == expectedName;
+
+                        const auto& gate = *_rasterEditTestGate;
+                        const bool rootOnlyCaptured = gate.rootOnlyCapturedOnOwner;
+                        const bool targetCopiedOnWorker =
+                            gate.targetCapturesOnOwner.load() == 0 && gate.targetCapturesOnWorker.load() == 1;
+                        const bool fullMetadataCaptured = gate.capturedImageNameUnits.load() == kAssetNameUnits &&
+                                                          gate.capturedMaskNameUnits.load() == kAssetNameUnits;
+                        const bool publishedMetadataPreserved =
+                            layer && layer->asset && layer->mask &&
+                            layer->asset->name == (mask ? imageAssetName : layer->name) &&
+                            layer->mask->asset.name == maskAssetName;
+                        std::printf("%s rasteredit-host.capture.root-only-owner.command-%d.mask-%u.after-%u\n",
+                                    rootOnlyCaptured ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf("%s rasteredit-host.capture.target-worker-only.command-%d.mask-%u.after-%u\n",
+                                    targetCopiedOnWorker ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf(
+                            "%s rasteredit-host.capture.full-image-and-mask-names.command-%d.mask-%u.after-%u\n",
+                            fullMetadataCaptured ? "PASS" : "FAIL", command, mask ? 1U : 0U, after ? 1U : 0U);
+                        std::printf("%s rasteredit-host.capture.published-name-semantics.command-%d.mask-%u.after-%u\n",
+                                    publishedMetadataPreserved ? "PASS" : "FAIL", command, mask ? 1U : 0U,
+                                    after ? 1U : 0U);
+                        correct = correct && rootOnlyCaptured && targetCopiedOnWorker && fullMetadataCaptured &&
+                                  publishedMetadataPreserved;
                         _session.Undo();
                         correct = correct && _session.ActiveLayer()->asset->image == source;
                         _session.Redo();

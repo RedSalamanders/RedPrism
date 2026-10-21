@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionNudgeTestGate.h"
 
@@ -29,6 +31,10 @@ DocumentSelection NudgeFaultRectangle(double left, double top)
 
 int Application::RunSelectionNudgeFaultSelfTest() noexcept
 {
+    const auto originalHistoryBudget = _session.history.RetainedByteLimit();
+    const auto restoreHistoryBudget =
+        wil::scope_exit([this, originalHistoryBudget]() noexcept
+                        { _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget}; });
     enum class Mode
     {
         Success,
@@ -49,7 +55,10 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         Outline,
         NestedCancel,
         Saved,
-        ZeroRedo
+        ZeroRedo,
+        ResidencyRefresh,
+        ResidencyFault,
+        ResidencyCancel
     };
     struct Case final
     {
@@ -80,7 +89,10 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         Case{"outline", Mode::Outline, {}},
         Case{"nested-cancel", Mode::NestedCancel, {}},
         Case{"saved", Mode::Saved, {}},
-        Case{"zero-redo", Mode::ZeroRedo, {}}};
+        Case{"zero-redo", Mode::ZeroRedo, {}},
+        Case{"residency-refresh", Mode::ResidencyRefresh, {}},
+        Case{"residency-fault", Mode::ResidencyFault, {}},
+        Case{"residency-cancel", Mode::ResidencyCancel, {}}};
     struct State final
     {
         Application& owner;
@@ -131,8 +143,9 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         std::fprintf(stderr, "%s selection-nudge-fault-host.%s.%s\n", condition ? "PASS" : "FAIL", mode, check);
         return condition;
     };
-    const auto prepare = [this]()
+    const auto prepare = [this, originalHistoryBudget]()
     {
+        _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget};
         _session.ClearDocument();
         _session.CreateDocument(40, 40, true);
         _session.AddBlankLayer();
@@ -278,12 +291,39 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
             _session.history.End(_session.Document(), _session.ActiveLayerID());
             _session.Undo();
         }
+        const bool residency = test.mode >= Mode::ResidencyRefresh;
+        Raster lateResidencySource;
+        std::uint64_t originalSelectionBytes = 0;
+        if (residency)
+        {
+            constexpr std::array<std::uint8_t, 4> literal{51, 52, 53, 255};
+            const Raster leaf = Raster::Make(1, 1, RasterFormat::Bgra8888, literal.data(), literal.size());
+            lateResidencySource = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+            auto historical = DocumentFixture::Copy(_session.Document().value());
+            historical.layers.front().asset = RasterAsset{lateResidencySource, {}, L"Historical nudge pixels"};
+            originalSelectionBytes = _session.Selection().value().loops.StorageBytes();
+            // The new outline excludes its own storage; the retained original outline still counts. Only eight
+            // bytes remain for historical pixels, so the grown leaf+cache (12) must drop the oldest entry.
+            _session.history = DocumentHistory(100, 8 + originalSelectionBytes);
+            auto baseline = DocumentHistory::PrepareEdit(_session.history.CaptureState(), std::move(historical).Seal(),
+                                                         _session.ActiveLayerID(), _session.Document(),
+                                                         _session.ActiveLayerID(), L"Saved nudge cache fixture");
+            if (!baseline || !_session.history.Publish(baseline.value()))
+                return 5;
+            baseline.reset();
+            _session.history.MarkSaved();
+            if (_session.history.RetainedBytes(_session.Document()) != 4 || lateResidencySource.IsMaterialized())
+                return 5;
+        }
         const auto gate = std::make_shared<SelectionNudgeTestGate>();
         gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (!expect(test.name, "gate-event", static_cast<bool>(gate->release)))
             return 5;
         gate->throwCaptureFailure = test.mode == Mode::CaptureFailure;
         gate->throwHistoryStage = test.stage;
+        gate->lateResidencySource = lateResidencySource;
+        gate->throwResidencyRefresh = test.mode == Mode::ResidencyFault;
+        gate->cancelResidencyRefresh = test.mode == Mode::ResidencyCancel;
         if (test.mode == Mode::Failure)
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
         _selectionNudgeTestGate = gate;
@@ -312,10 +352,17 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
             expect(test.name, "cancel-pending-until-worker-ack",
                    state.cancelPending && outcome == HostOutcome::Cancelled && _session.Document() == state.before &&
                        _session.history.IsCurrent(state.history) && _session.Generation() == state.generation);
-        else if (earlyFault || test.mode == Mode::Failure)
+        else if (test.mode == Mode::ResidencyCancel)
+            expect(test.name, "refresh-cancel-preserves-complete-owner",
+                   outcome == HostOutcome::Cancelled && _session.Document() == state.before &&
+                       _session.history.IsCurrent(state.history) && _session.Generation() == state.generation &&
+                       !_session.history.IsModified());
+        else if (earlyFault || test.mode == Mode::Failure || test.mode == Mode::ResidencyFault)
             expect(test.name, "failure-preserves-complete-owner",
                    outcome == HostOutcome::Failed &&
-                       state.receipt.Read().error == (earlyFault ? E_OUTOFMEMORY : E_ACCESSDENIED) &&
+                       state.receipt.Read().error ==
+                           static_cast<std::int32_t>(
+                               earlyFault || test.mode == Mode::ResidencyFault ? E_OUTOFMEMORY : E_ACCESSDENIED) &&
                        _session.Document() == state.before && _session.history.IsCurrent(state.history) &&
                        _session.Generation() == state.generation &&
                        (!test.stage || gate->historyFaultHits.load() == 1));
@@ -337,6 +384,21 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
                    outcome == HostOutcome::Succeeded &&
                        _session.Selection() == std::optional(NudgeFaultRectangle(11, 10)) &&
                        _session.history.UndoName() == L"Move Selection");
+        if (residency)
+        {
+            expect(test.name, "same-ticket-refresh-preserves-input-and-literal-history-budget",
+                   gate->captures.load() == 1 && gate->visits.load() == 1 && gate->residentGrowths.load() == 1 &&
+                       gate->residencyRefreshes.load() == 1 && gate->refreshReservationHeld.load() &&
+                       lateResidencySource.ByteSize() == 8 &&
+                       (outcome == HostOutcome::Succeeded
+                            ? _session.history.UndoCount() == 1 &&
+                                  _session.history.RetainedBytes(_session.Document()) == originalSelectionBytes &&
+                                  _session.Generation() == state.generation + 2 && _session.history.IsModified()
+                            : _session.history.UndoCount() == 1 &&
+                                  _session.history.RetainedBytes(_session.Document()) == 12 &&
+                                  _session.history.CurrentRevision() == state.revision &&
+                                  !_session.history.IsModified()));
+        }
         if (test.mode == Mode::Ordered)
         {
             expect(test.name, "younger-writers-wait-for-ack",
@@ -388,6 +450,8 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
             _session.CancelSelectionMove();
         _session.CancelLasso();
         _selectionNudgeTestGate.reset();
+        if (residency)
+            _session.history = DocumentHistory(100, HistoryLimitForPhysicalMemory(0));
     }
     for (const bool allocation : {false, true})
     {
@@ -433,9 +497,9 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         static_cast<void>(RunUiActions(_jobs));
     expect("scheduler-admission", "actual-record-table-refuses-before-capture",
            refused.Read().outcome == HostOutcome::Failed &&
-               refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && _session.Document() == before &&
-               _session.history.IsCurrent(history) && !_historyWork.Busy() && !_selectionNudgeTicket &&
-               !_selectionNudgeStamp);
+               refused.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+               _session.Document() == before && _session.history.IsCurrent(history) && !_historyWork.Busy() &&
+               !_selectionNudgeTicket && !_selectionNudgeStamp);
     expect("scheduler-admission", "occupied-records-settle",
            SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled);
     const auto retry = QueueHostInput(HostSelectionNudgeInput{1, 0});

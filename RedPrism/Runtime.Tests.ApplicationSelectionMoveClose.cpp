@@ -731,7 +731,8 @@ int Application::RunSelectionMoveCloseSelfTest() noexcept
         _hostAdmissionAllocationFailureForTest = false;
         const bool statePreserved =
             refusal.Read().outcome == HostOutcome::Failed &&
-            refusal.Read().error == (allocationFault ? E_OUTOFMEMORY : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+            refusal.Read().error == static_cast<std::int32_t>(
+                                        allocationFault ? E_OUTOFMEMORY : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
             (allocationFault || budget.has_value()) && std::holds_alternative<std::monostate>(_drag) &&
             _session.Document() == before && _session.Generation() == generation && _session.IsMovingSelection() &&
             _session.history.IsCurrent(history) && !_historyWork.Busy() && !_selectionMoveCloseTicket &&
@@ -771,7 +772,7 @@ int Application::RunSelectionMoveCloseSelfTest() noexcept
     (void)expect(
         "admission", "real-record-capacity",
         slotsFilled && admissionSettled == SettleResult::Settled && refusedResult.outcome == HostOutcome::Failed &&
-            refusedResult.error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) &&
+            refusedResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
             _session.Document() == admissionDocument && _session.Selection() == std::optional(rect(2, 2, 3, 3)) &&
             _session.IsMovingSelection() && _session.history.CurrentRevision() == admissionRevision &&
             !_historyWork.Busy() && !_selectionMoveCloseTicket && !_selectionMoveCloseStamp,

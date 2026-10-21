@@ -1,5 +1,6 @@
 #include "Document.Tests.MergeHistory.h"
 
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 
@@ -50,7 +51,7 @@ CanvasDocument MergeDocument(bool grouped)
 {
     constexpr std::array<std::uint8_t, 4> pixel{19, 31, 47, 255};
     const Raster raster = Bgra(1, 1, pixel);
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Id("10000000-0000-4000-8000-000000000001");
     document.width = 3;
     document.height = 2;
@@ -83,7 +84,7 @@ CanvasDocument MergeDocument(bool grouped)
     selection.antialiased = false;
     selection.loops = SelectionLoops{{Vec2{0, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{0, 1}}};
     document.selection = std::move(selection);
-    return document;
+    return std::move(document).Seal();
 }
 
 constexpr std::array<std::uint8_t, 24> kCompositePixels{0, 0, 0, 0, 11, 22, 33, 255, 44,  55,  66,  128,
@@ -300,17 +301,19 @@ void SparseSurvivorMakesMergeExceedD7Budget()
     const Raster huge = Raster::MakeSparse(9999, 10000, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
     constexpr std::array<std::uint8_t, 4> thumbnailPixel{0, 0, 0, 0};
     const Raster thumbnail = Bgra(1, 1, thumbnailPixel);
-    CanvasDocument document = MergeDocument(false);
+    const CanvasDocument baseline = MergeDocument(false);
+    DocumentFixture document = DocumentFixture::Copy(baseline);
     document.width = 30000;
     // Assign the huge survivor's thumbnail directly; never sample or materialize its 99,990,000-pixel image.
     document.layers[2].asset = RasterAsset{huge, thumbnail, L"Survivor"};
     document.layers[2].transform.size = Vec2{9999, 10000};
+    const CanvasDocument published = std::move(document).Seal();
     DocumentSession session;
-    session.ReplaceDocument(document, Id("20000000-0000-4000-8000-000000000003"));
-    Expect(ValidateDocument(document) == DocumentStatus::Ok && session.Document() && huge.IsSparse() &&
+    session.ReplaceDocument(published, Id("20000000-0000-4000-8000-000000000003"));
+    Expect(ValidateDocument(published) == DocumentStatus::Ok && session.Document() && huge.IsSparse() &&
                huge.PixelCount() == 99'990'000 && !huge.IsMaterialized() && huge.ByteSize() == 0 &&
-               document.layers[0].asset->image.PixelCount() + document.layers[1].asset->image.PixelCount() +
-                       document.layers[2].asset->image.PixelCount() ==
+               published.layers[0].asset->image.PixelCount() + published.layers[1].asset->image.PixelCount() +
+                       published.layers[2].asset->image.PixelCount() ==
                    99'990'002,
            "budget.valid-source-has-99990002-pixels-with-no-huge-pixel-buffer");
     if (!session.Document())

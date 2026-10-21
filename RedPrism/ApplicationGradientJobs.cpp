@@ -2,7 +2,9 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
+#include "PreparedRasterPreview.h"
 #include "Runtime.Tests.GradientWorkTestGate.h"
+#include "SharedPublicationMemory.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -17,6 +19,9 @@ namespace
 #pragma warning(disable : 4324)
 struct GradientPayload final : DeferredReleaseNode
 {
+    std::shared_ptr<const SharedPublicationMemory> memory; // All captured/output owners retire first.
+    bool preparedDisplay = false;
+    bool workerTargetCapture = false;
     RasterEditInput input;
     std::optional<JobToken> token;
     RasterEditResult committed;
@@ -85,7 +90,8 @@ struct RetireGradientPayload final
 {
     void operator()(GradientPayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && !TryDeferRelease(*payload, payload->preparedDisplay ? DeferredReleasePolicy::AlwaysOnOwner
+                                                                           : DeferredReleasePolicy::SizeThreshold))
         {
             const std::unique_ptr<GradientPayload> owned(payload);
         }
@@ -100,7 +106,7 @@ class Application::GradientJob final : public Job
   public:
     GradientJob(Application& owner, GradientRequest request, std::uint64_t serial, std::uint64_t generation,
                 std::int64_t pixelLimit, std::uint64_t preparationBytes, std::optional<PreviewStamp> preview,
-                std::optional<HistoryWorkStamp> commit, std::uint64_t retirementBytes)
+                std::optional<HistoryWorkStamp> commit, std::uint64_t retirementBytes, bool prepareDisplay)
         : _owner(owner), _request(request), _serial(serial), _generation(generation), _pixelLimit(pixelLimit),
           _preparationBytes(preparationBytes), _retirementBytes(retirementBytes), _preview(preview), _commit(commit),
           _gate(owner._gradientWorkTestGate &&
@@ -108,7 +114,8 @@ class Application::GradientJob final : public Job
                             (commit ? GradientWorkTestKind::Commit : GradientWorkTestKind::Preview)
                     ? owner._gradientWorkTestGate
                     : nullptr),
-          _ownerThread(GetCurrentThreadId())
+          _ownerThread(GetCurrentThreadId()), _prepareDisplay(prepareDisplay),
+          _ownerIdentity(std::this_thread::get_id())
     {
     }
     JobResult Run(JobContext& context) override
@@ -125,6 +132,30 @@ class Application::GradientJob final : public Job
         }
         if (_gate && _gate->throwAllocationFailure)
             throw std::bad_alloc{};
+        if (_payload->workerTargetCapture)
+        {
+            if (!_payload->source || !_payload->token)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            const auto* layer = _payload->source.value().layers.FindKey(_request.target);
+            if (!layer)
+                return {JobStatus::Failed, E_ABORT};
+            // Preserve assetless and mask-only targets; raster preparation validates their operation.
+            _payload->input.layer = *layer;
+            _payload->token->target = TargetIdentity{layer->id,        layer->asset ? layer->asset->image : Raster{},
+                                                     layer->transform, layer->mask,
+                                                     layer->isGroup,   layer->adjustment};
+            _payload->workerTargetCapture = false;
+            if (_gate)
+            {
+                const bool onOwner = GetCurrentThreadId() == _ownerThread;
+                _gate->targetCapturesOnOwner.fetch_add(onOwner ? 1u : 0u);
+                _gate->targetCapturesOnWorker.fetch_add(onOwner ? 0u : 1u);
+                _gate->capturedImageNameUnits.store(layer->asset ? layer->asset->name.size() : 0);
+                _gate->capturedMaskNameUnits.store(layer->mask ? layer->mask->asset.name.size() : 0);
+            }
+            if (!_commit)
+                _payload->source.reset(); // Complete root is charged; drop the extra owner on this worker.
+        }
         _payload->input.progressContext = &context;
         _payload->input.progress = [](void* value, std::size_t completed, std::size_t total) noexcept
         {
@@ -152,7 +183,10 @@ class Application::GradientJob final : public Job
             }
         }
         else
+        {
             _payload->preview = RunRasterEditPreview(_payload->input, context.cancellation);
+            _payload->memory = _payload->preview.memory;
+        }
         _payload->AccountRetainedGraph();
         if (_gate && _gate->status)
         {
@@ -191,13 +225,30 @@ class Application::GradientJob final : public Job
             }
             auto owned = std::make_unique<GradientPayload>();
             _payload.reset(owned.release());
+            _payload->preparedDisplay = _prepareDisplay;
             _payload->gate = _gate;
             _payload->ownerThread = _ownerThread;
             _payload->preparationBytes = _preparationBytes;
             _payload->retirementBytes = _retirementBytes;
             _payload->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
             auto& input = _payload->input;
-            input.layer = *layer;
+            input.prepareDisplay = _prepareDisplay;
+            input.ownerThread = _ownerIdentity;
+            _original = ticket;
+            _payload->workerTargetCapture = _commit.has_value() || _prepareDisplay;
+            if (_payload->workerTargetCapture)
+            {
+                _payload->source = _owner._session.Document();
+                if (_gate)
+                    _gate->rootOnlyCapturedOnOwner = GetCurrentThreadId() == _ownerThread;
+            }
+            else
+            {
+                // This legacy preview still lacks the complete document-source admission envelope.
+                input.layer = *layer;
+                if (_gate)
+                    _gate->targetCapturesOnOwner.fetch_add(1);
+            }
             input.selection = _owner._session.Selection();
             input.canvasWidth = _owner._session.Document()->width;
             input.canvasHeight = _owner._session.Document()->height;
@@ -212,11 +263,11 @@ class Application::GradientJob final : public Job
             input.opacity = _request.opacity;
             // Acquisition and gradient settings are separate clocks. A continued selected ordinal has a fresh
             // acquisition; a preview has a mailbox sequence. Neither is compared with the metadata sequence.
+            const auto target = _payload->workerTargetCapture ? std::optional<Guid>{} : std::optional(_request.target);
             _payload->token =
-                _owner._session.CaptureJobToken(_request.target, _commit ? _commit->acquisition : _preview->sequence);
+                _owner._session.CaptureJobToken(target, _commit ? _commit->acquisition : _preview->sequence);
             if (_commit)
             {
-                _payload->source = _owner._session.Document();
                 _payload->historyState = _owner._session.history.CaptureState();
             }
             if (_payload->token && _owner._jobs.Resume(ticket))
@@ -250,6 +301,19 @@ class Application::GradientJob final : public Job
             switch (status)
             {
             case RasterEditStatus::Ready:
+                if (_prepareDisplay)
+                {
+                    if (!_payload->preview.memory || !_payload->preview.display)
+                        error = E_UNEXPECTED;
+                    else
+                        error = static_cast<HRESULT>(
+                            _payload->preview.memory->BindAfterCompletedWork(_owner._jobs, _original));
+                    if (FAILED(error))
+                    {
+                        outcome = HostOutcome::Failed;
+                        break;
+                    }
+                }
                 if (_commit)
                 {
                     const auto* pending = _owner._session.PendingGradient();
@@ -264,9 +328,9 @@ class Application::GradientJob final : public Job
                         _owner.EndStrokePreview(_payload->publication->PreviewCommit());
                 }
                 else
-                    produced = _owner._session.PublishGradientPreview(std::move(_payload->preview.stroke),
-                                                                      _payload->token.value(), _request.opening,
-                                                                      _request.sequence);
+                    produced = _owner._session.PublishGradientPreview(
+                        std::move(_payload->preview.stroke), _payload->token.value(), _request.opening,
+                        _request.sequence, std::move(_payload->preview.display));
                 if (!produced)
                     outcome = HostOutcome::Stale;
                 break;
@@ -308,7 +372,7 @@ class Application::GradientJob final : public Job
             (void)_owner._gradientPreviews.Finish(_preview.value(), produced);
             _owner.SyncStrokePreview();
             _owner.SyncChrome(); // observes a new opening/tick and launches the latest pending request
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         if (_owner._gradientMailboxOpen && _owner._gradientPreviews.HasPending())
             (void)_owner._jobs.RequestUiActionSource(_owner._continuationAction);
@@ -353,6 +417,9 @@ class Application::GradientJob final : public Job
     const std::optional<HistoryWorkStamp> _commit;
     const std::shared_ptr<GradientWorkTestGate> _gate;
     const DWORD _ownerThread;
+    const bool _prepareDisplay;
+    const std::thread::id _ownerIdentity;
+    JobTicket _original;
     std::unique_ptr<GradientPayload, RetireGradientPayload> _payload;
     HRESULT _captureError = S_OK;
 };
@@ -361,16 +428,9 @@ Application::GradientRequest Application::CaptureGradientRequest() const noexcep
 {
     const auto* pending = _session.PendingGradient();
     const auto colors = _session.GradientColors();
-    return GradientRequest{pending->target,
-                           pending->opening,
-                           pending->sequence,
-                           pending->mask,
-                           pending->start,
-                           pending->end,
-                           _session.gradientSettings.shape,
-                           colors[0],
-                           colors[1],
-                           _session.gradientSettings.opacity};
+    const auto& settings = pending->capturedInputs ? pending->capturedInputs->settings : _session.gradientSettings;
+    return GradientRequest{pending->target, pending->opening, pending->sequence, pending->mask, pending->start,
+                           pending->end,    settings.shape,   colors[0],         colors[1],     settings.opacity};
 }
 
 void Application::CancelGradientJobs() noexcept
@@ -439,13 +499,28 @@ HRESULT Application::SubmitGradientJob(GradientRequest request, std::optional<Pr
     const auto limit = _session.RasterEditPixelLimit(*layer, request.mask);
     const auto preparation = RasterEditMemoryBytes(*layer, _session.Selection(), _session.Document()->width,
                                                    _session.Document()->height, limit, request.mask);
+    const bool prepareDisplay = !commit && _pendingDisplayInitialized;
+    std::uint64_t previewOwners = 0;
+    if (prepareDisplay)
+    {
+        const auto grid = BrushStroke::PlanGrid(*layer, request.mask, BrushSettings{}, _session.Document()->width,
+                                                _session.Document()->height);
+        const auto metadata = grid ? RasterPreviewMetadataMemoryBytes(grid->width, grid->height) : 0;
+        const auto source = _session.Document()->RetirementMemoryBytes();
+        if (!metadata || !source || source > (std::numeric_limits<std::uint64_t>::max)() - metadata)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        previewOwners = source + metadata;
+    }
     const auto history = commit ? _session.history.EditMemoryBytes(_session.Document()) : 0;
     if (preparation == 0 || (commit && history == 0) ||
         history > (std::numeric_limits<std::uint64_t>::max)() - sizeof(GradientJob) - sizeof(GradientPayload) ||
         preparation >
             (std::numeric_limits<std::uint64_t>::max)() - history - sizeof(GradientJob) - sizeof(GradientPayload))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto memory = preparation + history + sizeof(GradientJob) + sizeof(GradientPayload);
+    const auto baseMemory = preparation + history + sizeof(GradientJob) + sizeof(GradientPayload);
+    if (previewOwners > (std::numeric_limits<std::uint64_t>::max)() - baseMemory)
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto memory = baseMemory + previewOwners;
     const auto held = commit ? _session.RasterEditRetirementMemoryBytes() : 0;
     if ((commit && !held) || memory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
@@ -458,11 +533,12 @@ HRESULT Application::SubmitGradientJob(GradientRequest request, std::optional<Pr
             throw std::bad_alloc{};
         std::unique_ptr<Job> job =
             std::make_unique<GradientJob>(*this, request, _session.DocumentSerial(), _session.Generation(), limit,
-                                          preparation, preview, commit, retirement);
+                                          preparation, preview, commit, retirement, prepareDisplay);
         JobTicket ticket;
-        const auto result = static_cast<HRESULT>(_jobs.Submit(
-            job, {commit ? JobClass::Commit : JobClass::InteractivePreview, _session.DocumentSerial(), memory},
-            ticket));
+        JobOptions options{commit ? JobClass::Commit : JobClass::InteractivePreview, _session.DocumentSerial(), memory};
+        options.reserveRetainedMemory = prepareDisplay;
+        options.allowMemoryWaiting = !prepareDisplay; // A replacement cannot wait on its own retained preview.
+        const auto result = static_cast<HRESULT>(_jobs.Submit(job, options, ticket));
         if (SUCCEEDED(result))
         {
             if (commit)

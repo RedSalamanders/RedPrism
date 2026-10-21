@@ -1,16 +1,17 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Parser controls for the observed R10 AL guard. Dot-sourcing the existing helper follows
-# IsaAlGuardTests.ps1: the established inline-table controls run when this sidecar is invoked.
+# IsaAlGuardTests.ps1: the baseline runs once in IsaScanTests.ps1; this sidecar imports only fixtures.
 $repo = (Get-Item -LiteralPath $PSScriptRoot).FullName
 while (-not (Test-Path -LiteralPath (Join-Path $repo 'Build/IsaScan.cs'))) {
     $repo = Split-Path -Parent $repo
     if ([string]::IsNullOrEmpty($repo)) { throw 'Could not resolve repository root.' }
 }
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 $r10FixtureRoot = Join-Path $repo ('.build/BuildProcessTests/IsaR10AlGuard-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $r10FixtureRoot -Force)
@@ -335,7 +336,7 @@ foreach ($control in $script:R10AlGuardDraftCases) {
     }
     elseif ($control.Fault -in 'AdjacentVex','AdjacentEvex','BodyVex','BodyEvex') {
         Invoke-Control $case $false ($control.Maximum+1) 1
-        $proof = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+        $proof = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
         $expectedEvex = if($control.Fault -in 'AdjacentEvex','BodyEvex'){1}else{0}
         if($proof.EvexInstructions -ne $expectedEvex){throw 'Adjacent EVEX classification mismatch'}
     }

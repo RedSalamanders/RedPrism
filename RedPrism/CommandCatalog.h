@@ -66,6 +66,7 @@ struct CommandIds
     static constexpr int kCommandTargetLayerMask = 323;
     static constexpr int kCommandToggleMaskLink = 324;
     static constexpr int kCommandToggleLayerMask = 325;
+    static constexpr int kCommandRetryLayerList = 326;
     static constexpr int kCommandZoomFit = 400;
     static constexpr int kCommandZoomActual = 401;
     static constexpr int kCommandZoomIn = 402;
@@ -267,6 +268,7 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandTargetLayerMask, IDS_CMD_TARGET_MASK, L"cmd/layer/targetMask", kApp},
         {C::kCommandToggleMaskLink, IDS_CMD_UNLINK_MASK, L"cmd/layer/toggleMaskLink", kApp},
         {C::kCommandToggleLayerMask, IDS_CMD_DISABLE_MASK, L"cmd/layer/toggleMask", kApp},
+        {C::kCommandRetryLayerList, IDS_CMD_RETRY_LAYER_LIST, L"cmd/layer/retryList", kApp},
         {C::kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL, L"cmd/layer/flipHorizontal", kApp},
         {C::kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL, L"cmd/layer/flipVertical", kApp},
         {C::kCommandSelectAll, IDS_CMD_SELECT_ALL, L"cmd/select/all", kApp},
