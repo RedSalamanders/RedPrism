@@ -18,6 +18,10 @@ if (-not $clangFormat) {
     throw 'clang-format was not found. Install the Visual Studio C++ Clang tools component (any Visual Studio 2026 edition, not only Insiders) or LLVM.'
 }
 
+$formatterVersion = & $clangFormat --version
+if ($LASTEXITCODE -ne 0) { throw 'Could not identify the selected clang-format.' }
+Write-Host "Formatter: $formatterVersion ($clangFormat)"
+
 $sourceRoots = @('Common', 'RedPrism', 'Tests') | ForEach-Object { Join-Path $repoRoot $_ }
 $sourceFiles = Get-ChildItem -LiteralPath $sourceRoots -Recurse -File |
     Where-Object { $_.Extension -in @('.cpp', '.h') } |

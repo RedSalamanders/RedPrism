@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Prefer the discovered Visual Studio formatter bundle over unrelated PATH LLVM tools, report its version, and include formatter binary bytes in tooling evidence identity.
 - Name active native tests by context, run explainable affected scopes from the last successful iteration, reuse exact successful evidence, and qualify full profiles through one PR matrix with explicit pending and manual gates.
 - Keep hidden/capture harness canvas sizes exact on small CI desktops, verify an independent owned hidden HWND without changing display settings, report actual DPI/client dimensions, and install pinned validation dependencies in CI.
 - Ignore the legacy root-level journal-release.exe polygonal-input-journal probe; retain its local bytes and keep generated binaries out of source control.

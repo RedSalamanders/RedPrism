@@ -39,6 +39,12 @@ adopted by replacing the locked files and the lock together.
 
 First-party translation units compile as C++.
 
+`format.ps1` prefers the C++ Clang tools bundled with the discovered supported Visual Studio installation,
+then falls back to PATH and standalone LLVM. It reports the actual formatter and version. This prevents an
+unrelated global LLVM formatter from overriding the supported toolchain; tooling evidence includes the selected
+formatter's path and binary hash. Formatting uses bounded argument batches so deep checkout paths still cover
+every first-party source file within Windows process command-line limits.
+
 ## Configurations and platforms
 
 Every native project MUST map Debug, Release, and ASan Debug on x64 and ARM64 (six profiles).

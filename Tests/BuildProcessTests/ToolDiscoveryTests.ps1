@@ -19,6 +19,26 @@ foreach ($function in 'Find-RedPrismVisualStudioInstallationPath', 'Find-RedPris
 }
 Write-Host 'PASS tooldiscovery.module-exports'
 
+$installation = Find-RedPrismVisualStudioInstallationPath
+if ($installation) {
+    $bundled = @('VC/Tools/Llvm/x64/bin/clang-format.exe','VC/Tools/Llvm/bin/clang-format.exe') |
+        ForEach-Object { Join-Path $installation $_ } | Where-Object { Test-Path -LiteralPath $_ }
+    if (@($bundled).Count -and (Find-RedPrismClangFormat) -notin $bundled) {
+        throw 'An unrelated PATH formatter overrides the supported Visual Studio bundle.'
+    }
+}
+Write-Host 'PASS tooldiscovery.formatter-follows-supported-visual-studio'
+
+$formatter = Find-RedPrismClangFormat
+if ($formatter) {
+    Import-Module (Join-Path $repo 'Build/ScopedTesting.psm1') -Force
+    $fingerprint = 'formatter=' + $formatter + ':' + (Get-FileHash -LiteralPath $formatter).Hash
+    if ($fingerprint -cnotin @(Get-ScopedEnvironmentInputs -Tooling)) {
+        throw 'The selected formatter bytes are missing from tooling evidence identity.'
+    }
+}
+Write-Host 'PASS tooldiscovery.formatter-bytes-attested'
+
 # Every script that used to run its own vswhere lookup now goes through the shared, version-ranged helper.
 $buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw
 $restoreScript = Get-Content -LiteralPath (Join-Path $repo 'restore-dxui.ps1') -Raw
