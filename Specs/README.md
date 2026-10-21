@@ -50,6 +50,7 @@ When a spec, implementation, test, or document disagrees:
 | Domain | Start with |
 | --- | --- |
 | Build | [`Build/Build_Toolchain.md`](Build/Build_Toolchain.md) |
+| Qualification archive storage | [`Build/Build_QualificationArchives.md`](Build/Build_QualificationArchives.md) |
 | Packaging (from C15) | [`Build/Build_Packaging.md`](Build/Build_Packaging.md) |
 | Architecture | [`Core/Core_Architecture.md`](Core/Core_Architecture.md) |
 | Performance | [`Core/Core_PerformanceAndResources.md`](Core/Core_PerformanceAndResources.md) |

@@ -11,6 +11,13 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+Qualification archive storage follows
+[`Build_QualificationArchives.md`](../Build/Build_QualificationArchives.md).
+`Tests/BuildProcessTests/QualificationArchiveTests.ps1` exercises retained filesystem scenarios directly and
+through independent tooling validation (`validate.ps1` and `test.ps1`'s Tooling scope). Preservation receipts never
+replace source/profile/stage/PE/PDB/runtime qualification checks. The tooling runner discovers this script alongside
+the other independent BuildProcessTests; no unconditional duplicate invocation is added to native-only runs.
+
 ### Detached basic raster edits
 
 `DocumentTests` runs `rastereditwork.*` for literal legacy Fill/Clear/Invert bytes, Gray8 masks, transformed

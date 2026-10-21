@@ -74,6 +74,9 @@ application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes
 Parallel compilation requires isolated dependency outputs or an already-built immutable dependency; preserve
 failed source/object/link evidence before retrying a candidate affected by shared-output rebuilds.
 
+Persistent qualification storage follows [Build_QualificationArchives.md](Build_QualificationArchives.md).
+Collectors use `archive-qualification.ps1` with explicit frozen hashes and retain all existing semantic checks.
+
 ## Build presentation
 
 `build.ps1` MUST begin with the framed RedPrism pixel-art banner before any target, preflight, or MSBuild line. The
