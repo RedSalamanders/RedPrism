@@ -41,6 +41,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Install pinned validation dependencies
+        shell: pwsh
+        run: py -3 -m pip install -r Build/requirements-validation.txt
       - name: Independent tooling
         shell: pwsh
         run: ./validate.ps1
@@ -72,6 +75,14 @@ jobs:
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh
         run: ./Tools/Get-CiNativeScope.ps1 -VerifyInputs "${{ needs.native-scope.outputs.input_key }}" -BuildNumber ${{ needs.native-scope.outputs.build_number }}
+      - name: Prepare hosted display fixture
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./Tools/Initialize-CiDisplay.ps1
+      - name: Build native profile
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./build.ps1 -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
       - name: Retain original native qualification
         if: needs.native-scope.outputs.native != 'true'
         shell: pwsh
@@ -79,7 +90,7 @@ jobs:
       - name: Full native qualification
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh
-        run: ./test.ps1 -Full -SkipTooling -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
+        run: ./test.ps1 -Full -SkipTooling -SkipBuild -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
       - name: Retain source-profile test diagnostics
         if: always() && needs.native-scope.outputs.native == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

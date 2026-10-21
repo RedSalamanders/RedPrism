@@ -339,7 +339,7 @@ function Get-ScopedPrDelegation {
         # this branch left it.
         $baseRef = 'origin/' + $Manifest.defaultBranch
         $base = Get-ScopedMergeBase $Root $baseRef
-        $runner = @('.github/workflows/ci.yml','test.ps1','Tests/test-scopes.json','Build/ScopedTesting.psm1','Tools/Get-CiNativeScope.ps1') + @($Manifest.toolingCommands)
+        $runner = @('.github/workflows/ci.yml','test.ps1','Tests/test-scopes.json','Build/ScopedTesting.psm1','Tools/Get-CiNativeScope.ps1','Tools/Initialize-CiDisplay.ps1') + @($Manifest.toolingCommands)
         $moved = @((Invoke-ScopedGit $Root (@('diff','--name-only','--no-renames','-z',$base,$baseRef,'--') + $runner)) -split '\x00' | Where-Object { $_ })
         if ($moved.Count) {
             return & $keepLocal "$baseRef changed $($moved -join ', ') after this branch left it, so the PR would not run the reviewed version; integrate $baseRef first"
@@ -522,7 +522,7 @@ function Get-ScopedBuildAttestationKey {
 Export-ModuleMember -Function Get-ScopedBuildAttestationKey
 function Test-ScopedNativeCiProof {
     param([string[]]$ExpectedChecks,[object[]]$Jobs)
-    if($ExpectedChecks.Count -ne 6){return $false}
+    if($ExpectedChecks.Count -ne 6 -or @($ExpectedChecks|Sort-Object -Unique).Count -ne 6){return $false}
     foreach($name in $ExpectedChecks){
         $foundJobs=@($Jobs|Where-Object name -CEQ $name)
         if($foundJobs.Count -ne 1 -or $foundJobs[0].status -cne 'completed' -or $foundJobs[0].conclusion -cne 'success'){return $false}

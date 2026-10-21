@@ -220,12 +220,26 @@ try{
         $expected=@($manifest.prCoverage|Where-Object{$_.PSObject.Properties['platform']}|ForEach-Object check)
         $jobs=@($expected|ForEach-Object{[pscustomobject]@{name=$_;status='completed';conclusion='success';steps=@([pscustomobject]@{name='Full native qualification';conclusion='success'})}})
         Assert (Test-ScopedNativeCiProof $expected $jobs) 'Complete native matrix rejected'
+        Assert (-not(Test-ScopedNativeCiProof @($expected[0],$expected[0],$expected[0],$expected[0],$expected[0],$expected[0]) @($jobs[0]))) 'One successful profile counted six times'
         foreach($outcome in @('failure','cancelled','skipped','timed_out')){
             $jobs[0].conclusion=$outcome;Assert (-not(Test-ScopedNativeCiProof $expected $jobs)) "Nonpassing native result inherited: $outcome"
         }
         $jobs[0].conclusion='success';$jobs[0].steps[0].conclusion='skipped'
         Assert (-not(Test-ScopedNativeCiProof $expected $jobs)) 'A skipped/listed/inherited row was treated as actual execution'
         Assert (-not(Test-ScopedNativeCiProof $expected @($jobs|Select-Object -Skip 1))) 'Incomplete matrix inherited'
+    }
+    Case 'hosted display mutation refuses a local host before using display APIs' {
+        $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+        $start.UseShellExecute=$false;$start.CreateNoWindow=$true
+        $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+        $start.Environment['GITHUB_ACTIONS']='false'
+        foreach($argument in @('-NoProfile','-NonInteractive','-File',(Join-Path $root 'Tools/Initialize-CiDisplay.ps1'))){[void]$start.ArgumentList.Add($argument)}
+        $process=[Diagnostics.Process]::Start($start)
+        try{
+            if(-not $process.WaitForExit(10000)){$process.Kill($true);$process.WaitForExit();throw 'Display host refusal timed out.'}
+            $output=$process.StandardOutput.ReadToEnd()+$process.StandardError.ReadToEnd()
+            Assert ($process.ExitCode -ne 0 -and $output -match 'restricted to a GitHub-hosted runner') 'A local host reached display mutation'
+        }finally{$process.Dispose()}
     }
     $public=Join-Path $fixture 'public';New-Repository $public
     foreach($name in @('Example','Other')){Put (Join-Path $public "Tests/$name.Tests.Case.cpp") 'initial'}

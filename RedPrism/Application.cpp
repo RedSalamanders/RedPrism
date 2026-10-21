@@ -657,12 +657,19 @@ int Application::RunSelfTest() noexcept
     const SIZE expectedClientSize = ScaleDefaultClientSize(windowDpi);
     const DWORD windowStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
     const DWORD windowExtendedStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
+    const BOOL clientAreaRead = GetClientRect(_window.get(), &clientBounds);
     if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 ||
-        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !GetClientRect(_window.get(), &clientBounds) ||
+        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientAreaRead ||
         clientBounds.right - clientBounds.left != expectedClientSize.cx ||
         clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
-        SelfTestFailure(L"The default client area does not match the current monitor DPI.\n");
+        SelfTestFailure(std::format(L"The default client area does not match the current monitor DPI: dpi={}, "
+                                    L"read={}, client={}x{}, expected={}x{}, style=0x{:08X}, extended=0x{:08X}, "
+                                    L"desktop={}x{}.\n",
+                                    windowDpi, clientAreaRead != FALSE, clientBounds.right - clientBounds.left,
+                                    clientBounds.bottom - clientBounds.top, expectedClientSize.cx,
+                                    expectedClientSize.cy, windowStyle, windowExtendedStyle,
+                                    GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)));
         return 2;
     }
 
