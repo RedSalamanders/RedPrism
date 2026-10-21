@@ -25,6 +25,8 @@ if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls 
 if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaMarkedTableTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'PDB-marked table parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 
