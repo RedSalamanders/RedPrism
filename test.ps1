@@ -34,6 +34,7 @@ if('Tooling' -in $Suites){
     if($LASTEXITCODE -ne 0){throw 'Independent validation failed.'}
 }
 if(-not @($Suites|Where-Object{$_ -ne 'Tooling'}).Count){Write-Host 'Independent tooling passed; native coverage NOT_EVALUATED';exit 0}
+& (Join-Path $repoRoot 'Tools/Fold-Changelog.ps1') -Check
 $nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
     throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'

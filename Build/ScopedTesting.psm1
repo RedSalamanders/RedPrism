@@ -145,7 +145,7 @@ function Get-ScopedTestPlan {
     if (-not $Scopes.Count -and -not $Full) {
         foreach ($path in $ChangedPaths) {
             if ($path -match '(^/|(^|/)\.\.(/|$)|:|\\)') { throw "Expected a repository-relative Git path: $path" }
-            if ($path -match '(^README\.md$|(^|/)AGENTS\.md$|^(docs|Specs|\.agents|Changes)/.*\.md$)') {
+            if ($path -match '(^(README|CHANGELOG)\.md$|(^|/)AGENTS\.md$|^(docs|Specs|\.agents|Changes)/.*\.md$)') {
                 $targets = @($Manifest.scopes | Where-Object { -not $_.native } | ForEach-Object name)
                 foreach ($name in $targets) { [void]$selected.Add($name) }
                 $reasons.Add([pscustomobject]@{path=$path; scopes=$targets; reason='documentation/skill validation; no native test input'})
@@ -300,7 +300,7 @@ function Get-ScopedPrJobs {
 }
 
 function Get-ScopedPrCandidateScopes {
-    # The scopes the PR checks run for a local profile. Every RedXe check runs on every pull request (ci.yml has no path
+    # The scopes the PR checks run for a local profile. Every native check runs on every pull request (ci.yml has no path
     # filter or job condition), so they do not depend on what changed.
     param([object] $Manifest, [string] $Platform, [string] $Configuration)
     return @(Get-ScopedPrJobs $Manifest $Platform $Configuration | ForEach-Object { $_.scopes } | Sort-Object -Unique)
@@ -381,7 +381,7 @@ function Get-ScopedSourceMap {
         # Markdown in validator identities because link validators read it.
         if($path -match '^(Measurements|legacy|Specs/(TestRuns|Plans/Done))/' -and $path -notmatch '\.md$'){continue}
         if($CompiledOnly -and ($path -match '^(Measurements|legacy|docs|Specs/(Plans|TestRuns))/' -or
-            $path -match '(^README\.md$|(^|/)AGENTS\.md$|^(Specs|\.agents|Changes)/.*\.md$)')){continue}
+            $path -match '(^(README|CHANGELOG)\.md$|(^|/)AGENTS\.md$|^(Specs|\.agents|Changes)/.*\.md$)')){continue}
         $full=Join-Path $Root $path
         if(-not(Test-Path -LiteralPath $full -PathType Leaf)){
             if(Test-Path -LiteralPath $full -PathType Container){continue}

@@ -1,1 +1,0 @@
-- Name active native tests by context, run explainable affected scopes from the last successful iteration, reuse exact successful evidence, and qualify full profiles through one PR matrix with explicit pending and manual gates.

@@ -29,7 +29,7 @@ try{
         }
     }
     Case 'prose omits native tests, embedded Markdown does not, and empty changes select nothing' {
-        $plan=Get-ScopedTestPlan $manifest @('README.md')
+        $plan=Get-ScopedTestPlan $manifest @('README.md','CHANGELOG.md')
         Assert (@($manifest.scopes|Where-Object{$_.native -and $_.name -in $plan.scopes}).Count -eq 0) 'Prose selected native tests'
         Assert ((Get-ScopedTestPlan $manifest @('res/Welcome.md')).full) 'Embedded content mistaken for prose'
         Assert ((Get-ScopedTestPlan $manifest @()).scopes.Count -eq 0) 'Empty changes selected tests'
