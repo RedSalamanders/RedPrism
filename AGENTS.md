@@ -14,9 +14,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Package manager: vcpkg (`vcpkg.json` + `vcpkg-tool.json`)
 - Graphics: Direct3D 11, DXGI, DirectWrite, DxUi (from C2). No GDI text. No chrome HWND over the swap chain.
 
-## Canonical guidance
-
-### Drive-root output policy
+## Drive-root output policy
 
 Do not create scratch, caches, evidence, copied checkouts, or other output directories directly at a drive root.
 Use repository-local generated outputs or an existing approved workspace. The only permitted new drive-root
@@ -27,6 +25,8 @@ authorization. Keep outputs beneath the approved root; do not invent sibling roo
 runner-specific ownership markers and authorization. Historical cleanup inventories and preserves useful
 evidence/recovery data, checks process use, repairs live junction/worktree references, and verifies preservation
 before removal. Never follow junctions during cleanup or leave compatibility junctions at forbidden old roots.
+
+## Canonical guidance
 
 - This file is the repository-wide instruction source.
 - `Specs/README.md` defines specification authority and the plan lifecycle.
