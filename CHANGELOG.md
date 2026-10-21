@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Keep the concurrent thumbnail test's independent 23x15 pixel oracle explicit in loop bounds and divisors so newer MSVC Release optimization can prove the divisors are nonzero without suppressing warnings; the focused Release Document suite passes.
+- Frame synthetic actual-pixel canvas fixtures at the document origin so their literal drag points reach the canvas at 96 DPI as well as larger DPI scales; retain all selection/brush/pixel assertions and add independent viewport regressions. Native CI qualification remains required.
 - Prefer the discovered Visual Studio formatter bundle over unrelated PATH LLVM tools, report its version, and include formatter binary bytes in tooling evidence identity.
 - Name active native tests by context, run explainable affected scopes from the last successful iteration, reuse exact successful evidence, and qualify full profiles through one PR matrix with explicit pending and manual gates.
 - Keep hidden/capture harness canvas sizes exact on small CI desktops, verify an independent owned hidden HWND without changing display settings, report actual DPI/client dimensions, and install pinned validation dependencies in CI.

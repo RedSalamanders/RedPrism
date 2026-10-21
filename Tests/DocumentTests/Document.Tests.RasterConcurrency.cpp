@@ -113,19 +113,26 @@ bool CheckRegion(const Raster& raster)
 
 bool CheckThumbnail(const Raster& raster)
 {
-    const Raster thumb = Raster::MakeThumbnail(raster, 23);
-    if (thumb.Width() != 23 || thumb.Height() != 15 || thumb.Data() == nullptr)
+    constexpr int kThumbnailWidth = 23;
+    constexpr int kThumbnailHeight = 15;
+    const Raster thumb = Raster::MakeThumbnail(raster, kThumbnailWidth);
+    if (thumb.Width() != kThumbnailWidth || thumb.Height() != kThumbnailHeight)
     {
         return false;
     }
-    for (int y = 0; y < thumb.Height(); ++y)
+    const std::uint8_t* pixels = thumb.Data();
+    if (pixels == nullptr)
     {
-        for (int x = 0; x < thumb.Width(); ++x)
+        return false;
+    }
+    for (int y = 0; y < kThumbnailHeight; ++y)
+    {
+        for (int x = 0; x < kThumbnailWidth; ++x)
         {
             for (int c = 0; c < raster.Channels(); ++c)
             {
-                if (thumb.Data()[y * thumb.Stride() + x * raster.Channels() + c] !=
-                    Expected(x * kWidth / thumb.Width(), y * kHeight / thumb.Height(), c))
+                if (pixels[y * thumb.Stride() + x * raster.Channels() + c] !=
+                    Expected(x * kWidth / kThumbnailWidth, y * kHeight / kThumbnailHeight, c))
                 {
                     return false;
                 }

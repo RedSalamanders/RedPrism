@@ -183,6 +183,13 @@ Before initializing the renderer, `--self-test` MUST verify:
 - extended style includes `WS_EX_NOREDIRECTIONBITMAP`
 - client size equals the 1280×800 logical canvas scaled to that DPI
 
+Synthetic document-pointer scenarios MUST explicitly frame their intended document region inside the canvas hole.
+At 100% zoom a centered 1280×800 document is larger than the 96-DPI canvas area; document-space points such as
+(40, 40) can otherwise map outside the input surface. The selection, brush, retouch and pixel-edit fixtures use
+an actual-pixel viewport anchored at the document origin, preserving every literal selection/pixel assertion.
+Independent viewport controls cover 96/144/216-DPI canvas sizes and prior zoom/pan state. This harness framing
+does not change ordinary window sizing, production pan/zoom, display settings or pointer-loss handling.
+
 ## Validation
 
 ```powershell

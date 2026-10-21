@@ -166,6 +166,7 @@
     <ClInclude Include="Runtime.Tests.DocumentLifecycleTestGate.h" />
     <ClInclude Include="Runtime.Tests.ApplicationShutdownTestProbe.h" />
     <ClInclude Include="Runtime.Tests.ApplicationProcessingTestProbe.h" />
+    <ClInclude Include="Runtime.Tests.ViewportFixture.h" />
     <ClInclude Include="Runtime.Tests.ColorWorkTestGate.h" />
     <ClInclude Include="Runtime.Tests.SizingWorkTestGate.h" />
     <ClInclude Include="Runtime.Tests.RasterEditTestGate.h" />
