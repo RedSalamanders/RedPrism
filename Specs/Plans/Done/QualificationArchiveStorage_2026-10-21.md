@@ -49,3 +49,12 @@ tooling runner, all 24 scoped-testing regressions, complete independent validati
 files. A fresh two-attempt ReFS fixture verifies independent read-only copies, exact expected hashes and retained
 failure exit status. These tooling results do not qualify native application profiles selected by conservative
 scope fallback; pending or unavailable hosted execution remains separate from successful local storage tests.
+
+## Owner-authorized publication (2026-10-21)
+
+After reviewing the local results and being told that PR #11's hosted checks were refused before any steps by
+account payments/spending limits, the owner explicitly selected "Merge #11 using the verified local results".
+This authorizes an ordinary matching-head merge of the completed storage tooling despite unavailable CI. The
+final publication commit records that authorization and its changelog entry only; writer/test source bytes remain
+those independently reviewed and tested. The billing refusal is not successful qualification. Existing native,
+platform, focus, capability and performance gates remain open under their owning plans and contracts.
