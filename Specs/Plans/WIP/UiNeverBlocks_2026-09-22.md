@@ -2,6 +2,7 @@
 
 ## Current delivery checklist — 2026-10-21
 
+- [x] Request the guarded renewed native ARM64 Release run as `c805d5d638eda67858a4d39f838f3656a5e78298`, after all 30 wrapper controls and three typed refusal children pass. [Run 39541110772](https://github.com/RedSalamanders/RedPrism/actions/runs/39541110772) is in progress; actual native qualification remains open.
 - [x] Publish the locally qualified Polygonal DPI fixture as `ef1b2850971d4f5c449d8ab094dd5417951797f3`; approved branch destination SHA verified. Request and independently qualify renewed native Release next; full P1 remains WIP.
 - [x] Qualify the Polygonal DPI fixture portability change in full x64 Debug/Release/real ASan and all three ARM64 cross-builds: retain all 12,298 Application predecessors plus exactly three setup facts (12,301 total), 155 stages and all four suite rosters. Preserve the original native failure and independent clamp reference; renewed native Release remains open below. [Fixture and validation](../../TestRuns/P1PolygonalDpiFixture_2026-10-21.md).
 - [x] Commit/push the qualified Undo/Redo shutdown step as `d9295d9fc6e6d746e58ba5d6e6a87f4eb5291f4a`; the approved branch destination SHA is verified. Native runtime, ordinary activation and parent P1 gates remain open.

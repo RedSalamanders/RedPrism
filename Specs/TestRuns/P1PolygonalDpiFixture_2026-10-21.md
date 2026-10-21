@@ -93,3 +93,14 @@ rectangle, original writer/ticket, selection/history, five-point current-view cl
 This local proof does not identify which combined term failed on the preceding native runner. Renew native
 Release using the published fixture before claiming that assertion closed. ARM64 builds are compilation
 and instrumentation proof only. Final-source analysis, broader P1 admission/activation and G1 remain open.
+
+## Renewed native Release request
+
+The separate comment-only CI commit `c805d5d638eda67858a4d39f838f3656a5e78298` follows the verified
+local publication. Every helper/workflow remote blob matches its committed bytes. The unchanged native
+wrapper passes all 30 controls and three exact-refusal children. Existing workflow guards, runner,
+permissions, Release-only selection and failure bounds remain unchanged.
+
+[Native run 39541110772](https://github.com/RedSalamanders/RedPrism/actions/runs/39541110772) is observed in progress. Its watcher preserves the selected single attempt
+under `.build/P1Evidence/p1-native-arm-hosted-r5/`. This request establishes no passing native runtime,
+closing identity, Debug/ASan result, ordinary activation, G1 or P1 completion. Earlier failures remain preserved.
