@@ -15,7 +15,8 @@ Status: complete same-source local component qualification. Full P1, current-sou
 - [x] ARM64 Debug, Release and genuinely instrumented ASan cross-builds; native runtime remains separate.
 - [x] Same-source Release analysis, all 1,022 effective analysis command/object/link records and fresh SAL controls.
 - [ ] Complete remaining ordinary caller/phase/admission/lifetime grid outside these settled load commands.
-- [ ] Record actual results, update the parent checklist, commit and push the qualified component.
+- [x] Record actual results, update the parent checklist, commit and push the qualified component.
+  Published as `f4c712c21c0cfcacdeaf16db9e1e225662bd38a9`; the approved remote branch SHA is independently verified.
 
 ## Compatibility and boundaries
 
@@ -90,3 +91,11 @@ Archives/readers remain under `Z:/src/RedPrism/.build/P1Evidence/p1-loaded-layer
 `Z:/src/RedPrism/.build/P1Drafts/LoadedSelectionQualification-Main-r1/`.
 The failed original Release ISA attempt and its narrower ARM64 candidate remain preserved above.
 The preceding hosted c805d5d native run is a different source and does not qualify this component.
+
+## Publication
+
+The qualified component is committed and pushed as `f4c712c21c0cfcacdeaf16db9e1e225662bd38a9` on
+`codex/p1-opacity-host-proof` in `RedSalamanders/RedPrism`. The exact destination SHA is verified.
+Final `format.ps1 -Check`, `validate-skills.ps1` and staged whitespace checks pass; every frozen
+non-Markdown qualification input remains unchanged. This publication closes this component only.
+The remaining caller grid, full G1 and parent P1 Done gates stay open.
