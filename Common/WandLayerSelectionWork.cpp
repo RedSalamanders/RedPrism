@@ -31,11 +31,7 @@ bool ValidSettings(const WandSettings& settings, bool composite = false) noexcep
 }
 const ImageLayer* CapturedWandLayer(const CanvasDocument& document, const std::optional<Guid>& id) noexcept
 {
-    if (id)
-        for (const auto& layer : document.layers)
-            if (layer.id == id.value())
-                return &layer;
-    return nullptr;
+    return id ? document.layers.FindKey(id.value()) : nullptr;
 }
 class WandByteSum final
 {
@@ -80,7 +76,8 @@ WandLayerSelectionAdmission EvaluateWandLayerSelectionAdmission(const WandLayerS
 
     // Preserve refusal for the old incomplete New-only plan. The bounded adapter uses a separately
     // admitted fixed arena and exact-reserve output vectors; none may escape the worker arena.
-    if (mode == SelectionMode::Add || (mode == SelectionMode::Subtract && hasCurrentSelection))
+    if (plan.requiresCanvasClip || mode == SelectionMode::Add ||
+        (mode == SelectionMode::Subtract && hasCurrentSelection))
     {
         if (!plan.booleanWorkspaceBytes || !plan.booleanOutputBytes || !plan.booleanPhaseBytes)
             return WandLayerSelectionAdmission::UnknownClipperWorkspace;
@@ -185,12 +182,24 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandCompositeSele
     return PrepareWandSelectionInput(point, settings, antialiased, mode, true);
 }
 
+std::optional<WandLayerSelectionInput> DocumentSession::PrepareLoadedLayerSelectionInput(bool mask) const
+{
+    const auto* target = ActiveLayer();
+    if (!target || (mask ? !target->mask || !target->mask->asset.image.HasStorage()
+                         : target->isGroup || !target->asset || !target->asset->image.HasStorage()))
+        return std::nullopt;
+    return PrepareWandSelectionInput({}, {}, selectionAntialiased, SelectionMode::New, false, false,
+                                     mask ? LayerSelectionSource::MaskDark : LayerSelectionSource::LayerAlpha);
+}
+
 std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInput(Vec2 point, WandSettings settings,
                                                                                   bool antialiased, SelectionMode mode,
-                                                                                  bool composite,
-                                                                                  bool preservePanel) const
+                                                                                  bool composite, bool preservePanel,
+                                                                                  LayerSelectionSource source) const
 {
     if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
+        source > LayerSelectionSource::MaskDark ||
+        (source != LayerSelectionSource::ColorMatch && (composite || preservePanel || mode != SelectionMode::New)) ||
         !ValidPoint(point, _document->width, _document->height))
         return std::nullopt;
     auto authority = CaptureHistoryRestoreAuthority();
@@ -213,6 +222,7 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInpu
                                    history.CaptureState(), _document.value(), _activeLayerID, composite,
                                    outputHistoryBytes);
     result._panelAuthority = std::move(panelAuthority);
+    result._source = source;
     return result;
 }
 
@@ -259,7 +269,10 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     };
     if (cancellation.IsCancelled())
         return refused(WandFailure::Cancelled);
+    const bool loaded = input._source != LayerSelectionSource::ColorMatch;
     if (!input._valid || !input._document || input._token.target || input._mode > SelectionMode::Subtract ||
+        input._source > LayerSelectionSource::MaskDark ||
+        (loaded && (input._usesComposite || input._panelAuthority || input._mode != SelectionMode::New)) ||
         !ValidSettings(input._settings, input._usesComposite) || input._document->width != input._token.canvasWidth ||
         input._document->height != input._token.canvasHeight ||
         !ValidPoint(input._point, input._document->width, input._document->height))
@@ -274,9 +287,48 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
         return refused(WandFailure::Cancelled);
     const auto& before = input._document.value();
     const ImageLayer* target = input._usesComposite ? nullptr : CapturedWandLayer(before, input._active);
-    const Raster source = input._usesComposite ? composite : target && target->asset ? target->asset->image : Raster{};
+    const bool mask = input._source == LayerSelectionSource::MaskDark;
+    const Raster source = input._usesComposite      ? composite
+                          : mask                    ? (target && target->mask ? target->mask->asset.image : Raster{})
+                          : target && target->asset ? target->asset->image
+                                                    : Raster{};
     std::optional<std::vector<SelectionLoop>> outline;
-    if (!source.HasStorage())
+    if (loaded)
+    {
+        if (!target || !source.HasStorage() || (!mask && target->isGroup))
+            return refused(WandFailure::Memory);
+        WandFailure tracedFailure = WandFailure::None;
+        outline = mask ? MaskTracing::DarkPixels(source, &tracedFailure, cancellation)
+                       : MaskTracing::OpaquePixels(source, &tracedFailure, cancellation);
+        if (tracedFailure != WandFailure::None)
+            return refused(tracedFailure);
+        if (!Checkpoint(observer, WandLayerSelectionStage::SourceReady, cancellation))
+            return refused(WandFailure::Cancelled);
+        // An empty mask/alpha trace is the reference no-op, even for New. It must not deselect.
+        if (!outline)
+            return PreparedWandLayerSelection(std::move(input));
+        const auto map =
+            PixelToDocument(mask ? MaskTransform(*target) : target->transform, source.Width(), source.Height());
+        std::uint64_t work = 0;
+        for (auto& loop : outline.value())
+        {
+            if (cancellation.IsCancelled())
+                return refused(WandFailure::Cancelled);
+            for (auto& point : loop)
+            {
+                if (((work++ & 63) == 0) && cancellation.IsCancelled())
+                    return refused(WandFailure::Cancelled);
+                point = map.Apply(point);
+            }
+        }
+        // Load commands always clip in document space, including New, as ApplySelection does.
+        outline =
+            BoundedSelectionBoolean::Run(outline.value(), SelectionGeometry::Rect(0, 0, before.width, before.height),
+                                         BoundedSelectionBoolean::Operation::Intersect, cancellation);
+        if (!outline)
+            return refused(cancellation.IsCancelled() ? WandFailure::Cancelled : WandFailure::Memory);
+    }
+    else if (!source.HasStorage())
     {
         // Every sampled pixel is transparent, so every sample size, tolerance and connectivity selects the
         // complete canvas. Construct its exact clockwise rectangle without document-sized pixel/trace buffers.
@@ -369,9 +421,12 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionP
     if (ValidateDocument(after) != DocumentStatus::Ok)
         return refused(WandFailure::Memory);
     result._document = std::move(after);
-    result._history = DocumentHistory::PrepareEdit(
-        result._input._history, result._input._document, result._input._active, result._document, result._input._active,
-        matched ? L"Magic Wand" : L"Deselect", cancellation, historyObserver, memory);
+    result._history = DocumentHistory::PrepareEdit(result._input._history, result._input._document,
+                                                   result._input._active, result._document, result._input._active,
+                                                   loaded    ? (mask ? L"Load Mask Selection" : L"Load Layer Selection")
+                                                   : matched ? L"Magic Wand"
+                                                             : L"Deselect",
+                                                   cancellation, historyObserver, memory);
     if (cancellation.IsCancelled())
         return refused(WandFailure::Cancelled);
     if (!result._history)
@@ -453,16 +508,27 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandCompositeSe
     return PlanWandSelectionMemory(point, settings, true, mode);
 }
 
-std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMemory(Vec2 point, WandSettings settings,
-                                                                                     bool composite, SelectionMode mode,
-                                                                                     bool preservePanel) const noexcept
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanLoadedLayerSelectionMemory(bool mask) const noexcept
 {
+    return PlanWandSelectionMemory({}, {}, false, SelectionMode::New, false,
+                                   mask ? LayerSelectionSource::MaskDark : LayerSelectionSource::LayerAlpha);
+}
+
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMemory(
+    Vec2 point, WandSettings settings, bool composite, SelectionMode mode, bool preservePanel,
+    LayerSelectionSource sourceKind) const noexcept
+{
+    const bool loaded = sourceKind != LayerSelectionSource::ColorMatch;
+    const bool mask = sourceKind == LayerSelectionSource::MaskDark;
     if (!_document || mode > SelectionMode::Subtract || !ValidSettings(settings, composite) ||
+        sourceKind > LayerSelectionSource::MaskDark ||
+        (loaded && (composite || preservePanel || mode != SelectionMode::New)) ||
         !ValidPoint(point, _document->width, _document->height) || _document->width > kMaxCanvasSide ||
         _document->height > kMaxCanvasSide ||
         (preservePanel ? !PanelWandEligible() : !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority())))
         return std::nullopt;
     WandLayerSelectionMemoryPlan plan;
+    plan.requiresCanvasClip = loaded;
     const auto historyBytes = history.EditMemoryBytes(_document);
     auto retirement = history.RetirementMemoryBytes(_document);
     if (!historyBytes || !retirement)
@@ -484,8 +550,12 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
         return std::nullopt;
     plan.captureHistoryBytes = base.value;
     const ImageLayer* target = composite ? nullptr : CapturedWandLayer(_document.value(), _activeLayerID);
-    const Raster source = target && target->asset ? target->asset->image : Raster{};
-    plan.transparentShortcut = !composite && !source.HasStorage();
+    const Raster source = mask                      ? (target && target->mask ? target->mask->asset.image : Raster{})
+                          : target && target->asset ? target->asset->image
+                                                    : Raster{};
+    if (loaded && (!target || !source.HasStorage() || (!mask && target->isGroup)))
+        return std::nullopt;
+    plan.transparentShortcut = !loaded && !composite && !source.HasStorage();
     if (plan.transparentShortcut)
     {
         // Exact one-loop/four-point result, vector proxies and immutable root/control included.
@@ -493,8 +563,9 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
     }
     else
     {
-        const auto width = static_cast<std::uint64_t>(_document->width);
-        const auto height = static_cast<std::uint64_t>(_document->height);
+        // Load traces the original raster, which may be larger than the canvas. Never admit by canvas size.
+        const auto width = static_cast<std::uint64_t>(loaded ? source.Width() : _document->width);
+        const auto height = static_cast<std::uint64_t>(loaded ? source.Height() : _document->height);
         const auto pixels = width * height; // positive sides are bounded by kMaxCanvasSide above
         plan.sampledPixelsBytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(4 * pixels));
         if (!plan.sampledPixelsBytes)
@@ -510,7 +581,7 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
         }
         plan.maskBytes = pixels; // reserve exactly N once, then initialize within that capacity
         plan.vertexBytes = (width + 1) * (height + 1);
-        if (settings.contiguous)
+        if (!loaded && settings.contiguous)
         {
             // Each filled run owns previously unselected pixels. Above/below scans total at most 2N,
             // and each scan step pushes at most one seed, plus the initial seed. Pinned MSVC geometric
@@ -538,7 +609,8 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMe
     // recycle pool. Carry that capacity through later phases instead of assuming the process has freed it.
     plan.maskPhaseBytes = maskPhase.value;
     plan.tracePhaseBytes = tracePhase.value;
-    const bool boolean = mode == SelectionMode::Add || (mode == SelectionMode::Subtract && _document->selection);
+    const bool boolean =
+        loaded || mode == SelectionMode::Add || (mode == SelectionMode::Subtract && _document->selection);
     if (boolean)
     {
         const BoundedSelectionBoolean::Limits limits;

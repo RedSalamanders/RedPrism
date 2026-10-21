@@ -86,9 +86,9 @@ class Application::WandLayerHostJob final : public Job
 {
   public:
     WandLayerHostJob(Application& owner, HistoryWorkStamp stamp, HostWandLayerNewInput request,
-                     std::uint64_t retirement, std::uint64_t outlineLimit) noexcept
+                     std::uint64_t retirement, std::uint64_t outlineLimit, LayerSelectionSource source) noexcept
         : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement), _outlineLimit(outlineLimit),
-          _authority(owner._session.CaptureHistoryRestoreAuthority()),
+          _source(source), _authority(owner._session.CaptureHistoryRestoreAuthority()),
           _panelAuthority(request.panelOpening ? owner._session.CapturePanelWandAuthority() : std::nullopt),
           _gate(owner._wandLayerHostTestGate), _outputGate(owner._wandOutputLifetimeTestGate),
           _ownerThread(GetCurrentThreadId()), _trace(owner._traceWandForTest)
@@ -185,10 +185,12 @@ class Application::WandLayerHostJob final : public Job
                     throw std::bad_alloc{};
             }
             _payload->input =
-                (_request.panelOpening ? _owner._session.PreparePanelWandLayerSelectionInput(
-                                             _request.point, _request.settings, _request.antialiased, _request.mode)
-                                       : _owner._session.PrepareWandLayerSelectionInput(
-                                             _request.point, _request.settings, _request.antialiased, _request.mode));
+                (_source != LayerSelectionSource::ColorMatch
+                     ? _owner._session.PrepareLoadedLayerSelectionInput(_source == LayerSelectionSource::MaskDark)
+                 : _request.panelOpening ? _owner._session.PreparePanelWandLayerSelectionInput(
+                                               _request.point, _request.settings, _request.antialiased, _request.mode)
+                                         : _owner._session.PrepareWandLayerSelectionInput(
+                                               _request.point, _request.settings, _request.antialiased, _request.mode));
             if (_trace)
                 std::printf("WAND CAPTURE input=%d point=%.3f,%.3f generation=%llu\n", _payload->input.has_value(),
                             _request.point.x, _request.point.y,
@@ -269,10 +271,18 @@ class Application::WandLayerHostJob final : public Job
             ++_outputGate->publishedOutputs;
         }
         if (outcome == HostOutcome::Failed)
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage,
-                                        _payload && _payload->failure == WandFailure::TooDetailed
-                                            ? IDS_ERROR_WAND_DETAILED
-                                            : IDS_ERROR_WAND_MEMORY);
+        {
+            const auto message = _payload && _payload->failure == WandFailure::TooDetailed
+                                     ? (_source == LayerSelectionSource::ColorMatch ? IDS_ERROR_WAND_DETAILED
+                                                                                    : IDS_ERROR_SELECTION_DETAILED)
+                                     : IDS_ERROR_WAND_MEMORY;
+            if (_source != LayerSelectionSource::ColorMatch)
+            {
+                ++_owner._errorsShown;
+                _owner._lastErrorId = message;
+            }
+            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, message);
+        }
         _owner._wandLayerHostTicket.reset();
         _owner._wandLayerHostStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
@@ -307,6 +317,7 @@ class Application::WandLayerHostJob final : public Job
     const HostWandLayerNewInput _request;
     const std::uint64_t _retirement;
     const std::uint64_t _outlineLimit;
+    const LayerSelectionSource _source;
     const HistoryRestoreAuthority _authority;
     const std::optional<PanelWandAuthority> _panelAuthority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
@@ -319,7 +330,22 @@ class Application::WandLayerHostJob final : public Job
     bool _captureAttempted = false;
 };
 
+HRESULT Application::StartLoadedLayerSelection(bool mask) noexcept
+{
+    const auto* target = _session.ActiveLayer();
+    if (!target || (mask ? !target->mask || !target->mask->asset.image.HasStorage()
+                         : target->isGroup || !target->asset || !target->asset->image.HasStorage()))
+        return S_OK; // Missing/blank sources preserve the exact reference no-op.
+    return StartLayerSelection(HostWandLayerNewInput{{}, {}, _session.selectionAntialiased},
+                               mask ? LayerSelectionSource::MaskDark : LayerSelectionSource::LayerAlpha);
+}
+
 HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept
+{
+    return StartLayerSelection(input, LayerSelectionSource::ColorMatch);
+}
+
+HRESULT Application::StartLayerSelection(const HostWandLayerNewInput& input, LayerSelectionSource source) noexcept
 {
     if (_wandLayerHostTicket ||
         !(input.panelOpening ? _session.IsPanelWandOpeningCurrent(input.panelOpening.value()) &&
@@ -334,8 +360,10 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
     if (input.point.x < 0 || input.point.y < 0 || input.point.x >= document->width || input.point.y >= document->height)
         return S_OK; // The direct reference ignores outside clicks; a valid in-canvas no-match deselects.
     const auto plan =
-        (input.panelOpening ? _session.PlanPanelWandLayerSelectionMemory(input.point, input.settings, input.mode)
-                            : _session.PlanWandLayerSelectionMemory(input.point, input.settings, input.mode));
+        (source != LayerSelectionSource::ColorMatch
+             ? _session.PlanLoadedLayerSelectionMemory(source == LayerSelectionSource::MaskDark)
+         : input.panelOpening ? _session.PlanPanelWandLayerSelectionMemory(input.point, input.settings, input.mode)
+                              : _session.PlanWandLayerSelectionMemory(input.point, input.settings, input.mode));
     if (!plan)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const std::uint64_t metadata =
@@ -370,8 +398,8 @@ HRESULT Application::StartWandLayerSelection(const HostWandLayerNewInput& input)
     {
         if (_wandLayerHostTestGate)
             _wandLayerHostTestGate->reservationBytes = memory;
-        std::unique_ptr<Job> job =
-            std::make_unique<WandLayerHostJob>(*this, _wandLayerHostStamp.value(), input, retirement, outline.value());
+        std::unique_ptr<Job> job = std::make_unique<WandLayerHostJob>(*this, _wandLayerHostStamp.value(), input,
+                                                                      retirement, outline.value(), source);
         JobTicket ticket;
         result = static_cast<HRESULT>(_jobs.Submit(job,
                                                    {.kind = JobClass::Selection,

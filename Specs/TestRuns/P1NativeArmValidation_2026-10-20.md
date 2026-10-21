@@ -153,3 +153,18 @@ All five executable products are AA64, and each executable has a matching full P
 (Evidence: `main-failed-identity-and-rosters-r3.json`; downloaded products under `Artifacts/ARM64/Release/`; matching readable summaries under `MainPdbSummaries-r3/`; aggregate hashes in `download-manifest.json`.)
 
 This remains a failed native ARM64 Release run. Product identity and passing suite receipts do not override the DPI failure. The evidence does not establish its native cause, a repair, a passing run on newer source, ARM64 Debug or ASan qualification, performance qualification, G1, or P1 completion. Preserve the earlier failed and incomplete attempts above as separate records; this observation does not replace or reclassify them.
+
+## Hosted r5 observed failure — 2026-10-21
+
+Run [39541110772](https://github.com/RedSalamanders/RedPrism/actions/runs/39541110772), source
+`c805d5d638eda67858a4d39f838f3656a5e78298`, completes with canonical child PID 9936 / exit 1 and Application
+exit 2. Its final stderr is `The default client area does not match the current monitor DPI.` The stdout
+ends after `polygonal-dispatch-host checks=729 failures=0 reached=64`,
+`polygonal-press-host checks=1002 failures=0 reached=81` and `BEGIN self-test.RunJobShutdownSelfTest`.
+
+These are observed subsets only. The actual grouped assertion is in the later normal self-test window setup;
+the last BEGIN line does not prove a shutdown failure. No geometry/style/DPI term is identified by that message.
+Timeout, hang and root cause are not established. Terminal progress records no owned Application processes and
+no diagnostic errors. Original logs, five executable/PDB pairs and source/environment records are downloaded
+under `Z:/src/RedPrism/.build/P1Evidence/p1-native-arm-hosted-r5/`; independent source/environment/product
+qualification remains due. This older source does not qualify the subsequent load-selection/scanner component.

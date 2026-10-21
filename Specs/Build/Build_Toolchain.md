@@ -791,3 +791,20 @@ names, the exact matching PE/PDB procedure range and its owning contribution are
 function prefixes/suffixes, a different object, and function-name case changes MUST remain refused.
 Linker path casing alone MUST NOT reject an otherwise identical approved runtime procedure. This rule
 adds no runtime allowlist entry and grants no whole-object exemption.
+
+### Unsigned R9D / RCX / R8 terminal DWORD table
+
+Recognize only the observed seven-row, 30-byte `CMP R9D,max; JA rel8; LEA RCX,imagebase;
+MOVSXD RAX,R9D; MOV R8D,[RCX+4*RAX+tableRva]; ADD R8,RCX; JMP R8` form. The unsigned maximum
+is 1–127; it establishes a nonnegative signed-extended index. Every guard, dispatch, complete body
+and table listing row MUST match the PE without overlaps or unknown instructions. One valid owning
+PDB procedure (bounded to 1 MiB) and its anonymous untyped same-contribution terminal data symbol
+prove exactly max+1 aligned DWORDs. Earlier anonymous data does not qualify this form.
+
+The body ends at RET or RET plus exact `0f 1f 00` alignment. Default and case targets are known
+forward body boundaries after dispatch and before data; the default is represented in the table.
+Direct edges cannot enter the guard interior, instruction interiors, padding or data. Other indirect
+jumps and orphan prefixes refuse the proof. Candidate body collection grants no exemption. Only
+proved table bytes receive data status; real VEX/EVEX instructions remain gated everywhere else.
+`IsaR9dRcxR8Tests.ps1` contributes 85 encoded controls, including conflicting scopes and genuine
+vector body/target/adjacent cases. [Failure and qualification](../TestRuns/IsaR9dRcxR8_2026-10-21.md).

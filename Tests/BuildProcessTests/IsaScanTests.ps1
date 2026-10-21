@@ -11,6 +11,8 @@ Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
 if ($LASTEXITCODE -ne 0) { throw 'Shared inline-table parser baseline failed.' }
 & (Join-Path $PSScriptRoot 'IsaR8RaxRdxTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded R8/RAX/RDX interior DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR9dRcxR8Tests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Unsigned R9D/RCX/R8 terminal table controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRsiDwordTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RSI terminal DWORD parser controls failed.' }
 Write-Host 'BEGIN isa-rsi64-terminal-controls'

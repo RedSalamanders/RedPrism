@@ -490,6 +490,15 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   folder, a blank layer or an image with no opaque pixel. Both refuse an outline past 8 000 000 pixel edges (the
   wand's limit) or one that cannot be allocated: false with `failure` TooDetailed or Memory and the selection
   unchanged, so the host can say so instead of silently loading nothing (`failure` stays None for nothing to trace).
+- Ordinary settled Load Layer / Load Mask Selection commands MUST enter the original ordered host command
+  queue. Their shared selection job admits the complete source, trace, bounded canvas intersection (including
+  New), history, display outline and retirement envelopes before capture. Trace dimensions come from the original
+  image or mask, including when it is larger than the canvas. Workers privately read sparse pixels, transform the
+  outline with the layer or mask placement, clip and prepare history/display; the owner only validates and applies
+  the current publication. Missing or unmatched sources preserve selection, redo and generation; matched pixels
+  clipped completely outside the canvas produce a present empty selection. Failure/cancellation never falls back
+  to owner tracing. The synchronous session APIs above remain numeric references. Unsupported unresolved gesture
+  contexts retain their original authority refusal; complete selection input/display activation and G1 remain P1 work.
 - Undo and Redo drop a draft in progress; during an outline move they put the outline back as `CancelSelectionMove`
   does and history does not move (RF-904 of the 2026-09-23 review: the move holds its entry open, so history could
   not move before either). `FlipCanvas` mirrors the loops with the layers.

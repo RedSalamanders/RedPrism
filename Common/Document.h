@@ -1438,6 +1438,13 @@ struct HueTargetDrag
 };
 
 enum class SelectionCommandKind : std::uint8_t;
+// Source semantics for the shared admitted selection publication graph.
+enum class LayerSelectionSource : std::uint8_t
+{
+    ColorMatch,
+    LayerAlpha,
+    MaskDark,
+};
 class SelectionCommandInput;
 class SelectionCommandAuthority;
 class PreparedSelectionCommand;
@@ -2744,6 +2751,8 @@ class DocumentSession
         const LassoFinishObserver* observer = nullptr, std::shared_ptr<const SharedPublicationMemory> memory = {});
     [[nodiscard]] bool IsPreparedLassoFinishCurrent(const PreparedLassoFinish& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedLassoFinishIfCurrent(PreparedLassoFinish& prepared) noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareLoadedLayerSelectionInput(bool mask) const;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanLoadedLayerSelectionMemory(bool mask) const noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(
         Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode = SelectionMode::New) const;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(
@@ -3484,17 +3493,16 @@ class DocumentSession
     }
 
   private:
-    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(Vec2 point, WandSettings settings,
-                                                                                   bool antialiased, SelectionMode mode,
-                                                                                   bool composite,
-                                                                                   bool preservePanel = false) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(
+        Vec2 point, WandSettings settings, bool antialiased, SelectionMode mode, bool composite,
+        bool preservePanel = false, LayerSelectionSource source = LayerSelectionSource::ColorMatch) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
         WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
         DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer,
         std::shared_ptr<const SharedPublicationMemory> memory);
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(
-        Vec2 point, WandSettings settings, bool composite, SelectionMode mode,
-        bool preservePanel = false) const noexcept;
+        Vec2 point, WandSettings settings, bool composite, SelectionMode mode, bool preservePanel = false,
+        LayerSelectionSource source = LayerSelectionSource::ColorMatch) const noexcept;
     [[nodiscard]] bool PanelWandEligible() const noexcept;
 
     [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;

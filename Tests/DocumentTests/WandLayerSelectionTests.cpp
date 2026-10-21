@@ -1115,6 +1115,201 @@ void WorkerPublicationAndAggregateRetirement()
                      : "worker.applied-whole-result-retires-after-owner-close-on-worker");
     }
 }
+// Independent pixel thresholds and placements, including source dimensions larger than the canvas.
+void LoadedLayerSelectionCases()
+{
+    const auto make = [](bool sparse)
+    {
+        DocumentSession session;
+        DocumentFixture document;
+        document.id = Guid::Generate();
+        document.width = 2;
+        document.height = 2;
+        ImageLayer layer = ImageLayer::Blank(L"Loaded source", {3, 2});
+        const auto id = layer.id;
+        constexpr std::array<std::uint8_t, 24> pixels{0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 0, 128,
+                                                      0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 255};
+        const auto image = Raster::Make(3, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+        const auto source =
+            sparse ? Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, image}}, 0) : image;
+        layer.asset = RasterAsset{source, {}, layer.name};
+        layer.visible = false;
+        layer.opacity = 0;
+        layer.transform.origin = {-1, 0};
+        layer.transform.size = {3, 2};
+        constexpr std::array<std::uint8_t, 6> maskBytes{255, 255, 127, 255, 255, 128};
+        const auto mask = Raster::Make(3, 2, RasterFormat::Gray8, maskBytes.data(), maskBytes.size());
+        layer.mask = LayerMask{RasterAsset{mask, mask, L"Threshold mask"}, true, std::nullopt, true};
+        document.layers.push_back(std::move(layer));
+        session.ReplaceDocument(std::move(document).Seal(), id);
+        session.selectionAntialiased = false;
+        session.history.Reset();
+        session.history.MarkSaved();
+        return session;
+    };
+    const auto prepare = [](DocumentSession& session, bool mask, CancelToken cancellation = {},
+                            const WandLayerSelectionObserver* observer = nullptr)
+    {
+        auto input = session.PrepareLoadedLayerSelectionInput(mask);
+        return input ? DocumentSession::PrepareWandLayerSelectionPublication(std::move(input.value()), nullptr,
+                                                                             cancellation, {}, observer)
+                     : std::optional<PreparedWandLayerSelection>{};
+    };
+    for (const bool sparse : {false, true})
+    {
+        auto session = make(sparse);
+        const auto source = session.ActiveLayer()->asset->image;
+        const auto before = State(session);
+        const auto plan = session.PlanLoadedLayerSelectionMemory(false);
+        std::uint64_t admitted = 0;
+        Expect(plan && plan->requiresCanvasClip && !plan->transparentShortcut &&
+                   plan->sampledPixelsBytes == PixelBuffer::RequiredBytes(24) && plan->vertexBytes == 12 &&
+                   plan->booleanWorkspaceBytes != 0 && plan->booleanOutputBytes != 0 && plan->floodGrowthBytes == 0 &&
+                   EvaluateWandLayerSelectionAdmission(plan.value(), SelectionMode::New, false, admitted) ==
+                       WandLayerSelectionAdmission::Ready &&
+                   admitted == plan->reservationBytes && SameState(session, before),
+               sparse ? "load.sparse-source-sized-complete-clip-admission"
+                      : "load.source-sized-complete-clip-admission");
+        if (plan)
+        {
+            auto incomplete = plan.value();
+            incomplete.booleanWorkspaceBytes = 0;
+            Expect(EvaluateWandLayerSelectionAdmission(incomplete, SelectionMode::New, false, admitted) ==
+                           WandLayerSelectionAdmission::UnknownClipperWorkspace &&
+                       admitted == 0,
+                   sparse ? "load.sparse-new-refuses-incomplete-clip-plan" : "load.new-refuses-incomplete-clip-plan");
+        }
+        auto result = prepare(session, false);
+        Expect(result && SameState(session, before),
+               sparse ? "load.sparse-worker-preparation-is-private" : "load.worker-preparation-is-private");
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   BooleanLiteralRect(session.Selection(), 1, 0, 1, 2, false) &&
+                   session.history.UndoName() == L"Load Layer Selection" && session.history.IsModified(),
+               sparse ? "load.sparse-alpha-128-included-127-excluded-ignores-visibility-opacity-mask"
+                      : "load.alpha-128-included-127-excluded-ignores-visibility-opacity-mask");
+        Expect(!sparse || !source.IsMaterialized(), "load.source-cache-never-published");
+        session.Undo();
+        Expect(!session.Selection() && !session.history.IsModified() &&
+                   session.history.RedoName() == L"Load Layer Selection",
+               sparse ? "load.sparse-undo-restores-absent-and-saved-marker"
+                      : "load.undo-restores-absent-and-saved-marker");
+        session.Redo();
+        Expect(BooleanLiteralRect(session.Selection(), 1, 0, 1, 2, false),
+               sparse ? "load.sparse-redo-restores-literal-alpha" : "load.redo-restores-literal-alpha");
+    }
+    for (const bool linked : {false, true})
+    {
+        auto session = make(false);
+        if (!linked)
+            EditLayerRecordsForTest(session,
+                                    [](DocumentFixture& document)
+                                    {
+                                        LayerTransform placed;
+                                        placed.origin = {0, 1};
+                                        placed.size = {3, 2};
+                                        placed.flipX = true;
+                                        document.layers.front().mask->linked = false;
+                                        document.layers.front().mask->placement = placed;
+                                    });
+        auto result = prepare(session, true);
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   BooleanLiteralRect(session.Selection(), linked ? 1 : 0, linked ? 0 : 1, 1, 1, false) &&
+                   session.history.UndoName() == L"Load Mask Selection",
+               linked ? "load.linked-mask-127-included-128-excluded" : "load.unlinked-flipped-mask-placement");
+    }
+    {
+        auto session = make(false);
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document) { document.layers.front().transform.origin = {4, 0}; });
+        auto result = prepare(session, false);
+        Expect(result && session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) && session.Selection() &&
+                   session.Selection()->IsEmpty() && session.history.UndoName() == L"Load Layer Selection",
+               "load.off-canvas-opaque-source-publishes-present-empty-not-absent");
+    }
+    for (const bool mask : {false, true})
+    {
+        auto session = make(true);
+        session.SetSelection(Rect(0, 0, 1, 1), L"Keep selected");
+        session.SetSelection(Rect(1, 1, 1, 1), L"Keep redo");
+        session.Undo();
+        EditLayerRecordsForTest(session,
+                                [mask](DocumentFixture& document)
+                                {
+                                    if (mask)
+                                    {
+                                        constexpr std::array<std::uint8_t, 6> white{255, 255, 255, 255, 255, 255};
+                                        document.layers.front().mask->asset.image =
+                                            Raster::Make(3, 2, RasterFormat::Gray8, white.data(), white.size());
+                                    }
+                                    else
+                                        document.layers.front().asset->image =
+                                            Raster::Make(3, 2, RasterFormat::Bgra8888);
+                                });
+        const State before(session);
+        auto result = prepare(session, mask);
+        Expect(result && !result->ChangesSelection() &&
+                   session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) && SameState(session, before),
+               mask ? "load.all-white-mask-preserves-selection-redo-and-generation"
+                    : "load.zero-alpha-preserves-selection-redo-and-generation");
+    }
+    for (const bool mask : {false, true})
+    {
+        auto session = make(true);
+        const State before(session);
+        std::stop_source stop;
+        stop.request_stop();
+        auto result = prepare(session, mask, CancelToken(stop.get_token()));
+        Expect(!result && SameState(session, before),
+               mask ? "load.mask-pre-cancel-is-atomic" : "load.alpha-pre-cancel-is-atomic");
+        result = prepare(session, mask);
+        session.SelectLayerTarget(session.ActiveLayerID().value(), true);
+        const State afterTarget(session);
+        Expect(result && !session.ApplyPreparedWandLayerSelectionIfCurrent(result.value()) &&
+                   SameState(session, afterTarget),
+               mask ? "load.mask-stale-target-refuses-publication" : "load.alpha-stale-target-refuses-publication");
+    }
+    {
+        auto session = make(false);
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document)
+                                {
+                                    document.layers.front().asset.reset();
+                                    document.layers.front().mask.reset();
+                                });
+        Expect(!session.PrepareLoadedLayerSelectionInput(false) && !session.PrepareLoadedLayerSelectionInput(true) &&
+                   !session.PlanLoadedLayerSelectionMemory(false) && !session.PlanLoadedLayerSelectionMemory(true),
+               "load.missing-source-refuses-before-capture");
+    }
+    for (const bool mask : {false, true})
+    {
+        for (const auto stage : {WandLayerSelectionStage::SourceReady, WandLayerSelectionStage::OutlineReady,
+                                 WandLayerSelectionStage::SelectionReady, WandLayerSelectionStage::DocumentReady})
+        {
+            auto session = make(true);
+            const State before(session);
+            struct StopAt final
+            {
+                std::stop_source stop;
+                WandLayerSelectionStage stage;
+                unsigned int hits = 0;
+            } state{{}, stage};
+            const WandLayerSelectionObserver observer{&state, [](void* opaque, WandLayerSelectionStage reached) noexcept
+                                                      {
+                                                          auto& state = *static_cast<StopAt*>(opaque);
+                                                          if (state.stage == reached)
+                                                          {
+                                                              ++state.hits;
+                                                              state.stop.request_stop();
+                                                          }
+                                                      }};
+            auto result = prepare(session, mask, CancelToken(state.stop.get_token()), &observer);
+            const auto label = std::format("load.{}.cancel-at-stage-{}-preserves-complete-owner-state",
+                                           mask ? "mask" : "alpha", static_cast<unsigned int>(stage));
+            Expect(!result && state.hits == 1 && SameState(session, before), label.c_str());
+        }
+    }
+}
+
 } // namespace
 
 int RunWandLayerSelectionTests()
@@ -1132,6 +1327,7 @@ int RunWandLayerSelectionTests()
     CancellationAndHistoryFailures();
     MemoryPlansAndProducerCapacities();
     WorkerPublicationAndAggregateRetirement();
+    LoadedLayerSelectionCases();
     std::printf("wand-layer.summary assertions=%d failures=%d\n", gAssertions, gFailures);
     return gFailures;
 }

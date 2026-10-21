@@ -4947,6 +4947,8 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
+    const bool loadedSelection =
+        command == ChromeHost::kCommandLoadLayerSelection || command == ChromeHost::kCommandLoadMaskSelection;
     const bool settledSelection = (command == ChromeHost::kCommandSelectAll ||
                                    command == ChromeHost::kCommandDeselect || command == ChromeHost::kCommandInverse) &&
                                   _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
@@ -4954,8 +4956,8 @@ void Application::OnCommand(int command) noexcept
     const bool closesOutline =
         _session.IsMovingSelection() &&
         (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || closesOutline ||
-                            command == ChromeHost::kCommandFreeTransform))
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || loadedSelection ||
+                            closesOutline || command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -5532,21 +5534,19 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandLoadLayerSelection:
     case ChromeHost::kCommandLoadMaskSelection:
-        EndSelectionInteraction(false);
-        if (_session.ActiveLayerID().has_value())
+        if (!_hostExecuting)
         {
-            // An outline the tracer refuses says why, as the wand does (RF-217); nothing to trace stays silent.
-            WandFailure failure = WandFailure::None;
-            const Guid layer = _session.ActiveLayerID().value();
-            static_cast<void>(command == ChromeHost::kCommandLoadMaskSelection
-                                  ? _session.LoadMaskSelection(layer, SelectionMode::New, &failure)
-                                  : _session.LoadLayerSelection(layer, SelectionMode::New, &failure));
-            if (failure != WandFailure::None)
-            {
-                ShowError(failure == WandFailure::TooDetailed ? IDS_ERROR_SELECTION_DETAILED : IDS_ERROR_WAND_MEMORY);
-            }
+            _hostExecutionError = E_ABORT;
+            return; // Ordinary commands must retain their original ordered request through acknowledgement.
         }
-        SelectionChanged();
+        _hostExecutionError = StartLoadedLayerSelection(command == ChromeHost::kCommandLoadMaskSelection);
+        if (FAILED(_hostExecutionError))
+        {
+            ++_errorsShown;
+            _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
+                                                                                           : IDS_ERROR_SELECTION_EDIT;
+            _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+        }
         break;
     default:
         break;
@@ -9070,14 +9070,17 @@ int Application::RunRefusalSelfTest() noexcept
         (void)addLayer(std::move(layer), false);
         const int errors = _errorsShown;
         OnCommand(ChromeHost::kCommandLoadMaskSelection);
-        const bool maskRefused = _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
-                                 !_session.Selection().has_value();
+        const bool maskAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool maskRefused = maskAcknowledged && _errorsShown == errors + 1 &&
+                                 _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
-        const bool layerRefused = _errorsShown == errors + 2 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
-                                  !_session.Selection().has_value();
+        const bool layerAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool layerRefused = layerAcknowledged && _errorsShown == errors + 2 &&
+                                  _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandNewLayer);
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
-        const bool emptySilent = _errorsShown == errors + 2 && !_session.Selection().has_value();
+        const bool emptyAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const bool emptySilent = emptyAcknowledged && _errorsShown == errors + 2 && !_session.Selection().has_value();
         if (!maskRefused || !layerRefused || !emptySilent)
         {
             SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "

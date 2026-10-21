@@ -341,10 +341,13 @@ recapture session input, reconstruct pixel edits, regenerate the intended user r
 Moved and applied wrappers refuse reuse; a changing candidate cannot apply using a stale sampled charge.
 No-op selection candidates retain the original no-history-change acknowledgement.
 
-The history-only source path is
-scoped to self-test until activation and its full gates are complete. All other source callers and the reference
-history methods remain required P1 migration work. This scoped opt-in does not qualify G1, O(delta) work, native
-configuration coverage, or live-source behavior. Preserve the legacy oldest-past-then-oldest-future trim order,
+Ordinary `Application::Run` starts the independent history-only notification source before startup paths
+or input. A full route/subscription registry or failed acquisition stops startup and joins the acquired prefix.
+The actual-Run startup and shutdown controls cover this activation; see the
+[current receipt reconciliation](../TestRuns/P1HistoryResidencyStartup_2026-10-06.md#current-receipt-reconciliation--2026-10-21).
+Other source callers and reference history methods remain required P1 migration work. This source activation
+does not qualify G1, O(delta) work, complete native runtime coverage or every live-source caller. Preserve the
+legacy oldest-past-then-oldest-future trim order,
 revision assignment, no-op redo preservation, and saved-revision semantics above.
 
 The actual shutdown path MUST suppress an uncaptured ready maintenance notice and cancel/join a held prepared

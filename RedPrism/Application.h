@@ -1011,6 +1011,8 @@ class Application final : public ChromeEvents,
     int RunSelectionMoveHeaderSelfTest() noexcept;
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
+    [[nodiscard]] HRESULT StartLoadedLayerSelection(bool mask) noexcept;
+    [[nodiscard]] HRESULT StartLayerSelection(const HostWandLayerNewInput& input, LayerSelectionSource source) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
     int RunPanelWandHostSelfTest() noexcept;
     int RunPanelWandLifecycleSelfTest() noexcept;

@@ -45,6 +45,7 @@ struct WandLayerSelectionMemoryPlan
     std::uint64_t booleanOutputBytes = 0;
     std::uint64_t booleanPhaseBytes = 0;
     bool transparentShortcut = false;
+    bool requiresCanvasClip = false;
 };
 
 enum class WandLayerSelectionAdmission : std::uint8_t
@@ -105,11 +106,11 @@ class WandLayerSelectionInput final
     WandLayerSelectionInput& operator=(const WandLayerSelectionInput&) = delete;
     WandLayerSelectionInput(WandLayerSelectionInput&& source) noexcept
         : _point(source._point), _settings(source._settings), _antialiased(source._antialiased), _mode(source._mode),
-          _usesComposite(source._usesComposite), _outputHistoryBytes(source._outputHistoryBytes),
-          _authority(std::move(source._authority)), _panelAuthority(std::move(source._panelAuthority)),
-          _token(std::move(source._token)), _history(std::move(source._history)),
-          _document(std::move(source._document)), _active(std::move(source._active)),
-          _valid(std::exchange(source._valid, false))
+          _usesComposite(source._usesComposite), _source(source._source),
+          _outputHistoryBytes(source._outputHistoryBytes), _authority(std::move(source._authority)),
+          _panelAuthority(std::move(source._panelAuthority)), _token(std::move(source._token)),
+          _history(std::move(source._history)), _document(std::move(source._document)),
+          _active(std::move(source._active)), _valid(std::exchange(source._valid, false))
     {
     }
     WandLayerSelectionInput& operator=(WandLayerSelectionInput&& source) noexcept
@@ -121,6 +122,7 @@ class WandLayerSelectionInput final
             _antialiased = source._antialiased;
             _mode = source._mode;
             _usesComposite = source._usesComposite;
+            _source = source._source;
             _outputHistoryBytes = source._outputHistoryBytes;
             _authority = std::move(source._authority);
             _panelAuthority = std::move(source._panelAuthority);
@@ -157,6 +159,7 @@ class WandLayerSelectionInput final
     bool _antialiased;
     SelectionMode _mode = SelectionMode::New;
     bool _usesComposite = false;
+    LayerSelectionSource _source = LayerSelectionSource::ColorMatch;
     std::uint64_t _outputHistoryBytes = 0;
     HistoryRestoreAuthority _authority;
     // Inverse/Offset leave this absent and retain strict history-restore authority.

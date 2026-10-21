@@ -58,3 +58,17 @@ The borrowed startup hook is absent in production and exists solely to
 observe or fail the actual `Run` prefix. Its normal-case worker pump is a test operation. The production path
 performs no startup wait for pixels or history. Hidden functional tests do not establish visible frame latency,
 G1, native ARM64 runtime or full H3 completion.
+
+## Current receipt reconciliation — 2026-10-21
+
+The dated candidate record above remains historical. Main now verifies **44 actual startup facts per x64
+profile**, not the helper draft's incorrect 43: ten common facts in four actual-Run cases, two normal-startup
+facts and two failed-start facts. All three qualified dpi1 Release/Debug/real-ASan profiles retain the identical
+startup fixture and source implementation, and the current Run startup prefix matches that qualified source.
+The subsequent load-selection matrix preserves every corresponding Application predecessor in all three profiles.
+
+Fixture `RedPrism/Application.Tests.HistoryResidencyStartup.cpp` SHA-256: `F24D5363A8B7CEFAFB2FED467E34CFBCB2077D1875FC076F00A912EF775C89DF`.
+Source `RedPrism/ApplicationHistoryResidencyJobs.cpp` SHA-256: `531BA65CC26BC23CF2C5091BA697805C8A2F1D2219583F03EEFC4128580DE24D`.
+The Main reader and receipts remain in `Z:/src/RedPrism/.build/P1Drafts/HistoryStartupDocReconciliation-Main-r2/`.
+This reconciles the stale self-test-only normative sentence with existing qualified ordinary startup; it adds
+no production activation, full H3, native ARM64 runtime or G1 claim. Original dated evidence remains unchanged.

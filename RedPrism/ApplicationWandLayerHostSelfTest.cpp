@@ -787,6 +787,149 @@ int Application::RunWandLayerHostSelfTest() noexcept
         }
     }
 
+    // Exercise the actual ordinary command handler, not a direct prepared-session or Wand input substitute.
+    int loadedChecks = 0;
+    constexpr std::array loadModes{Mode::LiteralAndCapture, Mode::StaleActive,    Mode::Cancel,
+                                   Mode::WorkerFailure,     Mode::CaptureFailure, Mode::HistoryEntryFailure,
+                                   Mode::Admission};
+    for (const bool mask : {false, true})
+    {
+        for (const auto mode : loadModes)
+        {
+            prepare();
+            auto gate = std::make_shared<WandLayerHostTestGate>();
+            gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!gate->release)
+                return 5;
+            if (mode == Mode::WorkerFailure)
+                gate->result = {JobStatus::Failed, E_ACCESSDENIED};
+            if (mode == Mode::CaptureFailure)
+                gate->throwCaptureFailure = true;
+            if (mode == Mode::HistoryEntryFailure)
+                gate->throwHistoryStage = DocumentHistory::PrepareStage::Entry;
+            _wandLayerHostTestGate = gate;
+            _wandOutputLifetimeTestGate = gate;
+            State state{*this, mode};
+            state.before = _session.Document();
+            state.historyBefore = _session.history.CaptureState();
+            state.revision = _session.history.CurrentRevision();
+            state.generation = _session.Generation();
+            const auto check = [&](const char* label, bool condition, const char* detail) noexcept
+            {
+                ++loadedChecks;
+                failures += condition ? 0 : 1;
+                std::fprintf(stderr, "%s loaded-selection-host.%s.%s.%s%s%s\n", condition ? "PASS" : "FAIL",
+                             mask ? "mask" : "alpha", name(mode), label, condition ? "" : ": ",
+                             condition ? "" : detail);
+            };
+            if (mode == Mode::Admission)
+            {
+                for (std::size_t index = 0; index < JobScheduler::kCapacity; ++index)
+                {
+                    std::unique_ptr<Job> job = std::make_unique<OccupyWandHostTestSlot>();
+                    JobTicket ticket;
+                    if (FAILED(_jobs.Submit(job, {JobClass::Background}, ticket)))
+                        return 5;
+                }
+            }
+            const int command = mask ? ChromeHost::kCommandLoadMaskSelection : ChromeHost::kCommandLoadLayerSelection;
+            OnCommand(command);
+            const auto* front = _hostRequests.Front();
+            if (front)
+                state.receipt = front->input.Receipt();
+            check("ordinary-command-queues-original-intent-with-no-inline-mutation",
+                  front && std::get_if<HostCommandInput>(&front->input.Input()) &&
+                      std::get<HostCommandInput>(front->input.Input()).command == command &&
+                      state.receipt.Read().outcome == HostOutcome::Pending && gate->captures.load() == 0 &&
+                      _session.Document() == state.before && _session.Generation() == state.generation &&
+                      _session.history.CurrentRevision() == state.revision,
+                  "the real command did not queue its typed input or mutated document/history inline");
+            if (mode == Mode::Admission)
+            {
+                for (unsigned int pass = 0; pass < 4 && state.receipt.Read().outcome == HostOutcome::Pending; ++pass)
+                    (void)RunUiActions(_jobs);
+                check("full-original-record-table-refuses-before-capture",
+                      state.receipt.Read().outcome == HostOutcome::Failed &&
+                          state.receipt.Read().error ==
+                              static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+                          gate->captures.load() == 0 && !gate->retired.load() && !_historyWork.Busy() &&
+                          !_wandLayerHostTicket && !_wandLayerHostStamp && _session.Document() == state.before &&
+                          _session.Generation() == state.generation && _session.history.IsCurrent(state.historyBefore),
+                      "scheduler refusal captured a source or partially published selection/history");
+            }
+            const auto settled = SettleJobs(_jobs, 15000, pump, &state);
+            check("actual-owner-pump-joins-original-job", settled == SettleResult::Settled,
+                  "the original job or its acknowledgement did not finish");
+            const bool held = mode == Mode::LiteralAndCapture || mode == Mode::StaleActive || mode == Mode::Cancel ||
+                              mode == Mode::WorkerFailure;
+            check("worker-boundary-retains-original-authority-and-source",
+                  held ? state.gateVisited && state.gateHeld && state.sourceAndHistoryUnchangedAtGate &&
+                             gate->captures.load() == 1 && gate->reservationHeld.load() &&
+                             gate->outlinePreparedOffOwner.load()
+                       : !state.gateVisited,
+                  "a held worker lost its original ticket, reservation or unmodified before-document");
+            const auto outcome = state.receipt.Read().outcome;
+            check("terminal-receipt-matches-operation",
+                  mode == Mode::LiteralAndCapture ? outcome == HostOutcome::Succeeded
+                  : mode == Mode::StaleActive     ? outcome == HostOutcome::Stale
+                  : mode == Mode::Cancel          ? outcome == HostOutcome::Cancelled
+                                                  : outcome == HostOutcome::Failed,
+                  "the typed command lost its success, stale, cancellation or failure outcome");
+            if (mode == Mode::LiteralAndCapture)
+            {
+                const auto& selection = _session.Selection();
+                const std::array corners{Vec2{1, 1}, Vec2{3, 1}, Vec2{3, 3}, Vec2{1, 3}};
+                bool literal = selection && !selection->antialiased && selection->loops.size() == 1 &&
+                               selection->loops.Get()[0].size() == 4;
+                if (literal)
+                {
+                    const auto& loop = selection->loops.Get()[0];
+                    literal = false;
+                    for (std::size_t start = 0; start < corners.size(); ++start)
+                    {
+                        bool match = true;
+                        for (std::size_t point = 0; point < corners.size(); ++point)
+                            match = match && loop[(start + point) % corners.size()] == corners[point];
+                        literal = literal || match;
+                    }
+                }
+                check("literal-hidden-source-outline-and-one-history-entry",
+                      literal && _session.history.UndoCount() == 1 &&
+                          _session.history.UndoName() == (mask ? L"Load Mask Selection" : L"Load Layer Selection") &&
+                          gate->publishedOutputs == 1 && gate->publishedOutputBytes != 0 &&
+                          gate->allOutputsBoundToOriginal,
+                      "load did not publish the independent full source rectangle and one named history entry");
+                const auto undo = QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
+                check("ordered-undo-restores-absent-selection-and-saved-state",
+                      settle() && undo.Read().outcome == HostOutcome::Succeeded && !_session.Selection() &&
+                          !_session.history.IsModified(),
+                      "actual Undo did not restore the original saved state");
+            }
+            else
+                check("non-success-publishes-no-selection-or-history",
+                      _session.Document() == state.before && _session.Generation() == state.generation &&
+                          _session.history.IsCurrent(state.historyBefore) && gate->publishedOutputs == 0,
+                      "a failed, cancelled, stale or refused command changed pixels, selection or history");
+            check("original-job-and-barrier-retire-after-acknowledgement",
+                  !_wandLayerHostTicket && !_wandLayerHostStamp && !_historyWork.Busy() && !_activeHostRequest &&
+                      _hostRequests.Size() == 0 &&
+                      (mode == Mode::Admission || (gate->retired.load() && gate->retiredOffOwner.load())),
+                  "original command ownership survived its acknowledged terminal boundary");
+            _session.ClearDocument();
+            state.before.reset();
+            state.historyBefore = {};
+            DocumentChanged();
+            check("real-close-refunds-complete-original-output-charge",
+                  settle() && _jobs.ReservedMemoryBytes() == 0 && _jobs.ReleasingMemoryBytes() == 0,
+                  "last real source/history/outline ownership did not refund the original reservation");
+            _wandLayerHostTestGate.reset();
+            _wandOutputLifetimeTestGate.reset();
+            if (failures != 0)
+                return 5;
+        }
+    }
+    std::fprintf(stderr, "loaded-selection-host summary: %d checks, 14 cases\n", loadedChecks);
+
     if (!settle() || _historyWork.Busy() || _wandLayerHostTicket || _wandLayerHostStamp ||
         _jobs.ReservedMemoryBytes() != 0 || _hostRequests.Size() != 0 || _activeHostRequest)
     {
