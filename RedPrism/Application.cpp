@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.ViewportFixture.h"
 #include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
@@ -1219,7 +1220,7 @@ int Application::RunSelfTest() noexcept
     // Selection tools: a marquee drag, Shift adding, M switching the shape, an outline move, a click deselecting,
     // the wand, the Select menu keys, a polygonal lasso closed with Enter, Expand from the header and Escape.
     {
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
@@ -1378,7 +1379,7 @@ int Application::RunSelfTest() noexcept
         hostCommand(ChromeHost::kCommandDeselect);
         hostCommand(ChromeHost::kCommandNewLayer);
         _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1};
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
@@ -1515,7 +1516,7 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Brush);
         _chrome->SetCanvasFocused(true);
         InsertPaintedLayer(_session, L"Plate", 300, 300, Vec2{0, 0}, 0.0, 0xFF808080u);
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
@@ -1826,7 +1827,7 @@ int Application::RunSelfTest() noexcept
     // Selection` entry with the outline moved), Ctrl+J copies them to a layer, Add Mask hides them and Ctrl+Shift+C
     // copies the composite.
     {
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
         const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
@@ -2112,7 +2113,7 @@ int Application::RunSelfTest() noexcept
     // over the red beneath, a hue of 120 rotates it live on the canvas and Enter keeps the record as one entry;
     // Shift+= steps the blend mode.
     {
-        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(_viewport, DocumentSize());
         SyncChrome();
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {

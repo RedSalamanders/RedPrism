@@ -57,6 +57,7 @@
   "RedPrism/Runtime.Tests.TransformPreviewTestGate.h",
   "RedPrism/Runtime.Tests.TransformWorkTestGate.h",
   "RedPrism/Runtime.Tests.UtilityWorkTestGate.h",
+  "RedPrism/Runtime.Tests.ViewportFixture.h",
   "RedPrism/Runtime.Tests.WandLayerHostTestGate.h",
   "Tests/BuildProcessTests/Tooling.Tests.ConcurrencyAnalysisProbe.cpp",
   "Tests/BuildProcessTests/Tooling.Tests.IsaProbe.cpp",

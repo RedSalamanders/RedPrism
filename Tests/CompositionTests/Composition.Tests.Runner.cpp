@@ -9,6 +9,7 @@
 #include "Composition.Tests.GpuWork.h"
 #include "Document.h"
 #include "FrameScheduler.h"
+#include "Runtime.Tests.ViewportFixture.h"
 #include "TransformOverlay.h"
 
 #include <algorithm>
@@ -286,6 +287,33 @@ void TestViewport()
     const Vec2 actualOrigin = actual.DocumentRectOrigin(Vec2{1280, 800});
     Expect(actualOrigin.x == std::round(actualOrigin.x) && actualOrigin.y == std::round(actualOrigin.y),
            "viewport.actual-pixels-on-whole-pixels");
+
+    // A centered 1:1 document can put the first synthetic marquee press outside a small canvas.
+    CanvasViewport centeredFixture;
+    centeredFixture.Resize(Vec2{936, 656}, 1.0, Vec2{1280, 800});
+    centeredFixture.SetZoom(1.0, centeredFixture.Center(), Vec2{1280, 800});
+    const Vec2 missedPress = centeredFixture.ViewFromDocument(Vec2{40, 40}, Vec2{1280, 800});
+    Expect(missedPress == Vec2{-132, -32}, "viewport.fixture-centered-press-is-outside-small-canvas");
+    for (const double dpiScale : {1.0, 1.5, 2.25})
+    {
+        CanvasViewport fixture;
+        const Vec2 canvasSize{936 * dpiScale, 656 * dpiScale};
+        fixture.Resize(canvasSize, dpiScale, Vec2{1280, 800});
+        fixture.SetZoom(2.0, fixture.Center(), Vec2{1280, 800});
+        fixture.Translate(Vec2{200, -900});
+        RedPrismTestViewport::FrameActualPixelsAtOrigin(fixture, Vec2{1280, 800});
+        Expect(fixture.zoom == 1.0 && fixture.viewSize == canvasSize && fixture.backingScale == dpiScale &&
+                   !fixture.followsFit,
+               "viewport.fixture-actual-pixels-preserve-canvas-and-dpi");
+        for (const Vec2 point : {Vec2{40, 40}, Vec2{120, 100}, Vec2{280, 100}, Vec2{200, 600}, Vec2{520, 500},
+                                 Vec2{10, 250}, Vec2{600, 600}})
+        {
+            const Vec2 view = fixture.ViewFromDocument(point, Vec2{1280, 800});
+            Expect(view == point && view.x >= 0 && view.y >= 0 && view.x < canvasSize.x && view.y < canvasSize.y &&
+                       fixture.DocumentFromView(view, Vec2{1280, 800}) == point,
+                   "viewport.fixture-literal-document-pointer-inside-canvas");
+        }
+    }
 
     // RF-403: a handle hits where it is drawn: 10 DIP of hit radius and a knob 28 DIP up, at 225 % and at 100 %.
     LayerTransform box;

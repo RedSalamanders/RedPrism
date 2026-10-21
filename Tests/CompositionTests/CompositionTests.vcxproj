@@ -86,6 +86,7 @@
 
   <ItemGroup>
     <ClInclude Include="..\Support\Support.Tests.FailureReports.h" />
+    <ClInclude Include="..\..\RedPrism\Runtime.Tests.ViewportFixture.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
