@@ -1,7 +1,7 @@
 # RedPrism windowing and host command line
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-10-21
 Owner: `Application` HWND, DPI, and `RedPrism/CommandLine.h`
 
 ## Scope
@@ -202,6 +202,11 @@ Before initializing the renderer, `--self-test` MUST verify:
 - style includes `WS_CLIPCHILDREN`
 - extended style includes `WS_EX_NOREDIRECTIONBITMAP`
 - client size equals the 1280×800 logical canvas scaled to that DPI
+
+The hidden self-test records the actual DPI, styles, client/outer rectangles, requested default outer size,
+monitor/work rectangles and OS maximum-track metrics before evaluating these checks. Failed Win32 rectangle
+queries retain their error codes. Diagnostics MUST NOT relax the default-size assertion or infer which of its
+combined predicates failed without the recorded values.
 
 ## Validation
 

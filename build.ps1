@@ -67,100 +67,116 @@ Assert-RedPrismBuildOutputProcessNotRunning -ExpectedExecutablePath $executable
 $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
 
-$msbuild = Find-RedPrismMSBuild
-$target = if ($Clean) { 'Clean' } elseif ($Rebuild -or $Analyze) { 'Rebuild' } else { 'Build' }
-if (-not $Clean) {
-    Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
-    & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug') -MSBuildPath $msbuild
-    & (Join-Path $repoRoot 'restore-dxui.ps1') -Platform $Platform -MSBuildPath $msbuild -CheckUpdates
-    Write-Host ''
-}
-
-$workerArgument = if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
-$logDir = Join-Path $repoRoot '.build\logs'
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$logFlavor = if ($Analyze) { '-Analyze' } else { '' }
-$logPath = Join-Path $logDir ("{0}-{1}-{2}{3}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor)
-$arguments = @(
-    $solutionPath,
-    "/t:$target",
-    "/p:Configuration=$Configuration",
-    "/p:Platform=$Platform",
-    "/p:RedPrismBuildNumber=$BuildNumber",
-    $workerArgument,
-    '/nologo',
-    '/verbosity:minimal',
-    "/flp:LogFile=$logPath;Verbosity=minimal"
-)
-if ($MaxCpuCount -gt 0) {
-    # Bound each C++ compiler batch as well as MSBuild projects; /m alone leaves /MP unbounded.
-    $arguments += "/p:CL_MPCount=$MaxCpuCount"
-}
-if ($Analyze) {
-    # The root targets scope /analyze and its concurrency plugin to RedPrism projects. Rebuild ensures no stale
-    # objects bypass analysis; a distinct log preserves these diagnostics beside ordinary build logs.
-    $arguments += '/p:RedPrismAnalyze=true'
-}
-
-$stageLabel = if ($Clean) { '[1/1]' } else { '[2/2]' }
-Write-Host "$stageLabel $target" -ForegroundColor Cyan
-Write-Host "MSBuild: $msbuild" -ForegroundColor DarkGray
-if ($Analyze) {
-    $previousEspExtensions = [Environment]::GetEnvironmentVariable('Esp.Extensions', 'Process')
-    $existingExtensions = @($previousEspExtensions -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($existingExtensions -notcontains 'ConcurrencyCheck.dll') {
-        $existingExtensions += 'ConcurrencyCheck.dll'
+# Share one tool-host choice with dependency identity/restore, the solution and its provenance.
+# Cross-targeting ARM64 otherwise defaults to x86-hosted tools even under amd64 MSBuild.
+$previousToolArchitecture = [Environment]::GetEnvironmentVariable('PreferredToolArchitecture', 'Process')
+try {
+    if ($null -eq $previousToolArchitecture -and
+        [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq [Runtime.InteropServices.Architecture]::X64) {
+        [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', 'x64', 'Process')
     }
-    [Environment]::SetEnvironmentVariable('Esp.Extensions', ($existingExtensions -join ';'), 'Process')
-    try {
+
+    $msbuild = Find-RedPrismMSBuild
+    $target = if ($Clean) { 'Clean' } elseif ($Rebuild -or $Analyze) { 'Rebuild' } else { 'Build' }
+    if (-not $Clean) {
+        Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
+        & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug') -MSBuildPath $msbuild
+        & (Join-Path $repoRoot 'restore-dxui.ps1') -Platform $Platform -MSBuildPath $msbuild -CheckUpdates
+        Write-Host ''
+    }
+
+    $workerArgument = if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
+    $logDir = Join-Path $repoRoot '.build\logs'
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    $logFlavor = if ($Analyze) { '-Analyze' } else { '' }
+    $logPath = Join-Path $logDir ("{0}-{1}-{2}{3}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor)
+    $arguments = @(
+        $solutionPath,
+        "/t:$target",
+        "/p:Configuration=$Configuration",
+        "/p:Platform=$Platform",
+        "/p:RedPrismBuildNumber=$BuildNumber",
+        $workerArgument,
+        '/nologo',
+        '/verbosity:minimal',
+        "/flp:LogFile=$logPath;Verbosity=minimal"
+    )
+    if ($MaxCpuCount -gt 0) {
+        # Bound each C++ compiler batch as well as MSBuild projects; /m alone leaves /MP unbounded.
+        $arguments += "/p:CL_MPCount=$MaxCpuCount"
+    }
+    if ($Analyze) {
+        # The root targets scope /analyze and its concurrency plugin to RedPrism projects. Rebuild ensures no stale
+        # objects bypass analysis; a distinct log preserves these diagnostics beside ordinary build logs.
+        $arguments += '/p:RedPrismAnalyze=true'
+    }
+
+    $stageLabel = if ($Clean) { '[1/1]' } else { '[2/2]' }
+    Write-Host "$stageLabel $target" -ForegroundColor Cyan
+    Write-Host "MSBuild: $msbuild" -ForegroundColor DarkGray
+    if ($Analyze) {
+        $previousEspExtensions = [Environment]::GetEnvironmentVariable('Esp.Extensions', 'Process')
+        $existingExtensions = @($previousEspExtensions -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($existingExtensions -notcontains 'ConcurrencyCheck.dll') {
+            $existingExtensions += 'ConcurrencyCheck.dll'
+        }
+        [Environment]::SetEnvironmentVariable('Esp.Extensions', ($existingExtensions -join ';'), 'Process')
+        try {
+            & $msbuild @arguments
+            $exitCode = $LASTEXITCODE
+        } finally {
+            [Environment]::SetEnvironmentVariable('Esp.Extensions', $previousEspExtensions, 'Process')
+        }
+    } else {
         & $msbuild @arguments
         $exitCode = $LASTEXITCODE
-    } finally {
-        [Environment]::SetEnvironmentVariable('Esp.Extensions', $previousEspExtensions, 'Process')
     }
-} else {
-    & $msbuild @arguments
-    $exitCode = $LASTEXITCODE
-}
-if ($exitCode -ne 0) {
+    if ($exitCode -ne 0) {
+        Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
+        throw "MSBuild failed with exit code $exitCode."
+    }
+
+    if ($Analyze) {
+        Write-Host 'Validating native concurrency analysis controls...' -ForegroundColor Cyan
+        & (Join-Path $repoRoot 'Tests\BuildProcessTests\CodeAnalysisTests.ps1') `
+            -MSBuildPath $msbuild -Platform $Platform -Configuration $Configuration
+        if ($LASTEXITCODE -ne 0) {
+            throw "Native concurrency analysis controls failed with exit code $LASTEXITCODE."
+        }
+    }
+
+    if (-not $Clean) {
+        if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Build succeeded but the expected executable was not found: $executable"
+        }
+        if ($Platform -eq 'x64') {
+            Write-Host 'Checking linked x64 instructions and ISA gate controls...' -ForegroundColor Cyan
+            Import-Module (Join-Path $repoRoot 'Build\IsaScan.psm1') -Force
+            $scanRoot = Join-Path $repoRoot ".build\IsaScan\x64\$($Configuration -replace '\s', '')"
+            foreach ($name in @('RedPrism', 'HostTests', 'DocumentTests', 'CompositionTests', 'IoTests')) {
+                $binary = Join-Path (Split-Path -Parent $executable) "$name.exe"
+                $null = Invoke-RedPrismIsaScan -Binary $binary -OutputDirectory (Join-Path $scanRoot $name)
+            }
+            & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
+        }
+        Write-Host "Ready: $executable" -ForegroundColor Green
+        Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
+        $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
+        Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
+        if ($Run) {
+            $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+            if ($Platform -eq 'ARM64' -and $native -ne 'Arm64') {
+                throw 'This host cannot directly run the ARM64 build. Build it without -Run or run it on ARM64 Windows.'
+            }
+            Start-Process -FilePath $executable
+        }
+    }
+
     Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
-    throw "MSBuild failed with exit code $exitCode."
-}
-
-if ($Analyze) {
-    Write-Host 'Validating native concurrency analysis controls...' -ForegroundColor Cyan
-    & (Join-Path $repoRoot 'Tests\BuildProcessTests\CodeAnalysisTests.ps1') `
-        -MSBuildPath $msbuild -Platform $Platform -Configuration $Configuration
-    if ($LASTEXITCODE -ne 0) {
-        throw "Native concurrency analysis controls failed with exit code $LASTEXITCODE."
+} finally {
+    if ($null -eq $previousToolArchitecture) {
+        [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', [System.Management.Automation.Language.NullString]::Value, 'Process')
+    } else {
+        [Environment]::SetEnvironmentVariable('PreferredToolArchitecture', $previousToolArchitecture, 'Process')
     }
 }
-
-if (-not $Clean) {
-    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-        throw "Build succeeded but the expected executable was not found: $executable"
-    }
-    if ($Platform -eq 'x64') {
-        Write-Host 'Checking linked x64 instructions and ISA gate controls...' -ForegroundColor Cyan
-        Import-Module (Join-Path $repoRoot 'Build\IsaScan.psm1') -Force
-        $scanRoot = Join-Path $repoRoot ".build\IsaScan\x64\$($Configuration -replace '\s', '')"
-        foreach ($name in @('RedPrism', 'HostTests', 'DocumentTests', 'CompositionTests', 'IoTests')) {
-            $binary = Join-Path (Split-Path -Parent $executable) "$name.exe"
-            $null = Invoke-RedPrismIsaScan -Binary $binary -OutputDirectory (Join-Path $scanRoot $name)
-        }
-        & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
-    }
-    Write-Host "Ready: $executable" -ForegroundColor Green
-    Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
-    $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
-    Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
-    if ($Run) {
-        $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-        if ($Platform -eq 'ARM64' -and $native -ne 'Arm64') {
-            throw 'This host cannot directly run the ARM64 build. Build it without -Run or run it on ARM64 Windows.'
-        }
-        Start-Process -FilePath $executable
-    }
-}
-
-Write-Host "Captured log: $logPath" -ForegroundColor DarkGray

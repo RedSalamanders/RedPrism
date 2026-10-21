@@ -72,7 +72,7 @@ constexpr double kMutatedOpacity = 0.375;
 }
 
 // Keep sampling out of line so optimized benchmark builds must observe captured records and their child handles.
-__declspec(noinline) [[nodiscard]] std::uint64_t ChecksumSamples(const std::vector<ImageLayer>& records) noexcept
+[[nodiscard]] __declspec(noinline) std::uint64_t ChecksumSamples(const std::vector<ImageLayer>& records) noexcept
 {
     if (records.empty())
     {

@@ -1,13 +1,21 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-21
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
 
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
+
+`ToolDiscoveryTests.ps1` also runs the exact-entrypoint compiler-host controls in `ToolArchitectureTests.ps1`.
+They observe dependency/restore/solution/provenance boundaries, explicit and unset selections, Clean and failure
+cleanup through isolated stand-ins. They preserve MSBuild override/PATH precedence and the caller environment;
+actual compiler/dependency and native runtime qualification still require the selected products and canonical gates.
+Native ARM64 feasibility also records and requires the current default MSVC version before canonical work.
+`NativeArmValidationTests.ps1` exercises that exact host-selection boundary with isolated installation/discovery
+stand-ins. Those controls establish early refusal and environment selection, never ARM64 execution or product identity.
 
 ### Persistent history and raster residency controls
 

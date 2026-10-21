@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-10
+Last reviewed: 2026-10-21
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -43,6 +43,21 @@ adopted by replacing the locked files and the lock together.
 | Minimum OS | Windows 11 build 22000.2600 |
 
 First-party translation units compile as C++.
+
+On an X64 process, `build.ps1` MUST default an unset `PreferredToolArchitecture` to `x64` for dependency
+identity/restore, the solution build and its validation/provenance. An explicit value is preserved, including
+the native ARM64 wrapper's `arm64`. The caller's environment MUST be restored on success and every failure.
+MSBuild discovery keeps its existing `MSBUILD_EXE_PATH`, PATH and version-ranged installation precedence.
+An amd64 MSBuild process alone does not select x64-hosted tools when cross-targeting ARM64. Qualification
+records the actual compiler/linker and matching dependency identity; earlier tool-host receipts remain historical.
+`Tests/BuildProcessTests/ToolArchitectureTests.ps1` executes unchanged entrypoint bytes with isolated dependency
+and solution stand-ins to cover these boundaries, failures, clean builds and caller environment restoration.
+
+The current P1 native ARM64 feasibility wrapper requires default MSVC `14.52.37025` in the selected installation.
+It records required/actual versions in `toolset-requirement.json` and refuses a mismatch before changing the
+canonical discovery environment or starting work. Matching this declaration alone does not qualify compiler,
+dependency or runtime products. The hosted image must actually provide that native default toolset; earlier
+14.51 native evidence cannot qualify the 14.52 environment.
 
 ## Configurations and platforms
 

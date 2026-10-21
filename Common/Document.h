@@ -338,7 +338,7 @@ class Raster
 #pragma warning(disable : 4324) // the intrusive release node requires 16-byte storage alignment
     struct Storage : DeferredReleaseNode
     {
-        explicit Storage(std::uint64_t identity) noexcept : serial(identity) {}
+        explicit Storage(std::uint64_t identity) noexcept;
         const std::uint64_t serial;
         int width = 0;
         int height = 0;
@@ -370,7 +370,7 @@ class Raster
 #pragma warning(disable : 4324) // inherits the intrusive release node's alignment
     struct ChargedStorage final : Storage
     {
-        explicit ChargedStorage(std::uint64_t identity) noexcept : Storage(identity) {}
+        explicit ChargedStorage(std::uint64_t identity) noexcept;
         std::shared_ptr<const void> lifetime;
     };
 #pragma warning(pop)
@@ -409,6 +409,11 @@ struct RasterTile
         return height > 0 ? height : pixels.Height();
     }
 };
+
+// Constructor cleanup can instantiate vector<RasterTile>'s destructor. Define these only after
+// RasterTile is complete, retaining inline construction and the same storage layout/ownership.
+inline Raster::Storage::Storage(std::uint64_t identity) noexcept : serial(identity) {}
+inline Raster::ChargedStorage::ChargedStorage(std::uint64_t identity) noexcept : Storage(identity) {}
 
 struct RasterAsset
 {

@@ -19,6 +19,8 @@ foreach ($function in 'Find-RedPrismVisualStudioInstallationPath', 'Find-RedPris
 }
 Write-Host 'PASS tooldiscovery.module-exports'
 
+& (Join-Path $PSScriptRoot 'ToolArchitectureTests.ps1')
+
 # Every script that used to run its own vswhere lookup now goes through the shared, version-ranged helper.
 $buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw
 $restoreScript = Get-Content -LiteralPath (Join-Path $repo 'restore-dxui.ps1') -Raw

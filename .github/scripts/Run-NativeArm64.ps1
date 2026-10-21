@@ -48,6 +48,15 @@ function Initialize-NativeBuildHost {
         throw 'Native MSBuild is outside the required Visual Studio 2026 version.'
     }
     $version = (Get-Content -LiteralPath (Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+    $requiredVersion = '14.52.37025'
+    Write-Evidence 'toolset-requirement.json' ([ordered]@{
+        requiredDefaultVCToolsVersion=$requiredVersion;actualDefaultVCToolsVersion=$version
+        selectedInstallation=$installation;matched=($version -ceq $requiredVersion)
+        interpretation='Default-toolset preflight only; actual compiler/dependency products and native runtime still require independent qualification'
+    })
+    if ($version -cne $requiredVersion) {
+        throw "Native ARM64 requires default MSVC $requiredVersion; selected installation provides $version. No canonical work started."
+    }
     $compiler = Join-Path $installation "VC/Tools/MSVC/$version/bin/HostARM64/ARM64/cl.exe"
     if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
         throw 'Native ARM64-hosted compiler is unavailable in the default v145 toolset.'

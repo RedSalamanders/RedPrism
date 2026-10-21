@@ -753,8 +753,37 @@ int Application::RunSelfTest() noexcept
     const SIZE expectedClientSize = ScaleDefaultClientSize(windowDpi);
     const DWORD windowStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
     const DWORD windowExtendedStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
+    const bool clientBoundsAvailable = GetClientRect(_window.get(), &clientBounds) != FALSE;
+    const DWORD clientBoundsError = clientBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    RECT windowBounds{};
+    const bool windowBoundsAvailable = GetWindowRect(_window.get(), &windowBounds) != FALSE;
+    const DWORD windowBoundsError = windowBoundsAvailable ? ERROR_SUCCESS : GetLastError();
+    MONITORINFO monitor{sizeof(monitor)};
+    const bool monitorAvailable =
+        GetMonitorInfoW(MonitorFromWindow(_window.get(), MONITOR_DEFAULTTONEAREST), &monitor) != FALSE;
+    const DWORD monitorError = monitorAvailable ? ERROR_SUCCESS : GetLastError();
+    SIZE requestedWindowSize{};
+    const HRESULT requestedWindowResult =
+        CalculateWindowSizeForDpi(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP,
+                                  windowDpi, requestedWindowSize);
+    // Retain every original predicate. The hosted ARM64 failure combined several independent
+    // facts; report the actual values before choosing a DPI, style or OS sizing repair.
+    std::printf("INFO default-client window-dpi=%u system-dpi=%u style=0x%08lX extended-style=0x%08lX "
+                "client-ok=%d client-error=%lu client=[%ld,%ld,%ld,%ld] expected=[%ld,%ld] "
+                "outer-ok=%d outer-error=%lu outer=[%ld,%ld,%ld,%ld] requested-hr=0x%08lX requested=[%ld,%ld] "
+                "monitor-ok=%d monitor-error=%lu monitor=[%ld,%ld,%ld,%ld] work=[%ld,%ld,%ld,%ld] "
+                "max-track=[%d,%d]\n",
+                windowDpi, GetDpiForSystem(), windowStyle, windowExtendedStyle, clientBoundsAvailable,
+                clientBoundsError, clientBounds.left, clientBounds.top, clientBounds.right, clientBounds.bottom,
+                expectedClientSize.cx, expectedClientSize.cy, windowBoundsAvailable, windowBoundsError,
+                windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom,
+                static_cast<unsigned long>(requestedWindowResult), requestedWindowSize.cx, requestedWindowSize.cy,
+                monitorAvailable, monitorError, monitor.rcMonitor.left, monitor.rcMonitor.top, monitor.rcMonitor.right,
+                monitor.rcMonitor.bottom, monitor.rcWork.left, monitor.rcWork.top, monitor.rcWork.right,
+                monitor.rcWork.bottom, GetSystemMetricsForDpi(SM_CXMAXTRACK, windowDpi),
+                GetSystemMetricsForDpi(SM_CYMAXTRACK, windowDpi));
     if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 ||
-        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !GetClientRect(_window.get(), &clientBounds) ||
+        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientBoundsAvailable ||
         clientBounds.right - clientBounds.left != expectedClientSize.cx ||
         clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
