@@ -28,6 +28,11 @@ before removal. Never follow junctions during cleanup or leave compatibility jun
 
 ## Canonical guidance
 
+Future qualification archives use `archive-qualification.ps1` and
+[`Specs/Build/Build_QualificationArchives.md`](Specs/Build/Build_QualificationArchives.md), rather than per-run
+payload copy loops. Retain independent run evidence and every existing source/freshness/profile/stage/runtime
+check. Shared payloads remain read-only; edit only independent copies. Preserve frozen historical helpers.
+
 - This file is the repository-wide instruction source.
 - `Specs/README.md` defines specification authority and the plan lifecycle.
 - Normative product behavior lives in `Specs/<Domain>/`. Read the owning contract before changing behavior.
