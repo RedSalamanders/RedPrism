@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -593,7 +594,7 @@ function New-TailPaddingCase([string]$Name) {
 
 function Invoke-Control($Case, [bool]$ExpectedPass, [int]$ExpectedInline = -1, [int]$ExpectedVectors = -1) {
     $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
-        [string[]]@(), [string[]]@(), [string[]]@())
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and $result.Violations.Count -ne 0) {
         throw "$($Case.Name) unexpectedly violated the ISA gate: $($result.Violations -join '; ')"
     }

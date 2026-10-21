@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param(
     # Main may point this sidecar at the scanner source in its private worktree.
@@ -469,7 +470,7 @@ function Invoke-Control {
     $case = New-Fixture $Name $Fault
     try {
         $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary, $case.Metadata, $case.Symbols, $case.Disassembly,
-            [string[]]@(), [string[]]@(), [string[]]@())
+            [string[]]@(), [string[]]@(), [string[]]@(), $false)
     } catch {
         if ($Fault -eq 'MissingContribution' -and $_.Exception.GetBaseException() -is [IO.InvalidDataException]) {
             ++$script:controlCount

@@ -3,14 +3,14 @@
 // It uses the existing hidden WARP host, ApplicationShutdownTestProbe, and real Application::Shutdown path.
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
-#include "ApplicationShutdownTestProbe.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "CloneReadbackTestGate.h"
 #include "DeferredRelease.h"
 #include "KeyboardState.h"
 #include "ModalProbePrompts.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
 
 #include <algorithm>
 #include <array>

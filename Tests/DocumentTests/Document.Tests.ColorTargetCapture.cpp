@@ -3,7 +3,7 @@
 #include "../../Common/ColorEditHistory.h"
 #include "../../Common/ColorEditWork.h"
 #include "../../Common/Document.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

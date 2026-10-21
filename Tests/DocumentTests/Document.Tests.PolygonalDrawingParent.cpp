@@ -1,6 +1,6 @@
 #include "Document.Tests.PolygonalDrawingParent.h"
 #include "../../RedPrism/PolygonalDrawingJob.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionHitWork.h"
 
 #include <array>

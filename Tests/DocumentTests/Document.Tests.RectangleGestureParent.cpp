@@ -1,7 +1,7 @@
 #include "Document.Tests.RectangleGestureParent.h"
 #include "../../RedPrism/SelectionOutlineGestureJob.h"
 #include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
 #include "LassoFinishGeometry.h"
 

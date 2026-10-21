@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -376,7 +377,7 @@ function Assert-Outcome([string]$Name, [string]$Fault, [bool]$ExpectedPass,
     [int]$ExpectedInlineRows, [int]$ExpectedVectorViolations, [int]$ExpectedEvex = 0) {
     $case = New-Case $Name $Fault
     $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary, $case.Metadata, $case.Symbols, $case.Disassembly,
-        [string[]]@(), [string[]]@(), [string[]]@())
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and $result.Violations.Count -ne 0) {
         throw "$Name expected pass, got: $($result.Violations -join '; ')"
     }

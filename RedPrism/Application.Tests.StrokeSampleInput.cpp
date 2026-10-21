@@ -2,10 +2,10 @@
 
 #include "ChromeHost.h"
 #include "KeyboardState.h"
+#include "Runtime.Tests.StrokeFinishTestGate.h"
 #include "Selection.h"
-#include "StrokeFinishTestGate.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 # Independent PE/PDB/decoder controls for the exact 51-byte wide RCX stack remap.
 # DWORD RVAs deliberately begin with C5, while every target/default remains a proved body boundary.
 [CmdletBinding()]
@@ -292,7 +293,7 @@ Section Contributions
 
 function Assert-WideControl($Case,[bool]$ExpectedPass,[bool]$VectorViolation=$false) {
     try {
-        $result=[RedPrismBuild.IsaScanner]::Scan($Case.Binary,$Case.Metadata,$Case.Symbols,$Case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+        $result=[RedPrismBuild.IsaScanner]::Scan($Case.Binary,$Case.Metadata,$Case.Symbols,$Case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     } catch [IO.InvalidDataException] {
         if ($ExpectedPass -or $Case.Fault -notin 'WrongContribution','MissingContribution') { throw }
         ++$script:CaseCount; Write-Host "PASS isa-wide-rcx-byte-remap.$($Case.Name) metadata-refused"

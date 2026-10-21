@@ -1,8 +1,8 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
 
 #include <cstdint>
 #include <exception>

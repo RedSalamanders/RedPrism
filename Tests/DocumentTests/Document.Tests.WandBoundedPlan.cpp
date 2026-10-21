@@ -1,6 +1,6 @@
 #include "Document.Tests.WandBoundedPlan.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Selection.h"
 #include "SharedPublicationMemory.h"
 #include "WandLayerSelectionWork.h"

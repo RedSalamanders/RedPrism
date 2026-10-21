@@ -1,6 +1,6 @@
 #include "Document.Tests.PixelFinalDelegate.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "PixelMoveClosureWork.h"
 #include "SelectionOutlineGestureJob.h"
 #include "SelectionOutlineGestureMemory.h"

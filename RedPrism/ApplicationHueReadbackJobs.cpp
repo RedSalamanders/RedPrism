@@ -1,7 +1,7 @@
 #include "Application.h"
 
-#include "ColorWorkTestGate.h"
 #include "RecordedDocumentReadbackJob.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 #include "SharedPublicationMemory.h"
 
 #include <algorithm>

@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionHistoryBoundLifetime.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "SelectionMoveOpeningWork.h"

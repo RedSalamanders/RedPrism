@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "HistoryResidencyTestGate.h"
+#include "Runtime.Tests.HistoryResidencyTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

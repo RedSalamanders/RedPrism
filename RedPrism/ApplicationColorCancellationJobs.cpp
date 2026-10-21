@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "ColorDismissalWork.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 
 #include <algorithm>
 #include <limits>

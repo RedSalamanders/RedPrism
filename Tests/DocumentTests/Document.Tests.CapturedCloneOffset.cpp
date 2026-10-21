@@ -1,6 +1,6 @@
 #include "Document.Tests.CapturedCloneOffset.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 

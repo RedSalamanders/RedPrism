@@ -18,6 +18,10 @@ if (-not $clangFormat) {
     throw 'clang-format was not found. Install the Visual Studio C++ Clang tools component (any Visual Studio 2026 edition, not only Insiders) or LLVM.'
 }
 
+$formatterVersion = & $clangFormat --version
+if ($LASTEXITCODE -ne 0) { throw 'Could not identify the selected clang-format.' }
+Write-Host "Formatter: $formatterVersion ($clangFormat)"
+
 $sourceRoots = @('Common', 'RedPrism', 'Tests') | ForEach-Object { Join-Path $repoRoot $_ }
 $sourceFiles = Get-ChildItem -LiteralPath $sourceRoots -Recurse -File |
     Where-Object { $_.Extension -in @('.cpp', '.h') } |
@@ -34,32 +38,26 @@ if ($Check) {
     $formatArgs += '-i'
 }
 
-# Leave room for the executable/options and Windows quoting within CreateProcess's 32,767-character limit.
-# A deep worktree has much longer absolute paths than the primary checkout; every file still gets checked.
+# Long checkout roots plus the native test inventory exceed Windows' process command-line
+# limit. Bound each invocation by characters, retaining every source in Check and write modes.
 $batch = [Collections.Generic.List[string]]::new()
-$batchCharacters = 0
+$characters = $clangFormat.Length + 256
+function Invoke-FormatBatch {
+    if (-not $batch.Count) { return }
+    & $clangFormat @formatArgs -- @($batch)
+    if ($LASTEXITCODE -ne 0) { throw "clang-format failed with exit code $LASTEXITCODE." }
+    $batch.Clear()
+}
 foreach ($sourceFile in $sourceFiles) {
-    $argumentCharacters = $sourceFile.FullName.Length + 3
-    if ($argumentCharacters -gt 24000) {
-        throw "A source path exceeds the formatter command-line budget: $($sourceFile.FullName)"
-    }
-    if ($batchCharacters + $argumentCharacters -gt 24000) {
-        & $clangFormat @formatArgs -- @($batch.ToArray())
-        if ($LASTEXITCODE -ne 0) {
-            throw "clang-format failed with exit code $LASTEXITCODE."
-        }
-        $batch.Clear()
-        $batchCharacters = 0
+    $length = $sourceFile.FullName.Length + 3
+    if ($characters + $length -gt 14000) {
+        Invoke-FormatBatch
+        $characters = $clangFormat.Length + 256
     }
     $batch.Add($sourceFile.FullName)
-    $batchCharacters += $argumentCharacters
+    $characters += $length
 }
-if ($batch.Count -ne 0) {
-    & $clangFormat @formatArgs -- @($batch.ToArray())
-    if ($LASTEXITCODE -ne 0) {
-        throw "clang-format failed with exit code $LASTEXITCODE."
-    }
-}
+Invoke-FormatBatch
 
 if ($Check) {
     Write-Host "Checked $($sourceFiles.Count) files." -ForegroundColor Green

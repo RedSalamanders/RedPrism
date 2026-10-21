@@ -1,8 +1,8 @@
 #include "Application.h"
+#include "Runtime.Tests.ExportWorkTestGate.h"
 
 #include "ChromeHost.h"
 #include "ExportWork.h"
-#include "ExportWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
 #include "RecordedDocumentReadbackJob.h"

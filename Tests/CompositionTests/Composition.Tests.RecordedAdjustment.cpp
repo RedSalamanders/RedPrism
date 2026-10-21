@@ -1,5 +1,5 @@
 #include "Composition.Tests.RecordedAdjustment.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"

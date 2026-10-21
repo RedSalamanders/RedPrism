@@ -1,6 +1,6 @@
 #include "Document.Tests.SizeFinalSource.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasSize.h"
 #include "Document.h"
 #include "DocumentSizeHistory.h"

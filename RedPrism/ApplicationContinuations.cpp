@@ -1,12 +1,12 @@
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
-#include "ColorWorkTestGate.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 #include "SelectionCommandWork.h"
 #include "UiBenchmark.h"
 #include "resource.h"

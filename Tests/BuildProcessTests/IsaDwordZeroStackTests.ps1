@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -210,7 +211,7 @@ function Invoke-DwordControl([string]$Name,[string]$Fault,[int]$Maximum,[bool]$A
     $case = New-DwordZeroStackCase $Name $Fault $Maximum
     try {
         $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,
-            [string[]]@(),[string[]]@(),[string[]]@())
+            [string[]]@(),[string[]]@(),[string[]]@(), $false)
     } catch [System.Management.Automation.MethodInvocationException] {
         if ($Accepted -or $Fault -notin @('PdbAgeMismatch','PdbGuidMismatch') -or
             $_.Exception.InnerException -isnot [IO.InvalidDataException] -or

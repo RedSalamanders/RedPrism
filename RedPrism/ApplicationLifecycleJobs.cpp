@@ -2,8 +2,8 @@
 
 #include "ChromeHost.h"
 #include "DocumentDraft.h"
-#include "DocumentLifecycleTestGate.h"
 #include "ImageImportHistory.h"
+#include "Runtime.Tests.DocumentLifecycleTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

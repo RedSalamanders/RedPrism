@@ -1,7 +1,7 @@
 #include "Io.Tests.ProjectDurabilityFaults.h"
 
 #include "../../Common/ProjectStore.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

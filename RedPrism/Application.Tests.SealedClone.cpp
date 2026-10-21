@@ -1,12 +1,12 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
-#include "LayerMetadataTestGate.h"
-#include "StrokeOpeningTestGate.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
+#include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Runtime.Tests.StrokeOpeningTestGate.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

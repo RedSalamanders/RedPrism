@@ -1,5 +1,9 @@
 # Active plan index
 
+Main consolidation on 21 October preserves P1 **HOLD**. The user will restart P1 from the new main after merging;
+the opening [consolidation ledger](UiNeverBlocks_2026-09-22.md#main-consolidation--21-october-2026) supersedes older
+checkout routing. Satellite history preservation does not adopt unqualified residual code or close delivery gates.
+
 Latest P1 checkpoint - 21 October 2026: execution is HOLD at the user's request to continue later. P1 remains WIP. The [saved continuation](UiNeverBlocks_2026-09-22.md#saved-continuation--21-october-2026) contains all remaining delivery work, current exact evidence, private unfinished scanner/tests, backup hashes, storage limits and restart commands. Compiler/host batch d3fb3dc and pinned native CI setup 9a75051 are published. Focused flip Document/Application controls pass, while the mandatory Release ISA gate remains failed. Native r7 is cancelled for this stop with all 15 artifacts retained; the temporary DxUi candidate and API4 adoption remain separate. The [older handoff](../../TestRuns/P1SessionCheckpoint_2026-10-21.md) links to this current checkpoint. Earlier entries below are historical where superseded.
 
 Physical Ctrl/Polygonal host, typed pixel journal and colour target capture are now adopted from their scoped private proofs. The preceding1,010-TU source passes all three ARM64 cross-builds; its full ASan run retains an input-guard refusal. Deferred live capture now adds25 qualified private facts; clean combined1,011-TU native/affected ARM64 qualification is next; atomic final rows/GPU publication, remaining journal/Wand, ordinary activation and G1 stay open. [Host evidence](../../TestRuns/P1CtrlPixelHost_2026-10-19.md), [colour evidence](../../TestRuns/P1ColorTargetCapture_2026-10-19.md).
@@ -98,3 +102,5 @@ P1 H4 explicit raster mip qualification: [record](../../TestRuns/P1GpuMipChain_2
 Polygonal drawing CPU parent (2026-10-17): complete scoped Release/real-ASan qualify all 23,401 facts,
 284-TU identities and original admission/retirement, with retained failures. Physical multi-click/New
 inside-hit/command arbitration, latest native qualification and ordinary/G1 gates stay open.
+
+- [Scoped testing](ScopedTesting_2026-10-05.md) — ACTIVE: contextual native names, affected scopes, exact evidence, successful-iteration baselines and explicit local/PR qualification.

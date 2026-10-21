@@ -92,16 +92,11 @@ function Find-RedPrismMSBuild {
 function Find-RedPrismClangFormat {
     <#
     .SYNOPSIS
-    Resolves clang-format.exe: PATH, then any installed Visual Studio 2026 (18.x) edition's C++ Clang tools
-    component (not only Insiders), then a standalone LLVM install. Returns $null when none is found.
+    Resolves clang-format.exe from the supported Visual Studio 2026 C++ Clang tools bundle first,
+    then PATH and standalone LLVM. Returns $null when none is found.
     #>
     [CmdletBinding()]
     param()
-    $pathCommand = Get-Command 'clang-format.exe' -ErrorAction SilentlyContinue
-    if ($pathCommand) {
-        return $pathCommand.Source
-    }
-
     $installationPath = Find-RedPrismVisualStudioInstallationPath
     if ($installationPath) {
         $candidates = @(Get-ChildItem -Path @(
@@ -113,6 +108,10 @@ function Find-RedPrismClangFormat {
         }
     }
 
+    $pathCommand = Get-Command 'clang-format.exe' -ErrorAction SilentlyContinue
+    if ($pathCommand) {
+        return $pathCommand.Source
+    }
     $standalone = Join-Path $env:ProgramFiles 'LLVM\bin\clang-format.exe'
     if (Test-Path -LiteralPath $standalone -PathType Leaf) {
         return $standalone

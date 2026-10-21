@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 
 #include <array>
 #include <cstdio>

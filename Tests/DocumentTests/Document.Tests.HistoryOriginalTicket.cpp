@@ -4,7 +4,7 @@
 #include "Jobs.h"
 #include "SharedPublicationMemory.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>

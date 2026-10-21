@@ -356,7 +356,7 @@ document swap uses a test editor; it does not qualify application history or row
 runs `RunPreparedLayerRowsAccessibilitySelfTest` (17 controls) and `RunPreparedRowPublicationTests` (34 controls).
 The accessibility controls require the complete original admission to remain charged after row data retires while
 an expired weak witness still owns the control block, then require the exact refund after that witness is released
-(`ApplicationPreparedLayerRowsAccessibilityTests.cpp`). `RunStandaloneStrokeFinishSelfTest` covers ten actual
+(`Runtime.Tests.ApplicationPreparedLayerRowsAccessibility.cpp`). `RunStandaloneStrokeFinishSelfTest` covers ten actual
 hidden-WARP scenarios with 35 assertions. It retains the original gesture ordinal through worker final preparation
 and checks literal pixels, one history entry, Undo/Redo, sparse storage, eager semantic mask thumbnails, no-op,
 cancellation and joined shutdown. The two added scenarios require dormant healthy-device refusal, unchanged
@@ -600,6 +600,13 @@ limit refusal, empty zero-limit roots, reached reserve/seal allocation failures,
 and balanced final allocation release. Debug iterator-proxy allocations remain tracked; buffer failures are
 injected at actual record-buffer allocation. Preserve the 34 root, 12 view and all preceding controls, and qualify
 all six profiles before closing this construction preparation. Full document drafts/writers remain separate.
+
+Qualification archive storage follows
+[`Build_QualificationArchives.md`](../Build/Build_QualificationArchives.md).
+`Tests/BuildProcessTests/QualificationArchiveTests.ps1` exercises retained filesystem scenarios directly and
+through independent tooling validation (`validate.ps1` and `test.ps1`'s Tooling scope). Preservation receipts never
+replace source/profile/stage/PE/PDB/runtime qualification checks. The tooling runner discovers this script alongside
+the other independent BuildProcessTests; no unconditional duplicate invocation is added to native-only runs.
 
 ### Detached basic raster edits
 
@@ -958,7 +965,7 @@ handler and the kernels are initialized. Every harness mode and `--crash-probe` 
 opens neither Windows Error Reporting's dialog nor a critical-error box.
 
 Each of the four test executables first calls `RedPrismTestFailureReports::RouteAwayFromDialogs()`
-(`Tests/Support/FailureReports.h`). In every configuration `_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT)`
+(`Tests/Support/Support.Tests.FailureReports.h`). In every configuration `_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT)`
 and the same `SetErrorMode` flags leave an abort, a fast-fail or a crash without a dialog. In Debug and ASan Debug a
 wide report hook (`_CrtSetReportHookW2`, which the CRT calls for every report, ANSI ones included) ends the run at the
 first error or assertion report (an STL range check, a CRT assertion, a debug-heap error; a warning keeps the CRT's own
@@ -1251,7 +1258,7 @@ actual original-ticket transfer without a new budget query, more surviving outpu
 slot capacity, independently retired temporaries, both release orders, foreign/stale endpoint isolation,
 growth refusal, real joined Close and charge retention until final strong and weak/control release.
 
-`ApplicationWandLayerHostSelfTest.cpp` has 17 modes and 144 checks; the composite host has 21 modes and
+`Runtime.Tests.ApplicationWandLayerHost.cpp` has 17 modes and 144 checks; the composite host has 21 modes and
 199 checks. Each summary adds one PASS/FAIL record. Require original source/composite literals, New and FIFO
 Add/Subtract while the first request is held, actual Undo/Redo, copied geometry readers, real document/history
 Close and final strong/weak output retirement under the original charge. Composite cases require actual queued
@@ -1523,6 +1530,32 @@ or above the entry count (2), or a target in the previous or next function, insi
 table (6). A genuine VEX instruction in the procedure, in the alignment before the table, on the first byte after the procedure
 or in the next function (4) stays a violation while the two table rows stay data. The real Release images of the merged tree
 pass: [record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md).
+
+The PDB-marked table proof has 39 controls in `IsaMarkedTableTests.ps1`. Each builds a small image whose listing comes from the
+gate's own `llvm-objdump`, so a table decodes as it would at that address. They start from the switch of DxUi's
+`MenuPointerKindFromMessage` as linked into the Release image that the gate rejected on 2 October. Ten are accepted:
+
+- the observed image, whose vector-decoding entries the dispatch recognizers alone reject;
+- the switch at three other addresses, a second table in the procedure, and tables in two procedures;
+- valid byte indices that decode as VEX and EVEX, and each of the three alignment forms. With the three-byte form, a row
+  reaches from a proved DWORD table into the indices that the alignment ends.
+
+Each refusal changes one thing:
+
+- the record (6): absent, named, typed, one byte early or late, or another module's;
+- the procedure (5): absent, another module's, one byte short or long, or a second holder;
+- the range (2): a single entry, or not DWORD-aligned;
+- an entry (5): before the procedure, in the next one, inside the table, inside an earlier table, or inside an instruction;
+- the index bytes (7): an index at the entry count, unmarked, marked in another module, after a marked gap, starting the next
+  procedure, a trailing byte that is not a NOP, or a NOP that does not end on a DWORD boundary.
+
+A genuine VEX instruction in the marked range, in the procedure's code or after it stays a violation (3). So does a row that
+reaches from a proved DWORD table into unproved indices (1).
+
+Every dispatch-recognizer suite (inline, AL-guard, RDX, CL-guard, compact RCX, R10, wide-stack, QWORD stack, R9 byte switch,
+RDI-index and RDI image-base) evaluates every control twice. Through the full gate, an accepted control stays accepted and a
+control that plants vector code stays refused. With the marked-range proof disabled, their dispatch-form assertions apply
+unchanged. [Record](../TestRuns/IsaMarkedDataTables_2026-10-02.md).
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
@@ -3827,3 +3860,25 @@ idle. Receiver readiness is never queried for an empty service. Ordinary live OS
 is unchanged. The complete predecessor roster plus exactly these three controls must pass on the
 required profiles; the [failed attempt and adoption](../TestRuns/P1UtilityIdleNotification_2026-10-20.md)
 remain separate from subsequent qualification.
+
+## Scoped iteration and exact evidence
+
+`Test-Changes.ps1 -Explain` is the read-only planning entrypoint; `Test-Changes.ps1` runs affected scopes. The first run compares committed work since the local merge base with `origin/main` plus independent staged, working, rename-side, deletion and untracked paths. No ref is fetched. Unknown executable/build/shared inputs widen coverage. `-Scopes A,B` selects explicit scopes; unknown or incompatible selectors fail before execution.
+
+A successful default affected run retains a source-byte and Git-index baseline for that checkout, platform, configuration and environment. The next edit selects only changes since that baseline. Staging or committing identical tested working bytes does not rerun tests. A genuinely different staged blob is retained. Failed, interrupted, corrupt, mismatched, explicit partial or CI-pending runs never advance this baseline. An explicit `-BaseRef` bypasses the incremental baseline. Unexplained artifact changes widen coverage. No selection is `NOT_EVALUATED`, never a new repository pass.
+
+Only exact successful reusable scope results may be reused: source/dependency/build policy, binary/DLL/PDB and required deployed inputs, physical checkout, toolchain/environment, profile and normalized scenario arguments must match. Missing runtime inputs, JSON-only profiles, failures and mutation invalidate evidence. Receipts publish atomically only after successful unchanged execution. `-Force` bypasses result reuse; explicit Full/PrePush do not narrow obligations through the incremental baseline. IO/clipboard, stress, resource/benchmark observations, captures and process-fault workflows remain fresh when selected. Omission by an affected plan is not reusable qualification for omitted scopes.
+
+`test.ps1 -Full -SkipTooling` runs the complete native obligation for its profile; `validate.ps1` runs independent tooling and scope regressions once. `format.ps1 -Check` is an independently reusable Format scope. `-Mode Full` selects the complete applicable local obligation. `-Mode PrePush` accounts for matching local work and forthcoming enabled CI. Deferral requires clean committed bytes, a matching reviewed workflow digest, matching profile/scenarios and stable HEAD/worktree through the API lookup. Disabled/missing/unreadable CI, changed runner contracts and direct default-branch pushes keep obligations local. Deferral is always `CI_PENDING`, never a pass or merge approval.
+
+The PR workflow runs independent tooling once and full native tests in x64/ARM64 Debug, Release and ASan Debug. ARM64 execution is native on its hosted ARM64 runner; cross-builds alone never qualify runtime behavior. Every named PR check must succeed on the candidate before merge. The current private-repository account cannot enforce protected-branch checks; the merge procedure must verify the checks explicitly. Visibility is unchanged. There is no automatic main-push rerun of an identical validated merge tree. A changed integration tree, source, runner, profile, environment investigation or unresolved failure requires its corresponding new qualification. Manual dispatch remains available.
+
+Independent tooling owns parser, provenance, discovery, architecture-wiring and benchmark-runner controls once per validation. Native profile execution must not repeat those scripts. Actual UI cancellation, layer-row and display benchmark smoke remain native Performance obligations and cannot enter the independent tooling roster. `Invoke-ToolingTests.ps1 -ListScripts` exposes that roster without running it; `ToolingRoutingTests.ps1` checks both ownership and retained native gates.
+
+Physical focus/IME/AT, release/package acceptance, hardware-specific qualification and paired resource/performance studies retain their owning gates. Hidden/scoped/native CI passes never close those gates. Native test basenames use contextual `Scope.Tests.Something.h/.cpp`; inventories cover active files only. Immutable historical receipts, archived source and legacy references are not renamed or rewritten.
+
+RedPrism derives native consumers from declared project translation units and the current transitive local-include graph, including cycles and newly added callers. Ambiguous owned headers retain every possible consumer; macro/wildcard inputs widen to Full. Test-source rules also identify their standalone suite; shared support, build inputs and unknown files remain conservative. Host font/worker, IO/clipboard, application Runtime, stress, benchmark and capture scopes are not reused. Document and standalone WARP Composition evidence may be reused exactly. Existing runtime bodies, negative probes, stress modes and WARP/capture capability accounting are preserved.
+
+CI's native-scope job binds compiled inputs, test/build/workflow code, the version stamp and hosted image descriptor. A documentation-only continuation may retain the original native qualification only from an exact matching producer with all six actual successful Full native steps; skipped, failed, cancelled, incomplete or unavailable evidence cannot authorize it. The original source/profile/binary/environment evidence remains the observation; inherited rows explicitly claim no new execution, resource measurement or clipboard/environment result. Manual dispatch always executes fresh native qualification. Each native checkout verifies the descriptor before building. This also permits a documentation/Done closeout without repeating an identical already-qualified native matrix.
+
+The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before building. This independent Win32 preflight creates and destroys its own hidden HWND, verifies an exact 1280x800 DPI-scaled client, and records desktop dimensions without changing display settings or taking focus. The application harness uses `SWP_NOSENDCHANGING` only for its initial hidden/capture fixture resize, so the fixed canvas is independent of desktop tracking limits. The existing default-client/style/DPI assertions remain exact, also require a hidden window, and report actual dimensions. Ordinary visible-window initialization retains its normal sizing policy. The preflight is not application qualification; the full native suites still run afterward.

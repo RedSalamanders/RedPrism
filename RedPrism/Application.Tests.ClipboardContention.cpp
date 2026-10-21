@@ -1,8 +1,8 @@
 #include "Application.h"
-#include "../Tests/Support/DocumentFixture.h"
-#include "ApplicationProcessingTestProbe.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
-#include "ClipboardWorkTestGate.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
 
 #include <array>

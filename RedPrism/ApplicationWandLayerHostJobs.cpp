@@ -1,8 +1,8 @@
 #include "Application.h"
 #include "ChromeHost.h"
 
+#include "Runtime.Tests.WandLayerHostTestGate.h"
 #include "SharedPublicationMemory.h"
-#include "WandLayerHostTestGate.h"
 #include "WandLayerSelectionWork.h"
 #include "resource.h"
 

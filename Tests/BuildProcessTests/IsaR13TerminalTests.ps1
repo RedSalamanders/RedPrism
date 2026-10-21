@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param(
     [string]$ScannerSourcePath
@@ -345,7 +346,7 @@ function Invoke-R13Control([string]$Name, [string]$Fault, [int]$Maximum, [bool]$
     try {
         $case = New-R13TerminalCase $Name $Fault $Maximum
         $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary, $case.Metadata, $case.Symbols, $case.Disassembly,
-            [string[]]@(), [string[]]@(), [string[]]@())
+            [string[]]@(), [string[]]@(), [string[]]@(), $false)
     } catch {
         $expectedError = switch ($Fault) {
             'MissingContribution' { 'Missing PDB module/contribution data.' }

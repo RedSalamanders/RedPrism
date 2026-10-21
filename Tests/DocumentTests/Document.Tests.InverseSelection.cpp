@@ -1,6 +1,6 @@
 #include "Document.Tests.InverseSelection.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "InverseSelectionWork.h"
 
 #include "Document.h"

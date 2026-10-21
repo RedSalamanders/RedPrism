@@ -1,5 +1,5 @@
 #include "Document.Tests.PolygonalDispatcher.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionHitWork.h"
 #include "SelectionOutlineGestureJob.h"
 #include "SelectionOutlineGestureMemory.h"

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 
 // One cold-start owner path for the already qualified prepared display, rows and stroke engines.
 // Run and the prepared benchmark reach this only through explicit fixtures. Ordinary activation follows

@@ -1,6 +1,6 @@
 #include "Document.Tests.StrokeOpening.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "Selection.h"
 #include "StrokeOpeningWork.h"

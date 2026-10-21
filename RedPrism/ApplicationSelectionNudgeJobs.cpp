@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "SelectionNudgeTestGate.h"
+#include "Runtime.Tests.SelectionNudgeTestGate.h"
 #include "SelectionNudgeWork.h"
 #include "resource.h"
 

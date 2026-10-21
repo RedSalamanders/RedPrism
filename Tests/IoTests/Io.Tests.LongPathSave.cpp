@@ -3,7 +3,7 @@
 #include "../../Common/ImageCodecs.h"
 #include "../../Common/ProjectStore.h"
 #include "../../Common/Win32FilePath.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

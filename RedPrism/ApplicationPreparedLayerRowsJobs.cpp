@@ -1,9 +1,9 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "LayerRowsTestGate.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
+#include "Runtime.Tests.LayerRowsTestGate.h"
 #include "resource.h"
 
 #include <exception>

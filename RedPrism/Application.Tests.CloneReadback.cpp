@@ -1,11 +1,11 @@
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
-#include "ApplicationShutdownTestProbe.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "CloneReadbackTestGate.h"
 #include "KeyboardState.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
 
 #include <array>
 #include <cmath>

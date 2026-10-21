@@ -1,5 +1,5 @@
 #include "Composition.Tests.RecordedPixelPreview.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasViewport.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"

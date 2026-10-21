@@ -2,7 +2,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "SelectionOffsetTestGate.h"
+#include "Runtime.Tests.SelectionOffsetTestGate.h"
 
 #include <cmath>
 #include <cstddef>

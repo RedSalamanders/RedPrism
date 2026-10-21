@@ -1,5 +1,5 @@
 #include "Document.Tests.SelectionGestureParent.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "SelectionCommandWork.h"

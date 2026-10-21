@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "TransformPreviewTestGate.h"
+#include "Runtime.Tests.TransformPreviewTestGate.h"
 #include "TransformPreviewWork.h"
 #include "resource.h"
 

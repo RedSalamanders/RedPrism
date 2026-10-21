@@ -1,6 +1,6 @@
 #include "Document.Tests.DeferredSelectionMove.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Selection.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"

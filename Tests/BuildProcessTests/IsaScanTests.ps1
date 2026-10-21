@@ -7,90 +7,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
-& (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Shared inline-table parser baseline failed.' }
-& (Join-Path $PSScriptRoot 'IsaR8RaxRdxTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Guarded R8/RAX/RDX interior DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR9dRcxR8Tests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Unsigned R9D/RCX/R8 terminal table controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRsiDwordTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Guarded RSI terminal DWORD parser controls failed.' }
-Write-Host 'BEGIN isa-rsi64-terminal-controls'
-& (Join-Path $PSScriptRoot 'IsaRsi64TerminalTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Full-width RSI terminal DWORD parser controls failed.' }
-Write-Host 'END isa-rsi64-terminal-controls'
-& (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
-Write-Host 'BEGIN isa-rbx-disp8-remap-controls'
-& (Join-Path $PSScriptRoot 'IsaRbxDisp8RemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Guarded RBX disp8 byte-remap parser controls failed.' }
-Write-Host 'END isa-rbx-disp8-remap-controls'
-& (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaCompactSignedRcxByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Compact signed RCX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaDisp8RcxByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaDisp8RcxImm8ByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Disp8 RCX imm8 byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaWideRcxByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Wide RCX imm32 byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR10EcxGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'R10 ECX terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaShortStackRetNopTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Short-stack RET/one-byte NOP parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRbxDirectGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Direct RBX guarded terminal-table parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaAlNearRcxTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'AL near-JA RCX byte guarded terminal-table parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaSplitTailUnsignedTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Joint unsigned split-tail parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaWideUnsignedGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Wide unsigned guarded DWORD parser controls failed.' }
-if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaDwordZeroStackTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaQwordPaddingTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaQwordRetNopTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD RET/one-byte NOP parser controls failed.' }
-if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR9DirectTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Immediate R9 direct terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
-Write-Host 'BEGIN isa-r9-r15-pair-controls'
-& (Join-Path $PSScriptRoot 'IsaR9R15PairTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'R9/R15 paired byte-map parser controls failed.' }
-Write-Host 'END isa-r9-r15-pair-controls'
-& (Join-Path $PSScriptRoot 'IsaR9HoistedDirectTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Hoisted R9 message-switch parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR15SignedRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Hoisted R15 signed byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaSignedRdxRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Signed RDX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaSignedRdxDwordTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Signed RDX DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR14LoopTableTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Hoisted R14 loop-table parser controls failed.' }
-Write-Host 'BEGIN isa-r13-terminal-controls'
-& (Join-Path $PSScriptRoot 'IsaR13TerminalTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Terminal R13 DWORD parser controls failed.' }
-Write-Host 'END isa-r13-terminal-controls'
-Write-Host 'BEGIN isa-rbx-long-guard-controls'
-& (Join-Path $PSScriptRoot 'IsaRbxLongGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'RBX constructor terminal DWORD parser controls failed.' }
-Write-Host 'END isa-rbx-long-guard-controls'
+# Pure parser controls belong to Invoke-ToolingTests.ps1 once per validation.
+# This native gate retains compiler-generated passing/failing PE/full-PDB controls for this profile.
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
-$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
+$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'Tooling.Tests.IsaProbe.cpp'))
 
 function Invoke-Probe {
     param([string] $Name, [string] $ObjectName, [string] $Definition, [bool] $Negative)

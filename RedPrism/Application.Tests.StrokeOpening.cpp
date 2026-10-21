@@ -2,9 +2,9 @@
 
 #include "ChromeHost.h"
 #include "KeyboardState.h"
-#include "StrokeOpeningTestGate.h"
+#include "Runtime.Tests.StrokeOpeningTestGate.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

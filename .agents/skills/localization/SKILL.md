@@ -9,7 +9,7 @@ Read `Specs/UI/UI_ApplicationChrome.md` (Strings) before adding chrome text.
 
 - Every user-visible chrome string is a `STRINGTABLE` entry: declare the `IDS_*` id in `RedPrism/resource.h`,
   define the text in `RedPrism/RedPrism.rc` (`#pragma code_page(65001)`, UTF-8 source), and add the id to the
-  `kIds` table in `Tests/HostTests/HostTests.cpp` so the string-table gate proves it resolves.
+  `kIds` table in `Tests/HostTests/Host.Tests.Runner.cpp` so the string-table gate proves it resolves.
 - Load with `LoadStringResource(nullptr, IDS_X)`; format with `FormatStringResource(nullptr, IDS_X, args...)`.
   Placeholders are positional `std::format` specs (`{0}`, `{1:08X}`) so translators can reorder arguments. Bare `{}`
   and printf specs (`%s`) are forbidden; `HostTests` fails on them.

@@ -5,7 +5,7 @@
 #include "GpuCapabilities.h"
 #include "GpuRecordingCommands.h"
 #include "PreparedLayerRows.h"
-#include "StrokeFinishTestGate.h"
+#include "Runtime.Tests.StrokeFinishTestGate.h"
 #include "StrokeFinishWork.h"
 #include "StrokeSampleWork.h"
 #include "WarpFinishWork.h"

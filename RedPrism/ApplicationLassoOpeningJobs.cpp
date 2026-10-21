@@ -1,8 +1,8 @@
 #include "Application.h"
-#include "ApplicationProcessingTestProbe.h"
 #include "HostLassoInput.h"
 #include "LassoOpeningWork.h"
-#include "LassoWorkTestGate.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.LassoWorkTestGate.h"
 #include "SharedPublicationMemory.h"
 #include "resource.h"
 

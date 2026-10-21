@@ -6,5 +6,5 @@
     # S_[GL]PROC32 range in the matching PDB is exempt, never the surrounding ImageCodecs/other object.
     # Each owning module was observed in the matching Debug/Release/ASan PDBs. A compiler change that moves
     # the COMDAT to another module requires a new reviewed entry, not a wildcard.
-    Functions = @('ImageCodecs.obj!wmemchr', 'HostTests.obj!wmemchr', 'IoTests.obj!wmemchr', 'SettingsStore.obj!wmemchr')
+    Functions = @('ImageCodecs.obj!wmemchr', 'Host.Tests.Runner.obj!wmemchr', 'IO.Tests.Runner.obj!wmemchr', 'SettingsStore.obj!wmemchr')
 }

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "CloneReadbackTestGate.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
 #include "Selection.h"
 
 #include <algorithm>

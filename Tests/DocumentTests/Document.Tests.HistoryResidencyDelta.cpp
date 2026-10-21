@@ -1,5 +1,5 @@
 #include "Document.Tests.HistoryResidencyDelta.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 
 #include <cstdio>

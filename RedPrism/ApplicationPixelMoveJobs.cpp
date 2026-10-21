@@ -2,8 +2,8 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "PixelMoveWorkTestGate.h"
 #include "PreparedRasterPreview.h"
+#include "Runtime.Tests.PixelMoveWorkTestGate.h"
 #include "SharedPublicationMemory.h"
 #include "resource.h"
 

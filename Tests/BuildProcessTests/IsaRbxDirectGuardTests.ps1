@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -362,7 +363,7 @@ foreach ($spec in $cases) {
     Assert-IndependentFixture $case
     try {
         $scan = [RedPrismBuild.IsaScanner]::Scan($case.Binary, $case.Metadata, $case.Symbols, $case.Listing,
-                                               [string[]]@(), [string[]]@(), [string[]]@())
+                                               [string[]]@(), [string[]]@(), [string[]]@(), $false)
         $actual = "$($scan.InlineTableVectorData)/$($scan.VectorInstructions)/$($scan.EvexInstructions)/$($scan.Violations.Count)"
         $expected = "$($case.ExpectedInline)/$($case.ExpectedVectors)/$($case.ExpectedEvex)/$($case.ExpectedViolations)"
         if ($actual -ne $expected) {

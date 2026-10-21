@@ -2,9 +2,9 @@
 
 #include "ChromeHost.h"
 #include "DocumentDraft.h"
-#include "GradientWorkTestGate.h"
-#include "PixelMoveWorkTestGate.h"
 #include "PreparedRasterPreview.h"
+#include "Runtime.Tests.GradientWorkTestGate.h"
+#include "Runtime.Tests.PixelMoveWorkTestGate.h"
 
 #include <array>
 #include <cmath>

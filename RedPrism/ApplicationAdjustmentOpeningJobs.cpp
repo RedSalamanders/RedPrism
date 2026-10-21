@@ -1,14 +1,14 @@
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
 
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
-#include "LayerMetadataTestGate.h"
 #include "RecordedDocumentReadbackJob.h"
+#include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Runtime.Tests.UtilityWorkTestGate.h"
 #include "SharedPublicationMemory.h"
-#include "UtilityWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

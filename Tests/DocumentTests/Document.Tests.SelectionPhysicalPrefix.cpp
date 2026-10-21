@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionPhysicalPrefix.h"
 #include "../../RedPrism/HostSelectionPressInput.h"
 #include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "SelectionCommandWork.h"

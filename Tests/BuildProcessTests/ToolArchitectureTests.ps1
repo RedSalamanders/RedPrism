@@ -54,6 +54,13 @@ function Write-RedPrismDxUiProvenance([string] $RepoRoot, [string] $Platform, [s
 }
 Export-ModuleMember -Function Write-RedPrismDxUiProvenance
 '@
+Write-Fixture 'Build/ScopedTesting.psm1' @'
+function Get-ScopedSourceIdentity([string]$Root,[switch]$CompiledOnly) { 'fixture-source' }
+function Get-ScopedEnvironmentIdentity { 'fixture-environment' }
+function Get-ScopedBuildAttestationKey([string]$Root,[string]$Platform,[string]$Configuration,[int]$BuildNumber) { 'fixture-attestation' }
+function Write-ScopedReceipt([string]$Path,[string]$Key) { }
+Export-ModuleMember -Function Get-ScopedSourceIdentity,Get-ScopedEnvironmentIdentity,Get-ScopedBuildAttestationKey,Write-ScopedReceipt
+'@
 
 $previousArchitecture = [Environment]::GetEnvironmentVariable('PreferredToolArchitecture', 'Process')
 $previousMSBuild = [Environment]::GetEnvironmentVariable('MSBUILD_EXE_PATH', 'Process')

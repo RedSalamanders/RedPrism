@@ -1,10 +1,10 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "LayerMetadataTestGate.h"
-#include "ProjectSaveTestGate.h"
 #include "ProjectSaveWork.h"
 #include "ProjectStore.h"
+#include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Runtime.Tests.ProjectSaveTestGate.h"
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
 

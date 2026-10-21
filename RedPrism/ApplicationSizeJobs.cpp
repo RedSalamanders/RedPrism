@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentSizeHistory.h"
 #include "FinalPublicationWork.h"
-#include "SizingWorkTestGate.h"
+#include "Runtime.Tests.SizingWorkTestGate.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 

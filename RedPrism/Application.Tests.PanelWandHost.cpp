@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 
 #include <algorithm>

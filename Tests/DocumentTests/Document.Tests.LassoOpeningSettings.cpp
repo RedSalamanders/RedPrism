@@ -1,6 +1,6 @@
 #include "Document.Tests.LassoOpeningSettings.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "DocumentDraft.h"
 #include "Executor.h"

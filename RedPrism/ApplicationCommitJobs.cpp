@@ -2,10 +2,10 @@
 
 #include "ChromeHost.h"
 #include "ColorEditHistory.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 #include "resource.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

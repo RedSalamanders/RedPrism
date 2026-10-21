@@ -5,8 +5,8 @@
 #include "PublicationGraphAllocator.h"
 #include "RasterWork.h"
 #include "RecordedDocumentReadbackJob.h"
+#include "Runtime.Tests.UtilityWorkTestGate.h"
 #include "SharedPublicationMemory.h"
-#include "UtilityWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

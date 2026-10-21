@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -144,7 +145,7 @@ foreach ($i in 1..9) { Invoke-Control (New-R10EcxCase "R10EcxBypass$i" "Bypass$i
 foreach ($fault in 'BodyVex','BodyEvex','AdjacentVex','AdjacentEvex') {
     $case = New-R10EcxCase "R10Ecx$fault" $fault
     Invoke-Control $case $false 14 1
-    $proof = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+    $proof = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     $expectedEvex = if ($fault -in 'BodyEvex','AdjacentEvex') { 1 } else { 0 }
     if ($proof.EvexInstructions -ne $expectedEvex) { throw "EVEX count mismatch: $fault" }
     ++$count

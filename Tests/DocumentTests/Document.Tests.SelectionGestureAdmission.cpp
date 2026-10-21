@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionGestureAdmission.h"
 #include "../../RedPrism/SelectionOutlineGestureJob.h"
 #include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "TransformEdit.h"
 
 #include <atomic>

@@ -2,8 +2,8 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "GradientWorkTestGate.h"
 #include "PreparedRasterPreview.h"
+#include "Runtime.Tests.GradientWorkTestGate.h"
 #include "SharedPublicationMemory.h"
 #include "resource.h"
 

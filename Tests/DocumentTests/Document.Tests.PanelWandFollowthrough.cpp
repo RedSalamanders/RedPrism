@@ -1,6 +1,6 @@
 #include "Document.Tests.PanelWandFollowthrough.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
 #include "Document.h"

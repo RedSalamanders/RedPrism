@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param([string]$ScannerSource)
 Set-StrictMode -Version Latest
@@ -153,7 +154,7 @@ function New-WideUnsignedFixture {
 $wideUnsignedCount=0
 function Invoke-WideUnsignedControl($Name,[bool]$ShouldPass,[int]$Maximum=14,[string]$Fault='',[int]$ExpectedInline=-1,[int]$ExpectedVectors=-1){
     $case=New-WideUnsignedFixture -Name $Name -Maximum $Maximum -Fault $Fault
-    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     if($ShouldPass -and $result.Violations.Count -ne 0){throw "$Name unexpectedly failed: $($result.Violations -join '; ')"}
     if(-not $ShouldPass -and $result.Violations.Count -eq 0){throw "$Name was accepted despite its named fault."}
     if($ExpectedInline -ge 0 -and $result.InlineTableVectorData -ne $ExpectedInline){throw "${Name}: expected $ExpectedInline inline data rows, got $($result.InlineTableVectorData)."}

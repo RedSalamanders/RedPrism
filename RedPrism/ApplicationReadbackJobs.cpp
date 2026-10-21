@@ -1,11 +1,11 @@
 #include "Application.h"
 
-#include "ApplicationProcessingTestProbe.h"
-#include "ApplicationShutdownTestProbe.h"
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
 #include "GpuCapabilities.h"
-#include "UtilityWorkTestGate.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.UtilityWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

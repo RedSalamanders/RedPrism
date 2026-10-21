@@ -2,7 +2,7 @@
 
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
-#include "FileWorkTestGate.h"
+#include "Runtime.Tests.FileWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

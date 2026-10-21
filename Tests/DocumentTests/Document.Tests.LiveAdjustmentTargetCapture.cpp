@@ -1,6 +1,6 @@
 #include "Document.Tests.LiveAdjustmentTargetCapture.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "AdjustmentOpeningWork.h"
 #include "ColorEditHistory.h"

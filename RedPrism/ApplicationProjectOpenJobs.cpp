@@ -5,11 +5,11 @@
 #include "ImageCodecs.h"
 #include "ImageImportHistory.h"
 #include "ProjectLoadWork.h"
-#include "ProjectOpenTestGate.h"
 #include "Resources.h"
+#include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>

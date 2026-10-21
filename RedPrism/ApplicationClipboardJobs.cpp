@@ -1,11 +1,11 @@
 #include "Application.h"
 #include "ChromeHost.h"
+#include "Runtime.Tests.ClipboardWorkTestGate.h"
 
 #include "ClipboardCommandWork.h"
 #include "ClipboardEncodingBudget.h"
 #include "ClipboardPasteWork.h"
 #include "ClipboardTransfer.h"
-#include "ClipboardWorkTestGate.h"
 #include "CopyPixelsWork.h"
 #include "ImageCodecs.h"
 #include "ImageImportHistory.h"

@@ -196,6 +196,9 @@ capture failed.
 
 ## Self-test window checks
 
+The initial hidden self-test/benchmark and screenshot fixture resize uses `SWP_NOSENDCHANGING` together with `SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE`. This preserves the specified off-screen client canvas when a CI desktop is smaller than the fixture, without changing the display mode. Subsequent window messages and ordinary visible-window startup retain their normal minimum/maximum tracking policy. The independent Win32 preflight is a geometry check; it does not replace application, rendering, capture or performance qualification.
+
+
 Before initializing the renderer, `--self-test` MUST verify:
 
 - `GetDpiForWindow` is non-zero
@@ -207,6 +210,13 @@ The hidden self-test records the actual DPI, styles, client/outer rectangles, re
 monitor/work rectangles and OS maximum-track metrics before evaluating these checks. Failed Win32 rectangle
 queries retain their error codes. Diagnostics MUST NOT relax the default-size assertion or infer which of its
 combined predicates failed without the recorded values.
+
+Synthetic document-pointer scenarios MUST explicitly frame their intended document region inside the canvas hole.
+At 100% zoom a centered 1280×800 document is larger than the 96-DPI canvas area; document-space points such as
+(40, 40) can otherwise map outside the input surface. The selection, brush, retouch and pixel-edit fixtures use
+an actual-pixel viewport anchored at the document origin, preserving every literal selection/pixel assertion.
+Independent viewport controls cover 96/144/216-DPI canvas sizes and prior zoom/pan state. This harness framing
+does not change ordinary window sizing, production pan/zoom, display settings or pointer-loss handling.
 
 ## Validation
 

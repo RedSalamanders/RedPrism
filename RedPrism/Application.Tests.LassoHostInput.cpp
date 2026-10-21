@@ -1,10 +1,10 @@
 #include "Application.h"
-#include "../Tests/Support/DocumentFixture.h"
-#include "../Tests/Support/HistoryWorkFixture.h"
-#include "ApplicationProcessingTestProbe.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.HistoryWorkFixture.h"
 #include "ChromeHost.h"
 #include "LassoFinishGeometry.h"
-#include "LassoWorkTestGate.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.LassoWorkTestGate.h"
 
 #include <cmath>
 #include <cstdio>

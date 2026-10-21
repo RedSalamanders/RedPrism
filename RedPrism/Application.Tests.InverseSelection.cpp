@@ -3,7 +3,7 @@
 // through the ordered HostCommandInput/OnCommand path and register this host self-test.
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Selection.h"

@@ -1,6 +1,6 @@
 #include "Application.h"
 #include "ChromeHost.h"
-#include "SelectionOffsetTestGate.h"
+#include "Runtime.Tests.SelectionOffsetTestGate.h"
 #include "SelectionOffsetWork.h"
 #include "SelectionOutlineWork.h"
 #include "SharedPublicationMemory.h"

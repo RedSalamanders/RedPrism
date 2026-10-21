@@ -1,6 +1,6 @@
 #include "Application.Tests.RowPublication.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Jobs.h"
 #include "LayerRowsWork.h"
 #include "PreparedLayerRows.h"

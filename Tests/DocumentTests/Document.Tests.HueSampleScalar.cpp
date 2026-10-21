@@ -1,6 +1,6 @@
 #include "Document.Tests.HueSampleScalar.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "Document.h"
 

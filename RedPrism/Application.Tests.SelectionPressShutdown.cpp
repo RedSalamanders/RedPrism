@@ -1,7 +1,7 @@
 #include "Application.h"
-#include "../Tests/Support/DocumentFixture.h"
-#include "ApplicationProcessingTestProbe.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "SharedPublicationMemory.h"
 
 #include <cmath>

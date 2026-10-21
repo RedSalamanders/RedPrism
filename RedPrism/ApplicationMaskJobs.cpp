@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "MaskWorkTestGate.h"
+#include "Runtime.Tests.MaskWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

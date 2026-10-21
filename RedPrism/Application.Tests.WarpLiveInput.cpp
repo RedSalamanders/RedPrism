@@ -4,10 +4,10 @@
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "PreparedLayerRows.h"
-#include "StrokeFinishTestGate.h"
+#include "Runtime.Tests.StrokeFinishTestGate.h"
 #include "WarpOpeningWork.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

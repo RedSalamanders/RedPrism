@@ -1,7 +1,7 @@
 #include "Application.h"
 
-#include "CloneReadbackTestGate.h"
 #include "RecordedDocumentReadbackJob.h"
+#include "Runtime.Tests.CloneReadbackTestGate.h"
 
 #include <algorithm>
 #include <limits>

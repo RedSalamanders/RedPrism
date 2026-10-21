@@ -1,13 +1,13 @@
 // Original-ticket native path-read lifetime and actual host boundary fixtures.
 #include "Application.h"
-#include "ApplicationProcessingTestProbe.h"
-#include "ApplicationShutdownTestProbe.h"
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
 #include "PathClassificationRead.h"
 #include "PathReadWait.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>

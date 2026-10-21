@@ -1,6 +1,6 @@
 #include "Document.Tests.StrokeSampleSession.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "StrokeSampleWork.h"
 
 #include <array>

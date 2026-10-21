@@ -1,6 +1,6 @@
 #include "Document.Tests.DeferredPixelMoveOpening.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "PixelMoveOpeningWork.h"

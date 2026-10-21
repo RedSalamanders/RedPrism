@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param(
     [string]$ScannerSource
@@ -285,7 +286,7 @@ function Invoke-ShortStackControl([string]$Name,[string]$Fault,[bool]$ExpectedPa
     $case = New-ShortStackCase $Name $Fault $Maximum
     try {
         $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,
-            [string[]]@(),[string[]]@(),[string[]]@())
+            [string[]]@(),[string[]]@(),[string[]]@(), $false)
     } catch [IO.InvalidDataException] {
         if ($ExpectedPass) { throw }
         $script:isaCases.Add($Name)

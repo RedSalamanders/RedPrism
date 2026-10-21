@@ -1,5 +1,5 @@
 #include "Document.Tests.HistoryReferenceTopology.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include <array>
 #include <cstdio>

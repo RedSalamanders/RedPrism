@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -310,7 +311,7 @@ function New-IsaQwordRetNopCase([string]$Name,[string]$Fault='',[int]$Maximum=16
 $script:isaRetNopControlNames=[Collections.Generic.List[string]]::new()
 function Invoke-IsaQwordRetNopControl([string]$Name,[string]$Fault,[int]$Maximum,[bool]$Accepted,[int]$Tables=0,[int]$Violations=-1) {
     $case=New-IsaQwordRetNopCase $Name $Fault $Maximum
-    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     $expected=if($Accepted){'accept'}else{'refuse'}
     $observed=if($result.Violations.Count -eq 0){'accept'}else{'refuse'}
     if($expected -ne $observed){Write-Host "FAIL isa-qword-retnop.$Name expected=$expected observed=$observed"; throw "$Name ISA gate mismatch: $($result.Violations -join '; ')"}

@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -265,7 +266,7 @@ function New-IsaQwordPaddingCase([string]$Name,[string]$Fault='',[int]$Maximum=1
 $script:isaPadControlNames=[Collections.Generic.List[string]]::new()
 function Invoke-IsaQwordPaddingControl([string]$Name,[string]$Fault,[int]$Maximum,[bool]$Accepted,[int]$Tables=0,[int]$Violations=-1) {
     $case=New-IsaQwordPaddingCase $Name $Fault $Maximum
-    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+    $result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     if($Accepted -and $result.Violations.Count -ne 0){throw "$Name unexpectedly violated the ISA gate: $($result.Violations -join '; ')"}
     if(-not $Accepted -and $result.Violations.Count -eq 0){throw "$Name bypassed the ISA gate."}
     if($Tables -ge 0 -and $result.InlineTableVectorData -ne $Tables){throw "$Name expected $Tables inline table rows, got $($result.InlineTableVectorData)."}

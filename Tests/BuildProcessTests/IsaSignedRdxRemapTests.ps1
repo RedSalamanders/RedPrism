@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
@@ -92,7 +93,7 @@ function New-SignedRdxControl([string]$Name, [string]$Fault = '') {
 }
 
 function Assert-SignedRdx($Case,[bool]$ExpectedPass) {
-    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary,$Case.Metadata,$Case.Symbols,$Case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())
+    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary,$Case.Metadata,$Case.Symbols,$Case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     if ($ExpectedPass -and ($result.Violations.Count -ne 0 -or $result.InlineTableVectorData -ne 4 -or $result.VectorInstructions -ne 0)) { throw "$($Case.Name): expected exactly four proved data rows: $($result | ConvertTo-Json -Compress)" }
     if (-not $ExpectedPass -and $result.Violations.Count -eq 0) { throw "$($Case.Name): malformed data or executable vector instruction bypassed the ISA gate" }
     ++$script:signedRdxCount

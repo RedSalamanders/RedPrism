@@ -2,8 +2,8 @@
 
 #include "AccountedPublicationObject.h"
 
-#include "LayerMetadataTestGate.h"
 #include "LayerMetadataWork.h"
+#include "Runtime.Tests.LayerMetadataTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

@@ -1,8 +1,8 @@
 // Opt-in committed display route. Normal startup remains on the existing path until pending edits,
 // strokes, utilities, rows and complete resource admission have also been migrated and qualified.
 #include "Application.h"
-#include "ApplicationProcessingTestProbe.h"
 #include "PreparedRasterPreview.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 
 HRESULT Application::InitializeRecordedCommandsOwner() noexcept
 {

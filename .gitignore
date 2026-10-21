@@ -6,6 +6,8 @@
 *.VC.VC.opendb
 
 # Build products
+# Legacy standalone polygonal-input-journal probe; keep generated binaries local.
+/journal-release.exe
 .build/
 Debug/
 Release/

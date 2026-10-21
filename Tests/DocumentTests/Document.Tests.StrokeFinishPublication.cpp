@@ -1,6 +1,6 @@
 #include "Document.Tests.StrokeFinishPublication.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "HistoryRestoreWork.h"
 #include "StrokeFinishWork.h"
 

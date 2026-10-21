@@ -1,5 +1,41 @@
 # P1 — Responsive raster editor delivery milestone
 
+## Main consolidation — 21 October 2026
+
+The user explicitly requested: "Merge P1 in main keep pause I will start again P1 from the new main".
+This authorizes source/history consolidation and its integration checks only. P1 execution remains **HOLD**;
+ordinary activation, product implementation, benchmark qualification and the delivery gates below do not resume.
+After this integration lands, restart from freshly fetched `origin/main` on a new focused branch, rather than
+from the older worktree paths in the historical checkpoint. Preserve that checkpoint's private drafts and receipts.
+
+- [x] Preserve original dirty checkouts, P1 tips and recovery bundles before integration.
+- [x] Reconcile canonical paused tip `85de11d481630d51a7e550f01065dbd22d6eafbd` with main maintenance tip
+  `a6800c2bfdd5ab095cd1baaf1a5c770fefcaf9a1`, including the hosted viewport fixture, scoped testing, archive
+  tooling, build-number/attestation checks and the fragment workflow. Keep P1's pinned DxUi API3 dependency.
+- [x] Normalize active native test filenames and references; retain historical receipt bytes unchanged.
+- [x] Give independent tooling one owner. Keep UI cancellation/layer-row smoke in their native profiles,
+  while parser controls and other independent checks run once in validation.
+- [ ] Review integration validation/format/build results and publish the consolidated branch for merge.
+- [ ] Retain satellite histories without restoring their older or unqualified production source.
+- [ ] Merge into main; keep P1 and every unfinished acceptance gate paused.
+
+The [satellite source inventory](P1MainIntegration_2026-10-21/satellite-source-inventory.json) binds every
+satellite-touched path to both source blobs before naming migration. `IDENTICAL` means exact Git blob equality;
+`DIVERGENT_RETAIN_CURRENT` records a difference, not a claim of semantic equivalence or completed feature adoption.
+All touched paths exist in the canonical checkpoint. An ancestry-only consolidation preserves the alternative
+source for later review; it does not adopt private residual code or qualify it.
+
+| Preserved branch | Tip | Identical / divergent paths | Decision |
+| --- | --- | --- | --- |
+| `codex/p1-sampler` | `8f5110d` | 3 / 1 | Fixture and two evidence/plan files already match exactly; retain current index. |
+| `codex/p1-sampler-callers` | `3f49ea2` | 12 / 40 | Retain current canonical source. The private pause record explicitly forbids wholesale transfer; residency/Warp/mask residuals remain review work on resume. |
+| `ej/p1-selection-gesture-prerequisites` | `819e604` | 52 / 31 | Preserve canonical selection/host evolution and exact shared prerequisites. Reinspect divergent original-ticket/Rectangle/Ellipse details when P1 resumes. |
+| `codex/ui-never-blocks-paused-2026-10-03` | `97dd25b` | 14 / 11 | Documentation/evidence checkpoint only; preserve current continuation and contracts. |
+
+Current integration validation must retain every failure. In particular, the paused ISA scanner is not made
+green by relaxing its negative controls, allowlist or frozen expected manifests. No historical Full receipt
+qualifies the changed integration tree. Hosted billing failures and unavailable native ARM64 execution are not passes.
+
 ## Saved continuation — 21 October 2026
 
 Execution is **HOLD at the user's request to continue later**. P1 remains **WIP**. This section supersedes

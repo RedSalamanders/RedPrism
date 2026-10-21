@@ -1,11 +1,11 @@
 // Private real-caller controls. Expected state follows the ordered-host contract, not pixel implementation.
 #include "Application.h"
 
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
+#include "Runtime.Tests.SelectionCommandTestGate.h"
 #include "Selection.h"
-#include "SelectionCommandTestGate.h"
 
 #include <array>
 #include <cmath>

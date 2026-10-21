@@ -80,7 +80,7 @@ replaced binaries. The sidecar is product evidence, not a separate release syste
 ## Window messages and the API revision
 
 DxUi registers its private window messages by name (`RedSalamanders.DxUi.<Component>.<Purpose>.v1`), so their values lie in
-0xC000–0xFFFF, and it reserves no `WM_APP` or `WM_USER` value (DxUi `Changes/2026-10-01-api-revision-3.md`). A consumer forwards
+0xC000–0xFFFF, and it reserves no `WM_APP` or `WM_USER` value (DxUi API revision 3 notes in `CHANGELOG.md`). A consumer forwards
 every message, registered ones included, to `HandleMessage` of each window it attaches a `DxUi::WindowHost` to, copies no DxUi
 `WM_APP` value, and posts a menu-bar hover with `DxUi::ContextMenu::PostMenuBarHover`. API revision 3 also renamed the model and
 delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel` and `ITreeDelegate`; `ChromeHost` implements the last two for the

@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionGestureAbort.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionMoveOpeningWork.h"
 
 #include <array>

@@ -1,3 +1,4 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param([string]$RepositoryRoot = '')
 if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
@@ -139,7 +140,7 @@ isa-r9-r15-pair.reject.incoming-loop-pair-data	REJECT	reject.incoming-loop-pair-
 isa-r9-r15-pair.reject.incoming-prefixed-jrcxz-producer	REJECT	reject.incoming-prefixed-jrcxz-producer
 isa-r9-r15-pair.reject.incoming-prefixed-jrcxz-data	REJECT	reject.incoming-prefixed-jrcxz-data
 isa-r9-r15-pair.reject.unaligned-tables	REJECT	reject.unaligned-tables
-'@ -split "`n"
+'@ -split '\r?\n'
 
 if (-not (Test-Path -LiteralPath $CandidatePath -PathType Leaf)) { throw "CandidatePath not found: $CandidatePath" }
 if (-not ('RedPrismBuild.IsaScanner' -as [type])) { Add-Type -Path (Resolve-Path -LiteralPath $CandidatePath).Path }
@@ -445,7 +446,7 @@ foreach($line in $expected | Select-Object -Skip 1){
     [void](New-Item -ItemType Directory -Path $directory -Force)
     Materialize-Case $case $directory
     $binary=Join-Path $directory 'Synthetic.exe';$metadata=Join-Path $directory 'contributions.txt';$symbols=Join-Path $directory 'symbols.txt';$listing=Join-Path $directory 'disassembly.txt'
-    $result=[RedPrismBuild.IsaScanner]::Scan($binary,$metadata,$symbols,$listing,[string[]]@(),[string[]]@(),[string[]]@())
+    $result=[RedPrismBuild.IsaScanner]::Scan($binary,$metadata,$symbols,$listing,[string[]]@(),[string[]]@(),[string[]]@(), $false)
     $passed=if($disposition -eq 'ACCEPT'){$result.Violations.Count -eq 0}else{$result.Violations.Count -gt 0}
     if(-not $passed){throw "$label expected $disposition, got violations=$($result.Violations.Count): $($result.Violations -join '; ')"}
     if($disposition -eq 'ACCEPT'){++$accepted}else{++$refused}

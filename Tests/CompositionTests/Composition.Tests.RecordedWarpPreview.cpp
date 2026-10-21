@@ -1,5 +1,5 @@
 #include "Composition.Tests.RecordedWarpPreview.h"
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"
 #include "Jobs.h"

@@ -1,6 +1,6 @@
 #include "Document.Tests.WarpFinishAdmission.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SharedPublicationMemory.h"
 #include "WarpFinishWork.h"
 #include "WarpOpeningWork.h"

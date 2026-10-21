@@ -1,6 +1,6 @@
 #include "Document.Tests.WarpWorkerCancellation.h"
 
-#include "../Support/DocumentFixture.h"
+#include "../Support/Support.Tests.DocumentFixture.h"
 #include "WarpStroke.h"
 
 #include <algorithm>

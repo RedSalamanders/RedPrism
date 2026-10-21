@@ -42,7 +42,7 @@ inline constexpr PixelProbe kOverlapUnionProbes[]{{2, 2, 255}, {7, 7, 255}, {14,
 inline constexpr PixelProbe kOverlapSubtractProbes[]{{2, 2, 255}, {7, 7, 0}, {9, 9, 0}, {10, 10, 0}};
 inline constexpr PixelProbe kIntersectionProbes[]{{5, 5, 255}, {9, 9, 255}, {10, 10, 0}};
 
-// Legacy SelectionTests.swift:32-41 / C++ port DocumentTests.cpp:2115-2129.
+// Legacy SelectionTests.swift:32-41 / C++ port Document.Tests.Runner.cpp:2115-2129.
 // Exact legacy lasso rectangles and checked pixels; areas below are independent calculations from those inputs.
 inline constexpr Rect kLegacyReplace{10, 10, 40, 40};
 inline constexpr Rect kLegacyAddCornerTouch{50, 50, 40, 40};

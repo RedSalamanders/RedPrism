@@ -1,10 +1,10 @@
 #include "Application.h"
 
 #include "../Common/ClipboardReceipt.h"
-#include "../Tests/Support/DocumentFixture.h"
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ClipboardTransfer.h"
-#include "ClipboardWorkTestGate.h"
+#include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
 
 #include <algorithm>

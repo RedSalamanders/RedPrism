@@ -46,7 +46,7 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
   key state at once, the hidden self-test window's included, so a direct read lets the user's typing fail a step.
 - ASan Debug runs the same executables; parser and tile code must pass there before a phase closes.
 - A test process never waits on a dialog: every suite's `wmain` starts with `RedPrismTestFailureReports::RouteAwayFromDialogs()`
-  (`Tests/Support/FailureReports.h`), so a failed CRT or STL check ends the run with its report and exit code 3, and an abort,
+  (`Tests/Support/Support.Tests.FailureReports.h`), so a failed CRT or STL check ends the run with its report and exit code 3, and an abort,
   fast-fail or crash opens no Windows Error Reporting dialog. A new suite does the same, answers `--failure-report-self-test`
   and is added to the list of suites in `Tests/BuildProcessTests/FailureReportTests.ps1`, which runs the switch of each one.
 

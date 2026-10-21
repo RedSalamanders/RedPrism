@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "StrokeOpeningTestGate.h"
+#include "Runtime.Tests.StrokeOpeningTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

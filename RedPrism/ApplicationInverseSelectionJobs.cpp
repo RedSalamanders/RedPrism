@@ -1,7 +1,7 @@
 #include "Application.h"
 #include "ChromeHost.h"
 #include "InverseSelectionWork.h"
-#include "SelectionCommandTestGate.h"
+#include "Runtime.Tests.SelectionCommandTestGate.h"
 #include "SelectionOutlineWork.h"
 #include "SharedPublicationMemory.h"
 #include "resource.h"
