@@ -1,6 +1,6 @@
 # Scoped testing and validation cost
 
-Status: ACTIVE: user resumed implementation on 2026-10-21; native/CI qualification remains open.
+Status: ACTIVE: implementation complete; owner authorized merge on 2026-10-21 with native/CI qualification still open.
 Date: 2026-10-05
 Owner: [current validation contract](../../Testing/Testing_Validation.md)
 
@@ -69,10 +69,11 @@ Later acceptance must prove committed/staged/working/deleted/renamed/untracked d
 - [x] Add source/index baselines from successful default affected runs; explicit partial runs and failures do not advance them.
 - [x] Retain complete explicit Full and pre-push coverage with CI_PENDING distinct from passed evidence.
 - [x] Define one independent tooling job and six exact native PR profiles; no duplicate identical main-push matrix.
-- [ ] Complete focused tooling/format verification and native/CI qualification; retain every failure.
-- [ ] Review the final diff, publish/merge the PR after its exact candidate checks pass, and move this plan to Done.
+- [x] Complete focused tooling/format verification and review the final implementation diff.
+- [x] Publish PR #8 for the owner-authorized merge with failed/pending qualification recorded below.
+- [ ] Complete native/CI qualification, retain every failure, and move this plan to Done only after the remaining gates pass.
 
-The current private-repository GitHub account rejects branch-ruleset access with its plan/visibility restriction. Do not change visibility or claim protected checks are enforced. Explicitly verify all named candidate checks before merge. Existing RedPrism manual ARM64 feasibility results are historical and do not qualify the new current-main candidate.
+The current private-repository GitHub account rejects branch-ruleset access with its plan/visibility restriction. Do not change visibility or claim protected checks are enforced. The normal merge policy verifies all named candidate checks; the owner's explicit exception below permits this merge without closing qualification. Existing RedPrism manual ARM64 feasibility results are historical and do not qualify the new current-main candidate.
 
 Selection, exact evidence, source/index mutation, runtime closure, Unicode rename discovery, native ownership and clean/dirty/concurrent CI delegation have executable fixtures. Native filenames and group IDs do not rewrite legacy golden expectations. Foreground/clipboard desktop operation is not used locally by this tooling work; hosted native runners own their desktop. Resource measurements are not rebaselined and no production performance claim is made.
 
@@ -80,4 +81,10 @@ Selection, exact evidence, source/index mutation, runtime closure, Unicode renam
 
 [Run 39623304709](https://github.com/RedSalamanders/RedPrism/actions/runs/39623304709) retained the initial failures. Tooling lacked the existing pinned PyYAML package. All three x64 builds and the standalone native suites completed, then the existing default-client/DPI check failed in the hidden WARP application self-test. No assertion, golden or ISA control is relaxed. The correction installs validation requirements, separates build/test steps, and adds actual client/style/desktop diagnostics. [Run 39631307275](https://github.com/RedSalamanders/RedPrism/actions/runs/39631307275) then established that the hosted 1024x768 display cannot be enlarged; all profiles refused the unavailable display fixture before compilation. The final implementation sizes only initial hidden/capture harness windows independently of desktop tracking limits, preserves exact DPI/style/client assertions, and preflights an owned hidden HWND without changing display settings. The local independent probe passed at 144 DPI; full native qualification remains required.
 
-[Run 39634425945](https://github.com/RedSalamanders/RedPrism/actions/runs/39634425945) passed the independent exact-size hidden-window preflight on all six 1024x768 hosted desktops and all 24 scoped regressions. Its formatting step exposed global LLVM 20 overriding the repository's Visual Studio LLVM 22 style. Formatter discovery now prefers the supported VS bundle, reports its version, and binds its binary hash into reusable tooling evidence. Full candidate checks remain required before merge.
+[Run 39634425945](https://github.com/RedSalamanders/RedPrism/actions/runs/39634425945) passed the independent exact-size hidden-window preflight on all six 1024x768 hosted desktops and all 24 scoped regressions. Its formatting step exposed global LLVM 20 overriding the repository's Visual Studio LLVM 22 style. Formatter discovery now prefers the supported VS bundle, reports its version, and binds its binary hash into reusable tooling evidence.
+
+## Owner-authorized merge and outstanding qualification
+
+On 2026-10-21 the owner instructed "merge anyway" after GitHub reported that account payments/spending limits prevented the remaining checks from starting. This is a merge exception, not successful test evidence. [PR #8](https://github.com/RedSalamanders/RedPrism/pull/8) may merge with this plan kept active.
+
+Implementation candidate `4cf777b` passed tooling and native-scope checks in [run 39637882755](https://github.com/RedSalamanders/RedPrism/actions/runs/39637882755). All 24 scoped regressions and formatting of 563 files passed. All three x64 Full native jobs failed; ARM64 jobs were still running when the merge exception was recorded. The Release job passed its build, standalone Host/Document/Composition/IO suites and exact hidden-window fixture (`dpi=96 client=1280x800 desktop=1024x768 hidden=1`), then failed the application keyboard self-test with "Dragging the Marquee did not select a whole-pixel rectangle." The failed assertion is retained; no golden or predicate is relaxed. Investigate and repair this failure, inspect each remaining native result, and qualify the final corrected inputs before closing this plan. Existing P1/S3/G1, physical-capability and paired-resource gates remain separate.
