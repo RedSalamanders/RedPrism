@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Record the paused P1 main consolidation: stable x64 Release build, linked-image ISA gates and selected Host/Document/IO/Composition/Runtime suites pass.
+  Preserve failed attempts and satellite alternative source in history. Pure ISA parser controls now run once in independent tooling;
+  native image/compiler controls retain profile ownership. Full/platform/resource gates and unfinished P1 activation remain on HOLD.
 - Consolidate paused P1 source with current main while keeping P1 HOLD, ordinary activation and all unfinished acceptance gates open.
   Preserve satellite histories and exact divergent-source inventory; reconcile hosted viewport fixtures, contextual native test names,
   build attestations, archive tooling and independent tooling ownership. Current integration checks retain all scanner/runtime failures;

@@ -15,9 +15,10 @@ from the older worktree paths in the historical checkpoint. Preserve that checkp
 - [x] Normalize active native test filenames and references; retain historical receipt bytes unchanged.
 - [x] Give independent tooling one owner. Keep UI cancellation/layer-row smoke in their native profiles,
   while parser controls and other independent checks run once in validation.
-- [ ] Review integration validation/format/build results and publish the consolidated branch for merge.
-- [ ] Retain satellite histories without restoring their older or unqualified production source.
-- [ ] Merge into main; keep P1 and every unfinished acceptance gate paused.
+- [x] Review integration validation, formatting and the stable x64 Release build/selected functional suites;
+  retain failed attempts separately. [Exact scope](../../TestRuns/P1MainIntegration_2026-10-21.md).
+- [x] Retain satellite histories without restoring their older or unqualified production source (`aeb9d69`, unchanged tree).
+- [x] Route restart to freshly fetched main and keep P1 and every unfinished acceptance gate paused.
 
 The [satellite source inventory](P1MainIntegration_2026-10-21/satellite-source-inventory.json) binds every
 satellite-touched path to both source blobs before naming migration. `IDENTICAL` means exact Git blob equality;
