@@ -16,6 +16,11 @@ actual compiler/dependency and native runtime qualification still require the se
 Native ARM64 feasibility also records and requires the current default MSVC version before canonical work.
 `NativeArmValidationTests.ps1` exercises that exact host-selection boundary with isolated installation/discovery
 stand-ins. Those controls establish early refusal and environment selection, never ARM64 execution or product identity.
+The six initializer cases include explicitly provisioned native MSBuild selection and an older provisioned
+default-toolset refusal before any environment change. All 60 predecessor controls remain required; 14 added
+controls bring this boundary fixture to 74. The real disposable CI installation, pinned tool bytes, actual
+compiler/dependency inputs and native runtime require their own observed receipts. The canonical gates remain
+unchanged when native CI provisions its pinned side-by-side toolchain.
 
 ### Persistent history and raster residency controls
 

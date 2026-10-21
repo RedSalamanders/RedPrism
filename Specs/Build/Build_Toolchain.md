@@ -56,8 +56,18 @@ and solution stand-ins to cover these boundaries, failures, clean builds and cal
 The current P1 native ARM64 feasibility wrapper requires default MSVC `14.52.37025` in the selected installation.
 It records required/actual versions in `toolset-requirement.json` and refuses a mismatch before changing the
 canonical discovery environment or starting work. Matching this declaration alone does not qualify compiler,
-dependency or runtime products. The hosted image must actually provide that native default toolset; earlier
-14.51 native evidence cannot qualify the 14.52 environment.
+dependency or runtime products. Earlier 14.51 native evidence cannot qualify the 14.52 environment.
+
+The reviewed disposable native CI job provisions BuildTools catalog `18.12.12316.0` side by side at
+`C:\P1NativeTools1452`. Fixed official bootstrapper/channel/catalog URLs and SHA-256 values bind the input;
+the bootstrapper also requires a valid Microsoft publisher signature. Local pinned manifests select native
+ARM64 MSBuild, ARM64-hosted compiler tools and SDK 26100. An existing target, input mismatch, installer failure
+or restart requirement refuses the job. Installed MSBuild/compiler bytes must match independently inspected
+AA64 package members before the unchanged default-version/host-selection guard can mutate the environment.
+Installer results, fresh installer logs and observed product hashes are retained, including mismatch facts.
+Log collection cannot replace the primary installer error. This CI setup never installs tools on the user's
+computer. The artifact retains the selected ARM64 Release intermediates and DxUi library/identity for
+independent compiler/dependency readback. Provisioning alone grants no runtime or P1 qualification.
 
 ## Configurations and platforms
 

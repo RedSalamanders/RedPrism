@@ -60,7 +60,9 @@ $toolsetCases = @(
     @{name='required';version='14.52.37025';compiler=$true;success=$true;matched=$true},
     @{name='older-default';version='14.51.36231';compiler=$true;success=$false;matched=$false},
     @{name='newer-default';version='14.53.37100';compiler=$true;success=$false;matched=$false},
-    @{name='missing-native-compiler';version='14.52.37025';compiler=$false;success=$false;matched=$true}
+    @{name='missing-native-compiler';version='14.52.37025';compiler=$false;success=$false;matched=$true},
+    @{name='provisioned-required';version='14.52.37025';compiler=$true;success=$true;matched=$true;explicit=$true},
+    @{name='provisioned-older-default';version='14.51.36231';compiler=$true;success=$false;matched=$false;explicit=$true}
 )
 foreach ($toolsetCase in $toolsetCases) {
     # This child scope keeps the extracted functions and fake discovery exports out of the progress controls.
@@ -71,6 +73,8 @@ foreach ($toolsetCase in $toolsetCases) {
         $installation = Join-Path $repoRoot 'SelectedVS'
         $originalMSBuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
         $nativeMSBuild = Join-Path $installation 'MSBuild/Current/Bin/arm64/MSBuild.exe'
+        $useExplicitPath = $Case.ContainsKey('explicit') -and $Case.explicit
+        $expectedOriginalMSBuild = if ($useExplicitPath) { $nativeMSBuild } else { $originalMSBuild }
         $defaultVersion = Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt'
         $compiler = Join-Path $installation ("VC/Tools/MSVC/" + $Case.version + '/bin/HostARM64/ARM64/cl.exe')
         $discoveryPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'Build/VisualStudioDiscovery.psm1'))
@@ -95,7 +99,8 @@ function Find-RedPrismVisualStudioInstallationOfMSBuild {
     param([string] $MSBuildPath)
     $installation = Join-Path (Split-Path -Parent $PSScriptRoot) 'SelectedVS'
     $expected = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
-    if ($MSBuildPath -cne $expected) { throw 'Unexpected isolated discovery input.' }
+    $native = Join-Path $installation 'MSBuild/Current/Bin/arm64/MSBuild.exe'
+    if ($MSBuildPath -cne $expected -and $MSBuildPath -cne $native) { throw 'Unexpected isolated discovery input.' }
     $installation
 }
 Export-ModuleMember -Function Find-RedPrismMSBuild,Find-RedPrismVisualStudioInstallationOfMSBuild
@@ -112,7 +117,8 @@ Export-ModuleMember -Function Find-RedPrismMSBuild,Find-RedPrismVisualStudioInst
             $env:PreferredToolArchitecture = 'literal-prior-host'
             $environmentBefore = [Environment]::GetEnvironmentVariables('Process')
             try {
-                Initialize-NativeBuildHost
+                if ($useExplicitPath) { Initialize-NativeBuildHost -MSBuildPath $nativeMSBuild }
+                else { Initialize-NativeBuildHost }
                 $succeeded = $true
             } catch {
                 $failure = $_.Exception.Message
@@ -159,7 +165,7 @@ Export-ModuleMember -Function Find-RedPrismMSBuild,Find-RedPrismVisualStudioInst
                 $actualSelectionNames = @($selection.PSObject.Properties.Name)
                 Assert-Check ($actualSelectionNames.Count -eq $selectionNames.Count -and
                     @(Compare-Object $selectionNames $actualSelectionNames).Count -eq 0 -and
-                    $selection.originalMSBuild -ceq $originalMSBuild -and
+                    $selection.originalMSBuild -ceq $expectedOriginalMSBuild -and
                     $selection.selectedMSBuild -ceq $nativeMSBuild -and
                     $selection.requestedPreferredToolArchitecture -ceq 'arm64' -and
                     $selection.msbuildSha256 -ceq $MetadataHash -and
@@ -217,6 +223,8 @@ Export-ModuleMember -Function Find-RedPrismMSBuild,Find-RedPrismVisualStudioInst
                 ((Test-Path -LiteralPath $compiler -PathType Leaf) -eq $Case.compiler)) ($prefix + 'installation-stand-ins-remain-unchanged')
             Add-Result ('toolset-' + $Case.name) ([ordered]@{
                 initializerExecuted=$true;requirement=$requirement;failure=$failure
+                requestedMSBuildPath=$(if ($useExplicitPath) { $nativeMSBuild } else { $null })
+                expectedOriginalMSBuild=$expectedOriginalMSBuild;expectedSelectedMSBuild=$nativeMSBuild
                 changedEnvironmentKeys=$changedEnvironmentKeys
                 inheritedEnvironment=$inherited;metadataSource=$MetadataSource;metadataSha256=$MetadataHash
                 compilerStandInSha256=$(if ($Case.compiler) { $compilerHash } else { $null })
@@ -347,6 +355,16 @@ $beforeEnvironment = @(Evidence-Commands 'environment-before.json')
 Assert-Check ($beforeSource.Count -eq 1 -and $beforeEnvironment.Count -eq 1 -and
     $beforeSource[0].Extent.StartOffset -lt $afterAssignment[0].Extent.StartOffset -and
     $beforeEnvironment[0].Extent.StartOffset -lt $afterAssignment[0].Extent.StartOffset) 'opening-source-environment-receipts-retained'
+$provisionCalls = @($mainTry[0].Body.FindAll({param($node)
+    $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Install-PinnedNativeToolchain'
+}, $true))
+Assert-Check ($beforeSource.Count -eq 1 -and $provisionCalls.Count -eq 1 -and
+    $initializeCalls.Count -eq 1 -and $environmentCalls.Count -eq 2 -and $canonicalStarts.Count -eq 1 -and
+    $beforeSource[0].Extent.StartOffset -lt $provisionCalls[0].Extent.StartOffset -and
+    $provisionCalls[0].Extent.StartOffset -lt $initializeCalls[0].Extent.StartOffset -and
+    @($environmentCalls | Where-Object { $_.Extent.StartOffset -le $provisionCalls[0].Extent.StartOffset }).Count -eq 0 -and
+    $provisionCalls[0].Extent.StartOffset -lt $canonicalStarts[0].Extent.StartOffset
+) 'provisioning-follows-opening-source-and-precedes-host-environment-and-child-start'
 
 # Confirm canonical parameter metadata, then run only invalid parameter children that fail before build.ps1.
 $params=@($entryAst.ParamBlock.Parameters)

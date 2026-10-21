@@ -55,6 +55,12 @@ jobs:
             .build/native-arm-ci/**
             .build/logs/**
             .build/ARM64/Release/**
+            .build/Intermediate/ARM64/Release/**
+            .build/dependencies/DxUi/*.json
+            .build/dependencies/DxUi/*.props
+            .build/dependencies/DxUi/*/DxUi.build-identity.json
+            .build/dependencies/DxUi/*/ARM64/Release/DxUi.lib
+            .build/dependencies/DxUi/*/ARM64/Release/DxUi.pdb
             .build/screenshots/**
             !.build/**/*.dmp
 
