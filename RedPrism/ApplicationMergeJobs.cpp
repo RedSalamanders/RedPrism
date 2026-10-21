@@ -2,7 +2,7 @@
 
 #include "DocumentReadbackJob.h"
 #include "RasterWork.h"
-#include "UtilityWorkTestGate.h"
+#include "Runtime.Tests.UtilityWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "SelectionMoveCloseTestGate.h"
+#include "Runtime.Tests.SelectionMoveCloseTestGate.h"
 #include "SelectionMoveWork.h"
 #include "resource.h"
 

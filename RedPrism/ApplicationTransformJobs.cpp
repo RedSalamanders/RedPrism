@@ -3,9 +3,9 @@
 #include "DuplicateOpeningWork.h"
 #include "FloatingMergeWork.h"
 #include "FloatingOpeningWork.h"
+#include "Runtime.Tests.TransformWorkTestGate.h"
 #include "TransformCancellationWork.h"
 #include "TransformCommitWork.h"
-#include "TransformWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

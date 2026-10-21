@@ -1,6 +1,6 @@
 #include "Application.h"
-#include "ApplicationProcessingTestProbe.h"
-#include "ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
@@ -657,15 +657,26 @@ int Application::RunSelfTest() noexcept
     const SIZE expectedClientSize = ScaleDefaultClientSize(windowDpi);
     const DWORD windowStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_STYLE));
     const DWORD windowExtendedStyle = static_cast<DWORD>(GetWindowLongPtrW(_window.get(), GWL_EXSTYLE));
+    const BOOL clientAreaRead = GetClientRect(_window.get(), &clientBounds);
+    const bool hiddenFixture = !IsWindowVisible(_window.get());
     if (windowDpi == 0 || (windowStyle & WS_CLIPCHILDREN) == 0 ||
-        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !GetClientRect(_window.get(), &clientBounds) ||
+        (windowExtendedStyle & WS_EX_NOREDIRECTIONBITMAP) == 0 || !clientAreaRead || !hiddenFixture ||
         clientBounds.right - clientBounds.left != expectedClientSize.cx ||
         clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
-        SelfTestFailure(L"The default client area does not match the current monitor DPI.\n");
+        SelfTestFailure(std::format(L"The default client area does not match the current monitor DPI: dpi={}, "
+                                    L"read={}, client={}x{}, expected={}x{}, style=0x{:08X}, extended=0x{:08X}, "
+                                    L"desktop={}x{}, hidden={}.\n",
+                                    windowDpi, clientAreaRead != FALSE, clientBounds.right - clientBounds.left,
+                                    clientBounds.bottom - clientBounds.top, expectedClientSize.cx,
+                                    expectedClientSize.cy, windowStyle, windowExtendedStyle,
+                                    GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hiddenFixture));
         return 2;
     }
 
+    std::printf("WINDOWFIXTURE dpi=%u client=%ldx%ld desktop=%dx%d hidden=1\n", windowDpi,
+                clientBounds.right - clientBounds.left, clientBounds.bottom - clientBounds.top,
+                GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
     result = InitializeRenderer();
     if (FAILED(result))
     {
@@ -2587,7 +2598,11 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     {
         return result;
     }
-    if (!SetWindowPos(window, nullptr, 0, 0, windowSize.cx, windowSize.cy, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE))
+    // Fixed harness canvases must not be clamped to a hosted runner's small desktop by WM_GETMINMAXINFO.
+    // This changes only the initial harness fixture; later window messages retain their ordinary policy.
+    const UINT sizingFlags =
+        SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | ((!visible || !_screenshotPath.empty()) ? SWP_NOSENDCHANGING : 0u);
+    if (!SetWindowPos(window, nullptr, 0, 0, windowSize.cx, windowSize.cy, sizingFlags))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }

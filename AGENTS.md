@@ -119,6 +119,9 @@ regressions need measurement and a spec or WIP justification.
 
 ARM64 builds cross-compile with `build.ps1 -Platform ARM64`; runtime claims need a native ARM64 host.
 
+## Scoped testing policy (2026-10-21)
+
+Use `Test-Changes.ps1 -Explain` and the affected default while editing. Use explicit Full/PrePush for qualification; this accepted workflow replaces unconditional full-test iteration. Successful default affected runs advance their source/index baseline; explicit partial, failed, mutated or CI-pending runs do not. Reuse only exact successful evidence. CI_PENDING requires all named candidate checks to pass before merge, including when this private account cannot enforce protected checks. Preserve native/manual/platform/performance gates in Specs/Testing/Testing_Validation.md and contextual Scope.Tests.Something.h/.cpp names.
 ## Changes workflow
 
 Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)

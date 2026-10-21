@@ -5,11 +5,11 @@
 #include "ClipboardEncodingBudget.h"
 #include "ClipboardPasteWork.h"
 #include "ClipboardTransfer.h"
-#include "ClipboardWorkTestGate.h"
 #include "CopyPixelsWork.h"
 #include "DocumentReadbackJob.h"
 #include "ImageCodecs.h"
 #include "ImageImportHistory.h"
+#include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

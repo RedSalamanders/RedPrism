@@ -2,7 +2,7 @@
 
 #include "ChromeHost.h"
 #include "ColorEditHistory.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

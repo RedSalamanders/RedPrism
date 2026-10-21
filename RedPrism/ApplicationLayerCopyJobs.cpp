@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "LayerCopyWorkTestGate.h"
+#include "Runtime.Tests.LayerCopyWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

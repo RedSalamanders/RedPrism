@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "SelectionCommandTestGate.h"
+#include "Runtime.Tests.SelectionCommandTestGate.h"
 #include "SelectionCommandWork.h"
 #include "resource.h"
 

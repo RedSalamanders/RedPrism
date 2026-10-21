@@ -43,3 +43,5 @@ deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-22.m
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be
 indexed here before they authorize implementation.
+
+- [Scoped testing](ScopedTesting_2026-10-05.md) — ACTIVE: contextual native names, affected scopes, exact evidence, successful-iteration baselines and explicit local/PR qualification.

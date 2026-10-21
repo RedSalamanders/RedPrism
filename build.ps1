@@ -64,6 +64,9 @@ function Resolve-BuildNumber {
 
 Assert-RedPrismBuildOutputProcessNotRunning -ExpectedExecutablePath $executable
 
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+$scopedSourceBefore=Get-ScopedSourceIdentity $repoRoot -CompiledOnly
+$scopedEnvironmentBefore=Get-ScopedEnvironmentIdentity
 $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
 
@@ -150,6 +153,9 @@ if (-not $Clean) {
     Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
     $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
     Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
+    Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+    if((Get-ScopedSourceIdentity $repoRoot -CompiledOnly) -cne $scopedSourceBefore -or (Get-ScopedEnvironmentIdentity) -cne $scopedEnvironmentBefore){throw 'Source/toolchain environment changed during build; no build attestation was published.'}
+    Write-ScopedReceipt (Join-Path (Split-Path $executable) 'build-attestation.json') (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $BuildNumber)
     if ($Run) {
         $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
         if ($Platform -eq 'ARM64' -and $native -ne 'Arm64') {

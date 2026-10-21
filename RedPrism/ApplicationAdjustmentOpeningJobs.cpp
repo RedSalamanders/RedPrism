@@ -3,7 +3,7 @@
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
 #include "DocumentReadbackJob.h"
-#include "UtilityWorkTestGate.h"
+#include "Runtime.Tests.UtilityWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "FileWorkTestGate.h"
+#include "Runtime.Tests.FileWorkTestGate.h"
 #include "resource.h"
 
 #include <array>

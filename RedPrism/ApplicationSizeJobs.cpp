@@ -2,7 +2,7 @@
 
 #include "ChromeHost.h"
 #include "DocumentSizeHistory.h"
-#include "SizingWorkTestGate.h"
+#include "Runtime.Tests.SizingWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

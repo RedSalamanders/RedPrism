@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "AdjustmentClosureWork.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 
 #include <algorithm>
 #include <array>
