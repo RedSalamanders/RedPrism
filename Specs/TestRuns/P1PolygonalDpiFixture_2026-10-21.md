@@ -1,6 +1,6 @@
 # P1 Polygonal DPI fixture portability — 2026-10-21
 
-Status: complete same-source local runtime/build matrix qualified; publication and renewed native validation pending. P1 remains WIP.
+Status: complete same-source local matrix qualified and published as `ef1b2850971d4f5c449d8ab094dd5417951797f3`; renewed native validation pending. P1 remains WIP.
 
 ## Checklist
 
@@ -11,7 +11,7 @@ Status: complete same-source local runtime/build matrix qualified; publication a
 - [x] Run full x64 Debug, Release and genuine ASan; preserve all 12,298 predecessors plus three new facts.
 - [x] Cross-build ARM64 Debug, Release and ASan Debug.
 - [ ] Qualify native Release separately on the published source.
-- [ ] Commit/push each qualified step and verify the destination SHA; retain every failed attempt.
+- [x] Publish the qualified local fixture step as `ef1b2850971d4f5c449d8ab094dd5417951797f3` and verify the branch destination SHA; retain every failed attempt.
 
 ## Observed failure
 
