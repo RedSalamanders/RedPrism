@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Publish the historical paused-branch adversarial review, with WIP index routing and explicit snapshot/validation limits. P1 integration and current-head review triage remain open.
 - Record the paused P1 main consolidation: stable x64 Release build, linked-image ISA gates and selected Host/Document/IO/Composition/Runtime suites pass.
   Preserve failed attempts and satellite alternative source in history. Pure ISA parser controls now run once in independent tooling;
   native image/compiler controls retain profile ownership. Full/platform/resource gates and unfinished P1 activation remain on HOLD.
