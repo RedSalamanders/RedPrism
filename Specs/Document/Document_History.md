@@ -352,6 +352,12 @@ maintenance worker without publishing history or changing document, generation, 
 may release the borrowed subscription context or worker input before this join. Stopping subscriptions fences
 later process-wide cache notifications; repeated shutdown is idempotent.
 
+Undo/Redo joined shutdown retains its original ticket and exact HistoryWork stamp through producer and
+payload retirement. Close suppresses useful completion callbacks; only its completed join may acknowledge
+that record, finish that exact stamp and clear both optionals. No document/history/saved-marker publication
+is permitted during this acknowledgement. A never-captured restore owns no payload; a prepared held restore
+must wake from the actual shutdown event and retire off owner. Repeated Shutdown cannot repeat the join.
+
 ## Trim
 
 Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe

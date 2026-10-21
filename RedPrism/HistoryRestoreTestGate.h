@@ -22,5 +22,6 @@ struct HistoryRestoreTestGate final
     bool throwResidencyRefresh = false, cancelResidencyRefresh = false;
     std::uint64_t reservationBytes = 0;
     std::atomic<bool> reservationHeld{false}, refreshReservationHeld{false}, retired{false}, retiredOffOwner{false};
+    std::atomic<bool> shutdownObserved{false};
     std::atomic<unsigned int> visits{0}, historyFaultHits{0}, captures{0}, residentGrowths{0}, residencyRefreshes{0};
 };

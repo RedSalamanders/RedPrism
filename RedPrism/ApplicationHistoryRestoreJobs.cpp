@@ -110,6 +110,9 @@ class Application::HistoryRestoreJob final : public Job
                 return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
             const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
             const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
+            // Test-only witness: cancellation or a timeout alone cannot prove the shutdown event woke this Run.
+            if (waited == WAIT_OBJECT_0 + 1)
+                _gate->shutdownObserved.store(true);
             if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
                 return {JobStatus::Cancelled};
             return waited == WAIT_OBJECT_0 ? _gate->result

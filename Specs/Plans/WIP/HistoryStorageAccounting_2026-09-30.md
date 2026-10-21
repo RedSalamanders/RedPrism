@@ -236,9 +236,13 @@ accounting and late-residency synchronization, H4 and measured G1 remain separat
       with no shared-cache publication or assembly/residency gate. The complete current native matrix preserves
       the independent `sparse-region-reads.*` fixtures, including held-residency reads and unchanged nested cache
       identities/epoch. Explicit `Data()` keeps its separate materializing branch. `TransformEdit::PixelsOf`
-      remains a direct materializer on qualified checkpoint `67a77dd`. Its private-reader repair and 12 literal
-      tests are now adopted in the next combined source, with current native qualification still pending. A cached topology never authorizes stale resident totals. Keep the actual
-      growth/refresh/trim gates and measured reference/delta cost under H3.
+      now retains a private contiguous sampling owner for unassembled sources. Main reconciles the unchanged
+      implementation, tests and registration against the archived `oh4d1`/`oh4r1`/`oh4a1` profiles: all 12 literal
+      `distort-private-read` controls pass in each, including nested BGRA/Gray bytes, unchanged source caches,
+      placement, format/corner refusals and the uniform mask identity shortcut. This uses exact existing component
+      evidence, not a new run; native ARM64 runtime, complete phase admission and all-caller H3 remain open.
+      A cached topology never authorizes stale resident totals. Keep the actual growth/refresh/trim gates and
+      measured reference/delta cost under H3.
     - [ ] Qualify address reuse, checked overflow and oldest-first cases, plus concurrent late sparse materialization
       and resident-charge synchronization before trim preparation/publication. Current image/project encoders use
       private read bands; exercise actual `Data()` materializers. Verify cancellation/allocation refusal preserves

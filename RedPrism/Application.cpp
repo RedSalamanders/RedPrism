@@ -4000,6 +4000,12 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();
     _documentLifecycleTicket.reset();
+    // Undo/Redo completion is suppressed by Close too. Its joined retirement acknowledges the original
+    // restore record; retain both fields until that join, then finish only its exact history stamp.
+    if (_historyRestoreStamp)
+        (void)_historyWork.Finish(_historyRestoreStamp.value());
+    _historyRestoreTicket.reset();
+    _historyRestoreStamp.reset();
     // Close suppresses Inverse completions. Its joined retirement acknowledges the original selection
     // record; finish its exact stamp and clear the ticket only after all producers and payloads join.
     if (_inverseSelectionStamp)

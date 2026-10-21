@@ -117,3 +117,39 @@ progress in the canonical entrypoint step. The watcher preserves this exact atte
 artifacts at termination. This request supplies no runtime pass, closing identity or performance result;
 independent terminal, source, environment, product and complete-roster qualification remains due.
 Evidence destination: `.build/P1Evidence/p1-native-arm-hosted-r4/`.
+
+## Observed native ARM64 Release run 39511716098 — failed assertion
+
+Run [39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098), attempt 1, tested commit `43725c68817eb303b519f9837064d03bb77a148c` from `codex/p1-opacity-host-proof`. The hosted environment was native ARM64 for both OS and process: Windows build 26200, GitHub image `win11-vs2026-arm64` revision `20261013.183.4`, Visual Studio 18 Enterprise / MSVC `14.51.36231`, Cobalt 100, two logical processors, and 8 GiB RAM. The environment receipts before and after record the same architecture, toolchain and run configuration (`ARM64` / `Release`, max CPU count 2, 5,400-second hidden-self-test failure bound). This is native-host evidence, not an x64 cross-build. (Evidence: `Artifacts/native-arm-ci/environment-before.json`, `environment-after.json`, and `build-host-selection.json`.)
+
+The workflow step ran `./.github/scripts/Run-NativeArm64.ps1` under PowerShell 7 with `REDPRISM_CONFIGURATION=Release`. The wrapper selected ARM64-hosted MSBuild and requested `PreferredToolArchitecture=arm64`; the canonical entrypoint was `test.ps1 -Platform ARM64 -Configuration Release -MaxCpuCount 2`. The hidden WARP self-test was application PID 1580, child of canonical runner PID 4492. Application PID 1580 exited **5**; canonical runner PID 4492 exited **1**. The GitHub “Run canonical ARM64 test entrypoint” step and job both concluded failure. The terminal receipt records elapsed time 6,324 seconds, the application log’s final Polygonal summary, and zero owned application processes at termination. The application exited on a failed assertion before the failure bound. (Evidence: `job.log`; `Artifacts/native-arm-ci/started.json`, `child-result.json`, `terminal-progress.json`, `failure.json`; `Artifacts/ARM64/Release/RedPrism.self-test.err.log`.)
+
+The only recorded failed assertion is:
+
+```text
+FAIL polygonal-press-host.new.harness-dpi-live.harness-dpi-override-native-message-rebuilds-live-chrome-not-os-transition
+SUMMARY polygonal-press-host checks=316 failures=1 reached=25
+```
+
+The other 315 checks in that Polygonal group passed. Host, Document, Composition and I/O suites completed with passing results; their observed roster counts are respectively 12,548, 24,003, 8,426 and 1,953. The recorded-parent-cancellation controls passed **41/41**, and all **14/14** pending-raster fault cleanups completed. The Application run stops at the quoted DPI assertion; later stages are not qualified. (Evidence: `Artifacts/native-arm-ci/test.stdout.log`, `test.stderr.log`, `progress.jsonl`; summary: `main-failed-identity-and-rosters-r3.json`.)
+
+The suite comparison retains two explicit Host architecture/FMA label substitutions. The runner records
+`INFO brush-density-clear.debug-layer=unavailable`; exactly the two related optional SDK debug-message
+controls are unavailable. Every other same-profile suite PASS record matches. This availability boundary
+is retained explicitly and supplies no hardware GPU, timing or full Application qualification.
+
+The source receipts contain 2,082 inputs each. `source-before.json` and `source-after.json` are byte-for-byte identical, each SHA-256 `B1AC5246BFB93E5A83CE7ACAC4F2051A5C0BD2F5DC7CAF090F8289D941D7EE91`; the recorded commit is unchanged. The downloaded artifact manifest covers 36 files and has SHA-256 `8792A9BF6F5A7BA0BC2D8503711323476A7145CEE805E502BF81BE1BA193F211`. The independent failed-identity/roster receipt is `main-failed-identity-and-rosters-r3.json` (reader SHA-256 `00680D92A4BA48FBE05BA70EB8D99DE6710E563DC1EF37214BFDF64D74349FEB`). (Evidence: `Artifacts/native-arm-ci/source-before.json`, `source-after.json`; `download-manifest.json`; `main-failed-identity-and-rosters-r3.json`.)
+
+All five executable products are AA64, and each executable has a matching full PDB GUID/age identity (age 1). The product and PDB SHA-256 values are:
+
+| Product | EXE SHA-256 | PDB SHA-256 | PDB GUID / age |
+| --- | --- | --- | --- |
+| RedPrism | `EC72603729D06AABE846B6D0818E007BCAC9B36451E27D2EE0E360C68CCD6F41` | `1B6BF559913B7380DF8B4D16EB101F932611E65D28E5DC89D892AD4E94E86F89` | `39A15209-0F59-4215-B6E0-BBB24753D42A` / 1 |
+| HostTests | `D9EA5698906370E0386A14AC2C09177B1334C09845C3AC26F7413CD6E6786454` | `76C73CEA37A4790A93E62F9538C4AA49B569436A0ECFD3A23ADD45321877B5A5` | `C7163158-A4C7-4C23-B0E5-9F2E1B424EB5` / 1 |
+| DocumentTests | `2202344CA989B6031A5C041C62CC5E4A2ED576D5209357395C829D33F9218068` | `40094E1182764517C5214D604FB60C78D6930B1BE2D9A483178DD5EA8875C8A2` | `5C8897C8-80C9-4104-8D3A-71A9083FF63A` / 1 |
+| CompositionTests | `457A067550890975530A50C291E4D90C61B717844C1C98A16391CFC131B09FA7` | `A0403E4722F458FFBC19B56074B4378350D2378EB6B93111F59360FA9026D173` | `4159959E-D83D-4F94-9215-81F5DC307DCF` / 1 |
+| IoTests | `EC8A3C1CA9D32480CD33593363799EB0FCB30F38F1A940763371DFB39D06394E` | `188FC283FFBC9CCB3898DCC4A65996FFB018D710695558162AB61929CE06051C` | `161B6B7C-97F7-409C-98CD-92CBC0ECC370` / 1 |
+
+(Evidence: `main-failed-identity-and-rosters-r3.json`; downloaded products under `Artifacts/ARM64/Release/`; matching readable summaries under `MainPdbSummaries-r3/`; aggregate hashes in `download-manifest.json`.)
+
+This remains a failed native ARM64 Release run. Product identity and passing suite receipts do not override the DPI failure. The evidence does not establish its native cause, a repair, a passing run on newer source, ARM64 Debug or ASan qualification, performance qualification, G1, or P1 completion. Preserve the earlier failed and incomplete attempts above as separate records; this observation does not replace or reclassify them.

@@ -2,6 +2,7 @@
 
 ## Current delivery checklist — 2026-10-21
 
+- [x] Qualify the actual Undo/Redo joined-shutdown repair. Preserve the original four-boundary failure; the exact post-Close acknowledgement and shutdown-event witness pass all 36 new facts plus all 12,262 Application predecessors in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source Release analysis (1,022 TUs). Native ARM64 runtime and parent delivery gates remain open. [Reproduction and validation](../../TestRuns/P1HistoryRestoreShutdown_2026-10-21.md).
 - [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.
 - [x] Adopt the current Size recovery and original-worker cleanup, first-worker row allocation and actual-publication benchmark. Preserve all 473 Ctrl predecessors; current Size / row counts are 191 / 123.
 - [x] Qualify the preceding Size integration in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and canonical Release analysis: 1,022 translation units, 155 Application stages and 12,233 Application facts. [Current native matrix](../../TestRuns/P1SizeRecoveryAndCost_2026-10-20.md#current-integrated-native-qualification--2026-10-20).
@@ -23,7 +24,7 @@
 
 - [x] Independently verify failed native ARM64 Release run `39429595846`: exact 2,073-file commit/source bookends, five AA64/full-PDB pairs, successful Host/Document footers and the single retained cancellation fixture failure. [Native evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
 - [x] Qualify the adopted event-publication fixture repair in the complete latest-source local matrix, preserving all 41 original assertions. [Current repair evidence](../../TestRuns/P1CapturedBindingRepair_2026-10-20.md). The earlier failed native attempt remains separate evidence.
-- [ ] Finish native ARM64 validation. Hosted Release run [39479072110](https://github.com/RedSalamanders/RedPrism/actions/runs/39479072110) observes passing Host/Document/Composition/I/O rosters and all41 cancellation controls, then fails its 1,200-second Application bound. Its subsequent output-drain failure prevents closing source/environment/product receipts; Application exit and full native qualification remain unknown. [Preserved evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
+- [ ] Finish native ARM64 validation. Preserve the incomplete run `39479072110`. The observed followup [39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) closes its source/environment/product receipts and passes all four suite rosters, 41 cancellation controls and 14 pending-raster cleanups, then exits on one Polygonal DPI assertion (Application 5, canonical 1). A portable fixture candidate is prepared; native cause and passing qualification remain open. [Preserved evidence](../../TestRuns/P1NativeArmValidation_2026-10-20.md).
 
 - [x] Preserve and diagnose the preceding-source ASan `ca1a1` failure: the Size prepared smoke exits 2173 (`0x87D`),
   and the exact dump/PDB resolves `PreparedCommittedDisplay::PrepareForWork` querying the live immediate context
@@ -55,9 +56,10 @@
   The native-only 5,400-second failure backstop is an observation bound, not a causal repair or G1 result.
   [Affected tooling evidence](../../TestRuns/P1ValidationTooling_2026-10-21.md).
 - [x] Publish the qualified tooling step as `d6231b07f68eac678c43577c4cb2a99c7636d771`; approved branch destination SHA is verified and the guarded native job [39511554815](https://github.com/RedSalamanders/RedPrism/actions/runs/39511554815) correctly skips this unmarked mixed commit.
-- [x] Request the separately guarded native ARM64 Release attempt as `43725c68817eb303b519f9837064d03bb77a148c`; exact remote helper/workflow blobs are verified and all 30 wrapper controls pass again. [Run 39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) is observed in progress.
-- [ ] Independently qualify that native run's actual terminal result, complete source/environment bookends,
-  executable/full-PDB identities and full assertion rosters. An in-progress run is no runtime pass.
+- [x] Request the separately guarded native ARM64 Release attempt as `43725c68817eb303b519f9837064d03bb77a148c`; exact remote helper/workflow blobs are verified and all 30 wrapper controls pass again. [Run 39511716098](https://github.com/RedSalamanders/RedPrism/actions/runs/39511716098) completes with the preserved DPI assertion failure below.
+- [x] Independently verify that native run's actual failed terminal result, complete source/environment
+  bookends, five AA64/full-PDB pairs, four complete suite rosters and observed Application subset. The sole
+  Polygonal DPI assertion remains failed; later Application stages and full native qualification remain open.
 
 ## Remaining gates before P1 Done
 

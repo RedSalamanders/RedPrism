@@ -1714,6 +1714,14 @@ preserve no-op redo/saved state, reject moved/applied reuse, and exercise reache
 checked refresh-admission bounds. Three actual selection-nudge cases add 24 named controls for late-cache
 success/fault/cancel, including original moved outline, one entry and independent saved-revision truth.
 
+`history-restore-shutdown.*` requires 36 actual standalone hidden-WARP controls: Undo and Redo, each before
+capture and with a prepared original worker held. Literal pixels, both history stacks, saved state and generation
+survive producer join without Present. The exact ticket/stamp remain through the joined callback and clear only
+after Close; the cancelled original receipt, off-owner payload retirement, zero final charges, idempotence and
+quit isolation are explicit. The manual gate remains unsignalled; a separate test-only witness must identify
+the actual shutdown-event wake so a failure timeout cannot supply the held-worker proof. These state controls
+establish no G1 timing or ordinary activation.
+
 `history-residency-shutdown.*` adds 14 actual standalone hidden-WARP owner controls inside the existing shutdown
 stage. A notice ready before capture owns no payload; a worker held after preparation must wake from actual
 RequestStop and join without the test signalling its gate. Both retain original document/generation/revisions,

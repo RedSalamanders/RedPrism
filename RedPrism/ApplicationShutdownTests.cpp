@@ -7,6 +7,7 @@
 #include "ColorWorkTestGate.h"
 #include "DeferredRelease.h"
 #include "DocumentLifecycleTestGate.h"
+#include "HistoryRestoreTestGate.h"
 #include "KeyboardState.h"
 #include "Selection.h"
 #include "SelectionCommandTestGate.h"
@@ -786,6 +787,188 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         if (offsetCloseFailures)
             return 5;
     }
+
+    // Close suppresses useful completions. Exercise the real restore caller on both sides of capture.
+    unsigned int restoreChecks = 0, restoreFailures = 0;
+    const auto restoreExpect = [&](bool condition, const char* direction, const char* phase, const char* name) noexcept
+    {
+        ++restoreChecks;
+        restoreFailures += condition ? 0 : 1;
+        std::printf("%s history-restore-shutdown.%s.%s.%s\n", condition ? "PASS" : "FAIL", direction, phase, name);
+    };
+    for (const bool redo : std::array{false, true})
+        for (const bool held : std::array{false, true})
+        {
+            const char* direction = redo ? "redo" : "undo";
+            const char* phase = held ? "prepared-worker-held" : "before-capture";
+            auto owner = std::make_unique<Application>(instance, true, nullptr, 0);
+            // Borrowed observations must outlive cleanup on every refusal as well as the successful path.
+            struct Observation final
+            {
+                Application& owner;
+                std::optional<CanvasDocument> document;
+                std::optional<Guid> active;
+                Guid revision;
+                std::uint64_t generation = 0;
+                int undoCount = 0;
+                std::optional<JobTicket> ticket;
+                std::optional<HistoryWorkStamp> stamp;
+                bool reached = false, joined = false, sourcePreserved = false, originalHeldAtJoin = false;
+            } observation{*owner};
+            ApplicationShutdownTestProbe probe;
+            const auto shutdown = wil::scope_exit(
+                [&]() noexcept
+                {
+                    if (owner)
+                    {
+                        owner->Shutdown();
+                        owner->_shutdownTestProbe = nullptr;
+                    }
+                });
+            owner->_quietUi = true;
+            owner->_prompts = &QuietPrompts();
+            if (DeferredReleaseDetail::sink.enqueue || FAILED(owner->InitializeProcessing()) ||
+                FAILED(owner->RegisterWindowClass()) || FAILED(owner->CreateMainWindow(false)) ||
+                FAILED(owner->InitializeRenderer()) || FAILED(owner->InitializeChrome()))
+                return 5;
+            owner->BindCompositionDevice();
+            owner->_session.CreateDocument(2, 1, true);
+            const auto id = InsertPaintedLayer(owner->_session, L"Restore shutdown pixels", 2, 1, {}, 0, 0xFF3366CCu);
+            owner->_session.history.Reset();
+            owner->_session.SetOpacity(0.5);
+            owner->_session.SetOpacity(0.25);
+            owner->_session.Undo(); // Reference fixture leaves one entry in each direction.
+            owner->_session.history.MarkSaved();
+            owner->DocumentChanged();
+            if (SettleJobs(owner->_jobs, 15000, DispatchMessageThunk, owner.get()) != SettleResult::Settled)
+                return 5;
+            const auto gate = std::make_shared<HistoryRestoreTestGate>();
+            gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!gate->release)
+                return 5;
+            owner->_historyRestoreTestGate = gate;
+            observation.document = owner->_session.Document();
+            observation.active = owner->_session.ActiveLayerID();
+            observation.revision = owner->_session.history.CurrentRevision();
+            observation.generation = owner->_session.Generation();
+            observation.undoCount = owner->_session.history.UndoCount();
+            const auto presents = owner->_renderer.PresentCount();
+            std::array<std::uint8_t, 8> pixels{};
+            const auto* layer = owner->_session.ActiveLayer();
+            if (layer && layer->asset)
+                layer->asset->image.ReadRegion(0, 0, 2, 1, pixels.data(), 8, 0);
+            restoreExpect(layer && layer->id == id && layer->opacity == 0.5 &&
+                              pixels == std::array<std::uint8_t, 8>{204, 102, 51, 255, 204, 102, 51, 255} &&
+                              observation.undoCount == 1 && owner->_session.history.CanUndo() &&
+                              owner->_session.history.CanRedo() && !owner->_session.history.IsModified(),
+                          direction, phase, "literal-source-and-both-history-stacks");
+            const auto receipt =
+                owner->QueueHostInput(HostCommandInput{redo ? ChromeHost::kCommandRedo : ChromeHost::kCommandUndo});
+            (void)RunUiActions(owner->_jobs); // Admit the actual caller, without draining its capture completion.
+            if (!owner->_historyRestoreTicket || !owner->_historyRestoreStamp)
+                return 5;
+            observation.ticket = owner->_historyRestoreTicket;
+            observation.stamp = owner->_historyRestoreStamp;
+            if (held)
+            {
+                const auto dispatch = [](void* opaque, void* native) noexcept
+                {
+                    auto& state = *static_cast<Observation*>(opaque);
+                    auto& message = *static_cast<MSG*>(native);
+                    if (message.message == HistoryRestoreTestGate::kMessage)
+                        state.reached = true;
+                    else
+                        state.owner.DispatchQueuedMessage(message);
+                };
+                const auto deadline = GetTickCount64() + 15000;
+                while (!observation.reached)
+                {
+                    const auto messages = PumpMessages(dispatch, &observation);
+                    if (messages.quit)
+                    {
+                        PostQuitMessage(messages.exitCode);
+                        return 5;
+                    }
+                    if (observation.reached)
+                        break;
+                    (void)DrainCompletions(owner->_jobs);
+                    (void)RunUiActions(owner->_jobs);
+                    const auto now = GetTickCount64();
+                    if (now >= deadline)
+                        return 5;
+                    const HANDLE wake = static_cast<HANDLE>(owner->_jobs.WakeHandle());
+                    if (!wake || MsgWaitForMultipleObjectsEx(1, &wake, static_cast<DWORD>(deadline - now), QS_ALLINPUT,
+                                                             MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                        return 5;
+                }
+            }
+            const bool selected = held ? observation.reached && gate->captures.load() == 1 &&
+                                             gate->visits.load() == 1 && gate->reservationHeld.load()
+                                       : gate->captures.load() == 0 && gate->visits.load() == 0;
+            restoreExpect(selected && receipt.Read().outcome == HostOutcome::Pending && owner->_historyWork.Busy() &&
+                              owner->_historyRestoreTicket == observation.ticket &&
+                              owner->_historyRestoreStamp == observation.stamp && gate->reservationBytes != 0 &&
+                              owner->_jobs.ReservedMemoryBytes() >= gate->reservationBytes,
+                          direction, phase, "original-ticket-and-reservation-at-selected-boundary");
+            if (!selected)
+                return 5;
+            probe.checkContext = &observation;
+            probe.checkJoined = [](void* opaque) noexcept
+            {
+                auto& state = *static_cast<Observation*>(opaque);
+                const auto& app = state.owner;
+                state.joined = true;
+                state.sourcePreserved = app._session.Document() == state.document &&
+                                        app._session.ActiveLayerID() == state.active &&
+                                        app._session.Generation() == state.generation &&
+                                        app._session.history.CurrentRevision() == state.revision &&
+                                        app._session.history.UndoCount() == state.undoCount &&
+                                        app._session.history.CanRedo() && !app._session.history.IsModified();
+                state.originalHeldAtJoin = app._historyRestoreTicket == state.ticket &&
+                                           app._historyRestoreStamp == state.stamp &&
+                                           app._historyWork.IsCurrent(state.stamp.value());
+            };
+            owner->_shutdownTestProbe = &probe;
+            owner->Shutdown(); // Never signal release: RequestStop must wake and join the held original.
+            restoreExpect(observation.joined && observation.sourcePreserved &&
+                              owner->_renderer.PresentCount() == presents,
+                          direction, phase, "joined-close-preserves-source-history-saved-marker-and-no-present");
+            restoreExpect(observation.originalHeldAtJoin, direction, phase,
+                          "original-record-retained-through-producer-join");
+            restoreExpect(owner->_shutdownComplete && !owner->_historyRestoreTicket && !owner->_historyRestoreStamp &&
+                              !owner->_historyWork.Busy() && !owner->_activeHostRequest &&
+                              receipt.Read() == ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT},
+                          direction, phase, "joined-acknowledgement-clears-original-ticket-and-barrier");
+            restoreExpect(
+                WaitForSingleObject(gate->release.get(), 0) == WAIT_TIMEOUT &&
+                    (held ? gate->retired.load() && gate->retiredOffOwner.load() && gate->captures.load() == 1 &&
+                                gate->shutdownObserved.load()
+                          : !gate->retired.load() && gate->captures.load() == 0 && !gate->shutdownObserved.load()),
+                direction, phase, "captured-payload-retires-off-owner-and-uncaptured-owns-none");
+            restoreExpect(owner->_jobs.IsIdle() && owner->_jobs.WorkerCount() == 0 && !owner->_jobs.WakeHandle() &&
+                              owner->_jobs.ReservedMemoryBytes() == 0 && owner->_jobs.ReleasingMemoryBytes() == 0 &&
+                              probe.workerCalls.load() == 1 && probe.offOwner.load() && probe.mta.load() &&
+                              probe.hostCpuRootsRetired.load() && !owner->_session.Document() &&
+                              !DeferredReleaseDetail::sink.enqueue,
+                          direction, phase, "actual-worker-roots-and-reservations-retire");
+            owner->Shutdown();
+            restoreExpect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1 && owner->_shutdownComplete, direction,
+                          phase, "second-shutdown-is-idempotent");
+            owner->_shutdownTestProbe = nullptr;
+            owner.reset();
+            bool quit = false;
+            for (;;)
+            {
+                const auto messages = PumpMessages();
+                quit = quit || messages.quit;
+                if (!messages.quit)
+                    break;
+            }
+            restoreExpect(quit, direction, phase, "fixture-quit-consumed-before-next-owner");
+        }
+    std::printf("history-restore-shutdown summary: %u checks, %u failures\n", restoreChecks, restoreFailures);
+    if (restoreFailures)
+        return 5;
 
     const int residencyResult = RunStandaloneHistoryResidencyShutdownSelfTest(instance);
     if (residencyResult)
