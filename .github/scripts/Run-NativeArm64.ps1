@@ -4,7 +4,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # One bounded feasibility run. Repository entrypoints retain every existing build/test gate.
-# Observe the qualified Hue source with both output streams and closing evidence retained before drain.
+# Observe qualified shutdown and portable Polygonal DPI source; every existing gate remains required.
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'Native validation requires PowerShell 7.' }
 if ($env:GITHUB_ACTIONS -cne 'true') { throw 'This helper requires its reviewed GitHub Actions workflow.' }
 $repoRoot = (Get-Item -LiteralPath $PSScriptRoot).Parent.Parent.FullName
