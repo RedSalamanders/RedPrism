@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Publish the historical paused-branch adversarial review, with WIP index routing and explicit snapshot/validation limits. P1 integration and current-head review triage remain open.
 - Record the owner's authorization to publish locally verified qualification-archive tooling while hosted checks are billing-blocked; preserve unavailable CI results and all separate native/platform qualification gates.
 - Archive explicitly frozen qualification inputs through verified, read-only shared payload storage while keeping run records and logs independent; retain fail-closed path, metadata, locking, corruption and readback checks, exercise filesystem scenarios through existing tooling discovery, and preserve all native/platform qualification gates.
 - Record the owner's authorization to merge the locally tested canvas-fixture repair while hosted CI is billing-blocked; retain successful local evidence, failed CI results and the active plan's remaining qualification gates.
