@@ -1,6 +1,6 @@
 # P1 Undo/Redo joined shutdown — 2026-10-21
 
-Status: reproduced failure repaired and complete same-source local matrix qualified; publication pending. Native ARM64 runtime and P1 remain open.
+Status: reproduced failure repaired, complete same-source local matrix qualified and published as `d9295d9fc6e6d746e58ba5d6e6a87f4eb5291f4a`. Native ARM64 runtime and P1 remain open.
 
 ## Checklist
 
@@ -9,7 +9,7 @@ Status: reproduced failure repaired and complete same-source local matrix qualif
 - [x] Implement exact-stamp acknowledgement after joined Close and strengthen held-worker proof.
 - [x] Qualify repaired full x64 Debug, Release and real ASan; preserve every predecessor and 36 new facts.
 - [x] Qualify ARM64 cross-builds and applicable analysis; record native runtime scope separately.
-- [ ] Commit/push the completed qualified step and verify the destination SHA.
+- [x] Commit/push the completed qualified step and verify the destination SHA (`d9295d9fc6e6d746e58ba5d6e6a87f4eb5291f4a`).
 
 ## Preserved reproduction
 
