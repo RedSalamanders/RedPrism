@@ -68,3 +68,5 @@ When a spec, implementation, test, or document disagrees:
 | Testing | [`Testing/Testing_Validation.md`](Testing/Testing_Validation.md) |
 
 `Core/Core_DxUiIntegration.md` is the consumer pin contract.
+
+The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.

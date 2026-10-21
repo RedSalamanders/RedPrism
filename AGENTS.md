@@ -16,6 +16,18 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 
 ## Canonical guidance
 
+### Drive-root output policy
+
+Do not create scratch, caches, evidence, copied checkouts, or other output directories directly at a drive root.
+Use repository-local generated outputs or an existing approved workspace. The only permitted new drive-root
+output name is `<Project>.Perf` (for example `RedPrism.Perf`, `RedSalamander.Perf`, or another project's own
+name), and the user must explicitly authorize the exact path before its first creation or initialization.
+A matching name, environment variable, low disk space, or authorization for another drive/project is not
+authorization. Keep outputs beneath the approved root; do not invent sibling root folders. Preserve any
+runner-specific ownership markers and authorization. Historical cleanup inventories and preserves useful
+evidence/recovery data, checks process use, repairs live junction/worktree references, and verifies preservation
+before removal. Never follow junctions during cleanup or leave compatibility junctions at forbidden old roots.
+
 - This file is the repository-wide instruction source.
 - `Specs/README.md` defines specification authority and the plan lifecycle.
 - Normative product behavior lives in `Specs/<Domain>/`. Read the owning contract before changing behavior.
@@ -106,3 +118,12 @@ regressions need measurement and a spec or WIP justification.
 ```
 
 ARM64 builds cross-compile with `build.ps1 -Platform ARM64`; runtime claims need a native ARM64 host.
+
+## Changes workflow
+
+Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)
+and [Specs/Core/Core_Changes.md](Specs/Core/Core_Changes.md). Do not hand-edit generated `CHANGELOG.md` entries.
+Run `Tools/Test-Changelog.ps1` while editing. Before PrePush and final handoff, and immediately after every
+merge/rebase that introduces fragments, run `Tools/Fold-Changelog.ps1` and then `Tools/Fold-Changelog.ps1 -Check`,
+even for one fragment. Include the generated changelog and fragment removals in the current change; do not wait
+for release batches or a separate cleanup PR. Validation is read-only; `-WhatIf` previews folding without writes.
