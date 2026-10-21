@@ -2,6 +2,7 @@
 
 ## Current delivery checklist — 2026-10-21
 
+- [x] Qualify the Polygonal DPI fixture portability change in full x64 Debug/Release/real ASan and all three ARM64 cross-builds: retain all 12,298 Application predecessors plus exactly three setup facts (12,301 total), 155 stages and all four suite rosters. Preserve the original native failure and independent clamp reference; renewed native Release remains open below. [Fixture and validation](../../TestRuns/P1PolygonalDpiFixture_2026-10-21.md).
 - [x] Commit/push the qualified Undo/Redo shutdown step as `d9295d9fc6e6d746e58ba5d6e6a87f4eb5291f4a`; the approved branch destination SHA is verified. Native runtime, ordinary activation and parent P1 gates remain open.
 - [x] Qualify the actual Undo/Redo joined-shutdown repair. Preserve the original four-boundary failure; the exact post-Close acknowledgement and shutdown-event witness pass all 36 new facts plus all 12,262 Application predecessors in full x64 Debug/Release/real ASan, all three ARM64 cross-builds and same-source Release analysis (1,022 TUs). Native ARM64 runtime and parent delivery gates remain open. [Reproduction and validation](../../TestRuns/P1HistoryRestoreShutdown_2026-10-21.md).
 - [x] Commit/push the preceding qualified publication and Size foundations (`bd65f11`, `088a3d7`) and the ISA object-casing repair (`aa142f9`); destination SHAs were verified.

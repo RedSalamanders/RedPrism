@@ -3408,6 +3408,14 @@ recording a third stored point before Escape, and a true two-corner double-click
 the prior corner and assert the accepted Move/PolygonPress double-click and not-near-first flags.
 Check New/present-empty clearing once versus unchanged Add/Subtract and no history, captured mode through
 a direct header callback, and screenshot-DPI override plus native `WM_DPICHANGED` with restored bounds.
+The synthetic native-message fixture MUST use a positive rectangle contained in the already accepted
+native bounds and at least the live owner's minimum at the proposed harness scale. Restore the old override
+after querying that minimum and fail an unsuitable setup explicitly, once in each New/Add/Subtract case.
+Retain every exact bounds/DPI, original writer/ticket, selection/history, point-count, current-view click and
+restore assertion. On a combined-predicate failure, print its typed DPI/state terms and requested/actual
+native rectangles. An unexpected missing writer MUST produce a failed predicate instead of a null access.
+These controls establish no physical monitor-DPI transition.
+
 Widget interaction and real-monitor DPI are separate acceptance scope.
 
 Require exact-source Release and real ASan, all predecessor stdout/stderr through the source-only reader,

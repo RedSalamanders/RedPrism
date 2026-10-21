@@ -633,29 +633,66 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                         RECT suggested = originalBounds;
                         if (haveBounds)
                         {
-                            suggested.left -= 16;
-                            suggested.right += 16;
-                            suggested.top -= 12;
-                            suggested.bottom += 12;
+                            // Stay within an already accepted extent. An arbitrary enlargement may exceed
+                            // this host's maximum tracking size and is not a portable DPI-message precondition.
+                            suggested.left += 16;
+                            suggested.right -= 16;
+                            suggested.top += 12;
+                            suggested.bottom -= 12;
                         }
+                        // Query the live owner minimum at the proposed scale, restoring the override before admission.
+                        owner->_screenshotDpi = harnessDpi;
+                        MINMAXINFO tracking{};
+                        SendMessageW(owner->_window.get(), WM_GETMINMAXINFO, 0, reinterpret_cast<LPARAM>(&tracking));
+                        owner->_screenshotDpi = previousHarnessDpi;
+                        if (!expect(haveBounds && suggested.left > originalBounds.left &&
+                                        suggested.top > originalBounds.top && suggested.right < originalBounds.right &&
+                                        suggested.bottom < originalBounds.bottom && suggested.right > suggested.left &&
+                                        suggested.bottom > suggested.top && tracking.ptMinTrackSize.x > 0 &&
+                                        tracking.ptMinTrackSize.y > 0 &&
+                                        suggested.right - suggested.left >= tracking.ptMinTrackSize.x &&
+                                        suggested.bottom - suggested.top >= tracking.ptMinTrackSize.y,
+                                    "harness-dpi-message-uses-contained-native-rectangle-with-live-minimum"))
+                            return 5;
                         owner->_screenshotDpi = harnessDpi;
                         if (haveBounds)
                             SendMessageW(owner->_window.get(), WM_DPICHANGED, MAKELONG(harnessDpi, harnessDpi),
                                          reinterpret_cast<LPARAM>(&suggested));
                         owner->RenderFrame();
                         RECT afterHarnessMessage{};
-                        const bool changed =
-                            haveBounds && owner->ChromeDpi() == static_cast<float>(harnessDpi) &&
-                            GetDpiForWindow(owner->_window.get()) == nativeDpi &&
-                            GetWindowRect(owner->_window.get(), &afterHarnessMessage) &&
-                            afterHarnessMessage.left == suggested.left && afterHarnessMessage.top == suggested.top &&
-                            afterHarnessMessage.right == suggested.right &&
-                            afterHarnessMessage.bottom == suggested.bottom &&
-                            owner->_polygonalDrawing->controller == preparedWriter &&
-                            owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
-                            owner->_session.PendingLasso().value().PointCount() == 3 &&
-                            owner->_session.Selection() == original &&
-                            owner->_session.history.CurrentRevision() == revision;
+                        const float observedChromeDpi = owner->ChromeDpi();
+                        const UINT observedNativeDpi = GetDpiForWindow(owner->_window.get());
+                        const bool haveObservedBounds =
+                            GetWindowRect(owner->_window.get(), &afterHarnessMessage) != FALSE;
+                        const bool rectangleMatches =
+                            haveObservedBounds && afterHarnessMessage.left == suggested.left &&
+                            afterHarnessMessage.top == suggested.top && afterHarnessMessage.right == suggested.right &&
+                            afterHarnessMessage.bottom == suggested.bottom;
+                        const bool writerMatches =
+                            owner->_polygonalDrawing && owner->_polygonalDrawing->controller == preparedWriter;
+                        const bool ticketMatches =
+                            owner->_polygonalDrawing && owner->_polygonalDrawing->original == ticket;
+                        const auto draftPoints =
+                            owner->_session.PendingLasso() ? owner->_session.PendingLasso().value().PointCount() : 0;
+                        const bool selectionMatches = owner->_session.Selection() == original;
+                        const bool revisionMatches = owner->_session.history.CurrentRevision() == revision;
+                        const bool changed = haveBounds && observedChromeDpi == static_cast<float>(harnessDpi) &&
+                                             observedNativeDpi == nativeDpi && rectangleMatches && writerMatches &&
+                                             ticketMatches && owner->_session.PendingLasso() && draftPoints == 3 &&
+                                             selectionMatches && revisionMatches;
+                        if (!changed)
+                            std::printf("DIAGNOSTIC polygonal-dpi chrome=%.1f requested=%u osBefore=%u osAfter=%u "
+                                        "haveBounds=%d rectangle=%d writer=%d ticket=%d draft=%d points=%zu "
+                                        "selection=%d revision=%d "
+                                        "original=[%ld,%ld,%ld,%ld] requestedRect=[%ld,%ld,%ld,%ld] "
+                                        "actualRect=[%ld,%ld,%ld,%ld]\n",
+                                        observedChromeDpi, harnessDpi, nativeDpi, observedNativeDpi, haveBounds,
+                                        rectangleMatches, writerMatches, ticketMatches,
+                                        owner->_session.PendingLasso().has_value(), draftPoints, selectionMatches,
+                                        revisionMatches, originalBounds.left, originalBounds.top, originalBounds.right,
+                                        originalBounds.bottom, suggested.left, suggested.top, suggested.right,
+                                        suggested.bottom, afterHarnessMessage.left, afterHarnessMessage.top,
+                                        afterHarnessMessage.right, afterHarnessMessage.bottom);
                         if (changed)
                         {
                             click({2, 7});
@@ -666,10 +703,11 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                             until(
                                 [&]() noexcept
                                 {
-                                    return owner->_polygonalDrawing->waiting && owner->_session.PendingLasso() &&
+                                    return owner->_polygonalDrawing && owner->_polygonalDrawing->waiting &&
+                                           owner->_session.PendingLasso() &&
                                            owner->_session.PendingLasso().value().PointCount() == 5;
                                 }) &&
-                            owner->_polygonalDrawing->controller == preparedWriter &&
+                            owner->_polygonalDrawing && owner->_polygonalDrawing->controller == preparedWriter &&
                             owner->_polygonalDrawing->original == ticket && owner->_session.Selection() == original &&
                             owner->_session.history.CurrentRevision() == revision;
                         owner->_screenshotDpi = previousHarnessDpi;
@@ -684,7 +722,7 @@ int Application::RunStandalonePolygonalPressSelfTest(HINSTANCE instance) noexcep
                             GetWindowRect(owner->_window.get(), &restoredBounds) &&
                             restoredBounds.left == originalBounds.left && restoredBounds.top == originalBounds.top &&
                             restoredBounds.right == originalBounds.right &&
-                            restoredBounds.bottom == originalBounds.bottom &&
+                            restoredBounds.bottom == originalBounds.bottom && owner->_polygonalDrawing &&
                             owner->_polygonalDrawing->controller == preparedWriter &&
                             owner->_polygonalDrawing->original == ticket && owner->_session.PendingLasso() &&
                             owner->_session.PendingLasso().value().PointCount() == 5;
