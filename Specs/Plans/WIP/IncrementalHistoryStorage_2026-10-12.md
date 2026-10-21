@@ -9,6 +9,12 @@ Owners: `Common/DocumentHistory.cpp`, raster residency in `Common/Document.*`, p
 
 ## Current checklist
 
+Current caller migration (2026-10-21): settled single-layer Flip Horizontal/Vertical now enter the existing
+ordered metadata publication graph after all seven reviewed original source hashes match. Literal core,
+ordinary `OnCommand` receipt/ordering and joined-Close fixture controls are integrated; focused validation is
+pending. This closes no complete caller/admission/retirement, G1 or H3 gate.
+[Scope and validation](../../TestRuns/P1SettledLayerFlip_2026-10-21.md).
+
 Scoped reconciliation (2026-10-21): the existing nonmovable lease, stopped waiters, live-index maintenance,
 original-edit late-residency refresh and five semantic mask-thumbnail ownership cases have 38 retained core
 assertions per qualified B21 x64 Debug/Release/real-ASan profile. Current source matches 1,451 relevant

@@ -1,5 +1,221 @@
 # P1 — Responsive raster editor delivery milestone
 
+## Saved continuation — 21 October 2026
+
+Execution is **HOLD at the user's request to continue later**. P1 remains **WIP**. This section supersedes
+earlier active-job, next-step and estimate text. Do not start implementation, benchmarks or CI until the
+user resumes. The opening delivery checklist and §14 remain the completion authority; a checkpoint is no
+qualification waiver. The older [06:35 handoff](../../TestRuns/P1SessionCheckpoint_2026-10-21.md) is historical.
+
+### Checkout, publication and operating rules
+
+Use `C:\Users\eric\.codex\worktrees\p1-opacity-host-proof\RedPrism`, branch `codex/p1-opacity-host-proof`,
+remote `https://github.com/RedSalamanders/RedPrism.git`. `Z:\src\RedPrism` is the older evidence-host checkout,
+not the current source. Do not reset unrelated `rf/*` worktrees or `Z:\src\DxUi`.
+
+Published this session: `d3fb3dc7479f2daa88a108345f6a857b38f48beb` contains the compiler/diagnostic/host-default
+batch; `9a750512a4f6eb143467ad25ce29bc071ca86aa2` contains pinned native CI provisioning, regression controls
+and contracts. The checkpoint commit containing this section also saves the focused flip code/tests/docs.
+Its exact final HEAD/remote/clean-state receipt is in `final-publication.json` in the backup folder below;
+do not make a follow-up commit solely to insert this checkpoint's own SHA.
+
+- One coordinator; at most two helpers concurrently, finite deliverables and observed time/token limits.
+  Main owns concurrency, admission, GPU, publication/retirement and performance decisions, and verifies helpers.
+- Use focused diagnostics while repairing; run complete matrices at coherent integration batches and keep
+  all mandatory completion gates. Read complete failure logs; retain original failures and independent goldens.
+- Reuse existing runners/readers. Publish implementation, tests, contracts and evidence together. No new
+  qualification framework for each repair and no preceding-SHA-only follow-up commits.
+- Keep MSVC **14.52.37025** and matching dependency identity explicit. Old 14.51 receipts cannot qualify it.
+  The production DxUi pin is API3 `8e8994079e82f79e6765e6a885c03fc687957591`.
+- Keep one short live table: `Z:\src\RedPrism\.build\P1Drafts\P1-LIVE-STATUS.md`. No quiet-window question or
+  keyboard restriction remains pending. No automation or separate chat was created to resume work.
+- The conditional **4–6 focused working day** target remains **unconfirmed**. Actual row-path usefulness and
+  native toolchain installation are unresolved; reassess the integration/architecture premise when resumed.
+- Do not kill a running product to build. Generated files stay under ignored `.build` paths. No additional
+  managed worktree, API4 pin adoption or library publication is authorized by this checkpoint.
+
+### Saved files and recovery boundaries
+
+Primary backup: `S:\CodexEvidence\RedPrism\P1_2026-10-21\P1SessionCheckpoint-20261021T121547Z`.
+`S:\CodexEvidence\RedPrism\P1_2026-10-21\latest-checkpoint-path.txt` points to it.
+The initial snapshot verifies 51 files: all 14 then-dirty RedPrism paths, all 16 dirty/untracked DxUi paths,
+continuation scripts and the unfinished scanner/test drafts. `saved-files-manifest.json` has SHA-256
+`2D80CA0A3AF233E948E4BDE3F165112DF60E2B4BD25035A6B2041F3CC48B4D96`.
+Supplemental binary Git patches do not replace the complete untracked-file copies. Final checkpoint
+documents and source/remote/process receipts are preserved separately in the same folder.
+
+The incomplete scanner is deliberately **private and unqualified**, not published without its tests:
+
+- Main draft: `UnqualifiedIsaRepair/Main/Build/IsaScan.cs`, SHA-256
+  `37A31D1D4AC8FF79E64F5455436A745D7DFD3965E5A767C4D37B38185002A0C4`, plus its exact patch.
+- Helper draft: `UnqualifiedIsaRepair/HelperDraft/Tests/BuildProcessTests/IsaRsiDwordTests.ps1`, SHA-256
+  `03F7A5ECB3E23D3EDE78D15F19778661F8526080DE99C2829C968D82D0AC3DC8`.
+- Live private workspace: `S:\CodexEvidence\RedPrism\P1_2026-10-21\p1-settled-layer-flips-r1\IsaSilDraft`.
+  It still holds the **old** scanner, SHA-256 `58EE0D00D88DCE02BCE83F968A3046BD50FB8B56433623B389A20CC4A193E405`.
+  The source checkout is restored to those exact original scanner bytes after verifying backup and filtered
+  HEAD identity. The first no-filters comparison refused on line-ending identity; the refusal is retained.
+- The helper authors 323 SIL controls, preserving existing RSI controls/summary, and observes a clean
+  PowerShell parse. **No new parser control or Main C# compilation executes before stopping.** Review and
+  qualify both drafts together; do not mistake authored counts for observed passing results.
+
+Retained evidence roots remain accessible through `Z:\src\RedPrism\.build\P1Evidence\` junctions; current
+diagnostics, flips and native r6/r7 physically live under `S:\CodexEvidence\RedPrism\P1_2026-10-21`.
+The diagnostics packet's 86,300 files / 65,176,337,090 bytes are independently hash-identical on S:.
+Automatic approval review **blocked deletion** of the old Z: duplicate as policy; it remains at
+`p1-default-client-diagnostics-r1-relocation-source`. Do not retry or bypass that deletion.
+Z: has only a few MB free. New generated fixtures use the existing C: access path through the S: scratch root
+`S:\CodexScratch\RedPrism\P1_2026-10-21\BuildProcessTests`; all 1,588 legacy child targets are preserved.
+`BuildProcessTests-before-S-20261021` retains the original C: junction. No fixture data is deleted or moved.
+
+### Exact current evidence and the next repair
+
+**Compiler/diagnostic batch:** all three full x64 profiles and all three ARM64 cross profiles pass independent
+source/object/link/PE-PDB/runtime readback. The post-default 1,904-input freeze is
+`E81E1645C5130105EBECC8AD2FD43FB00C99C584312BE52F2B1C5DCBCF3660BF`.
+Attempts are `host1d1`, `host1r1`, `host1a1`, `host1armd1`, `host1armr1`, `host1arma1`; the same-attempt ASan
+archive is recovered without substituting another native run. Release verifies 1,022 compiler records plus
+23 selected dependency members. The preceding `dpi1an1` Release analysis retains its earlier exact 1,903-input
+scope. These historical matrices do not qualify the later flip or private scanner drafts.
+See [diagnostic evidence](../../TestRuns/P1DefaultClientDiagnostics_2026-10-21.md).
+
+**Settled layer flips:** ordinary single-layer Horizontal/Vertical commands enter the existing ordered
+queue/admitted original-ticket metadata worker. Core numeric expectations come from legacy LayerFlip/LayerMask;
+preserving-gesture/group/canvas/header behavior remains outside this migration. `flipdevr3` passes Release
+build/ISA and focused DocumentTests: every 24,035 predecessor PASS occurrence is retained plus exactly 289
+additions (266 flip, 22 joined-Close, one summary), total 24,324. Main independently verifies the Counters.
+Its first hidden Application run fails because the new fixture incorrectly expects an assetless blank layer
+to transform. The repaired fixture uses real pixels and rotation 12.5 to -12.5, with explicit assetless no-ops.
+`flipdevr4` hidden Application PID 75032 exits 0: all 158 flip checks / 28 cases pass with 1,905 source and
+EXE/PDB bookends. Fixture-level joined Close is not actual public-command Application Close qualification.
+
+`flipdevr4` still **fails the mandatory ISA build gate**. The same image/PDB SHA-256 values are
+`70DDADBEDC9C06A0EB34164D0C8E2508AC5A9345D529C604F116E3D115ECF9F4` /
+`A94E146C090C3CEECB9940FB6A960F92438D700C6CE80BD37B2E26791268CAE5`.
+Its failed 3,247-file archive manifest is `9ABB0BD8F6FE12AA49943F0AACA332FB051966D3CBD9F06C6C5BC98FA19D49F9`;
+source freeze `98DD15FB0F804D2F8B950DCD7CF861C8D92F34368A714CE7104E6B5C473C1B61`.
+Focused runtime after a failed build does not qualify that build or a full profile. All earlier compile,
+storage and fixture failures remain retained. See [flip scope/evidence](../../TestRuns/P1SettledLayerFlip_2026-10-21.md).
+
+The ISA refusal is table data in `Application::OnAdjustAction`, PDB module 332 / `ApplicationAdjust.obj`:
+procedure `[0x1402a0c20,0x1402a1d28)`, MOVZX ESI,DL at `0x1402a0c5d`, SIL <=36 guard at `0x1402a0d00`,
+RDX-base/RSI-index/EAX-result dispatch at `0x1402a0d20`, RET `0x1402a1c93`, anonymous 37-DWORD table
+`[0x1402a1c94,0x1402a1d28)`. Entry 9 is `c5 13 2a 00`, RVA `0x002a13c5`; linear decoding labels it
+`vcvtsi2sd` at `0x1402a1cb8`. All 37 actual destinations are decoded body boundaries. The old RSI form
+expects a different producer/ESI guard/ECX result; generic matching lacks `8b 84 b2`. Do not add an ISA allowance.
+Read the retained matching PE, PDB, complete disassembly/contributions/symbols under `Archives/flipdevr4/IsaScan/RedPrism`.
+
+Next, review the private exact producer/prelude/guard/body/terminal proof. Require complete nonoverlapping
+decoded rows matching PE, zero upper RSI bits, Win64 nonvolatile preservation through known external calls,
+correct unsigned guard/default and all targets, same anonymous-data/procedure/contribution owner and end,
+no incoming guard/table entry, and real adjacent VEX/EVEX refusal. Copy the Main scanner into the private
+test workspace only after verifying both source hashes; its current helper scanner is the old one.
+Use a fresh PowerShell process because `Add-Type` caches the scanner type. Run the existing focused
+`Tests/BuildProcessTests/IsaRsiDwordTests.ps1`, then all scanner predecessors and the unchanged failed-image
+replay. Its helper supports synthetic tests; real-image replay also needs the unchanged discovery module
+imported by `Build/IsaScan.psm1`. Only then integrate code/tests/contracts together and retry a focused
+canonical Release build. Latest complete integration gates remain due.
+
+**Native ARM64:** r5 source/products/rosters are independently verified as a preserved 14.51 sizing failure;
+there is still no exact native failed sizing predicate. r6 `39591618490` on `d3fb3dc` correctly refuses the
+image's default 14.51 before canonical work; 2,090 opening source inputs and its three artifacts are verified.
+The pinned 14.52 CI setup in `9a75051` passes 74 exact-function stand-in controls, retaining all preceding 60;
+Main verifies four source bookends, nine case entries and five actual child receipts. No stand-in executes
+native compiler/MSBuild. See [provisioning contract/evidence](../../TestRuns/P1NativeToolchainProvisioning_2026-10-21.md).
+
+Run [39597475207](https://github.com/RedSalamanders/RedPrism/actions/runs/39597475207), attempt 1 / job
+119213278997, is **cancelled for this requested checkpoint**, terminal at 12:15:38 UTC. It starts the pinned
+installer on image `20261013.183.4`; input/signature receipt and installer logs are retained, but there is no
+installer-result, selected toolset, canonical child or native product/runtime receipt. Do not call it a failed
+installation, passing provisioning or native qualification. Its 8,436,793-byte artifact 12345065882 is downloaded
+and all 15 extracted files match ZIP bytes; ZIP SHA-256
+`C082FC64499C0C371F163474CEE1109DB0D1A36726C36FAD40623BB295C261F4`.
+Full installer-log interpretation and exact opening-source semantic readback remain due if useful. On resume,
+dispatch one fresh bounded workflow after reviewing the saved logs; preserve the exact 14.52 guard and inspect
+actual selected compiler/dependency products before interpreting native DPI behavior. No guessed second resize,
+OS-clamp claim, weakened client-size assertion or old-toolchain qualification is authorized.
+
+**DxUi repaint experiment:** only `Z:\src\RedPrism\.build\dxui-p1-paint-r1`, branch
+`ej/p1-bounded-embedded-repaint`, base `f65e4a4b9311370b3e3070088e2a8abe29adcb27` (API4), is authorized.
+Its 16 changed/untracked paths are copied with exact base/branch and binary patch. Candidate-r2 passes all
+six local profiles: 19 normal scopes/zero skips in each x64 profile, actual sanitizer detection and all 336
+library compiler records at 14.52; ARM profiles are cross-builds. Evidence:
+`Z:\src\RedPrism\.build\P1Evidence\dxui-bounded-repaint-matrix-r1`, especially both Main profile readbacks,
+`source-binding.json`, and per-profile manifests. Bounded correctness, alpha/clip/z-order/reentrancy/lifetime
+proof is real; the generic benchmark observes 33 bounded updates. Unpaired warm medians 973.05 versus
+1026.95 microseconds and worse cold 6106 versus 5068 microseconds qualify **no speedup**. Foreground,
+native ARM64, CI, paired performance and explicit library/API4 publication/adoption remain open.
+
+The actual 10,000-row path still calls ordinary Prepare. `SetPreparedLayers` notifies model/selection;
+API4 `Tree::NotifyDataChanged` invalidates geometry/model revision, forcing full preparation. A consumer-only
+skip-Notify idea is withdrawn: BorrowedControlModelGuard/UIA does not compare the prepared row owner, so
+replacing it under the same model pointer/geometry leaves an old semantic capture apparently current.
+Strong ownership protects text lifetime, not semantic coherence. No UAF is established. A library-supported
+semantic revision boundary plus exact displayed-predecessor proof is needed before a bounded row update.
+Retain availability disable/re-enable, selected-row EnsureVisible/scroll, tooltip/typeahead/rainbow and animation
+rules. Compare every ordered non-name field, not only IDs/count; add nested callback/query/UIA rejection tests.
+RedPrism API3 internals differ and cannot inherit an API4 proof. Do not adopt the pin until concrete qualified
+benefit and the required approval exist.
+
+### Remaining P1 delivery work — all unchecked
+
+1. [ ] Complete the strict ISA repair and full coherent flip qualification, including actual public-command
+   joined Close and remaining group/live-gesture integration obligations; keep legacy numeric behavior.
+2. [ ] Complete native 14.52 installation/product/runtime observation and exact sizing diagnosis/repair;
+   retain D9/native availability decisions and all earlier cancelled/failed receipts.
+3. [ ] Resolve actual row/chrome Prepare cost before ordinary prepared activation. Preserve hardware initial/
+   first-rename 6.383/8.621 ms and WARP 7.387/6.520 ms misses; Apply maxima 0.260/0.240 ms do not close G1.
+4. [ ] Complete ordinary rows/display/selection-pixel-final/Gradient/Pixel Move/stroke/Shape/Warp consumers,
+   readiness and phase admission. Shared startup still only runs for the explicit processing probe. Its
+   order is rows -> committed/pending display -> stroke -> optional outline, with prefix shutdown guards.
+   History/cursor/recorded Hue already have independent ordinary startup; do not duplicate their workers.
+   `_selectionPixelFinalPublicationEnabled` remains false ordinarily; SizeJobs CPU fallback and explicit
+   Size benchmark enablement are not proof of general activation. Inspect `ApplicationSizeJobs.cpp` and
+   `ApplicationFinalPublicationPlan.cpp` before changing flags. A Present alone is weaker than committed/
+   pending/recorded/row-key readiness. StrokeFinish still needs cold-row held/refused/replaced/cancel/Close
+   first-stroke and Warp consumer proof. Gradient/Shape need complete source/output/display/row overlap bounds.
+5. [ ] Complete real GPU utility/readback/composition callers, device loss/recovery, suspend/restart,
+   cancellation, utility admission and joined shutdown grids using the existing queues and event waits.
+6. [ ] Close remaining Wand/selection overlap/geometry/coverage/outline, deferred transform settlement,
+   files/clipboard full phase/admission bounds and historical failure investigation in their child plans.
+7. [ ] Complete constant-time immutable capture, actual H3 caller migration, residency journal/memory bounds,
+   original-ticket strong/weak/cache/late-source retention and off-owner release. Existing persistent-index/
+   history primitives are real; do not build a second indexing/accounting framework.
+8. [ ] Qualify Image Size inclusive Apply <=2 ms and every original P1-due 45 MP/100 MP R1/WARP G1 operation,
+   owner/frame/latency/cancellation budgets and explicit original phase exceptions. No invented deferral closes
+   a miss. Record R2/R3 unavailability and D9 exactly as §14 requires.
+9. [ ] Run latest integrated full x64 Debug/Release/real ASan, Release analysis with actual concurrency controls,
+   all three ARM64 cross profiles, native host acceptance, ISA/provenance, skills/formatting, sanitizer/stress/
+   crash probes and harness captures. Reconcile contracts/user guide/child plans, publish code/tests/docs and
+   verify remote identity. Move P1 to Done only after every original §14 gate closes; P2–P6/RAW remain later.
+
+### Restart commands and reader reuse
+
+First verify HEAD/branch/remote/status against `final-publication.json` and the saved file manifests; reconcile
+unexpected edits instead of resetting them. No source freeze or local P1 build/test/observer is active at stop.
+Read current `AGENTS.md`, `Specs/README.md`, relevant repo skills, this section and §14. Recheck disk free bytes
+with `System.IO.DriveInfo`; keep new evidence/scratch on S:. Do not rerun one-shot scripts into existing folders.
+
+Reusable tools are under `Z:\src\RedPrism\.build\P1Drafts\DefaultClientDiagnostics-Main-r1`:
+`run-canonical.py`, `archive.py`, `verify-profile-main-r1.py`, `verify-runtime-main-r1.py` and analysis reader.
+The canonical runner/archiver/profile reader accept `REDPRISM_P1_EVIDENCE_ROOT` (absolute path). The profile
+reader also accepts an explicit triple, for example `new-attempt build x64 Release`; its 1,022 records/five
+PE-PDB/ISA proof is unchanged. Give every run a **new** attempt name. The runtime reader's old exact roster is
+not a flip reader: reuse neutral clean/Counter helpers and explicitly prove additions without weakening
+predecessors. Preserve both streams and actual PID/exit/source/product bookends even when a native test fails.
+
+Use `C:\Program Files\PowerShell\7\pwsh.exe` (7.6.7) and
+`C:\Users\eric\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
+JSON may have a BOM (`utf-8-sig`); set Python stdout UTF-8 before Unicode output. The selected shell's version
+can differ from system PowerShell. GitHub connector was disconnected; the existing authenticated `gh` CLI
+dispatch/download fallback works. Neutral native identity helpers are in `P1Drafts\ObservedArmSuccessReader-Main-r1`;
+use only the neutral functions for failed/cancelled jobs, never a success-only reader.
+
+After focused repair, use unchanged repository entrypoints for a coherent integration batch:
+`validate-skills.ps1`, `format.ps1 -Check`, full `test.ps1 -Platform x64` Debug/Release/ASan Debug,
+`build.ps1 -Platform x64 -Configuration Release -Analyze`, and ARM64 Debug/Release/ASan Debug cross-builds.
+`test.ps1` has no filters/SkipBuild option; `build.ps1` repeats mandatory ISA parser controls. Do not invent
+a skipped gate or stitched full pass. Reuse already-qualified unchanged predecessors where identity matches.
+
 ## Current delivery checklist — 2026-10-21
 
 - [x] Resume the saved checkpoint at `4fffd37`: verify the clean source/remote branch and all six DxUi experiment source/backup hashes. Execution resumed at the user's request on 21 October; the [saved checkpoint](../../TestRuns/P1SessionCheckpoint_2026-10-21.md) remains the restart/evidence reference. P1 remains WIP.
@@ -7,6 +223,7 @@
 - [ ] Qualify exact DPI/style/client/outer/monitor diagnostics with all original assertions retained, then use native evidence to select a repair. No guessed sizing change or native success is claimed.
 - [x] Qualify the repaired MSVC 14.52 diagnostic source in full x64 Debug/Release/real ASan, Release analysis with real concurrency controls and all three ARM64 cross-builds. Original failed keyboard guards remain retained; post-default full Debug/Release/real ASan and all three ARM cross profiles are separately verified. [Current evidence](../../TestRuns/P1DefaultClientDiagnostics_2026-10-21.md#current-repaired-source-qualification).
 - [x] Integrate and qualify the compiler-host batch: scoped unset-X64 default and 11 exact-entrypoint controls pass; all three post-default ARM cross profiles and full Debug/Release/real ASan qualify, including actual Release compiler/dependency selection. The native 14.52 default-version preflight passes 60 exact-function controls and preserves original native failure assertions. Code, tests, contracts and evidence publish together; earlier x86-host/fallback receipts and the ASan archive storage failure remain retained.
+- [ ] Qualify the settled single-layer Flip Horizontal/Vertical migration: focused DocumentTests preserves all 24,035 predecessors and adds 289 facts; the corrected hidden Application exits 0 with 158 checks / 28 cases and exact bookends. The current Release build still fails its ISA gate on an OnAdjustAction table; partial scanner/test drafts are saved privately and unqualified. Full integration, actual-command Close, group/live-edit completeness, G1 and P1 remain open. [Current scope](../../TestRuns/P1SettledLayerFlip_2026-10-21.md).
 - [x] Commit/push the seven-profile-qualified Load Layer/Mask Selection and exact inline-table scanner correction as `f4c712c21c0cfcacdeaf16db9e1e225662bd38a9`; the approved branch destination SHA is verified. Formatting/skills pass, compiled qualification inputs are unchanged, and P1 remains WIP. [Component publication](../../TestRuns/P1LoadedLayerSelection_2026-10-21.md#publication).
 - [x] Preserve the new Release ISA refusal and privately qualify the exact unsigned R9D/RCX/R8 table proof: all 4,368 scanner predecessors plus 85 encoded controls and unchanged failed-image replay pass. Canonical current-source integration now passes with the complete seven-profile load-selection matrix; this scanner correction changes neither the DxUi pin/library nor the allowlist. [Evidence](../../TestRuns/IsaR9dRcxR8_2026-10-21.md).
 - [x] Qualify ordinary settled **Load Layer Selection / Load Mask Selection** through admitted workers: all seven local profiles pass on the same 1,901 inputs, with 32 new Document facts and 102 actual-command stderr facts / 14 cases while preserving every predecessor. The synchronous inline source path is removed from these handlers. Full remaining caller/phase/G1 and current-source native runtime remain open. [Implementation and validation](../../TestRuns/P1LoadedLayerSelection_2026-10-21.md).

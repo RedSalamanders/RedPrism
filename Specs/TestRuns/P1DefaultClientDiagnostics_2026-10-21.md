@@ -230,3 +230,21 @@ freeze above. All other frozen inputs, including every C++ and build input, rema
 1,903-input Release analysis remains its exact historical scope; no post-default analysis run is claimed.
 Code, regression controls, contracts, checklist and this evidence publish in one coherent change. Renewed native
 workflow observation and the final integrated P1 matrix remain due. No preceding-commit-SHA-only update is required.
+
+## Renewed native toolset observation
+
+[Run 39591618490, attempt 1](https://github.com/RedSalamanders/RedPrism/actions/runs/39591618490), job 119193715869,
+selects published `d3fb3dc7479f2daa88a108345f6a857b38f48beb` on image `20261018.189.1`. Main reads the complete job log,
+verifies the downloaded ZIP against GitHub's 107,646-byte size and SHA-256, checks every extracted artifact byte,
+and reuses the reviewed neutral identity helper to verify all 2,090 opening source inputs against the exact
+commit tree after declared Git filters.
+
+The three retained artifacts are `source-before.json`, `toolset-requirement.json` and `failure.json`.
+The selected Enterprise installation still has default MSVC `14.51.36231`. The required `14.52.37025` guard
+refuses before host-environment selection or canonical child start. No closing source bookend, compiler product,
+application run or fresh sizing observation exists. This confirms early refusal; it qualifies no native runtime.
+It does not prove whether another toolset could be installed on the runner.
+
+Evidence: `P1Evidence/p1-native-arm-hosted-r6` through its S: junction, including `main-refusal-qualified.json`.
+ZIP SHA-256: `19162467286FBCADDDDA9BBCE97BA1A0383A404C21D102B1E1D15E36ADCE4A7E`.
+Supported provisioning of the exact native compiler remains the prerequisite for another canonical observation.

@@ -1,5 +1,13 @@
 # Resume RedPrism P1 — saved 21 October 2026
 
+**Latest stop: 21 October, afternoon.** Use the complete
+[saved continuation in the P1 WIP plan](../Plans/WIP/UiNeverBlocks_2026-09-22.md#saved-continuation--21-october-2026).
+It records the current 14.52 evidence, published CI setup, focused flip success with a retained ISA failure,
+private unqualified parser/tests, all remaining delivery work, stopped jobs, storage/backup hashes and exact
+restart steps. The checkpoint commit's final source/remote/status receipt is under
+`S:\CodexEvidence\RedPrism\P1_2026-10-21\P1SessionCheckpoint-20261021T121547Z`.
+Sections below preserve the **earlier 06:35 checkpoint** and are historical where superseded.
+
 Execution is stopped at the user's request to continue in another session. P1 is **WIP**.
 This checkpoint supersedes older progress text that still says profiles or source freezes are active.
 No implementation, benchmark or new CI dispatch should run until the user resumes work.

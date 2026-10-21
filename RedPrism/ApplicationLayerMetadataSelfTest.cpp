@@ -522,6 +522,224 @@ int Application::RunLayerMetadataSelfTest() noexcept
                     _jobs.ReservedMemoryBytes() == 0 && _jobs.IsIdle()))
         return 5;
     std::fprintf(stderr, "PASS metadata-owned-accounting.summary checks=4 failures=0\n");
+    // Exercise the ordinary idle command entrypoint. QueueHostInput alone would miss a synchronous
+    // OnCommand bypass, even if every admitted publication test passed.
+    const int flipChecks = checks;
+    struct FlipState final
+    {
+        Application& owner;
+        Mode mode;
+        std::optional<CanvasDocument> before;
+        Guid revision;
+        std::uint64_t generation;
+        std::optional<ContinuationReceipt> undo;
+        ContinuationReceipt receipt;
+        std::uint64_t ordinal = 0;
+        bool visited = false, held = false, cancelPending = false;
+    };
+    constexpr std::array flipCases{
+        Case{"ordinary", Mode::Rename, {}, {}},
+        Case{"younger-undo", Mode::Ordered, {}, {}},
+        Case{"cancel", Mode::Cancel, {}, {}},
+        Case{"worker-failure", Mode::Failure, {}, {}},
+        Case{"capture-fault", Mode::CaptureFault, {}, {}},
+        Case{"draft-fault", Mode::StageFault, LayerMetadataPrepareStage::BeforeDraft, {}},
+        Case{"record-fault", Mode::StageFault, LayerMetadataPrepareStage::AfterEdit, {}},
+        Case{"seal-fault", Mode::StageFault, LayerMetadataPrepareStage::AfterSeal, {}},
+        Case{"history-fault", Mode::StageFault, {}, DocumentHistory::PrepareStage::TrimIndex},
+        Case{"generation", Mode::Generation, {}, {}},
+        Case{"epoch", Mode::Epoch, {}, {}},
+        Case{"active", Mode::Active, {}, {}},
+        Case{"hidden-noop", Mode::NoOp, {}, {}},
+        Case{"assetless-noop", Mode::Inactive, {}, {}},
+    };
+    const auto flipPump = [](void* opaque, void* native) noexcept
+    {
+        auto& state = *static_cast<FlipState*>(opaque);
+        auto& owner = state.owner;
+        auto& message = *static_cast<MSG*>(native);
+        if (message.message != LayerMetadataTestGate::kMessage)
+        {
+            owner.DispatchQueuedMessage(message);
+            return;
+        }
+        const auto gate = owner._layerMetadataTestGate;
+        state.visited = true;
+        state.held = gate && gate->captures.load() == 1 && gate->reservationHeld.load() && owner._layerMetadataTicket &&
+                     owner._layerMetadataStamp && owner._layerMetadataStamp->ordinal == state.ordinal &&
+                     state.receipt.Read().outcome == HostOutcome::Pending && owner._historyWork.Busy() &&
+                     owner._jobs.ReservedMemoryBytes() >= gate->reservationBytes &&
+                     owner._session.Document() == state.before &&
+                     owner._session.history.CurrentRevision() == state.revision;
+        if (state.mode == Mode::Ordered)
+        {
+            state.undo = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
+            state.held = state.held && state.undo->Read().outcome == HostOutcome::Pending;
+        }
+        else if (state.mode == Mode::Cancel)
+        {
+            owner.CancelHostContinuations();
+            state.cancelPending = owner._historyWork.Busy() && owner._layerMetadataTicket.has_value();
+        }
+        else if (state.mode == Mode::Generation)
+        {
+            owner._session.EditForTest([](CanvasDocument& document) { document.resolution = 300; });
+            state.before = owner._session.Document();
+            state.generation = owner._session.Generation();
+        }
+        else if (state.mode == Mode::Epoch)
+        {
+            owner._session.history.Begin(L"Literal flip epoch", owner._session.Document(),
+                                         owner._session.ActiveLayerID());
+            owner._session.history.End(owner._session.Document(), owner._session.ActiveLayerID());
+        }
+        else if (state.mode == Mode::Active)
+            owner._session.SelectLayer(owner._session.Document()->layers.front().id);
+        (void)SetEvent(gate->release.get());
+    };
+    for (const bool horizontal : {true, false})
+    {
+        for (const auto& test : flipCases)
+        {
+            prepare();
+            if (test.mode != Mode::Inactive)
+            {
+                // Blank() has no asset and correctly cannot transform. Exercise real raster commands here;
+                // the separate assetless case keeps that refusal observable through the ordinary entrypoint.
+                _session.EditForTest(
+                    [](CanvasDocument& document)
+                    {
+                        constexpr std::array<std::uint8_t, 4> pixel{31, 47, 63, 255};
+                        auto fixture = DocumentFixture::Copy(document);
+                        fixture.layers.back().asset =
+                            RasterAsset{Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size()),
+                                        {},
+                                        L"Literal flip source"};
+                        fixture.layers.back().transform.rotation = 12.5;
+                        document = std::move(fixture).Seal();
+                    });
+                DocumentChanged();
+            }
+            const Guid active = _session.ActiveLayerID().value();
+            if (test.mode == Mode::NoOp)
+            {
+                _session.ToggleVisibility(active);
+                _session.history.Reset();
+                _session.RenameLayer(active, L"Literal flip redo source");
+                _session.Undo();
+            }
+            const auto gate = std::make_shared<LayerMetadataTestGate>();
+            gate->release.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!gate->release)
+                return 5;
+            gate->throwCaptureFailure = test.mode == Mode::CaptureFault;
+            gate->throwMetadataStage = test.metadata;
+            gate->throwHistoryStage = test.history;
+            if (test.mode == Mode::Failure)
+                gate->result = {JobStatus::Failed, E_ACCESSDENIED};
+            _layerMetadataTestGate = gate;
+            FlipState state{*this, test.mode, _session.Document(), _session.history.CurrentRevision(),
+                            _session.Generation()};
+            const auto openingHistory = _session.history.CaptureState();
+            const std::string label = std::string(horizontal ? "flip-horizontal-" : "flip-vertical-") + test.name;
+            OnCommand(horizontal ? ChromeHost::kCommandFlipLayerHorizontal : ChromeHost::kCommandFlipLayerVertical);
+            if (const auto* queued = _hostRequests.PendingAt(0))
+            {
+                state.receipt = queued->input.Receipt();
+                state.ordinal = queued->ordinal;
+            }
+            if (!expect(label.c_str(), "ordinary-command-queues-without-owner-mutation",
+                        _hostRequests.Size() == 1 && !_layerMetadataTicket && !_layerMetadataStamp &&
+                            state.ordinal != 0 && state.receipt.Read().outcome == HostOutcome::Pending &&
+                            !_historyWork.Busy() && _session.Document() == state.before &&
+                            _session.history.CurrentRevision() == state.revision) ||
+                SettleJobs(_jobs, 15000, flipPump, &state) != SettleResult::Settled)
+                return 5;
+            const bool fault = test.mode == Mode::CaptureFault || test.mode == Mode::StageFault;
+            const bool stale = test.mode == Mode::Generation || test.mode == Mode::Epoch || test.mode == Mode::Active;
+            const auto terminal = state.receipt.Read();
+            const auto expectedOutcome = fault || test.mode == Mode::Failure ? HostOutcome::Failed
+                                         : test.mode == Mode::Cancel         ? HostOutcome::Cancelled
+                                         : stale                             ? HostOutcome::Stale
+                                                                             : HostOutcome::Succeeded;
+            const auto expectedError = fault                                ? E_OUTOFMEMORY
+                                       : test.mode == Mode::Failure         ? E_ACCESSDENIED
+                                       : test.mode == Mode::Cancel || stale ? E_ABORT
+                                                                            : S_OK;
+            if (!expect(label.c_str(), "original-receipt-has-exact-terminal-outcome-and-error",
+                        terminal.outcome == expectedOutcome && terminal.error == expectedError))
+                return 5;
+            if (!expect(label.c_str(), "original-admission-and-off-owner-retirement",
+                        gate->reservationHeld.load() && gate->originalAccountingBound && gate->retired.load() &&
+                            gate->retiredOffOwner.load() && !_layerMetadataTicket && !_layerMetadataStamp &&
+                            !_historyWork.Busy() && (fault || (state.visited && state.held))))
+                return 5;
+            if (fault &&
+                !expect(label.c_str(), "fault-injected-at-intended-boundary",
+                        test.mode == Mode::CaptureFault ? gate->captures.load() == 0 : gate->faultHits.load() == 1))
+                return 5;
+            const bool changed = test.mode == Mode::Rename;
+            if (changed)
+            {
+                auto literal = DocumentFixture::Copy(state.before.value());
+                literal.layers.back().transform.flipX = horizontal;
+                literal.layers.back().transform.flipY = !horizontal;
+                literal.layers.back().transform.rotation = -12.5;
+                const std::wstring_view title = horizontal ? L"Flip Horizontal" : L"Flip Vertical";
+                if (!expect(label.c_str(), "literal-transform-and-one-history-entry",
+                            _session.Document() == std::optional<CanvasDocument>{std::move(literal).Seal()} &&
+                                _session.Generation() == state.generation + 1 && _session.ActiveLayerID() == active &&
+                                _session.history.UndoCount() == 1 && _session.history.UndoName() == title))
+                    return 5;
+            }
+            else if (!expect(
+                         label.c_str(), "no-unintended-publication",
+                         _session.Document() == state.before &&
+                             (test.mode == Mode::Ordered || _session.Generation() == state.generation) &&
+                             _session.history.UndoCount() == 0 &&
+                             (test.mode == Mode::Ordered
+                                  ? state.undo && state.undo->Read().outcome == HostOutcome::Succeeded &&
+                                        _session.history.CaptureState().FutureCount() == 1 &&
+                                        _session.history.RedoName() ==
+                                            (horizontal ? L"Flip Horizontal" : L"Flip Vertical")
+                                  : _session.history.CurrentRevision() == state.revision &&
+                                        _session.history.CaptureState().FutureCount() == openingHistory.FutureCount())))
+                return 5;
+            if (test.mode == Mode::Cancel &&
+                !expect(label.c_str(), "cancellation-keeps-barrier-until-worker-joins", state.cancelPending))
+                return 5;
+            auto outputWeak = gate->accountingOutput;
+            auto output = outputWeak.lock();
+            const auto bytes = gate->accountingOutputBytes;
+            if (changed && !expect(label.c_str(), "live-output-bound-to-original-ticket",
+                                   output && bytes > 0 && output->BoundTo(_jobs, gate->accountingTicket) &&
+                                       output->Bytes() == bytes && output->ResidentBytes() >= bytes))
+                return 5;
+            if (!expect(label.c_str(), "temporary-work-settles-under-original-accounting",
+                        MetadataAccountingSettledForTest()))
+                return 5;
+            if (changed)
+            {
+                _session.ClearDocument();
+                DocumentChanged();
+                if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+                    return 5;
+                const bool flipGraphDestroyed = output->LocalAllocationBytes() == 0;
+                output.reset();
+                (void)DrainCompletions(_jobs);
+                if (!expect(label.c_str(), "last-weak-control-retains-exact-original-charge",
+                            flipGraphDestroyed && outputWeak.expired() && _jobs.ReservedMemoryBytes() == bytes))
+                    return 5;
+                outputWeak.reset();
+                if (!expect(label.c_str(), "last-weak-release-refunds-original-charge",
+                            SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                _jobs.ReservedMemoryBytes() == 0))
+                    return 5;
+            }
+        }
+    }
+    std::fprintf(stderr, "PASS metadata-flip-host.summary checks=%d cases=%zu failures=0\n", checks - flipChecks,
+                 flipCases.size() * 2);
     if (const int residency = RunHistoryResidencySelfTest(); residency != 0)
         return residency;
     return 0;

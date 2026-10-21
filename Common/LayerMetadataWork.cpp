@@ -18,6 +18,26 @@ namespace
         observer.checkpoint(observer.context, stage);
     return !cancellation.IsCancelled();
 }
+
+// The settled single-layer flip keeps CanTransform's visibility rule. Walk only its indexed ancestry on
+// the worker, checking cancellation before every lookup; no hierarchy or selected-member vector is built.
+[[nodiscard]] bool CanFlipLayer(const CanvasDocument& document, const ImageLayer& layer,
+                                CancelToken cancellation) noexcept
+{
+    if (layer.isGroup || !layer.asset)
+        return false;
+    std::optional<Guid> current = layer.id;
+    for (std::size_t depth = 0; current && depth < document.layers.size(); ++depth)
+    {
+        if (cancellation.IsCancelled())
+            return false;
+        const auto* ancestor = document.layers.FindKey(current.value());
+        if (!ancestor || !ancestor->visible)
+            return false;
+        current = ancestor->parentID;
+    }
+    return !current;
+}
 } // namespace
 
 LayerMetadataAuthority DocumentSession::CaptureLayerMetadataAuthority(bool preserve) const noexcept
@@ -71,7 +91,8 @@ std::optional<LayerMetadataInput> DocumentSession::PrepareLayerMetadataInputImpl
                                                                                  LayerBlendMode blendMode,
                                                                                  bool preserve) const
 {
-    if (!_document || kind > LayerMetadataKind::SetBlendMode || (!preserve && history.CaptureState().Depth() != 0) ||
+    if (!_document || kind > LayerMetadataKind::FlipVertical || (!preserve && history.CaptureState().Depth() != 0) ||
+        (IsLayerFlipMetadata(kind) && (preserve || _activeLayerID != target || TransformsAsGroup())) ||
         (kind == LayerMetadataKind::SetOpacity && !std::isfinite(opacity)) ||
         (kind == LayerMetadataKind::SetBlendMode &&
          (blendMode < LayerBlendMode::Normal || blendMode > LayerBlendMode::Luminosity)) ||
@@ -114,7 +135,9 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
 {
     if (cancellation.IsCancelled() || !input._valid || !input._document || input._token.target ||
         (!input._authority._preserved && input._history.Depth() != 0) ||
-        input._kind > LayerMetadataKind::SetBlendMode || input._document.value().width != input._token.canvasWidth ||
+        input._kind > LayerMetadataKind::FlipVertical ||
+        (IsLayerFlipMetadata(input._kind) && input._authority._preserved) ||
+        input._document.value().width != input._token.canvasWidth ||
         input._document.value().height != input._token.canvasHeight)
         return std::nullopt;
     PreparedLayerMetadata result(std::move(input));
@@ -170,6 +193,12 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
             return unchanged();
         historyName = L"Layer Blend Mode";
         break;
+    case LayerMetadataKind::FlipHorizontal:
+    case LayerMetadataKind::FlipVertical:
+        if (!CanFlipLayer(before, layer, cancellation))
+            return unchanged();
+        historyName = captured._kind == LayerMetadataKind::FlipHorizontal ? L"Flip Horizontal" : L"Flip Vertical";
+        break;
     }
     if (!Checkpoint(observer, LayerMetadataPrepareStage::BeforeDraft, cancellation))
         return std::nullopt;
@@ -192,6 +221,17 @@ std::optional<PreparedLayerMetadata> DocumentSession::PrepareLayerMetadataPublic
         case LayerMetadataKind::SetBlendMode:
             writable.blendMode = captured._blendMode;
             break;
+        case LayerMetadataKind::FlipHorizontal:
+        case LayerMetadataKind::FlipVertical:
+        {
+            const bool horizontal = captured._kind == LayerMetadataKind::FlipHorizontal;
+            const auto center = layer.transform.Center();
+            const auto flipped = layer.transform.Mirrored(horizontal, horizontal ? center.x : center.y);
+            if (writable.mask)
+                writable.mask->placement = MaskPlacementMoving(writable.mask.value(), layer.transform, flipped);
+            writable.transform = flipped;
+            break;
+        }
         }
     }
     if (!Checkpoint(observer, LayerMetadataPrepareStage::AfterEdit, cancellation))
@@ -248,6 +288,7 @@ bool PreparedLayerMetadata::RefreshHistoryResidency(CancelToken cancellation, Do
 bool DocumentSession::IsPreparedLayerMetadataCurrent(const PreparedLayerMetadata& prepared) const noexcept
 {
     return !prepared._applied && prepared._input._valid && CanApplyLayerMetadataAuthority(prepared._input._authority) &&
+           (!IsLayerFlipMetadata(prepared._input._kind) || !TransformsAsGroup()) &&
            CanApplyJobResult(prepared._input._token, 0) &&
            (prepared._history ? history.CanPublish(prepared._history.value())
                               : history.IsCurrent(prepared._input._history));
@@ -284,7 +325,8 @@ std::uint64_t DocumentSession::PreservedLayerMetadataMemoryBytes(LayerMetadataKi
 std::uint64_t DocumentSession::LayerMetadataMemoryBytesImpl(LayerMetadataKind kind, std::size_t nameUnits,
                                                             bool preserve) const noexcept
 {
-    if (!_document || kind > LayerMetadataKind::SetBlendMode || (!preserve && history.CaptureState().Depth() != 0) ||
+    if (!_document || kind > LayerMetadataKind::FlipVertical || (!preserve && history.CaptureState().Depth() != 0) ||
+        (IsLayerFlipMetadata(kind) && (preserve || !_activeLayerID || TransformsAsGroup())) ||
         !CanApplyLayerMetadataAuthority(CaptureLayerMetadataAuthority(preserve)))
         return 0;
     auto bytes = history.EditMemoryBytes(_document);

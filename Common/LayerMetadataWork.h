@@ -14,7 +14,14 @@ enum class LayerMetadataKind : std::uint8_t
     ToggleVisibility,
     SetOpacity,
     SetBlendMode,
+    FlipHorizontal,
+    FlipVertical,
 };
+
+[[nodiscard]] constexpr bool IsLayerFlipMetadata(LayerMetadataKind kind) noexcept
+{
+    return kind == LayerMetadataKind::FlipHorizontal || kind == LayerMetadataKind::FlipVertical;
+}
 
 enum class LayerMetadataPrepareStage : std::uint8_t
 {

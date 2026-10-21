@@ -52,3 +52,20 @@ Control-result SHA-256: `BFE94449AFBA8F6EBB74E6E3BA031F385EBCBF5A7E77C5BC63D96DB
 Publication contains code, regression controls and contracts together. A real disposable CI installation and
 canonical native run remain required. Provisioning, parser controls and cross-builds confer no native runtime,
 DPI repair, G1 or P1 completion.
+
+## Requested stop and retained CI observation
+
+The source/test/contract batch publishes as `9a750512a4f6eb143467ad25ce29bc071ca86aa2`; remote identity is
+verified. [Run 39597475207](https://github.com/RedSalamanders/RedPrism/actions/runs/39597475207), attempt 1 /
+job 119213278997, starts on image `20261013.183.4`. At the user's request to save continuation for later,
+the coordinator cancels the run. It is terminal cancelled at 12:15:38 UTC; artifact upload succeeds.
+
+The pinned installer starts and leaves input/signature and installer-log receipts. There is no installer-result,
+toolset selection, canonical child or native product/runtime receipt. Installation success or failure is
+undetermined. All 15 files from artifact 12345065882 are retained locally and match their extracted ZIP bytes.
+The ZIP matches GitHub's 8,436,793-byte size and SHA-256
+`C082FC64499C0C371F163474CEE1109DB0D1A36726C36FAD40623BB295C261F4`.
+Evidence is `P1Evidence/p1-native-arm-hosted-r7` through its S: junction, including the complete job log,
+metadata, raw ZIP, extracted files and `cancelled-artifact-transport-verified.json`.
+This is transport preservation, not semantic source/installer/native qualification. Complete installer-log
+interpretation and a fresh canonical observation remain due after the user resumes.

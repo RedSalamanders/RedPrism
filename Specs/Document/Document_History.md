@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-21
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -276,6 +276,17 @@ ownership, move consumption and failure checkpoints. `metadata-host` exercises t
 routes, held-message pumping, stale results, scheduler refusal and off-owner retirement. Qualification is tracked
 in [DocumentRecordRoots](../TestRuns/DocumentRecordRoots_2026-10-03.md). Typed opacity previews/closure and shared
 record capture/accounting remain separate work.
+
+Settled single-layer Flip Horizontal/Vertical use the same original metadata admission and publication owner.
+Their non-preserving input requires a settled session and active single-layer target. Worker preparation follows
+archived behavioral reference and `LayerMask.swift`: center reflection, flip toggle, negated rotation,
+unchanged sampling, and linked-mask movement. Untouched records, raster owners and selection stay shared.
+No-op acknowledgement creates no entry; successful publication adds exactly one named undo step and retains the
+existing prepared-history residency refresh, original charge and deferred retirement. The ordinary host queue
+supplies the original ordinal and terminal receipt; cancellation, staleness, allocation/worker failure and
+admission refusal cannot publish either document or history. Core literal goldens, actual `OnCommand` controls
+and joined-Close ownership controls extend the existing fixtures. Full public-command Close and remaining
+group/live-edit caller migration stay separate validation obligations.
 The native settled slice also preserves the reference route for commands during live gestures and nested
 transactions. Its literal host checks retain the gesture, edited field and outer transaction name/depth. Migrating
 that route to preserving worker authority remains required before metadata coverage or root activation is complete.

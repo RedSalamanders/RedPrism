@@ -5391,12 +5391,28 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandFlipLayerHorizontal:
-        _session.FlipLayers(true);
-        DocumentChanged();
-        break;
     case ChromeHost::kCommandFlipLayerVertical:
-        _session.FlipLayers(false);
-        DocumentChanged();
+        if (!_hostExecuting)
+        {
+            ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+            break;
+        }
+        if (_session.ActiveLayerID() && _session.history.CaptureState().Depth() == 0 &&
+            _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) && !_session.TransformsAsGroup())
+        {
+            // Complete admission precedes immutable capture. Record cloning, mask placement and history
+            // preparation run on the existing metadata worker; failure never falls back to owner work.
+            const auto kind = command == ChromeHost::kCommandFlipLayerHorizontal ? LayerMetadataKind::FlipHorizontal
+                                                                                 : LayerMetadataKind::FlipVertical;
+            _hostExecutionError = StartLayerMetadata(kind, _session.ActiveLayerID().value());
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
+        }
+        else
+        {
+            _session.FlipLayers(command == ChromeHost::kCommandFlipLayerHorizontal);
+            DocumentChanged();
+        }
         break;
     case ChromeHost::kCommandFlipCanvasHorizontal:
         _session.FlipCanvas(true);

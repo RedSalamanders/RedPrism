@@ -15,6 +15,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <string>
 #include <utility>
 #include <windows.h>
 #pragma warning(push)
@@ -177,9 +178,10 @@ class OwnedMetadataJob final : public Job
 {
   public:
     OwnedMetadataJob(DocumentSession& session, JobScheduler& scheduler, JobState& state, double opacity,
-                     HANDLE entered = nullptr, HANDLE release = nullptr)
+                     HANDLE entered = nullptr, HANDLE release = nullptr,
+                     LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
         : _session(session), _scheduler(scheduler), _state(state), _opacity(opacity), _entered(entered),
-          _release(release)
+          _release(release), _kind(kind)
     {
     }
 
@@ -262,8 +264,9 @@ class OwnedMetadataJob final : public Job
         {
             _state.oldState.emplace(_session.history.CaptureState());
             const Guid& requestedTarget = _state.captureRefusalRequested ? kMissingTargetId : kTargetId;
-            auto input = _session.PreparePreservedLayerMetadataInput(LayerMetadataKind::SetOpacity, requestedTarget, {},
-                                                                     _opacity);
+            auto input = IsLayerFlipMetadata(_kind)
+                             ? _session.PrepareLayerMetadataInput(_kind, requestedTarget)
+                             : _session.PreparePreservedLayerMetadataInput(_kind, requestedTarget, {}, _opacity);
             if (!input)
             {
                 if (!_state.captureRefusalRequested)
@@ -389,10 +392,12 @@ class OwnedMetadataJob final : public Job
     std::optional<PreparedLayerMetadata> _publication;
     bool _started = false;
     bool _captured = false;
+    const LayerMetadataKind _kind;
 };
-std::uint64_t DescriptorBytes(const DocumentSession& session)
+std::uint64_t DescriptorBytes(const DocumentSession& session, LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
 {
-    const std::uint64_t estimate = session.PreservedLayerMetadataMemoryBytes(LayerMetadataKind::SetOpacity);
+    const std::uint64_t estimate = IsLayerFlipMetadata(kind) ? session.LayerMetadataMemoryBytes(kind)
+                                                             : session.PreservedLayerMetadataMemoryBytes(kind);
     const std::uint64_t jobBytes = sizeof(OwnedMetadataJob) + 2 * sizeof(SharedPublicationMemory);
     const std::uint64_t maximum = (std::numeric_limits<std::uint64_t>::max)();
     if (estimate == 0 || estimate > maximum - jobBytes)
@@ -401,12 +406,14 @@ std::uint64_t DescriptorBytes(const DocumentSession& session)
 }
 
 std::int32_t SubmitMetadata(JobScheduler& scheduler, DocumentSession& session, JobState& state, double opacity,
-                            HANDLE entered = nullptr, HANDLE release = nullptr)
+                            HANDLE entered = nullptr, HANDLE release = nullptr,
+                            LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
 {
-    state.descriptorBytes = DescriptorBytes(session);
+    state.descriptorBytes = DescriptorBytes(session, kind);
     if (state.descriptorBytes == 0)
         return E_INVALIDARG;
-    std::unique_ptr<Job> job = std::make_unique<OwnedMetadataJob>(session, scheduler, state, opacity, entered, release);
+    std::unique_ptr<Job> job =
+        std::make_unique<OwnedMetadataJob>(session, scheduler, state, opacity, entered, release, kind);
     JobOptions options;
     options.kind = JobClass::Commit;
     options.serialKey = 1;
@@ -815,15 +822,22 @@ void TestStaleAfterMovingToAnotherDocument()
     Expect(scheduler.ReservedMemoryBytes() == 0, "stale-output-and-temporary-weak-owners-release-after-old-state-drop");
     scheduler.Close();
 }
-void TestJoinedCloseRetainsPreparedGraphUntilBinding()
+void TestJoinedCloseRetainsPreparedGraphUntilBinding(LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
 {
+    const auto expect = [kind](bool condition, const char* label)
+    {
+        const std::string prefix = kind == LayerMetadataKind::FlipHorizontal ? "flip-horizontal-close-"
+                                   : kind == LayerMetadataKind::FlipVertical ? "flip-vertical-close-"
+                                                                             : "";
+        Expect(condition, (prefix + label).c_str());
+    };
     MemoryProbe probe;
     UseHighHeadroom(probe);
     JobScheduler scheduler;
     StartScheduler(scheduler, probe);
     ObserverState observer;
     StartObserverLease(scheduler, observer);
-    Expect(observer.bound && observer.completed && observer.lease && observer.lease->Bytes() == 8192 &&
+    expect(observer.bound && observer.completed && observer.lease && observer.lease->Bytes() == 8192 &&
                observer.lease->ResidentBytes() == 8192,
            "real-observer-job-retains-8192-byte-live-endpoint-before-close");
 
@@ -833,37 +847,44 @@ void TestJoinedCloseRetainsPreparedGraphUntilBinding()
     if (!entered || !release)
         SetupFailure("joined-close-events", GetLastError());
     JobState state;
-    const std::int32_t submitted = SubmitMetadata(scheduler, session, state, 0.9, entered.get(), release.get());
+    const std::int32_t submitted = SubmitMetadata(scheduler, session, state, 0.9, entered.get(), release.get(), kind);
     if (submitted != S_OK)
         SetupFailure("joined-close-submit", static_cast<DWORD>(submitted));
     WaitForOwnerContinuation(scheduler, state, "joined-close-owner-capture-deadline");
     CheckWait(WaitForSingleObject(entered.get(), 10000), "joined-close-prepared-worker-entered");
-    Expect(state.captures == 1 && state.workerStages == 2 && state.ownerCaptureComplete,
+    expect(state.captures == 1 && state.workerStages == 2 && state.ownerCaptureComplete,
            "joined-close-case-reaches-real-captured-prepared-worker-stage");
     scheduler.Close();
-    Expect(state.joinedSawPreparedGraph && state.heldPublicationAfterClose && state.terminalBindings == 1 &&
+    expect(state.joinedSawPreparedGraph && state.heldPublicationAfterClose && state.terminalBindings == 1 &&
                state.outputBoundToOriginal && state.temporaryBoundToOriginal && state.joinedOwnerLiveDuringCallback &&
                state.boundInJoinedClose,
            "joined-close-binds-original-ticket-and-moves-prepared-graph-to-held-state");
-    Expect(observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
+    expect(observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
            "observer-lease-proves-closed-endpoint-retains-observer-plus-original-admission");
-    Expect(!state.completionSeen && !state.applied,
+    expect(!state.completionSeen && !state.applied,
            "joined-close-drops-owner-completion-and-never-applies-prepared-metadata");
 
     state.heldPublication.reset();
     state.heldTemporary.reset();
     state.oldState.reset();
-    Expect(state.output.expired() && state.temporary.expired() &&
+    expect(state.output.expired() && state.temporary.expired() &&
                observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
            "expired-joined-graph-weak-controls-keep-original-endpoint-charge");
     state.output.reset();
     state.temporary.reset();
-    Expect(observer.lease->ResidentBytes() == 8192,
+    expect(observer.lease->ResidentBytes() == 8192,
            "last-joined-graph-weak-release-leaves-observer-only-endpoint-charge");
     observer.lease.reset();
 }
-void TestJoinedCloseWithZeroLocalOutput()
+void TestJoinedCloseWithZeroLocalOutput(LayerMetadataKind kind = LayerMetadataKind::SetOpacity)
 {
+    const auto expect = [kind](bool condition, const char* label)
+    {
+        const std::string prefix = kind == LayerMetadataKind::FlipHorizontal ? "flip-horizontal-close-"
+                                   : kind == LayerMetadataKind::FlipVertical ? "flip-vertical-close-"
+                                                                             : "";
+        Expect(condition, (prefix + label).c_str());
+    };
     MemoryProbe probe;
     UseHighHeadroom(probe);
     JobScheduler scheduler;
@@ -877,26 +898,26 @@ void TestJoinedCloseWithZeroLocalOutput()
         SetupFailure("partial-close-events", GetLastError());
     JobState state;
     state.gateBeforePrepare = true;
-    const std::int32_t submitted = SubmitMetadata(scheduler, session, state, 0.9, entered.get(), release.get());
+    const std::int32_t submitted = SubmitMetadata(scheduler, session, state, 0.9, entered.get(), release.get(), kind);
     if (submitted != S_OK)
         SetupFailure("partial-close-submit", static_cast<DWORD>(submitted));
     WaitForOwnerContinuation(scheduler, state, "partial-close-owner-capture-deadline");
     CheckWait(WaitForSingleObject(entered.get(), 10000), "partial-close-worker-entered");
     scheduler.Close();
-    Expect(!state.heldPublicationAfterClose && state.terminalBindings == 1 && state.outputBytes == 0 &&
+    expect(!state.heldPublicationAfterClose && state.terminalBindings == 1 && state.outputBytes == 0 &&
                !state.outputBoundToOriginal && state.temporaryBoundToOriginal &&
                state.temporaryBytes == state.descriptorBytes && state.boundInJoinedClose,
            "joined-close-zero-local-output-keeps-full-original-admission-in-temporary");
-    Expect(observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
+    expect(observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
            "partial-joined-close-is-retained-by-live-observer-endpoint");
     state.heldTemporary.reset();
     state.oldState.reset();
-    Expect(state.output.expired() && state.temporary.expired() &&
+    expect(state.output.expired() && state.temporary.expired() &&
                observer.lease->ResidentBytes() == 8192 + state.descriptorBytes,
            "partial-graph-weak-controls-retain-charge-after-strong-owner-release");
     state.output.reset();
     state.temporary.reset();
-    Expect(observer.lease->ResidentBytes() == 8192, "partial-graph-weak-release-leaves-observer-only-charge");
+    expect(observer.lease->ResidentBytes() == 8192, "partial-graph-weak-release-leaves-observer-only-charge");
     observer.lease.reset();
 }
 } // namespace
@@ -917,5 +938,15 @@ int RunOwnedMetadataJobsR4Tests()
         SetupFailure("authored-assertion-roster-mismatch", static_cast<DWORD>(gAssertions));
     std::printf("%s document.owned-metadata-jobs-r4.summary assertions=%llu failures=%d\n",
                 gFailures == 0 ? "PASS" : "FAIL", static_cast<unsigned long long>(gAssertions), gFailures);
+    const auto beforeFlips = gAssertions;
+    for (const auto kind : {LayerMetadataKind::FlipHorizontal, LayerMetadataKind::FlipVertical})
+    {
+        TestJoinedCloseRetainsPreparedGraphUntilBinding(kind);
+        TestJoinedCloseWithZeroLocalOutput(kind);
+    }
+    if (gAssertions - beforeFlips != 22)
+        SetupFailure("flip-close-authored-assertion-roster-mismatch", static_cast<DWORD>(gAssertions - beforeFlips));
+    std::printf("%s document.owned-metadata-flip-close.summary assertions=22 failures=%d\n",
+                gFailures == 0 ? "PASS" : "FAIL", gFailures);
     return gFailures;
 }

@@ -55,7 +55,8 @@ class Application::LayerMetadataJob final : public Job
                      std::optional<OpacityMetadataContext> opacityContext) noexcept
         : _owner(owner), _stamp(stamp), _kind(kind), _target(target), _name(name), _opacity(opacity),
           _blendMode(blendMode), _retirement(retirement), _admission(admission), _intent(intent), _opening(opening),
-          _opacityContext(opacityContext), _authority(owner._session.CaptureLayerMetadataAuthority(true)),
+          _opacityContext(opacityContext),
+          _authority(owner._session.CaptureLayerMetadataAuthority(!IsLayerFlipMetadata(kind))),
           _gate(owner._layerMetadataTestGate), _ownerThread(GetCurrentThreadId())
     {
     }
@@ -215,6 +216,8 @@ class Application::LayerMetadataJob final : public Job
                     ? _owner._session.PrepareLayerOpacityPreviewInput(_target, _opacity)
                 : _intent == OpacityMetadataIntent::TypedCommit
                     ? _owner._session.PrepareTypedLayerOpacityInput(_target, _opening.value(), _opacity)
+                : IsLayerFlipMetadata(_kind)
+                    ? _owner._session.PrepareLayerMetadataInput(_kind, _target)
                     : _owner._session.PreparePreservedLayerMetadataInput(_kind, _target, _name, _opacity, _blendMode);
             // No further access to the borrowed request text, on either thread, after this owner capture.
             _name = {};
@@ -398,7 +401,7 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
          (!opening || !std::isfinite(opening.value()) || opening.value() < 0.0 || opening.value() > 1.0)) ||
         (intent != OpacityMetadataIntent::TypedCommit && opening))
         return E_INVALIDARG;
-    if (_layerMetadataTicket || kind > LayerMetadataKind::SetBlendMode ||
+    if (_layerMetadataTicket || kind > LayerMetadataKind::FlipVertical ||
         (kind == LayerMetadataKind::Rename && !_activeHostRequest))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     if (kind == LayerMetadataKind::Rename)
@@ -410,7 +413,7 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
     }
     if (!_session.Document())
         return S_OK;
-    if (!_session.CanApplyLayerMetadataAuthority(_session.CaptureLayerMetadataAuthority(true)))
+    if (!_session.CanApplyLayerMetadataAuthority(_session.CaptureLayerMetadataAuthority(!IsLayerFlipMetadata(kind))))
         return E_ABORT;
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
     if (!ordinal)
@@ -421,7 +424,10 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
             _historyWork.Continue(_hostFinishedStamp.value(), _session.DocumentSerial(), HistoryWorkKind::Commit);
     if (!_layerMetadataStamp)
         return E_UNEXPECTED;
-    auto memory = _session.PreservedLayerMetadataMemoryBytes(kind, kind == LayerMetadataKind::Rename ? name.size() : 0);
+    auto memory =
+        IsLayerFlipMetadata(kind)
+            ? _session.LayerMetadataMemoryBytes(kind)
+            : _session.PreservedLayerMetadataMemoryBytes(kind, kind == LayerMetadataKind::Rename ? name.size() : 0);
     auto retirement = _session.HistoryRestoreRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);

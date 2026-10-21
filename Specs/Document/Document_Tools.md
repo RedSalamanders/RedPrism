@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-21
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `Common/LayerCopyWork.*`, `Common/WandLayerSelectionWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
@@ -238,6 +238,16 @@ center, as one `Flip Horizontal` / `Flip Vertical` entry; masks follow the link 
 mirrors every layer and placed mask across the canvas middle and reflects the selection outline, as one
 `Flip Canvas Horizontal` / `Flip Canvas Vertical` entry. Both commit a pending transform and apply a pending gradient
 first; `FlipCanvas` also drops the crop frame (legacy `flipCanvas`).
+
+Ordinary settled single-layer horizontal and vertical flip commands MUST enter the existing ordered host
+command queue and metadata worker. Complete operation admission precedes immutable source capture. The worker
+mirrors the active layer about its own center, follows the same mask-link placement rule, and prepares the
+complete document and legacy-named history entry. Hidden or assetless targets acknowledge without history.
+Publication requires the original session/document/generation, active and mask target, history epoch and command
+ordinal. Cancelled, stale, failed or refused work MUST preserve the live document and history; a failed admitted
+request MUST NOT run the synchronous flip path. A younger Undo waits for the original command's terminal receipt.
+Group/canvas flips and commands with a live edit retain their existing reference semantics; the transform
+header's edit actions keep their existing separate pending-transform behavior.
 
 ## Header flags
 
