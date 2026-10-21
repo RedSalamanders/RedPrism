@@ -2,7 +2,7 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "PixelMoveWorkTestGate.h"
+#include "Runtime.Tests.PixelMoveWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

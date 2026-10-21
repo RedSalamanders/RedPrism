@@ -2,10 +2,10 @@
 
 #include "ChromeHost.h"
 #include "ImageImportHistory.h"
-#include "ImageImportTestGate.h"
 #include "ImageImportWork.h"
-#include "ProjectOpenTestGate.h"
 #include "Resources.h"
+#include "Runtime.Tests.ImageImportTestGate.h"
+#include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
 
 #include <array>

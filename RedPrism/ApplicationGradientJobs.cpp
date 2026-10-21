@@ -2,7 +2,7 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "GradientWorkTestGate.h"
+#include "Runtime.Tests.GradientWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

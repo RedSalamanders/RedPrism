@@ -28,7 +28,7 @@ if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls fail
 & (Join-Path $PSScriptRoot 'IsaMarkedTableTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'PDB-marked table parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
-$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
+$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'Tooling.Tests.IsaProbe.cpp'))
 
 function Invoke-Probe {
     param([string] $Name, [string] $ObjectName, [string] $Definition, [bool] $Negative)

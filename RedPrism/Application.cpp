@@ -1,6 +1,6 @@
 #include "Application.h"
-#include "ApplicationProcessingTestProbe.h"
-#include "ApplicationShutdownTestProbe.h"
+#include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"

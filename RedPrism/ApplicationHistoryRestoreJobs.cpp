@@ -1,8 +1,8 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "HistoryRestoreTestGate.h"
 #include "HistoryRestoreWork.h"
+#include "Runtime.Tests.HistoryRestoreTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

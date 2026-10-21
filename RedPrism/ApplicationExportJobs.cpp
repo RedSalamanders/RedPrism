@@ -3,9 +3,9 @@
 #include "ChromeHost.h"
 #include "DocumentReadbackJob.h"
 #include "ExportWork.h"
-#include "ExportWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "Runtime.Tests.ExportWorkTestGate.h"
 #include "resource.h"
 
 #include <array>

@@ -83,7 +83,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
-    <ClInclude Include="..\Support\FailureReports.h" />
+    <ClInclude Include="..\Support\Support.Tests.FailureReports.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
@@ -96,26 +96,26 @@
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
     <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
-    <ClInclude Include="OwnerWorkMultiplexerTests.h" />
-    <ClInclude Include="RetryWaitQueueTests.h" />
-    <ClInclude Include="RetryWaitCancellationTests.h" />
+    <ClInclude Include="Host.Tests.OwnerWorkMultiplexer.h" />
+    <ClInclude Include="Host.Tests.RetryWaitQueue.h" />
+    <ClInclude Include="Host.Tests.RetryWaitCancellation.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
-    <ClInclude Include="JobCloseHookTests.h" />
-    <ClInclude Include="JobSuspendedRetirementTests.h" />
+    <ClInclude Include="Host.Tests.JobCloseHook.h" />
+    <ClInclude Include="Host.Tests.JobSuspendedRetirement.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="HostTests.cpp" />
-    <ClCompile Include="OwnerWorkMultiplexerTests.cpp" />
-    <ClCompile Include="RetryWaitQueueTests.cpp" />
-    <ClCompile Include="RetryWaitCancellationTests.cpp" />
-    <ClCompile Include="KernelDispatchTests.cpp" />
-    <ClCompile Include="KernelCliTests.cpp" />
-    <ClCompile Include="BenchmarkMachineTests.cpp" />
-    <ClCompile Include="UiTimingHistogramTests.cpp" />
-    <ClCompile Include="UiTimingTests.cpp" />
+    <ClCompile Include="Host.Tests.Runner.cpp" />
+    <ClCompile Include="Host.Tests.OwnerWorkMultiplexer.cpp" />
+    <ClCompile Include="Host.Tests.RetryWaitQueue.cpp" />
+    <ClCompile Include="Host.Tests.RetryWaitCancellation.cpp" />
+    <ClCompile Include="Host.Tests.KernelDispatch.cpp" />
+    <ClCompile Include="Host.Tests.KernelCli.cpp" />
+    <ClCompile Include="Host.Tests.BenchmarkMachine.cpp" />
+    <ClCompile Include="Host.Tests.UiTimingHistogram.cpp" />
+    <ClCompile Include="Host.Tests.UiTiming.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
@@ -155,31 +155,31 @@
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
-    <ClCompile Include="WorkerPoolTests.cpp" />
-    <ClCompile Include="JobTests.cpp" />
-    <ClCompile Include="JobStageTests.cpp" />
-    <ClCompile Include="JobBenchmark.cpp" />
-    <ClCompile Include="MemoryBenchmark.cpp" />
-    <ClCompile Include="FilterWorkBenchmark.cpp" />
-    <ClCompile Include="MemoryAdmissionTests.cpp" />
-    <ClCompile Include="DeferredReleaseTests.cpp" />
-    <ClCompile Include="PipelineTraceTests.cpp" />
-    <ClCompile Include="JobMemoryTests.cpp" />
-    <ClCompile Include="JobShutdownRetirementTests.cpp" />
-    <ClCompile Include="JobCloseHookTests.cpp" />
-    <ClCompile Include="JobSuspendedRetirementTests.cpp" />
-    <ClCompile Include="PixelRecycleTests.cpp" />
-    <ClCompile Include="PerfRootTests.cpp" />
+    <ClCompile Include="Host.Tests.WorkerPool.cpp" />
+    <ClCompile Include="Host.Tests.Job.cpp" />
+    <ClCompile Include="Host.Tests.JobStage.cpp" />
+    <ClCompile Include="Host.Tests.JobBenchmark.cpp" />
+    <ClCompile Include="Host.Tests.MemoryBenchmark.cpp" />
+    <ClCompile Include="Host.Tests.FilterWorkBenchmark.cpp" />
+    <ClCompile Include="Host.Tests.MemoryAdmission.cpp" />
+    <ClCompile Include="Host.Tests.DeferredRelease.cpp" />
+    <ClCompile Include="Host.Tests.PipelineTrace.cpp" />
+    <ClCompile Include="Host.Tests.JobMemory.cpp" />
+    <ClCompile Include="Host.Tests.JobShutdownRetirement.cpp" />
+    <ClCompile Include="Host.Tests.JobCloseHook.cpp" />
+    <ClCompile Include="Host.Tests.JobSuspendedRetirement.cpp" />
+    <ClCompile Include="Host.Tests.PixelRecycle.cpp" />
+    <ClCompile Include="Host.Tests.PerfRoot.cpp" />
     <ClCompile Include="..\..\Common\PerfRoot.cpp" />
-    <ClCompile Include="JobUiPolicyTests.cpp" />
-    <ClCompile Include="JobActivityTests.cpp" />
-    <ClCompile Include="PreviewMailboxTests.cpp" />
-    <ClCompile Include="ContinuationQueueTests.cpp" />
-    <ClCompile Include="ContinuationReceiptTests.cpp" />
-    <ClCompile Include="ContinuationRequestTests.cpp" />
-    <ClCompile Include="HostPathReadTests.cpp" />
-    <ClCompile Include="HistoryWorkTests.cpp" />
-    <ClCompile Include="ExecutorTests.cpp" />
+    <ClCompile Include="Host.Tests.JobUiPolicy.cpp" />
+    <ClCompile Include="Host.Tests.JobActivity.cpp" />
+    <ClCompile Include="Host.Tests.PreviewMailbox.cpp" />
+    <ClCompile Include="Host.Tests.ContinuationQueue.cpp" />
+    <ClCompile Include="Host.Tests.ContinuationReceipt.cpp" />
+    <ClCompile Include="Host.Tests.ContinuationRequest.cpp" />
+    <ClCompile Include="Host.Tests.HostPathRead.cpp" />
+    <ClCompile Include="Host.Tests.HistoryWork.cpp" />
+    <ClCompile Include="Host.Tests.Executor.cpp" />
     <ClCompile Include="..\..\Common\Localization.cpp" />
   </ItemGroup>
 

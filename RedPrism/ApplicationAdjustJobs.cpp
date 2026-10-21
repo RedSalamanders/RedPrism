@@ -2,7 +2,7 @@
 
 #include "Adjust.h"
 #include "ChromeHost.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 #include "resource.h"
 
 #include <array>

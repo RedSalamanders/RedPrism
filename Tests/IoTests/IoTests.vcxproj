@@ -83,7 +83,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
-    <ClInclude Include="..\Support\FailureReports.h" />
+    <ClInclude Include="..\Support\Support.Tests.FailureReports.h" />
     <ClInclude Include="..\..\Common\Document.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
@@ -94,18 +94,18 @@
     <ClInclude Include="..\..\Common\ProjectStore.h" />
     <ClInclude Include="..\..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\ImageImportWork.h" />
-    <ClInclude Include="ImageImportWorkTests.h" />
-    <ClInclude Include="ProjectLoadWorkTests.h" />
+    <ClInclude Include="IO.Tests.ImageImportWork.h" />
+    <ClInclude Include="IO.Tests.ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\PathClassificationWork.h" />
-    <ClInclude Include="PathClassificationWorkTests.h" />
-    <ClInclude Include="ImageCodecWorkTests.h" />
-    <ClInclude Include="ClipboardDibWorkTests.h" />
+    <ClInclude Include="IO.Tests.PathClassificationWork.h" />
+    <ClInclude Include="IO.Tests.ImageCodecWork.h" />
+    <ClInclude Include="IO.Tests.ClipboardDibWork.h" />
     <ClInclude Include="..\..\Common\ClipboardDibWork.h" />
-    <ClInclude Include="CodecFileStreamTests.h" />
-    <ClInclude Include="CappedImageCodecTests.h" />
-    <ClInclude Include="CodecMemoryStreamTests.h" />
-    <ClInclude Include="ProjectCancellationTests.h" />
-    <ClInclude Include="FileIoBench.h" />
+    <ClInclude Include="IO.Tests.CodecFileStream.h" />
+    <ClInclude Include="IO.Tests.CappedImageCodec.h" />
+    <ClInclude Include="IO.Tests.CodecMemoryStream.h" />
+    <ClInclude Include="IO.Tests.ProjectCancellation.h" />
+    <ClInclude Include="IO.Tests.FileIoBench.h" />
     <ClInclude Include="..\..\Common\Utf8.h" />
     <ClInclude Include="..\..\Common\ZipOwner.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
@@ -120,27 +120,27 @@
     <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="..\..\Common\ClipboardReceipt.h" />
     <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
-    <ClInclude Include="ClipboardTransferTests.h" />
-    <ClInclude Include="ProjectPublicationRetryTests.h" />
-    <ClInclude Include="ClipboardAvailabilityTests.h" />
-    <ClInclude Include="ClipboardReceiptTests.h" />
-    <ClInclude Include="ClipboardFingerprintTests.h" />
-    <ClInclude Include="ClipboardBindingTransferTests.h" />
+    <ClInclude Include="IO.Tests.ClipboardTransfer.h" />
+    <ClInclude Include="IO.Tests.ProjectPublicationRetry.h" />
+    <ClInclude Include="IO.Tests.ClipboardAvailability.h" />
+    <ClInclude Include="IO.Tests.ClipboardReceipt.h" />
+    <ClInclude Include="IO.Tests.ClipboardFingerprint.h" />
+    <ClInclude Include="IO.Tests.ClipboardBindingTransfer.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="IoTests.cpp" /><ClCompile Include="ClipboardEncodingBudgetTests.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />
+    <ClCompile Include="IO.Tests.Runner.cpp" /><ClCompile Include="IO.Tests.ClipboardEncodingBudget.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="..\..\RedPrism\ClipboardTransfer.cpp" />
     <ClCompile Include="..\..\RedPrism\SystemClipboard.cpp" />
-    <ClCompile Include="ClipboardTransferTests.cpp" />
-    <ClCompile Include="ClipboardAvailabilityTests.cpp" />
-    <ClCompile Include="ClipboardReceiptTests.cpp" />
-    <ClCompile Include="ClipboardFingerprintTests.cpp" />
-    <ClCompile Include="ClipboardBindingTransferTests.cpp" />
-    <ClCompile Include="ImageImportWorkTests.cpp" />
-    <ClCompile Include="ProjectLoadWorkTests.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardTransfer.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardAvailability.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardReceipt.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardFingerprint.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardBindingTransfer.cpp" />
+    <ClCompile Include="IO.Tests.ImageImportWork.cpp" />
+    <ClCompile Include="IO.Tests.ProjectLoadWork.cpp" />
     <ClCompile Include="..\..\Common\ImageImportWork.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
@@ -182,16 +182,16 @@
     <ClCompile Include="..\..\Common\CodecMemoryStream.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\..\Common\PathClassificationWork.cpp" />
-    <ClCompile Include="PathClassificationWorkTests.cpp" />
-    <ClCompile Include="ImageCodecWorkTests.cpp" />
-    <ClCompile Include="ClipboardDibWorkTests.cpp" />
+    <ClCompile Include="IO.Tests.PathClassificationWork.cpp" />
+    <ClCompile Include="IO.Tests.ImageCodecWork.cpp" />
+    <ClCompile Include="IO.Tests.ClipboardDibWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardDibWork.cpp" />
-    <ClCompile Include="CodecFileStreamTests.cpp" />
-    <ClCompile Include="CappedImageCodecTests.cpp" />
-    <ClCompile Include="CodecMemoryStreamTests.cpp" />
-    <ClCompile Include="ProjectCancellationTests.cpp" />
-    <ClCompile Include="ProjectPublicationRetryTests.cpp" />
-    <ClCompile Include="FileIoBench.cpp" />
+    <ClCompile Include="IO.Tests.CodecFileStream.cpp" />
+    <ClCompile Include="IO.Tests.CappedImageCodec.cpp" />
+    <ClCompile Include="IO.Tests.CodecMemoryStream.cpp" />
+    <ClCompile Include="IO.Tests.ProjectCancellation.cpp" />
+    <ClCompile Include="IO.Tests.ProjectPublicationRetry.cpp" />
+    <ClCompile Include="IO.Tests.FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>
 

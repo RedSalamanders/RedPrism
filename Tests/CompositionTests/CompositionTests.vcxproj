@@ -85,7 +85,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
-    <ClInclude Include="..\Support\FailureReports.h" />
+    <ClInclude Include="..\Support\Support.Tests.FailureReports.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
@@ -104,10 +104,10 @@
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CompositionTests.cpp" />
-    <ClCompile Include="GpuCapabilityTests.cpp" />
-    <ClCompile Include="GpuWorkTests.cpp" />
-    <ClCompile Include="DocumentReadbackTests.cpp" />
+    <ClCompile Include="Composition.Tests.Runner.cpp" />
+    <ClCompile Include="Composition.Tests.GpuCapability.cpp" />
+    <ClCompile Include="Composition.Tests.GpuWork.cpp" />
+    <ClCompile Include="Composition.Tests.DocumentReadback.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuCapabilities.cpp" />
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />

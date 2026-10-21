@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "ShapeWorkTestGate.h"
+#include "Runtime.Tests.ShapeWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>

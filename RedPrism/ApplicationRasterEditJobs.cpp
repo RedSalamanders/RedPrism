@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
-#include "RasterEditTestGate.h"
+#include "Runtime.Tests.RasterEditTestGate.h"
 #include "resource.h"
 
 #include <algorithm>
