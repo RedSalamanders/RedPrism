@@ -24,6 +24,15 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Generated products belong under `.build/`; never commit them.
 - Preserve the documented blend math, project schema and independent numeric goldens in the owning specs.
 
+## Drive-root output and run evidence policy
+
+Use repository-local generated outputs or an existing approved workspace. New drive-root outputs are permitted
+only as `<Project>.Perf`, and the user must explicitly authorize the exact path before creation or initialization.
+A matching name, environment variable, low disk space, or approval for another drive/project is not authorization.
+Never follow junctions during cleanup, clear shared read-only payload attributes, or delete unique run evidence.
+Native test output follows [the retention contract](Specs/Testing/Testing_RunEvidence.md): unique per-run evidence,
+preserved failures and interruptions, verified identities/hashes/streams/metadata, and no automatic old-run sweep.
+
 ## Skills
 
 | Skill | Use it for |

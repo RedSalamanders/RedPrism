@@ -1503,3 +1503,8 @@ Release analysis and three ARM64 cross-builds qualify this source; see
 [the bound record](../TestRuns/P1UploadCpuPreparation_2026-10-05.md#image-wrapper-residency-and-original-upload-transport-complete-managed-qualification).
 Private later fault/layout/retirement drafts, production upload consumers, G1 and Native activation remain
 separate P1 requirements. No RAW or Photoshop speed claim follows from these functional gates.
+
+
+## Test-run retention
+
+[Generated test-run evidence](Testing_RunEvidence.md) owns completed, failed and interrupted run storage, verification and CI collection.
