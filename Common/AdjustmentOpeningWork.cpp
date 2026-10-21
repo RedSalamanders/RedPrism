@@ -1,5 +1,6 @@
 #include "AdjustmentOpeningWork.h"
 #include "Adjust.h"
+#include "ColorEditWork.h"
 #include <algorithm>
 #include <limits>
 #include <type_traits>
@@ -45,6 +46,12 @@ std::optional<PreparedAdjustmentOpening> DocumentSession::PrepareAdjustmentOpeni
     panel.settings = Adjust::AdjustmentSettings(original);
     panel.seed = original.Grain().seed;
     panel.openingSequence = input.token.sequence + 1;
+    // Keep this opening's exact target authority while owner preview captures retain only shared roots
+    // and bounded descriptors. The original input stays a whole-document opening token.
+    panel.sourceLayers = source->layers;
+    panel.sourceToken = input.token;
+    panel.sourceToken->sequence = panel.openingSequence;
+    panel.sourceToken->target = DescribeColorEditTarget(*target);
     auto publication = DocumentHistory::PrepareBegin(
         std::move(history), source, input.active, L"Edit " + std::wstring(FilterKindName(panel.kind)) + L" Adjustment",
         cancellation, observer);

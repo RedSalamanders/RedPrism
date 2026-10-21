@@ -1,10 +1,11 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-21
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
-`Common/LayerCopyWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
+`Common/LayerCopyWork.*`, `Common/WandLayerSelectionWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
+`RedPrism/ApplicationWandCompositeHostJobs.cpp`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
 `RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`, and the mask
 command job in `RedPrism/ApplicationMaskJobs.cpp`
@@ -106,6 +107,10 @@ transform, the mask's placement when an unlinked mask is selected (`SelectLayerT
 `TransformTargetsMask`), or the upright box around the group's members. Nothing transforms while a color or filter
 panel is open (`HasColorEdit`): the panel's edit is anchored to the layer's placement, so moves, Free Transform,
 nudges, the Alt-drag duplicate and both flips wait for OK or Cancel (legacy `canEditLayers`).
+
+The single-layer eligibility query follows the layer's inherited visibility without constructing hierarchy rows,
+copying unrelated layer names or allocating a complete visible-ID set. Collapsing a folder in the Layers panel
+does not change eligibility. Group membership preparation remains a separate bounded-work obligation in P1.
 
 `PreviewTransform(value)` changes only the draft (invalid values are ignored); the document, history and
 `ActiveLayer()->transform` do not change while previewing. Rendering reads `DisplayDocument()`: the real document
@@ -234,6 +239,16 @@ mirrors every layer and placed mask across the canvas middle and reflects the se
 `Flip Canvas Horizontal` / `Flip Canvas Vertical` entry. Both commit a pending transform and apply a pending gradient
 first; `FlipCanvas` also drops the crop frame (legacy `flipCanvas`).
 
+Ordinary settled single-layer horizontal and vertical flip commands MUST enter the existing ordered host
+command queue and metadata worker. Complete operation admission precedes immutable source capture. The worker
+mirrors the active layer about its own center, follows the same mask-link placement rule, and prepares the
+complete document and legacy-named history entry. Hidden or assetless targets acknowledge without history.
+Publication requires the original session/document/generation, active and mask target, history epoch and command
+ordinal. Cancelled, stale, failed or refused work MUST preserve the live document and history; a failed admitted
+request MUST NOT run the synchronous flip path. A younger Undo waits for the original command's terminal receipt.
+Group/canvas flips and commands with a live edit retain their existing reference semantics; the transform
+header's edit actions keep their existing separate pending-transform behavior.
+
 ## Header flags
 
 Lock ratio (default on), Auto-Select (default off) and Show Transform Controls (default on) are the host's header state
@@ -267,6 +282,46 @@ the canvas pixels it overlaps. `DragBox(anchor, point, square, fromCenter)` is t
 the pointer rounds, `square` evens the sides toward the drag direction, `fromCenter` grows around the anchor.
 
 ## Selection session
+
+### Bounded lasso worker APIs
+
+The separate bounded route captures a sealed LassoOpeningInput only after original complete admission.
+Its worker creates the point arena and accounted gesture writer; current-only acquisition requires joined
+creation and memory bound to that same original ticket. Cancellation before acquisition, changed session/
+document/history/active/crop/mask/kind, consumed input and exhausted opening/intent counters MUST refuse.
+LassoDraft exposes cached PointCount, FirstPoint and RetirementMemoryBytes; a bounded draft keeps its reference
+vector empty. Point/cursor/marquee/Backspace changes and snapshot capture visit at most one 64-point chunk.
+Capacity refusal MUST preserve accepted points and retained snapshots. Arena blocks are never reused while
+readers exist; original accounting survives writer/display/terminal owners and off-owner final retirement.
+
+Closure owns the exact writer and terminal key, arena/prefix/tail, kind/mode, cursor/anchor and physical-event AA.
+PrepareClosedBoundedLassoFinishInput MUST reject older, foreign, altered or repeated terminals and source changes.
+The admitted worker builds the original freehand/polygonal, whole-pixel rectangle or Ramanujan ellipse, clips,
+applies New/Add/Subtract and prepares complete history. It MUST preserve absent versus present-empty selection,
+one named entry, no-op/redo/saved-marker behavior and current-only source/history/residency publication.
+The reference FinishLasso refuses a bounded draft; an eligible worker refusal has no synchronous fallback.
+
+HostLassoInput reuses the fixed 512-slot PointerInputStream. Its source/active/crop/kind/mode/view/ordinal and
+physical document coordinates are descriptors; later headers/views MUST NOT reinterpret accepted values.
+Physical nonterminal samples use the same nonwrapping HistoryWork event ordinal as queued commands; replay
+MUST select an older command/canvas lifetime before a later point/cursor/Backspace/marquee sample.
+A kind-toggle command MUST cancel the exact paired input descriptor and session opening/writer before
+switching its kind. An already accepted successor sample, command or canvas lifetime MUST retain an
+event-driven continuation after a consumed, stale or rejected sample. An empty settled input requests no wake.
+Point/cursor/Backspace/marquee events remain ordered, and terminal AA has a separate slot. Overflow retains the
+accepted prefix plus Lost, rejects later Up and stays owned until acknowledgement. Physical terminal and
+conditional polygon-close descriptors reserve the actual shared host ordinal at input time. Older accepted
+corners/Backspaces replay before the close decision; a near-first press closes only after three corners,
+while double-click/Enter preserve the reference short-outline behavior. A rejected early proximity press
+acknowledges without history and keeps the gesture live. Captured event AA belongs to the selected terminal.
+
+The explicitly cold-acquired harness route connects Application opening/replay/Finish to these APIs on the
+existing continuation source. Original whole-operation admission precedes worker allocation and owner input
+capture; joined acknowledgement/current-only validation precede publication and younger input. Eligible
+admission/allocation/cancellation failure has no synchronous fallback. The reference route remains the ordinary
+startup path until complete caller/lifetime/admission and S5/G1 gates qualify activation. Native tests and
+private actual-host PASS alone do not establish those gates.
+
 
 Selection state on `DocumentSession`: `lassoKind` (Freehand default, Polygonal), `marqueeKind` (Rectangle default,
 Ellipse), `selectionModeChoice` (New default, Add, Subtract), `heldSelectionMode`, `selectionAntialiased` (default
@@ -331,6 +386,43 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
     history joins its original outer entry and saved-marker changes during preparation survive publication.
     Existing live brush/warp/shape, lasso, outline-move and selection-header routes remain separate migrations.
     This settled route does not authorize synchronous gesture closure or establish the measured G1 exit.
+- `InverseSelectionWork` supplies the settled Inverse command. The owned host request and exact history ordinal
+  admit complete capture, fixed scratch, final output, replaced outline and retirement bounds before capture.
+  Preparation resumes the original job and computes the canvas rectangle minus the captured selection using
+  ClipperD precision 2 and NonZero filling, within the production 128 MiB scratch ceiling. Cancellation is checked
+  at bounded engine checkpoints; capacity or construction refusal publishes no partial geometry or history.
+  - Absent selection is a no-op preserving redo, revision, generation and outline. Explicit empty remains present
+    and becomes the full canvas. The original antialiasing state and `Inverse` history title are preserved.
+  - Exact settled session, document/generation, active target/mask, crop, history and opening authority precede
+    nonthrowing publication. Changed raster residency refreshes on the same admitted job before apply; its permit
+    remains valid through publication. Younger writes wait for acknowledgement; view input and messages continue.
+  - Worker-prepared numeric outline buffers retain their immutable source and are adopted without an owner copy.
+    Complete declared document/history/outline output stays charged to the original ticket through copied and
+    final weak controls. Failed/cancelled/stale graphs retain their charge until actual retirement too.
+  - Joined shutdown joins all producers before finishing the Inverse stamp and clearing its ticket. It grants no
+    successful-work authority; final copied/weak output owners can outlive the scheduler wrapper.
+  - Live/coexisting gesture closure retains the separate reference route. Owner Direct2D path construction,
+    complete selection migration, ordinary activation and measured G1 remain separate requirements.
+
+- `SelectionOffsetWork` supplies settled Expand/Contract commands. Their signed amount is captured
+  at the input event (positive Expand, negative Contract), remains in the original ordered request and is
+  validated within 1–500. Complete capture/history, 128 MiB scratch, geometry, replaced numeric outline
+  and retirement bounds are admitted before immutable capture. Normalization retains binary-scale128
+  ClipperD precision2/NonZero; round offset retains decimal-scale100 and original cleanup winding;
+  only Expand intersects the canvas afterward. No numerical reference or antialiasing rule changes.
+  - Offset scratch opts into same-arena power-of-two reuse after complete destruction. Slots, ownership
+    headers and ASan guards remain inside the unchanged cap; Boolean/Inverse retain their monotonic policy.
+    Allocation-count refusal and 64-unit cancellation remain global across every phase. Capacity, cancellation
+    and construction failure publish no partial geometry or history and reach the original job boundary.
+  - Absent/explicit-empty input is a successful no-op preserving revision/redo/generation; Contract past
+    the center publishes explicit empty. Named history, Undo/Redo and source AA retain legacy semantics.
+  - Exact session/document/generation/target/mask/crop/history authority precedes publication. Residency
+    refresh resumes the same admitted job. Numeric outline buffers and complete persistent output retain
+    original-ticket charge through copied and final weak controls. Joined Close joins producers before
+    clearing the ticket and host barrier; escaped readers retain their exact charge afterward.
+  - View input remains available while younger writes await acknowledgement. Existing live/coexisting
+    gesture settlement, owner Direct2D path construction, complete ordinary activation and G1 stay separate.
+
 - `PreparePreservingSelectionCommandInput` is a separate Select All/Deselect boundary for an existing brush,
   warp or shape opening. It preserves mutable gesture owners and captured stroke coverage. Opaque authority
   binds weak brush/warp control-block identities and the shape opening counter, plus the same document/history/
@@ -383,6 +475,24 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   preserve their live outline behavior. End-before-action
   classification does not migrate its dependent geometry/pixel work. Graph capture/accounting costs,
   broader selection kernels and measured G1 remain separate requirements.
+- The explicit deferred outline-move model keeps the original immutable loops plus a finite, rounded scalar
+  offset. Effective samples change only that offset and generation; `DisplayedSelectionValue` exposes source
+  and translation without constructing geometry. Numeric reference APIs may materialize the translated loops
+  and MUST NOT be used as a synchronous fallback by a future selected host route.
+  `PrepareDeferredSelectionMoveOpeningInput` captures settled authority and immutable document/history roots;
+  worker preparation opens history privately. Publication checks the original authority, exact epoch and
+  monotonic opening before atomically publishing one history depth and scalar mode. It refuses active panels;
+  preserving-panel Wand authority does not authorize an outline move.
+  Closure prepares translated geometry and history away from the owner. Apply binds the exact original loops,
+  offset, document generation, opening, target/crop and history epoch before swapping the prepared result.
+  Cancel restores the original; no-op, outer transaction and Undo/Redo semantics match the numeric reference.
+  `ContainsSelectionForWork` uses the reference nonzero winding and segment tolerance on translated vertices,
+  rather than inverse-translating the query (which changes rounding). It allocates nothing, checks cancellation
+  at most every 1,024 loop/edge steps, and distinguishes cancellation from an outside result.
+  `HostSelectionPressInput` is a bounded 512-event physical prefix with event-time document coordinates,
+  modifiers, antialias choice and nonwrapping ordinal. Up/Lost are separate terminals; overflow preserves the
+  accepted prefix. Lifecycle loss closes it without inventing a new physical sample. This model/descriptor
+  API does not activate an Application route; complete host admission, replay, lifetime and S5/G1 remain due.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
@@ -390,6 +500,15 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   folder, a blank layer or an image with no opaque pixel. Both refuse an outline past 8 000 000 pixel edges (the
   wand's limit) or one that cannot be allocated: false with `failure` TooDetailed or Memory and the selection
   unchanged, so the host can say so instead of silently loading nothing (`failure` stays None for nothing to trace).
+- Ordinary settled Load Layer / Load Mask Selection commands MUST enter the original ordered host command
+  queue. Their shared selection job admits the complete source, trace, bounded canvas intersection (including
+  New), history, display outline and retirement envelopes before capture. Trace dimensions come from the original
+  image or mask, including when it is larger than the canvas. Workers privately read sparse pixels, transform the
+  outline with the layer or mask placement, clip and prepare history/display; the owner only validates and applies
+  the current publication. Missing or unmatched sources preserve selection, redo and generation; matched pixels
+  clipped completely outside the canvas produce a present empty selection. Failure/cancellation never falls back
+  to owner tracing. The synchronous session APIs above remain numeric references. Unsupported unresolved gesture
+  contexts retain their original authority refusal; complete selection input/display activation and G1 remain P1 work.
 - Undo and Redo drop a draft in progress; during an outline move they put the outline back as `CancelSelectionMove`
   does and history does not move (RF-904 of the 2026-09-23 review: the move holds its entry open, so history could
   not move before either). `FlipCanvas` mirrors the loops with the layers.
@@ -425,9 +544,9 @@ order/winding and the eight-million-edge refusal are unchanged. Vertex-start sca
 
 `RenderLayerPixels` forwards cancellation to its placed rasterizer, including transparent blank/invalid-transform
 results. Its sampling and placement rules below remain unchanged. Kernel checkpoints do not bound allocator,
-OS call, vector growth, loop-vector compaction or Clipper latency. These APIs prepare worker migration; the host's
-wand/clone/sampler and selection command/pointer routes remain synchronous until ordered source acquisition,
-complete admission, history publication and lifetime qualification land. S4a establishes no UI/G1 time bound.
+OS call, vector growth, loop-vector compaction or Clipper latency. Direct session callers and the host's
+live-context wand routes remain synchronous. The settled New/Add/Subtract host graphs are specified below; these cancellable
+kernels alone establish no UI/G1 time bound.
 
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
 the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
@@ -461,16 +580,46 @@ install no partial selection or history.
 Current apply is nonthrowing validation followed by history publication and document/display-owner swaps.
 Applied and rejected aggregates retain their owners for worker disposal; they must not be destroyed on the owner
 path by a production caller. This core does not route application input. S2/S3b ordering, gesture closure, complete
-scheduler admission and All Layers/Add/Subtract remain separate prerequisites; no UI/G1 bound follows from it.
+scheduler admission and live-gesture migration remain separate prerequisites; no UI/G1 bound follows from it.
 
-Application routes settled active-layer New wand input through the owned host request and shared ordinal. Point,
+Application routes settled active-layer New/Add/Subtract wand input through the owned host request and shared ordinal. Point,
 settings and AA are event-time values; complete phased memory admission precedes capture/resume. Worker source
 sampling/flood/trace and history preparation use only the captured graph. Current-only completion acknowledges
 success/refusal before younger work and retires its complete aggregate off owner. Outside/nonfinite clicks and
 empty documents acknowledge without a job or selection change; an in-canvas no-match publishes `Deselect`.
 Consecutive queued New requests obey the existing document/adjacent-ordinal coalescing rules and retire the
-superseded receipt. This route does not change the pointer busy guard, All Layers/Add/Subtract/Intersect or
-live-gesture routes. Broader pointer replay/closure, metadata/accounting and G1 qualification remain separate.
+superseded receipt. Add/Subtract requests preserve FIFO and never coalesce across an older request. All Layers
+uses the composite graph below. Live-context wand requests retain their existing synchronous path.
+Broader pointer replay/closure, metadata/accounting and G1
+qualification remain separate.
+
+For Add/Subtract, the worker first clips traced geometry to the canvas, then applies the original nonzero
+winding union/difference with the captured selection. Subtract without a selection is the original no-op.
+No match preserves the existing selection for these modes. The bounded engine is an isolated source fork
+of pinned Clipper2 2.0.1 and preserves its precision-2 binary scale128 and geometry ordering. Complete arena,
+conversion coexistence, output capacity/control and history ownership bounds precede capture; an incomplete
+New-only plan cannot authorize a boolean. Capacity, cancellation or construction refusal publishes nothing.
+Final geometry and all newly built history controls retain the original output charge through copied/weak
+readers and Undo/Redo, independently of retiring capture/scratch. Actual final destruction and owner release
+acknowledgement refund each phase. A job finishing does not imply zero memory while output/history remain live.
+
+### Prepared All Layers New wand (core and host)
+
+Only a settled New/Add/Subtract wand request with `sampleAllLayers` uses the composite worker graph. Event-time point,
+settings and AA are captured with a move-only input whose borrowed `ReadbackDocument()` pointer is valid only while
+that input remains valid. Capture retains the exact document, session/job and restore authority, and history view;
+publication also checks the captured history epoch. Missing active image pixels do not remove the composite source.
+The active-layer graph above remains a separate source path. Requests made while a
+live context prevents settled admission keep their existing synchronous route.
+
+The host reserves the composite planner, full readback, source snapshot, job metadata and aggregate retirement
+before capturing the immutable document. Owner stages compose that snapshot and own every GPU `Map`/`Unmap`; mapped
+rows are copied into worker-owned output storage. After the final lease is acknowledged and utility targets are
+released, detached worker work runs wand sampling/tracing and prepares the complete after-document and history.
+Current-only owner publication publishes history and swaps prepared document/display owners without allocating.
+Cancellation, failed readback/preparation and stale authority publish no partial selection. Old owners retire through
+the worker release aggregate. This graph adds no polling and establishes no large-image acceptance promise or G1
+latency qualification.
 
 ## Brush session (C10)
 
@@ -509,6 +658,21 @@ explicitly empty selection.
   [`Document_History.md`](Document_History.md)); a committed stroke's Undo and Redo still share every untouched
   tile.
 - `ShiftLineStart` is the last sample of the previous stroke on the same layer or mask, for Shift-click lines.
+- The P1 worker foundation `TakeStrokeFinishInput` captures immutable source/history handles and the exact
+  pending brush opening after complete admission. It transfers exclusive CPU draft ownership without visiting
+  pixels and returns the engine borrow separately to the owner. `PendingBrushOpening` retains a finish marker
+  while `PendingBrush` is null; another brush cannot begin until that marker applies or drops. The worker
+  `PrepareStrokeFinishPublication` builds the final sparse snapshot, carried mask, eager semantic mask thumbnail,
+  sealed document and one history publication. Owner apply compares exact session/document/generation/restore,
+  target and root/selection identities plus history authority, then swaps the complete owners without pixel or
+  history construction. Prepared residency refresh retains this same publication. Old document/display/history
+  and draft owners remain in the retirement aggregate. Discard clears only its exact opening. `FinalDocument`
+  and `CommitInfo` expose immutable preparation views only while the input remains valid and unapplied. They
+  preserve the exact target and final bytes, confer no apply authority and cannot escape the preparation owner's
+  lifetime. Moved or applied preparations expose neither view; stale preparations still require the full
+  current-authority check before apply. Direct reference
+  Undo/Redo first clears the marker without moving older history; settled history restore refuses while it
+  exists. Actual application FIFO activation and full resource/latency qualification remain P1 obligations.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
   `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
   opacity typing (1–9 set 10–90 %, 0 sets 100 %, a second digit within 0.6 s makes a two-digit percent, never below
@@ -534,6 +698,22 @@ composite)`; the kernels, the tile composition and the warp model live in
   `CloneSamplePoint(point)` is where the crosshair sits; `CloneSample(composite)` is what a stroke copies from at
   document size (the active layer's pixels as placed, or the host's composite, required for All Layers). A stroke
   without a source does not start. Records `Clone Stamp`. Never on a mask.
+  The eligible settled host press captures its All Layers choice, whole-pixel offset and tip settings at pointer
+  press and queues samples in the original continuation ordinal. All Layers obtains the committed composite
+  through admitted tiled readback; single-layer Clone samples the captured active image and displayed placement
+  on a worker, using the existing `RenderLayerPixels` sampling rules without a composition or GPU readback.
+  Both produce a complete document-sized source before beginning the stroke. Later live source/alignment/All Layers settings cannot
+  reinterpret this accepted input. The explicit captured-offset `BeginBrush` overload requires a complete BGRA8
+  source of exactly the document dimensions and finite offsets rounding within the integer range; invalid
+  captured input refuses before gradient resolution, alignment changes or history. Direct core callers retain
+  the original `CloneSample` behavior. Cancellation, stale document authority and readback failure publish no
+  Clone pixels or history. A host Clone stroke without its admitted source refuses before graphics
+  preparation; it cannot fall back to owner layer sampling or synchronous readback. Alt-click changes only the source; mask targets
+  refuse before source capture. After the recorded paint producer closes, a new Space pan owns separate view
+  coordinates, survives readback completion and cannot append paint samples or change the original ordinal.
+  Physical pan loss ends the view gesture while the already sealed paint prefix remains queued.
+  This migration covers source readback; stroke painting/commit and the remaining
+  live-context routes still require their P1 ownership and timing qualification.
 - **Smear** (`smearMode`: Liquify default, Blur, Smudge). Blur is a brush stroke that paints `BlurSample(mask)`, the
   layer (or its mask, with its edge tone beyond its pixels; `RenderMaskPixels` samples a placed mask the same way
   `RenderLayerPixels` samples a layer, nearest included) softened by sigma = diameter / 10 clamped to 1.5–30,
@@ -543,6 +723,86 @@ composite)`; the kernels, the tile composition and the warp model live in
   what it leaves by the strength; Liquify moves pixels with the brush, most at the center. `FinishWarp` paints the
   result into the layer along the dabs with a hard tip four pixels wider, replacing the pixels under it (`Liquify`,
   `Smudge`); `CancelWarp` drops it; `PendingWarp` is the stroke in progress. Never on a mask.
+
+  Exclusive worker primitives check operation/shutdown cancellation at each serial dab and tip/snapshot row.
+  Refusal, cancellation or a throwing allocation invalidates the private draft: image and changed-tile APIs
+  expose no partial pixels, even though its private dab prefix may remain. Session finish drops an invalid draft
+  without changing document or history. Worker image/tile snapshots adopt initialized storage; dirty flags clear
+  only after the entire successful tile publication. The original finite supported-input dab formulas and
+  spacing remain unchanged. These primitives alone do not migrate the production Warp path.
+
+  `PrepareWarpOpeningInput` captures the event-time mode, tip, point, owner, immutable document/history and
+  opening counter without reading pixels or settling another gesture. `PrepareWarpOpeningPublication` constructs
+  a lazy `WarpSourceView` draft on a worker. `PlacedRasterReader` samples the original placed layer with the
+  transient Nearest/single-bilinear rules above, transparent outside; High remains Smooth. It borrows contiguous
+  pixels or reads sparse pixels through four reusable 64-square private windows, retaining the source and never
+  assembling its shared cache. Writable 256-square document-grid tiles appear only when a tip reads/writes them.
+  A blank layer allocates no full transparent canvas. Owner apply validates the captured opening counter, session,
+  document/root, target, history, selection and old Warp source before swapping the ready draft; it creates no
+  pixels or history. Cancellation/refusal preserves document/history and retires private owners through the
+  caller's original admission. These are detached core APIs; ordinary `BeginWarpStroke` still uses its earlier
+  synchronous copy and requires migration.
+
+  `AllTouchedTilesForWork` returns a complete immutable snapshot in row-major document-grid order, including
+  clipped edge tiles. It shares unchanged published tile versions and adopts one new pixel allocation for each
+  changed tile. Only successful completion clears the changed bits; the ever-touched bits survive. A recorder
+  needs the original placed source plus this complete snapshot, independent of skipped/replaced earlier previews.
+  `TakeChangedTilesForWork` continues to return only the consumed generation's changes. The complete old/new tile,
+  source-window, point/scratch, preview, display and final-history overlaps require admission before allocation;
+  the opening-only budget covers captured owners, metadata/windows, first-tip tiles and Smudge's pickup plane.
+
+  `PlanSampleMemory` is designated-owner-only metadata planning before capture: cached allocation bounds,
+  source bounds and path/scratch capacities declare the complete private draft plus one old/new snapshot overlap.
+  It performs no pixel reads or tile traversal. Plans retain their producer's weak control and private original
+  point; foreign, edited and stale plans refuse without mutating a valid draft. Explicit geometric point growth
+  and pre-reserved scratch follow the declaration before dabs. The caller must add complete source/history,
+  other retained preview, CPU/GPU transport, display and final-publication owners under its original admission.
+  These draft bounds alone do not approve a whole application operation.
+
+  `TakeWarpSampleInput` requires the original opening, current plan and sole strong draft owner. Capture retains
+  immutable document/history, moves the mutable draft and leaves scalar pending-opening authority in the session.
+  During transfer `PendingWarp`/`MutableWarp` expose no draft; competing pixel, selection, adjustment, settled-history
+  and preview-teardown routes refuse. Preserved metadata tracks the original opening and waits for joined return.
+  The input's known owner cannot append or borrow mutable work; the admitted worker appends at most once.
+  Only joined current apply restores the same draft and last point, without pixel work, document mutation or history.
+  Discard must match both opening and sample sequence; an old callback from the same gesture cannot clear a
+  newer transfer. Cancel/replacement/shutdown invalidates late publication while
+  the original worker input retains its graph until retirement. Normal Warp samples/finalization are still due.
+  `PrepareWarpPreviewForWork` prepares an immutable placed original plus complete touched replacement tiles,
+  in row-major 256-square cells clipped to the document. It requires the draft's known off-worker owner and
+  unbound original accounting owner; unknown/current/foreign owners, sealed accounting or cancellation refuse.
+  Its private directory and completion flag are producer-built; public metadata cannot forge reader authority.
+  `WarpPreviewReader` reads only on an exclusive worker, using that directory and bounded placed-source windows.
+  It does not materialize an unassembled sparse original or retain a mutable draft. Region reads preserve row
+  padding; invalid regions, sizes and pre-cancellation refuse before writing. In-flight cancellation may leave
+  only a private output prefix and grants no publication. Samples use the existing unrounded bilinear brush
+  rule after placed-source byte rounding; outside/nonfinite samples leave the caller's output unchanged.
+  Transparent document pixels remain successful samples. Old immutable previews survive subsequent dabs.
+  This CPU representation alone grants no session, history, GPU or normal display publication authority.
+  Private final Warp replay uses `BrushStroke::BeginWarpReplayForWork` with that immutable sample. The original
+  parent admits source, path, tiles, coverage, history, display and retirement overlap before creating the draft.
+  Replay retains the accepted point order and existing settled Catmull-Rom/provisional-tail/final-Flush rules.
+  Every `PrepareWarpReplaySampleForWork` descriptor must complete exact coverage delivery and composition before
+  another point or finish. Finite centers beyond the existing 1e7 limit acknowledge a no-op without changing the
+  retained curve controls; nonfinite points refuse without changing the prefix. Cancellation invalidates the
+  private prefix. `PrepareWarpReplayFinishForWork` seals only after final coverage composition; premature snapshots
+  refuse. CPU coverage is a private reference mode; WARP and hardware host replay retain the compute engine and
+  original uint delivery. The replay API grants no session/history publication authority.
+  `TakeWarpFinishInput` additionally requires the exact opening and sole strong draft owner. It captures only
+  immutable document/selection/history and scalar settings, leaving `_warpFinishingOpening` as the session barrier.
+  Its worker builds the private replay and exposes only const metadata. `PrepareNextSampleForWork` supplies the
+  next captured dab center; `ComposeSampleForWork` alone advances the path. Finish before the entire path or
+  publication before final composition refuses. Conversion carries the explicit `StrokeGestureKind::Warp` plus
+  the original path owner into prepared stroke/history publication. A brush finishing marker and Warp finishing
+  marker cannot authorize or discard each other, even with equal numeric openings. Apply is current and once;
+  cancellation, newer document/history/selection or reopening rejects late results. The joined original parent
+  retains every captured/replay/publication owner through retirement. These APIs do not activate the ordinary host.
+  `PlanWarpFinishMemory` is owner-only preflight before that capture, using cached complete source/history/grid
+  bounds and explicit CPU/GPU replay overlap. Missing, borrowed, detached or changed targets refuse. The
+  experimental host finishing parent preserves density through each recorded center, worker uint installation
+  and final composition. Final history, display and rows publish under the original host ordinal. Successful
+  apply moves the old Warp source cache into the prepared worker retirement owner. Ordinary Down, live preview,
+  acceptance/fault scenarios and measured G1 remain separate activation gates.
 - **Tip families**: `SwitchBrushTipFamily(from, to)` parks the size, hardness and opacity per family (0 the Brush,
   Eraser and Spot Healing; 1 Clone Stamp; 2 Smear; the parked families start soft at 40 px).
 - **Gradient** (`gradientSettings`: shape Linear / Radial, style Foreground to Transparent default / Foreground to
@@ -584,6 +844,33 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
   document pixel (nullopt outside or over transparency); the host shows the comparison ring while View › Sample Ring
   (the `sampleRing` setting, [`Core_Settings.md`](../Core/Core_Settings.md), default on) is checked.
+  `CapturePaletteSampleAuthority` binds a potential deferred foreground publication to this exact session and
+  palette input revision. `ApplySampledForegroundColor` refuses foreign or superseded authority without mutation;
+  success renews only the caller's authority. Explicit foreground/background writes, swap and reset invalidate
+  earlier authority even for equal colors or A–B–A input. Session copy/move cannot inherit it. These counters remain
+  outside document generation/history. Exhaustion permanently disables checked publication instead of wrapping.
+  `ApplySampledBackgroundColor` has the same checked semantics. Separate `CapturePaletteIntentAuthority` /
+  `IsPaletteIntentCurrent` track explicit input only: successful checked samples retain that intent while renewing
+  publication authority. This permits ordered accepted sample prefixes without treating an earlier sample as a
+  manual edit. A new manual input still invalidates both old publication and manual authority.
+  The P1 sampler host captures only a scalar document-read authority and opening at physical Down. An admitted
+  immutable committed source and one scheduler ticket/reservation serve its fixed FIFO of 1×1 samples. Manual
+  intent is captured with each accepted point; same-pixel coalescing also requires equal intent. Transparent/outside
+  points preserve color, and Up/leave/loss seal only accepted points without sampling the release coordinate.
+  Foreground/picker publication checks manual intent and exact picker opening; a younger accepted Brush/Gradient/
+  Shape owns the earlier scalar prefix even when a later manual edit suppresses the sample's palette publication.
+  Tool selection, accepted path/settings and final worker edit preserve the original ordinal and one undo entry.
+  Gradient pointer movement preserves captured colors/settings; explicit palette/header input to the already-open
+  gradient adopts live values. Shape preview and commit use the same accepted color. Escape cancels pending samples
+  through acknowledgement and keeps colors already published. Exact cancelled/failed outcomes cannot become success
+  just because the FIFO is empty. A matching cancellation or boundary also releases this HWND's mouse capture.
+  Foreground/background picker sampling previews only the chosen chrome color until OK; Canvas Size sampling
+  previews only its custom extension draft. Gradient Map sampling updates only the bound endpoint. A live
+  adjustment's exact own Preview acknowledgement renews authority within the same owner/document/restore/grid.
+  Worker-mode preview retains both generation and the immutable document root; direct reference preview may
+  update live parameters. Subsequent points continue to read the single admitted original root. Manual input and replacement picker
+  openings still refuse old publication. Current private qualification and remaining native/matrix/G1 work are recorded
+  in [SamplerReadback](../TestRuns/SamplerReadback_2026-10-04.md).
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.
 
@@ -763,12 +1050,28 @@ formats and copy bytes only while their source scope is held. No offered image p
 malformed/over-budget offered images fail locally. A valid owned receipt and exact fingerprints can retain private
 origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
 owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
-The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+Within each admitted phase, its original job, reservation and receiver survive acknowledged event waits.
+Successful metadata inspection may hand off once to the separately admitted full read/decode phase under the
+same selected request ordinal and history stamp. Its acquisition counter includes successful native inspections
+and continues into Copy; the number of armed waits is not that counter. A read retry must retain the full capture
+reservation. Failed/cancelled/stale work publishes no Paste.
+Each admitted native Inspect/Copy attempt uses its own invisible, worker-owned message window for
+`OpenClipboard`. It MUST NOT use a null window or share an opener between simultaneous scopes. Window
+creation failure is a local native failure with empty output; contention remains Busy with the original sealed
+authority. Close the native scope before destroying its window on that worker. No HWND or locked OS pointer
+escapes into the document, owner callback, retry wait or publication.
 
 Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
 and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or
-the OS writer. Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
-history and retirement. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
+the OS writer. Private preparation, encoding, OS offers and retry waits resume the same original
+record through its detached-readback helper. Private pixels explicitly retain its precreated opaque
+output lifetime while that record still reserves the full envelope; terminal completion or joined
+Close binds the original accounting before refund. A copied reader or last weak storage control
+continues to hold that charge after the private clipboard is replaced. Closing a document alone
+preserves the private clipboard. No early accounting transfer authorizes additional useful work.
+Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
+history, the previous private clipboard's complete cached ownership (even after document Close),
+and retirement. An unavailable/overflowing previous-copy bound refuses before capture. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
 work; functional migration alone establishes no Photoshop speed or bounded native-call cancellation claim.
 
 ### Other selection pixel edits
@@ -893,6 +1196,15 @@ These settled-source controls do not qualify settlement of a live brush, warp, s
 that remains P1.4/A6/S3 work. Owner metadata capture remains H2, and history/chrome/display costs and the full G1
 measurements remain open. Functional controls establish no G1 bound.
 
+### Detached Pixel Move target metadata
+
+For Pixel Move commits and prepared-display previews, complete reservation precedes owner capture of the
+immutable document root and targetless token. The worker captures the full layer and target identity from that
+root, including mask metadata. A failed capture publishes no pixels/history. The unprepared-preview owner copy
+remains a separate open host cost. The existing raster-edit naming policy applies: the resulting image asset
+name equals the layer name; a carried mask asset name is preserved. This ownership change does not activate
+the initial physical Ctrl/lift route.
+
 ## Color adjustments and filters (C12)
 
 The legacy `Levels.swift`, `HueSaturation.swift`, `Curves.swift`, `ImageAdjustments.swift`, `Filters.swift` and
@@ -967,6 +1279,37 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
 - `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
   wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
 
+### Scalar Hue sampling and preserving-panel Wand
+
+`SampleHueRangeValue(optional<double>)` and `BeginHueTargetingValue(optional<double>)` accept an already sampled
+hue while retaining the raster entry points as numeric references. Missing/nonfinite values or hues outside
+[0,360) refuse without changing panel, targeting, document, global settings or history. Raster wrappers check
+their existing panel prerequisites before sampling, then delegate. Range/band selection, near-neutral refusal
+and half-unit targeting deltas keep the existing formulas; no color or kernel golden changes.
+
+The ordinary host enables recorded Hue sampling after its common utility/recording routes are acquired.
+A physical range sample or targeting opening queues a scalar press. Its original admitted source supplies the
+one-pixel worker result; no synchronous composition readback runs in pointer dispatch. The scalar model's existing
+range/targeting formulas, transparent/near-neutral refusal and source/history invariants remain unchanged.
+Capacity, stale source and device/refused-admission paths retain the original lifetime through acknowledgement.
+
+The explicit preserving-panel Wand route uses separate opaque `PanelWandOpening` and `PanelWandAuthority`.
+The physical opening binds session, document serial, exact panel opening and color sequence. It may survive
+older FIFO source changes; the admitted source witness is captured only after those prerequisites finish.
+Global history-restore eligibility stays strict. Layer and committed-composite routes preserve the exact panel
+and source pixels while publishing prepared selection/history atomically. Original press point, mode, source
+choice, settings and antialiasing remain event-time values. Zero-offset outline closure and dependent Wand or
+Deselect retain one input and its original ordinal. Invalid mode, cancellation, stale source or equal-valued
+panel reopening cannot publish partial state. Other typed close policies remain unchanged.
+
+An acknowledged preserving-panel Wand records a private binding to that panel opening and the exact new
+immutable selection identity. Newly captured preview, histogram and commit validation tokens use that bound
+selection while the public panel source token and original sampling/rendering coverage remain unchanged.
+Pre-Wand produced work stays stale. Its selection-only refusal must leave the still-valid panel open; changed
+session, restore, canvas, target image, transform or mask retain their normal strict refusal behavior. A later
+direct selection change cannot acquire the Wand binding. Cancel retains the acknowledged Wand selection;
+the next panel captures that current selection as its own opening coverage.
+
 ### Immutable destructive-panel work
 
 `PrepareColorEditCommit` captures owning inputs for `RunColorEditJob` (`Common/ColorEditWork.*`), which has no
@@ -1030,6 +1373,14 @@ After final GPU row acknowledgement, worker preparation constructs the deferred 
 named Begin before the owner installs any of them. Opening preserves document pixels/visibility, generation,
 revision, global filter settings and retained redo. Failure installs no partial panel or transaction.
 
+The recorded utility opening allocates its capture aggregate on the original admitted Compute stage.
+It records the private below-composite through the shared recording lane and retires its graphics before
+CPU panel/history preparation. Real adapter headroom and the complete source, output, history and retirement
+overlap are admitted before capture. The panel's immutable original Raster retains that same original
+accounting after the job acknowledges; copied readers and its last weak storage control retain it too.
+Closing the panel does not refund live readers. Only actual final control destruction and the scheduler's
+owner acknowledgement refund the charge. Terminal device rebind cannot replay already copied bytes.
+
 OK is an admitted metadata job, including when Preview is off. It prepares the final record and End without a
 destructive pixel kernel. A selected OK receipt stays Pending until exact-authority publication or drop is
 acknowledged. True stored-record no-op preserves revision/redo; an old record whose absent HSV or Exposure settings
@@ -1089,6 +1440,13 @@ with inconsistent settings, grid or output shape is rejected.
 The default direct API runs these same worker functions inline and immediately applies them, preserving its numeric
 goldens. The Application explicitly chooses deferred mode for destructive and adjustment-layer panels.
 
+With `SetColorDisplayJobsEnabled(true)`, a deferred adjustment-layer settings tick retains the original
+immutable document root and generation. Its completed worker lookup supplies the visible preview; preview off
+selects the original adjustment. Only the admitted adjustment closure constructs/publishes the final metadata
+and history. The default reference mode keeps its existing live-metadata behavior and numeric expectations.
+An exact `UpdateAdjustment` restore/no-op retains the root and generation. The application enables the worker
+display mode; it must not obtain pending GPU pixels by mutating that committed source on every tick.
+
 ### Host preview and histogram jobs (P1.1c.2)
 
 `ApplicationAdjustJobs.cpp` owns one stable preview mailbox. Settings ticks retain at most one running request and
@@ -1109,6 +1467,29 @@ the scheduler. An adjustment-layer panel uses worker-prepared lookup values for 
 readback remains the P1.3 migration.
 
 ### GPU adjustment previews (P1.2)
+
+The immutable-root host queues a bounded scalar preview descriptor: session/document serial, opening, settings
+sequence and full display-source generation. Owning settings/target/document capture occurs only after the
+complete additional-allocation reservation is selected. The same record resumes worker render and complete
+display construction. An admitted opening histogram follows the same capture and retirement boundary.
+An older running settings request may publish an intermediate result; one latest pending descriptor follows
+its acknowledgement. Off, identity, changed display source, Cancel and reopen invalidate publication immediately,
+while the old ticket and reservation remain until that exact record acknowledges.
+
+For destructive previews, `ColorDisplayPublication` binds the rendered target to the complete captured document
+and scalar history authority. The owner validates current authority and swaps the prepared display/panel handles;
+replaced owners remain in the preallocated retirement payload. `DisplayDocument` selects a compatible completed
+display or committed document and does not clone or assemble pixels. Preview invalidation retains invisible
+source/coverage/lookup caches and one old grown cache until prepared transfer; `ColorLookupPreviewReady` controls
+shader visibility. Lookup-only adjustment-layer previews retain their original composition and epoch semantics.
+
+The allocation-free failure publication cannot compare rebuilt outlines on the owner. It accepts only the same
+captured selection root; successful preparation proves equality on the worker and binds that root. Missing,
+foreign, moved-from, consumed or stale publications preserve current data. Complete CPU admission includes
+settings/token metadata, render scratch, display construction and job/payload records; resident retirement
+ownership is reported separately. Failed/cancelled/dropped aggregates retire off owner through the existing
+scheduler release sink. These structural contracts do not establish G1 timing, large-metadata, device recovery,
+shutdown or complete native migration qualification.
 
 For Hue/Saturation, Levels, Curves, Exposure, Gradient Map and Grain, the Application requests immutable
 `AdjustmentLookup` values from the preview worker instead of a filtered CPU raster. Destructive previews retain
@@ -1488,3 +1869,522 @@ block reconstructs within 1 everywhere as one `Content-Aware Fill` entry and und
 and a no-source fill leave the original and the failed fill refuses to commit; no selection refuses) and adds the
 grown grid (a selection past a 40 × 30 layer's edge fills a 50 × 36 layer with opaque pixels). The WARP self-test
 drives Shift+Delete, Enter and the no-source refusal through `Application`.
+
+### Prepared wand mode and antialiasing authority
+
+The prepared wand layer/composite API captures New/Add/Subtract and antialiasing with the event settings.
+Invalid modes refuse before source capture. Matched New replaces, Add unions and Subtract removes the clipped
+outline from the captured selection. Matched changes use captured antialiasing; no-match Add/Subtract preserve
+null, explicit-empty or nonempty selections and their antialiasing/history. New no-match deselects. Publication
+remains bound to the original session/document/selection/history authority. Boolean outputs may retain
+collinear edge vertices and have a cyclic starting vertex; their exact geometry/winding remains required.
+This core preparation contract alone does not activate Add/Subtract in the host's asynchronous New route.
+
+## Selected selection publication ownership prerequisites
+
+The optional charged Select All/Deselect route publishes only after its complete new history/geometry/control
+output is bound. Its constant-time output bound is overflow checked; unbound or underbound results refuse
+before document/history mutation. Select All uses the exact AA full-canvas rectangle; Deselect removes the
+optional selection. True no-op output is zero and preserves history revision, redo and document generation.
+Source, active/mask/crop, preserved gesture and history authority remain mandatory.
+
+A prepared deferred outline opening can opt into opaque own-move/abort authority. Scalar movement retains
+immutable source geometry and renews only that exact gesture's witness. Prebuilt abort preserves the original
+selection root and redo, closes its Begin and matches reference Cancel invalidations. Transform, brush,
+transferred brush/warp work, other gestures, foreign mutations and a consumed opening refuse. Default opening
+and numeric reference routes retain their behavior. These model APIs do not enable physical dispatch or
+change pointer-loss End, click follow-up, preserving callers, ordinary activation or G1 requirements.
+
+## Worker lasso opening: accepted descriptor settings and history epoch
+
+The `LassoOpeningSettings` overload of `PrepareLassoOpeningInput` records the accepted physical Down's numeric kind and antialias flag. Subsequent header preference changes cannot replace those settings. The bool overload retains its live-kind validation and live-AA-at-acquisition behavior. Invalid kind, selection mode or nonfinite point refuses before rotating the pending intent. Both overloads capture exact `DocumentHistory::Authority`; acquisition requires the same history epoch as well as the existing session/document/editor/token/intent authority. A foreign Begin refuses even when generation and revision are unchanged. Worker-created storage must bind to the original admitted parent before acquisition; moved-from, superseded, cancelled and already-applied results refuse. This API alone does not activate ordinary physical routing.
+
+## Guarded ownership of a worker-created lasso writer
+
+`PrepareLassoOpening` retains own-gesture authority only with its explicit default-false opt-in. Guarded marquee drag, abort and close require the same applied active writer and latest own key, plus unchanged session/document/editor/history/token authority. Own successful or unchanged drags retain that authority; a foreign direct writer mutation revokes it without permitting rollback. Closing consumes own active authority and seals the supplied physical terminal AA. General history restoration still refuses a live lasso. The default reference path retains its original ownership and live API behavior. These primitives alone do not enable ordinary physical input.
+
+## Selected Rectangle/New physical-parent protocol
+
+The explicitly opted-in parent may choose Rectangle/New after cancellable worker containment finds no hit, including absent or explicit-empty source selection. It reuses the original admitted parent, fixed Down settings, ordered samples and terminal AA. Physical Alt never requests `fromCenter`; physical Shift held at Down must first be released before constraining the draft. The model's explicit centered-drag API retains its numeric behavior. Lost/cancelled drawing preserves the original selection. This protocol alone does not activate ordinary input.
+
+An opaque `LassoIntent` clears only its exact pending opening or finish identity. It cannot clear a newer intent, another kind, session/document, or foreign editor/history authority. Closed own-writer cleanup requires its exact original authority and retains old owners for worker retirement.
+
+## Qualified selected Rectangle Win32 caller
+
+With its explicit test gate enabled, the physical caller routes Rectangle/New inside and outside hits through the original admitted parent. Absent/empty selection, click, capture loss, cancellation, overflow, stale active target and joined Close retain their distinct terminal semantics. Accepted Down owns primitive kind; accepted Up supplies terminal AA without adding a Move. Physical Alt during drawing does not center it. Every terminal acknowledges the exact prefix and history stamp, and preserves foreign state. This selected caller remains disabled in ordinary operation until complete selection/display admission and activation gates close.
+
+## Kind-bound New marquee preparation
+
+The typed New-marquee descriptor supports Rectangle and Ellipse. It captures the accepted kind before source capture; worker preparation must use that same kind and its admitted limits. Unsupported kinds and mismatched Rectangle-only admission refuse before capture or document/history mutation. Inside-outline movement retains the prior outline; outside Ellipse/New generates the legacy oval under the same original parent, accepted samples, terminal AA, history authority and retirement. Physical Alt never means centered drawing. The explicit physical caller routes both New kinds, including inside-outline movement; accepted Up supplies AA without an invented Move. Ordinary activation remains a separate gate.
+
+## Opted-in preserving marquee worker parent
+
+The typed marquee parent can explicitly opt into Rectangle/Ellipse Add/Subtract. These modes always draw,
+even when Down is inside the existing outline; only New may choose outline movement after containment.
+Captured Down kind/mode, ordered physical samples and terminal AA remain authoritative. Add unions and
+Subtract removes the worker shape using the existing clip-grid rules. Subtract with absent selection
+preserves absence/revision/history; explicit-empty subtraction retains its empty-selection edit semantics.
+A foreign target/editor/history change refuses without rolling back foreign state. Cancellation/loss
+preserves the original outline, and joined Close retains the original parent until worker acknowledgement.
+The new mode gate defaults off. This model protocol alone does not enable the ordinary physical caller.
+
+## Selected preserving marquee physical caller
+
+The explicit selected physical gate supports Rectangle/Ellipse Add/Subtract through the typed original
+parent. Those modes always draw without containment, including inside an old outline. Accepted Down
+owns kind/mode; accepted Up seals AA without inventing another Move. Physical Shift/Alt retain the legacy
+Add/Subtract, rearm and non-centered rules. The same admission/ticket covers input, closure and retirement.
+Absent, explicit-empty, foreign target, loss, cancellation, overflow and joined Close retain their distinct
+semantics. This selected caller remains disabled in ordinary use until complete activation gates close.
+
+## Cursor containment model prerequisite
+
+`DescribeSelectionCursorProbe` returns only cached scalar authority, translated bounds and a
+retained-geometry/control envelope. It captures no geometry or history, walks no points, and does
+not materialize deferred translation. No document, absent/empty/collapsed selection, an incompatible
+transform/lasso, nonfinite or collapsed translated bounds, or an unavailable/overflowed storage
+bound returns no plan. The caller must add its job/payload/construction costs before admission.
+
+After that original admission, `CaptureSelectionCursorProbe` recomputes and matches every plan
+field before sharing the immutable original selection and scalar translation. Changed session,
+document serial, generation, restore authority, bounds, translation or declared bytes refuses.
+Persisted document identifiers alone cannot authorize capture. Captured roots survive replacement
+or deselection. Worker containment retains the existing per-vertex translation, edge tolerance and
+nonzero winding reference; inverse-query translation cannot substitute for it at large coordinates.
+
+This API prerequisite does not activate the ordinary pointer consumer or qualify complete host
+admission, retirement, native profiles or G1.
+
+## Selected cursor containment worker
+
+Ordinary Application startup enables the admitted cursor containment worker independently of prepared
+GPU display, stroke or selection-outline activation. The cursor returns a neutral containment result while
+exact work is pending or unavailable. It reads only finite scalar bounds and the model plan before original whole-job
+admission; it captures immutable geometry only in the admitted owner continuation. Exact containment
+runs on a worker with the existing per-vertex translation and cancellation checkpoints. Other ordinary
+pointer/selection consumers retain their separate complete-consumer and G1 gates.
+
+At most one useful probe and one replaceable latest scalar request are retained. Document serial,
+document generation, cursor epoch and query coordinates bind cached replies. In particular, equal
+bounds and an unchanged chrome epoch cannot reuse an old result after geometry changes. A superseded
+request retains its original ticket through exact acknowledgement. Stale results cannot publish; failed
+identical queries do not spin retrying. There is no synchronous geometry fallback on refusal.
+
+## Selected Freehand original parent
+
+The explicit selected caller supports Freehand New/Add/Subtract with one immutable drawing plan shared
+by accepted Down, cached admission and the original parent. Only New may choose outline movement
+after worker containment; preserving modes always draw. Accepted kind/mode cannot be rewritten by
+later headers. Up supplies terminal antialiasing without adding a Move or rubber-band point.
+
+`ExtendPreparedFreehandIfCurrent` requires the exact applied writer and latest own key, original
+session/document/editor/history/token authority and captured Freehand kind. A quarter-pixel no-op
+preserves its key; a successful append renews only that key. Foreign writer, history or target edits
+refuse without replacing or cancelling foreign state. Capacity refusal publishes no partial selection.
+
+Worker-created, prefaulted storage holds at most 65,536 accepted vertices. The 512-slot pending input
+ring is separate from that lifetime capacity. Owner replay consumes at most sixteen accepted moves
+per continuation; each metadata update visits at most one prefaulted 64-point chunk. Full path
+traversal, clipping, booleans, history preparation and final graph/control retirement run on workers
+under the original admission. The existing owner budget and measured G1 gates remain mandatory.
+
+While the original selected parent owns the pointer prefix or controller, generic pointer cleanup
+MUST hand it Lost and return. It cannot cancel the live writer before the original acknowledgement.
+Accepted Up remains authoritative over a later loss. Lost/cancelled drawing preserves its original
+selection/history; final publication and joined Close retain the original ticket, input and history
+barriers through acknowledged retirement. Activation of this worker route in ordinary operation
+remains disabled pending complete consumer admission, remaining branches and activation/G1 qualification.
+
+## Guarded Polygonal metadata primitives
+
+`ExtendPreparedLassoPointIfCurrent` supports a captured Freehand/Polygonal writer only; the existing
+Freehand wrapper retains its kind restriction. `MovePreparedPolygonCursorIfCurrent` changes only
+the rubber band, rejects nonfinite positions and preserves the key on repeated hover.
+`RemovePreparedPolygonPointIfCurrent` returns Continues or Ended. Last-corner Pop validates the
+exact current writer first, then clears only its matching draft/active marker in that same owner
+transition; Pop already ends the writer, so no subsequent ActiveOwner check may reject cleanup.
+The prepared handle and held snapshots retain the original arena/control charge after draft removal.
+
+All three APIs retain original session/document/editor/history/token and own-key checks. Foreign
+writer/Begin, wrong kind and consumed authority refuse without replacing foreign state. Metadata
+alone changes neither committed selection, history, generation nor redo. `PolygonalLimits` and
+`PlanPolygonal` describe the finite arena/worker capacities; generic drag-Up `PlanDrawing` still
+refuses Polygonal. These primitives do not enable the multi-click physical parent or ordinary routing.
+
+## Polygonal original drawing job
+
+`DescribePolygonalDrawing` uses cached scalar metadata only. Add/Subtract and New with absent or
+explicitly empty prior selection use the original `PolygonalDrawingJob`; New with a nonempty prior
+refuses this drawing-only descriptor until the separate exact containment dispatcher selects a branch.
+Captured document/editor/history/target, kind, mode and opening AA govern preparation; live header
+changes do not reinterpret the gesture. Point/hover/Backspace consume at most sixteen accepted
+metadata samples per owner continuation. Empty input parks until known input rearms the same ticket.
+
+Nonzero, strictly increasing physical ordinals order accepted samples. Near-first closes only after
+three accepted corners, and double-click closes without appending that closing point. Preserve the
+selected physical close ordinal and opaque host intent before the legacy prefix normalizes its terminal;
+the intent is observational host metadata, never document mutation authority. An older accepted close
+wins over a younger explicit Finish, including its AA. Last-corner Backspace ends with no history.
+Overflow preserves the accepted prefix and chooses Lost; no partial selection can commit.
+
+This CPU component is registered in DocumentTests. Its physical multi-click dispatcher, New inside-hit
+choice, Save/tool/lifetime arbitration, ordinary activation and measured owner budgets remain separate.
+
+## Polygonal terminal accepted before controller admission
+
+A physical Finish/Lost accepted before the original controller exists retains its nonzero physical
+ordinal in immutable descriptor metadata. The original controller consumes that recorded terminal; a
+younger opposite terminal cannot replace its outcome or AA. The scalar is observational event order,
+never model authority. Claimed terminal metadata while input is still sampling, or an ordinal not
+after the captured Down, refuses with `E_ABORT` before any source/geometry/history capture.
+
+## Polygonal owner readiness and provisional closure
+
+Optional owner-only `mayReplay` and `mayFinish` hooks yield before taking the next fixed input record.
+False parks the same original job with that record unconsumed; only known input/prerequisite changes
+notify it. Readiness grants no model authority and never closes the writer or captures terminal history
+early. Queries MUST NOT mutate session/input state or reenter the controller. Absent hooks preserve
+the original CPU behavior. Invalid successful ordinals refuse instead of parking indefinitely.
+
+`pressResolved` reports each nonzero opaque provisional intent exactly once after older corners and
+Backspaces decide it. A rejected proximity close has appended its corner; a chosen close never appends
+the closing point. Preserve physical sample ordinal and opaque intent before terminal normalization.
+A separately queued host descriptor has a distinct ordinal. Actual physical dispatch remains separate.
+
+## Selected Polygonal Win32 original job
+
+The selected test host routes Polygonal Add/Subtract and New with absent/empty prior selection through
+one admitted `PolygonalDrawingJob`. Pointer Down captures fixed event scalars and one physical ordinal;
+Up is nonterminal while drawing. Corners, hover and Backspace replay on the original parent. The creator
+receipt completes at acknowledged Opened while the original ticket, reservation and prepared writer remain
+live. Metadata-only drawing does not hold the global history barrier.
+
+Physical Enter records its ordinal/AA before controller admission. Proximity/double-click closure is
+provisional until older corners and removals replay. A nonclosing provisional request completes only its
+own receipt. A selected close takes the history barrier and permits the same original job to prepare and
+publish its one changed selection/history entry. A younger terminal already queued behind an older
+chosen close acknowledges that earlier outcome; it does not recapture or create another entry.
+
+Save captures committed document state, excluding transient selection outlines from the file, while the
+unfinished Polygonal draft stays live, retaining the original
+ticket and writer on success, dialog cancellation and encode failure. Selected tool changes and explicit
+Deselect cancel and join the original parent before their own action. A cancelled Close confirmation
+keeps the live draft/window; joined shutdown suppresses useful callbacks and refunds every reservation.
+Direct competing layer callbacks enter the ordered host queue and unsupported intents refuse before
+source mutation or another serial Selection producer. New with nonempty prior, Ctrl-lift and other
+unsupported dispatcher branches remain separate; this selected gate is disabled for ordinary input.
+
+
+### Polygonal export while drawing
+
+A selected live Polygonal draft permits ordered PNG/JPEG export of committed document pixels. Successful
+export and picker cancellation preserve its original ticket, writer, fixed input, committed selection and
+history revision. Export leaves the project path and saved marker unchanged, including when the committed
+revision was already dirty. Later corners and the chosen terminal remain on the original drawing parent.
+PNG preserves transparent blank pixels; JPEG uses the existing white matte and codec tolerance. This
+selected qualification does not enable the ordinary route or complete view/device/dispatcher scope.
+
+
+Selected Polygonal Zoom In/Out and native pointer leave/reentry preserve the original drawing writer,
+ticket, committed selection and history revision. A view change affects future physical-to-document
+mapping, not captured drawing kind/mode or accepted coordinates. Pointer leave clears the transient drag;
+reentry adds its next corner on the same parent. The chosen terminal still publishes the original mode's
+independent selection and one history entry, with unchanged Undo/Redo and joined ownership rules.
+
+
+### Selected Polygonal terminal and captured-mode semantics
+
+In the selected original-parent Polygonal caller, Escape discards the draft without selection publication
+or history. Removing its last corner also discards only that draft. A near-first click with two stored
+corners records the clicked point and keeps drawing; a true double-click selects the short terminal.
+The New fixture with a present empty selection clears it once; Add/Subtract preserve their prior selection
+and create no history for this short terminal. The native double-click requires both time and previous-point
+position criteria. Drawing mode is captured at Down; a later header-mode callback does not retarget its writer.
+These requirements do not enable the remaining New/nonempty or lifted-pixel dispatcher branches.
+[Selected native terminal evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+## Polygonal original-parent branch selection
+
+The explicit journal overload of `SelectionOutlineGestureState` permits Polygonal in the original
+`SelectionOutlineGestureJob`. It uses the existing finite Polygonal arena/geometry plans through a
+private descriptor mapping; generic drag-Up `PlanDrawing` still rejects Polygonal. Complete inside
+and outside peaks are admitted before immutable source/history capture. New with nonempty prior
+selection runs one exact cancellable worker hit; inside moves only the original outline and outside
+opens a Polygonal draft on that same ticket. Add/Subtract draw without containment.
+
+The scalar borrowing view preserves complete event-time journal samples and chooses its branch
+terminal only after consuming that exact record. Inside Up ends only the current original parent,
+leaving later Down records and contexts intact. Missing release before a later Down finishes only
+the old inside drag at its last sample. Later family overflow cannot cancel an already accepted Up.
+Outside Up is nonterminal; hover/Leave do not add corners. Deferred near-first uses the actual first
+point and captured physical view/DPI operands; double-click closes without appending its point.
+Escape and loss cancel only the draft; last-corner Backspace ends without publication/history.
+
+Journal arrival restore/target authority must still be current at original capture. Generation must
+also be current except when covered by the explicit owned transition below. The physical caller must
+move and validate that exact receipt; no stored arrival metadata is rewritten. Owner readiness queries
+are scalar and nonreentrant. False preserves the unconsumed record; only a useful readiness event
+resumes the original reservation. Terminal callback is the final state access and observes cleared
+controller plus acknowledgement. Joined shutdown emits no useful terminal callback.
+
+This CPU branch qualification does not enable the physical dispatcher or ordinary input, settle
+Save/tool/lifetime arbitration, close lifted-pixel/Wand branches or establish G1.
+[Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+
+
+## Owned selection predecessor receipts
+
+Only the original journal job can construct `SelectionOutlineGestureTransition`, after successful
+selection-only publication. Both inside outline movement and a chosen Polygonal close may issue it;
+failed, cancelled or unclosed parents issue none. `TakeSuccessor` yields its private receipt once,
+after completion, controller clearance and parent acknowledgement. Default/copy construction and
+move assignment are unavailable; moving invalidates its source. The journal owner must outlive every
+issued receipt. This metadata is owner-only and never becomes persisted document content.
+
+A later original journal parent validates and consumes the receipt after its complete admission and
+before retaining geometry/history roots. Require the exact journal/family, a later Down ordinal,
+same session/document/restore/dimensions, captured generation inside the contiguous owned range,
+current exact post-document/editor/history authority and current captured target. The legacy press
+protocol refuses this receipt. Missing, moved-from, retired-family, foreign or stale authority
+cannot grant a generation transition. Each successful chain step retains only its proven minimum
+generation and latest exact post authority; it never walks or rewrites earlier events. An actual
+intermediate owned-preview generation may be covered, while generation wrap grants no credit.
+
+These CPU receipts preserve separate original admissions, numeric selection results and Undo/Redo
+for already accepted later Down events. Actual conditional host descriptors, older Save ordering,
+keys, tool/lifetime settlement, ordinary activation and measured G1 remain required.
+[Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
+
+
+## Selected original physical Polygonal dispatcher
+
+The selected Win32 journal route admits one original exact-hit parent for the first primary Down. New with a nonempty prior selection chooses inside outline movement or outside Polygonal drawing on that worker; Add/Subtract choose drawing. Each Down/key reserves its own bounded ordered host descriptor before recording scalar event-time arguments. Inside retains its atomic gesture barrier through accepted Up/loss/cancel; outside Opened acknowledges only its creator and releases the host barrier while preserving the admitted job/writer. Every later corner or key acknowledges its own conditional receipt. Up alone cannot terminate an outside family. Successful selection-only parents hand their exact one-shot predecessor receipt to an already accepted later Down without rewriting arrival authority.
+
+Pure replay/finish readiness never admits or mutates. A separate selected terminal admission hook obtains only the exact matching history barrier after readiness and before terminal consumption/source capture. Admission refusal preserves that raw terminal and prior document/history. Consumed-ordinal progress signals the existing owner source for partial/no-change input too; all records, including ignored inside keys, count toward the sixteen-record owner quantum. Input, state and scalar transition receipts survive all borrowers and outstanding host receipts. Failure retires dependent receipts explicitly and bounded orphan metadata drains before family retirement. Joined Shutdown joins producers before destroying borrowed state and emits no useful terminal callback.
+
+HostWrite preserves an inside drag as one atomic gesture: accepted Up must progress while Save waits, without the outside replay ordinal gate. Outside Save reads committed project content and preserves the original unfinished writer. A stopping tool command joins its cancellation before applying the tool. Temporary Space-pan retains the Polygonal writer; normal Up or actual pan capture loss ends only the view drag. Right selection input cannot enter the synchronous selection/lasso fallback. This is a Win32 routing state-machine requirement; the legacy canvas routes right input through its separate brush-only handler (`EditorCanvas.swift::rightMouseDown`). An initial Ctrl/lift press is explicitly refused by this selected partial route; later Ctrl corners of an already admitted drawing family retain their original journal.
+
+This qualification covers fifteen named hidden-WARP native cases / 139 independent facts, the full 152-stage Application roster, and twenty additional CPU owner-hook facts (159 module assertions). Held-worker/foreign/admission limits, full512/emergency/after-Up overflow, inside-Save interleaving, all export/picker/header/Undo/Redo/Deselect/lifetime/DPI/device/hidden/restart cases, Ctrl/lift, ordinary activation and measured G1 remain open. Earlier drawing-only caller receipts do not qualify those cases for this new dispatcher. [Evidence](../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).
+
+## Original Polygonal refusal and capacity boundaries
+
+An absent document is handled without recording input, changing counters or posting a busy/overflow notice; its diagnostic receipt is E_ABORT. Exhausted family/record identities return the exact arithmetic-overflow receipt without capture or wrap. These immediate refusals must not overwrite an older pending receipt used as a readiness guard.
+
+When TakeReady retires every stale descriptor and selects none, the same existing owner action must retire the unborrowed raw journal too. Receipt completion alone cannot leave a family alive. Document replacement before a controller exists preserves the new document/target/selection and starts no old parent. A changed target refuses all dependent accepted receipts before worker/source capture. Memory admission may create one failed scheduler ticket, but must execute zero worker stages, capture no immutable roots and open no writer.
+
+The ninth host descriptor fails explicitly while all eight accepted Down/Up pairs remain ordered; reserved loss joins the original writer without publishing a partial selection. The complete 512-record journal plus its separate emergency record also cancels only its selected current parent. An older inside Up preceding overflow must still publish its exact move/Undo entry; a younger outside parent then cancels. Missing Up may settle only the old inside movement at its last accepted sample while preserving the younger Down. All accepted dependent receipts and family storage retire before final joined refunds. These state-machine cases extend the selected native fixture to 25 cases / 212 facts; ordinary activation and the remaining live/held-worker/lifetime/device/DPI grid stay open. [Evidence](../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md).
+
+
+## Original Polygonal transaction ownership and inside Save
+
+Before describing/submitting a first selected original Down, refuse a pre-existing nonzero history transaction depth. Do not fold the new selection gesture into that unrelated transaction. Refusal preserves its opaque history authority, pending depth, document generation/revision and all prior selection geometry, executes no parent or source capture, and retires all accepted dependent receipts. Its owner must still be able to close the original no-op transaction without an editor-created entry. A live original reaches its conditional path before this first-parent guard; its own inside-move transaction remains valid.
+
+An inside move is atomic through real Up. If ordered project Save arrives after Move but before Up, keep both receipts pending on the original barrier, with no synthetic terminal, child parent or early write. A later actual Up must progress on that same admitted parent despite the waiting Save. Publish exactly one move/history entry, release the original barrier and only then capture/write/mark the saved revision. Exact Undo/Redo and joined refunds must remain valid. This requirement does not add selection persistence to the .prism schema.
+
+[Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+
+## Original Polygonal document lifetime and export
+
+On documentSerial replacement or Clear, an existing selected original Polygonal controller MUST receive cancellation independently of further pointer input. If parked, resume its existing ticket to acknowledge cancellation. Never create another parent or apply old geometry/history into the replacement session. Already successful corner receipts remain successful; original and family retirement must preserve the exact foreign selection or absent document and refund all retained ownership. Same-document editor/history/crop/mask changes remain separately qualified requirements.
+
+PNG/JPEG export from a parked outside draft must retain the original ticket/draft/corners, selection, revision, path and dirty marker; exporting must not close that draft. Quiet no-selected-path cancellation has exact ERROR_CANCELLED and writes no file. Later real Enter still commits one exact history entry with valid Undo/Redo. This test seam establishes no actual OS-picker qualification. Scheduler-record exhaustion refuses the new parent with ERROR_NOT_ENOUGH_QUOTA while preserving every accepted prior job, the committed document/history and the raw-prefix terminal acknowledgement.
+
+[Qualification](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+
+## Selected Polygonal ordered commands and prepared-result refusal
+
+Typed Deselect/Undo/Redo waits for cancellation acknowledgment of the existing outside Polygonal original before its own document/history change. Previously successful corner receipts stay fixed and the command creates no replacement original or repeated source capture. Real seed Undo/Redo entries retain their exact saved revisions.
+
+A prepared original result that loses history/editor authority through a foreign pending transaction, crop frame or mask-target change fails with E_ABORT. It removes only its own pending writer/family; committed selection, generation/revision, foreign transaction depth/authority, exact crop or selected mask identity remain with the foreign owner. Borrowed test-gate state must outlive joined work. This selected-route qualification does not activate ordinary input. [Focused evidence](../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).
+
+
+## Original Polygonal keyboard command barrier
+
+While the selected original Polygonal journal is busy, non-view/non-file commands MUST enter the
+existing ordered host queue before any synchronous editor mutation. Ctrl+D, Ctrl+Z and Ctrl+Shift+Z
+use the same command/ordinal/cancellation path as typed requests. The original outside writer must
+acknowledge cancellation before Deselect/Undo/Redo changes selection, generation or history.
+Successful corner receipts remain fixed and no replacement original is captured. The command barrier
+queries only the bounded journal scalar; the older legacy Polygonal producer cannot stand in for it.
+This selected-route requirement does not activate ordinary input or establish measured G1.
+[Qualification](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+
+
+## Original Polygonal selection-header boundary
+
+The selected original Polygonal journal MUST also be recognized at the selection-header callback.
+Deselect queues its exact existing host command and waits for original cancellation acknowledgment.
+Expand/Contract refuse before geometry, capture or a second producer and post the existing localized
+Busy notice, preserving the original draft, selection/history, receipts and reservation. They cannot
+fall through the older producer's guard into synchronous selection work. Later Enter/Undo/Redo retain
+the original literal semantics. Ordinary input is not activated by these selected-route callbacks.
+[Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).
+
+
+### Original Polygonal header-kind settlement
+
+A selection-kind change while the original journal is busy MUST seal that journal's existing reserved loss record.
+It MUST retain the same admitted ticket and prepared writer until the original acknowledges cancellation; it cannot
+call synchronous lasso cancellation, allocate a second producer or invent an arrival ordinal. The transient host drag
+may clear immediately. Pointer leave with keep-draft intent retains the original draft. Cancellation preserves prior
+committed selection, history, generation and already successful corner receipts while keeping the new preference.
+Joined cleanup refunds every retained owner. This selected callback does not activate ordinary input or qualify the
+complete captured-setting/geometry/device grid. [Evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+
+
+### Original Polygonal chrome release ownership
+
+A parked original Polygonal journal MUST let an outside-canvas left Up reach chrome when it owns no canvas left
+press. This release consumes no Polygonal ordinal or raw record. A captured canvas press released outside remains
+with its original owner. A real header Deselect click then enters the existing ordered host-command barrier; it
+MUST wait for the original cancellation acknowledgment before changing committed selection/history.
+[Evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
+
+
+### Ctrl corners in an existing original Polygonal drawing
+
+Once the selected original Polygonal drawing family is admitted, a later Ctrl corner MUST enter its
+existing bounded raw journal and receive its own conditional receipt. Ctrl/Shift/Alt combinations
+cannot replace captured New/Add/Subtract mode, open a pixel writer or create another original parent.
+This also applies when later corners arrive before controller admission: the original worker chooses
+and replays its accepted branch. Exact geometry, one final history entry, Undo/Redo and joined owner
+refunds retain the existing contract. An initial Ctrl press, including Ctrl pixel lift, remains
+unsupported by this partial selected route. Ordinary activation is still a separate gate.
+[Evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
+
+### RasterEdit and Gradient target metadata
+
+After full memory admission, RasterEdit commits and Gradient commits/prepared-display previews retain only
+an immutable document root and a targetless token on the owner. A worker copies the full target layer and
+identity from that root. Image edits keep the existing output image-name normalization to the layer name;
+mask edits preserve the source image asset name, and carried mask names remain intact. Assetless or mask-only
+targets are validated by the existing raster operation. A failed worker capture publishes no pixels/history.
+This does not complete initial physical Ctrl/lift handling or enable ordinary prepared display policy.
+
+
+## Original Ctrl pixel opening and closure foundation
+
+The explicit fixed-press `SelectionOutlineGestureJob` CPU path may opt into initial pixel movement only after
+`DescribeSelectionPixelGestureMemory` admits the source/history, hit-dependent branch, immutable lift, final
+output and retirement overlap. An outline-only admission cannot authorize pixels. Ordinary physical input,
+Wand and the journal pixel successor remain separate activation requirements.
+
+For this opted-in fixed press, Ctrl plus an inside hit attempts image-pixel lift before New/Add/Subtract
+branch selection. Alt captured at Down fixes duplication; later Shift/Alt changes do not constrain or change
+that pixel drag. An inside failure (including a mask target, invisible ancestry or no selected source region)
+refuses without outline/drawing fallback. Transparent pixels within the selected source grid remain eligible.
+An outside hit uses the captured drawing mode. An existing Polygonal draft retains its established modifier rule.
+
+`PrepareDeferredPixelMoveOpeningInput` captures immutable roots, targetless token and bounded authority/scalars
+under admission. The worker checks ancestry and prepares complete target/mask metadata, selection coverage,
+lifted pixels and the pending record. Apply validates source, editor, history and opening authority, then swaps
+that record without pixels, history construction or geometry traversal. Movement is finite rounded scalar metadata.
+
+Terminal preparation captures that exact opening/sequence and uses its original immutable lift to prepare the
+final raster, carried mask/eager semantic thumbnail, translated outline and history on a worker. Publication
+requires current document/session/editor/history/target/opening/offset authority and a real history-residency
+attempt/permit; a changed residency topology refreshes on the same original job. A rounded zero closes only
+the pending gesture: it changes no document generation, history revision, redo or selection. Nonzero completion
+publishes one `Move Pixels` or `Duplicate Pixels` undo. Loss cancels this pixel gesture. Abort cannot clear a
+newer opening. Prepared owners retain replaced pending/display/history graphs for worker retirement.
+
+The optional final PixelMove `RasterEditInput::outputMemory` retains original accounting through each new
+sparse result storage, painted tile, translated selection, carried mask and semantic thumbnail, including
+copied handles and their last weak controls. Other raster-edit kinds refuse this new lifetime option. Default
+inputs preserve their numeric behavior. This core qualification does not activate Ctrl in the native host or
+establish complete large-document phase bounds, typed journal lineage, frame admission or G1.
+
+### Opted-in fixed-press Ctrl host
+
+The explicit selection-press host captures Ctrl and Alt at the accepted Down and selects the complete pixel
+gesture admission before source capture. Later input remains on that original parent. A pending procedural
+opening bypasses the legacy per-tick PixelMove CPU preview job. Its frame consumer separately admits the
+immutable lift, metadata, complete GPU preview and real-use retirement before capture/recording. Zero offset
+excludes the pending pixel frame; redrag cannot inherit an obsolete landing.
+
+Successful pixel closure invalidates the committed document display; outline-only terminals retain their
+selection notification. The CPU reference route requests a separate committed frame after final CPU/history
+closure. The explicit final-publication route below retains that work on the original parent. Journal/Wand,
+complete phase bounds, ordinary activation and G1 retain their separate delivery gates. [Implementation and private evidence](../TestRuns/P1CtrlPixelHost_2026-10-19.md).
+
+### Typed pixel journal successors
+
+The explicitly enabled Polygonal pixel route admits the complete initial Ctrl branch before capture.
+Its successful closure may issue an opaque `PixelGesture` successor after final CPU/history application
+and input acknowledgment. A younger physical Down recorded before that application uses the original
+family/ordinal and full after-document/editor/history authority. A different family, restore, target,
+canvas or foreign mutation refuses; no fresh token or smaller outline admission blesses the old prefix.
+Every raw record, including ignored Enter/Backspace, counts toward the16-record owner quantum. Missing Up
+cancels the old pixel drag at its last accepted sample and preserves the younger Down. These selected
+routes remain disabled in ordinary startup pending the complete S5/H4/G1 delivery gates.
+
+### Deferred destructive colour metadata
+
+Deferred destructive colour panels retain their immutable opening layer root. The opening token keeps
+mask pixel/thumbnail handles, enabled/linked flags and placement; its mask asset-name string is empty.
+Owner preview/commit input capture shares that root and copies the bounded descriptor/settings only.
+Workers verify the descriptor against the captured opening record before using it. A ready commit copies
+the original complete mask metadata into its carried mask; preview/histogram validation needs no name copy.
+No current-document lookup can refresh a stale opening's authority. Original pixel, selection, mask,
+history, undo/redo and cancellation semantics remain required. Direct inline and adjustment-layer capture
+paths retain their existing behavior; this component establishes no whole-UI or G1 completion claim.
+
+### Original-parent pixel final publication
+
+An explicitly enabled native pixel gesture includes its final display/rows envelope in the original complete
+admission before Submit. A moved final closure remains inside that original job: no younger display job,
+new FIFO ordinal, continuing-output reservation growth or owner pixel preparation may finish it. The worker
+prepares immutable final rows, raster residency and GPU recording; actual original recording, GPU completion
+and transport-retirement acknowledgements precede publication.
+
+Before capture the original waits for the committed source and a free controller cell. Actual visibility or
+device recovery readiness resumes the same ticket through its acknowledged worker stage. A failed current
+source with no pending rebuild fails the original with that error, preserving committed pixels/history/rows;
+it must not strand the original. A suspended source with no failure remains dormant until visibility resumes,
+cancellation or joined Close. A busy or changed history-residency witness resumes that original worker for
+refresh; the owner never waits for the lease. These waits do not poll or enlarge the fixed controller/mux.
+
+The nonreentrant successful publication validates source/editor/history/collapse/device authority, binds the
+original output, prepares the private GPU/rows root, then swaps CPU/history, rows and scalar row keys before
+adopting the committed GPU graph. Its publication observer sees all four before terminal input receipts.
+Replaced graphs and temporary owners retire on workers; original charges survive real last GPU use and
+strong/expired weak owners. Close supplies destruction authority only and suppresses useful completion.
+This selected route remains disabled in ordinary startup until complete caller/lifetime/admission/G1 gates pass.
+
+### Immutable sizing final source and output ownership
+
+`PreparedDocumentSize::FinalDocument` exposes the checked immutable candidate only while valid and unapplied.
+A move invalidates the source; successful Apply invalidates final-source access before the prepared object
+holds the retired predecessor. Its current-only query and residency acquire/refresh APIs grant no mutation
+authority. A stale or cancelled preparation adds no history and cannot replace a newer source.
+
+When a caller supplies original output memory to resize/render preparation, every new image/mask allocation,
+separately allocated semantic mask thumbnail, sealed layer root and prepared history retains that same owner.
+Shared unchanged pixels retain their existing owners. Destruction releases metadata/pixels before accounting;
+surviving immutable history/strong/weak readers cannot lose their charge when the prepared aggregate retires.
+Ordinary size-card activation and measured complete 2 ms Apply remain required beyond the selected route below;
+the ownership API and CPU tests alone do not close P1.8.
+
+
+### Selected Image Size original final publication
+
+The selected prepared-display Size path keeps CPU resizing, prepared history, final row/display preparation,
+recording and retirement on the same admitted original job. It creates its payload and final/temporary
+accounting owners on the first worker. Source/history capture follows admission. The immutable prepared Size
+source supports current-only validation and residency refresh; source/history/invocation cancellation is
+checked before each useful owner stage. Foreign restore or a newer Size invocation cannot be overwritten.
+
+Publication prevalidates the final graph and history permit, then applies CPU/history, recalculates Fit,
+publishes the actual current Chrome row owner and adopts the GPU graph in one nonreentrant owner action.
+Late cancellation cannot change an already committed result into a dropped/cancelled edit. One Undo/Redo
+restores the original/final dimensions and pixels. Failure preserves the current committed source; accepted
+work remains charged through original worker/GPU retirement, including joined Close.
+
+
+Selected Size suspension/recovery retains its exact original ticket and private new CPU/history while the
+committed source is unavailable. Visibility readiness resumes the same original; cancellation and Close drop
+only its private result. A current-source device recovery failure preserves the old document/history/rows;
+explicit source retry rebuilds that old committed display without reviving the failed Size request. Worker
+failure before final delegate construction retires partial CPU/history results on the original worker. Source
+authority is validated even after that payload is gone. These rules do not activate the route in ordinary use.

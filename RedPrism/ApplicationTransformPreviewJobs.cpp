@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "TransformPreviewTestGate.h"
+#include "Runtime.Tests.TransformPreviewTestGate.h"
 #include "TransformPreviewWork.h"
 #include "resource.h"
 
@@ -143,7 +143,7 @@ class Application::TransformPreviewJob final : public Job
         if (produced)
         {
             _owner._composition.InvalidateDocument();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         // Re-arm only after acknowledgement. The next source dispatch follows record/reservation retirement;
         // accepted history inputs take priority and never wait inside a completion callback.

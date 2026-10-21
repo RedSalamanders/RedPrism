@@ -1,6 +1,9 @@
 #include "Document.h"
+#include "ColorEditWork.h"
+#include "DocumentDraft.h"
 
 #include "PipelineTrace.h"
+#include "RasterWork.h"
 
 #include "Adjust.h"
 #include "CanvasSize.h"
@@ -23,6 +26,302 @@
 
 #pragma comment(lib, "rpcrt4.lib")
 #pragma comment(lib, "ole32.lib")
+
+namespace
+{
+std::atomic<std::uint64_t> gRasterResidencyEpoch{1};
+RasterStorageSerial gRasterStorageSerial;
+Raster::ResidencyJournal gRasterResidencyJournal;
+thread_local bool gRasterResidencyLeaseHeld = false;
+std::mutex gRasterResidencyNotificationsGate;
+std::array<Raster::ResidencySubscription*, Raster::ResidencySubscription::kCapacity> gRasterResidencySubscribers{};
+} // namespace
+
+namespace
+{
+// Owner attempts perform one acquire CAS. Workers block on value changes; no timer, spin or polling source.
+// Release is paired with notify_one so contention wakes one waiter, while an owner never enters a wait.
+// Bit zero is ownership; upper bits are a wake sequence, not publication authority. Stop callbacks change the
+// observed value without releasing ownership, so a stopped waiter returns before the current holder releases.
+std::atomic<std::uint64_t> gRasterResidencyGate{0};
+} // namespace
+
+Raster::ResidencyLease::ResidencyLease(bool attempt, CancelToken cancellation) noexcept
+{
+    if (attempt)
+    {
+        (void)TryAcquire();
+        return;
+    }
+    if (gRasterResidencyLeaseHeld || cancellation.IsCancelled())
+        return;
+    const auto wakeStoppedWaiters = []() noexcept
+    {
+        gRasterResidencyGate.fetch_add(2, std::memory_order_release);
+        gRasterResidencyGate.notify_all();
+    };
+    // Intrusive stop registrations allocate no storage. Their worker-scope destruction joins the bounded
+    // readiness callback. The owner/try path returns above without registering or waiting for callbacks.
+    const std::stop_callback localStop(cancellation.LocalToken(), wakeStoppedWaiters);
+    const std::stop_callback shutdownStop(cancellation.ShutdownToken(), wakeStoppedWaiters);
+    for (;;)
+    {
+        if (cancellation.IsCancelled())
+            return;
+        auto observed = gRasterResidencyGate.load(std::memory_order_acquire);
+        if ((observed & 1) == 0 && gRasterResidencyGate.compare_exchange_strong(
+                                       observed, observed | 1, std::memory_order_acquire, std::memory_order_relaxed))
+        {
+            _held = true;
+            _thread = std::this_thread::get_id();
+            gRasterResidencyLeaseHeld = true;
+            if (cancellation.IsCancelled())
+                Reset();
+            return;
+        }
+        if (cancellation.IsCancelled())
+            return;
+        if ((observed & 1) == 0)
+            continue; // CAS lost to a wake-sequence change; the gate is free, so there is no holder to wake us.
+        // A concurrent stop changes the sequence before notifying; wait therefore cannot miss that stop even
+        // if it arrives between the predicate check and parking. Other waiters recheck after the actual event.
+        gRasterResidencyGate.wait(observed, std::memory_order_relaxed);
+    }
+}
+
+Raster::ResidencyLease::~ResidencyLease() noexcept
+{
+    Reset();
+}
+
+void Raster::ResidencyLease::CheckThread() const noexcept
+{
+    // A foreign-thread transfer is a programming error. Fail before releasing another thread's scope owner.
+    if (_held && _thread != std::this_thread::get_id())
+        std::terminate();
+}
+
+bool Raster::ResidencyLease::Held() const noexcept
+{
+    CheckThread();
+    return _held;
+}
+
+bool Raster::ResidencyLease::TryAcquire() noexcept
+{
+    CheckThread();
+    if (_held || gRasterResidencyLeaseHeld)
+        return false;
+    auto expected = gRasterResidencyGate.load(std::memory_order_relaxed);
+    if ((expected & 1) != 0 || !gRasterResidencyGate.compare_exchange_strong(
+                                   expected, expected | 1, std::memory_order_acquire, std::memory_order_relaxed))
+        return false;
+    _held = true;
+    _thread = std::this_thread::get_id();
+    gRasterResidencyLeaseHeld = true;
+    return true;
+}
+
+void Raster::ResidencyLease::Reset() noexcept
+{
+    CheckThread();
+    if (!_held)
+        return;
+    gRasterResidencyLeaseHeld = false;
+    _held = false;
+    _thread = {};
+    gRasterResidencyGate.fetch_and(~std::uint64_t{1}, std::memory_order_release);
+    gRasterResidencyGate.notify_one();
+}
+
+Raster::ResidencyLease Raster::AcquireResidencyLease(CancelToken cancellation) noexcept
+{
+    return ResidencyLease{false, cancellation};
+}
+
+Raster::ResidencyLease Raster::TryResidencyLease() noexcept
+{
+    return ResidencyLease{true};
+}
+
+std::uint64_t Raster::ResidencyEpoch() noexcept
+{
+    return gRasterResidencyEpoch.load(std::memory_order_acquire);
+}
+
+Raster::ResidencyJournal::CopyResult Raster::CopyResidencyChanges(std::uint64_t afterEpoch,
+                                                                  std::span<RasterResidencyChange> output,
+                                                                  std::size_t& count, CancelToken cancellation) noexcept
+{
+    count = 0;
+    if (!gRasterResidencyLeaseHeld)
+        return ResidencyJournal::CopyResult::InvalidWitness;
+    return gRasterResidencyJournal.CopySince(afterEpoch, output, count, cancellation);
+}
+
+Raster::ResidencySubscription::~ResidencySubscription() noexcept
+{
+    Stop();
+}
+
+bool Raster::ResidencySubscription::Start(Changed changed, void* context) noexcept
+{
+    if (!changed)
+        return false;
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    if (_registered)
+        return false;
+    for (auto*& subscriber : gRasterResidencySubscribers)
+    {
+        if (subscriber)
+            continue;
+        _changed = changed;
+        _context = context;
+        _registered = true;
+        subscriber = this;
+        return true;
+    }
+    return false;
+}
+
+void Raster::ResidencySubscription::Stop() noexcept
+{
+    // The notice owns this lock through its bounded readiness callback. Joining it is allowed only at teardown,
+    // before the scheduler wake/context is destroyed. No callback can follow removal or retain that context.
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    if (!_registered)
+        return;
+    for (auto*& subscriber : gRasterResidencySubscribers)
+        if (subscriber == this)
+            subscriber = nullptr;
+    _registered = false;
+    _changed = nullptr;
+    _context = nullptr;
+}
+
+void Raster::NotifyResidencyChanged() noexcept
+{
+    const std::lock_guard lock(gRasterResidencyNotificationsGate);
+    for (auto* subscriber : gRasterResidencySubscribers)
+        if (subscriber)
+            subscriber->_changed(subscriber->_context);
+}
+
+bool RecordSavePolicy<ImageLayer>::Accumulate(RecordSavePlan& plan, const ImageLayer& layer) noexcept
+{
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto add = [](std::uint64_t& target, std::uint64_t value) noexcept
+    {
+        if (value > (std::numeric_limits<std::uint64_t>::max)() - target)
+            return false;
+        target += value;
+        return true;
+    };
+    if (layer.adjustment)
+        for (const auto& channel : layer.adjustment->curves.channels)
+            if (channel.size() > 32)
+                return false;
+    const auto units = static_cast<std::uint64_t>(layer.name.size());
+    if (units > maximum / 32 || !add(plan.metadataBytes, units * 32) ||
+        !add(plan.metadataBytes, sizeof(ImageLayer) + 64 * 1024))
+        return false;
+    const auto asset = [&](const RasterAsset& value) noexcept
+    {
+        if (!value.image.HasStorage() || value.image.Width() < 1 || value.image.Height() < 1 ||
+            value.image.Width() > kMaxCanvasSide || value.image.Height() > kMaxCanvasSide ||
+            value.image.PixelCount() > kMaxLayerPixels)
+            return false;
+        const auto largest = static_cast<std::uint64_t>(value.image.Stride()) * value.image.Height();
+        const auto nameUnits = static_cast<std::uint64_t>(value.name.size());
+        if (nameUnits > (maximum - 128) / 32 || !add(plan.metadataBytes, nameUnits * 32 + 128) ||
+            !add(plan.assetCount, 1))
+            return false;
+        plan.largestAssetBytes = (std::max)(plan.largestAssetBytes, largest);
+        return true;
+    };
+    return (!layer.asset || asset(layer.asset.value())) && (!layer.mask || asset(layer.mask->asset));
+}
+
+std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
+{
+    RecordOwnershipBounds result;
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto add = [](std::uint64_t& bytes, std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    const auto text = [&](const std::wstring& value) noexcept
+    {
+        // SSO capacity is intentionally overcounted; names and curve buffers are the only variable record
+        // metadata. The record objects, optionals and fixed settings are charged by the root's vector capacity.
+        return value.capacity() <= maximum / sizeof(wchar_t) - 1 &&
+               add(result.metadataBytes, (value.capacity() + 1) * sizeof(wchar_t)) &&
+               add(result.metadataBytes, 64); // allocator rounding and the v145 Debug container proxy
+    };
+    if (!text(layer.name) || (layer.asset && !text(layer.asset.value().name)) ||
+        (layer.mask && !text(layer.mask.value().asset.name)))
+        return std::nullopt;
+    if (layer.adjustment)
+    {
+        for (const auto& channel : layer.adjustment.value().curves.channels)
+            if (channel.capacity() > maximum / sizeof(CurvePoint) ||
+                !add(result.metadataBytes, channel.capacity() * sizeof(CurvePoint)) || !add(result.metadataBytes, 64))
+                return std::nullopt;
+    }
+    result.ownershipBytes = result.metadataBytes;
+    const int imagePixels = layer.asset ? layer.asset.value().image.PixelCount() : 0;
+    const int maskPixels = layer.mask ? layer.mask.value().asset.image.PixelCount() : 0;
+    if (imagePixels < 0 || maskPixels < 0)
+        return std::nullopt;
+    result.imagePixels = static_cast<std::uint64_t>(imagePixels);
+    result.maskPixels = static_cast<std::uint64_t>(maskPixels);
+    const auto raster = [&](const Raster& image) noexcept
+    {
+        if (!image.HasStorage())
+            return true;
+        const auto bytes = image.RetirementMemoryBytes();
+        const auto nodes = image.RetirementNodeCount();
+        // These construction caches include possible sparse assembly. Reading them never expands a DAG,
+        // materializes pixels or becomes stale when Data() subsequently publishes its resident byte buffer.
+        return bytes && nodes && add(result.ownershipBytes, bytes) && add(result.rasterNodes, nodes);
+    };
+    if (!raster(layer.shapeImage) ||
+        (layer.asset && (!raster(layer.asset.value().image) || !raster(layer.asset.value().thumbnail))) ||
+        (layer.mask && (!raster(layer.mask.value().asset.image) || !raster(layer.mask.value().asset.thumbnail))))
+        return std::nullopt;
+    return result;
+}
+
+std::uint64_t CanvasDocument::RetirementMemoryBytes() const noexcept
+{
+    const auto layerBounds = layers.OwnershipBounds();
+    // A default empty handle owns no root. A published root with unavailable bounds must be refused.
+    if (!layerBounds && layers.Identity() != nullptr)
+        return 0;
+    std::uint64_t bytes = 64 * 1024 + sizeof(CanvasDocument);
+    const auto add = [&bytes](std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    if (layerBounds && !add(layerBounds->ownershipBytes))
+        return 0;
+    if (selection)
+    {
+        // StorageBytes covers retained outer/inner vector capacities. Charge the outer shared control/proxy
+        // and each constructed inner vector's allocator/Debug proxy without visiting its points or loops.
+        const auto loopCount = selection->loops.size();
+        if (loopCount > ((std::numeric_limits<std::uint64_t>::max)() - 64) / 64 ||
+            !add(selection->loops.StorageBytes()) || !add(64 + static_cast<std::uint64_t>(loopCount) * 64))
+            return 0;
+    }
+    return bytes;
+}
 
 Guid Guid::Generate() noexcept
 {
@@ -169,14 +468,100 @@ Raster Raster::Make(int width, int height, RasterFormat format)
 
 std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
 {
+    const auto serial = gRasterStorageSerial.Allocate();
+    if (!serial)
+        return {};
     // make_unique establishes exception-safe ownership before the custom shared_ptr control block is made.
     // If that second allocation fails, FreeStorage still returns the already-owned payload exactly once.
-    std::unique_ptr<Storage, FreeStorage> storage{std::make_unique<Storage>().release()};
+    std::unique_ptr<Storage, FreeStorage> storage{std::make_unique<Storage>(serial).release()};
     return std::shared_ptr<Storage>{std::move(storage)};
+}
+
+namespace
+{
+// A control-block allocator retains admission through the last weak reader. Resource deleter lifetime
+// alone is not an allocation-lifetime contract; the allocator explicitly outlives block deallocation.
+template <class T> struct ChargedRasterAllocator final
+{
+    using value_type = T;
+    std::shared_ptr<const void> lifetime;
+    explicit ChargedRasterAllocator(std::shared_ptr<const void> value) noexcept : lifetime(std::move(value)) {}
+    template <class U>
+    ChargedRasterAllocator(const ChargedRasterAllocator<U>& other) noexcept : lifetime(other.lifetime)
+    {
+    }
+    [[nodiscard]] T* allocate(std::size_t count)
+    {
+        return std::allocator<T>{}.allocate(count);
+    }
+    void deallocate(T* value, std::size_t count) noexcept
+    {
+        auto lifetimeGuard = lifetime;
+        std::allocator<T>{}.deallocate(value, count);
+    }
+    template <class U> [[nodiscard]] bool operator==(const ChargedRasterAllocator<U>& other) const noexcept
+    {
+        return !lifetime.owner_before(other.lifetime) && !other.lifetime.owner_before(lifetime);
+    }
+};
+} // namespace
+
+std::shared_ptr<Raster::Storage> Raster::AllocateChargedStorage(std::shared_ptr<const void> lifetime)
+{
+    const auto serial = gRasterStorageSerial.Allocate();
+    if (!serial)
+        return {};
+    auto allocated = std::make_unique<ChargedStorage>(serial);
+    allocated->lifetime = lifetime;
+    // The shared_ptr constructor invokes the supplied deleter if control allocation fails. Ownership
+    // starts in make_unique and moves once; neither failure path can abandon or double-free the storage.
+    return std::shared_ptr<Storage>{allocated.release(), FreeChargedStorage{},
+                                    ChargedRasterAllocator<ChargedStorage>{std::move(lifetime)}};
+}
+
+void Raster::FreeChargedStorage::operator()(ChargedStorage* storage) const noexcept
+{
+    storage->DeferredReleaseNode::bytes = storage->bytes.capacity() + storage->adoptedBytes.AllocationBytes() +
+                                          storage->tiles.capacity() * sizeof(RasterTile);
+    storage->destroy = [](DeferredReleaseNode* node) noexcept
+    {
+        auto* charged = static_cast<ChargedStorage*>(node);
+        // Derived fields would otherwise die before base pixel fields. This local keeps admission alive
+        // until all base bytes actually die, including when the control block already has no weak readers.
+        auto lifetimeGuard = std::move(charged->lifetime);
+        const std::unique_ptr<ChargedStorage> owned(charged);
+        TracePipelineFree(owned->bytes.capacity());
+    };
+    if (!TryDeferRelease(*storage, DeferredReleasePolicy::AlwaysOnOwner))
+        storage->destroy(storage);
 }
 
 void Raster::CacheRetirementMemory(Storage& storage) noexcept
 {
+    // This immutable producer already visits its children below. Admission later reads this scalar even
+    // when a repeatedly shared child graph cannot represent its conservative occurrence sum.
+    std::uint64_t windowBytes = 0;
+    bool windowBoundValid = true;
+    if (storage.sparse)
+        for (const auto& tile : storage.tiles)
+        {
+            if (tile.Width() < 1 || tile.Height() < 1 || tile.Width() > kMaxCanvasSide ||
+                tile.Height() > kMaxCanvasSide)
+            {
+                windowBoundValid = false;
+                break;
+            }
+            const auto columns = (static_cast<std::uint64_t>(tile.Width()) + 255) / 256 + 2;
+            const auto rows = (static_cast<std::uint64_t>(tile.Height()) + 255) / 256 + 2;
+            const auto pieceBytes = columns * rows * 8 * sizeof(RasterTile); // axes <=120; product cannot overflow
+            if (pieceBytes > (std::numeric_limits<std::uint64_t>::max)() - windowBytes)
+            {
+                windowBoundValid = false;
+                break;
+            }
+            windowBytes += pieceBytes;
+        }
+    storage.gridReplacementWorkspaceBytes = windowBoundValid ? std::optional{windowBytes} : std::nullopt;
     const auto logical = static_cast<std::uint64_t>(storage.stride) * static_cast<std::uint64_t>(storage.height);
     if (logical > (std::numeric_limits<std::size_t>::max)())
         return;
@@ -201,10 +586,21 @@ void Raster::CacheRetirementMemory(Storage& storage) noexcept
         storage.graphNodes += value->graphNodes;
         return true;
     };
+    // Freeze the distinct allocation bound before adding children. A shared DAG can have an unavailable
+    // occurrence sum while every individual allocation still has a valid bound for a unique owning index.
+    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)))
+        return;
+    const auto ownedPixels = storage.adoptedBytes.AllocationBytes();
+    if (storage.bytes.capacity() > (std::numeric_limits<std::uint64_t>::max)() - ownedPixels)
+        return;
+    const auto residentPixels = ownedPixels + storage.bytes.capacity();
+    const auto potentialPixels = PixelBuffer::RequiredBytes(static_cast<std::size_t>(logical));
+    if (residentPixels > potentialPixels && !add(1, residentPixels - potentialPixels))
+        return;
+    storage.selfRetirementBytes = bytes;
     // Sum already cached child bounds while the producer owns this record. Even a repeatedly shared nested
     // sparse DAG then has an O(1) bound read; admission never recursively expands it or materializes pixels.
-    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)) ||
-        !child(storage.base))
+    if (!child(storage.base))
         return;
     for (const auto& tile : storage.tiles)
         if (!child(tile.pixels._storage))
@@ -246,6 +642,8 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
         return raster;
     }
     auto storage = AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -266,6 +664,12 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
 
 Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels)
 {
+    return Adopt(width, height, format, std::move(pixels), {});
+}
+
+Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels,
+                     const std::shared_ptr<const void>& lifetime)
+{
     if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
         (format != RasterFormat::Gray8 && format != RasterFormat::Bgra8888))
     {
@@ -277,7 +681,10 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     {
         return {};
     }
-    auto storage = AllocateStorage();
+    const bool charged = lifetime.use_count() != 0; // A null alias may still own a real lifetime control block.
+    auto storage = charged ? AllocateChargedStorage(lifetime) : AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -285,6 +692,17 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     storage->adoptedBytes = std::move(pixels);
     storage->assembled.store(storage->adoptedBytes.Data(), std::memory_order_release);
     CacheRetirementMemory(*storage);
+    if (charged)
+    {
+        constexpr auto extra = sizeof(ChargedStorage) - sizeof(Storage) + sizeof(std::shared_ptr<const void>);
+        const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        storage->retirementBytes = storage->retirementBytes && storage->retirementBytes <= maximum - extra
+                                       ? storage->retirementBytes + extra
+                                       : 0;
+        storage->selfRetirementBytes = storage->selfRetirementBytes && storage->selfRetirementBytes <= maximum - extra
+                                           ? storage->selfRetirementBytes + extra
+                                           : 0;
+    }
     return Raster(std::move(storage));
 }
 
@@ -299,6 +717,10 @@ Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
     const int largest = std::max(width, height);
     if (largest <= maxSide)
     {
+        // Gray thumbnails carry mask edge semantics and are read on the owner during composition/admission.
+        // A fitting sparse mask must not leave those readers an alias that can assemble shared source caches.
+        if (source.Format() == RasterFormat::Gray8 && !source.IsMaterialized())
+            return ContiguousRasterForWork(source);
         return source;
     }
     const int thumbWidth = std::max(1, (width * maxSide + largest / 2) / largest);
@@ -375,18 +797,35 @@ void BlitRegion(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWid
 
 // A tile's window blitted onto a destination rectangle of the grid.
 void BlitTile(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWidth, int dstHeight, const RasterTile& tile,
-              int channels) noexcept
+              int channels, bool materializeSource) noexcept
 {
-    const std::uint8_t* pixels = tile.pixels.Data();
-    if (pixels == nullptr)
+    if (materializeSource)
     {
+        // Explicit Data() keeps its existing publication contract for the nested graph.
+        // This branch is used only by Materialize; ordinary region readers use the private branch below.
+        const std::uint8_t* pixels = tile.pixels.Data();
+        if (pixels == nullptr)
+            return;
+        const int stride = tile.pixels.Stride();
+        const std::uint8_t* origin = pixels +
+                                     static_cast<std::size_t>(tile.sourceY) * static_cast<std::size_t>(stride) +
+                                     static_cast<std::size_t>(tile.sourceX) * static_cast<std::size_t>(channels);
+        BlitRegion(dst, dstStride, dstX, dstY, dstWidth, dstHeight, origin, stride, tile.x, tile.y, tile.Width(),
+                   tile.Height(), channels);
         return;
     }
-    const int stride = tile.pixels.Stride();
-    const std::uint8_t* origin = pixels + static_cast<std::size_t>(tile.sourceY) * static_cast<std::size_t>(stride) +
-                                 static_cast<std::size_t>(tile.sourceX) * static_cast<std::size_t>(channels);
-    BlitRegion(dst, dstStride, dstX, dstY, dstWidth, dstHeight, origin, stride, tile.x, tile.y, tile.Width(),
-               tile.Height(), channels);
+    // Copy only the visible tile window. Nested sparse tiles must not build a shared cache,
+    // including when the caller already holds a resident sampling/publication lease.
+    const int left = std::max(dstX, tile.x);
+    const int top = std::max(dstY, tile.y);
+    const int right = std::min(dstX + dstWidth, tile.x + tile.Width());
+    const int bottom = std::min(dstY + dstHeight, tile.y + tile.Height());
+    if (right <= left || bottom <= top)
+        return;
+    auto* output = dst + static_cast<std::size_t>(top - dstY) * static_cast<std::size_t>(dstStride) +
+                   static_cast<std::size_t>(left - dstX) * static_cast<std::size_t>(channels);
+    tile.pixels.ReadRegion(tile.sourceX + left - tile.x, tile.sourceY + top - tile.y, right - left, bottom - top,
+                           output, dstStride, tile.pixels.Fill());
 }
 
 struct IntRect
@@ -440,6 +879,8 @@ const std::uint8_t* Raster::Data() const noexcept
     const std::uint8_t* pixels = _storage->assembled.load(std::memory_order_acquire);
     if (pixels == nullptr)
     {
+        if (gRasterResidencyLeaseHeld)
+            return nullptr; // never build/wait recursively inside a resident sample/publication lease
         Materialize(*_storage);
         pixels = _storage->assembled.load(std::memory_order_acquire);
     }
@@ -455,7 +896,7 @@ const std::vector<RasterTile>& Raster::Tiles() const noexcept
 void Raster::Materialize(const Storage& storage) noexcept
 {
     // Serialize builders, not readers. A failed allocation leaves the cache unpublished and retryable.
-    const std::lock_guard lock(storage.assemblyMutex);
+    std::unique_lock lock(storage.assemblyMutex);
     if (storage.assembled.load(std::memory_order_acquire) != nullptr)
     {
         return;
@@ -479,10 +920,22 @@ void Raster::Materialize(const Storage& storage) noexcept
     }
     for (const RasterTile& tile : storage.tiles)
     {
-        BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
+        BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels, true);
     }
+    // Build privately before this brief publication gate. History samples resident charges under the same
+    // gate; an owner can try it to validate a prepared sample and swap history without racing this growth.
+    auto residency = AcquireResidencyLease();
+    if (!residency.Held())
+        return;
+    const auto epoch = ResidencyEpoch();
+    if (epoch != gRasterResidencyJournal.Epoch() || !gRasterResidencyJournal.Append(storage.serial, size))
+        return; // no wrap or journal/publication divergence; private pixels remain unpublished
     storage.bytes = std::move(bytes);
     storage.assembled.store(storage.bytes.data(), std::memory_order_release);
+    gRasterResidencyEpoch.store(gRasterResidencyJournal.Epoch(), std::memory_order_release);
+    residency.Reset();
+    lock.unlock();
+    NotifyResidencyChanged();
 }
 
 void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,
@@ -548,7 +1001,7 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
     }
     for (const RasterTile& tile : storage.tiles)
     {
-        BlitTile(out, outStride, x, y, width, height, tile, channels);
+        BlitTile(out, outStride, x, y, width, height, tile, channels, false);
     }
 }
 
@@ -583,7 +1036,8 @@ void Raster::ForEachStorage(const std::function<void(const Raster&)>& visit) con
 }
 
 Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX, int baseY,
-                          std::vector<RasterTile> tiles, std::uint8_t fill)
+                          std::vector<RasterTile> tiles, std::uint8_t fill,
+                          const std::shared_ptr<const void>& outputLifetime)
 {
     if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
@@ -593,7 +1047,9 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
     {
         return {};
     }
-    auto storage = AllocateStorage();
+    auto storage = outputLifetime ? AllocateChargedStorage(outputLifetime) : AllocateStorage();
+    if (!storage)
+        return {};
     storage->width = width;
     storage->height = height;
     storage->stride = format == RasterFormat::Gray8 ? width : width * 4;
@@ -641,7 +1097,8 @@ namespace
 // The part of `area` outside `inside`, as windows of one shared block of `value` no larger than a brush tile, so
 // padding a grown grid costs one small allocation however much area it adds.
 [[nodiscard]] std::vector<RasterTile> UniformTiles(const IntRect& area, const IntRect& inside, RasterFormat format,
-                                                   std::uint8_t value, const CancelToken& cancellation)
+                                                   std::uint8_t value, const CancelToken& cancellation,
+                                                   const std::shared_ptr<const void>& outputLifetime)
 {
     constexpr int kBlock = 256;
     std::vector<IntRect> pieces;
@@ -667,10 +1124,13 @@ namespace
         return tiles;
     }
     const int channels = format == RasterFormat::Gray8 ? 1 : 4;
-    const std::vector<std::uint8_t> bytes(static_cast<std::size_t>(blockWidth) * static_cast<std::size_t>(blockHeight) *
-                                              static_cast<std::size_t>(channels),
-                                          value);
-    const Raster block = Raster::Make(blockWidth, blockHeight, format, bytes.data(), bytes.size());
+    auto bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(blockWidth) * blockHeight * channels);
+    if (!bytes)
+        throw std::bad_alloc{};
+    std::fill_n(bytes.Data(), bytes.Size(), value);
+    const Raster block = Raster::Adopt(blockWidth, blockHeight, format, std::move(bytes), outputLifetime);
+    if (!block.HasStorage())
+        return {};
     for (const IntRect& piece : pieces)
     {
         for (int y = piece.y; y < piece.y + piece.height; y += blockHeight)
@@ -689,7 +1149,8 @@ namespace
 } // namespace
 
 Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles, int cropX,
-                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill, CancelToken cancellation)
+                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill, CancelToken cancellation,
+                         const std::shared_ptr<const void>& outputLifetime)
 {
     if (cropWidth < 1 || cropHeight < 1 || cancellation.IsCancelled())
     {
@@ -713,9 +1174,9 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         gridFill = source.Fill();
         if (gridFill != fill)
         {
-            older =
-                UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
-                             IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill, cancellation);
+            older = UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
+                                 IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill, cancellation,
+                                 outputLifetime);
         }
         for (RasterTile tile : source.Tiles())
         {
@@ -783,8 +1244,8 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         tile.x -= cropX;
         tile.y -= cropY;
     }
-    Raster prepared =
-        MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), gridFill);
+    Raster prepared = MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result),
+                                 gridFill, outputLifetime);
     return cancellation.IsCancelled() ? Raster{} : prepared;
 }
 
@@ -1012,6 +1473,11 @@ bool NameUtf8LengthOk(std::wstring_view name) noexcept
 
 namespace
 {
+[[nodiscard]] const ImageLayer* LayerById(const RecordRoot<ImageLayer>& layers, const Guid& id) noexcept
+{
+    return layers.FindKey(id);
+}
+
 [[nodiscard]] const ImageLayer* LayerById(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     for (const ImageLayer& layer : layers)
@@ -1024,7 +1490,7 @@ namespace
     return nullptr;
 }
 
-[[nodiscard]] ImageLayer* LayerById(std::vector<ImageLayer>& layers, const Guid& id) noexcept
+[[nodiscard]] ImageLayer* LayerById(std::span<ImageLayer> layers, const Guid& id) noexcept
 {
     for (ImageLayer& layer : layers)
     {
@@ -1325,19 +1791,7 @@ const ImageLayer* DocumentSession::FindLayer(const Guid& id) const noexcept
     {
         return nullptr;
     }
-    return LayerById(_document.value().layers, id);
-}
-
-ImageLayer* DocumentSession::MutableLayer(const Guid& id) noexcept
-{
-    if (HasDeferredTransform())
-        return nullptr;
-
-    if (!_document.has_value())
-    {
-        return nullptr;
-    }
-    return LayerById(_document.value().layers, id);
+    return _document.value().layers.FindKey(id);
 }
 
 const ImageLayer* DocumentSession::ActiveLayer() const noexcept
@@ -1347,15 +1801,6 @@ const ImageLayer* DocumentSession::ActiveLayer() const noexcept
         return nullptr;
     }
     return FindLayer(_activeLayerID.value());
-}
-
-ImageLayer* DocumentSession::MutableActiveLayer() noexcept
-{
-    if (!_activeLayerID.has_value())
-    {
-        return nullptr;
-    }
-    return MutableLayer(_activeLayerID.value());
 }
 
 void DocumentSession::BeginEdit(std::wstring name)
@@ -1400,7 +1845,7 @@ std::optional<JobToken> DocumentSession::CaptureJobToken(const std::optional<Gui
     return token;
 }
 
-bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept
+bool DocumentSession::IsJobTargetAndSessionCurrent(const JobToken& token, std::uint64_t latestSequence) const noexcept
 {
     if (!_document.has_value() || token.sessionIdentity != _tokenIdentity.value ||
         token.documentSerial != _documentSerial || token.restoreSerial != _restoreSerial ||
@@ -1415,15 +1860,22 @@ bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t lat
     }
     const TargetIdentity& target = token.target.value();
     const ImageLayer* layer = FindLayer(target.layerId);
-    // A selection can have millions of edges. Validation compares the retained immutable handle in O(1), and
-    // conservatively drops a rebuilt outline even when its points happen to be equal.
-    const bool sameSelection =
-        _document->selection.has_value() == token.selection.has_value() &&
-        (!token.selection.has_value() || (_document->selection->antialiased == token.selection->antialiased &&
-                                          _document->selection->loops.Identity() == token.selection->loops.Identity()));
     return layer != nullptr && (layer->asset.has_value() ? layer->asset->image : Raster{}) == target.image &&
-           layer->transform == target.transform && layer->mask == target.mask && sameSelection &&
-           layer->isGroup == target.isGroup && layer->adjustment == target.adjustment;
+           layer->transform == target.transform && layer->mask == target.mask && layer->isGroup == target.isGroup &&
+           layer->adjustment == target.adjustment;
+}
+
+bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept
+{
+    if (!IsJobTargetAndSessionCurrent(token, latestSequence))
+        return false;
+    if (!token.target)
+        return true;
+    // Public validation still requires the retained exact selection; a dedicated color refusal may
+    // inspect source/session alone but can never publish through that weaker observation.
+    return _document->selection.has_value() == token.selection.has_value() &&
+           (!token.selection || (_document->selection->antialiased == token.selection->antialiased &&
+                                 _document->selection->loops.Identity() == token.selection->loops.Identity()));
 }
 
 namespace
@@ -1458,8 +1910,34 @@ template <typename Excluded>
 
 std::int64_t DocumentSession::PixelBudgetLeft(bool mask, std::initializer_list<Guid> excluding) const noexcept
 {
-    return BudgetLeft(_document, mask, [&](const Guid& id)
-                      { return std::find(excluding.begin(), excluding.end(), id) != excluding.end(); });
+    if (!_document)
+        return 0;
+    const auto& layers = _document.value().layers;
+    const auto bounds = layers.OwnershipBounds();
+    if ((!bounds && layers.Identity()) || !layers.HasUniqueKeys())
+        return 0;
+    auto used = bounds ? (mask ? bounds.value().maskPixels : bounds.value().imagePixels) : 0;
+    // The exclusion list is bounded by its caller, not document size. Ignore repeated/missing IDs just as the
+    // original predicate did on validated unique-ID documents. Invalid duplicate roots refuse above; stored
+    // occurrence totals exclude thumbnails and shape-source owners, and count each layer even with shared pixels.
+    for (auto cursor = excluding.begin(); cursor != excluding.end(); ++cursor)
+    {
+        if (std::find(excluding.begin(), cursor, *cursor) != cursor)
+            continue;
+        const auto* layer = layers.FindKey(*cursor);
+        if (!layer)
+            continue;
+        const auto pixelCount = mask ? (layer->mask ? layer->mask.value().asset.image.PixelCount() : 0)
+                                     : (layer->asset ? layer->asset.value().image.PixelCount() : 0);
+        if (pixelCount < 0)
+            return 0;
+        const auto pixels = static_cast<std::uint64_t>(pixelCount);
+        if (pixels > used)
+            return 0;
+        used -= pixels;
+    }
+    const auto limit = static_cast<std::uint64_t>(mask ? kMaxMaskPixels : kMaxLayerPixels);
+    return used >= limit ? 0 : static_cast<std::int64_t>(limit - used);
 }
 
 std::int64_t DocumentSession::PixelBudgetLeft(bool mask, const std::unordered_set<Guid>& excluding) const noexcept
@@ -1515,7 +1993,7 @@ bool DocumentSession::CancelPendingEdit()
     if (HasDeferredTransform())
         return true;
 
-    _lassoDraft.reset();
+    CancelLasso();
     // The open panel owns the document until OK or Cancel. The key must not restore history under it.
     if (HasColorEdit())
     {
@@ -1532,12 +2010,12 @@ bool DocumentSession::CancelPendingEdit()
         CancelTransform();
         return true;
     }
-    if (_brush)
+    if (_brush || _brushFinishingOpening || _brushUpdatingOpening)
     {
         CancelBrush();
         return true;
     }
-    if (_warp)
+    if (HasPendingWarp())
     {
         CancelWarp();
         return true;
@@ -1617,8 +2095,7 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     }
     if (!ResolveGradient())
         return;
-    _lassoDraft.reset();
-    BeginEdit(L"New Canvas");
+    CancelLasso();
     CanvasDocument document;
     document.id = Guid::Generate();
     document.width = width;
@@ -1628,12 +2105,19 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     {
         ImageLayer layer = ImageLayer::Blank(L"Layer 1", Vec2{static_cast<double>(width), static_cast<double>(height)});
         active = layer.id;
-        document.layers.push_back(std::move(layer));
+        RecordRoot<ImageLayer>::Builder records(1);
+        if (!records.Append(std::move(layer)))
+            return;
+        auto root = records.Seal();
+        if (!root)
+            return;
+        document.layers = std::move(root.value());
     }
+    BeginEdit(L"New Canvas");
     _document = std::move(document);
     ++_documentSerial;
     SetActiveLayerID(active);
-    _collapsed.clear();
+    ClearCollapsedGroups();
     EndEdit();
 }
 
@@ -1670,7 +2154,7 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
     }
     if (layer.parentID.has_value())
     {
-        _collapsed.erase(layer.parentID.value());
+        SetGroupCollapsed(layer.parentID.value(), false);
     }
     std::size_t insertion = _document.value().layers.size();
     if (_activeLayerID.has_value())
@@ -1692,13 +2176,20 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
             }
         }
     }
-    BeginEdit(editName);
-    _document.value().layers.insert(_document.value().layers.begin() + static_cast<std::ptrdiff_t>(insertion), layer);
+    const Guid insertedId = layer.id;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size() + 1);
+    if (!draft || !draft.value().Insert(insertion, std::move(layer)))
+        return;
     if (dropsSelection)
     {
-        _document.value().selection.reset();
+        draft.value().DocumentState().selection.reset();
     }
-    SetActiveLayerID(layer.id);
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(editName);
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(insertedId);
     EndEdit();
 }
 
@@ -1748,48 +2239,76 @@ void DocumentSession::AddGroup()
             insertion = index.value() + 1;
         }
     }
-    std::vector<ImageLayer> layers = _document.value().layers;
-    layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(insertion), group);
-    if (ValidateHierarchy(layers) != DocumentStatus::Ok)
+    const Guid groupId = group.id;
+    const auto groupParent = group.parentID;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size() + 1);
+    if (!draft || !draft.value().Insert(insertion, std::move(group)) ||
+        ValidateHierarchy(draft.value().ReadLayers()) != DocumentStatus::Ok)
     {
         return;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"New Folder");
-    _document.value().layers = std::move(layers);
-    SetActiveLayerID(group.id);
-    if (group.parentID.has_value())
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(groupId);
+    if (groupParent.has_value())
     {
-        _collapsed.erase(group.parentID.value());
+        SetGroupCollapsed(groupParent.value(), false);
     }
     EndEdit();
 }
 
 void DocumentSession::RenameLayer(const Guid& id, std::wstring_view name)
 {
+    if (HasDeferredTransform())
+        return;
     const std::wstring trimmed = TrimWide(name);
     if (trimmed.empty())
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(id);
-    if (layer == nullptr)
+    if (!_document)
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].name = trimmed;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Rename Layer");
-    layer->name = trimmed;
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
 void DocumentSession::ToggleVisibility(const Guid& id)
 {
-    ImageLayer* layer = MutableLayer(id);
-    if (layer == nullptr)
+    if (HasDeferredTransform())
+        return;
+    if (!_document)
     {
         return;
     }
-    BeginEdit(layer->visible ? L"Hide Layer" : L"Show Layer");
-    layer->visible = !layer->visible;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return;
+    const bool visible = _document->layers[index.value()].visible;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].visible = !visible;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(visible ? L"Hide Layer" : L"Show Layer");
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -1828,38 +2347,45 @@ bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& pare
     {
         return false;
     }
-    std::vector<ImageLayer> layers = _document.value().layers;
-    const std::optional<std::size_t> index = IndexOf(layers, id);
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    const std::optional<std::size_t> index = IndexOf(draft.value().ReadLayers(), id);
     if (!index.has_value())
     {
         return false;
     }
-    ImageLayer layer = layers[index.value()];
-    layers.erase(layers.begin() + static_cast<std::ptrdiff_t>(index.value()));
+    ImageLayer layer = draft.value().ReadLayers()[index.value()];
+    if (!draft.value().Erase(index.value()))
+        return false;
     layer.parentID = destination;
-    std::size_t insertion = atBottom ? 0 : layers.size();
+    std::size_t insertion = atBottom ? 0 : draft.value().ReadLayers().size();
     if (aboveId.has_value())
     {
-        const std::optional<std::size_t> target = IndexOf(layers, aboveId.value());
-        if (!target.has_value() || layers[target.value()].parentID != destination)
+        const std::optional<std::size_t> target = IndexOf(draft.value().ReadLayers(), aboveId.value());
+        if (!target.has_value() || draft.value().ReadLayers()[target.value()].parentID != destination)
         {
             return false;
         }
         insertion = target.value() + (before ? 0 : 1);
     }
-    layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(layer));
-    AdoptClipping(id, layers);
-    ReleaseDetachedClipping(layers);
-    if (ValidateHierarchy(layers) != DocumentStatus::Ok)
+    if (!draft.value().Insert(insertion, std::move(layer)))
+        return false;
+    AdoptClipping(id, draft.value().EditLayers());
+    ReleaseDetachedClipping(draft.value().EditLayers());
+    if (ValidateHierarchy(draft.value().ReadLayers()) != DocumentStatus::Ok)
     {
         return false;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
     BeginEdit(L"Move Layer");
-    _document.value().layers = std::move(layers);
+    std::swap(_document.value(), after.value());
     SetActiveLayerID(id);
     if (destination.has_value())
     {
-        _collapsed.erase(destination.value());
+        SetGroupCollapsed(destination.value(), false);
     }
     EndEdit();
     return true;
@@ -1957,9 +2483,15 @@ void DocumentSession::MoveActiveLayer(int offset)
     {
         return;
     }
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    std::swap(draft.value().EditLayers()[first.value()], draft.value().EditLayers()[second.value()]);
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Reorder Layers");
-    std::vector<ImageLayer>& layers = _document.value().layers;
-    std::swap(layers[first.value()], layers[second.value()]);
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -1973,7 +2505,7 @@ void DocumentSession::GroupSelectedLayers()
     {
         return;
     }
-    const std::vector<ImageLayer>& layers = _document.value().layers;
+    const auto& layers = _document.value().layers;
     std::unordered_set<Guid> selected;
     for (const Guid& id : _selected)
     {
@@ -2074,15 +2606,19 @@ void DocumentSession::GroupSelectedLayers()
             }
         }
     }
-    std::vector<ImageLayer> next;
+    auto draft = CanvasDocumentDraft::Rebuild(_document.value(), layers.size() + 1);
+    if (!draft)
+        return;
     for (const ImageLayer& layer : layers)
     {
         if (!rootIds.contains(layer.id))
         {
-            next.push_back(layer);
+            if (!draft.value().Append(layer))
+                return;
         }
     }
-    next.insert(next.begin() + static_cast<std::ptrdiff_t>(std::min(insertion, next.size())), group);
+    if (!draft.value().Insert(std::min(insertion, draft.value().ReadLayers().size()), ImageLayer(group)))
+        return;
     for (const Guid& id : ordered)
     {
         const ImageLayer* child = LayerById(layers, id);
@@ -2090,19 +2626,23 @@ void DocumentSession::GroupSelectedLayers()
         {
             ImageLayer copy = *child;
             copy.parentID = group.id;
-            next.push_back(std::move(copy));
+            if (!draft.value().Append(std::move(copy)))
+                return;
         }
     }
-    if (ValidateHierarchy(next) != DocumentStatus::Ok)
+    if (ValidateHierarchy(draft.value().ReadLayers()) != DocumentStatus::Ok)
     {
         return;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Group Layers");
-    _document.value().layers = std::move(next);
+    std::swap(_document.value(), after.value());
     SetActiveLayerID(group.id);
     if (parent.has_value())
     {
-        _collapsed.erase(parent.value());
+        SetGroupCollapsed(parent.value(), false);
     }
     EndEdit();
 }
@@ -2134,11 +2674,13 @@ bool DocumentSession::CanToggleClippingMask(const Guid& id) const
 
 void DocumentSession::ToggleClippingMask(const Guid& id)
 {
+    if (HasDeferredTransform())
+        return;
     if (!CanToggleClippingMask(id))
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(id);
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr)
     {
         return;
@@ -2159,14 +2701,21 @@ void DocumentSession::ToggleClippingMask(const Guid& id)
             }
             releases.push_back(*sibling);
         }
-        BeginEdit(L"Release Clipping Mask");
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+        if (!draft)
+            return;
         for (const Guid& release : releases)
         {
-            if (ImageLayer* released = MutableLayer(release))
+            if (ImageLayer* released = LayerById(draft.value().EditLayers(), release))
             {
                 released->maskSourceID.reset();
             }
         }
+        auto after = draft.value().Seal();
+        if (!after)
+            return;
+        BeginEdit(L"Release Clipping Mask");
+        std::swap(_document.value(), after.value());
         EndEdit();
         return;
     }
@@ -2189,7 +2738,7 @@ void DocumentSession::ClearDocument()
     _document.reset();
     ++_documentSerial;
     SetActiveLayerID(std::nullopt);
-    _collapsed.clear();
+    ClearCollapsedGroups();
     _transformEdit.reset();
     _transformDuplicate.reset();
     _cropRect.reset();
@@ -2197,15 +2746,21 @@ void DocumentSession::ClearDocument()
     _maskSelected = false;
     NoteDocumentMutation();
     _displayCopy.reset();
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     _brush.reset();
+    _brushFinishingOpening.reset();
+    _brushUpdatingOpening.reset();
     _lastBrushPoint.reset();
     _pendingOpacityDigit.reset();
     _budgetRefused = false;
     _lastBrushCommit.reset();
     _cloneOffset.reset();
     _warp.reset();
+    _warpUpdatingOpening.reset();
+    _warpUpdatingSequence.reset();
+    _warpFinishingOpening.reset();
     _warpSource = {};
     _gradient.reset();
     _shapeDraft.reset();
@@ -2242,8 +2797,9 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     {
         return;
     }
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
@@ -2259,8 +2815,9 @@ bool DocumentSession::ApplyDocumentSizeIfCurrent(CanvasDocument document, std::w
     {
         return false;
     }
-    _lassoDraft.reset();
+    CancelLasso();
     _selectionMoveOrigin.reset();
+    _selectionMoveOffset.reset();
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
@@ -2311,7 +2868,7 @@ std::optional<DocumentSession::MergePlan> DocumentSession::PlanMergeForWork(cons
     {
         return std::nullopt;
     }
-    const std::vector<ImageLayer>& layers = source.value().layers;
+    const auto& layers = source.value().layers;
     std::unordered_map<Guid, std::vector<Guid>> children;
     if (selected.size() > 1 || active->isGroup)
     {
@@ -2459,9 +3016,9 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(cons
     return PrepareMerge(plan, composite, {});
 }
 
-std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(const MergePlan& plan,
-                                                                            const Raster& composite,
-                                                                            const CancelToken& cancellation)
+std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(
+    const MergePlan& plan, const Raster& composite, const CancelToken& cancellation,
+    const std::shared_ptr<const void>& outputLifetime)
 {
     if (cancellation.IsCancelled() || !composite.HasStorage() || composite.Format() != RasterFormat::Bgra8888 ||
         plan.ids.empty())
@@ -2470,7 +3027,7 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(cons
     }
     LayerTransform canvas;
     canvas.size = Vec2{static_cast<double>(composite.Width()), static_cast<double>(composite.Height())};
-    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas, cancellation);
+    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas, cancellation, outputLifetime);
     if (!trimmed.image.HasStorage())
     {
         return std::nullopt;
@@ -2507,7 +3064,7 @@ bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMe
     {
         return false;
     }
-    const std::vector<ImageLayer>& layers = _document.value().layers;
+    const auto& layers = _document.value().layers;
     std::unordered_set<Guid> planIds;
     planIds.reserve(plan.ids.size());
     for (const Guid& id : plan.ids)
@@ -2530,16 +3087,20 @@ bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMe
         return false;
     }
     ImageLayer merged = preparedLayer;
-    std::vector<ImageLayer> next;
+    const Guid mergedId = merged.id;
+    auto draft = CanvasDocumentDraft::Rebuild(_document.value(), layers.size() - plan.removed.size() + 1);
+    if (!draft)
+        return false;
     for (const ImageLayer& layer : layers)
     {
         if (!plan.removed.contains(layer.id))
         {
-            next.push_back(layer);
+            if (!draft.value().Append(layer))
+                return false;
         }
     }
     // Layers clipped to anything that was merged now clip to the result.
-    for (ImageLayer& layer : next)
+    for (ImageLayer& layer : draft.value().EditLayers())
     {
         if (layer.maskSourceID.has_value() && plan.removed.contains(layer.maskSourceID.value()))
         {
@@ -2559,14 +3120,19 @@ bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMe
             --insertion;
         }
     }
-    next.insert(next.begin() + static_cast<std::ptrdiff_t>(std::min(insertion, next.size())), merged);
-    if (ValidateHierarchy(next) != DocumentStatus::Ok || ValidateLiveMaskGraph(next) != DocumentStatus::Ok)
+    if (!draft.value().Insert(std::min(insertion, draft.value().ReadLayers().size()), std::move(merged)))
+        return false;
+    if (ValidateHierarchy(draft.value().ReadLayers()) != DocumentStatus::Ok ||
+        ValidateLiveMaskGraph(draft.value().ReadLayers()) != DocumentStatus::Ok)
     {
         return false;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
     BeginEdit(plan.action);
-    _document.value().layers = std::move(next);
-    SetActiveLayerID(merged.id);
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(mergedId);
     EndEdit();
     return true;
 }
@@ -2584,7 +3150,8 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
 std::optional<DocumentSession::PreparedMergePublication> DocumentSession::PrepareMergePublication(
     const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
     DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite, MergePublicationStatus& status,
-    CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+    CancelToken cancellation, DocumentHistory::PrepareObserver observer,
+    const std::shared_ptr<const void>& outputLifetime)
 {
     status = MergePublicationStatus::Invalid;
     const auto cancelled = [&]() noexcept
@@ -2619,7 +3186,7 @@ std::optional<DocumentSession::PreparedMergePublication> DocumentSession::Prepar
     if (!activeExists || planIds.empty() || plan.removed.size() != planIds.size() ||
         !plan.removed.contains(plan.anchor))
         return std::nullopt;
-    auto pixels = PrepareMerge(plan, composite, cancellation);
+    auto pixels = PrepareMerge(plan, composite, cancellation, outputLifetime);
     if (cancelled() || !pixels)
         return std::nullopt;
     const auto left = BudgetLeft(source, false, [&](const Guid& id) { return plan.removed.contains(id); });
@@ -2628,13 +3195,10 @@ std::optional<DocumentSession::PreparedMergePublication> DocumentSession::Prepar
         status = MergePublicationStatus::TooLarge;
         return std::nullopt;
     }
-    CanvasDocument after;
-    after.id = source->id;
-    after.width = source->width;
-    after.height = source->height;
-    after.resolution = source->resolution;
-    after.selection = source->selection;
-    after.layers.reserve(source->layers.size() - plan.removed.size() + 1);
+    auto draft =
+        CanvasDocumentDraft::Rebuild(source.value(), source->layers.size() - plan.removed.size() + 1, cancellation);
+    if (cancelled() || !draft)
+        return std::nullopt;
     std::size_t insertion = 0;
     bool passedAnchor = false;
     for (const auto& layer : source->layers)
@@ -2648,16 +3212,18 @@ std::optional<DocumentSession::PreparedMergePublication> DocumentSession::Prepar
         auto copy = layer;
         if (copy.maskSourceID && plan.removed.contains(copy.maskSourceID.value()))
             copy.maskSourceID = pixels->_layer.id;
-        after.layers.push_back(std::move(copy));
+        if (!draft.value().Append(std::move(copy)))
+            return std::nullopt;
         if (!passedAnchor)
             ++insertion;
     }
     const Guid merged = pixels->_layer.id;
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(pixels->_layer));
-    if (cancelled() || ValidateDocument(after) != DocumentStatus::Ok)
+    if (!draft.value().Insert(insertion, std::move(pixels->_layer)))
+        return std::nullopt;
+    auto afterDocument = draft.value().Seal(cancellation);
+    if (cancelled() || !afterDocument || ValidateDocument(afterDocument.value()) != DocumentStatus::Ok)
         return std::nullopt;
     std::unordered_set<Guid> selected{merged};
-    std::optional<CanvasDocument> afterDocument{std::move(after)};
     auto publication = DocumentHistory::PrepareEdit(std::move(history), source, active, afterDocument, merged,
                                                     plan.action, cancellation, observer);
     if (cancelled() || !publication)
@@ -2671,8 +3237,8 @@ bool DocumentSession::ApplyPreparedMergeIfCurrent(PreparedMergePublication& prep
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     static_assert(std::is_nothrow_swappable_v<std::unordered_set<Guid>>);
-    if (!prepared._document || _gradient || _pixelMove || _transformEdit || HasColorEdit() || _brush || _warp ||
-        _shapeDraft || _selectionMoveOrigin || _activeLayerID != prepared._beforeActive ||
+    if (!prepared._document || _gradient || _pixelMove || _transformEdit || HasColorEdit() || _brush ||
+        HasPendingWarp() || _shapeDraft || _selectionMoveOrigin || _activeLayerID != prepared._beforeActive ||
         !CanApplyJobResult(prepared._token, prepared._token.sequence) || !history.CanPublish(prepared._history))
         return false;
     if (!history.Publish(prepared._history))
@@ -2818,20 +3384,29 @@ void DocumentSession::DeleteLayer(const Guid& id)
     }
     std::unordered_set<Guid> removed = DescendantIds(_document.value().layers, id);
     removed.insert(id);
-    BeginEdit(L"Delete Layer");
-    auto& layers = _document.value().layers;
-    layers.erase(std::remove_if(layers.begin(), layers.end(),
-                                [&](const ImageLayer& layer) { return removed.contains(layer.id); }),
-                 layers.end());
-    for (ImageLayer& layer : layers)
+    auto draft = CanvasDocumentDraft::Rebuild(_document.value(), _document.value().layers.size() - removed.size());
+    if (!draft)
+        return;
+    for (const ImageLayer& original : _document.value().layers)
     {
+        if (removed.contains(original.id))
+            continue;
+        ImageLayer layer = original;
         if (layer.maskSourceID.has_value() && removed.contains(layer.maskSourceID.value()))
         {
             layer.maskSourceID.reset();
         }
+        if (!draft.value().Append(std::move(layer)))
+            return;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(L"Delete Layer");
+    std::swap(_document.value(), after.value());
     if (_activeLayerID.has_value() && removed.contains(_activeLayerID.value()))
     {
+        const auto& layers = _document.value().layers;
         SetActiveLayerID(layers.empty() ? std::nullopt
                                         : std::optional<Guid>(layers[std::min(index.value(), layers.size() - 1)].id));
     }
@@ -2840,20 +3415,34 @@ void DocumentSession::DeleteLayer(const Guid& id)
 
 void DocumentSession::SetOpacity(double opacity)
 {
+    if (HasDeferredTransform())
+        return;
     // An open panel owns the document (legacy canEditAppearance): an opacity would fold into its entry.
-    ImageLayer* layer = MutableActiveLayer();
+    const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr || layer->isGroup || !std::isfinite(opacity) || HasColorEdit())
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].opacity = std::min(1.0, std::max(0.0, opacity));
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Layer Opacity");
-    layer->opacity = std::min(1.0, std::max(0.0, opacity));
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
-bool DocumentSession::PreviewLayerOpacity(const Guid& id, double opacity) noexcept
+bool DocumentSession::PreviewLayerOpacity(const Guid& id, double opacity)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return false;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || layer->isGroup || !std::isfinite(opacity))
     {
         return false;
@@ -2861,7 +3450,17 @@ bool DocumentSession::PreviewLayerOpacity(const Guid& id, double opacity) noexce
     const double value = std::clamp(opacity, 0.0, 1.0);
     if (layer->opacity != value)
     {
-        layer->opacity = value;
+        const auto index = IndexOf(_document.value().layers, id);
+        if (!index)
+            return false;
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+        if (!draft)
+            return false;
+        draft.value().EditLayers()[index.value()].opacity = value;
+        auto after = draft.value().Seal();
+        if (!after)
+            return false;
+        std::swap(_document.value(), after.value());
         NoteDocumentMutation();
     }
     return true;
@@ -2869,13 +3468,25 @@ bool DocumentSession::PreviewLayerOpacity(const Guid& id, double opacity) noexce
 
 void DocumentSession::SetBlendMode(LayerBlendMode mode)
 {
-    ImageLayer* layer = MutableActiveLayer();
+    if (HasDeferredTransform())
+        return;
+    const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr || layer->isGroup)
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].blendMode = mode;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Layer Blend Mode");
-    layer->blendMode = mode;
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -2892,23 +3503,27 @@ bool DocumentSession::CanLinkMask(const Guid& source, const Guid& target) const
     {
         return false;
     }
-    std::vector<ImageLayer> layers = _document.value().layers;
-    ImageLayer* writable = LayerById(layers, target);
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    ImageLayer* writable = LayerById(draft.value().EditLayers(), target);
     if (writable == nullptr)
     {
         return false;
     }
     writable->maskSourceID = source;
-    return ValidateLiveMaskGraph(layers) == DocumentStatus::Ok;
+    return ValidateLiveMaskGraph(draft.value().ReadLayers()) == DocumentStatus::Ok;
 }
 
 bool DocumentSession::LinkMask(const Guid& source, const Guid& target)
 {
+    if (HasDeferredTransform())
+        return false;
     if (!CanLinkMask(source, target))
     {
         return false;
     }
-    ImageLayer* layer = MutableLayer(target);
+    const ImageLayer* layer = FindLayer(target);
     if (layer == nullptr)
     {
         return false;
@@ -2917,10 +3532,42 @@ bool DocumentSession::LinkMask(const Guid& source, const Guid& target)
     {
         return true;
     }
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    {
+        ImageLayer* writable = LayerById(draft.value().EditLayers(), target);
+        if (!writable)
+            return false;
+        writable->maskSourceID = source;
+    }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
     BeginEdit(L"Create Clipping Mask");
-    layer->maskSourceID = source;
+    std::swap(_document.value(), after.value());
     EndEdit();
     return true;
+}
+
+void DocumentSession::SetGroupCollapsed(const Guid& id, bool collapsed)
+{
+    if (collapsed)
+    {
+        if (_collapsed.size() < kMaxLayerCount && _collapsed.insert(id).second)
+            _collapseRevision.Advance();
+    }
+    else if (_collapsed.erase(id) != 0)
+        _collapseRevision.Advance();
+}
+
+void DocumentSession::ClearCollapsedGroups() noexcept
+{
+    if (!_collapsed.empty())
+    {
+        _collapsed.clear();
+        _collapseRevision.Advance();
+    }
 }
 
 std::vector<HierarchyEntry> DocumentSession::LayerRows() const
@@ -2932,7 +3579,7 @@ std::vector<HierarchyEntry> DocumentSession::LayerRows() const
     return HierarchyEntries(_document.value().layers, true, _collapsed);
 }
 
-void DocumentSession::AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers)
+void DocumentSession::AdoptClipping(const Guid& id, std::span<ImageLayer> layers)
 {
     const ImageLayer* layer = LayerById(layers, id);
     if (layer == nullptr || layer->isGroup)
@@ -2976,7 +3623,7 @@ void DocumentSession::AdoptClipping(const Guid& id, std::vector<ImageLayer>& lay
     }
 }
 
-void DocumentSession::ReleaseDetachedClipping(std::vector<ImageLayer>& layers)
+void DocumentSession::ReleaseDetachedClipping(std::span<ImageLayer> layers)
 {
     std::vector<std::size_t> roots;
     std::unordered_map<Guid, std::vector<std::size_t>> grouped;
@@ -3326,7 +3973,9 @@ bool DocumentSession::CanTransform() const noexcept
     {
         return false;
     }
-    return EffectiveVisibleIDs(_document.value()).contains(layer->id);
+    // This owner-side eligibility query needs one ancestry, not every hierarchy row and copied name.
+    // Panel collapse affects row display only; visibility still follows the layer and its ancestors.
+    return EffectivelyVisible(_document.value(), layer->id);
 }
 
 bool DocumentSession::TransformsAsGroup() const noexcept
@@ -3566,222 +4215,237 @@ void DocumentSession::CommitTransform()
         finishDuplicate();
         return;
     }
-    std::vector<ImageLayer>& layers = _document.value().layers;
-    if (edit.mask)
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
     {
-        const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
-        if (edit.draft.IsValid() && index.has_value() && layers[index.value()].mask.has_value())
+        finishDuplicate();
+        return;
+    }
+    std::wstring editName;
+    const auto mutate = [&]()
+    {
+        auto layers = draft.value().EditLayers();
+        if (edit.mask)
         {
-            ImageLayer& layer = layers[index.value()];
-            if (edit.corners.has_value())
+            const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
+            if (edit.draft.IsValid() && index.has_value() && layers[index.value()].mask.has_value())
             {
-                // A distorted mask is resampled into the shape, its background outside it.
-                const std::optional<DistortWarp::Warped> moved =
-                    DistortWarp::WarpMask(layer.mask->asset.image, edit.draft, edit.corners.value(),
-                                          MaskEdgeBackground(layer.mask->asset.thumbnail));
-                if (moved.has_value())
+                ImageLayer& layer = layers[index.value()];
+                if (edit.corners.has_value())
                 {
-                    BeginEdit(L"Distort Layer Mask");
-                    if (!(moved->image == layer.mask->asset.image))
+                    // A distorted mask is resampled into the shape, its background outside it.
+                    const std::optional<DistortWarp::Warped> moved =
+                        DistortWarp::WarpMask(layer.mask->asset.image, edit.draft, edit.corners.value(),
+                                              MaskEdgeBackground(layer.mask->asset.thumbnail));
+                    if (moved.has_value())
                     {
-                        layer.mask->asset.image = moved->image;
-                        layer.mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
+                        editName = L"Distort Layer Mask";
+                        if (!(moved->image == layer.mask->asset.image))
+                        {
+                            layer.mask->asset.image = moved->image;
+                            layer.mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
+                        }
+                        layer.mask->placement = moved->transform.SamePlacement(layer.transform)
+                                                    ? std::nullopt
+                                                    : std::optional<LayerTransform>(moved->transform);
                     }
-                    layer.mask->placement = moved->transform.SamePlacement(layer.transform)
-                                                ? std::nullopt
-                                                : std::optional<LayerTransform>(moved->transform);
-                    EndEdit();
+                }
+                else
+                {
+                    const std::optional<LayerTransform> placement = edit.draft.SamePlacement(layer.transform)
+                                                                        ? std::nullopt
+                                                                        : std::optional<LayerTransform>(edit.draft);
+                    if (placement != layer.mask->placement)
+                    {
+                        editName = L"Transform Layer Mask";
+                        layer.mask->placement = placement;
+                    }
+                }
+            }
+            return;
+        }
+        if (edit.corners.has_value())
+        {
+            editName = edit.group.has_value() ? L"Distort Layers" : L"Distort";
+            std::vector<Guid> ids;
+            if (edit.group.has_value())
+            {
+                for (const auto& [id, original] : edit.group->originals)
+                {
+                    ids.push_back(id);
                 }
             }
             else
             {
-                const std::optional<LayerTransform> placement = edit.draft.SamePlacement(layer.transform)
-                                                                    ? std::nullopt
-                                                                    : std::optional<LayerTransform>(edit.draft);
-                if (placement != layer.mask->placement)
-                {
-                    BeginEdit(L"Transform Layer Mask");
-                    layer.mask->placement = placement;
-                    EndEdit();
-                }
+                ids.push_back(edit.layerID);
             }
-        }
-        finishDuplicate();
-        return;
-    }
-    if (edit.corners.has_value())
-    {
-        BeginEdit(edit.group.has_value() ? L"Distort Layers" : L"Distort");
-        std::vector<Guid> ids;
-        if (edit.group.has_value())
-        {
-            for (const auto& [id, original] : edit.group->originals)
-            {
-                ids.push_back(id);
-            }
-        }
-        else
-        {
-            ids.push_back(edit.layerID);
-        }
-        // Decision D7: the distorted layers' new pixels (and masks) fit the document's budget, their old pixels no
-        // longer counted; a layer that would not fit keeps its own and the refusal is reported.
-        const std::unordered_set<Guid> distorted(ids.begin(), ids.end());
-        std::int64_t imageLeft = PixelBudgetLeft(false, distorted);
-        std::int64_t maskLeft = PixelBudgetLeft(true, distorted);
-        for (const Guid& id : ids)
-        {
-            const std::optional<std::size_t> index = IndexOf(layers, id);
-            if (!index.has_value())
-            {
-                continue;
-            }
-            ImageLayer& layer = layers[index.value()];
-            // A layer the distortion leaves as it is still holds its pixels against the budget.
-            const auto keep = [&]
-            {
-                imageLeft -= layer.asset.has_value() ? static_cast<std::int64_t>(layer.asset->image.PixelCount()) : 0;
-                maskLeft -=
-                    layer.mask.has_value() ? static_cast<std::int64_t>(layer.mask->asset.image.PixelCount()) : 0;
-            };
-            if (!layer.asset.has_value())
-            {
-                keep();
-                continue;
-            }
-            LayerTransform transform = edit.draft;
-            std::array<Vec2, 4> corners = edit.corners.value();
-            if (edit.group.has_value())
-            {
-                const auto original = std::find_if(edit.group->originals.begin(), edit.group->originals.end(),
-                                                   [&](const auto& entry) { return entry.first == id; });
-                if (original == edit.group->originals.end())
-                {
-                    keep();
-                    continue;
-                }
-                transform = original->second.Following(edit.group->box, edit.draft);
-                corners = DistortWarp::Carried(transform, edit.draft, edit.corners.value());
-                if (!DistortWarp::IsUsable(corners))
-                {
-                    keep();
-                    continue;
-                }
-            }
-            const std::optional<DistortWarp::WarpedTrimmed> warped =
-                DistortWarp::WarpTrimmed(layer.asset->image, transform, corners);
-            if (!warped.has_value())
-            {
-                keep();
-                continue;
-            }
-            // The mask as the distortion leaves it (legacy Distort.distort), built apart so the budget can refuse.
-            std::optional<LayerMask> mask = layer.mask;
-            if (mask.has_value() && !mask->placement.has_value() && mask->linked)
-            {
-                // A uniform mask passes through; any other is warped and cropped with the pixels.
-                const std::optional<DistortWarp::Warped> warpedMask =
-                    DistortWarp::Warp(mask->asset.image, transform, corners, true);
-                if (warpedMask.has_value() && !(warpedMask->image == mask->asset.image))
-                {
-                    // The layer's warp and the mask's share the same corners and no preview limit, so they land at
-                    // the same size: the layer's alpha crop always lies inside the mask's untrimmed warped image.
-                    const Raster cropped = warpedMask->image.Crop(warped->cropX, warped->cropY, warped->image.Width(),
-                                                                  warped->image.Height(), 0);
-                    if (cropped.HasStorage())
-                    {
-                        mask->asset.image = cropped;
-                        mask->asset.thumbnail = Raster::MakeThumbnail(cropped);
-                    }
-                }
-            }
-            else if (mask.has_value() && mask->linked)
-            {
-                // A linked mask placed apart takes the same perspective over its own bounds.
-                if (const std::optional<DistortWarp::Warped> moved =
-                        DistortedPlacedMask(mask.value(), layer.transform, transform, corners, 0.0);
-                    moved.has_value())
-                {
-                    if (!(moved->image == mask->asset.image))
-                    {
-                        mask->asset.image = moved->image;
-                        mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
-                    }
-                    mask->placement = moved->transform;
-                }
-            }
-            else if (mask.has_value() && !mask->placement.has_value())
-            {
-                // An unlinked mask keeps its place on the document while its layer is resampled into the shape.
-                mask->placement = layer.transform;
-            }
-            // Decision D7: the new pixels and mask fit the document's budget, or the layer keeps its own.
-            const std::int64_t newPixels = static_cast<std::int64_t>(warped->image.PixelCount());
-            const std::int64_t newMaskPixels =
-                mask.has_value() ? static_cast<std::int64_t>(mask->asset.image.PixelCount()) : 0;
-            if (newPixels > imageLeft || newMaskPixels > maskLeft)
-            {
-                _budgetRefused = true;
-                keep();
-                continue;
-            }
-            imageLeft -= newPixels;
-            maskLeft -= newMaskPixels;
-            layer.mask = std::move(mask);
-            layer.asset->image = warped->image;
-            layer.asset->thumbnail = {};
-            layer.transform = warped->transform;
-        }
-        EndEdit();
-        finishDuplicate();
-        return;
-    }
-    if (edit.group.has_value())
-    {
-        if (edit.draft.IsValid())
-        {
-            BeginEdit(L"Transform Layers");
-            for (const auto& [id, original] : edit.group->originals)
+            // Decision D7: the distorted layers' new pixels (and masks) fit the document's budget, their old pixels no
+            // longer counted; a layer that would not fit keeps its own and the refusal is reported.
+            const std::unordered_set<Guid> distorted(ids.begin(), ids.end());
+            std::int64_t imageLeft = PixelBudgetLeft(false, distorted);
+            std::int64_t maskLeft = PixelBudgetLeft(true, distorted);
+            for (const Guid& id : ids)
             {
                 const std::optional<std::size_t> index = IndexOf(layers, id);
                 if (!index.has_value())
                 {
                     continue;
                 }
-                const LayerTransform moved = original.Following(edit.group->box, edit.draft);
-                if (!moved.IsValid())
+                ImageLayer& layer = layers[index.value()];
+                // A layer the distortion leaves as it is still holds its pixels against the budget.
+                const auto keep = [&]
                 {
+                    imageLeft -=
+                        layer.asset.has_value() ? static_cast<std::int64_t>(layer.asset->image.PixelCount()) : 0;
+                    maskLeft -=
+                        layer.mask.has_value() ? static_cast<std::int64_t>(layer.mask->asset.image.PixelCount()) : 0;
+                };
+                if (!layer.asset.has_value())
+                {
+                    keep();
                     continue;
                 }
-                ImageLayer& layer = layers[index.value()];
-                if (layer.mask.has_value())
+                LayerTransform transform = edit.draft;
+                std::array<Vec2, 4> corners = edit.corners.value();
+                if (edit.group.has_value())
                 {
-                    layer.mask->placement = MaskPlacementMoving(layer.mask.value(), original, moved);
+                    const auto original = std::find_if(edit.group->originals.begin(), edit.group->originals.end(),
+                                                       [&](const auto& entry) { return entry.first == id; });
+                    if (original == edit.group->originals.end())
+                    {
+                        keep();
+                        continue;
+                    }
+                    transform = original->second.Following(edit.group->box, edit.draft);
+                    corners = DistortWarp::Carried(transform, edit.draft, edit.corners.value());
+                    if (!DistortWarp::IsUsable(corners))
+                    {
+                        keep();
+                        continue;
+                    }
                 }
-                layer.transform = moved;
-                RedrawShape(index.value());
+                const std::optional<DistortWarp::WarpedTrimmed> warped =
+                    DistortWarp::WarpTrimmed(layer.asset->image, transform, corners);
+                if (!warped.has_value())
+                {
+                    keep();
+                    continue;
+                }
+                // The mask as the distortion leaves it (legacy Distort.distort), built apart so the budget can refuse.
+                std::optional<LayerMask> mask = layer.mask;
+                if (mask.has_value() && !mask->placement.has_value() && mask->linked)
+                {
+                    // A uniform mask passes through; any other is warped and cropped with the pixels.
+                    const std::optional<DistortWarp::Warped> warpedMask =
+                        DistortWarp::Warp(mask->asset.image, transform, corners, true);
+                    if (warpedMask.has_value() && !(warpedMask->image == mask->asset.image))
+                    {
+                        // The layer's warp and the mask's share the same corners and no preview limit, so they land at
+                        // the same size: the layer's alpha crop always lies inside the mask's untrimmed warped image.
+                        const Raster cropped = warpedMask->image.Crop(warped->cropX, warped->cropY,
+                                                                      warped->image.Width(), warped->image.Height(), 0);
+                        if (cropped.HasStorage())
+                        {
+                            mask->asset.image = cropped;
+                            mask->asset.thumbnail = Raster::MakeThumbnail(cropped);
+                        }
+                    }
+                }
+                else if (mask.has_value() && mask->linked)
+                {
+                    // A linked mask placed apart takes the same perspective over its own bounds.
+                    if (const std::optional<DistortWarp::Warped> moved =
+                            DistortedPlacedMask(mask.value(), layer.transform, transform, corners, 0.0);
+                        moved.has_value())
+                    {
+                        if (!(moved->image == mask->asset.image))
+                        {
+                            mask->asset.image = moved->image;
+                            mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
+                        }
+                        mask->placement = moved->transform;
+                    }
+                }
+                else if (mask.has_value() && !mask->placement.has_value())
+                {
+                    // An unlinked mask keeps its place on the document while its layer is resampled into the shape.
+                    mask->placement = layer.transform;
+                }
+                // Decision D7: the new pixels and mask fit the document's budget, or the layer keeps its own.
+                const std::int64_t newPixels = static_cast<std::int64_t>(warped->image.PixelCount());
+                const std::int64_t newMaskPixels =
+                    mask.has_value() ? static_cast<std::int64_t>(mask->asset.image.PixelCount()) : 0;
+                if (newPixels > imageLeft || newMaskPixels > maskLeft)
+                {
+                    _budgetRefused = true;
+                    keep();
+                    continue;
+                }
+                imageLeft -= newPixels;
+                maskLeft -= newMaskPixels;
+                layer.mask = std::move(mask);
+                layer.asset->image = warped->image;
+                layer.asset->thumbnail = {};
+                layer.transform = warped->transform;
             }
-            EndEdit();
+            return;
         }
-        finishDuplicate();
-        return;
-    }
-    const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
-    if (edit.draft.IsValid() && index.has_value())
-    {
-        BeginEdit(L"Transform Layer");
-        ImageLayer& layer = layers[index.value()];
-        if (layer.mask.has_value())
+        if (edit.group.has_value())
         {
-            layer.mask->placement = MaskPlacementMoving(layer.mask.value(), layer.transform, edit.draft);
+            if (edit.draft.IsValid())
+            {
+                editName = L"Transform Layers";
+                for (const auto& [id, original] : edit.group->originals)
+                {
+                    const std::optional<std::size_t> index = IndexOf(layers, id);
+                    if (!index.has_value())
+                    {
+                        continue;
+                    }
+                    const LayerTransform moved = original.Following(edit.group->box, edit.draft);
+                    if (!moved.IsValid())
+                    {
+                        continue;
+                    }
+                    ImageLayer& layer = layers[index.value()];
+                    if (layer.mask.has_value())
+                    {
+                        layer.mask->placement = MaskPlacementMoving(layer.mask.value(), original, moved);
+                    }
+                    layer.transform = moved;
+                    RedrawShape(layer, layers);
+                }
+            }
+            return;
         }
-        layer.transform = edit.draft;
-        RedrawShape(index.value());
+        const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
+        if (edit.draft.IsValid() && index.has_value())
+        {
+            editName = L"Transform Layer";
+            ImageLayer& layer = layers[index.value()];
+            if (layer.mask.has_value())
+            {
+                layer.mask->placement = MaskPlacementMoving(layer.mask.value(), layer.transform, edit.draft);
+            }
+            layer.transform = edit.draft;
+            RedrawShape(layer, layers);
+        }
+    };
+    mutate();
+    if (!editName.empty())
+    {
+        auto after = draft.value().Seal();
+        if (!after)
+        {
+            finishDuplicate();
+            return;
+        }
+        BeginEdit(std::move(editName));
+        std::swap(_document.value(), after.value());
         EndEdit();
     }
     finishDuplicate();
 }
-
 void DocumentSession::CancelTransform()
 {
     if (_transformEdit && _transformEdit->deferred)
@@ -3798,10 +4462,16 @@ void DocumentSession::CancelTransform()
     if (_transformDuplicate.has_value() && _document.has_value())
     {
         const auto [copy, source] = _transformDuplicate.value();
-        std::vector<ImageLayer>& layers = _document.value().layers;
-        layers.erase(
-            std::remove_if(layers.begin(), layers.end(), [&](const ImageLayer& layer) { return layer.id == copy; }),
-            layers.end());
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+        if (!draft)
+            return;
+        if (const auto index = IndexOf(draft.value().ReadLayers(), copy); index)
+            if (!draft.value().Erase(index.value()))
+                return;
+        auto after = draft.value().Seal();
+        if (!after)
+            return;
+        std::swap(_document.value(), after.value());
         SetActiveLayerID(source);
         _transformDuplicate.reset();
         EndEdit();
@@ -4053,8 +4723,10 @@ void DocumentSession::FlipLayers(bool horizontally)
         return;
     }
     const std::unordered_set<Guid> ids(members.begin(), members.end());
-    BeginEdit(horizontally ? L"Flip Horizontal" : L"Flip Vertical");
-    for (ImageLayer& layer : _document.value().layers)
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    for (ImageLayer& layer : draft.value().EditLayers())
     {
         if (!ids.contains(layer.id))
         {
@@ -4067,6 +4739,11 @@ void DocumentSession::FlipLayers(bool horizontally)
         }
         layer.transform = flipped;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(horizontally ? L"Flip Horizontal" : L"Flip Vertical");
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -4085,10 +4762,12 @@ void DocumentSession::FlipCanvas(bool horizontally)
     CancelCrop();
     if (!ResolveGradient())
         return;
-    CanvasDocument& document = _document.value();
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    CanvasDocument& document = draft.value().DocumentState();
     const double axis = horizontally ? document.width / 2.0 : document.height / 2.0;
-    BeginEdit(horizontally ? L"Flip Canvas Horizontal" : L"Flip Canvas Vertical");
-    for (ImageLayer& layer : document.layers)
+    for (ImageLayer& layer : draft.value().EditLayers())
     {
         layer.transform = layer.transform.Mirrored(horizontally, axis);
         if (layer.mask.has_value() && layer.mask->placement.has_value())
@@ -4116,6 +4795,11 @@ void DocumentSession::FlipCanvas(bool horizontally)
         }
         document.selection->loops = std::move(loops);
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(horizontally ? L"Flip Canvas Horizontal" : L"Flip Canvas Vertical");
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -4134,7 +4818,7 @@ void DocumentSession::DuplicateActiveLayer()
     {
         return;
     }
-    std::vector<ImageLayer>& layers = _document.value().layers;
+    const auto& layers = _document.value().layers;
     const std::optional<std::size_t> index = IndexOf(layers, active->id);
     if (!index.has_value())
     {
@@ -4151,9 +4835,16 @@ void DocumentSession::DuplicateActiveLayer()
     ImageLayer copy = *active;
     copy.id = Guid::Generate();
     copy.name = active->name + L" copy";
+    const Guid copiedId = copy.id;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), layers.size() + 1);
+    if (!draft || !draft.value().Insert(index.value() + 1, std::move(copy)))
+        return;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Duplicate Layer");
-    layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, copy);
-    SetActiveLayerID(copy.id);
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(copiedId);
     EndEdit();
 }
 
@@ -4173,14 +4864,31 @@ void DocumentSession::SelectLayerTarget(const Guid& id, bool mask)
 
 void DocumentSession::ToggleMaskLink(const Guid& id)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->mask.has_value())
     {
         return;
     }
     CommitTransform();
-    BeginEdit(layer->mask->linked ? L"Unlink Layer Mask" : L"Link Layer Mask");
-    layer->mask->linked = !layer->mask->linked;
+    // Transform settlement can replace the record root: reacquire after it completes.
+    layer = FindLayer(id);
+    if (!layer || !layer->mask)
+        return;
+    const bool linked = layer->mask->linked;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask.value().linked = !linked;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(linked ? L"Unlink Layer Mask" : L"Link Layer Mask");
+    std::swap(_document.value(), after.value());
     EndEdit();
 }
 
@@ -4199,6 +4907,18 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
                    ? &_displayCopy.value()
                    : &_document.value();
     }
+    if (_colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && !_adjustmentEditingID)
+    {
+        // Settings ticks retain a compatible completed intermediate display. Off/identity or a changed source
+        // selects committed data while the old display remains charged until admitted retirement acknowledges.
+        return _colorEdit->preview && !ColorEditChangesNothing(_colorEdit->kind, _colorEdit->settings) &&
+                       Adjust::BlurMargin(_colorEdit->kind, _colorEdit->settings) <= _colorEdit->grownMargin &&
+                       _displayCopy && _displayColorOpening == _colorEdit->openingSequence &&
+                       _displaySourceGeneration == Generation() && _displayColorSequence != 0 &&
+                       _displayColorSequence == _colorEdit->previewSequence
+                   ? &_displayCopy.value()
+                   : &_document.value();
+    }
     const PreviewLayer shown = PreviewedLayer();
     if (!_transformEdit.has_value() && !shown.raster.HasStorage())
     {
@@ -4209,12 +4929,14 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
     {
         return &_displayCopy.value();
     }
-    _displayCopy = _document;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return &_document.value();
     if (shown.raster.HasStorage())
     {
         // A filter or color panel's preview shows in place of the layer's pixels; a mask on the layer's grid keeps
         // its place when the preview's grid is a grown one.
-        for (ImageLayer& layer : _displayCopy->layers)
+        for (ImageLayer& layer : draft.value().EditLayers())
         {
             if (layer.id == shown.layerID && layer.asset.has_value())
             {
@@ -4228,7 +4950,7 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
             }
         }
     }
-    for (ImageLayer& layer : _displayCopy->layers)
+    for (ImageLayer& layer : draft.value().EditLayers())
     {
         if (!_transformEdit.has_value())
         {
@@ -4304,6 +5026,10 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
             layer.mask->placement = placement;
         }
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return &_document.value();
+    _displayCopy = std::move(after);
     _displayRevision = _editRevision;
     _displayTransformOpening = _transformEdit ? _transformEdit->opening : 0;
     _displaySourceGeneration = Generation();

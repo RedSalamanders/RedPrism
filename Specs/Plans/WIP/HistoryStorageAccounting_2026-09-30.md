@@ -2,6 +2,14 @@
 
 ## Implementation checklist
 
+Current source reconciliation (2026-10-12): `CanvasDocument::layers` already uses
+`RecordRoot<ImageLayer>`, and `CanvasDocumentDraft` owns private writer buffers and seals
+replacement roots. Native immutable layer storage is present. Historical private-candidate
+notes below retain their original scope; they do not describe today's storage type. The
+remaining H2 closure is the unclosed opacity/adjustment/display and ordinary caller paths,
+their complete admission/retirement, and exact current-source qualification. H3 incremental
+accounting and late-residency synchronization, H4 and measured G1 remain separate open gates.
+
 - [x] Back up the qualified private immutable layer/typed opacity candidate: `7dd28d7`, `codex/p1-opacity-host-proof`.
 - [x] D13 explicit uint64 application limit, class default and machine-query fallback; 45 MP sizing retains undo.
 - [x] Cache retained selection container capacity at geometry construction; constant-time immutable reads.
@@ -15,7 +23,7 @@
     Debug/Release/ASan. Producer opacity ordering, adjacent previews and bounded pending views pass 96 native
     controls and all six profiles. Another 47 private preserved-opacity core controls and 67 complete typed host
     checks pass all x64 profiles. Finish pointer/lifetime closure
-    and adjustment/display worker construction before native root activation. Admission/accounting and measured
+    and adjustment/display worker construction before closing ordinary caller qualification. Admission/accounting and measured
     G1 remain open ([current evidence](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.
     - [x] New/default canvas, New Canvas card and Close Project: optional-document preparation, saved New
@@ -135,7 +143,10 @@
         preceding document controls. The original Release clipboard/text interference and complete failure are
         preserved; four already passed profiles are retained and Release/Debug rerun without source changes.
         All 220 final evidence copies are independently verified ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
-      - [ ] Full layer-root integration: a separate 528-input seed now has private drafts for structural,
+      - [x] Native immutable layer storage exists: `Common/Document.h` holds a `RecordRoot<ImageLayer>`;
+        `Common/DocumentDraft.h` clones into an exclusive writer and seals a replacement. This source
+        fact closes neither the remaining caller migration nor current-source runtime, H3/H4 or G1 gates.
+      - [ ] Remaining layer-root caller integration: the original separate 528-input seed had private drafts for structural,
         brush/transform/resize/mask and prepared raster/color publication. Primary reviews four cheaper-agent
         fixture groups and preserves the original retired-layer accessor contract. The complete private Debug
         suites pass all 5,768 preceding assertions plus eight draft/six fixture controls in Debug, Release and
@@ -155,11 +166,13 @@
         - [x] Private typed-opacity core: preview/restore without history and original-to-final publication pass
           112 independent controls and all 5,880 preceding controls in Debug/Release/ASan, with identical 316
           core/test inputs and independently verified archives.
-        - [ ] Typed-opacity host: ordered opening/sequence closure, requested/shown separation, coalescing,
-          late-value suppression and all caller prerequisites. Worker intent plumbing is prepared privately;
-          explicit queue coalescing privately passes 154 existing and 20 new controls plus all six profiles.
-          The 81 application caller files compile privately after reviewed fixture and worker draft conversions;
-          full application linkage/runtime and host integration remain open. The detailed checklist is in the record above.
+        - [x] Tested typed-opacity host ordering, requested/shown separation, coalescing and late-value
+          suppression: the later complete WARP application r6/r7/r8 matrix qualifies 31 typed and 36 context
+          controls in Debug/Release/real ASan, with all predecessor labels preserved. The earlier private
+          plumbing-only status is superseded by [the typed host matrix](../../TestRuns/DocumentRecordRoots_2026-10-03.md#typed-host-application-matrix-qualified-2026-10-04).
+        - [ ] Remaining typed-opacity pointer/lifetime and caller-prerequisite closure, ordinary activation,
+          complete current-source qualification, H3/H4 and measured G1. The qualified ordering fixture does
+          not close these separate requirements; do not reintroduce its tested ordering as generic missing code.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering
@@ -187,22 +200,53 @@
       inputs, with 28 root assertions and 331 parser controls per x64 configuration
       ([qualified record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
-    - [x] Main-integrated history-index slice: immutable unique Entry/Raster/Selection membership with changed-entry diffs; Undo/Redo transfer between stacks without changing membership; live-document exclusion; fresh resident-byte reads; unique cached retirement ownership bounds and O(1) sealed-stack metadata pass scoped x64 Debug r74. This does not close H3. Late-cache concurrency/reprepare, remaining reference paths, complete native/configuration qualification, caller/delta cost and G1 remain open; see [scoped record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md).
-    - [ ] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
+    - [x] Original history-residency startup/failure/shutdown prefix: normal `Application::Run` starts the source after
+      `InitializeDocument`/`ApplySettings` and before startup paths or ordinary input. The actual-Run fixture covers
+      normal notification and history-only growth/trim, failure after successful subscription, full subscription and
+      owner-route admission failures, startup rollback, joined shutdown, route detachment, repeated shutdown and quit
+      isolation (36 controls). The current pushed x64 full-suite Release548, Debug549 and real-ASan550 receipts use the
+      same 1,084-input source freeze and include all 120 Application stages; `Main` invokes this self-test
+      ([receipt](../../TestRuns/P1WarpLive_2026-10-09.md)). This qualifies the original prefix on x64 only; it does
+      not close native ARM64 runtime, remaining direct/reference materializers, incremental H3 accounting/cost,
+      measured G1 or P1.
+    - [x] Managed immutable index and unique retirement slice passes full Debug r74, Release r75 and ASan Debug r76: 6,729 document / 9,298 application controls, unchanged 79 stages, 46 added document controls and nine owner-policy HostTests controls; the 1,041-copy Debug/Release and 1,048-copy ASan archives verify. Changed-entry membership, live exclusion, partial construction faults and retirement are covered. Worker container clones/sampling/bounds still scan unique owners; late-cache synchronization/reprepare, reference/delta cost, analysis/ARM64, native activation and G1 remain open ([evidence](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+    - [x] Cached immutable history-stack metadata/ownership/node bounds and constant-time edit/restore/retirement admission pass full Debug r71: 19 reviewed root-cache and 11 snapshot/history controls preserve the preceding registry. r69 compilation and r70 fixture failures remain archived. This conservative occurrence bound does not close exact identity accounting or late residency; current Release/analysis/ARM64 and native activation remain open.
+    - [x] Shape-source trim omission repair passes full Debug r71: both direct/prepared paths charge history-only `shapeImage` and exclude the same live owner; four literal 1 MiB / half-MiB controls pass after the fixture performs a real rename. Original derived-cache equality and legacy goldens remain unchanged. Current matrix and native activation remain open.
+    - [x] Qualify `HistoryStorageTopology`: complete iterative nested closure with held raster/layer/selection owners, cached index metadata and fixed recent-root reuse. Worker-prepared snapshots retain it; source matching is constant-time. Reference Begin stays a shared-handle capture; reference trim uses its existing layer scan and dedup set plus one pending-owner vector for complete closure, avoiding temporary topology objects. The mixed cached-history/live-exclusion repair and four literal reference/mixed budget checks pass in full ASan Debug r72 (25 topology/reference checks); the same run qualifies actual sampler Escape after pointer Up. Incremental unique accounting, reference caller migration, mutation cost, late residency and G1 remain open.
+    - [x] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
       key. Include nested sparse tiles/bases, distinct optional thumbnails and selection capacity without
-      repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged.
-    - [ ] Account for late sparse materialization: `ByteSize()` grows from zero to the assembled allocation when
-      `Data()` publishes its cache. A topology cache alone cannot authorize a stale byte total. Define the
-      resident-charge epoch/notification and off-owner reprepare/trim path before using cached totals for
-      publication. A captured export can materialize a raster now owned only by history while another history
-      worker prepares trim; neither operation may silently exceed the retained limit or traverse history on UI.
-    - [ ] Add independent shared/nested topology, address-reuse, live-document exclusion, capacity, checked overflow
-      and oldest-first cases; gate an export's materialization before/after trim preparation and publication.
-      Verify cancellation/allocation refusal preserves revision/redo and releases every replaced index owner.
-    - [ ] Complete retirement policy/lifetime and partial-clone qualification across all required profiles. Scoped
-      x64 Debug r74 adds 46 DocumentTests assertions and 0 Application assertions; the full registry/archive receipt
-      is recorded, but Release, ASan, ARM64 and any separately counted HostTests policy suite remain unqualified or
-      unreported ([record](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+      repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged. Full ASan
+      Debug r72 and full Release r73 qualify this topology implementation on the same frozen snapshot; current
+      Debug/analysis/ARM64 matrix, native activation and late-residency synchronization remain open.
+    - [x] Integrate the immutable unique-owner `StorageIndex` prototype with changed-entry membership, live-document
+      exclusion, oldest-past-then-future trim and retained identity owners. Full Debug r74 / Release r75 / real ASan
+      r76 qualify the managed candidate; subsequent full managed caller matrices preserve it. See
+      [candidate evidence](../../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md). This closes the duplicate
+      prototype row only. Private map cloning, membership/sampling/bound scans remain worker costs; incremental
+      charge cost, uncovered arithmetic overflow, production startup, reference writers and G1 remain below.
+    - [ ] Complete late sparse-materialization activation and synchronization. The managed nonmovable
+      same-thread lease, epoch/notice, worker reprepare/permit, semantic mask thumbnail and several real callers
+      are integrated and qualified in the r85–r88 core and later caller matrices. Full Debug r278 preserves these
+      controls on its 877-input source; current-source x64 Debug/Release/ASan qualification is recorded in
+      [P1WarpLive](../../TestRuns/P1WarpLive_2026-10-09.md). `HistoryResidencySource::Start` is wired into normal
+      `Application::Run`; the original startup/failure/shutdown prefix is qualified in the checklist entry above.
+      Remaining direct/reference writers and their caller-specific proofs stay open.
+      Current ImageCodecs/ProjectStore encoders and Warp root copying use private read bands. Nested sparse
+      region/crop reads now use the nonmaterializing `BlitTile` branch: source windows recurse into caller rows,
+      with no shared-cache publication or assembly/residency gate. The complete current native matrix preserves
+      the independent `sparse-region-reads.*` fixtures, including held-residency reads and unchanged nested cache
+      identities/epoch. Explicit `Data()` keeps its separate materializing branch. `TransformEdit::PixelsOf`
+      now retains a private contiguous sampling owner for unassembled sources. Main reconciles the unchanged
+      implementation, tests and registration against the archived `oh4d1`/`oh4r1`/`oh4a1` profiles: all 12 literal
+      `distort-private-read` controls pass in each, including nested BGRA/Gray bytes, unchanged source caches,
+      placement, format/corner refusals and the uniform mask identity shortcut. This uses exact existing component
+      evidence, not a new run; native ARM64 runtime, complete phase admission and all-caller H3 remain open.
+      A cached topology never authorizes stale resident totals. Keep the actual growth/refresh/trim gates and
+      measured reference/delta cost under H3.
+    - [ ] Qualify address reuse, checked overflow and oldest-first cases, plus concurrent late sparse materialization
+      and resident-charge synchronization before trim preparation/publication. Current image/project encoders use
+      private read bands; exercise actual `Data()` materializers. Verify cancellation/allocation refusal preserves
+      revision/redo and releases every replaced index owner.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
     - [x] H4.1 — Image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,

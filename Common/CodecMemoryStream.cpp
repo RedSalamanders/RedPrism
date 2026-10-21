@@ -150,6 +150,8 @@ HRESULT CodecMemoryStream::Read(void* output, ULONG count, ULONG* received) noex
     const auto total = static_cast<ULONG>((std::min)(static_cast<std::uint64_t>(count), available));
     auto* destination = static_cast<std::uint8_t*>(output);
     ULONG done = 0;
+    if (total && !destination)
+        return E_POINTER;
     while (done < total)
     {
         if (_cancellation.IsCancelled())

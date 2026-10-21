@@ -1,16 +1,19 @@
 #include "Application.h"
+#include "Runtime.Tests.ExportWorkTestGate.h"
 
 #include "ChromeHost.h"
-#include "DocumentReadbackJob.h"
 #include "ExportWork.h"
-#include "ExportWorkTestGate.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "RecordedDocumentReadbackJob.h"
+#include "SharedPublicationMemory.h"
+#include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -18,20 +21,71 @@
 #include <string>
 #include <utility>
 
-class Application::ExportReadbackJob final : public DocumentReadbackJob
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ExportReadbackOwners final : DeferredReleaseNode
+{
+    std::shared_ptr<SharedPublicationMemory> memory;
+    CanvasDocument document;
+    PixelBuffer pixels;
+    Raster image;
+    explicit ExportReadbackOwners(std::uint64_t admission) noexcept
+    {
+        bytes = admission;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ExportReadbackOwners> owned(static_cast<ExportReadbackOwners*>(node)); };
+    }
+};
+#pragma warning(pop)
+} // namespace
+
+class Application::ExportReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
-    ExportReadbackJob(Application& owner, HistoryWorkStamp stamp, JobToken token, CanvasDocument document,
-                      HostWriteFormat format, JpegExportOptions options, std::wstring path)
-        : DocumentReadbackJob(
-              owner._jobs, owner._gpuWork, owner._composition, std::move(document),
-              {0, 0, 0, static_cast<UINT>(token.canvasWidth), static_cast<UINT>(token.canvasHeight), 1}),
-          _owner(owner), _stamp(stamp), _token(std::move(token)), _format(format), _options(options),
-          _path(std::move(path)), _gate(owner._exportWorkTestGate), _ownerThread(GetCurrentThreadId())
+    ExportReadbackJob(Application& owner, HistoryWorkStamp stamp, DocumentReadAuthority authority,
+                      UtilityReadbackAdmission::Envelope envelope, GpuResidencyReservation reservation,
+                      HostWriteFormat format, JpegExportOptions options, std::wstring path,
+                      std::shared_ptr<WorkerWriteCompletion> write)
+        : RecordedDocumentReadbackJob(
+              owner._jobs, owner._gpuWork, owner._recordedCommands, owner._utilityReadback, owner._graphGpuBudget,
+              envelope, std::move(reservation),
+              {0, 0, 0, static_cast<UINT>(authority.canvasWidth), static_cast<UINT>(authority.canvasHeight), 1},
+              owner._renderer.IsWarp()),
+          _owner(owner), _stamp(stamp), _authority(authority), _cpuAdmission(envelope.cpuBytes), _format(format),
+          _options(options), _path(std::move(path)), _write(std::move(write)), _gate(owner._exportWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
+    }
+    ~ExportReadbackJob() override
+    {
+        if (!_owners)
+            return;
+        TransferReadbackOwners(_owners->document, _owners->pixels, _owners->image, _owners->memory);
+        if (!TryDeferRelease(*_owners, DeferredReleasePolicy::AlwaysOnOwner))
+            std::terminate();
+        (void)_owners.release();
     }
 
   private:
+    HRESULT CaptureReadbackDocument(CanvasDocument& document) noexcept override
+    {
+        if (_owner._shutdownStarted || _owner._exportStamp != _stamp || !_owner._historyWork.IsCurrent(_stamp) ||
+            !_owner._session.IsDocumentReadCurrent(_authority) || _owner._historyWork.CancelRequested(_stamp))
+            return E_ABORT;
+        document = _owner._session.Document().value();
+        document.selection.reset(); // No outline data is captured into the graphics source.
+        return S_OK;
+    }
+    JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext& context) override
+    {
+        if (!_owners)
+            _owners = std::make_unique<ExportReadbackOwners>(_cpuAdmission);
+        if (_gate && _gate->holdReadback && _gate->visits.load() == 0)
+            return PassGate(context, ExportWorkTestGate::kReadbackMessage);
+        return {};
+    }
     HRESULT PrepareReadbackDevice(HRESULT reason) noexcept override
     {
         return _owner.PrepareUtilityDevice(reason);
@@ -44,6 +98,9 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     }
     JobResult ProcessReadback(Raster& image, JobContext& context) override
     {
+        const auto acknowledged = wil::scope_exit([this]() noexcept { _write->Acknowledge(); });
+        if (!_write->BeginWorker(WorkerWriteCompletion::Phase::Readback))
+            return {JobStatus::Cancelled};
         if (_gate && !_gate->afterPublication && _gate->visits.load() == 0)
         {
             const auto result = PassGate(context);
@@ -60,6 +117,11 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
                       ? EncodeJpegFile(image, _options, _path.c_str(), context.cancellation)
                       : EncodePngFile(image, _options.resolution, _path.c_str(), context.cancellation);
         _published = _status == ImageCodecStatus::Ok;
+        if (_gate)
+        {
+            _gate->encodedStatusForTest = _status;
+            _gate->publishedForTest = _published;
+        }
         // Encoding has returned and no future tile reads this raster. Release large CPU output on its worker.
         image = {};
         if (_gate && _gate->afterPublication)
@@ -74,7 +136,7 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     {
         const bool current = _owner._exportStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
                              _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
-                             _owner._session.CanApplyJobResult(_token, _token.sequence);
+                             _owner._session.IsDocumentReadCurrent(_authority);
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -103,26 +165,29 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId = error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                  : _format == HostWriteFormat::Jpeg                ? IDS_ERROR_EXPORT_JPEG
-                                                                                    : IDS_ERROR_EXPORT_PNG;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                      ? IDS_ERROR_TOO_LARGE
+                                  : _format == HostWriteFormat::Jpeg ? IDS_ERROR_EXPORT_JPEG
+                                                                     : IDS_ERROR_EXPORT_PNG;
             ++_owner._errorsShown;
             _owner._lastErrorId = stringId;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
         }
+        _owner._exportWrite.reset();
+        _owner.ClearEndSessionWriteBlock();
         _owner._exportTicket.reset();
         _owner._exportStamp.reset();
         (void)_owner._historyWork.Finish(_stamp);
         _owner.SyncChrome();
-        _owner._frameInvalidated = true; // exports never alter the document/path/saved revision
+        _owner.InvalidateFrame(); // exports never alter the document/path/saved revision
         _owner.ResumeHostHistory(_stamp, outcome, error);
     }
-    JobResult PassGate(JobContext& context) noexcept
+    JobResult PassGate(JobContext& context, UINT message = ExportWorkTestGate::kMessage) noexcept
     {
         _gate->quality.store(_options.quality);
         _gate->resolution.store(_options.resolution);
         _gate->visits.fetch_add(1);
-        if (!PostThreadMessageW(_ownerThread, ExportWorkTestGate::kMessage, 0, 0))
+        if (!PostThreadMessageW(_ownerThread, message, 0, 0))
             return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
         const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
         const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
@@ -133,13 +198,16 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
     }
     Application& _owner; // owner device/completion stages only
     const HistoryWorkStamp _stamp;
-    const JobToken _token;
+    const DocumentReadAuthority _authority;
+    const std::uint64_t _cpuAdmission;
     const HostWriteFormat _format;
     const JpegExportOptions _options;
     const std::wstring _path;
+    const std::shared_ptr<WorkerWriteCompletion> _write;
     const std::shared_ptr<ExportWorkTestGate> _gate;
     const DWORD _ownerThread;
     ImageCodecStatus _status = ImageCodecStatus::Encode;
+    std::unique_ptr<ExportReadbackOwners> _owners;
     bool _published = false; // published stage ownership synchronizes this worker write with owner reads
 };
 
@@ -151,7 +219,16 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
     const auto path = _activeHostRequest->input.SelectedOutputPath();
     if (!path)
         return E_UNEXPECTED;
-    std::array<wchar_t, 32768> resolved{};
+    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
+    try
+    {
+        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
+    }
+    auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path->data(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -169,23 +246,49 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
     {
         if (_exportWorkTestGate && _exportWorkTestGate->throwAdmissionFailure)
             throw std::bad_alloc{};
-        auto token = _session.CaptureJobToken();
+        auto authority = _session.CaptureDocumentReadAuthority();
         const auto memory = ExportReadbackMemoryBytes(_session.Document().value(), units);
         if (static_cast<std::int64_t>(_session.Document()->width) * _session.Document()->height > kMaxLayerPixels)
             result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-        if (token && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - sizeof(ExportReadbackJob))
+        const auto bookkeeping = sizeof(ExportReadbackJob) + sizeof(ExportReadbackOwners) +
+                                 WorkerWriteCompletion::kReservationBytes +
+                                 SharedPublicationMemory::OwnershipAllowance();
+        if (authority && memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - bookkeeping)
         {
-            CanvasDocument snapshot = _session.Document().value();
-            snapshot.selection.reset(); // export pixels come from the committed whole document, never selection
-            std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(
-                *this, _exportStamp.value(), std::move(token.value()), std::move(snapshot), format,
-                JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
-                std::wstring(resolved.data(), units));
-            JobTicket ticket;
-            result = static_cast<HRESULT>(_jobs.Submit(
-                job, {JobClass::Io, _session.DocumentSerial(), memory + sizeof(ExportReadbackJob)}, ticket));
+            auto write = std::make_shared<WorkerWriteCompletion>(WorkerWriteCompletion::Phase::Readback);
+            result = write->CreationError();
             if (SUCCEEDED(result))
-                _exportTicket = ticket;
+            {
+                UtilityReadbackAdmission::Envelope envelope;
+                GpuResidencyReservation reservation;
+                result = PrepareRecordedUtilityAdmission(_session.Document().value(), memory + bookkeeping, envelope,
+                                                         reservation);
+                if (FAILED(result))
+                {
+                    (void)_historyWork.Finish(_exportStamp.value());
+                    _hostFinishedStamp = _exportStamp;
+                    _exportStamp.reset();
+                    return result;
+                }
+                std::unique_ptr<Job> job = std::make_unique<ExportReadbackJob>(
+                    *this, _exportStamp.value(), authority.value(), envelope, std::move(reservation), format,
+                    JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
+                    std::wstring(resolved.data(), units), write);
+                JobTicket ticket;
+                result = static_cast<HRESULT>(_jobs.Submit(job,
+                                                           {.kind = JobClass::Io,
+                                                            .serialKey = _session.DocumentSerial(),
+                                                            .memoryBytes = envelope.cpuBytes,
+                                                            .deferredRetirement = true,
+                                                            .allowMemoryWaiting = true,
+                                                            .reserveRetainedMemory = true},
+                                                           ticket));
+                if (SUCCEEDED(result))
+                {
+                    _exportWrite = std::move(write);
+                    _exportTicket = ticket;
+                }
+            }
         }
     }
     catch (const std::bad_alloc&)
@@ -278,7 +381,8 @@ int Application::RunExportReadbackSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._exportWorkTestGate->release.get());
     };
-    std::array<wchar_t, 32768> temporary{};
+    const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    auto& temporary = *temporaryStorage;
     const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
     if (units == 0 || units >= temporary.size())
         return 5;
@@ -402,11 +506,12 @@ int Application::RunExportReadbackSelfTest() noexcept
             correct = correct && _errorsShown == errors + 1 &&
                       _lastErrorId ==
                           static_cast<UINT>(mode == Mode::PixelBudget ? IDS_ERROR_TOO_LARGE : IDS_ERROR_EXPORT_PNG) &&
-                      actual.error == (mode == Mode::Failure         ? E_ACCESSDENIED
-                                       : mode == Mode::PixelBudget   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                       : mode == Mode::PathBudget    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
-                                       : mode == Mode::LaterTileBusy ? DXGI_ERROR_WAS_STILL_DRAWING
-                                                                     : E_OUTOFMEMORY);
+                      actual.error == static_cast<std::int32_t>(
+                                          mode == Mode::Failure         ? E_ACCESSDENIED
+                                          : mode == Mode::PixelBudget   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                          : mode == Mode::PathBudget    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
+                                          : mode == Mode::LaterTileBusy ? DXGI_ERROR_WAS_STILL_DRAWING
+                                                                        : E_OUTOFMEMORY);
         else
             correct = correct && _errorsShown == errors;
         if (mode == Mode::RebindBefore || mode == Mode::RebindPublished)

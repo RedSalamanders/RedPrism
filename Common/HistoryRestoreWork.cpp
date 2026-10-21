@@ -4,6 +4,51 @@
 #include <type_traits>
 #include <utility>
 
+PreparedHistoryRestore::PreparedHistoryRestore(PreparedHistoryRestore&& source) noexcept
+    : _authority(std::move(source._authority)), _view(std::move(source._view)), _history(std::move(source._history)),
+      _selected(std::move(source._selected)), _retired(std::move(source._retired)),
+      _retiredDisplay(std::move(source._retiredDisplay)), _changesDocumentSerial(source._changesDocumentSerial),
+      _maskSelected(source._maskSelected), _applied(std::exchange(source._applied, true))
+{
+}
+
+PreparedHistoryRestore& PreparedHistoryRestore::operator=(PreparedHistoryRestore&& source) noexcept
+{
+    if (this != &source)
+    {
+        _authority = std::move(source._authority);
+        _view = std::move(source._view);
+        _history = std::move(source._history);
+        _selected = std::move(source._selected);
+        _retired = std::move(source._retired);
+        _retiredDisplay = std::move(source._retiredDisplay);
+        _changesDocumentSerial = source._changesDocumentSerial;
+        _maskSelected = source._maskSelected;
+        _applied = std::exchange(source._applied, true);
+    }
+    return *this;
+}
+
+DocumentHistory::ResidencyValidation PreparedHistoryRestore::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedHistoryRestore::RefreshHistoryResidency(CancelToken cancellation,
+                                                     DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || cancellation.IsCancelled())
+        return false;
+    if (!_history)
+        return true;
+    const auto& restore = _history->RestoreSnapshot();
+    return restore &&
+           DocumentHistory::RefreshPreparedResidency(_history.value(), restore->document, cancellation, observer);
+}
+
 std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(HistoryRestoreAuthority authority,
                                                                        DocumentHistory::StateView view, bool redo,
                                                                        CancelToken cancellation,
@@ -50,25 +95,32 @@ HistoryRestoreAuthority DocumentSession::CaptureHistoryRestoreAuthority() const 
     result._active = _activeLayerID;
     result._crop = _cropRect;
     result._maskSelected = _maskSelected;
-    result._valid = !HasColorEdit() && !_gradient && !_transformEdit && !_brush && !_warp && !_pixelMove &&
-                    !_shapeDraft && !_selectionMoveOrigin && !_lassoDraft;
+    result._valid = !HasColorEdit() && !_gradient && !_transformEdit && !_brush && !_brushFinishingOpening &&
+                    !_brushUpdatingOpening && !HasPendingWarp() && !_pixelMove && !_shapeDraft &&
+                    !_selectionMoveOrigin && !_lassoDraft;
     return result;
 }
 
 bool DocumentSession::CanApplyHistoryRestore(const HistoryRestoreAuthority& authority) const noexcept
 {
+    return !_lassoDraft && CanApplyHistoryRestoreWithoutLasso(authority);
+}
+
+bool DocumentSession::CanApplyHistoryRestoreWithoutLasso(const HistoryRestoreAuthority& authority) const noexcept
+{
     return authority._valid && authority._session == _tokenIdentity.value &&
            authority._documentSerial == _documentSerial && authority._generation == _generation &&
            authority._restoreSerial == _restoreSerial && authority._active == _activeLayerID &&
            authority._maskSelected == _maskSelected && authority._crop == _cropRect && !HasColorEdit() && !_gradient &&
-           !_transformEdit && !_brush && !_warp && !_pixelMove && !_shapeDraft && !_selectionMoveOrigin && !_lassoDraft;
+           !_transformEdit && !_brush && !_brushFinishingOpening && !_brushUpdatingOpening && !HasPendingWarp() &&
+           !_pixelMove && !_shapeDraft && !_selectionMoveOrigin;
 }
 
 bool DocumentSession::ApplyPreparedHistoryRestoreIfCurrent(PreparedHistoryRestore& prepared) noexcept
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
     static_assert(std::is_nothrow_swappable_v<std::unordered_set<Guid>>);
-    if (!CanApplyHistoryRestore(prepared._authority) ||
+    if (prepared._applied || !CanApplyHistoryRestore(prepared._authority) ||
         (prepared._history ? !history.CanPublish(prepared._history.value()) : !history.IsCurrent(prepared._view)))
         return false;
     if (prepared._history)
@@ -88,6 +140,7 @@ bool DocumentSession::ApplyPreparedHistoryRestoreIfCurrent(PreparedHistoryRestor
         NoteDocumentMutation();
     }
     prepared._authority._valid = false;
+    prepared._applied = true;
     return true;
 }
 

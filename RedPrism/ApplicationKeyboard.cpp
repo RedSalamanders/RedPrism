@@ -159,6 +159,14 @@ void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
 
 LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark)
+        BeginUiCancellationKey(message, wParam, lParam);
+    const auto endCancellationDispatch = wil::scope_exit(
+        [this]() noexcept
+        {
+            if (_uiBenchmark)
+                EndUiCancellationKey();
+        });
     const KeyPress press = KeyPressFromMessage(wParam, lParam, _chrome && _chrome->TextInputFocused());
     _suppressCharacter = false;
     _lastKeyHandled = false;
@@ -191,7 +199,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
             // (its WM_CHAR) opens that menu. A key the bar used types nothing where the keyboard goes next.
             if (_chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press)))
             {
-                _frameInvalidated = true;
+                InvalidateFrame();
                 _suppressCharacter = true;
             }
             return 0;
@@ -223,7 +231,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
     {
         _lastKeyHandled = true;
         _suppressCharacter = true;
-        _frameInvalidated = true;
+        InvalidateFrame();
         (void)movedKeyboard();
         // DefWindowProc still sees an Alt chord a command took (its character stays dropped), so it knows Alt was
         // not tapped alone: releasing Alt, before or after the chord's key, gives the menu bar nothing.
@@ -238,7 +246,7 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
         !heldPress && _chrome && _chrome->DispatchKey(press.virtualKey, true, ChromeKeyModifiers(press));
     if (chromeHandled)
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (heldPress || movedKeyboard())
     {
@@ -255,6 +263,8 @@ LRESULT Application::OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM 
 
 LRESULT Application::OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    if (_uiBenchmark)
+        NoteUiCancellationKeyUp(message, wParam);
     const UINT virtualKey = static_cast<UINT>(wParam);
     // The key down's character, if it had one, arrived before this key up.
     _suppressCharacter = false;
@@ -277,7 +287,7 @@ LRESULT Application::OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lP
     else if (virtualKey != VK_MENU && virtualKey != VK_F10 && _chrome &&
              _chrome->DispatchKey(virtualKey, false, HeldModifiers()))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     // Every key up reaches DefWindowProc, which tells a tapped Alt or F10 (it sends SC_KEYMENU, which OnKeyMenu gives
     // to the menu bar) from a key up that ends the tap: releasing Alt after Alt+Backspace opens nothing.
@@ -304,13 +314,13 @@ LRESULT Application::OnCharacter(HWND window, UINT message, WPARAM wParam, LPARA
         // Alt+letter opens the menu with that mnemonic; an Alt+key nothing took does nothing, without a beep.
         if (_chrome && _chrome->OpenMenuByMnemonic(character))
         {
-            _frameInvalidated = true;
+            InvalidateFrame();
         }
         return 0;
     }
     if (_chrome && _chrome->DispatchCharacter(character, HeldModifiers()))
     {
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     return 0;
 }
@@ -338,7 +348,7 @@ void Application::OnKeyboardLayoutChanged() noexcept
     if (_chrome)
     {
         _chrome->SetCommandBindings(&_bindings); // retitles the menus, the Command List and the tooltips
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
 }
 
@@ -376,7 +386,7 @@ void Application::OnKeyMenu(wchar_t character) noexcept
     {
         (void)_chrome->OpenMenuByMnemonic(character);
     }
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 KeyState Application::CurrentKeyState() const noexcept
@@ -387,7 +397,7 @@ KeyState Application::CurrentKeyState() const noexcept
                                                                  : KeyFocus::Chrome;
     state.tool = _tool;
     state.selection = _session.Selection().has_value() && !_session.Selection()->IsEmpty();
-    state.lassoDraft = _session.PendingLasso().has_value();
+    state.lassoDraft = _session.PendingLasso().has_value() || _lassoInput.Busy() || _polygonalPressInput.Busy();
     return state;
 }
 
@@ -400,8 +410,23 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     // Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && _chrome->EscapeFloatingCard())
     {
+        SealSamplerForBoundary();
         return true;
     }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CanvasBrushSealedStrokePending())
+    {
+        CancelHostContinuations(true); // The accepted terminal and original worker retain their authority.
+        return true;
+    }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
+        (_samplerHostTicket || (std::get_if<ColorSampling>(&_drag) && std::get<ColorSampling>(_drag).opening)))
+    {
+        SealSamplerForBoundary();  // Release the gesture/capture even while memory admission awaits cancellation.
+        CancelHostContinuations(); // Retain published color; acknowledge cancellation of the remaining prefix.
+        return true;
+    }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && CancelCanvasBrush(true))
+        return true;
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
         (_documentLifecycleTicket || _sizingTicket || _pathClassificationTicket || _rasterEditTicket ||
          _gradientCommitTicket || _pixelMoveCommitTicket))
@@ -449,11 +474,28 @@ bool Application::HandleKey(const KeyPress& press) noexcept
 bool Application::HandleEditGesture(const KeyPress& press) noexcept
 {
     const UINT key = press.virtualKey;
+    if (_polygonalPressInput.Busy() && !SizeCardOpen() && !_session.HasColorEdit())
+    {
+        if (key == VK_RETURN)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Enter);
+        if (key == VK_ESCAPE)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Escape);
+        if (key == VK_BACK || key == VK_DELETE)
+            return QueuePolygonalKeyOwner(HostPolygonalInputJournal::Action::Backspace);
+    }
     if (key == VK_RETURN || key == VK_ESCAPE)
     {
         // Enter applies and Escape cancels the first edit under way that takes the key, in the one order Undo and a
         // settle use (RF-904): the size card's and the panel's OK and Cancel first, then the canvas's edits.
         return EndFirstCanvasEdit(key == VK_RETURN ? EditEnd::Enter : EditEnd::Escape);
+    }
+    if ((key == VK_BACK || key == VK_DELETE) && _lassoInput.Busy())
+    {
+        const auto* captured = _lassoInput.CapturedContext(_lassoInput.Opening());
+        if (captured && captured->kind == LassoKind::Polygonal)
+            RecordLassoInputOwner(_lassoInput.Backspace(_lassoInput.Opening(), NextLassoSampleOrdinalOwner()));
+        DropDrag<DraftDrag>();
+        return true;
     }
     if ((key == VK_BACK || key == VK_DELETE) && _session.PendingLasso().has_value())
     {

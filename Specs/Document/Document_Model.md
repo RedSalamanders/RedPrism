@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-07
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -53,8 +53,8 @@ outside equality: while the asset still holds it the layer is a live shape (`Liv
 
 ### Immutable record construction foundation (P1.9 H2.2)
 
-`Common/RecordRoot.h` provides a shared immutable sequence primitive. This foundation does not yet replace
-`CanvasDocument::layers`; full document writer/capture integration remains tracked in
+`Common/RecordRoot.h` provides a shared immutable sequence primitive. Its primitive qualification does not
+qualify the full `CanvasDocument::layers` writer/capture integration, which remains tracked in
 [`HistoryStorageAccounting`](../Plans/WIP/HistoryStorageAccounting_2026-09-30.md).
 
 A captured root retains its immutable record vector. Copying a root never copies its records, and all reads,
@@ -82,6 +82,49 @@ new clone owns that clone's allocations; it does not silently inherit the source
 Final root destruction belongs to the admitted retirement path. Container capacity alone does not account
 record children, captured history, control blocks or complete construction/retirement peaks. Those remain
 integration and H3 accounting obligations; this primitive establishes no UI timing bound.
+
+An enabled `RecordOwnershipPolicy` measures owned record children while an exclusive builder seals. The
+immutable root caches `RecordOwnershipBounds`: metadata bytes, complete conservative ownership bytes and raster
+node occurrences, image-pixel occurrences and mask-pixel occurrences. Queries and handle copies allocate nothing and never revisit records. Root/vector capacity and
+a control allowance are added to child totals with checked arithmetic. Disabled/unavailable policies, overflow
+or a child ownership total below its metadata total yield an unavailable bound; an otherwise valid root still
+seals. A consumer requiring a complete bound MUST refuse admission explicitly, never substitute zero.
+Cancellation is checked before measurement, between records and before publication; refusal preserves the builder.
+
+`ImageLayer` metadata counts retained layer/asset/mask names and all four curve-channel capacities, with allocator
+and Debug proxy allowances. Ownership additionally sums cached image, mask, thumbnail and shape raster bounds by
+occurrence, including possible sparse assembly. Shared occurrences intentionally overcount, and measurement never
+materializes pixels. These bounds remain stable after lazy assembly. They do not replace exact history deduplication,
+process headroom or complete operation admission/retirement. Application use and G1 remain separately qualified.
+
+An enabled `RecordLookupPolicy` builds one sorted key/index vector while the exclusive builder seals. It checks
+its policy's record maximum before allocation/key access and checks cancellation before keys, during duplicate
+validation and before publication. Sorting is bounded by that maximum. By default, exceeding the policy maximum
+refuses sealing before key allocation. A policy may explicitly retain oversized malformed snapshots without an
+index; such snapshots expose no lookup or uniqueness authority. Keys, comparisons, moves and destruction
+are nonthrowing. Index/root allocation failure preserves the original builder buffer and its records for retry.
+The immutable root owns its lookup and records together; lookup borrows allocate nothing. Duplicate keys retain
+the first source record, and `HasUniqueKeys` exposes the invalid-root condition without a second traversal.
+Ownership includes the actual lookup capacity and allocator/control allowance.
+
+`ImageLayer` enables Guid lookup for at most 10,000 records. Full-root `IndexOf`, `FindLayer` and layer lookup use
+the index; span/vector/sliced queries retain indices relative to their supplied range. Oversized snapshots remain
+representable for production validation and malformed-input tests, but have no index/uniqueness authority and
+remain rejected by `ValidateDocument`; this does not increase the supported document layer limit. Cached pixel totals count
+each layer occurrence even with shared rasters, and exclude thumbnails and shape-source storage. The bounded
+initializer-list pixel-budget query subtracts unique existing exclusions from these totals. Missing/repeated IDs
+do not alter the result; invalid duplicate roots or unavailable ownership bounds refuse with zero budget.
+The unordered-set form retains the linear reference. Indexing does not qualify all writer/destructor or G1 paths.
+
+`CanvasDocument::RetirementMemoryBytes` supplies a complete conservative bound for that immutable source only.
+It reads the sealed layer root and construction-cached selection storage in constant time, without allocation,
+record/point traversal or pixel materialization. The bound includes a 64 KiB root/rounding allowance, the document
+header, complete cached layer ownership, selection retained capacities, and 64-byte outer and per-constructed-loop
+control/allocator allowances. Shared occurrences may overcount. Possible sparse assembly is included before Data
+publishes it. A default empty layer handle has a valid nonzero bound; a published root with unavailable child bounds
+or arithmetic overflow returns zero and MUST cause admission refusal. This source bound excludes unrelated history
+and display owners. Consumers MUST additionally charge their job, readback, producer and retirement peaks. It
+does not replace exact history accounting, global memory admission or first-upload/G1 qualification.
 
 Pure layer reads (`IndexOf`, hierarchy/clipping validation, hierarchy entries, descendants and effective
 visibility) borrow `std::span<const ImageLayer>`. Array, sliced, vector and immutable-root ranges retain their
@@ -119,7 +162,11 @@ Concurrent readers of separate `Raster` handles sharing the same storage MUST se
 The assembled byte pointer is published once with release ordering and read with acquire ordering. `Data()`
 serializes first assembly with a per-storage mutex and checks the pointer again after acquiring it; failed
 allocation leaves it unpublished and retryable. `ReadRegion`, `ByteSize`, `IsMaterialized` and thumbnails inspect
-only the published pointer and immutable metadata, never the vector being built. Publication does not change
+only the published pointer and immutable metadata, never the vector being built. Region reads of nested sparse
+tile windows recursively copy only the requested pixels into the caller's existing rows; they do not call `Data()`,
+allocate or acquire an assembly/residency gate. Tile source offsets, fills, later-window overrides and destination
+padding keep their existing meanings. Explicit `Data()` still publishes the nested caches before its outer cache,
+with unchanged pixels and identity. Publication does not change
 identity or invalidate a previously returned pixel pointer. A caller retains its `Raster` for the lifetime of
 any borrowed pointer. Concurrent assignment to the same handle or mutation of a document/session is not supported.
 
@@ -129,6 +176,25 @@ checks also cover large buffers. `Raster::Adopt` accepts only a complete, tightl
 width × height × bytes-per-pixel bytes and transfers it without a pixel copy. Invalid dimensions, format or size
 leave ownership with the caller. A successful adoption empties the caller's buffer; writers MUST discard borrowed
 mutable pointers before publication. `Raster::Make` retains its copying/zero-filling semantics for existing callers.
+
+An admitted producer may give `Raster::Adopt` an opaque shared publication lifetime. The storage and its
+control-block allocator retain that lifetime independently: actual pixel destruction on the release worker
+precedes storage lifetime release, and the allocator retains admission until its last weak control block is
+deallocated. A null alias with an owning control block retains the same lifetime. Copied Raster handles preserve
+both pixels and accounting; invalid adoption consumes neither the pixel buffer nor caller lifetime ownership.
+This creates no new byte reservation and grants no job, document or graphics publication authority. The caller
+must declare all output/control overlap before allocation and bind original accounting before refunding its job.
+The ordinary storage layout/factory remains unchanged. Charged storage adds two shared lifetime handles (32 bytes
+on supported 64-bit targets), included in its cached self/graph retirement bounds, with no pixel copy or extra
+pixel allocation. Its last owner-thread release always uses an installed deferred-release sink; workers release
+inline. `WeakStorageForTest` observes control-block expiry without owning or reading dead pixels.
+
+CopyPixelsInput may carry an explicitly supplied opaque output lifetime. Newly allocated Copy pixels
+retain it in their Raster storage and control-block allocator, never implicitly inheriting source
+accounting. The ordinary empty-lifetime path retains its numeric behavior and storage layout.
+Closing a document preserves its private clipboard for later Paste; a later successful private Copy
+replaces that clipboard. Those operations cannot refund pixels still owned by another copied Raster
+or weak storage control. Final application CPU retirement also releases the private clipboard.
 
 Large last-reference storage releases can be transferred through the owning thread's deferred-release sink.
 The intrusive node remains alive until its worker destroys it; workers with no sink release inline. Directly
@@ -151,6 +217,13 @@ overcounted. Bound reads are constant-time and never assemble pixels or recursiv
 An overflow or graph depth above 128 produces an unavailable bound (zero), which migrated whole-operation
 admission refuses. These immutable construction caches are separate from history's retained-byte accounting;
 they do not change pixel equality, history trim goldens or the raster's published assembly lifetime.
+
+`GridReplacementWorkspaceBytes` additionally caches the clipped-window splitting allowance used by one uniform
+256-pixel replacement grid. For each kept window it sums
+`(ceil(width/256)+2)*(ceil(height/256)+2)*8*sizeof(RasterTile)` with checked arithmetic. Empty and contiguous
+rasters return zero; unavailable sparse metadata returns absence and admission MUST refuse it. The immutable
+query allocates nothing and visits no windows. This allowance does not cover arbitrary overlapping rectangles,
+new pixel buffers, full source/result ownership or other operation peaks.
 
 Basic raster-edit jobs retain input/token/result handles in one aggregate deferred-release owner. A stale or
 canceled sparse frame can consist of many individually small tiles; retirement MUST NOT free that entire graph
@@ -187,6 +260,15 @@ ranges, four normalized level ranges, curves 2…32 strictly increasing x from 0
 ranges). Adjustment layers apply live in the composition and the Image menu applies the same kinds to a layer's
 pixels (C12, [`Document_Tools.md`](Document_Tools.md), [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)).
 
+### Direct distortion source lifetime
+
+`DistortWarp::Warp` and `WarpMask` retain a contiguous sampling owner for their complete read. An already
+published contiguous source may be shared; an unmaterialized sparse source is copied privately with the
+bounded worker raster reader. The source identity, nested caches and residency epoch are not changed by that
+private read. The uniform 1x1 mask shortcut retains its exact source identity without an assembly. Format,
+corner, sampling and output-byte rules are unchanged. Explicit caller `Data()` keeps its separate publication
+contract; this does not activate an asynchronous caller or establish whole-operation/G1 bounds.
+
 ## Hierarchy and clipping
 
 `ValidateHierarchy` rejects duplicate ids, groups that own an image, missing/non-group parents, and cycles.
@@ -201,6 +283,15 @@ validates); the Gray8 format rule applies once a mask has storage, and the decod
 set) lists itself with `collapsed = true` and hides its subtree. A row carries its layer's mask state for the layers
 panel's badge (`hasMask`, and `maskEnabled`, true without a mask; RF-907). `RenderLayerIds` is the visible, non-group
 subset in bottom-to-top order.
+
+Collapsed IDs are session-only panel state, outside document equality, the project format and history. The
+read-only set has a new bound of 10,000 IDs independently of live layer count, including remembered deleted
+folders. Adding at capacity is ignored; removal remains allowed. Explicit `SetGroupCollapsed` and
+`ClearCollapsedGroups` advance a separate monotonic `CollapseRevision` only on membership change. Clearing or
+replacement that discards a nonempty set also advances it. No-op requests leave document generation and history
+unchanged. Exhaustion invalidates this authority rather than wrapping. Returning to an earlier collapsed set
+cannot authorize a delayed prepared result. Copied/moved sessions renew their document read authority, so even
+equal roots, IDs and counters cannot authorize another session's row publication.
 
 ## Session edits
 
@@ -320,9 +411,15 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   Production merge first admits a metadata-only record, captures immutable source/active/selected owners and
   plans on its worker. A missing plan succeeds without canvas pixel allocation or GPU work. A ready plan retains
   that source and worker-built composition subset while a separate full readback/history record retains the same
-  history acquisition. History capture follows its complete reservation. `PrepareMergePublication` builds the
+  history acquisition. The probe aggregate is allocated on its original admitted Compute opening, before
+  owner capture; its original accounting survives the complete handoff and aggregate/control retirement.
+  The dependent readback refuses insufficient memory once: its owned probe cannot free while that phase
+  retains it. Ordinary independent admissions keep event-driven waiting. History capture follows the complete
+  readback reservation. `PrepareMergePublication` builds the
   survivor records, clipping rewrites, the trimmed layer, active/selected ids and detached history before
-  either live state changes. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
+  either live state changes. Newly allocated crop pixels explicitly retain the readback's original lifetime
+  owner, including its charged metadata in admission. Full-bounds/transparent trims preserve source identity;
+  crop never implicitly inherits another source job's accounting owner. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
   edit state and exact history epoch, then publishes and swaps replaced document/selection/display owners.
   Failure/cancellation/staleness preserves the existing document, revision and redo. The original direct methods
   remain numeric references. This integration is undergoing native qualification under P1.9 H1.
@@ -373,3 +470,63 @@ Compile-time assertions require const document/layer readers and non-throwing se
 .\test.ps1 -Platform x64 -Configuration Debug
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
 ```
+
+## Immutable worker geometry adoption
+
+`SelectionLoops::AdoptForWork` adopts worker-owned loop/point vector buffers without copying points. It
+computes cached point count, capacity bytes and finite-point bounds with cancellation checks every64 work
+units. Bounds ignore non-finite points, as the existing geometry reference does; point count still includes
+them. Cancellation returns no published handle. Empty geometry retains no allocation or opaque lifetime.
+The caller admits vector/control/ownership bounds before allocation and explicitly supplies a charged output
+lifetime when needed. `WorkOwnershipAllowance` covers the supported node, control block and per-vector
+bookkeeping in addition to cached vector capacity bytes; zero refuses overflow. It is an admission allowance,
+not a physical-residency measurement.
+
+Copied/moved readers share one immutable identity and cached metadata. On the scheduler owner, the final
+strong geometry release queues the complete node for worker destruction regardless of its size. Geometry
+buffers die before their opaque lifetime. A surviving weak storage control also retains that lifetime until
+its own control block dies. This does not change synchronous selection arithmetic or activate a worker
+boolean caller by itself. See the separate phase-retention contract in `Core_PerformanceAndResources.md`.
+
+## Preserving marquee source metadata
+
+Opted-in preserving marquee preparation uses the original immutable selection's cached point/loop counts
+for its admitted plan. The drawing payload retains that exact plan while holding the corresponding source
+root. A worker cannot substitute the default zero-source limits or mutate/materialize the shared source.
+Output and allocator/control owners remain charged through their final strong and weak reader release.
+This does not change the synchronous reference API or enable ordinary host activation.
+
+
+## Explicit pixel output lifetime
+
+`MakeSparse` and `Replacing` may receive an already admitted opaque output lifetime for newly constructed
+sparse metadata and any newly created uniform padding block. Existing source/base/tile storage keeps its
+own identity and previous accounting. A copied root or expired weak control retains the new metadata's
+lifetime; a child tile's independent accounting cannot depend only on the containing root.
+
+The final worker PixelMove path writes each new painted tile into one initialized `PixelBuffer` and adopts
+it without the previous extra tile copy. New translated `SelectionLoops` use charged worker adoption. Carried
+masks and newly allocated semantic thumbnails, including small dense copies of sparse Gray8 masks, keep the
+same output lifetime. Private reads do not assemble the source cache. The original producer binds accounting
+before publication/refund. These options create neither new admission nor document/GPU publication authority.
+
+## Original procedural pixel opening metadata
+
+An admitted fixed-press PixelMove may retain its original immutable `PixelMoveOpening`, bound CPU memory
+owner and worker-cached grid dimensions/ownership bound. These handles describe the original lift; offsets
+and duplication remain scalar gesture metadata. They do not create a second CPU producer or permit capture
+without the consumer's own admission. Missing/zero bounds refuse publication. The descriptor and its weak
+controls retain the frame's separately bound original charge until their real release acknowledgment.
+
+## Colour opening source records and final pixel views
+
+A deferred destructive or live adjustment-layer `ColorEdit` owns `sourceLayers` from its opening document. This immutable root
+retains the original asset strings without owner-side copies. Its complete cached ownership bound stays
+part of retirement accounting even after document replacement. The separate small target token is a
+validation descriptor, not a ready carried-mask record. Worker commit preparation reconstructs full mask
+metadata from the captured root only after validating all target fields. It never captures a newer target.
+
+`PreparedPixelMoveClosure::FinalDocument()` provides a lifetime-bound immutable view for final display/row
+preparation. It grants no publication, history-residency or session-mutation authority. Zero offset, moved-
+from and already-applied closures return null. In particular, the retired predecessor swapped into the
+closure after apply must never be exposed as a final source. A copied immutable document keeps its owners.

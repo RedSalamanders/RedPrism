@@ -2,11 +2,13 @@
 
 #include "ChromeHost.h"
 #include "ImageImportHistory.h"
-#include "ImageImportTestGate.h"
 #include "ImageImportWork.h"
-#include "ProjectOpenTestGate.h"
 #include "Resources.h"
+#include "Runtime.Tests.ImageImportTestGate.h"
+#include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
+
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -87,6 +89,16 @@ class Application::ImageImportJob final : public Job
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed =
+                _payload->publication && _payload->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         if (_payload->files && !_snapshotReady)
             return {}; // admitted record reaches its owner capture hook before any document copy
         const auto phase = _payload->files ? ImageImportTestPhase::Prepare : ImageImportTestPhase::Probe;
@@ -104,6 +116,8 @@ class Application::ImageImportJob final : public Job
         const auto paths = std::span<const std::wstring_view>(views.data(), _payload->paths.size());
         if (_payload->files)
         {
+            if (_gate)
+                _gate->preparations.fetch_add(1);
             ImageImportBatchInput input{_payload->source, _active, paths, _newProject, _center};
             input.files = _payload->files.value();
             input.maximumAddedPixels = _maximumAddedPixels;
@@ -144,6 +158,12 @@ class Application::ImageImportJob final : public Job
             if (!_payload->publication)
                 return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
                                                           : JobResult{JobStatus::Failed, E_UNEXPECTED};
+            if (_gate && _gate->lateResidencySource.HasStorage())
+            {
+                if (!_gate->lateResidencySource.Data())
+                    return {JobStatus::Failed, E_FAIL};
+                _gate->residentGrowths.fetch_add(1);
+            }
         }
         else
             _payload->probed = ProbeImageImportBatch(paths, context.cancellation);
@@ -161,16 +181,47 @@ class Application::ImageImportJob final : public Job
                    : JobResult{};
     }
 
-    bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (!_payload->files || _snapshotReady)
+        if (result.status != JobStatus::Finished || !_payload->files || !Current() ||
+            _owner._historyWork.CancelRequested(_stamp))
             return false;
-        if (!Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (_snapshotReady)
+        {
+            if (!_payload->publication)
+                return false;
+            const auto decision = _payload->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false;
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _snapshotError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshTicketMatches.store(_gate->capturedTicket == ticket);
+                _gate->refreshReservationHeld.store(_gate->preparationReservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >=
+                                                        _gate->preparationReservationBytes);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket);
+                return true;
+            }
+            _snapshotError = E_UNEXPECTED;
             return false;
+        }
         try
         {
             if (_gate)
             {
+                _gate->captures.fetch_add(1);
+                _gate->capturedTicket = ticket;
                 _gate->captureReservationHeld =
                     _owner._jobs.ReservedMemoryBytes() != 0 &&
                     _owner._jobs.ReservedMemoryBytes() == _gate->preparationReservationBytes;
@@ -194,6 +245,7 @@ class Application::ImageImportJob final : public Job
 
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         const bool current = Current();
         HostOutcome outcome = !current ? HostOutcome::Stale
                               : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
@@ -224,7 +276,8 @@ class Application::ImageImportJob final : public Job
                 error = E_ABORT;
                 replaced = false;
             }
-            else if (changes)
+            _residencyPermit.Reset(); // No borrowed lease survives chrome, replacement, or another owner pump.
+            if (outcome == HostOutcome::Succeeded && changes)
             {
                 if (replaced)
                 {
@@ -241,6 +294,7 @@ class Application::ImageImportJob final : public Job
                 error = _payload->tooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : E_FAIL;
             }
         }
+        _residencyPermit.Reset();
         if (outcome == HostOutcome::Failed)
         {
             if (!FAILED(error))
@@ -299,7 +353,8 @@ class Application::ImageImportJob final : public Job
     const int _maximumAddedPixels;
     const std::shared_ptr<ImageImportTestGate> _gate;
     const DWORD _ownerThread;
-    bool _snapshotReady = false;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _snapshotReady = false, _refreshResidency = false;
     HRESULT _snapshotError = S_OK;
 };
 
@@ -330,9 +385,9 @@ HRESULT Application::SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t gen
         {
             const auto history = _session.history.EditMemoryBytes(_session.Document());
             retirement = _session.ImageImportRetirementMemoryBytes();
-            if (!history || !retirement || history > maximum - memory)
+            if (!history || !retirement || history > maximum / 2 || history * 2 > maximum - memory)
                 return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-            memory += history;
+            memory += history * 2; // Original private history and one same-ticket refresh candidate coexist.
             // Derived previews already in flight remain allowed; later mutating inputs wait behind this ordinal.
             const auto previews = _jobs.ReservedMemoryBytes();
             if (previews > maximum - retirement)
@@ -384,10 +439,11 @@ HRESULT Application::StartImageImport(std::span<const std::wstring_view> paths, 
     {
         std::vector<std::wstring> owned;
         owned.reserve(paths.size());
+        const auto resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+        auto& resolved = *resolvedStorage;
         for (const auto path : paths)
         {
             const std::wstring terminated(path);
-            std::array<wchar_t, 32768> resolved{};
             const DWORD units =
                 GetFullPathNameW(terminated.c_str(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
             if (units == 0 || units >= resolved.size() || units > kImageImportMaxPathUnits)
@@ -585,19 +641,21 @@ int Application::RunImageImportSelfTest() noexcept
                     if (mode == Mode::MaskOnly)
                     {
                         const auto selected = _session.ActiveLayerID().value();
-                        _session.EditForTest(
-                            [&](CanvasDocument& document)
-                            {
-                                for (auto& layer : document.layers)
-                                    if (layer.id == selected)
-                                    {
-                                        const std::uint8_t byte = 173;
-                                        const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
-                                        LayerMask placed;
-                                        placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
-                                        layer.mask = std::move(placed);
-                                    }
-                            });
+                        EditLayerRecordsForTest(_session,
+                                                [&](DocumentFixture& fixture)
+                                                {
+                                                    for (auto& layer : fixture.layers)
+                                                        if (layer.id == selected)
+                                                        {
+                                                            const std::uint8_t byte = 173;
+                                                            const Raster mask =
+                                                                Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                                            LayerMask placed;
+                                                            placed.asset =
+                                                                RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                                            layer.mask = std::move(placed);
+                                                        }
+                                                });
                         _session.SelectLayerTarget(selected, true);
                     }
                     if (historyFailure || scopeStale)
@@ -608,14 +666,14 @@ int Application::RunImageImportSelfTest() noexcept
                     if (mode == Mode::CropOnly)
                         _session.SetCropFrame(CropRect{1, 0, 1, 1});
                     if (target == Target::Grouped)
-                        _session.EditForTest(
-                            [](CanvasDocument& document)
-                            {
-                                ImageLayer group = ImageLayer::Blank(L"Import folder", Vec2{8, 4});
-                                group.isGroup = true;
-                                document.layers.back().parentID = group.id;
-                                document.layers.insert(document.layers.begin(), std::move(group));
-                            });
+                        EditLayerRecordsForTest(_session,
+                                                [](DocumentFixture& fixture)
+                                                {
+                                                    ImageLayer group = ImageLayer::Blank(L"Import folder", Vec2{8, 4});
+                                                    group.isGroup = true;
+                                                    fixture.layers.back().parentID = group.id;
+                                                    fixture.layers.insert(fixture.layers.begin(), std::move(group));
+                                                });
                     _session.history.MarkSaved();
                     _documentPath = L"before-import.prism";
                     if (target == Target::Empty)
@@ -737,7 +795,9 @@ int Application::RunImageImportSelfTest() noexcept
                         correct = correct && _imageImportTestGate->historyFaultHits.load() == 1 &&
                                   !_session.history.IsModified();
                     if (failed)
-                        correct = correct && actual.error == (mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY) &&
+                        correct = correct &&
+                                  actual.error == static_cast<std::int32_t>(mode == Mode::Failure ? E_ACCESSDENIED
+                                                                                                  : E_OUTOFMEMORY) &&
                                   _lastErrorId == IDS_ERROR_IMPORT_IMAGE;
                     if (mode == Mode::Cancel)
                         correct = correct && state.cancelPending;
@@ -747,7 +807,7 @@ int Application::RunImageImportSelfTest() noexcept
                         correct = correct && _imageImportTestGate->captureReservationHeld &&
                                   _imageImportTestGate->retired.load() && _imageImportTestGate->retiredOffOwner.load();
                     if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-                        correct = correct && actual.error == E_ABORT;
+                        correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
                     if (younger)
                         correct = correct && younger.value().Read().outcome ==
                                                  (creates ? HostOutcome::Stale : HostOutcome::Succeeded);
@@ -904,14 +964,15 @@ int Application::RunImageImportSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._imageImportTestGate->release.get());
     };
-    CanvasDocument projectDocument;
-    projectDocument.id = Guid::Generate();
-    projectDocument.width = 8;
-    projectDocument.height = 4;
+    DocumentFixture projectFixture;
+    projectFixture.id = Guid::Generate();
+    projectFixture.width = 8;
+    projectFixture.height = 4;
     auto projectLayer = ImageLayer::Blank(L"Mixed baseline", Vec2{2, 1});
     const auto projectActive = projectLayer.id;
     projectLayer.asset = RasterAsset{image, image, projectLayer.name};
-    projectDocument.layers.push_back(std::move(projectLayer));
+    projectFixture.layers.push_back(std::move(projectLayer));
+    const CanvasDocument projectDocument = std::move(projectFixture).Seal();
     const auto projectPath = (root / L"mixed.prism").wstring();
     const auto failedProjectPath = (root / L"missing-project.prism").wstring();
     if (SaveProject(projectPath.c_str(), projectDocument, projectActive, true) != ProjectIoStatus::Ok)
@@ -998,9 +1059,9 @@ int Application::RunImageImportSelfTest() noexcept
                       _session.ActiveLayer()->transform.origin == Vec2{0, 0};
         if (!success)
             correct = correct &&
-                      actual.error == (mode == BatchMode::MixedFailure ? E_OUTOFMEMORY
-                                       : growth                        ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                                                       : E_FAIL) &&
+                      actual.error == static_cast<std::int32_t>(mode == BatchMode::MixedFailure ? E_OUTOFMEMORY
+                                                                : growth ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                         : E_FAIL) &&
                       _lastErrorId == static_cast<UINT>(growth ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
         _projectOpenTestGate.reset();
         std::fprintf(stderr, "%s image-import-host.batch=%u\n", correct ? "PASS" : "FAIL",
@@ -1016,5 +1077,6 @@ int Application::RunImageImportSelfTest() noexcept
             return 5;
         }
     }
-    return 0;
+    const std::array<std::wstring_view, 2> residencyPaths{first, second};
+    return RunImageImportResidencySelfTest(residencyPaths);
 }

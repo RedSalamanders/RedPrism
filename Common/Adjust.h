@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -189,8 +190,10 @@ struct Trimmed
     int cropX = 0;
     int cropY = 0;
 };
+// A supplied lifetime belongs only to a newly cropped output. No-crop and transparent inputs retain `image`.
 [[nodiscard]] Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed,
-                                     const CancelToken& cancellation = {});
+                                     const CancelToken& cancellation = {},
+                                     const std::shared_ptr<const void>& outputLifetime = {});
 // The room a blur needs around the layer: about three standard deviations, or half a streak.
 [[nodiscard]] double BlurMargin(FilterKind kind, const FilterSettings& settings) noexcept;
 // A Gaussian-blurred copy as the Gaussian Blur filter makes it (sigma = radius × scale).

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <thread>
 
 enum class RasterEditKind : std::uint8_t
 {
@@ -28,6 +29,8 @@ enum class RasterEditStatus : std::uint8_t
 };
 
 class PixelMoveOpening;
+class SharedPublicationMemory;
+struct PreparedRasterPreview;
 
 // Captured under the complete reservation, after earlier history work settles. Only value metadata and shared
 // immutable raster/selection owners cross the worker boundary. Clear on a mask is the captured background fill.
@@ -54,10 +57,17 @@ struct RasterEditInput final
     // Immutable opening coverage/lift owners only. Worker validation includes selection identity/AA and exact
     // source grid/placement; mutable stroke state and cancellation never cross between jobs.
     std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
+    // PixelMove final publication only; other kinds refuse. New output storage and weak controls retain this
+    // precreated original publication owner. Existing source storage retains its original owner.
+    std::shared_ptr<const SharedPublicationMemory> outputMemory;
     // Borrowed only during RunRasterEdit, never retained by its result. Observe completed tile checkpoints;
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
     void* progressContext = nullptr;
+    // Opt-in recorded display: build immutable metadata on this admitted worker, and hold the original
+    // accounting owner through every stroke/metadata control block. Unknown/current owner refuses work.
+    bool prepareDisplay = false;
+    std::thread::id ownerThread;
 };
 
 struct RasterEditResult final
@@ -83,11 +93,13 @@ class PreparedRasterEdit final
     PreparedRasterEdit& operator=(PreparedRasterEdit&&) noexcept = default;
     [[nodiscard]] const ImageLayer& Layer() const noexcept
     {
-        return _raster.layer.value();
+        // Publication swaps the complete document. Borrow the retained old record after apply, preserving
+        // the retired-layer accessor without copying a string-bearing record on the owner thread.
+        return _applied ? _document.value().layers[_targetIndex] : _raster.layer.value();
     }
     [[nodiscard]] const std::optional<DocumentSelection>& Selection() const noexcept
     {
-        return _raster.selection;
+        return _applied && _kind == RasterEditKind::PixelMove ? _document.value().selection : _raster.selection;
     }
     [[nodiscard]] const std::optional<BrushCommitInfo>& PreviewCommit() const noexcept
     {
@@ -100,14 +112,19 @@ class PreparedRasterEdit final
         RasterEditKind, bool, const std::optional<CanvasDocument>&, const std::optional<Guid>&, JobToken,
         DocumentHistory::StateView, RasterEditResult&&, std::wstring, CancelToken, DocumentHistory::PrepareObserver);
     PreparedRasterEdit(RasterEditKind kind, bool mask, JobToken token, RasterEditResult&& raster,
+                       std::optional<CanvasDocument> document, std::size_t targetIndex,
                        DocumentHistory::Publication&& history) noexcept
-        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)), _history(std::move(history))
+        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)),
+          _document(std::move(document)), _targetIndex(targetIndex), _history(std::move(history))
     {
     }
     RasterEditKind _kind;
     bool _mask;
     JobToken _token;
     RasterEditResult _raster;
+    std::optional<CanvasDocument> _document;
+    std::size_t _targetIndex;
+    bool _applied = false;
     DocumentHistory::Publication _history;
     std::optional<BrushCommitInfo> _retiredBrushCommit;
     std::optional<GradientEdit> _retiredGradient;
@@ -127,6 +144,8 @@ struct RasterEditPreviewResult final
     RasterEditStatus status = RasterEditStatus::Invalid;
     std::shared_ptr<BrushStroke> stroke;
     std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
+    std::shared_ptr<SharedPublicationMemory> memory;
+    std::shared_ptr<const PreparedRasterPreview> display;
 };
 
 // Cached complete ownership bound; no raster materialization, allocation or graph traversal.
@@ -153,3 +172,29 @@ struct RasterEditPreviewResult final
 // Source owners, tiles and coverage retire together through the release sink. No caller may mutate a stroke
 // while a worker borrows it. Commit preparation uses RunRasterEdit and returns a complete target layer instead.
 [[nodiscard]] RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation = {});
+
+enum class PixelMoveLiftStatus : std::uint8_t
+{
+    Ready,
+    NoPixels,
+    Invalid,
+    TooLarge,
+    Memory,
+    Cancelled,
+};
+
+struct PixelMoveLiftResult final
+{
+    PixelMoveLiftStatus status = PixelMoveLiftStatus::Invalid;
+    std::shared_ptr<const PixelMoveOpening> opening;
+};
+
+// Admitted CPU worker prelude for an initial Ctrl lift. It validates and lifts even at zero offset;
+// it never moves pixels, builds a preview, edits a session/history or owns a device. Offset/duplicate
+// are applied only when a later raster operation consumes the opening. Existing opening input refuses.
+// NoPixels means no selected source region, not transparent source pixels (legacy BrushStroke.swift:681).
+// The caller settles eligibility/prerequisites and admits PixelMoveMemoryBytes plus source/history/
+// display/retirement peaks before capturing input. A supplied memory owner retains opening allocations.
+[[nodiscard]] PixelMoveLiftResult PreparePixelMoveLiftForWork(
+    const RasterEditInput& input, CancelToken cancellation = {},
+    std::shared_ptr<const SharedPublicationMemory> memory = {});

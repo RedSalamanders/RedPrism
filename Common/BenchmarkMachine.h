@@ -2,12 +2,19 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 
 // This snapshot is intended for explicit benchmark setup/reporting only. It does not belong in a frame or
 // document-processing path. A missing optional value means Windows did not provide a trustworthy value.
 struct BenchmarkMachineInfo final
 {
+    struct RefreshRate final
+    {
+        std::uint32_t numerator;
+        std::uint32_t denominator;
+    };
+
     std::optional<std::string> cpuBrand;
     std::optional<std::uint32_t> physicalCoreCount;
     std::optional<std::uint32_t> logicalProcessorCount;
@@ -26,6 +33,8 @@ struct BenchmarkMachineInfo final
     std::optional<std::string> adapterName;
     std::optional<std::string> driverVersion;
     std::optional<std::string> adapterLuid;
+    std::optional<std::string> monitorDeviceName;
+    std::optional<RefreshRate> refreshRate;
     std::optional<std::string> applicationVersion;
     std::optional<std::string> isa;
     std::optional<std::uint32_t> workerCount;
@@ -44,3 +53,24 @@ struct BenchmarkMachineInfo final
 
 // Produces one line with quoted/escaped text fields. Missing values are rendered as "unknown".
 [[nodiscard]] std::string FormatBenchmarkMachineInfo(const BenchmarkMachineInfo& info);
+
+// Cold benchmark setup only. The native adapter resolves monitor identity and rejects variable,
+// unavailable or interlaced targets before setting eligible. This pure selector verifies every
+// matching clone and never chooses the first conflicting path as a timing authority.
+struct BenchmarkRefreshCandidate final
+{
+    bool matches = false;
+    bool eligible = false;
+    BenchmarkMachineInfo::RefreshRate rate{};
+};
+
+[[nodiscard]] std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(
+    std::span<const BenchmarkRefreshCandidate> candidates) noexcept;
+
+// Monotonic invalidation observed from the real owner window procedure. The window monitor is checked
+// only when WM_MOVE is delivered; topology/DPI/interactive-size changes invalidate unconditionally.
+struct BenchmarkDisplayContinuity final
+{
+    bool invalidated = false;
+    void ObserveMessage(std::uint32_t message, bool monitorIdentityChanged = false) noexcept;
+};

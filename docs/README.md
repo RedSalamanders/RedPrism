@@ -95,7 +95,9 @@ as unsaved work.
   outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
   the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
   mask as the selection (and says so instead of silently loading nothing when the outline would be too detailed to
-  trace). Ctrl-drag inside a selection moves its pixels (Alt duplicates), Ctrl+arrows nudge them,
+  trace). Loading runs in the background and adds one Undo step when it changes the selection; a failed or
+  cancelled load keeps the previous selection. Ctrl-drag inside a selection moves its pixels (Alt duplicates),
+  Ctrl+arrows nudge them,
   Ctrl+T transforms them on a floating layer that merges back, Layer via Copy (Ctrl+J) copies them to a layer, and
   Add Mask or Add Black Mask on the Layer menu turns the selection into a mask.
 - **Brush and Eraser**: B paints with the foreground color, E erases (the Brush's header also has an Erase mode).

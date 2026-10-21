@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-21
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -9,7 +9,537 @@ Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
+`ToolDiscoveryTests.ps1` also runs the exact-entrypoint compiler-host controls in `ToolArchitectureTests.ps1`.
+They observe dependency/restore/solution/provenance boundaries, explicit and unset selections, Clean and failure
+cleanup through isolated stand-ins. They preserve MSBuild override/PATH precedence and the caller environment;
+actual compiler/dependency and native runtime qualification still require the selected products and canonical gates.
+Native ARM64 feasibility also records and requires the current default MSVC version before canonical work.
+`NativeArmValidationTests.ps1` exercises that exact host-selection boundary with isolated installation/discovery
+stand-ins. Those controls establish early refusal and environment selection, never ARM64 execution or product identity.
+The six initializer cases include explicitly provisioned native MSBuild selection and an older provisioned
+default-toolset refusal before any environment change. All 60 predecessor controls remain required; 14 added
+controls bring this boundary fixture to 74. The real disposable CI installation, pinned tool bytes, actual
+compiler/dependency inputs and native runtime require their own observed receipts. The canonical gates remain
+unchanged when native CI provisions its pinned side-by-side toolchain.
+
+### Persistent history and raster residency controls
+
+DocumentTests runs the persistent identity-index, actual history adapter, raster serial/journal, late-residency
+delta and direct-root topology controls in every x64 configuration. The identity-index reference is an
+independent `std::map` corpus with retained old versions, allocation faults, cancellation and original-owner
+lifetime checks. Actual history edits compare retained-byte charges, trim and Undo/Redo against the unchanged
+reference history implementation, including shared nested sparse storage and late materialization.
+Journal tests cover serial/epoch exhaustion without wrap, contiguous suffixes, overwrite and cancellation.
+Actual Raster tests require its existing lease and exact literal bytes. Topology controls require shared scalar
+root groups, first/last active parent edges and cancellation preserving the published history. These state
+controls do not establish production phase peaks, owner timing, ordinary activation or G1.
+
+The original-ticket history fixture uses the actual scheduler and a resumable owner capture after descriptor
+admission. Its literal reservation covers cached preparation, retirement and accounting-control allowances.
+Successful completion binds the original ticket before publication. Captured old roots retain their original
+owner across scalar history changes and live-history reset, without a diagnostic strong lock masking release.
+Cancellation preserves revision and Redo; joined Close drops unpublished prepared history while strong and
+weak controls keep the original charge until their final release. These fixtures do not migrate production
+callers or qualify measured retirement cost.
+
 ## Entrypoint
+
+The x64 ISA gate includes independent `IsaR14LoopTableTests.ps1` parser controls for the exact hoisted
+nonvolatile-base worker loop. Valid relocated table data and checked `INT3` straddles require the complete
+producer, guard, loop, decoded PE rows, PDB ownership/extent and targets. Missing, contradictory, duplicated,
+unknown or overlapping rows, body gaps, changed loop operands, invalid symbols/targets/extents, outside
+entries and adjacent genuine VEX/EVEX code MUST withhold data proof or remain ordinary ISA violations.
+Synthetic parser controls never execute their bytes and grant no native runtime or performance qualification.
+
+The x64 ISA gate runs `IsaRbxLongGuardTests.ps1` with 132 independent encoded controls: four accepted
+and 128 refused. Its exact RBX/RDX terminal constructor dispatch must agree with the linked PE,
+decoded row boundaries, PDB contribution, anonymous symbol, procedure extent, RET/INT3 and every
+case/default target. Controls cover twelve setup/dispatch rows, terminal and target rows, conflicting
+duplicate extents, unknown/overlapping rows, corrupt listing bytes, invalid ownership/extents and
+adjacent genuine vector code. These parser-only bytes are never executed and do not qualify runtime
+or performance. The exact supported dispatch is owned by `Build_Toolchain.md`.
+
+The x64 ISA gate also runs `IsaRbxDisp8RemapTests.ps1`: 59 independent encoded controls,
+one accepted and 58 refused. The 39 existing remap scenarios are ported to the exact RBX disp8
+guard; 20 additional controls corrupt its operands or each of its four guard rows (unknown,
+duplicate, overlap and PE mismatch). Complete table/target, procedure/contribution and dispatch
+proof remains required. The unchanged 39-control RDX fixture runs separately. These parser bytes
+are never executed and provide no native runtime or performance qualification. The supported
+encoding is owned by `Build_Toolchain.md`; the runtime allowlist is unchanged.
+
+### Responsive startup acquisition
+
+`RunStandaloneResponsiveStartupSelfTest` requires 14 actual hidden-Application cases and 217 independent
+assertions: successful acquisition, refusal and reentrant joined shutdown at each of five boundaries, and real
+owner-route exhaustion before row, display and stroke acquisition. It preserves the original document,
+generation and history, holds startup paths until full acquisition, publishes all async engine flags together,
+and proves joined cleanup, detach, closed/repeat refusal and drained quit state. Capacity refusal comes from
+actual borrowed routes filling the original multiplexer, never a fabricated quota HRESULT. Fixture storage
+outlives joined `Shutdown`. These state gates do not qualify ordinary startup, first frame or gesture cost.
+
+The x64 ISA gate also runs `IsaDwordZeroStackTests.ps1`: 109 encoded parser controls, five accepted and 104
+refused. PE/PDB identity, exact guard/dispatch rows, complete table, terminal body and decoded control flow must
+all agree; genuine vector instructions beside the table remain subject to the ordinary ISA gate. These bytes
+are parsed and never executed. The runtime allowlist is unchanged.
+
+### First visible canvas proof
+
+`RunStandaloneUiCancellationCanvasSelfTest` requires six actual hidden-WARP owner cases and 72 independent
+assertions: direct/prepared successful drawing, direct Compose and Blit failures, a successful skipped direct
+Blit, and a prepared Blit failure. Actual `RenderFrame` must advance the chrome Present ordinal while refusing
+source-frame proof after a failed/skipped canvas. The next successful canvas draw cannot replace that first
+frame. Source/history authority and joined owner cleanup remain exact. The fixture uses an explicit proof
+identity and suppresses only diagnostic failure reporting/WM_QUIT; it grants no real Escape admission or cost
+measurement. The existing dispatch/benchmark gates own those claims.
+
+The pure frame reducer has 17 controls, including permanent refusal of the first chrome-only Present.
+`recorded-blit.*` adds five real target/no-op HRESULT assertions: missing canvas, missing target, zero target
+dimensions and empty canvas holes return exactly `S_FALSE`, distinct from a completed `S_OK` draw.
+Prepared cancellation readers require all async tool flags enabled; direct readers require them disabled.
+The exact 47-field cancellation rows and all earlier numeric goldens remain unchanged.
+
+### Opt-in Escape cancellation diagnostics
+
+`REDPRISM_UI_TIMING_ATTRIBUTION=1` explicitly enables bounded attribution in cancellation benchmarks only.
+Ordinary application runs and ordinary benchmark runs leave it disabled. Each trial retains the first 32
+intervals of at least 1,000 microseconds, including nested scheduler phases. It reports overflow and optional
+clock failures. It never replaces the original inclusive QPC histogram, changes the 2 ms Apply limit or grants
+G1 qualification. Thread cycles are raw counts with a separate known flag; they are not elapsed microseconds
+and cannot excuse a wall-clock failure.
+
+`UI ATTRIBUTION` rows include raw QPC endpoints/frequency, rounded-up wall duration, thread-cycle delta,
+lexical source location, kind, phase and the original scheduler slot/generation when available. Phase values
+are Operation=0, DeferRetirement=1, DeferCompletion=2, CompletedCallback=3, PayloadDestruction=4,
+MemoryRefund=5, StateTransition=6, RetirementNotice=7, ActionRun=8, ActionDestruction=9, WorkerWake=10 and
+CancellationSourceDestruction=11. In the extended recorder, phase 4 covers job-wrapper destruction and phase 11
+covers the cancellation source separately. Earlier `r862` phase-4 records covered both; their frozen source
+and original interpretation remain preserved. WorkerWake inherits the surrounding original Apply ticket on
+the same thread; its detail is the work priority, while the scheduler's Apply phases use the job class.
+Nested intervals
+are appended when they finish, so a parent's start can precede the previously reported child's start.
+`UI ATTRIBUTION SUMMARY` retains the count, overflow and optional clock failures even when no interval meets
+the threshold. Reporting happens after the original cancellation row; its namespace and fields stay unchanged.
+The unchanged cancellation reader requires its namespace block to be contiguous and therefore refuses raw
+interleaved attribution output. Diagnostic shape review first validates every attribution row, preserves the
+complete raw file, then removes only those validated rows into a separate hashed projection; every original
+cancellation row must remain byte-identical. This projection never qualifies a timing gate.
+Disabled phase scopes read no clock, allocate no storage and create no timer/event. Enabled storage is a fixed
+array inside the existing capture; source strings have static lifetime. Pure synthetic controls cover the
+threshold, capacity/order, saturated overflow, unknown cycles, invalid clocks/kinds/phases, original-ticket
+identity and exact source propagation. Phase scopes do not write legacy histograms or their clock-failure counter.
+Identity ancestry is thread-local, installed only by enabled identified scopes and restored in nesting order;
+workers cannot inherit it. The optional action-destruction scope passes its lexical origin explicitly through
+`optional::emplace`. Raw cycle counts follow the
+[QueryThreadCycleTime contract](https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-querythreadcycletime).
+
+HostTests adds 14 immutable capture, 28 original-body/clock partition, 25 real event transport and 35 CLI
+controls. Selected useful Run ordinal is explicitly 2; admission stubs, other ticket generations, malformed
+boundary/result pairs, clock failure, early return and overlap cannot qualify accepted-stop-to-return.
+Transport controls read immutable payloads while original producers are still event-held, before join, and
+verify the exact bounded32record rearm/exhaustion policy. The factory's nonempty output refusal preserves
+its existing live event owner. Production callbacks own no Application/scheduler access or producer wait.
+
+`RunUiCancellationDispatchSelfTest` adds 36 real hidden-HWND controls in accepted/refused pairs. The
+independent four-gray-pixel source remains unchanged while its real original Commit body is event-held.
+Real WM_KEYDOWN/WM_KEYUP must bind the original ticket, preserve exact receipt errors, hide only an accepted
+Cancel card and retain logical/history/source authority until acknowledgement. Stale disarmed timer identity
+cannot repost Escape. After joined retirement, only the actual committed render argument is eligible; a
+separate equivalent document copy refuses. This fixture grants neither a worker-return nor visible-Present
+measurement. Its ordinary scheduler has no execution observer.
+
+Eight `ui-cancel-held-display` controls additionally compose/read back the four-gray-pixel source while the
+original Commit body remains event-held. The legacy gamma-two preview is present before Escape; accepted
+Cancel must restore the literal original pixels before acknowledgement, while admission refusal retains
+the preview. The actual frame selector, logical preview/source/history and original ticket/barrier remain
+exact. The fixture performs no Present and makes no timing or visible-frame claim.
+
+HostTests additionally requires 64 refusal classifier controls: the explicit four-profile/ten-case roster
+and both refusal stages reject changed source/history, unjoined owners, admitted Commit processing, an
+armed timer, missing/repeated notices and mismatched panel/grid state. The same actual Application dispatch
+fixture adds 24 independent `ui-cancel-refusal-caller.*` controls through real menu and settings callers.
+Hidden sparse budget holders leave exactly four pixels for opening refusal or one million for settings
+refusal; neither allocates or uploads the large holder. Gaussian and Motion must each report their original
+notice once, preserve source/history, settle all owners without Commit/timer admission, qualify the matching
+stage, and consume the notice without repeating it on DocumentChanged. These state controls measure no cost
+or Present. Four `docbudget.*-single-grid-*` controls separately exercise the exact 100 M sparse source's
+early single-raster growth limit for both blurs, with one-shot notice and unchanged unmaterialized source/history.
+
+The durable full cancellation reader and independent pure controls must preserve all 110 contexts, distinguish
+the declared 45/100 MP opening/settings refusals from admitted Commit rows, and exclude refused contexts from
+all duration/receipt distributions. Typed exact rosters, order, duplicate/missing/extra fields, fabricated
+clocks or receipts, stage mismatches and false qualification flags are required refusal controls. Small
+smoke remains strict: its 30 rows per route have no budget refusals. Pure readers establish schema correctness;
+native full-profile qualification and actual R1/W measurements remain separate requirements.
+
+The full test script runs independent cancellation output parser controls and both actual direct/prepared
+64x48 WARP cancellation smoke routes. Each route requires the exact ten-operation/three-trial roster with
+excluded warmup, known original raw/receipt results and a complete success report. Malformed, duplicate,
+missing or reordered records, false measurement, failed/refused work, invalid numeric fields and unsupported
+G1 claims refuse. All-early samples remain truthful unmeasured success rather than invented fast cancellation.
+No duration threshold is a correctness assertion. Original predecessor suites, numeric goldens, sanitizer
+probe/stress and both existing27operation smoke routes remain required. Runtime claims still require their
+exact source/dependency/binary/profile binding; pure parser tests and cross-builds are not runtime evidence.
+
+Six positive parser models and 41 refusal controls include exact `previewEnabled` context and bounded
+`deadlineRearms` (0–2) checks:
+Gaussian 250/Motion 2000 use the actual Preview-off checkbox outside timed Commit; the other eight cases
+keep their live previews. The actual smoke must observe useful-body notices from the original scheduler
+initialized at startup; constructing an observer only after scheduler initialization cannot pass. Ordinary
+startup remains observer-free. Extreme-preview latency/cancellation remain separate performance obligations.
+Prepared Preview-off setup requires current committed publication with no pending graph; Preview-on still
+requires exact current pending publication. Early native timer wakes disarm their original identity and
+permit at most two fresh event-driven one-shots, retaining the original QPC deadline. Exhaustion is failure,
+and posting before that deadline never qualifies. The actual smoke retains real re-arm and delay fields.
+The prepared smoke must progress with the published row cache's completed charge ticket retained; pending
+row preparation remains joined, row identity remains current and immutable cache memory ownership is preserved.
+
+
+### Detached Warp CPU and exclusive samples
+
+`RunRecordedWarpPreviewParentTests` runs the actual original scheduler/command parent on WARP and available
+hardware with ten literal source/mode cases per driver: translated, scaled, rotated 180 degrees, truly
+unmaterialized sparse and blank, each with Liquify and Smudge. Three actual GPU readbacks compare first preview
+with independently placed literal bytes and touched/committed results with original contiguous scalar Warp,
+with zero byte tolerance. The acknowledged old grid remains unchanged. Invalid/incomplete descriptors refuse
+before private resource creation, and original transport plus last-use acknowledgements precede worker retirement.
+The summary separately records completed WARP/hardware cases and explicit hardware skips. A cross-build does
+not qualify runtime, and this graphics fixture does not activate ordinary Warp or close G1.
+
+`DocumentTests` runs the Warp worker cancellation (43 assertions), adopted snapshots (36), detached opening (54),
+lazy tile snapshots (24), placed source sampler (31), sample plans (48) and exclusive sample sessions (45).
+The new plan/session references are independently calculated spacing centers, clipped tile geometry, explicit
+capacity growth, unchanged source/root/history/generation and exact joined transfer states. The constant-color
+Smudge check keeps its entire pickup inside the image. A separate radius-2, hardness-.98 edge pickup followed by
+one +1 pixel dab requires exactly three transparent pixels at x=0, y=1/2/3; all other pixels and the source remain
+the literal input. A constant image is not invariant when a pickup carries transparent exterior pixels.
+
+Sample tests require foreign/edited/stale plan refusal, known-owner mutation refusal, sole-strong-owner capture,
+moved-input invalidation, one worker append, prepared-before-stale rejection, unchanged document/history on sample
+apply, and opening-plus-sequence-specific discard. Reopening an identical source and an old discard within the
+same gesture cannot authorize or clear a younger sample. Failure-only fixture diagnostics cannot substitute for
+the fixed success inventory and exact summary counts.
+
+`HostTests` additionally runs 24 `warp-factory-lifetime.*` lifetime/admission controls on actual joined workers. Both weak
+control and deferred-graph destruction orders must retain the original charge through the last owner, including
+drafts below the large-release threshold. Existing legacy numeric Warp controls remain unchanged. Complete
+source/product/profile binding and predecessor order/multiplicity are required. Original-parent live/final host
+admission, display publication, ordinary activation and G1 remain separate gates. See
+[the source-bound run record](../TestRuns/P1WarpWorkers_2026-10-08.md).
+
+`RunWarpPreviewReaderTests` adds 32 assertions with literal premultiplied pixels: identity/padded rows,
+translated nearest sampling, quarter-offset smooth placement, unrounded four-tap brush samples, refusal
+canaries, transparent exterior carried by Smudge, four clipped crossing tiles, immutable old generations and
+a 100 MP sparse source with one touched tile and no materialization. Preview factory controls include unknown,
+current and foreign owner, missing or cancelled accounting and unprepared metadata. No reference reads
+candidate output to generate expected pixels.
+
+`RunWarpPreviewLifetimeTests` adds 24 actual scheduler assertions. Event-gated joined workers prepare literal
+2x2 previews under one original reservation. Missing/stale tickets, sealed rebinding and already-bound preview
+preparation refuse. Both queued-graph/last-weak destruction permutations retain the full original charge;
+the final owner drain alone refunds it. A completed job without a slot preclaim can transfer into a free slot,
+preserving the scheduler's existing API behavior. Ten-second waits are deadlock bounds, not timing claims.
+These CPU tests do not qualify a GPU preview, final document publication, ordinary activation or G1.
+
+`RunWarpReplayTests` adds 21 CPU reference assertions. The original layer is literal `(8,4,12,32)` BGRA,
+distinct from the independent premultiplied sample pattern. Curved selected/self-crossing paths, duplicate centers,
+single-point Flush and a finite outlier compare exact pixels, bounds and transform with the unchanged scalar
+`BrushStroke` Append/Flush reference using that original fixture. Full hard coverage at `(3,3)` mixes
+`(56,28,112,224)` through selection `136/255` to `(32,16,62,136)`; selection zero preserves the original.
+A transparent sample clears the single-point tip interior while far pixels remain original. Missing/repeated
+opening, known-owner mutation, uncomposed phase advance/finish and cancelled-prefix snapshot refuse. A nonfinite
+point preserves the accepted prefix. These references do not qualify WARP compute delivery or host publication.
+
+`RunWarpFinishTests` adds 31 authority/history assertions on joined worker-factory drafts. Diameter 6 has
+spacing 1 in both modes; the opening at `(7.25,7.25)` seeds the last point and Smudge pickup without recording
+a dab. Moving to `(9.25,7.25)` captures only `(8.25,7.25)` and `(9.25,7.25)` in order. Liquify and Smudge require every captured center and final composition before conversion, apply
+exactly one correctly named history entry and Undo restores the independent original. Capture preserves root,
+history and generation, refuses missing/wrong opening or a live strong borrow, and rejects worker replay on
+the original owner. A brush-kind discard cannot clear a Warp marker. Moved/duplicate conversion, generation
+change, legitimate opacity history and cancel/reopen leave stale results unable to overwrite newer state.
+
+`RunWarpReplayComputeTests` requires the actual compute engine on WARP and exercises hardware when available.
+Its independent original/sample BGRA fixtures expose replacement errors. Curved/duplicate point phases and
+final Flush retain density; missing, short and duplicate uint coverage delivery refuse before composition.
+Workers compose only after joined coverage delivery. Exact bounds/transform and every resulting channel match
+the scalar reference within the existing brush tolerance (2/255); a transparent tip and far original have literal
+byte expectations. The diagnostic uses the existing synchronous engine on its context owner and independent
+readback storage. It does not qualify the production command recorder, asynchronous readback lifetime, original
+admission, ordinary activation or G1.
+
+`RunWarpFinishAdmissionTests` adds 12 controls for repeatable CPU/GPU preflight, literal one-tile geometry,
+unchanged source/document/history/path, an independently calculated source/snapshot/output floor and owner,
+borrowed, detached, missing, changed-placement and cancelled refusals. A worker-produced snapshot retains
+valid premultiplied bytes inside its cached ownership bound. This small identity fixture is not large-document
+admission or an allocation/latency measurement.
+
+`RunStandaloneWarpFinishSelfTest` uses a hidden actual WARP application and the real admitted final parent.
+Its fourteen controls cover Liquify and Smudge: original pending ordinal through recorded compute/readback and
+held final worker, complete final raster/placement against the original contiguous Warp plus scalar
+Append/Flush reference (existing 2/255 tolerance), one correctly named history entry, display/row publication,
+off-owner retirement and exact Undo. Harness-only readback compares every published display channel with the
+independent reference within 2/255. Each mode also cancels while final preparation is held, requiring unchanged
+literal source/history and acknowledged display, the exact old charge after off-owner retirement and a cancelled
+original receipt. Opening and sample setup are explicitly joined core fixtures; this gate
+does not qualify ordinary Down/live preview, hardware host acceptance, the complete fault matrix or G1.
+
+### Completed raster-preview metadata and accounting
+
+`DocumentTests` runs `RunPreparedRasterPreviewTests`: 52 assertions cover immutable completed image gradients,
+placed and unplaced stretched masks, lifted-pixel source/grid metadata, unchanged changed flags/list and source
+bytes, owner/unknown-owner/pre-cancel refusal, and below-threshold complete metadata retirement on a joined worker.
+The pixel references are literal four-pixel BGRA and two-pixel Gray8 expectations, with explicit source rectangle
+and tile bounds; implementation output is not a golden generator.
+
+`HostTests` runs ten `completed-preview-memory.*` controls for actual successful/failed original completion,
+ticket generation, provenance, duplicate/outside-callback refusal and exact whole-admission retention/refund.
+It also runs 39 `prepared-raster-preview-lifetime.*` controls through the actual opted-in CPU raster-edit path.
+Joined workers destroy semantic nodes while separately retained stroke, metadata and lifted-opening weak controls
+keep the complete original 4 MiB admission charged. The final weak reset and owner drain must refund it exactly.
+
+`Host.Tests.WorkerWake` adds 17 `owner-wake-pool.*` records (including its summary), while the original
+`WorkerPoolTests` retain all default-route predicates, including foreign Close. Four literal counter controls
+cover zero/oversized capacity, all three lanes with saturation/reset/later requests, and the 1,024-hint cap.
+Actual opted-in pool cases cover 48 real bodies, a foreign producer on the original route, MTA/off-owner
+dispatch, invalid/closed requests and a single occupied worker with pending broker hints. Joined Close must
+precede owner cleanup and actual off-owner payload destruction must precede borrowed-context release.
+These functional controls do not establish owner latency, whole-operation phase admission or G1.
+A separate strong lifted-opening cache must retain the charge after stroke/metadata retirement and release its
+last semantic owner on a joined worker before the owner can refund. All existing predecessor controls remain
+required. These controls qualify CPU metadata/accounting only; display consumers, normal activation and G1 are
+separate gates. See [the exact-source record](../TestRuns/P1RasterPreview_2026-10-08.md).
+
+### Deferred selection movement model
+
+The document runner requires 147 additional ordered assertions: 57 `deferred-selection-move`, 32
+`selection-hit-work`, 37 `selection-press-input` and 21 `selection-move-lifetime` facts. Literal geometry
+and the independent numeric reference cover opening/closure, rounding, cancellation, no-op history and stale
+refusal. The finite `DBL_MAX` offset whose rounded bounds collapse is required to be nonmovable, matching the
+materialized reference. Hit tests cover segment boundaries, holes, large coordinates and cancellation in both
+empty-loop and edge traversal. Physical-prefix tests cover exact event-time values, capacity loss, terminal
+ownership and ordinal exhaustion. Real worker threads prove deferred geometry destruction and final weak
+control retention. All predecessor goldens remain required. Private Release/real-ASan success qualifies these
+model tests only; full native integration, actual Application routes, ordinary activation and G1 are separate.
+
+### Selection outline source and mapped cache
+
+`DocumentTests` runs 37 `selectiondisplayvalue.*` controls. Independent literal loops require separate rounded
+Pixel Move translation, source storage identity/ownership, empty versus absent selection, direct/deferred
+transform precedence, finite-input behavior, unchanged document/generation/history and a captured display
+value retaining its source after all other owners are gone. The existing numeric translated-outline API
+remains separately checked.
+
+The actual pending-raster WARP host requires 56 `application-pending-raster.outline-*` assertions (14 in each
+Move/Copy × Cancel/Apply case). Four literal corners use an independent center/zoom/pan/current-DPI formula;
+source conversions and actual painted paths are reused through both landings, pan, zoom, DPI, zero/redrag and
+all eight marching-ant phases. Equal points with a new source rebuild once; cache-only source ownership,
+empty/absent transitions and actual device/factory replacement are checked. Fixed 1 DIP strokes and 4/4 DIP
+dashes preserve pen dimensions under zoom. The unchanged no-outline Hand pan gate requires zero repaint and
+preparation work. Complete registries and predecessor order/multiplicity remain required; only the existing
+source-bound recorded-brush callback windows admit their documented partial order. These controls prove
+semantics and lifetime; initial geometry construction, large-owner retirement, ordinary display activation
+and measured G1 remain separate requirements. See [the run record](../TestRuns/P1SelectionOutlineCache_2026-10-08.md).
+
+### Original publication and application final-stroke controls
+
+`HostTests` registers 15 `publication-callback.*` controls, 17 publication-retention controls, four shared
+publication boundary controls, six real-worker publication-owner controls and six reconstructed-endpoint controls. They independently require
+exact acknowledged-hook identity, success-only one-time complete reservation transfer, predecessor FIFO,
+failure/cancellation refusal and charge retention through final weak-control release.
+
+`CompositionTests` registers the original-parent publication controls on WARP and available hardware. These
+check held seeds, exact private publication, foreign GPU-ledger refusal and literal pixel results. The exact
+post-retirement charge assertion MUST wait for scheduler idle as well as final parent/follower callbacks and
+display retirement: a cache's worker-retired notification can precede the release sink's byte/count refund.
+Require the real event-driven acknowledgment without changing expected bytes, pixels or the failure timeout.
+[Retirement boundary evidence](../TestRuns/P1PublicationParentRetirement_2026-10-19.md). Their
+document swap uses a test editor; it does not qualify application history or rows. The application additionally
+runs `RunPreparedLayerRowsAccessibilitySelfTest` (17 controls) and `RunPreparedRowPublicationTests` (34 controls).
+The accessibility controls require the complete original admission to remain charged after row data retires while
+an expired weak witness still owns the control block, then require the exact refund after that witness is released
+(`Runtime.Tests.ApplicationPreparedLayerRowsAccessibility.cpp`). `RunStandaloneStrokeFinishSelfTest` covers ten actual
+hidden-WARP scenarios with 35 assertions. It retains the original gesture ordinal through worker final preparation
+and checks literal pixels, one history entry, Undo/Redo, sparse storage, eager semantic mask thumbnails, no-op,
+cancellation and joined shutdown. The two added scenarios require dormant healthy-device refusal, unchanged
+notification refusal, repeated failed recovery preserving the first cause, and cancellation retaining every owner
+until a real original event acknowledges. The full physical FIFO additionally seals its accepted prefix at the last
+accepted point, preserves the original pending ordinal through final preparation, commits only that literal prefix
+with matching display/rows, returns exactly `ERROR_NOT_ENOUGH_QUOTA` and retires its original payload and stream.
+Complete predecessor stages remain mandatory; these stages precede shutdown tests.
+
+These integrated controls require fresh exact-source execution. Historical isolated probes and the earlier
+978-input profiles cannot qualify this candidate. Normal asynchronous stroke activation, complete device and
+transport fault coverage, the required profile matrix and G1 remain separate gates.
+
+### Joined sample-input retirement
+
+`DocumentTests` retains the original 98 `strokesample-session.*` controls and their summary, then runs five
+`joined-retirement.*` engine-owner assertions with a separate `strokesample-joined-retirement.summary`.
+A tracking CPU engine observes one Begin/End, a real worker prepares/composes the detached draft, and
+successful owner apply must consume the input's draft reference. Owner cancellation expires the original
+weak draft before a second real worker destroys the remaining input. That worker calls no engine End and
+writes no history. These are lifetime controls, not application Append/Up or G1 qualification.
+
+### Clone worker opening
+
+`DocumentTests` additionally requires eight `clone-opening-memory.*` assertions and its separate summary.
+The independent equation is the same Paint declaration plus the valid sample's cached retirement bytes;
+missing, empty, wrong-format/dimension, mask and unexpected non-Clone sample inputs return exact zero.
+The predecessor `stroke-opening-memory` assertions and 30-fact summary remain unchanged.
+
+The actual WARP `RunSealedCloneHostSelfTest` retains all predecessor receipt/order/pixel expectations and
+adds seven assertions: one off-owner opening in each All Layers Escape/Undo scenario, one after a cancelled
+opacity predecessor, and four Single Layer fixture/held-opening/event-time-offset/retirement observations.
+The Single Layer destination starts literal blue and must become literal red despite a later Clone-source
+change while its actual prepared worker is held. The summary has four scenarios. Full current-source profiles
+and archived identities must qualify these controls; opening is not an Append/Up or G1 result.
+
+### Private GPU recording and original-record phase transitions
+
+Normal `HostTests` runs `recording-lane.*`, `execution-lane-stages.*` and `reservation-growth.*`.
+The independent state references observe original tickets, actual acknowledged stages, retained charges,
+event gates, worker identities and final callbacks. CPU/recorder/CPU handoff keeps the original serial FIFO,
+cancellation and retained slot; unrelated CPU work completes while the recorder is blocked. Invalid or disabled
+lane changes preserve the suspended record. Later phase growth uses a fresh physical/commit snapshot outside
+the scheduler lock and revalidates the exact suspended ticket afterward. Equal totals do not sample, refusal
+changes no charge, and cancellation/shutdown return the complete grown reservation after acknowledgement.
+The reentrant sample case resumes that same ticket during sampling and must refuse stale growth.
+See the [growth state oracle](../TestRuns/P1ReservationGrowthStateOracle_2026-10-07.md).
+
+Normal WARP `CompositionTests` runs the `recorded-display.*` transport and `recording-pump.*` groups:
+two fixed command slots, exact leases, producer acknowledgement, original GPU completion, failed-signal recovery
+and dormant quarantine. A real second device with the same numeric generation must be refused before Execute,
+with `E_INVALIDARG`, no executed acknowledgement and the complete charge retained until original retirement.
+Actual display graph activation, complete graph admission and G1 remain separate gates. The complete identical-source
+runtime/cross-build matrix, exact predecessor inventories and preserved archives are required for qualification;
+[r330 evidence](../TestRuns/P1GpuRecording_2026-10-07.md) covers only its original source.
+
+### Stroke completion and normal history notification startup foundation
+
+Canonical `DocumentTests` includes 33 `heal-work.*`, 133 `strokefinal.*` and 201
+`strokefinish-publication.*` assertions. The independent references are literal complete BGRA/Gray8 rasters,
+selection64 rounding, exact private-draft state transitions and existing-history Undo/Redo behaviour. Healing
+span and cancellation tests include last-row extents, unsupported shape/opacity/mode, actual recursive solve,
+and an analytic partial-output prefix with unchanged outside pixels and padding. Create Texture's 5x5 red-hole
+fixture uses 25 literals derived from the legacy detail/grain equations, not a constant-fill assumption or
+implementation-generated output. Existing legacy healing goldens stay unchanged.
+
+`CompositionTests` requires 68 expanded `gpu-buffer-readback.*` assertions, including repeated helper
+multiplicities: actual WARP structured-buffer dispatch/copy, exact uint values and worker clamp, hard/soft final
+tail parity within 2/255, unchanged preview sentinel, buffer/texture/buffer slot reuse and staging charge,
+invalid device/layout admission, the one-event busy-Map rearm, cancellation with a lent mapping and device
+retirement through exact worker acknowledgement. These transport controls do not activate application mouse-up.
+
+The normal WARP application self-test registers `RunStandaloneHistoryResidencyStartupSelfTest` once and
+requires 36 `history-residency-startup.*` assertions across normal startup, failure after registration,
+subscription exhaustion and owner-route exhaustion. It executes the actual `Run` startup path: an original
+worker grows a literal sparse history raster, notifications start admitted trimming, the live document/revision/
+saved state stay exact, and the graph retires off owner. Acquired-prefix rollback, repeated shutdown, joined
+producer/event lifetime, zero residual charge and per-fixture quit isolation are mandatory.
+
+Every runtime configuration must preserve the complete predecessor registry and stage order, require the exact
+expanded names/multiplicities/order of all 471 additions, and bind its source, binaries, PDBs, linked ISA checks
+and logs to the actual attempt. Functional foundation proof does not establish application stroke activation,
+complete resource admission or G1 performance. Evidence: [foundation record](../TestRuns/P1StrokeFinishFoundation_2026-10-07.md).
+
+### Stroke resource controls
+
+Canonical `DocumentTests` additionally requires 48 `brush-retirement.*`, 44 `sparse-window.*` and 18
+`mask-sample-work.*` controls. They cover producer-cached complete tile ownership, sparse clipping/splitting and
+literal replacement pixels, and private cancellable nearest/bilinear mask sampling without shared assembly.
+The worker sampler validates Gray8 and dimensions/pixel limits, preserves the captured edge background, and
+uses Smooth for High exactly as the reference mask sampler does. Invalid placement yields background only
+after a successful source read. Its bilinear expectations are independent literal bytes.
+
+WARP `CompositionTests` requires 40 `brush-density-clear.*` controls with the D3D11 debug layer active, or 38
+when the SDK debug component is absent, plus 31 expanded `gpu-buffer-slots.*` controls. The repeated device-bind
+assertion appears twice and MUST NOT be deduplicated. Active debug-layer runs reject every warning, error or
+corruption diagnostic after engine cleanup. Fresh/reused density, exact eight-slot capacity, real mapped loans,
+release/device generations and stopped cleanup are mandatory. Receiver owners outlive callback and loan cleanup.
+
+Complete runtime profiles preserve every predecessor control and ordered application stage, with exact source,
+binary, PDB and ISA identity. Large healing fixture arrays live on heap owners so Release analysis retains stack
+diagnostics without suppressing them. These controls do not establish asynchronous application mouse-up, whole
+CPU/VRAM admission or G1. See [the resource record](../TestRuns/P1StrokeResourceControls_2026-10-07.md).
+
+### Experimental prepared layer-row and retained-cache foundation
+
+Normal `DocumentTests` preserves all predecessor goldens and adds 42 `layer-rows-work.*` and 16
+`collapse-revision.*` state expectations: literal hierarchy/name/visibility/mask semantics, 10,000 rows/depth
+64/long names, malformed localized patterns, sparse nonmaterialization, cancellation, independent remembered
+collapse bounds and copied/moved session read authority. Normal `HostTests` adds 59 `retained-job-memory.*`
+expectations plus its summary, including the exact final callback restriction, 64 slots, stale/foreign/reused
+tokens, original reservation, release-once, waiting admission and actual Close. The replacement-pressure extension
+adds seven state expectations (66 named controls plus the summary): one original refusal, unchanged cache/charge,
+dormancy on memory events, exact release and a fresh explicit ticket when the entire peak fits.
+
+The experimental shared-reader extension adds 57 `shared-retained-job-memory.*` expectations plus its exact
+summary in normal `HostTests`. The independent state reference covers original full-reservation transfer without
+a memory requery, occupied output/outside callback/repeated transfer refusal, failed/cancelled terminal results,
+idle with live leases, move/self-move/overwritten lease acknowledgement, a real MTA final graph destructor held
+inside its payload destruction, and charge retention until the owner consumes acknowledgement. The same 64 slots
+hold mixed shared leases and owner-only tickets; the 65th transfer refuses, and moved-empty releases cannot affect
+a reused slot. A waiting job remains unrun until foreign acknowledgement reaches the owner, then runs once. Two
+literal readable graphs survive actual Close and scheduler destruction; post-close release preserves the other
+graph's live-byte record and cannot affect an unrelated scheduler. Complete normal-profile qualification and
+actual admitted row/accessibility graph adoption remain required; this primitive alone establishes no H4/G1 result.
+
+The actual WARP self-test adds 123 `layer-rows-host.*` publication/lifetime expectations and 46
+`application-prepared-layer-rows-boundary.*` initial-refusal/changed-key/shutdown expectations, each with a
+separate summary. Current/stale/cancelled/failed/deleted-folder/copy-session cases use the real scheduler,
+owner capture, held worker, pinned Tree and deferred sink. Shutdown before/after preparation and with an active
+cache uses a fresh Application and its real shutdown event, detach and worker join. Complete source/private
+registry/stage and archive proofs remain required for every profile. These foundation gates keep production
+disabled; replacement pressure, explicit retry, remaining interaction/UIA/cost, Native activation and G1 remain
+open. The interaction/retry extension requires separate real hidden-WARP fixtures with 18 named expectations
+each and their exact summaries: actual pointer row/mask selection, expander collapse/expand A-B-A, stale row/mask
+refusal while a real worker is held, retained-cache pressure/refusal, repeated refusal, actual accessible retry
+button input, duplicate suppression, continued view input, exact literal source/history and worker retirement.
+These source additions need the same normal-profile/private/predecessor/stage and archive proof before they are
+qualified. The edit extension adds 17 `application-prepared-layer-rows-edit.*` named state expectations and an
+exact summary in a separate hidden-WARP Application: stale held-worker drag/invocation refusal, literal group
+reorder through actual pointer input, leaf double-click Rename, typed characters/Enter after coherent Prepare,
+one rename undo preserving the reorder, exact stored BGRA/Gray8 bytes, worker retirement and filtered quit
+cleanup. Its registry and complete identical-source normal matrix must preserve all earlier controls/stages.
+Client-reentrant UIA and largest-count/name owner cost remain separate gates; these functional tests do not
+activate production prepared rows or establish their G1 latency.
+The `application-prepared-layer-rows-accessibility.*` fixture exercises a real hidden-WARP provider scenario:
+the 10,000-row epoch retains its original admitted reservation, indexed reads expose literal full offscreen names,
+the actual Tree captures the same owner, and provider child/sibling navigation preserves the name and order. A
+replacement epoch keeps both original charges alive while the old provider exists; releasing that provider retires
+the complete old graph before acknowledgement. A fresh MTA reader then holds and reads the final graph across
+Application shutdown and scheduler destruction before its final release. The current coherent x64
+Debug/Release/real-ASan integration passes all 17 named checks and its summary.
+Actual UIA latency, largest-row owner cost, complete consumer admission, production activation and G1 remain
+open; these functional checks do not close P1.
+The `RunStandalonePreparedLayerRowsCapacitySelfTest` fixture
+(`application-prepared-layer-rows-capacity.*`) retains 64 actual published epochs, then requires the 65th
+publication to refuse its exhausted slot while preserving the old Chrome rows and full original charges. Releasing
+one old graph cannot uncharge it before whole-graph retirement and owner acknowledgement. Neither that capacity
+return nor a memory event may automatically retry the unchanged key; one explicit retry must submit a fresh ticket
+and reuse the acknowledged slot. The current coherent x64 Debug/Release/real-ASan integration passes all
+12 capacity checks and its summary.
+The `RunStandalonePreparedLayerRowsNotificationSelfTest` fixture has 11 named
+`application-prepared-layer-rows-notification.*` state expectations and its separate summary. A fresh MTA UIA
+client subscribes through the real hidden window provider, holds a same-count/same-ID structure callback, reads
+the complete replacement Unicode name, and invokes the standard selection pattern through COM marshalling.
+The owner must return from publication and process view input while delivery is held; the callback must select
+exactly once without changing literal pixels or adding history. The client unsubscribes while the owner pumps
+messages before joining; shutdown then retires every admitted epoch. Failure bounds detect blocked publication
+or teardown and establish no latency target. Raw embedded providers stay on their STA. Exact registration,
+predecessor preservation and the identical-source x64 Debug/Release/real-ASan matrix now qualify all 11 checks
+and its summary. These same-process MTA-client checks establish no external-client latency target.
+The stable-identity extension adds 21 named `application-prepared-layer-rows-identity.*` expectations and its
+separate summary, registered as `RunStandalonePreparedLayerRowsIdentitySelfTest` before accessibility tests.
+The independent reference is a literal four-layer hierarchy and BGRA bytes, exercised through actual pinned
+Tree providers: disjoint initial IDs in known storage order, full renamed Unicode text, stable runtime IDs,
+reorder and insertion without selecting a replacement ordinal, collapse unavailability and reopening identity,
+delete unavailability, replacement of a document with the same Guids but a new serial, unchanged pixel storage
+through every transition, full old-epoch charges until reader retirement, checked range overflow before capture,
+explicit retry without wraparound, and shutdown/quit closeout. Existing interaction, edit, accessibility and
+capacity fixtures must preserve their exact named controls with independent stable IDs. The new fixture and
+adapted sources need the complete identical-source normal matrix; current draft integration is not a pass and
+does not enable production or qualify owner latency.
+See [prepared-row evidence](../TestRuns/P1PreparedLayerRows_2026-10-05.md).
 
 ### Producer input ordering primitives
 
@@ -37,6 +567,13 @@ remain separate requirements; these tests alone do not qualify G1.
 
 ### Immutable record primitive foundation
 
+`record-bounds.*` proves immutable cached metadata/ownership/node accounting against an independent literal
+child policy: constant-time copied/concurrent reads, capacity, separate overflows, invalid/unavailable children,
+empty/copy/move/swap/replacement/equality, adoption and cancellation/allocation retry. ImageLayer cases use
+published capacities and actual fields to cover names, spare/empty curves, repeated raster owners, eager semantic
+mask ownership and sparse bounds before/after explicit assembly. The 87 controls preserve the original root and
+document goldens; they establish no application timing, exact retained-history index or complete admission result.
+
 Normal `DocumentTests` runs `document-record-root.*`: 10,000-record zero-copy capture/non-const read, retained
 strings/child owners, event-ordered concurrent readers, private edit ordering/capacity refusal, consumed/moved
 builders, before/mid/final-copy cancellation, reached record-buffer/root-seal/record-copy allocation faults,
@@ -63,6 +600,13 @@ limit refusal, empty zero-limit roots, reached reserve/seal allocation failures,
 and balanced final allocation release. Debug iterator-proxy allocations remain tracked; buffer failures are
 injected at actual record-buffer allocation. Preserve the 34 root, 12 view and all preceding controls, and qualify
 all six profiles before closing this construction preparation. Full document drafts/writers remain separate.
+
+Qualification archive storage follows
+[`Build_QualificationArchives.md`](../Build/Build_QualificationArchives.md).
+`Tests/BuildProcessTests/QualificationArchiveTests.ps1` exercises retained filesystem scenarios directly and
+through independent tooling validation (`validate.ps1` and `test.ps1`'s Tooling scope). Preservation receipts never
+replace source/profile/stage/PE/PDB/runtime qualification checks. The tooling runner discovers this script alongside
+the other independent BuildProcessTests; no unconditional duplicate invocation is added to native-only runs.
 
 ### Detached basic raster edits
 
@@ -121,6 +665,13 @@ across modifier transitions, persistent draft metadata, one-entry publication an
 Ctrl+T retains the opening/draft with no entry. Full native profiles remain required; deferred preview coalescing,
 remaining bypass/duplicate/pointer-loss routes, device/shutdown and measured G1 are separate follow-ups.
 
+The unexecuted `RunTransformShapeRedrawSelfTest` fixture (`transform-shape-redraw-host.*`) queues
+`HostTransformFinishInput` into the admitted worker and gates after preparation. Required assertions preserve the
+literal red 2×2 source, linked Gray8 mask bytes and implicit placement, original reservation, source/history and
+live preview while view input remains responsive. Completion must produce the independent literal red 4×3 pixels,
+preserve mask bytes while assigning explicit placement, and publish exactly one Transform Layer entry with matching
+Undo/Redo. This host fixture has not yet been executed or qualified in the consumer matrix.
+
 Duplicate-opening tests add 82 independent controls for shared original image/mask storage, grouped insertion,
 exact-cap color/mask budgets, one duplicate entry/Undo, prepaid rollback, nested parent history/redo, stale
 authority and reached preparation faults. The real host adds 131 event-gated checks: opening ownership,
@@ -146,6 +697,31 @@ failures, retained complete previews, queued full-resolution Apply and draft-onl
 retirement off owner. The existing capture-loss fixture awaits cancellation acknowledgement before applying its
 unchanged document/history assertions. Full native clean qualification remains required before closing this
 foundation. Production opt-in, Alt-duplicate, complete caller/device/shutdown and G1 remain separate gates.
+### Windows session-end file writes and clipboard publication
+
+`worker-write-completion.*` has 16 protocol assertions for queued writer entry, invalid/duplicate entry refusal,
+readback cancellation winning before writer entry, writer entry winning cancellation, event readiness only after
+acknowledgement, and retained job authority. `file-end-session.*` has 108 assertions across 12 actual-message cases:
+Save/PNG before and after publication, `WM_ENDSESSION(FALSE)`, writer timeout, export readback for saved and modified
+documents, JPEG writer acknowledgement, and an earlier unsaved prompt while Save is active. Literal old-destination
+bytes, captured output, ticket/stamp/reservation, wait counts, no owner apply in the window procedure, and ordinary
+receipt completion are checked. The current source, actual child runs and
+qualification boundaries are recorded in [P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md).
+
+`clipboard-end-session.*` contains 48 assertions across six Copy/Cut cases. The earlier oracle passed in Debug
+r275. Release r276 failed one combined publication-counter assertion; the available log does not identify which counter
+failed, so no root cause is claimed. The current optional counters permit a supported pre-`EmptyClipboard` Busy retry
+(up to the existing six-attempt job limit), snapshot the acquisition count at Empty, and require the final count to
+match that snapshot. Receipt, PNG and DIB placement still occur exactly once after Empty, and no production retry or
+publication behavior changed. Fresh repaired-oracle qualification
+is recorded in [P1ClipboardSessionEnd](../TestRuns/P1ClipboardSessionEnd_2026-10-06.md); Release r276 remains
+failed evidence.
+
+The repaired source passes full Debug r278, Release r280, real ASan r281 and all three ARM64 r40 cross-builds. These results do not
+close F5d/P1 or move its plan to Done. Release analysis r282 was user-interrupted; completed analysis, native runtime claims, resource
+and G1 qualification remain subject to the parent milestone
+and its current execution checklist; cross-compilation alone makes no native ARM64 runtime claim.
+
 ### Clipboard and copy preparation
 
 `clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent
@@ -176,7 +752,8 @@ suite establishes command semantics; the production host graph and current priva
 Constant-time capture and G1 remain unqualified.
 
 `owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
-pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
+pending versus ready, literal ten-leaf acceptance/eleventh refusal, bounded/duplicate/self registration refusal,
+quiescent detach/reused slot, recursive pump
 refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application. Production
 clipboard Inspect/Copy retries retain their admitted record and reservation, with Paste sharing six total
 acquisitions across Inspect and owned Copy; host qualification and its remaining limits are recorded below.
@@ -204,7 +781,9 @@ retained source/private tiles and callback-borrow termination without shared spa
 `gradient-host.*` exercises the actual preview and selected commit callers at event gates. Capture follows full
 reservation; input/history/tickets survive early/late cancellation. Admission/capture/worker OOM, returned statuses,
 source/selection/generation/restore/opening changes cannot authorize dependent edits. Coalesced endpoints and
-palette refreshes finish at the latest settings with no history entry. Image/mask commits use literal pixels and
+palette refreshes finish at the latest settings with no history entry. The Gradient gate consumes one release per
+worker visit: the second coalesced preview stays held until the owner checks the first immutable publication.
+Image/mask commits use literal pixels and
 one named entry; Undo drops an uncommitted line. Existing GPU checks await acknowledgement, retaining their
 canvas-vs-raster tolerance and adoption count. Full x64 suites and ARM64 cross-builds are required. No event-gate
 deadline is a performance assertion; real-loop drag/settle timing and owner upload/history budgets remain open.
@@ -234,6 +813,23 @@ preparation across two coalesced previews plus commit, check latest literal pixe
 and invalidate/rebuild on gesture reopen. Every terminal commit clears the cache and returns reservations;
 weak-owner controls check final retirement. These additions enter native qualification and make no drag-time claim.
 
+The detached Pixel Move numeric oracle additionally uses the 100×40 red-left/blue-right fixture from
+`retained numeric golden cases–287,331–345`. From selection(10,10,10,10), updates(30.4,0)
+then(60.2,5) give the final absolute rounded offset(60,5). Preview and commit require BGRA hole[0,0,0,0] at
+(15,15), red[0,0,255,255] at(75,20), unchanged blue[255,0,0,255] at(85,20) and red at(5,5), final selection
+bounds(70,15,80,25), one named history entry and one Undo restoring pixels and original selection. Duplicate
+preserves the source while landing red over blue; its final selection translates under the owning tool contract.
+A separate(30,0) outline case requires bounds(40,10,50,20) in the displayed preview, while CPU output awaits
+owner application, and after application. These literal references must not be rebaselined to an implementation.
+
+Pixel Move target-capture host controls observe actual worker/owner thread IDs after full reservation. Commit
+and prepared-display preview require bounded root/token owner capture and complete worker target capture.
+The commit fixture gives image and mask asset names 1,048,576 UTF-16 units each, checks both sizes on the worker,
+the existing output image-name normalization, exact mask-name preservation, literal pixels, history and Undo.
+The unprepared-preview owner-copy route remains explicitly separate. Private component proof and canonical
+integration receipts are recorded in `Specs/TestRuns/P1PixelTargetCapture_2026-10-19.md`; focused model proof
+does not qualify a full Document suite, initial physical Ctrl/lift or ordinary activation.
+
 ### Retained selection and history ownership
 
 `DocumentTests` runs `selectionstorage.*` and `history-accounting.*`: empty/shared/moved geometry, reserved
@@ -252,7 +848,7 @@ allocation-free publication with stale, foreign, moved-from and malformed candid
 `std::bad_alloc` leaving live history/document state unchanged at the named preparation checkpoints; basic raster,
 gradient and pixel-move apply/Undo/Redo ownership; and conservative graph bounds for current, pending, past, future
 and additional raster owners. Raster-bound cases include sparse bases/tiles and a possible lazy materialization
-cache, shared-DAG occurrence overcount/overflow refusal, and refusal beyond depth 128 without materialization.
+cache, shared-DAG occurrence overcount/overflow refusal, and refusal beyond depth 136 without materialization.
 
 The WARP `rasteredit-host.*` self-test also injects `std::bad_alloc` at five history-preparation stages for the
 basic Invert image commit: `BeforeSnapshot`, `AfterSnapshot`, `Entry`, `StackGrowth` and `TrimIndex`. Its expected
@@ -283,6 +879,17 @@ The actual WARP host checks complete admitted capture/reservation, retained sour
 late cancellation drop, precise terminal receipt and off-owner retirement for all six kinds. Opening checks literal
 below-composite bytes, unchanged live visibility and history baseline, GPU mapping/target release before detached
 Begin preparation, device recovery after copied pixels and a younger queued rename that waits for opening and OK.
+The recorded opening preserves all72 original kind/mode cases. Successful Ordered/Rebind panels retain the
+exact original CPU envelope; other terminal cases release it. Its48 additional lifetime controls use actual
+Cancel for all six kinds in both modes: unchanged document values/revision/redo with one generation advance,
+copied literal pixels retaining the original charge, an expired last weak storage control retaining that charge,
+and final control release followed by real owner acknowledgement producing zero charge/release and idle.
+Construction-failure cases MUST NOT reach the final processing gate. The opening aggregate and graphics owners
+retire off owner; these controls do not qualify timing, the remaining callers or wider configuration results.
+Sampler adjustment-picker checks retain the original panel's settled memory baseline while sampling;
+the sampler must add no retained terminal charge. Original99/75 luminance bytes, settings, root/generation,
+history and palette expectations remain exact. Actual panel Cancel must then acknowledge zero reserved
+and releasing bytes. Destructive panel/ordinary sampler zero-memory cases remain unchanged.
 An open transaction disables Undo/Redo commands; retention assertions therefore inspect its immutable redo stack,
 not `CanRedo()`. No production command pumps a nested wait. Final identities and configuration results live in the
 [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
@@ -315,8 +922,39 @@ entrypoint's success exit code and MUST NOT be reused as the pass/fail signal fo
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
 
-The hidden WARP self-test runs under a bounded timeout; a run that does not finish in time fails with the process id
-reported, never killed.
+The hidden WARP self-test failure bound defaults to 1,200 seconds. Optional
+`-SelfTestTimeoutSeconds` accepts 1,200–5,400 seconds; values above the default require `-Platform ARM64`
+on a native ARM64 host and are rejected before build on every other route. The hosted native ARM64 Release
+helper requests 5,400 seconds as a failure backstop. This extends observation only: it does not establish
+a prior stall's cause, a performance fix, a G1 pass or successful runtime completion. A timeout fails with
+the process id reported, never killed.
+
+The native helper copies canonical stdout/stderr independently and records Application stdout and stderr
+progress, byte counts, last-write times, and bounded owned-process CPU/memory diagnostics. Unavailable CIM,
+missing/disappearing logs and processes are diagnostic states with explicit availability/errors, never an
+invented zero or a reason to abandon canonical work. The actual parent exit and terminal progress precede
+closing source/environment receipts and available product hashes, all before the 30-second raw-pipe drain.
+A drain refusal still fails; it cannot erase these earlier receipts. A zero exit without all five product
+pairs fails. Preserve the previous failed attempt and every absent receipt as historical evidence.
+
+`NativeArmValidationTests.ps1` runs 30 pure-PowerShell controls before the build, after entrypoint argument
+guards. Literal available/unavailable and independent stdout/stderr fixtures test progress; executable AST
+commands test terminal/closing-evidence ordering. Three byte-identical entrypoint copies refuse 1,199,
+5,401 and x64 5,400 seconds with the required exception types/parameter or exact native-only message.
+An isolated build sentinel must remain unreachable. All source bookends remain identical. These controls
+execute no native helper, Application runtime or build. Main's separate misleading-comment/reordered-AST
+and unrelated-error counterexamples must be refused by these guards; they are tooling proof, not native
+qualification.
+
+The ISA synthetic fixture helpers live in `IsaInlineTableFixtures.ps1`. Importing helpers must not run the
+inline-table assertion suite. `IsaScanTests.ps1` explicitly runs that complete baseline once, followed by
+every original family and compiled probe. Keep the 21 helper bodies, 13 setup statements, all 181 original
+non-function baseline statements, nested helper scope and successful-import exit semantics unchanged.
+The composite run retains all 4,305 distinct parser PASS records (4,350 occurrences) and 15 compiled named
+controls; only fourteen repeated executions of the same 698 baseline PASS records are removed. This is
+fixture reuse, with no decoder, runtime allowlist, compiler, project, instruction or golden relaxation.
+The [adopted tooling evidence](../TestRuns/P1ValidationTooling_2026-10-21.md) records the current source,
+actual affected runs and retained counterexamples. Full application and performance gates remain separate.
 
 A test run never waits on a dialog. In Debug and ASan Debug, `RedPrism.exe`'s harness modes (`--self-test`,
 `--screenshot`, a `--demo`, a `--bench`) install a CRT report hook (`_CrtSetReportHook2`) that ends the process at the
@@ -327,7 +965,7 @@ handler and the kernels are initialized. Every harness mode and `--crash-probe` 
 opens neither Windows Error Reporting's dialog nor a critical-error box.
 
 Each of the four test executables first calls `RedPrismTestFailureReports::RouteAwayFromDialogs()`
-(`Tests/Support/FailureReports.h`). In every configuration `_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT)`
+(`Tests/Support/Support.Tests.FailureReports.h`). In every configuration `_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT)`
 and the same `SetErrorMode` flags leave an abort, a fast-fail or a crash without a dialog. In Debug and ASan Debug a
 wide report hook (`_CrtSetReportHookW2`, which the CRT calls for every report, ANSI ones included) ends the run at the
 first error or assertion report (an STL range check, a CRT assertion, a debug-heap error; a warning keeps the CRT's own
@@ -341,6 +979,12 @@ Release, which has no such checks. A run that does not end is blocked on a dialo
 
 The self-test reads a keyboard of its own (`RedPrism/KeyboardState.h`): its drivers hold exactly the modifiers a
 step names, and the input code reads Shift, Ctrl and Alt from that keyboard, never from the thread's key state.
+Nested drivers use `KeyboardState::ScopedSynthetic`: each starts with all keys up and restores the enclosing
+driver's previous mode and complete key bytes on normal or early return. An inner test cannot switch the outer
+test to physical input. The sampler caller's existing exact snapshot restoration preserves the same contract.
+`HostTests` runs 15 `keyboard-synthetic.*` literal state controls for two/three levels, held modifiers, toggle
+bytes, early return and restoration of initially physical or synthetic input. This harness state is UI-thread-only;
+the scope performs no native keyboard writes and ordinary input continues to use the message thread's key state.
 Windows writes every physical key transition into each thread's key state at once, the hidden self-test window's
 thread included, so without it a Shift or Ctrl the user types in another application while a gate runs changes a
 step at random (RF-1110); with the thread's key state, a Ctrl the user held turned a typed S into Save and left
@@ -377,7 +1021,11 @@ before acknowledgement, and aggregate retirement off owner. Reached generation/a
 lasso/brush changes refuse stale output. Capture and six history-stage allocation faults preserve live state;
 actual full scheduler records refuse admission and a later command recovers after drain. The mask fixture MUST
 begin on image pixels with an existing mask, so its held target switch is a reached change.
-These 162 unique checks across 28 modes run inside the full application suite; they do not qualify live gesture
+These 208 unique checks across 34 modes retain all preceding 162 checks/28 modes and add six actual late-residency
+success, refresh-failure and cancellation cases for Select All and Deselect. They require the literal four-byte
+leaf/eight-byte assembly charge, original source/outline/saved lineage, one capture/preparation and retained refresh
+reservation, one current failure notice and off-owner retirement. They run inside the full application suite and
+do not qualify live gesture
 or header routing, every retained raster's last-release thread, allocator/API faults, constant-time capture or G1.
 Harness setup/cleanup waits for queued selection acknowledgement before starting later pointer gestures.
 
@@ -574,6 +1222,63 @@ Real gated workers prepare both applied and stale aggregates, then dispose of th
 the owner closes the document. This proves the core handoff; scheduler/host lifecycle, ordering, failure/refusal
 presentation and measured G1 remain separate gates.
 
+`wand-composite-core.*` covers the detached All Layers New core with an independent literal two-color BGRA composite,
+exact outline vertices/AA, transparent full-canvas selection, history/no-op behavior, invalid composites, crossed
+publication modes, cancellation, authority refusal and the composite-versus-sparse-source memory plans. These
+fixtures do not use the composition or `MagicWand` as their expected-pixel oracle. `RunWandCompositeHostSelfTest`
+contains 21 modes whose expected state and selected outline come from an independent literal visible-composite
+fixture, not from the rendering helper that produces the GPU readback. Require original selected order, current-only
+publication, actual record-capacity refusal, map/utility release before CPU preparation, real device recovery after
+copy acknowledgement, fault atomicity and off-owner aggregate retirement. The two pre-copy device-change modes
+retire an actual queued readback before a map exists: one change restarts and publishes the literal outline as one
+undoable entry; a third change fails after two restarts, preserving original selection, redo and history epoch.
+Both require one source capture and unchanged job ticket, history stamp and reservation across retries.
+Recorded passage belongs in `Specs/TestRuns/WandCompositeReadback_2026-10-04.md` and the later
+[pre-copy recovery qualification](../TestRuns/P1WandReadbackRebind_2026-10-06.md); these structural controls preserve the existing legacy numeric
+goldens and do not substitute for the required large supported fixtures or G1 performance measurements.
+
+### Native Wand Boolean admission, publication and lifetime (P1.6 S4b)
+
+`Document.Tests.HistoryPublicationLifetime.cpp` adds 38 publication and lifetime controls;
+`Document.Tests.WandBoundedPlan.cpp` adds 20 mode-aware admission and charged publication controls.
+`RunDocumentWandBooleanTests()` registers 130 workspace, geometry, compatibility, allocation-prefix,
+cancellation-prefix, load and smoke assertions from `Document.Tests.WandBoolean*`. All fixtures and runners
+are compiled and registered in the native DocumentTests project. Preserve the previous numeric controls.
+
+History controls require charged metadata/topology, exact Undo/Redo, copied selection readers, actual worker
+destruction, owning null aliases and final weak/control ownership. Plan controls require the literal 134217792
+byte workspace envelope, complete input/output/result coexistence, checked missing/short/overflow refusal,
+and original mode semantics. Arena controls use independent analytic/legacy geometry literals and the unchanged
+pinned Clipper2 2.0.1 engine as the compatibility reference. Walk every reached allocation/cancellation prefix,
+sweep 1,021 workspace capacities, and cover 262,144 collinear points and 16,384 disjoint intersections.
+The workspace capacity is not a measured peak or a proof of all allocator/destructor deadlines.
+
+`Host.Tests.PersistentOutputMemory.cpp` registers 41 controls plus its summary through HostTests. Require
+actual original-ticket transfer without a new budget query, more surviving output leases than the temporary
+slot capacity, independently retired temporaries, both release orders, foreign/stale endpoint isolation,
+growth refusal, real joined Close and charge retention until final strong and weak/control release.
+
+`Runtime.Tests.ApplicationWandLayerHost.cpp` has 17 modes and 144 checks; the composite host has 21 modes and
+199 checks. Each summary adds one PASS/FAIL record. Require original source/composite literals, New and FIFO
+Add/Subtract while the first request is held, actual Undo/Redo, copied geometry readers, real document/history
+Close and final strong/weak output retirement under the original charge. Composite cases require actual queued
+readback and original-ticket capture/rebind behavior. UI Wand modes are New, Add and Subtract; the arena's
+internal Intersect clips to the canvas and does not add a UI mode.
+
+The clipboard host preserves its previous 268 controls and adds six `paste-unavailable-sequence` controls,
+for 274 checks across 53 scenarios. Require real foreign DIB bytes and placement, one actual paste history entry,
+independent private clipboard ownership, unavailable sequence inspection, the original two initial busy attempts,
+six-total-attempt policy and actual output retirement. A zero sequence query cannot establish private preference.
+The test override changes only the queried sequence; actual Open/Inspect/Copy/Decode/Paste remain native.
+
+Actual run inventories and failure receipts belong in `Specs/TestRuns/`. Qualify the full required x64
+Debug/Release/real-ASan matrix and ARM64 cross-builds before declaring this component complete. Native ARM64
+runtime needs a native host. Functional fixtures and capacity bounds do not close ordinary activation or G1.
+
+## UI benchmark qualification evidence
+
+For UI benchmark qualification, retain the machine row with the actual window-monitor device name and exact rational configured refresh, together with the captured continuity outcome. A full performance report is acceptable only when those fields are known and the run's window/display continuity stayed valid; unknown authority or any continuity invalidation is a refusal, including when the window later returns to its starting monitor. UI smoke reports MUST be explicitly marked `smokeCorrectnessOnly=1`; their durations and successful completion establish correctness-harness behavior only. Unbuilt or unexecuted candidate controls are not passing runtime evidence, and a smoke pass does not close performance qualification or mark P1 Done.
+
 ## Gates
 
 The pipeline foundation adds `DocumentTests.exe --stress`: 256 rounds of eight simultaneous readers of shared
@@ -591,7 +1296,7 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 | Unknown switch | `RedPrism.exe --no-such-switch` exit 2 |
 | Crash probe | `RedPrism.exe --crash-probe <directory>` (a directory under `.build\`) exits nonzero and leaves exactly one `RedPrism-*.dmp` above zero bytes with a `pending.txt` naming it ([`Core_CrashHandling.md`](../Core/Core_CrashHandling.md)); the directory is removed afterwards |
 | Failure reports | Each test executable's hidden `--failure-report-self-test`, run first by `test.ps1` through `Tests/BuildProcessTests/FailureReportTests.ps1` within a bound, ends with exit code 3 and the CRT report on stderr in Debug and ASan Debug and with exit code 0 in Release; a run that blocks on a dialog fails the gate |
-| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0: visible DxUi surface within 64 MiB with ≥ 1 composite, canvas surfaces allocated, a second frame does not re-composite the settled document, a splitter drag through `DispatchPointer` widens the layers panel by 40 DIP and narrows the hole after the layout re-sync, the foreground well opens the picker and a sampled color commits into the session palette, a cancelled background edit leaves it, X/D swap and reset, the opacity stepper records one `Layer Opacity` undo entry at 50 %, a painted layer shows the Move tool's box, a pointer drag commits one `Transform Layer` entry, Free Transform previews a typed rotation until Apply, Escape cancels, Shift+Right nudges ten pixels, Flip Canvas Horizontal and Flip Layer Vertical mirror, a Marquee drag selects a whole-pixel rectangle and a Shift drag adds one, M switches the shape once per press, dragging inside the selection moves it as one `Move Selection` entry, Escape and Ctrl+Z during such a drag put the outline back without an entry, a click inside deselects, the wand selects a painted layer's pixels with exact bounds, Ctrl+Shift+I / Ctrl+A / Ctrl+D drive the Select menu, three polygonal clicks and Enter close a `Polygonal Lasso`, Expand from the header grows it by five pixels, Escape cancels an outline, a Brush stroke through the pointer path with the compute engine shows a live preview and commits one sparse `Brush Stroke` entry drawn from the adopted texture without materializing, the Eraser clears it, `[` `]` Shift-`[` and `5` change the tip, Escape drops a stroke, Clone Stamp stamps a mark from a source, Spot Healing blends it away, Smudge drags it through a live warp, Blur commits, a Gradient previews and applies with Enter after a digit set its opacity, a Shape drag adds a Rectangle layer, Shift-U switches the kind, Escape drops a draft, the Eyedropper samples the shape's color, Fill with Foreground Color fills a Marquee selection, Ctrl+X cuts it to the clipboard (mirrored to the system clipboard), Ctrl+V pastes it in place as a new layer, Ctrl+I inverts it, a Ctrl-drag moves the selected pixels through the live preview as one `Move Pixels` entry with the outline following, Ctrl+Right nudges them, Delete clears them, Ctrl+T on a selection floats them (Escape restores exactly, Enter merges one `Transform Selection` entry), Ctrl+J copies them to a layer, Add Mask hides them, Ctrl+Shift+C copies the composite, Ctrl+L opens the Levels panel and its output white previews black through the display document, Escape restores, an input white of 128 turns the gray white and Enter records one `Levels` entry, the Filter menu's Gaussian Blur applies one entry, Shift+Delete opens Content-Aware Fill on a red block filled into a selection of the white plate and Enter restores it as one `Content-Aware Fill` entry, with everything selected the fill reports no source, refuses Enter and closes on Escape, a Hue/Saturation adjustment layer opens its panel and a hue of 120 rotates the red beneath it live on the canvas, Enter keeps its record, Shift+= steps the blend mode, a rail click through the pointer path activates its tool (plainly, with the window focused, under the button's tooltip, and held across settled frames after a tool switch, after a click on another rail button and with the opacity stepper focused), the File menu's flyout anchor lies under its item on screen and a point on the open color picker card counts as chrome while the hole beside it counts as canvas, every interactive chrome control has an accessible name and the window's UIA root exposes the DxUi tree (its parent link, at least eight named elements, a hit under the menu bar), a settings file of the self-test's own reloads live (a light theme, the sample ring off and a 300 DIP layers panel apply, a broken file changes nothing and is not rewritten, restoring it applies again), the high-contrast palette applies and `RefreshTheme` follows the system state, and a save records the window placement; an image opened with the forced Add as Layer answer joins the document as a layer and with New Project replaces it by an unmodified untitled document of the image's size, a modified document survives New under the forced Cancel answer and is replaced under Don't Save, Close Project empties the shell (status `—`, a frame still renders) and New brings a document back, Import Images adds two files as one `Import Images` entry, Move Layer Up and Down swap siblings as `Reorder Layers` entries, Group Selected Layers wraps the active layer in a folder, Ctrl+Alt+G clips a layer to the one below and releases it, each function the UI spec lists as unimplemented raises the notice count by one and changes neither the document, the history nor the tool, Canvas Size shrinks the document to half in percent with the ratio locked around the top-left anchor on Enter and grows it with a white Canvas Extension layer from the bottom-right anchor, Escape cancels a pending size, Image Size resamples to 325 × 205 at 300 ppi with nearest sampling (the red layer's pixels and box scale with it) and three undos restore the document, New Canvas creates a 300 × 200 unmodified document, and the Crop tool frames the canvas when chosen, resizes the frame to 640 × 400 by a handle drag through the pointer path, crops on Enter as one `Crop` entry, moves the frame by a drag inside it, drops it on Escape, squares it through the header's ratio, cancels, is chosen again and undoes the crop with Ctrl+Z (its own whole-canvas frame takes no Undo) and leaves the tool without a frame, the Rename Layer card renames the active layer through typed characters and Enter and leaves the name alone on Escape, Merge Down composites a blue layer onto a red one into one trimmed layer named after the lower one and undo restores both, the Layer menu's mask commands gray out without a mask and a layer's mask is targeted again once another layer was chosen (Target Layer Mask and back, with the captions and the row's badge tone; Unlink and Disable Layer Mask as their entries with `Mask off` on the row; a Shift-press on the row's Mask badge choosing that layer and turning its mask on again; a press on the row's name targeting the pixels; a plain press on the badge the mask), the rendering steps listed in [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md) Validation pass (actual pixels 1:1, wheel and Zoom tool zoom, device removal at every frame stage rebuilt and drawn on, a failed canvas that keeps the chrome, a 17 000 pixel document through its proxy and read back at full resolution, readbacks without the preview, the adopted curve equal to its raster, a gradient on another layer previewing there, surfaces dropped while minimized or occluded, the minimum window size, the screenshot exit codes, repeated failures that ask to close through the save prompt, a gradient left pending on one layer when another is chosen ending with its own commit so each layer draws exactly as its raster), the keyboard steps listed in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md) Validation (every key through the window procedure: replacements, text fields, AltGr, the Command List, the menu bar, the Move tool's digits, the displayed chords), the session checks (a typed opacity typed back to its start, closed by a command, carried to a new document, cancelled and committed; the Rename card's own layer; Cancel at the save prompt keeping a panel, the size card, a crop frame, a shape draft and a pending transform; a live stroke on a clean document; Save under an adjustment layer's panel; a folder project saved in place; an image batch whose first file fails; Canvas Size over a pending gradient; a copy the system clipboard refused; capture loss mid-stroke and mid-drag; a cancelled splitter drag; a leave without a capture; a stroke dragged over the layers panel keeping the pointer; Space across a focus loss; Alt-press, Undo and a drag; a close inside a chrome callback; the session end and its settings save) and the integration checks of the 2026-09-23 review (a reopened project keeping no mask target; a dropped image centered on the drop point on the canvas and on the canvas's middle off it; Load Mask and Load Layer Selection saying why a 2100 × 2100 checkerboard loads nothing; budget refusals raising one notice each for Layer via Copy with and without a selection, Gaussian Blur and Merge Down; Copy and Copy Merged applying a pending gradient first; Merge Down under a pending gradient holding it; a pending mask gradient following Paint, and X and D flipping and resetting the mask palette; the rail's wells showing that palette in black and white whatever the colors, a well opening no picker while a mask is the target and a picker open on a well closing unchanged once one is; a typed "2.5" in Gaussian Blur's radius kept as typed; the Gradient Map picker closing with its panel and the next well pick reaching the palette; Image Size's unit pick without resampling storing the unit; the rail parsing no SVG while settled and at most two per tool switch; the palette zones, the curve editor, the levels bars and the hue spectrum reachable in the UI Automation tree; a press on the spectrum's hue bars moving no handle while one in its handle strip does), what a pointer move costs the chrome and its UI Automation snapshot ([`Core_PerformanceAndResources.md`](../Core/Core_PerformanceAndResources.md), "Pointer input and the chrome": a Hand pan writing and preparing nothing, a Space pan, a wheel step and a brush move writing only the overlay and the zoom text, a transform drag rebuilding no layer row or menu, a settled sync writing nothing, no snapshot published without a listening client and one per preparation with one, `WM_GETOBJECT` and the in-process root publishing a waiting snapshot, a card published without a client) and the canvas cursor's per-position decisions (no layer scan with auto-select off, one scan and one selection test per position, none outside the selection's bounds, the cursors unchanged), then 0 DxUi bytes and 0 canvas bytes when hidden |
+| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0: visible DxUi surface within 64 MiB with ≥ 1 composite, canvas surfaces allocated, a second frame does not re-composite the settled document, a splitter drag through `DispatchPointer` widens the layers panel by 40 DIP and narrows the hole after the layout re-sync, the foreground well opens the picker and a sampled color commits into the session palette, a cancelled background edit leaves it, X/D swap and reset, the opacity stepper records one `Layer Opacity` undo entry at 50 %, a painted layer shows the Move tool's box, a pointer drag commits one `Transform Layer` entry, Free Transform previews a typed rotation until Apply, Escape cancels, Shift+Right nudges ten pixels, Flip Canvas Horizontal and Flip Layer Vertical mirror, a Marquee drag selects a whole-pixel rectangle and a Shift drag adds one, M switches the shape once per press, dragging inside the selection moves it as one `Move Selection` entry, Escape and Ctrl+Z during such a drag put the outline back without an entry, a click inside deselects, the wand selects a painted layer's pixels with exact bounds, Ctrl+Shift+I / Ctrl+A / Ctrl+D drive the Select menu, three polygonal clicks and Enter close a `Polygonal Lasso`, Expand from the header grows it by five pixels, Escape cancels an outline, a Brush stroke through the pointer path with the compute engine shows a live preview and commits one sparse `Brush Stroke` entry drawn from the adopted texture without materializing, the Eraser clears it, `[` `]` Shift-`[` and `5` change the tip, Escape drops a stroke, Clone Stamp stamps a mark from a source, Spot Healing blends it away, Smudge drags it through a live warp, Blur commits, a Gradient previews and applies with Enter after a digit set its opacity, a Shape drag adds a Rectangle layer, Shift-U switches the kind, Escape drops a draft, the Eyedropper samples the shape's color, Fill with Foreground Color fills a Marquee selection, Ctrl+X cuts it to the clipboard (mirrored to the system clipboard), Ctrl+V pastes it in place as a new layer, Ctrl+I inverts it, a Ctrl-drag moves the selected pixels through the live preview as one `Move Pixels` entry with the outline following, Ctrl+Right nudges them, Delete clears them, Ctrl+T on a selection floats them (Escape restores exactly, Enter merges one `Transform Selection` entry), Ctrl+J copies them to a layer, Add Mask hides them, Ctrl+Shift+C copies the composite, Ctrl+L opens the Levels panel and its output white previews black through the display document, Escape restores, an input white of 136 turns the gray white and Enter records one `Levels` entry, the Filter menu's Gaussian Blur applies one entry, Shift+Delete opens Content-Aware Fill on a red block filled into a selection of the white plate and Enter restores it as one `Content-Aware Fill` entry, with everything selected the fill reports no source, refuses Enter and closes on Escape, a Hue/Saturation adjustment layer opens its panel and a hue of 120 rotates the red beneath it live on the canvas, Enter keeps its record, Shift+= steps the blend mode, a rail click through the pointer path activates its tool (plainly, with the window focused, under the button's tooltip, and held across settled frames after a tool switch, after a click on another rail button and with the opacity stepper focused), the File menu's flyout anchor lies under its item on screen and a point on the open color picker card counts as chrome while the hole beside it counts as canvas, every interactive chrome control has an accessible name and the window's UIA root exposes the DxUi tree (its parent link, at least eight named elements, a hit under the menu bar), a settings file of the self-test's own reloads live (a light theme, the sample ring off and a 300 DIP layers panel apply, a broken file changes nothing and is not rewritten, restoring it applies again), the high-contrast palette applies and `RefreshTheme` follows the system state, and a save records the window placement; an image opened with the forced Add as Layer answer joins the document as a layer and with New Project replaces it by an unmodified untitled document of the image's size, a modified document survives New under the forced Cancel answer and is replaced under Don't Save, Close Project empties the shell (status `—`, a frame still renders) and New brings a document back, Import Images adds two files as one `Import Images` entry, Move Layer Up and Down swap siblings as `Reorder Layers` entries, Group Selected Layers wraps the active layer in a folder, Ctrl+Alt+G clips a layer to the one below and releases it, each function the UI spec lists as unimplemented raises the notice count by one and changes neither the document, the history nor the tool, Canvas Size shrinks the document to half in percent with the ratio locked around the top-left anchor on Enter and grows it with a white Canvas Extension layer from the bottom-right anchor, Escape cancels a pending size, Image Size resamples to 325 × 205 at 300 ppi with nearest sampling (the red layer's pixels and box scale with it) and three undos restore the document, New Canvas creates a 300 × 200 unmodified document, and the Crop tool frames the canvas when chosen, resizes the frame to 640 × 400 by a handle drag through the pointer path, crops on Enter as one `Crop` entry, moves the frame by a drag inside it, drops it on Escape, squares it through the header's ratio, cancels, is chosen again and undoes the crop with Ctrl+Z (its own whole-canvas frame takes no Undo) and leaves the tool without a frame, the Rename Layer card renames the active layer through typed characters and Enter and leaves the name alone on Escape, Merge Down composites a blue layer onto a red one into one trimmed layer named after the lower one and undo restores both, the Layer menu's mask commands gray out without a mask and a layer's mask is targeted again once another layer was chosen (Target Layer Mask and back, with the captions and the row's badge tone; Unlink and Disable Layer Mask as their entries with `Mask off` on the row; a Shift-press on the row's Mask badge choosing that layer and turning its mask on again; a press on the row's name targeting the pixels; a plain press on the badge the mask), the rendering steps listed in [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md) Validation pass (actual pixels 1:1, wheel and Zoom tool zoom, device removal at every frame stage rebuilt and drawn on, a failed canvas that keeps the chrome, a 17 000 pixel document through its proxy and read back at full resolution, readbacks without the preview, the adopted curve equal to its raster, a gradient on another layer previewing there, surfaces dropped while minimized or occluded, the minimum window size, the screenshot exit codes, repeated failures that ask to close through the save prompt, a gradient left pending on one layer when another is chosen ending with its own commit so each layer draws exactly as its raster), the keyboard steps listed in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md) Validation (every key through the window procedure: replacements, text fields, AltGr, the Command List, the menu bar, the Move tool's digits, the displayed chords), the session checks (a typed opacity typed back to its start, closed by a command, carried to a new document, cancelled and committed; the Rename card's own layer; Cancel at the save prompt keeping a panel, the size card, a crop frame, a shape draft and a pending transform; a live stroke on a clean document; Save under an adjustment layer's panel; a folder project saved in place; an image batch whose first file fails; Canvas Size over a pending gradient; a copy the system clipboard refused; capture loss mid-stroke and mid-drag; a cancelled splitter drag; a leave without a capture; a stroke dragged over the layers panel keeping the pointer; Space across a focus loss; Alt-press, Undo and a drag; a close inside a chrome callback; the session end and its settings save) and the integration checks of the 2026-09-23 review (a reopened project keeping no mask target; a dropped image centered on the drop point on the canvas and on the canvas's middle off it; Load Mask and Load Layer Selection saying why a 2100 × 2100 checkerboard loads nothing; budget refusals raising one notice each for Layer via Copy with and without a selection, Gaussian Blur and Merge Down; Copy and Copy Merged applying a pending gradient first; Merge Down under a pending gradient holding it; a pending mask gradient following Paint, and X and D flipping and resetting the mask palette; the rail's wells showing that palette in black and white whatever the colors, a well opening no picker while a mask is the target and a picker open on a well closing unchanged once one is; a typed "2.5" in Gaussian Blur's radius kept as typed; the Gradient Map picker closing with its panel and the next well pick reaching the palette; Image Size's unit pick without resampling storing the unit; the rail parsing no SVG while settled and at most two per tool switch; the palette zones, the curve editor, the levels bars and the hue spectrum reachable in the UI Automation tree; a press on the spectrum's hue bars moving no handle while one in its handle strip does), what a pointer move costs the chrome and its UI Automation snapshot ([`Core_PerformanceAndResources.md`](../Core/Core_PerformanceAndResources.md), "Pointer input and the chrome": a Hand pan writing and preparing nothing, a Space pan, a wheel step and a brush move writing only the overlay and the zoom text, a transform drag rebuilding no layer row or menu, a settled sync writing nothing, no snapshot published without a listening client and one per preparation with one, `WM_GETOBJECT` and the in-process root publishing a waiting snapshot, a card published without a client) and the canvas cursor's per-position decisions (no layer scan with auto-select off, one scan and one selection test per position, none outside the selection's bounds, the cursors unchanged), then 0 DxUi bytes and 0 canvas bytes when hidden |
 | DocumentTests | `DocumentTests.exe` exit 0 (graph, `ProjectStore`-identical validation, history budget, mask placement helpers, collapsed rows and their mask state, clip release on delete, legacy insertion/deletion/naming semantics, palette, transform geometry/drag/snap/session/duplicate/group/mask/flip/distort cases ported from the legacy transform suites, selection geometry/coverage/session/move/modify/load/marquee and wand kernel/session cases ported from the legacy `SelectionTests` and `MagicWandTests`, sparse rasters and the brush kernel, strokes, masks, opacity, curves, crossings, snapshots, budgets, keys, expansion and selection clips from the legacy brush suites, listed in [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md), and the retouch cases: spot healing for every mode, clone stamp alignment and tip families, blur, smudge, liquify, warp tiles, gradients, shapes with the redraw on scaling, and the eyedropper; and the pixel edits ported from the legacy `SelectionEditTests` and `SelectionClipboardTests`: fills, Clear and the Delete key, invert, masks from the selection, pixel moves and nudges, the clipboard and the floating selection transform; and the color adjustments and filters ported from the legacy `LevelsTests`, `HueSaturationTests`, `ImageAdjustmentTests`, `FilterTests`, `AdjustmentLayerTests` and `BlendShortcutTests`: levels, hue/saturation, exposure, gradient map, grain, blurs, noise, lens correction, adjustment layers edited through the panels, the blend-mode step and the HSL formulas; and the content-aware fill ported from the legacy `SmartEditTests` (`smart.*`): the stripes continue through the filled block, a flat background reconstructs and undoes, Cancel and a no-source fill leave the original, the grid grows to a selection past the layer's edge; and the Layer menu edits ported from the legacy `LayerTests`, `GroupingSelectionTests` and `LiveMaskTests` gates (`order.*`, `wrap.*`, `clip.*`, `clear.*`): sibling swaps and their refusal, single, folder and empty grouping with undo, the clipping toggle with a shared base, and the cleared session; and the sizes ported from the legacy `CanvasSizeTests` and `ImageSizeTests` (`canvasdraft.*`, `canvas.*`, `imagedraft.*`, `imagesize.*`) and the crop cases from the legacy `CropTests` (`crop.*`) listed in [`Document_Tools.md`](../Document/Document_Tools.md); and the merge plan and merge (`merge.*`: no plan for a bottom layer or an empty folder, Merge Down onto the lower layer in the anchor's slot with clips re-targeted and undo, Merge Group replacing the folder, a stale plan refused) |
 | CompositionTests | `CompositionTests.exe` exit 0: the golden table in [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md) including the C12 adjustment layers and HSL blends (blend modes, order, raster masks with placement, live masks and chains, clipping stacks, folder masks, transforms, residency and caching, viewport, sparse upload, stroke preview and adoption, compute brush parity with the CPU kernel) |
 | IoTests | `IoTests.exe` exit 0: the list in [`IO_ProjectFormat.md`](../IO/IO_ProjectFormat.md) plus PNG/Gray8/JPEG codec round trips, remaining aggregate project budgets before allocation, adaptive project probes/reopened-input ceilings and detached ordered image imports, HEIF clean error, import onto a document (a PNG is not a ZIP project), and the settings store (`settings.*`: file names and paths, parsing with per-field fallbacks and rejects, serialization keeping unknown fields and a newer schema, the cold load of a missing, invalid and unreadable file, the live load, and saves that back up an invalid file, keep unknown fields, leave no temporary and create the directory) |
@@ -685,6 +1390,18 @@ body/default targets are required. Missing/unknown/duplicate/overlapping or PE-m
 Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
 and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
 
+The 119 `isa-compact-signed-rcx-byte-remap.*` controls independently prove the compact disp32/MOVSXD variant:
+the unsigned imm8 guard, identical stack displacement, eight contiguous PE/listing rows, same-owner table
+symbols, valid body/default targets and an exact terminal or interior bound. For an interior table, the next
+same-owner anonymous symbol must be exactly the four-byte alignment of the guard-derived byte-table end,
+inside the same procedure. Only the exact zero-to-three-byte standard NOP alignment is accepted; those padding
+bytes receive no table exemption. Four valid padding lengths and ten independently malformed interior forms
+cover this additional boundary. The positive matrix includes maxima
+1, 67 and 127 with three displacements each; missing, duplicate, unknown, overlapping and mismatched rows,
+invalid bounds/owners/symbols/indices/targets and real body/adjacent VEX/EVEX are separate refusals.
+The archived r260 and r265 images additionally have independent literal PE/PDB byte proofs. No object, address or runtime
+allowance exempts the newly recognized encoding; its full configuration matrix remains required.
+
 `IsaRdiBaseByteRemapTests.ps1` adds 57 synthetic controls for Release OnCommand's RDI image-base remap:
 seven accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
 table row proved from PE bytes) and 50 refusals. The exact nine-row unsigned guard/CDQE/base/byte-and-DWORD
@@ -726,6 +1443,16 @@ same-procedure decoded boundary. An unrelated later data symbol does not extend 
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
+The separate short-default terminal form adds 63 independent encoded controls (three accepted, 60 refused).
+Its signed disp8 stack reload and unsigned short JA must match the CMP slot and the complete contiguous RCX
+RVA dispatch. Only a bounded body (at most4096 bytes after the candidate dispatch) with an exact PE/listing
+`RET; NOP dword [RAX]` three-byte padding shape may use a distinct default target. Every body row is known,
+contiguous and matches PE bytes; body branches into terminal padding/table data refuse. Case/default targets
+must be decoded body boundaries; the anonymous same-owner table starts at the guarded DWORD array and ends
+exactly at its PDB procedure end. Reported table bytes must also match the PE. Missing, unknown, duplicate or
+changed rows, invalid bounds/targets/symbols and real body/adjacent VEX/EVEX instructions remain rejected.
+These are parser controls, not native execution or performance proof. The runtime allowlist and DxUi pin stay unchanged.
+
 `IsaWideStackGuardTests.ps1` reruns the original inline-table controls and adds 54 independent
 `isa-inline-table.TerminalDwordWideStack*` controls for the observed ASan EndCanvasEdit switch. The seven
 contiguous CMP/JA/MOVSXD/RCX-dispatch rows require exact PE/listing agreement, full disp32 stack-slot equality,
@@ -734,6 +1461,25 @@ targets. Every high displacement byte is tested independently; malformed opcodes
 overlapping/mismatched rows, incorrect metadata/end/targets and an unrelated later symbol refuse the data proof.
 Adjacent real VEX remains a violation while all eleven DWORD data rows are still recognized. Recheck the exact
 archived failing image before rebuilding, with the runtime allowlist and executable/runtime/tier counts preserved.
+
+`IsaInlineTableTests.ps1` also adds 60 independent `isa-inline-table.UnsignedStackTerminal*` controls for the
+observed ASan WindowHost disp8 DWORD switch. This form requires CMP/unsigned short JA/zero-extending MOV EAX
+from the same stack slot, the exact four-row RCX dispatch, bound 1…127, actual PE/listing/nonoverlap agreement,
+same-owner anonymous aligned data, decoded body/default targets, an immediately preceding RET and the exact
+terminal PDB procedure end. The separate default must be a forward decoded body boundary. Wrong or missing
+guards, registers, stack slots, returns, metadata, bounds and targets refuse; a later unrelated data symbol
+cannot prove the range. Adjacent real VEX remains a violation. Reparse the exact retained failed image before
+rebuilding; only its six proved table DWORDs change classification. The runtime allowlist and DxUi pin stay
+unchanged. Parser proof is separate from native ASan qualification ([record](../TestRuns/P1ProjectDurabilityFaults_2026-10-09.md)).
+
+The full-width RSI host-flow terminal table additionally has 93 independent parser controls (seven accepted,
+86 refused). The exact six-row guard/dispatch, maximum 1–127, image base, same-owner anonymous data, complete
+PE-matched body (at most 16 KiB), RET/three-byte NOP and exact terminal PDB extent must agree. Case/default
+targets must be decoded boundaries after the dispatch and before the NOP. Unknown, omitted, duplicated,
+overlapping or changed rows, guards, targets and invalid PDB proof refuse. A valid table alongside a genuine
+VEX instruction still fails for that instruction. The existing encoded control assertion multisets and runtime
+allowlist stay intact. Parser tests do not execute their synthetic bytes; the original failed native analysis
+artifact is preserved and a fresh native analysis run is required after integration.
 
 The ASan `std::variant` visit switch additionally has 73 QWORD-stack/RAX-base controls: four valid tables and
 69 refusals. The seven contiguous CMP/JA/LEA/MOV/load/ADD/JMP rows require exact PE/listing agreement, equal
@@ -785,6 +1531,32 @@ table (6). A genuine VEX instruction in the procedure, in the alignment before t
 or in the next function (4) stays a violation while the two table rows stay data. The real Release images of the merged tree
 pass: [record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md).
 
+The PDB-marked table proof has 39 controls in `IsaMarkedTableTests.ps1`. Each builds a small image whose listing comes from the
+gate's own `llvm-objdump`, so a table decodes as it would at that address. They start from the switch of DxUi's
+`MenuPointerKindFromMessage` as linked into the Release image that the gate rejected on 2 October. Ten are accepted:
+
+- the observed image, whose vector-decoding entries the dispatch recognizers alone reject;
+- the switch at three other addresses, a second table in the procedure, and tables in two procedures;
+- valid byte indices that decode as VEX and EVEX, and each of the three alignment forms. With the three-byte form, a row
+  reaches from a proved DWORD table into the indices that the alignment ends.
+
+Each refusal changes one thing:
+
+- the record (6): absent, named, typed, one byte early or late, or another module's;
+- the procedure (5): absent, another module's, one byte short or long, or a second holder;
+- the range (2): a single entry, or not DWORD-aligned;
+- an entry (5): before the procedure, in the next one, inside the table, inside an earlier table, or inside an instruction;
+- the index bytes (7): an index at the entry count, unmarked, marked in another module, after a marked gap, starting the next
+  procedure, a trailing byte that is not a NOP, or a NOP that does not end on a DWORD boundary.
+
+A genuine VEX instruction in the marked range, in the procedure's code or after it stays a violation (3). So does a row that
+reaches from a proved DWORD table into unproved indices (1).
+
+Every dispatch-recognizer suite (inline, AL-guard, RDX, CL-guard, compact RCX, R10, wide-stack, QWORD stack, R9 byte switch,
+RDI-index and RDI image-base) evaluates every control twice. Through the full gate, an accepted control stays accepted and a
+control that plants vector code stays refused. With the marked-range proof disabled, their dispatch-form assertions apply
+unchanged. [Record](../TestRuns/IsaMarkedDataTables_2026-10-02.md).
+
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
 It checks the actual six scalar function entries and padded, odd-width alpha/transparent adjustment inputs.
@@ -799,6 +1571,47 @@ All x64 builds run the PE/PDB-attributed VEX/EVEX gate and compiled passing/fail
 not native execution. Pre-AVX execution under Intel SDE remains optional and must be recorded if performed.
 
 ### Job input and progress policies (P0.6b)
+
+`document.captured-clone-offset.*` pins independent BGRA source/target/untouched-neighbor pixels, captured
+offset/composite selection despite later live settings, one Clone Stamp entry, and refusal of missing, empty,
+wrong-size, Gray8, nonfinite or integer-overflow captured sources without document/history/alignment changes.
+The registered WARP `clone-readback.*` host cases exercise actual pointer admission and replay: success,
+cancellation while a copied worker is held, detached failure, capture allocation failure, stale authority,
+one device recovery, exhaustion of the total two-restart allowance, physical capture loss while readback is
+held, and a live stroke after readback retirement. Independent actual owners also shut down with a copied
+worker held or an adopted live stroke; the original live sample charge survives owner graphics detachment
+and retires only after the session's final worker releases the draft. Joined shutdown checks preserved
+document/history, cancelled receipts, MTA aggregate retirement, exact zero charge and no surviving sink.
+They retain literal source pixels and Undo/Redo expectations, verify view input while held, exact original
+capture/ticket/charge, no hidden Present, and full off-owner aggregate and reservation retirement. The live
+sample case checks bound SharedPublicationMemory with no second lease: the original admission remains charged
+after the utility job retires. Recorded recovery prepares once per actual graph attempt, so one rebind requires
+two preparations and exhausting two restarts requires three. Before-copy faults hold a real private source;
+pixel/history expectations and the original two-restart limit are unchanged. Timing and
+other live-context callers remain separate P1 requirements. Sampler transparent-tail failure diagnostics
+report actual receipt, slot/sequence/color and foreground values without changing its literal expectation.
+Three additional actual pointer cases start a separate physical Space pan after the original Clone producer
+is sealed. They preserve its FIFO, ordinal, ticket and source through completion, capture loss or cancellation;
+later pan Move/Up publishes no extra paint/history. The 12 readback modes total 81 named checks; independent
+shutdown owners add 14. The 15 `clone-input-policy.*` checks establish literal Alt-source selection without
+readback/history, mask refusal, event-time Shift continuation from the prior endpoint, exact red/green pixels,
+one entry per Clone, Undo/Redo and missing-composite refusal. At zoom 1 the policy fixture aligns its document
+grid to whole client pixels after layout, so odd canvas extents cannot alter its literal pointer coordinates.
+
+The registered single-layer `clone-layer-source.*` graph has 50 controls across success, cancellation,
+worker failure, stale active target, retained live lease and capture loss. Literal red active source and
+blue destination must produce red despite an unrelated opaque green overlay. A live All Layers change while
+the worker is held cannot change its captured false choice. Checks bind original ordinal/opening/ticket/stamp,
+source charge, responsive zoom, zero GPU preparations, exact errors, one entry, actual host Undo/Redo and
+off-owner aggregate retirement. Five independent capture-refusal controls require `E_OUTOFMEMORY` before
+payload/copy and unchanged literal pixels/history. Sixteen standalone shutdown controls cover copied-worker
+and adopted-live-source boundaries, complete reservation lifetime, MTA retirement and one drained quit.
+
+Nine standalone prepared-folder controls use an actual borrowed Tree row to select a folder, issue two Group
+Layers commands, and perform actual host Undo/Redo. Independent literal hierarchy, top-first rows, unique
+folder IDs, single active selection and original two-pixel rasters must survive each operation, with one
+history entry per grouping. This tests the supported folder route; it does not activate production prepared
+rows or define multiple-row modifier behavior. All new controls require full configuration qualification.
 
 HostTests covers one-active/latest-pending preview ownership, stale epochs and refinements, all eight continuation
 slots, refusal ownership, ring wrap, wand coalescing, shared stroke ordinals, cross-class history exclusion and
@@ -912,7 +1725,18 @@ preparation; the separate tiled-graph tests still prove bounded restart before a
 five history-allocation faults, readback/probe capture refusal, worker probe allocation refusal, epoch-only
 invalidation and probe cancellation/staleness with seeded redo preserved. A 30,000-square blank canvas completes
 its no-plan command with a metadata-only reservation, no readback capture and no history change. Every owned probe
-and readback aggregate retires off the owner; each terminal case leaves no barrier, GPU work or reservation.
+and readback aggregate retires off the owner; each terminal case leaves no barrier or GPU work. Failed/dropped
+cases release every reservation. Successful Ordered/Rebind cases retain exactly the readback's original
+charge through the published crop/history. Eight added controls use independent literal red/blue BGRA bytes,
+actual document/history release, a copied reader, the last weak storage control and final owner refund.
+`RunStandaloneMergeReadbackSelfTest` adds ten fixed assertions at the actual held probe boundary: a fresh owner
+snapshot refuses the dependent readback with no source capture or history mutation, and actual joined Shutdown
+cancels without signalling the gate, publishing pixels or refunding before aggregate retirement. Each fixture
+clears its real WM_QUIT and owner sink before the next standalone owner. The existing 17 Merge scenarios and
+their pixel/history/error expectations remain unchanged.
+`Document.Tests.CropLifetime` checks explicit output-lifetime selection, exact literal pixels/placement,
+no-crop/transparent identity, refusal/cancellation, last weak controls and the fixed 32-byte metadata delta.
+Its opaque tokens are ownership references; only the actual host fixtures establish scheduler accounting.
 `MergeHistoryTests` and `MergePlanProbeTests` add 71 independent literal-pixel, trim/group/clip/budget, immutable
 planner, no-plan, exact-authority, moved/single-use, fault and cancellation assertions. Native qualification is
 tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
@@ -921,13 +1745,38 @@ tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
 actual-restore crop removal/no-entry crop retention, no-document Redo, selected-snapshot memory floors,
 default/foreign/moved/single-use authority, exact history epoch and both directions of all three restore allocation
 and cancellation stages. A later saved revision and newly begun unrecorded lasso cannot corrupt live state.
-The production self-test adds 28 `history-restore-host.mode=` scenarios, including ordered younger edits,
+The production self-test retains all 28 preceding `history-restore-host.mode=` scenarios and adds six actual
+late-residency Undo/Redo success, refresh-allocation failure and cancellation scenarios, for 34 total. Original cases include ordered younger edits,
 selected receipt lineage across document removal, empty/nested no-op, stale active/mask/crop/generation/epoch/lasso,
 capture/worker/history refusal, cancellation acknowledgement and complete aggregate retirement off the owner.
 Every terminal case requires no hidden Present and returned reservations/barrier/ticket. Crop/opacity host tests
 wait for acknowledged real restores before inspecting results; pending-edit consumes retain their immediate rules.
 All six configurations qualify this slice ([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
 these functional gates assert no latency threshold.
+
+The managed staged-residency caller slice adds 10 `HistoryRestoreTests`, 14 `SelectionCommandTests` and eight
+`SelectionNudgeTests` controls. They bind refresh to the original prepared optional document/after-outline,
+preserve no-op redo/saved state, reject moved/applied reuse, and exercise reached allocation/cancellation and
+checked refresh-admission bounds. Three actual selection-nudge cases add 24 named controls for late-cache
+success/fault/cancel, including original moved outline, one entry and independent saved-revision truth.
+
+`history-restore-shutdown.*` requires 36 actual standalone hidden-WARP controls: Undo and Redo, each before
+capture and with a prepared original worker held. Literal pixels, both history stacks, saved state and generation
+survive producer join without Present. The exact ticket/stamp remain through the joined callback and clear only
+after Close; the cancelled original receipt, off-owner payload retirement, zero final charges, idempotence and
+quit isolation are explicit. The manual gate remains unsignalled; a separate test-only witness must identify
+the actual shutdown-event wake so a failure timeout cannot supply the held-worker proof. These state controls
+establish no G1 timing or ordinary activation.
+
+`history-residency-shutdown.*` adds 14 actual standalone hidden-WARP owner controls inside the existing shutdown
+stage. A notice ready before capture owns no payload; a worker held after preparation must wake from actual
+RequestStop and join without the test signalling its gate. Both retain original document/generation/revisions,
+publish no trim and Present no frame, release source/ticket/barrier/reservation/worker ownership, retire captured
+payloads off owner, refuse later global notifications into stopped contexts and pass a second shutdown.
+Structural deadlines detect a deadlock and do not supply performance thresholds. Preserve every preceding
+literal control, multiplicity, output route and all 79 ordered application stages through the full x64 Debug,
+Release, real ASan Debug, analysis and ARM64 cross-build matrix. Native ARM64 execution and G1 require separate
+runtime evidence; this caller slice is recorded in [P1ResidencyCore](../TestRuns/P1ResidencyCore_2026-10-05.md).
 
 `ImportHistoryTests` adds 55 independent reset/baseline/edit/trim-publication assertions, including literal
 Undo/Redo and all six replacement/edit construction and cancellation checkpoints with the old state preserved.
@@ -989,7 +1838,9 @@ retry observer prefix/reached fault, matching live pool/routing/source/sink stat
 retry/GPU routes, empty ownership and unchanged caller apartment. Acquired pools acknowledge exactly one final
 off-owner MTA hook; a prefix with no scheduler runs no hook. Each case owns its own trace/pool/sink and supplies
 no window/device/chrome. The following complete graphics-host tests retain their separate scope.
-Full x64 logs must report `application-processing summary: 390 checks, 0 failures` and 390 named PASS controls.
+The original foundation reported `application-processing summary: 390 checks, 0 failures` and 390 named PASS
+controls. Subsequent acquired-stage additions preserve those controls; the shared RecordedCommands startup
+qualification below requires `application-processing summary: 593 checks, 0 failures` and 593 named PASS controls.
 After-stage checkpoints test prefix cleanup, not failure inside those successful APIs. Retry seams return before
 the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
 scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
@@ -1075,7 +1926,7 @@ resolution. Separate `rotation-fault.*` controls inject every folder rotation/ro
 exact reported errors, compare literal loaded pixels and byte-identical old trees, and check publication truth.
 Backup-only retries cover repeated failed rollback, successful restoration and successful new publication;
 unrelated siblings survive. Real cleanup cases cover a read-only file, nested files, a mount-point junction with
-an intact external target and the 128-level refusal. Injected flush/close faults remain open.
+an intact external target and the 136-level refusal. Injected flush/close faults remain open.
 Native rollback-reader controls hold a descendant manifest open after rotation. One releases at the first
 `RollbackRetryScheduled` observation and requires exact restoration despite late cancellation; another remains
 open through exactly two event waits/three attempts and requires the exact access-denied error, complete `.old`
@@ -1153,7 +2004,10 @@ The latter requires no encode visit and no output file, exactly one failure rece
 Worker gates prove the request/barrier/reservation remain held with zero lent mappings/utility bytes; hidden
 completion makes no Present. Device-change cases require one encode attempt. Failure notices occur exactly once;
 terminal paths leave no barrier, reserved bytes, slot or utility target. PNG is exact opaque 191; JPEG RGB is within
-3/255 and opaque. Export leaves project path/saved revision unchanged. Full qualification is separate from these
+3/255 and opaque. Export leaves project path/saved revision unchanged. The recorded export route retains
+one original CPU admission through real region copies, graphics retirement, encoding and deferred aggregate
+destruction. Its forced 16-pixel tile case still reaches the later actual Map failure with no partial file.
+Full qualification is separate from these
 structural assertions; no event deadline is a performance threshold.
 
 ### File classification and banded codecs (P1.7 F1/F2)
@@ -1172,6 +2026,51 @@ quality-1 white-matte stripes straddling a band boundary (12/255 RGB tolerance a
 the shared source to remain unmaterialized, complete precancelled output clearing, preserved distinct previous
 destination bytes on cancelled/failed export, unrelated temp preservation and owned-temp cleanup.
 
+### Shared native classification continuation (P1.7 F6)
+
+The independent reference is the native-operation state machine, original host FIFO/session identity,
+the fixed input-budget ownership contract and literal four-byte ZIP/image headers. No timeout is a
+performance threshold. HostTests runs eight real filesystem/overlapped-pipe primitive cases with
+44 fixed ordered controls: directory and extension shortcuts, missing/unreadable/invalid paths,
+stop-before-prepare/issue, skipped-issue retirement, all three ZIP signatures, non-ZIP/short reuse,
+premature readiness, real pending cancellation, forced retirement without token cancellation,
+final native shutdown acknowledgement, refused open and actual ReadFile access refusal.
+
+Twenty-six path-input transfer controls require the same vector/string allocations, original ordered
+Unicode values/action/drop point, pending receipt and owner-affine reservation through joined transfer,
+restore, request moves, refusal and destruction. No native worker or host proof follows from these
+console ownership controls alone.
+
+The actual hidden WARP Application fixture uses exactly one compute worker and supplies pending-read
+bytes only from an independent admitted job on that same pool. Nine scenarios cover three acknowledged
+native read cycles, a premature event, pending cancel, replacement, late cancel after native acknowledgement,
+pending shutdown, cancellation after a premature event, shutdown after a premature event and an actual
+readiness callback while the issue worker is held before return. Await cannot resume that worker. Each has
+14 fixed controls for original ticket/ordinal/receipt/full charge, unchanged vector restoration, younger
+command ordering, literal inverted pixels/history or unchanged/stale state, MTA payload retirement,
+hidden zero-Present behavior and complete event/input/reservation shutdown. Three startup-resource faults
+(event creation, registration, route attachment) each have six reached-prefix/cleanup/idempotence controls.
+The exact total is 144. GetOverlappedResult, never readiness or stop alone, acknowledges pending IO.
+
+Twenty additional `path-read-wait-cycle.*` Host controls use actual scheduler tickets and the shared event pool
+for zero/foreign-ticket refusal, initially exhausted new-operation refusal before event reset, the last valid
+identity, same-operation rearm and unchanged signalled-event delivery. The MAX-1 preparation drains the real
+startup callback before testing reset; callback observation uses an atomic cycle. These are readiness tests,
+not native I/O acknowledgements. Two actual hidden-host boundary cases add 17 controls each (34 total): seed
+MAX for first-issue refusal, and MAX-2 for a real first file followed by the final-identity pending pipe,
+premature/incomplete readiness, same-pool byte production, actual native acknowledgement and next-read refusal.
+Both require exact arithmetic-overflow receipts, truthful no classification publication, original FIFO/charge,
+younger Invert, literal pixels/single history entry, MTA payload retirement, zero hidden Present and joined
+idempotent shutdown. The original nine scenarios/144 controls remain unchanged.
+
+Normal cancellation yields the original record; only final worker shutdown may join its existing read.
+
+The ten-leaf owner router has a literal capacity control: ten distinct sources attach and the eleventh refuses.
+Existing fair one-leaf rotation and mutation/reentrancy refusals remain unchanged. Processing startup
+adds its native-read checkpoint after recycling, retaining all prior stage indices and prefix checks.
+All existing path-classification host scenarios remain required. Full Debug/Release/real ASan, analysis,
+ARM64 cross-build, complete memory/stop-to-return and G1 qualification remain separate release obligations.
+
 ### UI timing foundations (P0.1a)
 
 HostTests runs `ui-timing-histogram.*` and `ui-timing.*` numeric and state checks. Independent expectations cover bucket
@@ -1187,10 +2086,15 @@ It never starts, stops or cancels a system trace; missing WPR or an invalid prof
 maxima including loop cost. It refuses an already-enabled external timing session so its disabled-path numbers
 are interpretable. This is instrumentation overhead only; operation baselines and G1 remain in the WIP plan.
 
-`RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
+`RedPrism.exe --bench ui|ui45|ui100|ui-smoke|ui-sampler|ui-sampler45|ui-sampler100|ui-sampler-smoke` is the opt-in application-loop measurement described in
 [`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
-its 24 operation rows include production project open/save, image imports and PNG/JPEG export workers.
-normal test runs never download the RAW corpus.
+its 27 operation rows include production project open/save, image imports, PNG/JPEG export, ordered gradient
+preview/apply and an accepted sampler prefix. Sampler trials require three point copies each, the independent
+composite color, unchanged source/history and complete graph retirement.
+Focused sampler modes reuse those fixtures and production loop with one operation. Their separate initial-display
+and excluded-warmup boundary rows are outside the recorded trials. The focused smoke requires one operation,
+six recorded copies, two valid boundary rows and complete retirement; it imposes no latency threshold.
+Normal test runs never download the RAW corpus.
 
 Smoke may render with the session display off, while full measurements refuse that state. It validates ordered
 elapsed distributions and the total Present count over two trials. Scheduler tests that inspect undrained job
@@ -1232,6 +2136,36 @@ For diagnostic children that are started and then waited with a deadline, `test.
 before waiting and reads the terminal exit code while it remains owned. A missing exit code never passes a gate,
 including a crash probe that left its dump. Timeout handling and product assertions are unchanged. Qualification
 records an unobserved process result as a failed run rather than inferring success from partial PASS output.
+
+### Recorded production sampler and All Layers Wand
+
+The eligible canvas sampler runs through the original recorded parent. Its existing acknowledged-prefix
+fixture additionally asserts no mapped/in-flight copy, no attached command source, a retained utility owner
+and no useful owner readiness while waiting for real input. Terminal graph-clear checks include the command
+pump and utility service. Literal colors, point order, palette/picker intent, original capture, cancellation,
+stale authority and FIFO-overflow expectations stay unchanged.
+
+The five `sampler-memory.*` scenarios preserve the same42 state/pixel checks. With an actual4096-byte
+event-held background reservation, a temporary shortage retains the original ticket/receipt and captures
+no source; real memory recovery publishes literal blue once, while Cancel/Escape acknowledge the same ticket
+and preserve literal brown/history. With no outstanding prospective release, zero headroom fails once with
+`E_OUTOFMEMORY`. The synthetic ample snapshot is headroom plus256MiB to admit the complete recorded WARP
+envelope, including staging/driver allowances; this fixture value is not a product minimum RAM requirement.
+
+New-mode All Layers Wand retains its complete selection/history overlap with the original utility admission.
+The before-copy recovery fixture observes the actual retained utility owner and GPU charge before each device
+change; a fresh recovered attempt may not yet have attached its next source or enqueued a copy. One device
+preparation occurs per graph attempt:1 initial plus1 per recovery, at most2 restarts. Exact original capture,
+ticket/history/receipt, no-row-before-ack, selection/history pixels and error expectations remain unchanged.
+
+`Composition.Tests.RestartDeviceOwnerControls` uses two actual WARP devices and two queue origins. The foreign
+queue initially has the same device/context/generation; its restart returns E_INVALIDARG. The original queue's
+old captured context after a real rebind returns E_ABORT. Calling from the owner pump outside the original
+callback or from another actual job callback returns E_INVALIDARG. All refusals preserve the original charge
+and actual acknowledgement count without command replay. A valid replacement records and acknowledges only a
+new monotonic command on the same original source. Stream retirement precedes each decision. Its external
+fixture root outlives the scheduler wrapper and all joined cleanup hooks. This direct API test does not prove
+the production parent excluded unrelated graph/copy/map users; parent/caller lifetime controls remain separate.
 
 ## Later gates (record now, implement with the feature)
 
@@ -1288,7 +2222,7 @@ and the histogram, Colorize and curve-removal prerequisites.
 The ordered-commit check gates the actual worker on owned events. It proves no history/pixel change before apply,
 mutation callback/Enter suppression, view input, rejection of a competing ordinal and release only after one
 successful apply. Four gray inputs under Gamma 2 have the independent square-root expectation
-`0, 128, 181, 255`. Cancel after pixels finish cannot close a new panel; stale identity cannot authorize a
+`0, 136, 181, 255`. Cancel after pixels finish cannot close a new panel; stale identity cannot authorize a
 dependent operation; valid identity adds no entry; returned `E_OUTOFMEMORY`, an actual throwing `Job::Run`
 translated by the scheduler's `bad_alloc` catch, and actual donorless fill
 retain their panel/original image and release their barrier. Ten-second bounds detect deadlocks, never gate speed.
@@ -1485,6 +2419,14 @@ the replacement. Fixture helpers use bounded event waits for external listeners;
   Full frozen native qualification is required before closing these foundations. Production host,
 retry/lifetime, G1 and native ARM64 runtime claims remain separate.
 
+`clipboardtransfer.concurrent.*` gates an actual metadata reader at its native Opened stage. Its opener must
+be a window on that exact MTA worker. A simultaneous Inspect and Copy each return Busy after one acquisition,
+with no output; after release, the first reader enumerates and closes successfully with the literal 2×1 DIB
+metadata. Read-window allocation faults fail locally before opening. This independent held-scope reference
+detects null-window scopes accepting a second open that invalidates the first close. Original transfer, delayed
+render, source-sequence, fallback and cancellation checks remain unchanged. Failure diagnostics retain the
+native call, format and immediate error before cleanup; they never renew a source token or alter retry policy.
+
 ### P1 worker upload and image-wrapper residency foundations
 
 `RasterUploadWorkTests` requires 73 literal pitched-row/crop/guard/invalid/sparse/cancellation controls.
@@ -1504,6 +2446,1442 @@ Release analysis and three ARM64 cross-builds qualify this source; see
 Private later fault/layout/retirement drafts, production upload consumers, G1 and Native activation remain
 separate P1 requirements. No RAW or Photoshop speed claim follows from these functional gates.
 
+
+### P1 dormant raster upload lifetime foundations
+
+Event-gated `gpu-raster-upload-job.queued-ack.*` holds the only worker after fill publication, queues the original
+cancelled acknowledgement, and delivers the real copy fence before that skipped stage can run. The original
+ticket/charge must survive the fence callback, literal copied pixels remain, and releasing the worker yields
+one Cancelled callback followed by zero remaining charges/receiver state. `queued-rows.*` holds the only worker
+before Map, queues cancellation, then delivers its mapped loan: the skipped stage must acknowledge that loan,
+perform no copy, preserve every literal guard byte, and retire the original charge exactly once. These
+independent producer-order expectations add to all existing controls; deadlines are failure bounds only.
+
+The managed source passes 41 independent worker reduction and 34 immutable layout controls, 88 opt-in
+scheduler terminal-acknowledgement controls, and 58 startup/123 fault/127 receiver controls on real WARP.
+All older literal controls, application routes and 79 ordered stages remain unchanged. Full x64 Debug,
+Release and real ASan Debug, Release analysis and all three ARM64 cross-builds bind the identical 805-input
+source; ASan's repeated worker-stress registry is compared independently. The actual heap-use-after-free
+sanitizer detection diagnostic and each raw source/log/archive receipt are retained in
+[the qualification record](../TestRuns/P1UploadLifetime_2026-10-05.md).
+
+These gates qualify dormant transport/receiver lifetime only. Complete CPU/VRAM plan admission, resource
+creation/mips, application consumers, bounded first composition/chrome/retirement and large-fixture G1 remain
+mandatory before H4/P1 completion. Native source activation and native ARM64 runtime are not inferred.
+
+The integrated `recorded-blit` and `recorded-blit-parent` controls require three actual published WARP graphs,
+with optional hardware, literal sampling expectations, a deliberately stale scissor, zero pan/zoom composition
+or mip work, and an original last-use barrier before worker retirement. `admitted-display` controls observe
+actual DXGI budgets, the original retained CPU charge, cache reuse/replacement, immediate document exclusion
+and final worker refund. `empty-shutdown` independently covers an attached source before recorder Resume,
+finished/started/nonempty/wrong-owner refusals and actual scheduler post-join/final-MTA hooks. No requested
+stop or cancellation is a completion. `RunStandaloneCommittedDisplaySelfTest` enables the route in actual hidden
+WARP Application instances, verifies renderer blits without legacy owner composition and closes both cached
+and in-flight roots through actual Application shutdown. These tests establish their reached states; pending
+preview/stroke/utility migrations, all injected controller faults, peak bounds and measured G1 remain separate.
+
+## Prepared layer-row owner and provider cost diagnostic
+
+`RedPrism.exe --bench layer-rows` runs the prepared layer-row diagnostic with 10,000 layers; `--bench layer-rows-smoke` runs the same correctness path with 136 layers and is not a performance measurement. Both use a hidden 2×1 canvas, independent literal assets at the first/last storage records, the active/rename target at the final storage record (the longest active-layer lookup path), and the deterministic stress fixture: 1,024-code-unit names consisting of `N` characters followed by storage-order suffixes `#00000` through `#09999` (smoke retains `#00000` through `#00127`). Trial 0 is the initial publication; the full mode then records ten rename trials (1–10), and smoke records two (1–2). No initial or rename trial is discarded as warmup.
+
+For every trial, report the request, `ChromeHost::Prepare`, raw embedded-STA provider `Navigate` calls, and raw embedded-STA `UIA_NamePropertyId` reads, plus the existing dispatch, window-message, completion-drain, result-apply, and chrome-sync scopes. Report `elapsedWithWorkerWaitUs` separately; it includes settling the worker and is not an owner-work scope or a substitute for those measurements. At each settled publication, require the prepared graph to carry its retained memory lease. Report the scheduler reservation after provider release and require it to equal the current row graph's declared MemoryBytes plus each distinct original metadata output admission retained by the literal untrimmed document/history sequence. Observe each output through its original bound ticket, validate its declared/local allocation bounds and actual worker retirement, then drop diagnostic strong/weak controls and settle their real retirement before comparing the checked sum. Require all temporary owners expired, one original output per rename and zero releasing bytes; unexplained charges still fail. Emit one separate `LAYER ROWS ACCOUNTING` row per trial without changing the measured cost rows. The standard smoke runner validates its exact initial-plus-two-rename sequence, checked UInt64 sum, correspondence with BENCH reservations and increasing original output retention; independent positive and malformed/missing/duplicate/overflow/stale-charge controls must pass first. The separate original-ticket/admission lifetime suite remains mandatory; these observations do not prove admission before capture or account for every intermediate owner.
+
+Correctness checks must preserve the final storage layer's active Guid and its stable item ID (`FirstItemIdentity + layerCount - 1`), order, and full expected names (including every offscreen row). Both modes retain independent first/last BGRA bytes `10 20 30 ff 40 50 60 ff` / `70 80 90 ff a0 b0 c0 ff` and first Gray8 mask bytes `3f d1`; every trial verifies those literals outside the measured provider calls. Initial publication adds no history entry; each rename adds exactly one entry while preserving pixels and active identity.
+
+These diagnostics use a hidden 2×1 canvas and do not measure visible-frame G1, external COM RPC/client latency, or GPU residency. `layer-rows-smoke` is correctness-only. Neither mode changes performance requirements or thresholds, and diagnostic output alone does not qualify G1.
+
+### P1 exclusive stroke sample controls
+
+The candidate registers `Document.Tests.StrokeSample` and `Document.Tests.StrokeSampleSession` for exact
+scalar reference pixels/placement, detached worker state, original engine identity, ordered coverage delivery,
+scalar opening retention, source/history/target refusals and cancellation. `Host.Tests.RetainedGrowth` checks
+the same original lease's full admission/refund lifetime. Actual WARP `recorded-brush` returns its joined
+epoch without replacing/resetting buffers, then retires those original owners on the worker. The bound record
+is [P1StrokeSampleWork_2026-10-08.md](../TestRuns/P1StrokeSampleWork_2026-10-08.md). These additions require
+fresh qualification and do not establish actual application Append/Up, complete admission, G1 or native ARM64.
+
+`Composition.Tests.GpuResidencyGrowth` adds 33 literal accounting controls, including exact headroom, no-op
+under pressure, atomic refusals, moved/foreign leases and growth with all 136 slots held.
+`Composition.Tests.CommandStreamRestart` adds 21 controls through one original real WARP parent and three
+recording/acknowledgement/worker-retirement rounds; old ordinal 1 cannot name ordinal 3 in the same slot.
+
+`RunStandaloneStrokeSampleSelfTest` opts into the sample parent in an actual hidden WARP Application.
+Its eight mode fixtures cover Paint, Eraser, uniform and nearest-stretched masks, constant Blur/Heal, active
+Clone and All Layers Clone. Forty-nine source-fixed assertions require acknowledged Down and Move previews
+before history, the original ticket/ordinal, duplicate-point no-op, exact final pixels/history, complete-root
+publication and worker retirement. The independent stretched-mask quadrants are 64, 136 and 255; healing's
+full-coverage wash over opaque red is BGRA `14,14,154,255` from the legacy 12% gray at 45% opacity. The legacy
+touched-patch commit retains one history entry even when final color is constant. The event wait's ten-second
+bound detects deadlock; these functional fixtures do not measure G1 or qualify ordinary activation.
+
+### Application stroke sample faults and input ordering (P1)
+
+The opt-in hidden application sample route holds real worker preparation, CPU composition, completed preview
+recording, or consumed-draft retirement on a fixture event. Cancel, exact worker failure, actual renderer device
+replacement and actual joined shutdown are tested at each boundary. Dormant input additionally covers Cancel,
+device replacement and shutdown. Original ticket/ordinal, charges, unmodified source/history, old-frame exclusion
+and off-owner retirement form the independent state reference: 19 scenarios and 89 assertions. Device-invalid
+original work reports Stale/E_ABORT after original users acknowledge; cancellation reports Cancelled/E_ABORT;
+the injected failed producer reports Failed/E_OUTOFMEMORY. Shutdown uses the scheduler shutdown event, never a
+synthetic release. Ten-second waits detect deadlock and do not assert throughput or responsiveness.
+
+Separate literal input fixtures cover Shift's previous endpoint followed by the physical click, accepted-prefix
+capture loss, Undo that cancels an open gesture without changing history (RF-904), Undo after physical Up with
+accepted samples still pending, Undo during final preparation, the 512-event physical FIFO plus its separate
+terminal, and a hard rectangular selection: seven scenarios and 14 assertions. Sealed Undo waits behind the
+original stroke; open Undo reports Cancelled/E_ABORT with no new history. Overflow commits the accepted prefix and reports ERROR_NOT_ENOUGH_QUOTA;
+the rejected point remains transparent. Their original scalar/legacy brush reference remains unchanged.
+
+The existing startup-only ApplicationProcessingTestProbe::memory source drives two admission fixtures. Real OS
+snapshots admit a 512x8 source and the first acknowledged red preview. The next point crosses a 256-pixel tile
+boundary; one failed snapshot or one successful zero physical/commit snapshot refuses original reservation
+growth. Both report E_OUTOFMEMORY before a second sample acknowledgement, preserve source/history and retire
+the complete private graph off owner. All queries are on the owner. Production has no probe and retains its
+real OS memory source. These are functional admission controls; large-fixture peak/G1 qualification stays separate.
+
+### Patterned application stroke parity (P1)
+
+The opt-in actual application also compares ten patterned scenarios with a separate direct DocumentSession
+using CpuBrushCoverage::Shared, whose existing legacy numeric goldens remain unchanged. Five physical points
+per scenario include a curved return and a repeated endpoint. Every acknowledged live tile's geometry,
+coverage and complete composed raster is compared, including provisional-tail replacement. Final raster,
+placement, carried mask/semantic thumbnail and history are compared after Up; original preparation and
+off-owner retirement must acknowledge. The fixed inventory is 70 assertions plus one summary.
+
+Cases are partial-alpha soft paint/erasure, fractional selected paint, nonuniform masks, image/mask Blur,
+active/All Layers Clone, translated growth with a carried mask and nonuniform Heal. An opaque patterned top
+layer provides an analytic All Layers Clone composite. Each scenario constructs fresh actual and reference
+sessions; the first Heal uses the same existing session LCG state (`0x9e3779b9`, then unsigned
+`state * 1664525 + 1013904223`, in `Common/Document.h`), with no preceding Noise/Grain/Heal operation,
+without using candidate pixels or changing a production seed. Coverage and pixel comparisons use the existing 2/255 CPU/compute tolerance;
+placement, history count and ticket ownership are exact. Ten-second event waits are deadlock bounds. These
+functional scenarios do not establish G1, throughput or ordinary startup activation.
+
+### Recorded adjustment parent (P1)
+
+`Composition.Tests.RecordedAdjustment.cpp` uses one original admitted scheduler parent per case and actual
+WARP/hardware command acknowledgement. Three private graphs retain the committed seed, GPU preview and
+independent CPU-filter reference. Levels, Curves, Exposure, Gradient Map, HSV and half-scale Grain use a
+translated/stretched partial-alpha image, fractional selection, mask, opacity and an opaque upper layer.
+The reference is `RunFilter` plus `BlendThrough`, followed only by ordinary composition passes. Tolerances
+remain 1/255 for tables/Gradient Map, 4/255 for HSV and 2/255 for Grain. Live Exposure and Grain compare with
+`ApplyAdjustment` on the lower document composite through a half-coverage mask, preserving the upper layer.
+
+Exact unaffected pixels and immutable seed pixels, owner/invalid/pre-cancel refusals before creation,
+original ticket/device identity, joined stream retirement and a real final-use barrier are required.
+Every graph and lookup retires on the joined worker before the parent charge refunds. Failure prints both
+pixel arrays. Hardware is optional when unavailable; WARP is required. Diagnostic readback occurs only in
+this fixture. The declared three-graph 136 MiB peak and ten-second deadlock bound prove neither production
+resource sufficiency nor G1. Normal pending preview routing remains a separate integration gate.
+
+In the display-worker mode, `ColorEditDeferredTests` also covers all six adjustment kinds with both OK and
+Cancel: settings/preview-off/lookup publication retain the exact original root, generation and history;
+prepared closure does not mutate the source until apply; OK adds one exact entry and Cancel adds none.
+The 72 new state assertions supplement the unchanged direct-mode literal adjustment closure expectations.
+
+
+### Pending source, admission and actual host display (P1)
+
+`Document.Tests.PendingDisplaySource` checks that only completed deferred worker sources are describable,
+including live/destructive color and affine/distort transforms. Borrowed authority, root, opening, publication,
+lookup, original settings and same-grid coverage must match. Description preserves document/generation/history;
+preview off, disabled reference mode and late results from a cancelled opening refuse.
+
+`Composition.Tests.AdjustmentDisplayAdmission` uses independent 2x2 and 1x8 mip totals, exact LUT/cube/curve
+storage arithmetic, all six adjustment kinds, software host-memory charges and invalid dimensions/kinds.
+These declared envelopes do not replace measured production CPU/driver peaks.
+
+`RunStandalonePendingDisplaySelfTest` uses actual hidden WARP Applications and the shared original command
+pump. Four destructive/live Exposure OK/Cancel cases require independent linear-light exposure 136 -> 176 -> 92 literals, unchanged
+source/history during preview, actual Present without owner Compose, committed-seed refusal, compatible old
+preview retention, both-root device rebinding, preview off/on, final OK/Cancel history and complete joined
+retirement. Accepted OK retains the panel until acknowledgement; accepted Cancel immediately excludes the
+acknowledged preview while retaining the panel, original source and history. Four additional cases stop
+immediately after the original planning callback attaches its recorder,
+before a later owner pass can execute the first batch: Cancel/reopen, joined shutdown, document replacement
+and suspension/resume. Unpublished cancelled pixels cannot become a frame; all original charges remain until
+producer/transport/worker retirement. Fifteen-second event waits are deadlock bounds, not G1 measurements.
+Ordinary activation, recorder coexistence, full peaks and the large-document latency gates remain separate.
+
+`RunStandalonePendingDisplayTransportSelfTest` uses the actual WARP owner and both asynchronous stroke
+flags. Exposure's recorded commands execute before completion and recovery enqueue refusals quarantine the
+original source. Cancel's exact receipt must close the panel while that original remains attached. A real
+opacity commit then executes and quarantines its second source. Read-only fixed-array observers require
+one then two live executing, quarantined, nonwaiting sources and a dormant pump. Paint starts only after
+opacity's exact receipt is terminal. The third real recorder must report `ERROR_NOT_ENOUGH_QUOTA` through
+its retained Paint receipt without changing the opacity-published pixels or history. Joined shutdown must
+release both originals and all reservations. No failure field delivered only after retirement, synthetic
+acknowledgement or transient-ticket timing observation qualifies this scenario. The event timeout is a
+deadlock bound. This does not qualify ordinary activation, complete peaks or G1.
+
+### Terminal retirement memory (P1)
+
+Normal `HostTests` runs 90 independent `retirement-memory.*` controls. Actual worker/event gates exercise
+successful completion, `E_FAIL`, cancellation and joined Close in both graph-first and weak-first release
+orders. The callback transfers one entire original descriptor reservation without useful acknowledgement;
+wrong ticket, occupied output, outside callback and missing descriptor slot refuse. Success-only publication
+and completed-work binding must remain refused on failed/cancelled/closing paths while the reservation is
+still present, so an already-empty reservation cannot mask a broken authority check.
+
+An independently admitted real lease observes the original shared endpoint after Close without holding a
+strong reference to the tested owner. A joined worker destroys the queued CPU graph; a surviving expired
+weak control must keep the complete original charge until its actual release. The observer's own 4 KiB charge
+remains separately accounted. A replacement scheduler cannot own the old endpoint. The fixed summary must
+report `passed=90 failed=0 controls=90 expected=90`. This accounting reference does not qualify GPU completion,
+live Warp activation or G1; those need the original application-parent gates.
+
+### Original Warp input and retirement prerequisites (P1)
+
+Normal DocumentTests runs the fixed 21 `warp-retirement.*` controls: verified owner/opening capture,
+zero-point no-history retirement, a genuinely prepared updating sample refused after retirement capture,
+complete detached-input/cache lifetime, stale/duplicate/foreign refusal, and exact sample-before-finish
+acknowledgement. A joined worker with an independent destruction sink observes actual final draft release.
+Normal HostTests runs 36 `host-pointer-input-stream-peek.*` controls, including returned-copy independence,
+terminal authority through acknowledgement, stale openings and an actual wrapped ring index.
+
+The hidden original live Warp fixture enters through QueueCanvasBrush and the real HostCanvasBrushInput
+FIFO. The 18 fixed controls cover Liquify/Smudge Down prime, captured-mode changes, Move GPU pixels, duplicate
+sample acknowledgement, same ticket/ordinal through held final preparation, scalar-reference final pixels,
+matching committed display/rows, joined off-owner retirement, exact Undo and primed-only Lost. Initial/Move
+GPU pixels use zero tolerance; final scalar/compute parity retains the existing 2/255 tolerance. Counts and
+unique labels must match the fixed registry. Real cancellation/stale/refusal/replacement/Close coverage,
+complete phase peaks, the current-source matrix, ordinary activation and G1 are separate required gates;
+these prerequisite or basic fixture passes cannot close P1.
+
+
+The original live Warp fault registry contains exactly 54 scenarios and 268 controls: Liquify/Smudge,
+opening, sample composition, recorded preview, returning draft, final preparation, final composition and
+dormant input; cancellation, producer failure, real device replacement and joined shutdown (a dormant
+parent has no useful producer to inject a failure into). A held final-composed boundary requires its
+exact sample-boundary visit plus the event; an earlier final-prepare event cannot satisfy it. Each case
+retains original ticket/ordinal and complete charges until the actual producer/transport retirement.
+
+Four real Lost/FIFO-overflow cases require 24 controls. The fixed 512-event capacity accepts only its
+prefix; later Up/Move must not extend it. Overflow commits that prefix, then reports the original receipt
+as Failed with HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA), as the pointer-input contract requires.
+Ordinary Lost reports Succeeded/S_OK. Numeric parity keeps the existing final 2/255 tolerance.
+
+The target registry requires seven literal target geometries in both modes and 84 controls: translated,
+scaled, rotated, sparse, blank, selected and masked. The reference constructs placed pixels independently,
+then uses the established contiguous Warp and scalar brush; final display placement has explicit index
+arithmetic. It checks preview, final source/display, exact receipt, rows, worker retirement and exact Undo.
+The four memory-refusal scenarios require 44 controls: query failure or zero physical/commit headroom in
+both modes after the first real preview and before a cross-tile second sample. Exactly one fresh owner
+query must refuse with E_OUTOFMEMORY before further acknowledgement/publication; original pixels/history
+stay unchanged, the entire parent retires off-owner and all CPU/GPU/releasing charges return to baseline.
+These fixed registries are required gates, not claims that their latest execution has passed. Full current
+configuration qualification, remaining stale/lifetime cases, complete peaks, ordinary activation and G1
+remain separate; preserve actual failed attempts before repairs.
+
+
+The original live Warp stale registry requires 12 scenarios/72 controls: both modes, actual worker-held
+opening/sample/final composition and a changed captured tool or active layer. It enters through real
+Queue/Record input and changes authority on the owner without synthetic cancellation. The exact boundary
+visit plus its event is required. Original ticket/ordinal and CPU/GPU charges remain through producer join;
+opening retains its existing GPU baseline, later sample/final phases own additional admission. Completion
+must report Stale/E_ABORT, preserve both independent literal images and their identities/history, retire the
+original draft/input/preview/payload off-owner, and return all CPU/GPU/releasing charges to baseline while
+retaining the requested authority change. This registry is required proof, not a passing execution claim.
+
+### Actual first cancellation check and first-frame proof
+
+`RunCancellationCheckTests` requires 37 independent controls: false/local/shutdown token semantics, nested
+bindings, null suppression/restoration, retained tokens outside and across useful Runs, real joined helper
+propagation and exact first-check original identity. Event-held local and scheduler shutdown cases each require
+Entry, one first Check, Exit ordering; repeated true checks cannot publish again. The allocation-failure case
+requires raw Failed/E_OUTOFMEMORY at body exit, unchanged normalized Cancelled completion, an empty binding in
+real worker retirement and no retained-token republication. Deadlock bounds are test failures, not timings.
+
+The body reducer requires 42 literal controls, including selected ordinal 2 versus capture stub 1, separate
+check/exit timestamps, before-stop/overlap classification, unobserved checks and malformed duplicate/order
+refusals. `RunUiCancellationFrameTests` requires 15 independent ordering/identity controls: only the first exact
+successful-visible ordinal qualifies; failed/occluded attempts remain unqualified; stale/gapped/changed identity,
+unknown attempts and overflow refuse irreversibly. Hidden caller tests prove accepted baseline retention and
+that settlement without Present cannot create first-frame proof. Actual direct/prepared native cancellation
+smokes must satisfy the appended check/frame schema and retain every predecessor context. The strict full
+reader additionally requires 42 negative controls and all six route/profile models; pure models never qualify
+native performance, ordinary activation or G1. Affected ordinary kernel/group overhead must be measured.
+
+### Optional worker body observations
+
+`RunJobExecutionObservationTests` contributes 36 independent event-gated assertions and one fixed PASS summary.
+The controls require original ticket/class/lane identity and exact entry/exit ordering, concurrent compute and
+recording lanes, raw failed results, translated allocation failure after local unwinding, cancelled unrun stages,
+raw running results before cancellation normalization, three resumed body pairs, and visible body exit while
+worker retirement remains held. Default initialization emits no execution callback. Owner-only Close signals
+its real shutdown event before a bounded helper releases the held worker, joins all observer activity before
+borrowed context/event destruction and drops owner completion. No wall-clock performance threshold is asserted.
+
+### Serial private utility regions
+
+`RunCommandStreamRestartTests` retains its original three-stage parent and adds recording-policy controls for
+actual joined producer migration, stale/wrong-thread status, cancelled/foreign/null-context rebind refusal,
+same-epoch refusal and shader/state retention. Its original ticket, full charge and command ordinal controls
+must remain unchanged.
+
+`RunRecordedUtilityRegionTests` executes the original scheduler/command-pump/readback parent on WARP and
+available hardware. The owning composition contract names its independent literal sparse-pixel truth table.
+Three actual mapped-row stages compare exact premultiplied bytes, including the partial edge region. All
+stages retain the original ticket and fixture reservation; next-region recording follows actual command,
+copy and row acknowledgements. Cumulative recorded upload bytes remain unchanged after the first region.
+Final graph/source/context retirement runs off owner before the fixture reservation is refunded. The fixture's
+512 MiB charge proves accounting lifetime, not production GPU admission, host migration or a performance gate.
+
+The same original parent tests an invalid region after source capture and cancellation after an actual mapped-row
+callback. Invalid input records no command or pixel publication. Cancellation skips the useful copy body but
+acknowledges the exact original mapped lease, excludes future borrows and retires original owners off owner
+before refund. Unpublished and excluded regions refuse borrows; missing immediate context refuses publication
+without consuming the region. Hardware skips only explicit DXGI_ERROR_UNSUPPORTED/DXGI_ERROR_NOT_FOUND.
+
+`RunUtilityAdmissionTests` uses the composition contract's checked arithmetic policy. Four independently
+enumerated 2x2 descriptor records fix CPU/GPU/logical totals: dense11547152/135468632/595544;
+sparse11556368/135747160/611928; software147015784/135468632/595544;
+empty-layer11542544/134496320/16448. These synthetic ownership descriptors test arithmetic only. Real
+dense/sparse documents independently check cached ownership, one/three raster owners, caller-byte changes,
+software charging and invalid document/tile bounds. Unknown source bounds, overflowing products, one byte
+beyond the exact UINT64_MAX sum and software-domain overflow refuse. No native expectation is rebaselined
+from the implementation output. Real adapter admission, acquired-prefix overlap and caller lifetime remain due.
+
+### Dormant utility ownership and original source capacity
+
+The independent reference for `utility-owner.*`, `utility-joined-close.*`, `utility-current-context.*`
+and `utility-source-capacity.*` is the original-ticket state machine, actual scheduler/queue acknowledgements
+and literal ownership/charge expectations in the corresponding `Composition.Tests.*` fixtures.
+
+Routing uses136 actual admissions, unchanged ticket/generation, bitmap boundaries63/64/127, one fair receiver
+per pass, callback/startup/mutation refusals and idle no-readiness behavior. Its graphless receiver mocks prove
+routing only. Joined Close uses a real suspended parent, CPU1MiB/GPU65536 policy charges and literal65536 bytes
+of value17. A held final worker proves CPU/GPU charges remain until actual retirement; useful Completed is
+dropped. GPU snapshot arithmetic in this fixture is accounting-policy proof, not an actual adapter query.
+
+Current-context checks use actual WARP device/context captures, origin/generation, same-pointer and real-device
+replacement, reconstructed queue identity, output clearing and worker-only strong-reference retirement. The
+source-capacity fixture fills both actual pump slots, suspends a third original1MiB ticket without recording
+or a retry timer, refuses foreign/off-owner/callback operations, then uses one real detach notification to
+attach/resume that same ticket. A held first retirement proves all three whole charges still exist. Failed
+pre-execution transport remains Failed and grants no successful pixel publication.
+Its final destruction stage explicitly switches to Compute. While that first worker is held, the third
+original recording stage must join on the available recording lane; a zero thread ID cannot pass that proof.
+
+`Composition.Tests.CopyCompletionRetirement` uses the actual WARP queue and literal4x2 BGRA/structured-buffer
+sources. Eight independent state-machine cases cover the selected completion route, actual event fallback,
+two healthy signal refusals followed by real device replacement, real original cancellation, joined Close,
+a producer that issues an actual command then refuses, and buffer recovery/cancellation. Initial refusal
+occurs after a real copy, before signaling; subsequent successful barriers use the original actual context
+and driver event. Assert one original1MiB admission, source/staging retention, no early callback/refund,
+no mapped rows, no recopy, exact original failure, cancelled useful-body exclusion and worker graph retirement.
+Joined Close must drop useful callbacks and bind original CPU accounting until final graph/control-owner
+retirement. These are transport/ownership controls, not rendered-pixel goldens or production GPU admission.
+
+Processing startup appends UtilityReadback checkpoint9 after unchanged checkpoints0..8. Test every acquired
+prefix, a real full-router refusal after NativeRead (seven inert leaves plus three original routes), native-read
+internal fault prefixes, responsive/history-source rollback, joined Close and repeated Shutdown. The service
+is dormant and must detach before its router is destroyed. This does not activate ordinary utility parents.
+Complete real caller admission/device-restart/row/shutdown matrices and G1 remain required.
+
+
+Processing startup subsequently appends RecordedCommands checkpoint10; checkpoints0..9 keep their identities.
+Preserve every earlier prefix/refusal assertion. Add the actual common-route refusal with six inert leaves
+at NativeRead: the first UtilityReadback attachment succeeds, then the full ten-leaf router refuses the
+command pump before checkpoint10. Joined rollback must detach both shared leaves and retire the enabled
+recording worker. Responsive startup has six routes before rows, seven before display and nine before
+stroke. Literal capacity seeds are4/3/1 respectively. An additional pending-child case seeds two leaves
+before display: committed attaches, pending refuses, committed closes, and the common pump remains live.
+For both display-child failures, assert empty children, one live shared pump, unchanged free source capacity,
+no repeated partial display acquisition and joined final detach. These new controls require fresh full
+source/profile qualification; they do not activate the ordinary prepared route or qualify G1.
+
+### Recorded utility parent state and pixels
+
+The independent reference for `joined-retirement-authority.*` is the Close state contract: two actual
+distinct nonzero serial keys retain original tickets/reservations through joined hooks, which accept only
+their own owner-thread ticket after producer join. An actual foreign thread queries during each active
+hook and must refuse. Ordinary worker/defer acknowledgements, cross-ticket authority and repeated Close
+must not acquire that authority or deliver useful completion.
+
+The additional actual WARP `recording-pump-joined-source.*` scenario starts real recording and executed
+work, refuses both signal paths and retains a dormant healthy quarantine. Stopped pump/returned producer
+alone, stale source leases and foreign threads cannot acknowledge joined source retirement. Actual original
+Close excludes/transfers the source before wrapper destruction, delivers no useful completion/refund and
+retires the original stream/context on the final worker.
+
+`recorded-parent-pixels.*` uses independently specified literal premultiplied BGRA bytes for a 7x5 layer:
+dense and sparse replacement sources, six 3x3 regional copies including the 1x2 lower-right partial region,
+and a mandatory CPU-only `S_FALSE` route. Run each on WARP and available hardware; only an actual unsupported
+hardware creation result permits a skip. Assert actual Compute/MTA bodies, owner-only capture, one original
+ticket/complete retained reservation, exact bytes, no GPU work on CPU-only, terminal adoption of the same
+bound accounting owner and off-owner destruction after real infrastructure Close. The actual body observer
+is evidence of lane execution, not a standalone kernel cancellation-latency measurement.
+
+Before production migration, additionally qualify cancellation during a gated detached CPU body (no second
+owner resume), stopped-source/queued/map/recording/joined boundaries, original versus foreign queue recovery,
+fresh-device budget refusal, sampler continuation, hidden behavior and no replay after CPU/write handoff.
+Simple pixel controls alone do not qualify these state paths, production callers, G1 or P1 Done.
+
+`recorded-parent-cancellation.*` gates one real CPU-only detached Compute body on test events. Cancel the
+actual original ticket while its body is still running, then perform one owner drain: no ready utility
+resume or terminal callback is permitted and the full original reservation remains held. The test releases
+the worker, which observes its actual cancellation token; terminal cancellation occurs once on owner with
+no useful output. Require zero GPU sources/copies/maps/barriers, actual same-ticket Compute/MTA execution
+and the same bound memory owner through final aggregate destruction. The finite test barrier is a failure
+bound, not an application wait or a cancellation timing result.
+Every worker observation read after the entered-event wait MUST be published before signaling that event.
+In particular, assigning an observation from `SetEvent`'s return value after waking the owner is not a
+publication barrier for that later assignment. The fixture publishes its blocked-state flag first,
+captures an actual failed signal's Win32 error immediately, and preserves its event and original-ticket
+cancellation predicates. This ordering requirement establishes no wall-clock performance result.
+
+
+
+### Recorded parent pixel continuation
+
+`Composition.Tests.ChargedRaster.cpp` uses one actual original preclaimed CPU job and the real MTA release sink.
+Its14 fixed controls require literal2x2 BGRA bytes and the same allocation address after adoption; invalid input
+preserves both owners, and an owning null alias survives. An ordinary adoption has unchanged bytes/node count,
+while the two charged lifetime handles add exactly32 bytes to cached bounds on supported64-bit targets.
+A copied reader retains original pixels/accounting after publication/payload release. After the final Raster
+release and real worker drain, its expired weak storage control still retains original accounting; deleting that
+control leaves the expired shared-memory weak block charged until its final reset. Only then may the owner drain
+refund the original charge and settle idle. The fixture's1MiB charge and4GiB memory snapshot are synthetic policy
+inputs, not application memory minima. Its joined-hook fallback is not exercised and grants no shutdown claim.
+
+`Composition.Tests.RecordedParentSampler.cpp` uses one actual WARP parent and four independently specified
+opaque BGRA pixels11/22/33,44/55/66,77/88/99,AA/BB/CC (hexadecimal), in row-major order on a2x2 source.
+Each1x1 result requires actual queued copy/map and original Compute/MTA processing. Between results, no
+command source/copy work or owner readiness remains; source capture is once, ticket/accounting stay original,
+wrong-ticket/outside-coordinate refusals preserve that result, and the terminal resume performs no new sample.
+Idle and actual gated-worker cancellation drop useful results without replay. Actual release-sink and joined
+Close hooks require off-owner MTA aggregate destruction and complete CPU/GPU refund. Driver budget admission
+uses the real WARP DXGI snapshot. These are functional controls; they establish no timing or production sampler
+activation. Sampling metadata hooks accept only real output dimensions/format and never read pixels on the owner.
+
+
+### Recorded Copy Merged output and joined Close
+
+The original clipboard host scenarios retain their literal selected1x1 bytes20/40/80/255,
+origin1,0, private serial/history, source capture, OS publication/receipt and six-total-attempt
+expectations. Successful Merged paths retain exactly their original complete reservation; other
+terminal paths require zero. Six successful paths add24 fixed real copied/weak-reader controls.
+Close preserves private pixels; a real subsequent private Copy replaces them before testing an
+independent copied reader. Expired weak storage remains charged until its final reset and actual
+owner release acknowledgement. Tests may not replace the session to simulate that release.
+
+Two standalone hidden Application owners add12 actual joined-Close controls at the source snapshot
+and already-applied private copy before encoding. Never signal the held worker gate: the actual
+shutdown event joins it. Require original source/history and completed private truth at graphics
+detach, the original full CPU charge until actual retirement, no OS entry/offer/mutation and one
+off-owner aggregate destruction. Sink/quit cleanup precedes the next owner. Ten-second waits
+detect deadlock, not cancellation/frame performance.
+
+Document.Tests.CopyPixelsLifetime adds9 independent identity-nearest literal/token controls for
+explicit output ownership, copied/expired-weak readers, no source-owner inheritance, the ordinary
+empty-owner path and canceled/invalid source preservation. Synthetic tokens prove only the primitive
+storage contract; the host controls separately establish scheduler/Close accounting. Wider profiles,
+native clipboard contention/end-session and measured G1 remain independent gates.
+
+## P1 checked opacity prerequisite and post-close clipboard replacement
+
+The standalone `Application.Tests.OpacityClosureGuard` fixture owns and joins its own hidden Application before
+the main owner installs its thread release sink. Eighteen independent controls require unchanged layer/selection
+roots, active target, generation, history epoch/revision/saved state and typed preview when an unacknowledged
+changed opacity refuses closure. Actual dependent layer, tool, command, write, interaction and canvas pointer
+callers stop before mutation. A real Space pan remains usable. Absent/unchanged/expired scalar state does not
+create history. Existing typed worker success and legacy opacity goldens remain unchanged.
+
+`ApplicationClipboardTests` adds twelve `copy-foreign-replacement-after-close` controls. Force two busy
+OpenClipboard attempts, retaining the original ticket through bounded retries. The successful-publication
+gate MUST wait until the native publication returns Ok after OS clipboard close and immediate-owner teardown;
+a busy or failed attempt cannot satisfy it. Retain the separate attempted-publication gate for native fault
+scenarios. Require exactly one gate visit, one closed publication and one receipt/PNG/DIB placement before
+receipt application; replace the offered contents using a distinct held
+message-only owner and an independent two-pixel BI_RGB DIB. The later actual queued Paste MUST read BGRA
+`13,27,41,255` and `59,73,89,255`, dimensions 2x1, at `(3,3)` on the 9x7 canvas. Require one Paste undo, no redo,
+cleared selection, unchanged private-copy serial, exact receipt outcome and acknowledged original-ticket refund.
+Installation failure reports its immediate native error and stage and still fails the literal assertions;
+fixture acquisition uses the existing bounded test policy, without changing production retry authority.
+
+`Application.Tests.SelectionOutlineTiming` observes the actual hidden WARP owner with a rectangle, a hole and
+32,768 four-vertex contours. Its 34 structural assertions preserve fixed one-DIP strokes, 4/4 dashes, original
+view mapping and one cached path across phase/pan/zoom. Fifteen observations separate path Create/Open, append,
+Close, solid/dash calls and inclusive RenderFrame. Counters are opt-in and disabled in ordinary painting.
+Neither these hidden CPU intervals nor draw-return time establish GPU completion, visible presentation or G1.
+Require fresh native configuration gates after integration; the private Release record remains separate.
+
+## Partitioned retention and immutable geometry controls
+
+`Host.Tests.PartitionedRetainedMemory` runs against the actual JobScheduler/WorkerPool and immutable geometry
+factory. It verifies exact original-ticket authority, no memory query at transfer, both release orders,
+copied geometry and weak/control lifetime, simultaneous two-word acknowledgements, slot reuse, invalid/foreign
+ticket and callback refusals, descriptor/deferred-retirement requirements, failed terminal accounting,
+successful suspended publication, actual running cancellation, joined Close, endpoint lifetime after Close,
+and partition growth refusal without changing either charge. The unchanged whole-retained and retained-slot
+fixtures must continue to pass. These controls do not qualify a Wand admission formula or activated G1 cost.
+
+`Document.Tests.SelectionGeometryLifetime` verifies all eight literal input vertices and cached metadata,
+buffer adoption, copied/moved/self-moved handles, finite-bound compatibility, empty/cancelled/overflow
+refusal, actual foreign worker destruction, null alias lifetime ownership, weak storage control ownership
+and exact sink identity. Run the full required x64 Debug/Release/real-ASan configuration gates and ARM64
+cross-builds before declaring the combined component qualified. Native ARM64 runtime requires its own host.
+
+### Numeric Wand display transport
+
+`Document.Tests.SelectionOutline` preserves independent fractional and large-coordinate double-anchor
+expectations, input buffer identity, exact loop/point counts, owning-null/empty-owner behavior, cancellation
+checkpoints/recovery, actual deferred off-owner destruction and final-weak accounting-control lifetime.
+Count and numeric-admission overflow cases refuse before allocation. These component controls establish
+numeric/lifetime behavior; they do not authorize a complete host reservation.
+
+The actual layer and All Layers Wand literal host cases additionally compare the worker point-buffer
+address with the adopted chrome buffer and verify its independent zero-relative first corner. Preserve
+all existing no-op, mode, cancellation/staleness, refusal, source/output accounting, Undo/Redo and Close
+predicates. Native matrix and measured S5/G1 qualification remain distinct requirements.
+
+### Hue readback and panel-preserving Wand validation (P1)
+
+The independent ordinary Hue startup case in `RunStandaloneResponsiveStartupSelfTest` calls actual
+`Application::Run` without a responsive-source opt-in, holding an owned startup path until the probe. Its eleven
+`responsive-startup.ordinary-hue.*` facts must prove ready common routes with other prepared GPU consumers off,
+scalar queued press before any capture/copy/Map, actual original readback returning literal hue220's
+`HueBand{175,205,235,265}`, unchanged source bytes/history, joined original work and complete Shutdown retirement.
+Require one drained quit from its intentional pre-input startup exit. With CPU rows disabled this case has no
+current row lease; a combined CPU-row startup must retain exactly its independently admitted current row charge
+while running and still reach zero after Shutdown. Preserve all previous startup, physical Hue, capacity,
+cancellation, stale-panel, device/failure and source-retirement controls. This is functional startup acceptance,
+not a timing, ordinary full-display activation, native ARM64 or whole-P1 qualification.
+
+Keep all predecessor DocumentTests, HostTests, Application WARP, and legacy numeric controls. Add the named source families below to their existing runners and require their complete ordered PASS output; a missing, duplicate, reordered, failed, or unexpected family record fails the corresponding run.
+
+`Document.Tests.HueSampleScalar` emits `huesamplescalar.*`. Preserve the existing Replace/Add/Remove band behavior and literal red/blue references; compare the raster wrappers with their scalar-value counterparts. The six invalid scalar values (360, negative, NaN, both infinities, and nullopt) must refuse without changing panel settings, targeting/drag state, document, global settings, or history. Preserve the raster wrapper's literal transparent, gray, near-gray, half-alpha, out-of-bounds, and nonfinite sampling controls and the existing targeting drag expectations.
+
+`Document.Tests.PanelWand` emits 36 `panel-wand-core.*` assertions: 18 literal geometry cases and 18 route, strict-policy, stale-witness, nested-history, cancellation, transform, and invalid-mode assertions. `Document.Tests.PanelWandAuthority` emits all 11 `panel-wand-authority.*` assertions. The explicit panel-preserving opening and source authority remain separate from global history-restore eligibility; live-panel history restore continues to refuse. Preserve literal layer/composite geometry, panel and source identity, selection/history state, equal-settings reopen invalidation, and the existing strict typed route.
+
+`Host.Tests.HueInput` remains registered in HostTests and requires its source-declared 70 `host-hue-input.*` checks plus `SUMMARY host-hue-input checks=70 failures=0 expected=70`. Retain FIFO event-time delta/modifier/ordinal, terminal-slot, opening identity, invalid-input, overflow-prefix, acknowledgement, and nonwrapping-ordinal predicates.
+
+The actual Application call to `RunHueReadbackHostSelfTest` remains in the sampler caller sequence. Its `hue-admission.*` assertions require invalid purpose and mode to leave the request queue empty, avoid readback/source capture, and preserve the Hue opening and actual shared history-work ordinal. The following valid press must use the exact next opening. Its `hue-host.*` assertions use the original committed document readback and literal color references, including hue 220 producing `HueBand{175, 205, 235, 265}`; preserve original-ticket admission, physical input ordering, cancellation, stale-panel refusal, acknowledgement, unchanged pixels/history, and complete owner retirement.
+
+The ordered Application WARP run adds `BEGIN self-test.RunPanelWandHostSelfTest` followed by `BEGIN self-test.RunPanelWandLifecycleSelfTest`. Require every emitted `panel-wand-host.*` and `panel-wand-lifecycle.*` fact and the source's exact summary: 126 assertions across 30 panel/route/action combinations, and 32 assertions across eight lifecycle combinations. Host cases cover Levels, Hue/Saturation, and Exposure; layer and committed-composite sources; New, Add, Subtract, zero-offset closure, and nested history. Lifecycle cases cover cancellation, worker failure, equal-panel reopen, and panel Cancel for both source routes. Preserve the original selection/history/source and charge through acknowledgement, and keep Cancel's own receipt distinct.
+
+`Document.Tests.PanelWandFollowthrough` adds 28 `panel-wand-followthrough.*` assertions and its exact
+28-assertion/zero-failure summary. Both layer and detached-composite routes use a two-pixel literal red/blue
+source, an opening selection on the first pixel and a Wand selection on the second. New preview/commit must
+blacken only the original opening pixel; old preview/direct-commit/prepared results refuse while the panel
+stays open. Preserve two-step undo, Cancel/reopen, and a subsequent direct-selection-change refusal.
+
+`BEGIN self-test.RunStandalonePanelWandFollowthroughSelfTest` runs the actual hidden WARP host with exactly
+two startup-selected compute workers. Require all 29 `panel-wand-followthrough-host.*` records and its exact
+summary. Physical layer/composite Wand is followed by actual composition preview and worker OK, or Cancel
+and reopen. GPU colors use the existing 2/255 tolerance and exact alpha; committed CPU bytes are literal.
+A computed histogram is held across actual Wand acknowledgement: its original ticket and full reservation
+remain held, the old result refuses, exactly one fresh histogram completes, and payload retirement occurs
+off the owner. Event waits have a failure bound, not a performance assertion. Keep all predecessor records.
+
+`Application.Tests.StrokeSampleParity` adds the `hard-alpha-paint` scenario to the existing actual WARP versus CPU scalar-reference path. Keep hardness at 1.0, the five live sample assertions, final publication, and original off-owner retirement. Preserve the existing 70 facts and 2/255 tolerance; the source-derived summary is 77 checks across 11 scenarios. This does not add an Application stage or change any existing brush golden.
+
+These are functional controls. They do not replace any predecessor gate or the required native x64 Debug, Release, and real ASan Debug runs, ARM64 cross-builds, source/profile binding, ordinary prepared startup and host activation, complete admission/retirement qualification, or measured G1. Private WARP or source-only results do not qualify native profiles, ordinary behavior, native ARM64 runtime, or G1. P1 remains WIP until its independent remaining gates close.
+
+### Private direct distortion sources (P1.9)
+
+`Document.Tests.DistortRead` requires 12 literal `distort-private-read.*` facts: nearest BGRA/Gray identity,
+axis flips, fractional floor/ceil placement, valid nested sparse tile/window overrides with cold source caches,
+format and twisted-corner refusal, and exact 1x1 mask identity/byte 173. Fixtures must contain valid stored sparse
+nodes; sparse bases are forbidden. Dense leaf owners remain materialized and sparse wrappers stay cold. Compare
+all independent literal bytes and preserve every existing warp golden. These reference-API ownership controls
+add no asynchronous/cancellation or performance promise.
+
+### Settled Inverse selection
+
+`Document.Tests.InverseSelection` requires all original Document assertions plus 43 named controls: absent
+selection with seeded redo, explicit empty/full, independent coverage and antialiasing, the `Inverse` title,
+Undo/Redo, stale authority, reduced-workspace refusal, reached engine cancellation and original-ticket output
+accounting through copied/final weak readers and exact refund.
+
+The actual ordered Application caller requires all predecessor assertions/stages plus 219 named controls:
+literal success, Deselect/Undo order, cancellation, worker/capture/history faults, every captured authority,
+view/message pumping, same-job residency refresh/failure/cancellation, joined Close and actual 136-record
+saturation with atomic refusal and successful recovery. Borrowed fixture handles outlive joined producers.
+
+The independent large case subtracts 28,672 disjoint unit squares from a 1,024×448 rectangle: exactly 28,673
+loops, 114,692 points and area 430,080. It requires a complete declared original-ticket output charge above
+16 MiB, worker-buffer identity at adoption, copied and final weak readers, and one final refund. The charge is
+computed from the supported configuration's ownership sizes; Debug's value is not imposed on other profiles.
+The production scratch limit stays 136 MiB. Preserve genuine larger-input refusals without inferring their
+branch from success-only statistics. These correctness controls do not qualify owner D2D latency or G1.
+
+## Settled Expand/Contract worker validation
+
+Document offset tests add 92 independently declared records: legacy numerical tuples and original
+pinned-engine ordered references, every reached allocation/cancellation/capacity refusal, sealed input,
+source/history/no-op/Undo/Redo publication, and a fixed 32,768-square Contract reference. The latter
+requires 131,072 vertices, signed twice-area 6,553,600 and bounds {13,13,8183,4087}, immutable input and
+successful completion within the unchanged 136 MiB arena. No implementation output generates its expected values.
+
+Actual application stages preserve every predecessor assertion and add exactly 433 controls across
+numeric/event-time input, both-sign fault/order/stale/residency/admission cases, joined Close and large
+original-ticket output ownership. They require worker-prepared point-buffer identity, a persistent
+charge above 16 MiB through document/history release and final copied/weak readers, exact final refund,
+and no leaked host barrier. The original header Expand golden settles through the real pump before
+its unchanged five-pixel/title check. Debug, Release and real ASan (with the genuine detection probe),
+latest-source analysis/ARM64 and the separate G1/ordinary consumer gates remain required for completion.
+
+## Immutable metadata allocation and mixed-reference history controls
+
+DocumentTests registers Document.Tests.OwnedRecordRoot, PublicationAllocation, PublicationBudget, OwnedMetadataJobsR4 and HistoryReferenceTopology. Independent controls cover checked local limits, sealed refusal, unchanged reference layout, original-owner sharing, actual data destruction, copied/final weak control lifetime and exact original-ticket partition/refund. The actual scheduler corpus exercises 110 edits and readers, stale refusal, cancellation, capture refusal, retained-slot pressure and joined Close. Preserve all predecessor numeric expectations and ordered records.
+
+Mixed-reference controls require complete dense/nested sparse/shared closure accounting, lazy storage, literal End/Undo/Redo and Reset, late-cache diagnostic charge and oldest-first trim. No reference byte query may materialize sparse pixels. Actual hidden Application controls additionally require the original metadata ticket, expired temporary ownership, live persistent endpoint balance and exact last-weak refund.
+
+A brush or close acknowledgement with retained opacity history must verify input/temporary retirement separately from the published metadata charge. Cancelled modal lifecycles require the exact sum of the live original brush-opening charge and retained metadata; after original Up only the retained metadata charge remains. Lifecycle authority faults separately observe source-preview and typed-closure tickets: document replacement can retain the preview source even when closure is stale. Exact source/output/input sums must hold before and after original acknowledgement. Final destroyed-graph/shutdown cases keep their explicit zero-memory expectations. Test weak observers are released after the original observation so they cannot create artificial retention. These lifetime expectations do not change literal pixels, history, input ordering, file contents or receipt outcomes.
+
+The integrated source must pass the required x64 Debug/Release/real ASan (including detection probe), Release analysis, ISA/provenance and ARM64 cross-build gates. Native ARM64 runtime, ordinary responsive activation, complete caller phase costs and G1 remain separately qualified; private component passes do not close P1.
+
+A cancelled panel OK followed by a younger rename, or an adjustment opening followed by a younger rename, preserves the exact Cancel/opening/close receipt order and literal source/history expectations. The rename remains charged to its own original ticket while its live document or undo entry owns the publication. Test panel/source charges and metadata contributions separately; never infer global zero from completed temporary work. Reference fixture commits can enqueue real memory acknowledgements after their last previous settlement; consume those owner events before observing IsIdle/accounting. Final destroyed-graph zeros and other modes exact charges stay explicit.
+
+A reference clipboard Copy followed by document/history Clear can defer real metadata destruction. Keep the copied original baseline reader alive and consume the real retirement acknowledgements before asserting its exact remaining charge. Only explicit final reader release and consumed acknowledgement may refund that original baseline. Preserve literal clipboard bytes, origin, serial, distinct source identity and empty document/history expectations.
+
+Independent save-fixture cases first clear the previous document/history, refresh real consumers and consume real retirement before a fresh CreateDocument. CreateDocument is a history edit and alone cannot prove an empty original-owner baseline. Preserve each mode's original zero or intentionally retained-reader expectation.
+
+Document.Tests.ProjectSaveCachedPlan compares the immutable save-admission summary with the preserved old scalar formula. Boundary cases include 10,000 layers, Unicode/long names and paths, 32/33 curve points, invalid assets, BGRA/Gray and lazy sparse masks, repeated shared assets, copied/changed roots and cancelled Seal. Original scalar outcomes and all identities/unmaterialized state remain exact.
+
+IsaR9R15PairTests preserves the exact guarded paired R9/R15 dispatch, PDB-owned anonymous relative-DWORD/byte tables and terminal transfer proof. Its 113 encoded controls include genuine surrounding vectors and mismatching/unknown/overlapping rows, ownership/bounds, branch targets, padding and unaligned tables. Generated PE files are parser inputs and are never executed. The runtime allowlist and DxUi pin remain unchanged.
+
+
+### P1 selection ownership and arena coverage
+
+The native suites register the independently referenced prepared outline raster, fractional DPI/view,
+local allocation, GPU residency, controller and clipping tests. The application harness additionally
+checks 47 host lifecycle facts, 75 actual-frame parity facts and 40 actual eleven-owner acquisition/
+joined-shutdown facts in both startup orders. The contextual multiplexer test pair retains its previous
+fairness/refusal tests with literal eleven-slot admission and twelfth-slot refusal.
+
+DocumentTests adds 536 bounded-point model assertions and 39 actual original-ticket assertions, with
+both summaries and every predecessor test retained. The arena reference covers chunk boundaries,
+retained snapshots, clear/pop/re-extension, capacity refusal, moves, cancellation, original admission and
+worker/owner retirement. These foundations require the mandatory native matrix after integration and do
+not substitute for ordinary host activation, complete operation admission, sanitizer detection or G1.
+
+Wide unsigned inline-table controls retain the earlier parser controls and assert three exact accepts
+and 27 malformed/real-vector refusals. The corrected scanner must pass the same previously failed
+ASan binary/PDB/listings without an allowlist change before fresh native ASan qualification.
+
+
+## Bounded lasso component validation
+
+DocumentTests registers 32 bounded-gesture, 43 finish/history, 67 current-only session bridge and 80 ordered-input
+facts, retaining all predecessor assertions. Independent vector, literal polygon/rectangle/ellipse membership
+and history/state references cover chunk/capacity boundaries, old snapshots, exact terminal mismatch, original
+ticket admission/retirement, cancellation/replacement/source changes, no-op/redo/saved markers, physical AA,
+nonwrapping counters, 512-slot FIFO plus separate Up/Lost and overflow refusal. Native compilation/runtime,
+actual window event ordering, GPU draft parity and large owner/apply/cancel/frame measurements are separately
+required; private component PASS does not close lasso host migration, S5 or P1.
+
+### Hidden committed-display frame qualification
+
+The actual hidden WARP committed-display fixture requires a completed canvas blit, successful canvas status,
+zero owner composition, exactly one real frame Present attempt and a handled result of `S_OK` or
+`DXGI_STATUS_OCCLUDED`. `PresentCount` advances only for the former. An explicit occlusion-stage control
+requires the real call and canvas blit while preserving visible count. Neither a hidden successful call nor
+an occluded attempt qualifies visible latency/G1. Failure diagnostics record attempts, presentations, handled
+result, canvas/suspension/occlusion, composition count and frame failure. The intermittent r990 failure and
+passing diagnostic-only r996 remain evidence; a passing rerun does not establish its cause.
+
+Full native qualification accepts `test.ps1 -MaxCpuCount N` to forward explicit project/compiler concurrency.
+All tests, scanner controls, probes, screenshots and failure gates remain required. Record the chosen cap and
+actual compiler/task settings; a build refused by system commit capacity provides no runtime qualification.
+
+
+### Lasso draft and actual host qualification (P1)
+
+Native DocumentTests register 23 independently referenced draft-raster assertions and 23 conditional-input
+behavioral controls; CompositionTests register
+25 shared-child lifetime and 13 premultiplied color/fractional clipping assertions. Every predecessor
+registration remains in order. Application registers the actual lasso display and host stages once: 29
+original-ticket/draw/current-view/device/close assertions and 160 physical FIFO/conditional-close/keyboard,
+reached-allocation fault, held-original cancellation and whole-memory refusal assertions. Thirty-two of the
+160 exercise point/cursor/Backspace/marquee versus a tool request in both admission orders: the original
+shared nonwrapping event ordinal selects the oldest stream/queued/lifetime input. The standalone allocation
+counter remains separate evidence; native tests replace no executable-wide allocator. Eight further assertions place the actual shared clock
+at uint64 maximum: live sampling fails before mutation; late Move/Backspace/polygon press cannot cancel an
+already accepted terminal, which still publishes its literal triangle and exactly one entry. The native
+fixture-only friend adjusts no production state/layout and restores no counter below a started operation.
+Twenty-four additional controls toggle either lasso or marquee kind while opening is pending, a writer is
+acquired, or a conditional close is queued. They require exact paired input/session cancellation, unchanged
+selection/history and a working follow-up opening. Draining or rejecting one sample must rearm an already
+accepted next sample, queued command or canvas lifetime through the existing event-driven continuation
+source. A settled gesture with no pending input must not request repeated wakeups.
+
+Exact New/Add short-outline, Backspace/Delete/Escape, original event AA, younger-command history ordering,
+partial capture counts, unchanged source/history/generation and off-owner weak retirement are independent
+predicates. Faults are reached in the original worker runner; complete admission refusal occurs before
+capture/arena allocation. Held cancellation waits on an owned event or original shutdown, and must not
+acknowledge success/cancellation before that worker joins. The default production layout/route is unchanged.
+
+The independent expected-only reader retains every predecessor assertion, order, duplicate and stage.
+Source/dependency/product bookends bind each actual run. Private PASS is scoped evidence; integration
+requires fresh analysis, native Debug/Release/real ASan (including actual detection), ARM64 cross-builds,
+formatting/skills and separate ordinary-host/lifetime/admission/large-lasso performance qualification.
+
+## Continuing-output and selection parent prerequisites
+
+DocumentTests includes six independent fixture families: selected history ownership (23 checks), continuing
+output (44), bound history lifetime (23), charged selection command memory (30), original gesture parent (41)
+and opaque gesture abort (57). Existing predecessors and legacy numeric goldens remain unchanged.
+
+The scheduler reference uses real workers, literal 17/41 payloads, declared 256/32/64 KiB partitions and all
+64 terminal slots preclaimed before transfer. Descriptor/ticket/bounds/undercharge/repeat/growth and wrong
+callback refusals preserve state. Useful resume, failure, cancellation, joined Close and final weak refunds
+are required. Geometry/history fixtures use literal square coordinates, exact AA/Undo/Redo/no-op semantics,
+complete storage plus allocator/control accounting, unbound/underbound/stale/cancel refusals and strong/weak
+owner retention. The original parent keeps one admission/ticket through moved End, zero-offset End then fresh
+Deselect, zero/nonzero Lost End, failure, cancellation and Close. A separately admitted settled 8 KiB endpoint
+observer verifies exact final parent refund after closed-scheduler teardown and last weak-control release.
+Pending transform without a generation/history change MUST refuse opaque Move and Abort without overwrite.
+
+Run the full predecessor stream in Release and real ASan, including an actual UAF detection probe, source/
+dependency/product bookends, instrumented compiler records and exact binary/PDB identity. These CPU protocols
+establish no physical Win32 routing, whole caller admission, ordinary activation or measured G1 qualification.
+
+### Selected deferred-outline staged-residency controls
+
+`Document.Tests.SelectionGestureResidency` requires 47 independent controls across late Move, late Click,
+Busy/release, cancellation, joined Close and foreign-transform Move/Click. The late 64-by-64 BGRA cache grows
+by exactly 16,384 bytes; literal selection bounds, history count/revision/name, generation and trim order
+remain checked. An explicit worker inspection gate proves original reservation plus an independently admitted
+8,192-byte observer and the remaining worker partition before refresh can finish. Scarce-memory sampling
+proves no second admission or source/geometry preparation.
+
+The foreign editor opens during the gated refresh without changing generation/history; refusal must preserve
+its exact transform address/draft, selection root/opening and history. The independent endpoint observes exact
+live opening/final charges before final source/session release and the observer-only charge afterwards.
+Callback lease availability and cancellation/joined-Close release are checked separately. A watchdog expiration
+is a failure, never a passing release. All preceding assertions and goldens remain required; independent strict
+source-defined stream controls reject missing, duplicate, reordered, failed, unknown or miscounted output.
+
+Private Release and exact-source real-ASan proofs require complete archive, compiler/source/dependency/product
+bookends, matching PE/PDB, ISA and a real ASan UAF control. They do not substitute for native application/ARM64
+qualification, ordinary activation, other physical routes or measured G1.
+
+## Lasso opening settings/history authority proof
+
+`Document.Tests.LassoOpeningSettings` preserves all prior assertions and adds 46 primitive numeric/state controls for captured and live settings, signed rounding, exact foreign-editor/history refusal, invalid descriptor pre-mutation rejection, one-shot/move authority, original-ticket binding and final refunds. Foreign Begin is tested separately for both overloads without a generation/revision change. The pre-fix run's two real failures remain preserved; fixed Release and real ASan must pass unchanged predicates and the complete ordered predecessor stream. Counts alone do not qualify a run. See [the scoped evidence](../TestRuns/P1LassoOpeningSettings_2026-10-17.md). Private model proof does not qualify ordinary Win32 routing, latest native integration or P1 Done.
+
+## Own-writer and Rectangle/New primitive qualification
+
+`Document.Tests.LassoGestureAuthority` adds 45 original-ticket, numeric, authority and lifetime facts; `Document.Tests.RectangleFinishPlan` adds 19 independent shape/area, bounded-plan, prior-selection, cancellation and clipping facts. Preserve all predecessor facts and the original default-path behavior in Release and real ASan. Exact source/command/profile/PE/PDB/archive identity and the complete ordered stream remain required. See [the scoped evidence](../TestRuns/P1LassoDrawingAuthority_2026-10-17.md). Private primitive proof cannot qualify the later physical parent, ordinary routing, latest native integration, G1 or P1 Done.
+
+## Rectangle/New original parent and intent cleanup qualification
+
+`Document.Tests.RectangleGestureParent` adds 75 literal geometry/state, event-time settings, original-ticket, cancellation, refusal, history and shutdown facts. `RunLassoIntentCleanupTests` adds 30 exact-intent/foreign-state cleanup facts while preserving all 45 prior authority predicates. Release and real ASan must retain every predecessor assertion, source/profile/artifact identity, actual sanitizer detection, complete archive and strict full-stream validation. Physical modifier expectations follow the legacy canvas; explicit model `fromCenter` goldens remain unchanged. See [the retained failures and passing CPU evidence](../TestRuns/P1RectangleGestureParent_2026-10-17.md). These CPU gates do not qualify actual Win32, ordinary activation, latest native integration, G1 or P1 Done.
+
+## Rectangle Win32 and long-path reference qualification
+
+The standalone physical Rectangle gate covers 13 scenarios/83 facts on the actual two-worker/WARP application, followed by all predecessor Application stages. Require exact-source Release and real ASan, actual sanitizer detection, exact compiler/ISA/PE/PDB/archive identity and complete ordered streams. Retain failed fixture/API, stale-outcome, joined-driver and path attempts before correction. Literal-tree reference readers use the existing checked Win32 path adapter so a 260-character backup image can be independently compared without changing any expected bytes or save behavior. Reader adapters validate their exact new stage and forward untouched predecessor bytes, including its existing CHROME SYNC LF records, to the unchanged full comparator. See [the complete evidence](../TestRuns/P1RectangleSelectionHost_2026-10-17.md). Ordinary activation, latest native profiles and G1 remain separate gates.
+
+## Ellipse/New CPU qualification
+
+Preserve all predecessor records and add the 20 Ellipse geometry/legacy-coverage references plus 77 original-parent, source, history, cancellation, refusal and lifetime facts. Require fresh exact-source Release and real ASan, the actual UAF control, complete ordered readers, exact command/ISA/PE/PDB/archive identity and final bookends. The independent serial geometric reference uses the documented 1/128 grid and a derived floating-point accumulation bound; legacy coverage remains exact 255/0. See [the qualified CPU evidence](../TestRuns/P1EllipseGestureParent_2026-10-17.md). Actual Win32, native integration, ordinary activation and measured G1 remain open.
+
+## Selected physical Ellipse host validation
+
+The shared physical fixture MUST retain all 83 Rectangle facts and all prior Application records and
+exercise the 14 Ellipse scenarios (89 facts), including inside-outline movement. Its complete roster
+is 147 stages, 8,577 stdout facts and 7,613 stderr facts. The independent reader checks exact order,
+source identity, summary and actual zero exit, then forwards every predecessor byte unchanged.
+Release evidence and the retained R1 fixture failure are in
+[`P1EllipseSelectionHost_2026-10-17.md`](../TestRuns/P1EllipseSelectionHost_2026-10-17.md).
+Complete adopted-source native ASan and ARM64 qualification remain due.
+
+## Preserving marquee CPU and capacity qualification
+
+`Document.Tests.MarqueeModePlan` adds 45 literal plan/refusal facts. The shared marquee-parent fixture adds
+268 original-ticket, geometry, authority and lifetime facts across both kinds and Add/Subtract. Preserve all
+22,693 predecessor facts (23,006 total) in Release and real ASan with actual UAF detection and complete
+source/command/ISA/PE/PDB/archive readback. Literal cached-limit tables cover zero, four and eight source
+vertices. A normal 2 GiB memory query must admit the small cases below 32 MiB and four 65,540-point
+collinear-rectangle cases below 512 MiB; those original counts must reach the worker. Independent winding
+probes and rectangle areas 42/12 validate union/difference. No RSS or G1 claim follows from admission.
+See [the scoped evidence](../TestRuns/P1PreservingMarquee_2026-10-17.md). Actual Win32 Add/Subtract routing,
+latest adopted-source native profiles, ordinary activation and G1 remain separate gates.
+
+## Real external clipboard-contention host validation
+
+The standalone `Application.Tests.ClipboardContention` fixture owns a separate native thread and
+message-only HWND that genuinely holds `OpenClipboard`. Copy/Paste cover release after the first armed
+wait and six-attempt exhaustion through production retry events. Assert the same original ticket,
+history barrier and reservation at every wait. The original holder must be open at the first
+release wait and all five exhaustion waits. Later release waits require that original holder to be
+closed: unrelated desktop owners can deny a later native acquisition. Release allows one through
+five armed waits within the shared six-acquisition limit; forced/injected failure counters remain zero. Literal DIB/private-copy pixels, independent public outcome/history, saved clipboard restoration,
+thread/window joining and final refunds are required. Copy retains its successful private result if
+system mirroring exhausts; Paste exhaustion fails without source/history mutation.
+All 53 new facts and the complete predecessor Application stream must pass in Release and real ASan.
+Native Inspect diagnostics are accepted only in their source-defined Pending-to-Settled windows: one
+through five failed Open calls for Paste release and six for exhaustion, with genuine ACCESS_DENIED
+and valid native DWORD fields. Only the additional source-defined release diagnostics may be projected
+before the unchanged predecessor reader; assertion labels, order and every other byte remain required. Every unrelated
+byte still passes to the unchanged predecessor reader. See [the scoped evidence](../TestRuns/P1ClipboardRealContention_2026-10-17.md).
+
+## Preserving marquee actual-window validation
+
+`Application.Tests.MarqueeModes` adds 429 assertions over 52 actual Win32/two-worker/WARP cases across
+Rectangle/Ellipse Add/Subtract. Preserve the entire predecessor stream (149 stages, 9,059 stdout and
+7,613 stderr facts), exact full 343-TU compiler/source/dependency/product/archive identity, zero ISA
+violations and matching executable/full-PDB in Release and real ASan with actual UAF detection. Include
+normal 2 GiB admission and original 65,540-point counts, no preserving-mode containment, captured Down
+kind/mode, terminal AA, Shift rearm/Alt semantics, literal winding/bounds/history/Undo/Redo, refusal,
+foreign target, loss, cancellation, prefix overflow and joined refunds. The source-only isolated reader
+requires exact order and forwards all predecessor bytes unchanged; counts alone never qualify.
+See [the scoped evidence](../TestRuns/P1PreservingMarqueeHost_2026-10-17.md). Ordinary activation, cursor
+work, remaining selection branches, latest native profiles and measured G1 remain separate gates.
+
+## Cursor request state prerequisite
+
+`Host.Tests.SelectionCursorRequests.cpp` adds 113 independent state-machine expectations and one
+zero-failure summary. Cases cover true/false caching, latest-only replacement, exact acknowledgement,
+document/epoch/generation changes, invalid coordinates, admission refusal without retry spin,
+invalidation, joined Close, signed zero, negative coordinates and serial exhaustion. Seven compile-time
+traits constrain scalar ownership and the 256-byte ceiling. Focused runs are not complete HostTests,
+Application, native-matrix or timing qualification; those receipts remain separate P1 obligations.
+
+## Cursor geometry capture model validation
+
+`Document.Tests.SelectionCursorProbe` adds 33 independently specified facts while preserving all
+23,006 predecessors. It checks absent/empty/collapsed inputs, real transform/lasso eligibility,
+literal rectangle and edge hits, exact immutable-root capture, rejected plan tampering and foreign
+session/reopen/generation, root survival, scalar deferred translation, large-coordinate per-vertex
+rounding and a 65,540-point source. Three static traits constrain the scalar plan and shared display
+copy. Full scoped Release and real ASan must preserve the complete ordered roster, genuine UAF
+control, exact compile/source/dependency/product identity, ISA scan and complete archives. Actual
+Application routing and latest native qualification remain distinct gates.
+
+## Cursor worker and clipboard setup validation
+
+`Application.Tests.SelectionCursor` retains its 50 worker/host facts and adds two ordinary-startup controls.
+The startup control invokes the actual Run initialization path without prepared-source opt-ins, verifies
+cursor-only activation before input, then stops before showing a window and performs joined shutdown.
+The remaining facts run through an actual hidden Application, WARP device
+and two-worker scheduler. It invokes the production cursor containment function and sends actual
+leave/focus messages; it does not move the user's pointer or claim visible `WM_SETCURSOR` latency.
+Require literal interior/hole/edge/corner results, cache reuse, latest-only dispatch, same-point/same-bounds
+generation changes before chrome publication, stale-source retention, a 65,540-point outline, exact
+deferred translation, memory refusal without retry spin, serial exhaustion and joined Close. A separate
+pre-capture cancellation case must acknowledge the original ticket without entering useful geometry
+work. Counters distinguish accepted failed descriptors from useful captures and normal callbacks.
+
+The native clipboard holder setup retries only genuine `ERROR_ACCESS_DENIED`, with at most six calls
+separated by one-shot kernel events; it never fabricates acquisition, sleeps or busy-polls. Separate
+native-holder controls prove first-denial release/acquisition and six-denial exhaustion, distinct threads,
+actual Win32 ownership, exit/close/join truth and unchanged data while exclusively locked. Release cases
+use the actual production deadline for the handoff; exhaustion may signal the real registered deadline
+while its native holder stays locked. Keep all 53 original contention facts and all existing assertions
+unchanged. Terminal setup and retry failures report their exact native/counter state. A passing repeat
+provides no causal explanation for an earlier uninstrumented failure.
+
+The complete selected Release roster now has 150 Application stages, 9,111 stdout PASS records and
+7,613 stderr facts. Source-only projection removes exactly the 50 new cursor facts/stage and two
+clipboard setup facts/summary and delegates every predecessor byte unchanged. Complete native Debug,
+Release, real ASan and ARM64 cross-build qualification remain separate gates; native ARM64 runtime
+claims require a native host.
+
+## Selected Freehand parent and actual-window validation
+
+`Document.Tests.FreehandPlan` supplies 75 independent finite-capacity/geometry facts; the physical
+input suite supplies nine long-path/queue facts. The shared original-parent fixture adds 110 facts
+covering New/Add/Subtract, literal areas and complete hard-coverage grids, 131 accepted points over
+two sealed blocks, captured settings, no-op/short/inside behavior, exact writer authority, refusal,
+cancellation, foreign edits and original strong/weak retirement. Keep all 23,039 prior facts
+(23,233 total) in complete scoped Release and real ASan; require actual UAF detection.
+
+`Application.Tests.FreehandPress` adds 472 facts over 51 actual hidden Win32/two-worker/WARP cases,
+including live capture loss for Freehand, Rectangle and Ellipse in all three modes. Retain every
+predecessor record: 151 stages, 9,583 stdout PASS records and 7,613 stderr facts. Independent readers
+require source-derived exact order, summaries, actual exits, compiler/dependency and executable/full-PDB
+identity, ISA proof and complete archives. A valid unchanged Document image may reuse its exact
+compiler-input/artifact/profile receipt; a fresh Application run cannot inherit an older exit.
+Keep failed runs and reader/scanner repairs separately. Private selected proof does not qualify
+ordinary activation, latest full native profiles, G1 or P1 Done.
+
+## Immediate R9 terminal switch-data validation
+
+`IsaR9DirectTests.ps1` adds 64 independent PE/PDB/listing controls: three accepted maximum ranges
+and 61 refusals. Require exact guarded zero-extension/dispatch rows and anonymous terminal extent;
+missing, unknown, mismatched, foreign or malformed proof refuses. True VEX in executable body,
+case-target or adjacent code remains rejected. Keep all existing parser and compiled ISA controls.
+Original failed linked images are rechecked without rebuilding, preserving the failed report and
+exact binary/PDB/raw metadata hashes. [Evidence](../TestRuns/IsaR9Direct_2026-10-17.md).
+
+## Polygonal finite plan and metadata validation
+
+`RunPreparedPolygonAuthorityTests` adds 39 own-key, kind, hover, quarter-pixel, nonfinite, close,
+foreign writer/Begin, last-corner removal, immutable snapshot, one-block exhaustion/refill and
+original-refund expectations. `Document.Tests.PolygonalPlan` adds 35 independent literal capacity,
+invalid/overflow, drag-Up refusal, short-mode and geometry checks. Triangle/bowtie references
+check every pixel of independent 12-by-10 literal masks (28/24 covered pixel centers).
+Complete scoped Release and real ASan preserve all 23,233 predecessor assertions (23,307 total),
+with genuine sanitizer detection, exact 282-TU profile/artifacts/PDB/ISA and full archive readback.
+[Evidence](../TestRuns/P1PolygonalPrimitives_2026-10-17.md). This is not physical-parent, latest full
+native-matrix, ordinary input or G1 qualification.
+
+## Polygonal original drawing parent validation
+
+`Document.Tests.PolygonalDrawingParent` registers 94 source-defined facts over twenty calls. Require
+all 23,307 predecessor assertions as well (23,401 total), complete scoped Release and real ASan, actual
+UAF detection, exact 284-TU compiler/object/profile/PE/PDB/ISA/source identities and all runtime archives.
+Independent 12-by-10 rectangle/union/difference and 15-center triangle formulas check every pixel.
+Cover absent/explicit-empty, captured/terminal AA, Undo/Redo, physical close identity, idle park,
+hover/Backspace/refill, early-near/double-click, older close versus younger Finish, bounded bursts,
+full-ring Lost, invalid ordinals, scarce-memory dispatch before capture, forged source, foreign Begin,
+last-corner removal, parked/prepared cancellation, joined Close and exact last-reader refund.
+
+Fixtures on one thread join and uninstall each release sink before starting the next. Preserve the
+first fixture compile/runtime refusals and reader-only/pre-native refusals; a corrected fixture never
+turns an earlier run into a pass. A single-TU correction requires exact unchanged-object lineage.
+Physical New inside-hit/multi-click routing, real queued Save/tool/lifetime arbitration, latest full
+native matrix, ordinary activation and measured G1 remain open.
+[Evidence](../TestRuns/P1PolygonalDrawingParent_2026-10-17.md).
+
+## Polygonal terminal-before-controller validation
+
+Require the four pre-admission Up/Lost and contradictory-descriptor cases in
+`Document.Tests.PolygonalDrawingParent`: fourteen additional source-defined facts preserve all 23,401
+predecessors (23,415 total) in complete scoped Release and real ASan. Cover terminal AA/physical order,
+younger opposite-terminal refusal, no-capture E_ABORT for sampling/nonincreasing contradictions, one
+publication/history or cancellation, exact original-prefix drop and final accounting refund. Keep the
+genuine UAF control, full 284-TU/source/artifact/PE/PDB/ISA readback and source-only roster controls.
+The preserved stale ASan archive-count reader refusal is corrected against the unchanged completed
+bytes; it never replays a compiler or runtime. Physical routing and ordinary/G1 gates remain separate.
+[Evidence](../TestRuns/P1PolygonalPendingTerminal_2026-10-17.md).
+
+## Polygonal owner gate validation
+
+`RunPolygonalHostGateTests` adds 39 source-defined facts over eight calls after every 23,415 predecessor
+assertion (23,454 total), complete scoped Release and real ASan with 284 exact compiler records. Cover
+Peek-before-Take ordinal boundaries, original-ticket/memory ownership without polling, terminal gating
+before close/history capture, owner-only hooks, one-time early-near/selected-close decisions, terminal
+AA and independent rectangle coverage, Save-marker/Undo/Redo, cancellation/joined Close/foreign Begin,
+accepted Lost versus younger Finish, invalid orders that refuse rather than park, and final refund.
+
+The source-only reader preserves all predecessor bytes; require four newline/BOM positives and thirteen
+refusals, genuine UAF detection and exact source/object/profile/PE/PDB/ISA/archive readback. Preserve
+the premature dependent readback and stale inventory-count refusal; qualify the same completed runtime
+only after join and exact inventory verification. Actual Polygonal multi-click, Save/tool/lifetime
+callers, ordinary activation and measured G1 remain separate.
+[Evidence](../TestRuns/P1PolygonalOwnerGates_2026-10-17.md).
+
+## Selected Polygonal physical caller validation
+
+`Application.Tests.PolygonalPress.cpp` adds 527 source-defined assertions over 45 actual hidden Win32/WARP
+cases (15 in each New/Add/Subtract mode) after all 151 inherited Application stages. Its independent
+4096 pixel-center winding reference checks New rectangle30, Add union37 and Subtract remainder7; existing
+legacy goldens are unchanged. Require native Down/Up/hover/Backspace/Enter, near-first/double-click,
+terminal-before-admission and older-close/younger-Enter order, original ticket/capture/barrier retirement,
+actual Save/load excluding transient selection outlines, live committed-selection preservation and
+saved-marker Undo/Redo, dialog cancellation, injected archive failure without a file,
+cancelled Close confirmation, tool/header cancellation, refused direct layer mutation and joined shutdown
+with complete memory refund. The source-pinned reader checks all 152 stages / 10110 stdout assertions and
+forwards the 151-stage predecessor bytes and stderr unchanged to its immutable reader.
+
+Full scoped Release and real ASan application proof, with an unchanged-source 23454-fact CPU prerequisite
+only under exact artifact/dependency/scope identity, is required before adoption. Preserve original compiler,
+ISA, runtime and reader failures before corrections. Current full native profiles, ARM64 cross-builds,
+ordinary activation and measured G1 remain separate obligations.
+[Evidence](../TestRuns/P1PolygonalPhysicalHost_2026-10-17.md).
+
+The inherited inverse-selection joined-close wait records quit/deadline/native-wait or premature-terminal
+receipt failures with captured ticket/history/native-error/memory state before its existing exit. Its
+10-second bound and success references stay unchanged. A source-only one-TU override can reuse exactly
+348 qualified objects only with unchanged hashes, matching compiler/linker profile and independent
+PE/PDB/ISA checks; both complete native streams still run. Keep the earlier unreported ASan exit 5 in
+the final qualification audit: it did not recur, and no causal fix is inferred from the later pass.
+
+
+### Polygonal live-draft PNG/JPEG export validation
+
+The same native fixture extends all 45 cases / 527 facts with twelve actual PNG/JPEG success/picker-Cancel
+cases across New/Add/Subtract, reaching 57 cases / 713 facts. Require exact host receipt/error, original
+live ticket/writer/input, unchanged project path and dirty saved marker, no cancellation artifact, decoded
+64×64 PNG zero BGRA pixels and JPEG opaque white pixels within the existing `jpeg.flatten-white-matte`
+6/255 tolerance. Later closure, independent selection pixels, Undo/Redo and complete joined refunds remain
+required. Production behavior and all legacy goldens stay unchanged.
+
+Main verifies the complete 152 stages / 10296 stdout assertions and unchanged 151-stage predecessor bytes
+and stderr, both exact native Release/real-ASan profiles, 349-object lineage (one new test TU, 348 unchanged
+qualified objects), matching full PE/PDB and zero ISA violations. The source-only acceptance reader must
+pass its complete inherited-chain positives and malformed/missing/reordered/duplicate receipt controls;
+preserve reader-only refusals without rerunning successful native code. Earlier CPU/UAF prerequisite
+receipts are reusable only under exact unchanged source/dependency/artifact/profile/scope identity.
+[Evidence](../TestRuns/P1PolygonalExport_2026-10-17.md). Final latest-source native/ARM64, ordinary activation,
+measured G1 and the inherited unexplained held-gate ASan audit remain separate.
+
+
+### Polygonal live zoom and pointer leave validation
+
+`Application.Tests.PolygonalPress.cpp` extends all 57 cases / 713 facts with `zoom-live` and
+`pointer-leave-live` across New/Add/Subtract. Six additional cases include the inherited common predicates
+and twelve scenario-specific checks: 78 new facts, 63 cases / 791 total. `joined-close` stays last. Require
+queued Zoom In/Out to change the view in the expected direction with an exact successful receipt; native
+`WM_MOUSEMOVE`/`WM_MOUSELEAVE` must establish/clear real tracking and clear the transient drag. Both cases
+retain the exact original controller/ticket, committed selection/history and live three-corner draft.
+After reentry, wait on scheduler events for the fourth corner; a sent native message alone is not replay
+acknowledgement. The same independent 4096-center terminal geometry, one entry, Undo/Redo and final
+strong/weak CPU/GPU refunds remain required.
+
+Qualify the full 152 stages / 10374 stdout assertions and immutable predecessor stderr in exact native
+Release/real ASan. Main must verify all 713 prior facts, complete archives and source/object/product
+bookends, exact one-TU/348-reused-object lineage, matching x64 PE/full-PDB and zero ISA violations. The
+source-only reader requires four local byte-preservation positives, two complete inherited-chain profile
+positives and 26 refusals. [Evidence](../TestRuns/P1PolygonalView_2026-10-17.md). Complete DPI/device/hidden
+scope, dispatcher branches, final full native/ARM64, ordinary activation and measured G1 remain open.
+
+
+### Guarded R8/RAX/RDX interior-table ISA controls
+
+`IsaScanTests.ps1` runs `IsaR8RaxRdxTests.ps1`: 107 independently encoded controls (22 accepted, 85 refused)
+for the exact biased R15D/EAX unsigned guard and R8-image-base/RAX-index/RDX-target switch defined in
+`Build_Toolchain.md`. Cover bounds 1/5/12/127, alternate biases, exact guard-start entry, same-owner repeated
+symbols, RET/backward-JMP alignment, split LOCK memory INC/DEC/XADD, malformed PE/PDB/listing/body and
+case/default boundaries, conflicting ownership and genuine VEX/EVEX body/target instructions. These controls
+MUST NOT execute their encoded bytes. Preserve the prior complete parser and compiled tier/runtime/PDB controls.
+The unchanged failed PE/PDB readback and original refusal remain separate evidence; scanner success alone
+closes no native application, ASan runtime, ARM64, ordinary activation or G1 gate.
+[Evidence](../TestRuns/IsaR8RaxRdx_2026-10-18.md).
+
+
+### Selected Polygonal terminal native qualification
+
+Preserve all 791 predecessor facts and add 18 cases / 208 facts: 81 cases / 999 total and the full
+152-stage Application stream / 10,582 stdout assertions. Cover Escape without publication/history,
+Backspace-to-zero as Finished/endedByBackspace without publication/history, near-first with two corners
+recording a third stored point before Escape, and a true two-corner double-click. The latter MUST click
+the prior corner and assert the accepted Move/PolygonPress double-click and not-near-first flags.
+Check New/present-empty clearing once versus unchanged Add/Subtract and no history, captured mode through
+a direct header callback, and screenshot-DPI override plus native `WM_DPICHANGED` with restored bounds.
+The synthetic native-message fixture MUST use a positive rectangle contained in the already accepted
+native bounds and at least the live owner's minimum at the proposed harness scale. Restore the old override
+after querying that minimum and fail an unsuitable setup explicitly, once in each New/Add/Subtract case.
+Retain every exact bounds/DPI, original writer/ticket, selection/history, point-count, current-view click and
+restore assertion. On a combined-predicate failure, print its typed DPI/state terms and requested/actual
+native rectangles. An unexpected missing writer MUST produce a failed predicate instead of a null access.
+These controls establish no physical monitor-DPI transition.
+
+Widget interaction and real-monitor DPI are separate acceptance scope.
+
+Require exact-source Release and real ASan, all predecessor stdout/stderr through the source-only reader,
+actual sanitizer detection, complete original-ticket and strong/weak refunds, full command/object/profile/
+PE/PDB/ISA/archive identity and source-only malformed-input controls. Preserve the original test-driver,
+compile-warning and ISA refusals before correction. The exact unchanged CPU/UAF artifacts and ASan DLL
+closure are reused only under their recorded source/dependency/artifact/profile/scope mapping; both
+complete new Application streams run. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+
+## Polygonal unresolved-branch journal validation
+
+`Host.Tests.PolygonalInputJournal.cpp` runs in complete HostTests and adds 3,382 independent state/numeric facts plus one summary. Require FIFO and nonconsuming Peek, complete per-Down scalar authority and captured view operands, Up followed by a younger Down, invalid enums/coordinates/scales/ordinals, exact full-capacity prefix plus separate emergency Lost, ring wrap, seal/refusal/drain, explicit family close and monotonic stream/ordinal exhaustion. Rejected input must preserve the earlier prefix.
+
+The numeric oracle is archived behavioral reference: the projected-first-point distance is at most eight view points. Windows fixtures use literal 144-DPI/12-physical-pixel and 192-DPI/16-pixel boundaries, one ULP outside the boundary, minimum zoom, invalid snapshots and an exact large-pan counterexample where rounded-document reconstruction would incorrectly reject closure. Later viewport changes cannot reinterpret a recorded click. Proximity alone does not decide whether a polygon has enough corners.
+
+Qualify the complete unchanged predecessor HostTests roster plus this module in Release and real ASan, with exact 136-TU compiler records, source bookends, matching native x64 executable/full-PDB identity, linked ISA and genuine UAF detection. The isolated resource fixture uses the exact qualified ARM64 executable only through data/resource loading and version-info APIs; it executes no ARM64 code. Preserve original project-import/configuration and missing-resource pre-build refusals; a reader or fixture correction never turns an earlier attempt into a pass. This scoped proof does not close the physical dispatcher, final native matrix, ordinary activation or G1. [Evidence](../TestRuns/P1PolygonalInputJournal_2026-10-18.md).
+
+## Polygonal original-parent branch validation
+
+`Document.Tests.PolygonalDispatcher.cpp` registers 105 independent CPU assertions over 24 scenarios.
+Preserve every 23,454 predecessor PASS record and the generic drag-Up planner's Polygonal refusal.
+Verify one original admission/capture/ticket and one New/nonempty worker hit; Add/Subtract skip hit.
+All 120 pixel centers use independent literal rectangle/union/subtraction predicates, with exact
+Undo/Redo/history and event-time terminal AA. Inside movement has the existing Move+End generation
+invalidations; short New clears once and short Add/Subtract preserve exact no-op history.
+
+Cover inside Up with a younger Down, missing Up, all 512 accepted records plus separate emergency
+loss after that Up, borrowed-family retention, forged generation/restore/active/crop/mask, real
+foreign pending History Begin, memory refusal before capture, Escape, parked/running cancellation,
+joined close, Backspace-to-zero, short double-click, physical view/DPI closure, terminal/ordinal
+readiness before Take and sixteen-record hover replay. Normal observer sees cleared controller
+and acknowledgement; final reader release refunds both reserved and releasing bytes.
+
+Qualify complete affected Release and real-ASan DocumentTests, all 285 source/command records,
+consistent private state headers, exact source/object lineage, full archived bytes, matching x64
+executable/full-PDB, linked ISA and genuine isolated UAF detection. Preserve the stale agent-project
+preparation, original macro compile failure, two legacy-batching regression predicates and four
+fixture predicates before correction. No predecessor assertion/golden is rebaselined.
+
+This proof excludes actual Win32 dispatcher/conditional receipts, owned-predecessor transitions,
+Save/tool/lifetime arbitration, ordinary activation, ARM64 runtime, G1 and the final latest-source
+full matrix. [Evidence](../TestRuns/P1PolygonalGestureDispatcher_2026-10-18.md).
+
+
+## Owned Polygonal predecessor transition validation
+
+Extend `Document.Tests.PolygonalDispatcher.cpp` by 34 independent assertions over ten scenarios,
+retaining all 105 original assertions (139 total). Three already queued original parents compare
+all 120 centers against literal successive rectangles, three separate history entries, existing
+six Move/End invalidations, three exact Undo/Redo results and final refunds. Verify a new original
+inside parent after a chosen Polygonal close, and a Down captured during a genuine owned preview.
+The stored Down authorities must remain byte-identical. Each parent retains its own admission/ticket.
+
+Require one-shot extraction after completed/cleared/acknowledged state, no public default/copy
+construction and no-throw move construction. Missing receipt, another journal, retired/reused
+family, foreign history/crop/target and moved-from receipt must refuse before retained-root capture
+and preserve predecessor selection/history. A single valid moved receipt can consume that same
+untouched younger Down. Opaque history validation must catch a foreign Begin without generation change.
+
+Fresh complete Release and real-ASan profiles each compile all 285 TUs and pass 23,594 PASS lines.
+Preserve every 23,559 matching-profile predecessor assertion record; replace only the old module's
+105-count summary with its 139-count summary. Require frozen source/command/byte manifests,
+consistent private headers, exact x64 executable/full-PDB identity, linked ISA and genuine UAF
+detection. No cached objects or prior runtime result qualifies this new component. Actual Win32
+conditional dispatch, Save/key/lifetime order, ordinary activation, G1 and final latest-source
+native qualification remain open. [Evidence](../TestRuns/P1PolygonalOwnedTransition_2026-10-18.md).
+
+
+## Original physical Polygonal caller validation
+
+`Document.Tests.PolygonalDispatcher.cpp` adds twenty owner-hook assertions in four scenarios: pure terminal readiness cannot admit/consume/capture; selected admission refusal preserves the exact terminal and prior history; a duplicate/no-change corner still reports consumed progress; thirty-three ignored inside keys count toward the sixteen-record replay quantum before physical Up. All 139 predecessor module facts remain (159 total); both complete 285-TU Release/real-ASan suites pass 23,614 PASS records and preserve 23,593 matching-profile predecessor records, excluding only the replaced summary. Require genuine UAF detection, ISA, actual type/include consistency, frozen inputs and full artifact/PE-PDB readback.
+
+`Application.Tests.PolygonalDispatch.cpp` runs fifteen selected actual-Win32 hidden-WARP cases after the unchanged 81-case / 999-fact predecessor fixture: two already queued inside parents; New/Add/Subtract; chosen close then queued inside; Escape/Backspace before controller; hover/remove/refill; live project Save; tool cancellation; leave/zoom; temporary Space-pan with Space released before Up and explicit actual capture loss; ignored right input before first Down and with a live draft; joined Shutdown. Require all 139 new facts, all 152 stages, every matching-profile predecessor stdout/stderr assertion and 10,721 stdout PASS records. Compare all 4,096 centers with literal rectangle/union/difference predicates, exact generation/history/Undo/Redo, original tickets, conditional receipts and final CPU/GPU/weak-owner refunds. Right input uses independent Win32 state-machine expectations; no legacy golden is rebaselined.
+
+Compile all changed application types consistently and prove all 351 source/command/object records. Affected builds may reuse only byte-exact matching-profile ancestor objects with unchanged frozen source/header/flag identity and verified actual link inclusion; runtime results are always from the final executable. Require final linked ISA, matching x64 PE/full-PDB identity, complete artifact/ancestor/source readback and independently reloaded Save ZIP/manifest/PNG dimensions. Preserve the reader-only refusal that incorrectly required Job.h from a fixture using the forward-declared pointer; repair the reader without rebuilding successful code.
+
+The earlier complete ASan R2 cohort passes 122 new facts / thirteen cases. It does not prove pan capture-loss cleanup or the later right-button guards. The final fifteen-case fixture explicitly covers both. Complete host refusal/overflow/foreign/lifetime/device/DPI controls, ordinary activation, measured G1 and the final latest-source x64/analysis/ARM matrix remain required. [Evidence](../TestRuns/P1PolygonalOriginalHost_2026-10-18.md).
+
+## Original Polygonal admission-boundary validation
+
+Extend the actual native fixture by ten cases / 73 facts, preserving all fifteen / 139 predecessors: family and record counter exhaustion, absent document, queued prefix replaced before controller creation, target refusal, memory refusal, ninth host descriptor, full 512 plus emergency loss, overflow after accepted inside Up, and missing release followed by a younger parent. Require 25 cases / 212 facts, all 152 Application stages, every prior matching-profile stdout/stderr assertion and 10,794 stdout PASS records. Literal 4096-center masks, exact generation/Undo/Redo, all accepted descriptor outcomes, no orphan family and joined resource refunds are independent expectations.
+
+The unchanged-product control places prefix replacement first and must retain its actual result: all 999 old Polygonal assertions / 81 cases pass; the new family-retirement fact fails after successful settlement (exit 5). The corrected caller must pass that same fact. Preserve both the original fixture shadowing warning-as-error and the new fixture's mistaken zero-record memory expectation. JobScheduler::Submit returns one accepted record even when AdmitWaiting immediately queues memory failure; require zero worker runs, source captures and opened writers, not zero submitted records. No legacy golden or product failure behavior is loosened.
+
+Final artifacts include all 351 actual command/source/object records, matching-profile byte-exact ancestor objects and actual link inclusion, source/header consistency, final full runtime/ISA/PE-PDB/Save readback. No header, CPU kernel or document-job implementation changes in this correction. Earlier exact CPU/HostTests evidence remains scoped to its immutable artifacts; the final milestone matrix is still required. Shared-ordinal/scheduler-slot exhaustion, held-worker foreign editor/history/crop/mask, inside-Save and complete file/picker/lifetime/device/DPI/hidden controls remain due. [Evidence](../TestRuns/P1PolygonalAdmissionBoundaries_2026-10-18.md).
+
+
+## Original Polygonal foreign-history and inside-Save cases
+
+The actual native fixture adds outside/inside foreign pending-history refusal and real inside-Save-before-Up ordering: three cases / thirty assertions, preserving all previous 25 / 212 (28 / 242 total). Require the full 152-stage Application stream, 10,824 stdout PASS records and every matching-profile predecessor stdout/stderr assertion. Foreign-history tests distinguish history-only authority change from unchanged generation/revision, require zero original admissions/captures/writers, all 4,096 prior literal selection centers, exact pending depth/opaque authority and the foreign owner's no-op End.
+
+The real Up/Save case must first park the original inside drag; queue Save and verify it remains pending with no output or synthetic terminal; deliver actual WM_LBUTTONUP and require one original ticket, one exact move/history entry, the successful saved revision, Undo/Redo and final refunds. Independently preserve/read both live.prism and inside-before-up.prism with ZIP CRC/manifest/PNG dimensions; the project schema intentionally omits selection outlines. The unchanged-product Release control must retain its actual single refusal-before-admission failure, exact executable/PDB and source/artifact records; do not infer unobserved downstream mutations or an ASan control outcome.
+
+[Qualification](../TestRuns/P1PolygonalForeignHistoryAndSave_2026-10-18.md).
+
+## Original Polygonal lifetime, export and scheduler-capacity cases
+
+The actual native dispatcher fixture adds seven cases / 96 facts over 28/242, requiring 35/338 total, all 152 Application stages and 10,920 stdout PASS records in selected Release/real ASan. Preserve every matching-profile predecessor stdout/stderr assertion. Require real PNG/JPEG files, all 4,096 literal opaque-white pixels (PNG exact; JPEG existing earlier host default-quality white reference 6/255), exact active writer/draft/corner receipts/history/path/dirty marker, and later one-entry Enter/Undo/Redo. The quality 1 IoTests jpeg.flatten-white-matte fixture is not a default-quality golden. Quiet missing-output-path cancellation covers its real ERROR_CANCELLED seam only; actual OS dialogs and held-write interleavings remain open.
+
+Two no-more-input cases replace/Clear only after every accepted corner/Up and host descriptor has parked on the original. Require document notification alone to cancel/join that exact ticket, unchanged successful receipts, exact foreign 4,096-center mask/absent document, history/generation and reservations. Retain the unchanged-product focused failure and both focused candidate rosters as focused evidence, distinct from full-suite qualification.
+
+Fill the actual scheduler's 128 owned records without draining completions, keep one accepted job on an event, and invoke the registered owner continuation. Require exact slot-refusal HRESULT, zero original worker/capture/writer admissions, unchanged literal document/history and 128 successful prior completions after release. Every early exit releases/joins the borrowed gate before its stack lifetime ends. Concurrent workers need not all start before the final-index job signals. Shared history ordinal exhaustion remains open; it has no current seed seam.
+
+Sampler-capacity diagnostics retain every original predicate and the 10-second failure bound. Failure logs report settlement/time, exact receipt/error/color, capture/authority/history, opening slots and owner/resource states. Preserve the original nonzero run; passing repeats establish no historical cause or causal fix.
+
+[Evidence](../TestRuns/P1PolygonalLifetimeAndExport_2026-10-18.md).
+
+## Original Polygonal typed commands and prepared-worker foreign authority
+
+The selected dispatcher adds six cases / 82 facts over 35/338: 41 cases / 420 facts. Focused Release and real ASan execute the entire selected fixture, preserve all 338 predecessor names, and independently qualify exact source/object/artifact/PE-PDB/ISA and Save/export readback. These focused runs do not qualify the full Application stream. Integration must retain all 152 stages and the expected 11,002 stdout facts with every existing matching-profile assertion; actual keyboard/menu widgets remain separately due.
+
+Deselect, Undo and Redo enter the real typed HostCommandInput queue. Construct genuine before/after history entries and exact revisions independently of the operation under test. While the old Polygonal original is parked, one owner continuation must hold the command behind cancellation acknowledgment with no early selection/history change. After join, require the same cancelled original ticket, fixed successful corner receipts, no new worker/capture/admission, literal command result/history/revision/generation and full refunds.
+
+For foreign history Begin, crop frame or selected-mask target, hold the actual original worker at DrawingPrepared using borrowed events/scalars only. Verify unchanged document generation/revision and all 4,096 literal prior selection centers before changing authority. Release then require exact Failed/E_ABORT, no publication, no orphan raw family or old writer, unchanged successful corners and the exact foreign transaction/crop/mask identity. Only the foreign owner may close its no-op transaction, cancel its crop or restore its image target. Every early exit releases the event and joins the scheduler before borrowed gate state dies.
+
+Preserve the optional-comparison compile failure and signed-depth warning-as-error as failed builds with no runtime. Preserve the crop ASan ISA rejection independently of later mask-layout scanner success; do not widen the instruction allowlist or claim a passing link layout repairs a scanner gap. [Evidence](../TestRuns/P1PolygonalCommandAuthority_2026-10-18.md).
+
+## Joint unsigned switch-pair scanner regression
+
+The canonical x64 ISA control suite includes IsaSplitTailUnsignedTests.ps1. Require all 94 distinct controls and the complete unchanged predecessor scanner roster, including compiled scalar/tier/negative-owner and PDB identity controls. Require the valid joint proof to classify exactly 29 VEX-prefixed RVA rows as data, every hostile proof to retain its expected vector violations, and genuine body/adjacent VEX/EVEX code to remain gated. Preserve the original actual native image/PDB/decoder input rejection and verify the correction on those unchanged bytes with unchanged allowlist. Scanner qualification is distinct from Application behavior, latest native matrix and P1 closeout. [Evidence](../TestRuns/IsaSplitUnsignedTail_2026-10-18.md).
+
+## Initial layer row geometry
+
+RunSelfTest checks the first row immediately after initial SyncChrome, before Render/Prepare and later model changes, then after the initial renderer preparation. Require a nonempty row whose top is at or below the title-band bottom (menu + tab + Layers title heights, 94 DIP); retain every existing failure gate. The unchanged-product focused control must fail this first assertion with row top69/bottom97/titleBottom94; the corrected ordering must pass both new facts. The full adopted Application stream now expects 152 stages / 11,004 stdout assertions with the 41/420 dispatcher extension; focused startup evidence does not qualify that full stream.
+
+Qualify Release and real ASan with exact command/source/object/PE-PDB/ISA and artifact records. Four real application-harness captures (empty/brush/adjust at96, brush at144 DPI) must have independent PNG integrity and post-arrange geometry showing row0 top TreeTop+2, and be visually reviewed for separation. Preserve the private ASan C4702 driver-only failure and its correction. If a launcher wait expires while the child continues, join that same owned process through its verified handle and retain the actual eventual exit; never kill/replay it to manufacture a result. [Evidence](../TestRuns/P1InitialLayerViewport_2026-10-18.md).
+
+
+## Direct RBX terminal-table scanner controls
+
+The canonical `IsaScanTests.ps1` MUST run `IsaRbxDirectGuardTests.ps1` with 120 distinct encoded cases;
+fixture generation alone is insufficient. Each case checks its exact table-data/vector/EVEX/violation tuple.
+Independent literal PE/listing/PDB oracles cover the 32-bit producer versus full-width index, register width
+and extension bits, modeled/unknown effects, dispatch-interior and producer-bypass branches, row byte and
+boundary integrity, ownership/extents, terminal CALL/INT3 and case/default targets. Valid alternate producer
+slots, body starts and guard-preserving entries remain valid. Genuine body/adjacent VEX/EVEX remain actual
+violations beside successfully proved table data. Preserve unsuccessful drafts and original image reports;
+qualification uses the same original executable/full PDB and decoder bytes, with unchanged runtime allowlist.
+These parser controls supply no Application runtime, ARM64 runtime, G1 or ordinary activation qualification.
+[Evidence](../TestRuns/IsaRbxDirectGuard_2026-10-18.md).
+
+
+## Original Polygonal window-key command validation
+
+Extend the selected original dispatcher to 44 cases / 469 facts, preserving all 420 predecessors.
+Ctrl+D, Ctrl+Z and Ctrl+Shift+Z MUST execute through actual window key down/up and scoped synthetic
+keyboard state. Before pumping, require the one actual matching queued command, document serial,
+later physical-input ordinal, no active request and Pending receipt. Retain that owning receipt before
+queue mutation; injecting another typed request cannot substitute for the real key route. Reuse every
+intermediate original-cancellation barrier and literal result/history/revision/generation/corner/refund
+assertion. Failure diagnostics must expose queue and binding operands.
+
+Require the unchanged-product failure and source/profile/object/PE-PDB/ISA/output readback for focused
+Release and real ASan. Focused execution is not a full Application result. Latest full integration
+expects 152 stages / 11,053 stdout facts; old 41/420 integration evidence cannot qualify changed code.
+Actual menu widgets, physical keyboard hardware, ordinary activation and G1 remain separate.
+[Evidence](../TestRuns/P1PolygonalKeyboard_2026-10-19.md).
+
+
+## Original Polygonal header callback validation
+
+The selected fixture requires47 cases /508 facts, retaining all469 matching-profile predecessors.
+Header Deselect must expose one actual matching later queued command; retain its own Pending receipt
+and reuse the existing intermediate cancellation and exact result/history/ticket/corner/refund checks.
+Expand/Contract require a last-Up-quiescent original, exactly one localized Busy notice, unchanged
+literal selection/identity/history/revision/generation and exact original job/reservation/corner state,
+with no new host descriptor or history producer. Real Enter then commits the same original rectangle
+once, with literal Undo/Redo and joined refunds. The test-only Prompts delegate must outlive all borrowed
+callbacks and restore the owner before its destruction. Preserve the unchanged-product Deselect failure.
+Latest full integration expects152 stages /11,092 stdout facts; focused runs grant no full stream,
+actual-widget, ordinary-activation, performance or native-ARM64-runtime qualification.
+[Evidence](../TestRuns/P1PolygonalHeader_2026-10-19.md).
+
+
+## Original Polygonal header-kind cancellation regression
+
+The selected dispatcher fixture MUST exercise the actual SetLassoKind callback with a parked original writer and
+completed corner receipts. Before pumping, assert the same ticket/controller/charge, prepaid loss record, unchanged
+four-corner draft and no second producer. After acknowledgment, require the new preference, all 4,096 prior selection
+centers, exact generation/revision/history, fixed successful receipts and complete joined refunds. Preserve the
+unchanged-product control failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderKind_2026-10-19.md).
+
+
+## Original Polygonal header widget dispatch regression
+
+Use the normal hidden WARP window and the public ChromeHost accessibility root. A bounded 512-node/depth-32 search
+MUST find the localized enabled Deselect button; its rectangle is outside the canvas and a UIA point hit confirms
+the same enabled button. Release owned COM providers before pumping/destruction. Send HWND left Down/Up, without
+direct callbacks or command injection, and require one exact later Pending command, unchanged original authority
+before acknowledgment, original cancellation, exact selection/history and joined refunds. Retain the unchanged
+product's lost-Up failure. [Focused Release/ASan evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).
+
+
+## AL/RCX terminal switch ISA regression
+
+The default ISA build-process suite MUST run all 121 AL/RCX encoded controls in addition to every
+predecessor control. Valid table bytes require the exact guard, complete PE-matching body, PDB
+ownership, target and terminal proof in `Build_Toolchain.md`. Missing/duplicate/unknown rows,
+listing-versus-PE differences, altered guards/flow/extents/targets and real VEX/EVEX instructions
+retain their independent refusal or violation oracle. Never execute synthetic parser fixture bytes
+or widen the runtime allowlist to make a table control pass. [Evidence](../TestRuns/IsaAlNearRcx_2026-10-19.md).
+
+
+## Existing Polygonal drawing Ctrl-corner regression
+
+The selected dispatcher fixture covers New/Add/Subtract with Ctrl, Ctrl+Shift, Ctrl+Alt and
+Ctrl+Shift+Alt corners, and modified corners queued before original controller admission. Require
+each distinct Pending receipt, exactly one original/capture, no lifted-pixel writer, unchanged
+captured mode, all 4,096 independent expected selection centers, exact one-entry history, Undo/Redo
+and joined refunds. Preserve every predecessor and the unchanged-product refusal. The 15 new
+cases contribute 195 facts (64 cases / 729 facts total at adoption); initial Ctrl/lift is outside
+this qualification. [Focused Release/ASan evidence](../TestRuns/P1PolygonalCtrlCorners_2026-10-19.md).
+
+
+## Scalar preflight, target metadata and native clipboard handoff controls
+
+Native Debug calibrates the CRT allocation event observer with a known vector allocation before asserting
+that cold image, Pixel Move, two mask-grid, blank and invalid preflight queries allocate nothing. Preserve and chain any
+existing observer, and restore it after the bounded observation. ASan/Release retain the functional grid,
+budget, source-immutability and pixel checks; their CRT hooks are not allocation-event evidence.
+
+RasterEdit and Gradient capture tests use large image/mask names and actual native thread identities.
+They verify complete admission before owner-root capture, worker-only full target capture, assetless/mask-only
+behavior, the established name policy, literal pixels, prepared-preview Apply/Cancel and joined retirement.
+
+The real clipboard contention fixture MUST force a second native holder after successful Paste inspection
+and before the full read. Verify actual Busy without injected failure, one permitted inspection/read ticket
+handoff, unchanged selected ordinal/history stamp, the retained full read reservation, the six-total-acquisition
+cap, literal DIB pixels, exact history/outcome, restored user clipboard and both holder threads/windows joined.
+Pure witness controls reject changed authorities, counters, tickets or reservations. The old global-ticket/
+armed-wait predicate must fail this deterministic native control. Focused passes remain distinct from full
+Application and final canonical matrix qualification.
+
+
+### Confirmed session-end native deadline truth
+
+The file fixture validates the actual native wait result within the single1500ms policy budget from
+`UI_Windowing`. It MUST NOT require real filesystem work to finish inside that allowance. WAIT_TIMEOUT
+requests cancellation of the original ticket/stamp; ordinary acknowledgement may truthfully report a cancelled
+receipt after publication already succeeded. After acknowledgement, the independent worker publication trace,
+literal output bytes and saved-revision/path checks must agree. A receipt alone confers no publication truth.
+Event-controlled before/after-publication cases hold the actual producer through native wait return; they
+fabricate no wait status and change no production deadline. Both retain the earlier unsaved-query generation,
+verify cancellation, original receiver/reservation ownership and final joined refunds.
+
+
+### Panel/Wand completion failure diagnostics
+
+The preserving-panel native Wand fixture reports the actual settlement result, receipt outcome/error,
+selection-move/ticket/history state, scheduler reservation/release bytes and host queue state only when its
+existing completion predicate fails. Its15000ms deadlock bound and all selection/panel/history expectations
+remain unchanged. A passing diagnostic repeat alone does not establish the cause of an earlier failure.
+
+
+### Ctrl pixel opening, closure and procedural preview foundation
+
+DocumentTests runs the named prelude, deferred opening, procedural reader, closure, original fixed-press parent,
+output lifetime and immutable descriptor modules. Preserve the100×40 literal move/duplicate/outline reference,
+inside Ctrl/Shift/Alt precedence, outside drawing modes, mask/unsupported-envelope refusal, rounded zero/redo,
+source/history/editor mismatch, cancellation, residency and exact original-ticket ownership expectations.
+
+Independent storage cases retain a copied strong owner, then an expired weak control, then release it. Cover
+new sparse roots, painted tiles, translated geometry, carried masks and both resized and small sparse semantic
+thumbnails. Separate real-parent cases require the exact declared final-output charge through independent root,
+tile and selection strong/weak survivors, with zero refund until actual release acknowledgement. Unbound CPU
+lifetime observations alone are not reservation proof.
+
+CompositionTests adds `RunRecordedPixelPreviewParentTests`: WARP plus available hardware, move/duplicate and
+sparse variants, independent literal bytes, CPU commit parity, invalid descriptors before resource prefix,
+unchanged seed/source caches, actual offscreen blits, original command/completion context, barrier and worker
+retirement. Keep all existing recorded Warp controls. Harness/readback success is not visible-frame timing.
+The [component record](../TestRuns/P1CtrlPixelFoundation_2026-10-19.md) separates private scope and fresh
+canonical integration; ordinary host, journal/Wand and G1 gates remain open.
+
+### Fixed-press Ctrl host and opening retirement
+
+`RunStandaloneCtrlPixelPressSelfTest` uses actual WndProc input and independently specified 5x3 BGRA bytes:
+Move, Down-Alt duplicate, Ctrl/Shift precedence, later modifiers, Up before pumping, zero, loss and refusal.
+Require the same original hit/lift/ticket, no legacy per-tick pixel job, correct pending/final WARP pixels,
+zero/redrag exclusion, actual device rebuild, exactly one Undo/Redo, and independent strong/expired weak
+frame/memory accounting. Drive production readiness rather than repeatedly requesting replacement frames.
+Every fixture exit releases Win32 thread modifiers as well as its scoped synthetic keyboard. The existing
+standalone selection-press driver uses its own scoped synthetic keyboard and keeps its original assertions.
+
+`RunStandaloneDisplayOpeningRetirementSelfTest` retains the actual single undrained opening completion
+after its worker hook, then tests late cancellation, source staleness and real joined Close. Require no early
+publication/refund and eventual worker retirement with zero reserved/releasing bytes.
+
+Clipboard tests also replace an actual foreign DIB while PasteProbe is held, before successful inspection.
+Require the new literal payload under the original six-acquisition budget and unchanged private copy. Keep
+all existing clipboard assertions. Test-gated owner/sequence/dimension diagnostics preserve GetLastError
+and add no clipboard acquisition. A passing repeat does not identify a historical external publisher.
+
+The [host record](../TestRuns/P1CtrlPixelHost_2026-10-19.md) separates private artifacts, causal controls and
+combined-source validation. These tests do not substitute for ordinary activation, phase bounds or G1.
+
+### Typed pixel journal and colour target capture
+
+`Document.Tests.SelectionPixelJournal` tests chained pixel/outline and pixel/pixel parents, Down-Ctrl
+precedence, ignored keys, missing Up, cancellation/loss/leave, wrong family/generation, overflow and complete
+admission. The actual native Ctrl fixture mirrors its eight fixed-press cases through Polygonal and holds
+the first worker closure while queuing the younger Down/Move/Up. Require both original tickets, all four
+conditional receipts, independent final CPU/WARP bytes and exactly two undo entries.
+
+`Document.Tests.ColorTargetCapture` validates large-name documents, shared original roots, name-free owner
+descriptors, actual worker preview/histogram/commit and independent legacy gamma pixels. Require full mask
+metadata in the ready commit, prepared history/undo, corrupted-target refusal, cancellation, stale completion
+after replacement and complete name/source-retirement bounds. Preserve every existing colour/panel/Wand fact.
+The pixel closure tests additionally require final-source refusal after zero, move and apply, original literal
+pixels before publication, no early history authority and a surviving immutable consumer after session clear.
+
+The [colour capture record](../TestRuns/P1ColorTargetCapture_2026-10-19.md) distinguishes private CPU tests,
+same-source capture measurements and pending combined native qualification. Model-call timing is not visible
+UI latency, RAW decode speed, a Photoshop comparison or measured G1.
+
+### Deferred live adjustment target capture
+
+`Document.Tests.LiveAdjustmentTargetCapture` covers direct deferred and real worker-prepared openings of
+an assetless adjustment layer with a valid 1Mi-WCHAR mask name. Require shared original roots and name-free
+descriptors, full mask placement/flags, repeated worker lookup previews, unchanged literal source pixels,
+pending history, corrupted descriptor refusal, pre-cancelled worker acknowledgment and stale-session refusal.
+The opening input remains its original whole-document token; preview target authority comes from that exact
+opening. Preserve all existing colour/panel/Wand facts. Focused private proof does not qualify the full suite.
+
+### Original-parent final display and sizing-source controls
+
+`Composition.Tests.OriginalDisplayPublication` runs independent literal move/duplicate bytes on WARP and
+available hardware, full original-ticket/accounting/rows callback ordering, CPU/GPU/row-epoch refusal and
+post-record cancellation. Exercise actual Close after allocated/captured/prepared/admitted/joined/retired/private
+publication prefixes and while allocation/preparation/recording/transport-retirement workers are held.
+
+The actual Ctrl/Polygonal host additionally observes final CPU/history/rows before terminal and GPU callbacks.
+Hold real final workers for cancellation/Close. Refuse current-source memory after real device recovery and
+original admission; require the exact original error, unchanged source/history/rows, explicit source retry and
+a successful fresh original. Hold a real global residency lease on another thread; require original worker
+refresh without owner wait, unchanged source while held and one successful final history/GPU publication.
+Suspend the real display before final capture: require a dormant original, then actual visibility resume,
+cancel or joined Close with exact receipts and final zero charges. No private Main selector ships.
+
+`Document.Tests.PixelFinalDelegate` tests original worker delegation, literal CPU publication and original
+retirement/accounting, Undo/Redo, zero bypass and factory refusal without fallback.
+`Document.Tests.SizeFinalSource` tests literal 2x1 to 4x2 nearest output, moved/applied source invalidation,
+staleness/cancel, one Undo/Redo, provided output ownership and a separately allocated semantic mask thumbnail
+after its parent root dies. Last immutable history readers retain accounting after prepared aggregate retirement.
+Small-fixture functional proof does not establish production phase bounds, complete 2 ms Apply or G1.
+
+
+First-row publication controls hold the actual row worker while the current GPU source is ready. Ctrl and
+Polygonal each cover resume, cancellation, current-epoch failure and joined Close, preserving one original
+and all prior CPU/history/row/GPU state until publication. The atomic GPU observer compares Chrome's real
+prepared accessibility-row owner with the published application owner. A control using the previous
+handoff must fail that assertion. All sizing fault modes also require first-worker payload allocation.
+
+
+### Size original final host integration
+
+The standard self-test registers RunStandaloneSizeFinalPublicationSelfTest after the Ctrl Pixel fixture.
+Its 191 independent actual-host facts preserve all 473 Pixel publication predecessors and cover 19 Size
+cases: literal nearest resize, coloured canvas extension, Undo/Redo, cancellation, history cancellation,
+invocation/restore staleness, final admission failure, joined Close, late cancellation after Apply, and
+first-row resume/cancel/failure/retry/Close. Restore checks current row/display epochs and foreign Redo,
+rather than requiring obsolete pointer identity. Hidden final work completes through event acknowledgements
+without a RenderFrame pump. Private selected proof remains distinct from full current native qualification.
+
+
+The Size extension requires actual suspended-slot resume/cancel/Close and real device rebuild/refusal/retry.
+Its parked-slot witness comes from the original final delegate waitingOwner callback, not temporary absence
+of runnable work. Cancellation and held-worker Close prove predelegate private CPU/history retirement on the
+original worker. A separate actual BeforeSnapshot allocation fault follows successful real resize; require
+one fault hit, no CPU/history/row/GPU publication, off-owner result destruction before terminal and zero charges
+after joined Close. Literal nearest and coloured extension references remain unchanged.
+
+Prepared-row controls additionally require original admission before off-owner holder allocation in each
+existing applicable case and allocation refusal before owner source capture. Preserve live source/history,
+offer explicit retry, avoid idle rearm and retire complete ownership. The four selected Size CLI modes and
+actual focused smoke publication/boundary records are separate from these state tests. Private proof alone
+does not establish full current native qualification, ordinary activation, 2ms Apply or G1.
+
+
+## Runtime function object casing controls
+
+The ISA build-process suite MUST retain the wrong-object runtime-name refusal and run seven additional
+compiled-fixture parser controls: exact/lowercase/uppercase object basenames accept the complete named
+procedure; changed function-name case, object prefix/suffix and function suffix refuse. The original
+decoded vector bytes, matching PE/PDB, procedure extent and contribution remain required. These controls
+do not execute the vector fixture and do not expand the reviewed runtime allowlist.
+
+## Utility routing and independent memory readiness
+
+The utility-owner routing/capacity fixture uses a fixed memory snapshot so asynchronous system-pressure
+events cannot invalidate its empty-router baseline. It retains the original idle assertion and every
+original routing predicate. Three additional controls explicitly call NotifyMemoryChanged: the empty
+scheduler has ready UI work and is non-idle, the utility service stays quiescent, and one drain restores
+idle. Receiver readiness is never queried for an empty service. Ordinary live OS notification behavior
+is unchanged. The complete predecessor roster plus exactly these three controls must pass on the
+required profiles; the [failed attempt and adoption](../TestRuns/P1UtilityIdleNotification_2026-10-20.md)
+remain separate from subsequent qualification.
+
+## Scoped iteration and exact evidence
+
+`Test-Changes.ps1 -Explain` is the read-only planning entrypoint; `Test-Changes.ps1` runs affected scopes. The first run compares committed work since the local merge base with `origin/main` plus independent staged, working, rename-side, deletion and untracked paths. No ref is fetched. Unknown executable/build/shared inputs widen coverage. `-Scopes A,B` selects explicit scopes; unknown or incompatible selectors fail before execution.
+
+A successful default affected run retains a source-byte and Git-index baseline for that checkout, platform, configuration and environment. The next edit selects only changes since that baseline. Staging or committing identical tested working bytes does not rerun tests. A genuinely different staged blob is retained. Failed, interrupted, corrupt, mismatched, explicit partial or CI-pending runs never advance this baseline. An explicit `-BaseRef` bypasses the incremental baseline. Unexplained artifact changes widen coverage. No selection is `NOT_EVALUATED`, never a new repository pass.
+
+Only exact successful reusable scope results may be reused: source/dependency/build policy, binary/DLL/PDB and required deployed inputs, physical checkout, toolchain/environment, profile and normalized scenario arguments must match. Missing runtime inputs, JSON-only profiles, failures and mutation invalidate evidence. Receipts publish atomically only after successful unchanged execution. `-Force` bypasses result reuse; explicit Full/PrePush do not narrow obligations through the incremental baseline. IO/clipboard, stress, resource/benchmark observations, captures and process-fault workflows remain fresh when selected. Omission by an affected plan is not reusable qualification for omitted scopes.
+
+`test.ps1 -Full -SkipTooling` runs the complete native obligation for its profile; `validate.ps1` runs independent tooling and scope regressions once. `format.ps1 -Check` is an independently reusable Format scope. `-Mode Full` selects the complete applicable local obligation. `-Mode PrePush` accounts for matching local work and forthcoming enabled CI. Deferral requires clean committed bytes, a matching reviewed workflow digest, matching profile/scenarios and stable HEAD/worktree through the API lookup. Disabled/missing/unreadable CI, changed runner contracts and direct default-branch pushes keep obligations local. Deferral is always `CI_PENDING`, never a pass or merge approval.
+
+The PR workflow runs independent tooling once and full native tests in x64/ARM64 Debug, Release and ASan Debug. ARM64 execution is native on its hosted ARM64 runner; cross-builds alone never qualify runtime behavior. Every named PR check must succeed on the candidate before merge. The current private-repository account cannot enforce protected-branch checks; the merge procedure must verify the checks explicitly. Visibility is unchanged. There is no automatic main-push rerun of an identical validated merge tree. A changed integration tree, source, runner, profile, environment investigation or unresolved failure requires its corresponding new qualification. Manual dispatch remains available.
+
+Independent tooling owns parser, provenance, discovery, architecture-wiring and benchmark-runner controls once per validation. Native profile execution must not repeat those scripts. Actual UI cancellation, layer-row and display benchmark smoke remain native Performance obligations and cannot enter the independent tooling roster. `Invoke-ToolingTests.ps1 -ListScripts` exposes that roster without running it; `ToolingRoutingTests.ps1` checks both ownership and retained native gates.
+
+Physical focus/IME/AT, release/package acceptance, hardware-specific qualification and paired resource/performance studies retain their owning gates. Hidden/scoped/native CI passes never close those gates. Native test basenames use contextual `Scope.Tests.Something.h/.cpp`; inventories cover active files only. Immutable historical receipts, archived source and legacy references are not renamed or rewritten.
+
+RedPrism derives native consumers from declared project translation units and the current transitive local-include graph, including cycles and newly added callers. Ambiguous owned headers retain every possible consumer; macro/wildcard inputs widen to Full. Test-source rules also identify their standalone suite; shared support, build inputs and unknown files remain conservative. Host font/worker, IO/clipboard, application Runtime, stress, benchmark and capture scopes are not reused. Document and standalone WARP Composition evidence may be reused exactly. Existing runtime bodies, negative probes, stress modes and WARP/capture capability accounting are preserved.
+
+CI's native-scope job binds compiled inputs, test/build/workflow code, the version stamp and hosted image descriptor. A documentation-only continuation may retain the original native qualification only from an exact matching producer with all six actual successful Full native steps; skipped, failed, cancelled, incomplete or unavailable evidence cannot authorize it. The original source/profile/binary/environment evidence remains the observation; inherited rows explicitly claim no new execution, resource measurement or clipboard/environment result. Manual dispatch always executes fresh native qualification. Each native checkout verifies the descriptor before building. This also permits a documentation/Done closeout without repeating an identical already-qualified native matrix.
+
+The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before building. This independent Win32 preflight creates and destroys its own hidden HWND, verifies an exact 1280x800 DPI-scaled client, and records desktop dimensions without changing display settings or taking focus. The application harness uses `SWP_NOSENDCHANGING` only for its initial hidden/capture fixture resize, so the fixed canvas is independent of desktop tracking limits. The existing default-client/style/DPI assertions remain exact, also require a hidden window, and report actual dimensions. Ordinary visible-window initialization retains its normal sizing policy. The preflight is not application qualification; the full native suites still run afterward.
 
 ## Test-run retention
 

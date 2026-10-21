@@ -1,16 +1,21 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "Adjust.h"
 #include "ChromeHost.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
+#include "JobUiPolicy.h"
 #include "KeyboardState.h"
-#include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
 #include "Resources.h"
+#include "Runtime.Tests.EndSessionWriteTestGate.h"
+#include "Runtime.Tests.ProjectSaveTestGate.h"
 #include "Selection.h"
 #include "SystemClipboard.h"
+#include "WorkerWriteCompletion.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -184,17 +189,24 @@ struct ClipboardHold
 {
     wil::unique_event_nothrow opened;
     wil::unique_event_nothrow release;
+    HWND window = nullptr; // borrowed while the holder thread waits; published by opened
     bool held = false;
+    bool closed = false;
     DWORD released = WAIT_FAILED;
 };
 
 DWORD WINAPI HoldClipboard(void* context) noexcept
 {
     auto* hold = static_cast<ClipboardHold*>(context);
+    // A null opener can be reopened and closed by this process's asynchronous prefill reader. Use a distinct
+    // window so the fixture models another window's exclusive hold throughout every product retry.
+    wil::unique_hwnd window(CreateWindowExW(0, L"STATIC", L"RedPrism clipboard hold", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                            nullptr, GetModuleHandleW(nullptr), nullptr));
+    hold->window = window.get();
     // A clipboard manager may read the clipboard for a moment after each change: wait for it, boundedly.
     for (int attempt = 0; attempt < SystemClipboard::kHarnessAttempts && !hold->held; ++attempt)
     {
-        hold->held = OpenClipboard(nullptr) != FALSE;
+        hold->held = window && OpenClipboard(window.get()) != FALSE;
         if (!hold->held)
         {
             Sleep(10);
@@ -204,7 +216,7 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
     hold->released = WaitForSingleObject(hold->release.get(), 10000);
     if (hold->held)
     {
-        (void)CloseClipboard();
+        hold->closed = CloseClipboard() != FALSE;
     }
     return 0;
 }
@@ -266,7 +278,8 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return false;
     }
-    if (_session.history.IsModified() || _session.HasColorEdit())
+    if (_session.history.IsModified() || _session.HasColorEdit() ||
+        (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome == HostOutcome::Pending))
     {
         return true;
     }
@@ -277,8 +290,7 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return true;
     }
-    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr ||
-        _session.PendingGradient() != nullptr)
+    if (_session.PendingBrush() != nullptr || _session.HasPendingWarp() || _session.PendingGradient() != nullptr)
     {
         return true;
     }
@@ -306,7 +318,8 @@ bool Application::SettleForWrite() noexcept
     // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo. A
     // live stroke or warp, a pending gradient and a pending transform record their entries (EditEnd::Write).
     const auto generation = _session.Generation();
-    CloseOpacityEdit();
+    if (!CloseOpacityEdit())
+        return false;
     EndCanvasEdits(EditEnd::Write);
     _session.ClearSnapGuides();
     if (_session.Generation() != generation)
@@ -314,7 +327,7 @@ bool Application::SettleForWrite() noexcept
     else
     {
         SyncChrome();
-        _frameInvalidated = true; // cleared guides/chrome do not require recomposing settled pixels
+        InvalidateFrame(); // cleared guides/chrome do not require recomposing settled pixels
     }
     return !_session.HasColorEdit();
 }
@@ -339,7 +352,13 @@ HRESULT Application::SelectHostOutput(HostWriteFormat format, bool saveAs) noexc
     {
         return E_UNEXPECTED;
     }
-    auto& request = _activeHostRequest->input;
+    return SelectHostOutput(_activeHostRequest->input, format, saveAs);
+}
+
+HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat format, bool saveAs) noexcept
+{
+    if (!_session.Document())
+        return E_UNEXPECTED;
     try
     {
         if (const auto* write = std::get_if<HostWriteInput>(&request.Input()); write && write->path)
@@ -451,6 +470,12 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return !_session.PendingTransformEdit();
             }
+            else if constexpr (std::is_same_v<Input, HostSelectionOffsetInput>)
+            {
+                _hostExecutionError = StartSelectionOffset(value.amount);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
             else if constexpr (std::is_same_v<Input, HostSelectionNudgeInput>)
             {
                 _hostExecutionError = StartSelectionNudge(value.dx, value.dy);
@@ -538,7 +563,8 @@ bool Application::ExecuteHostInput() noexcept
             }
             else if constexpr (std::is_same_v<Input, HostWandLayerNewInput>)
             {
-                _hostExecutionError = StartWandLayerSelection(value);
+                _hostExecutionError = value.settings.sampleAllLayers ? StartWandCompositeSelection(value)
+                                                                     : StartWandLayerSelection(value);
                 if (FAILED(_hostExecutionError))
                     _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_WAND_MEMORY);
             }
@@ -600,13 +626,13 @@ bool Application::ExecuteHostInput() noexcept
                 if (value.name)
                     _hostExecutionError = StartLayerMetadata(LayerMetadataKind::Rename, value.id, value.name.value());
                 if (FAILED(_hostExecutionError))
-                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
             }
             else if constexpr (std::is_same_v<Input, HostLayerOpacityInput>)
             {
                 if (_session.ActiveLayerID() != value.id)
                     return false;
-                OnLayerOpacity(value.opacity, value.phase);
+                ExecuteLayerOpacityInput(value);
             }
             else
             {
@@ -617,7 +643,8 @@ bool Application::ExecuteHostInput() noexcept
                           !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
                           !std::is_same_v<Input, HostDuplicateBeginInput> &&
                           !std::is_same_v<Input, HostDuplicateFinishInput> &&
-                          !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput>)
+                          !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput> &&
+                          !std::is_same_v<Input, HostCanvasBrushInput>)
             {
                 return true;
             }
@@ -676,6 +703,7 @@ void Application::FinishPreparedDocumentReplacement() noexcept
     _sizeDialog.kind = SizeCardKind::None;
     CloseRenameCard();
     _drag = PointerDrag{};
+    _canvasPanLast.reset();
     _composition.EndStroke();
     if (_window && GetCapture() == _window.get())
     {
@@ -688,7 +716,9 @@ void Application::FinishPreparedDocumentReplacement() noexcept
 void Application::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active,
                                   std::wstring path) noexcept
 {
-    SettleInteractions(false);
+    if (!SettleInteractions(false))
+        return;
+    _canvasPanLast.reset();
     _session.ReplaceDocument(std::move(document), active);
     _documentPath = std::move(path);
     _viewport.followsFit = true;
@@ -769,23 +799,52 @@ void Application::ReleaseDeferredClose() noexcept
     }
 }
 
+void Application::ClearEndSessionWriteBlock() noexcept
+{
+    if (std::exchange(_endSessionWriteBlocked, false) && _window)
+    {
+        (void)ShutdownBlockReasonDestroy(_window.get());
+        if (_endSessionPending && !_shutdownStarted)
+        {
+            const std::wstring reason = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
+            (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
+        }
+    }
+}
+
 bool Application::OnQueryEndSession(LPARAM reasons) noexcept
 {
     if ((reasons & ENDSESSION_CRITICAL) != 0)
     {
+        ClearEndSessionWriteBlock();
         return true;
     }
-    if (_endSessionPending)
+    const auto savePhase = _projectSaveWrite ? _projectSaveWrite->Current() : WorkerWriteCompletion::Phase::Finished;
+    const auto exportPhase = _exportWrite ? _exportWrite->Current() : WorkerWriteCompletion::Phase::Finished;
+    const EndSessionWorkState work{_projectSaveTicket && (savePhase == WorkerWriteCompletion::Phase::Queued ||
+                                                          savePhase == WorkerWriteCompletion::Phase::Writing),
+                                   _exportTicket && exportPhase == WorkerWriteCompletion::Phase::Writing,
+                                   _exportTicket && exportPhase == WorkerWriteCompletion::Phase::Readback,
+                                   _clipboardTicket.has_value(), false};
+    if (GetEndSessionWorkPolicy(work).blockQuery)
     {
-        // The prompt for an earlier request has not been answered.
+        if (_window)
+        {
+            const auto output = _activeHostRequest ? _activeHostRequest->input.SelectedOutputPath() : std::nullopt;
+            const std::wstring reason = FormatStringResource(
+                nullptr, IDS_SHUTDOWN_SAVING, FileTitle(output ? std::wstring(output.value()) : _documentPath));
+            (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
+            _endSessionWriteBlocked = true;
+        }
         return false;
     }
-    // A critical end cannot wait; nothing unsaved (or a quiet run the self-test does not answer) has nothing to ask.
+    ClearEndSessionWriteBlock();
+    if (_endSessionPending)
+        return false; // the earlier unsaved prompt still owns its generation and restored reason
+    // Readback/clipboard work adds no work-specific query block. It must not suppress the existing unsaved
+    // document check. A settled writer's event likewise confers no saved-revision authority here.
     if (!_window || !HasUnsavedWork() || (_quietUi && !_forcedDiscard.has_value()))
-    {
         return true;
-    }
-    // Windows wants the answer now and shows the reason while it waits; the save prompt runs from the queue.
     const std::wstring reason = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
     (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
     _endSessionPending = true;
@@ -800,20 +859,76 @@ bool Application::OnQueryEndSession(LPARAM reasons) noexcept
     return false;
 }
 
+void Application::WaitForEndSessionWriter(const std::shared_ptr<WorkerWriteCompletion>& write,
+                                          const std::optional<JobTicket>& ticket,
+                                          const std::optional<HistoryWorkStamp>& stamp, ULONGLONG deadline) noexcept
+{
+    if (!write || !ticket)
+        return;
+    const auto phase = write->Current();
+    if (phase != WorkerWriteCompletion::Phase::Queued && phase != WorkerWriteCompletion::Phase::Writing)
+        return;
+    const auto now = GetTickCount64();
+    const DWORD remaining = now < deadline ? static_cast<DWORD>(deadline - now) : 0;
+    unsigned int observation = 0;
+    if (_endSessionWriteTestGate)
+    {
+        observation = _endSessionWriteTestGate->waitVisits.fetch_add(1);
+        if (observation < _endSessionWriteTestGate->waits.size())
+            _endSessionWriteTestGate->waits[observation] = {deadline, remaining, WAIT_FAILED};
+        else
+            _endSessionWriteTestGate->traceTruncated = true;
+        (void)SetEvent(_endSessionWriteTestGate->waitEntered.get());
+    }
+    // No dispatch, owner action, GPU work or completion application is possible inside this native wait.
+    const DWORD result = WaitForSingleObject(write->Event(), remaining);
+    if (_endSessionWriteTestGate)
+    {
+        _endSessionWriteTestGate->waitResult.store(result);
+        if (observation < _endSessionWriteTestGate->waits.size())
+            _endSessionWriteTestGate->waits[observation].result = result;
+    }
+    if (result != WAIT_OBJECT_0)
+    {
+        if (stamp && _historyWork.IsCurrent(stamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(ticket.value());
+    }
+}
+
 void Application::OnEndSession(bool ending) noexcept
 {
-    if (_endSessionPending && _window)
-    {
+    if ((_endSessionPending || _endSessionWriteBlocked) && _window)
         (void)ShutdownBlockReasonDestroy(_window.get());
-    }
-    // Cancelled (another app refused, or the user did): a prompt still waiting or showing no longer closes.
+    _endSessionWriteBlocked = false;
     _endSessionPending = false;
     _endSessionPromptDeferred = false;
-    if (ending)
+    if (!ending)
+        return;
+
+    // The boundary is atomic with worker entry. If readback cancellation wins, no writer can start afterward;
+    // otherwise the already entered CPU writer is waited below without restarting GPU work.
+    const auto exportWrite = _exportWrite;
+    if (_exportTicket && exportWrite && exportWrite->CancelReadback())
     {
-        // The process may end as soon as this returns: the settings are saved as a close saves them.
-        SaveSettings();
+        if (_exportStamp && _historyWork.IsCurrent(_exportStamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_exportTicket.value());
     }
+    if (_clipboardTicket)
+    {
+        if (_clipboardStamp && _historyWork.IsCurrent(_clipboardStamp.value()))
+            (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_clipboardTicket.value());
+    }
+    // One total native-wait allowance even if work flags overlap. Timeout requests cancellation and keeps the
+    // exact ticket, event, result and retained graph until ordinary acknowledgement or the shutdown join.
+    constexpr ULONGLONG kWriteWaitMilliseconds = 1500;
+    const ULONGLONG deadline = GetTickCount64() + kWriteWaitMilliseconds;
+    const auto saveWrite = _projectSaveWrite;
+    WaitForEndSessionWriter(saveWrite, _projectSaveTicket, _projectSaveStamp, deadline);
+    WaitForEndSessionWriter(exportWrite, _exportTicket, _exportStamp, deadline);
+    SaveSettings();
 }
 
 void Application::RunEndSessionPrompt() noexcept
@@ -845,13 +960,22 @@ bool Application::HonorsPointerLoss() const noexcept
 
 void Application::EndPointerInteractions() noexcept
 {
+    if (_asyncSelectionCursorEnabled)
+        InvalidateSelectionCursorOwner();
+    _canvasPanLast.reset();
+    // Our close preflight's modal loop may release capture. Its Cancel answer must leave this edit live.
+    if (_canvasLifetime && _canvasLifetime->presenting && _canvasBrushInput.Busy())
+        return;
     // Legacy resignFirstResponder: every drag ends (EndPointerDrag). A stroke or a warp keeps what it painted, as a
     // release would; a transform drag goes back to where it started (a drag-only edit drops, an Alt-drag's duplicate
     // with it); marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place;
     // lifted pixels and a shape draft drop; crop, gradient and eyedropper drags stop where they are; Space no longer
     // pans.
     _spacePan = false;
-    EndPointerDrag(PointerEnd::Lost);
+    if (_canvasBrushInput.Busy())
+        LoseCanvasBrush();
+    else
+        EndPointerDrag(PointerEnd::Lost);
     _session.ClearSnapGuides();
     if (_brushHover.has_value())
     {
@@ -867,7 +991,7 @@ void Application::EndPointerInteractions() noexcept
         DxUi::PointerEvent leave{};
         leave.action = DxUi::PointerAction::Leave;
         (void)_chrome->DispatchPointer(leave);
-        _frameInvalidated = true;
+        InvalidateFrame();
     }
     if (_window && GetCapture() == _window.get())
     {
@@ -1060,7 +1184,7 @@ int Application::RunFilesSelfTest() noexcept
     const Guid top = _session.ActiveLayerID().value();
     const auto indexOf = [&](const Guid& id) noexcept
     {
-        const std::vector<ImageLayer>& layers = _session.Document().value().layers;
+        const auto& layers = _session.Document().value().layers;
         for (std::size_t index = 0; index < layers.size(); ++index)
         {
             if (layers[index].id == id)
@@ -1587,7 +1711,7 @@ int Application::RunClipboardSelfTest() noexcept
         ImageLayer layer = ImageLayer::Blank(L"Sheet", Vec2{100, 100});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();
@@ -1612,7 +1736,8 @@ int Application::RunClipboardSelfTest() noexcept
         return 5;
     }
     wil::unique_handle holder(CreateThread(nullptr, 0, HoldClipboard, &hold, 0, nullptr));
-    if (!holder || WaitForSingleObject(hold.opened.get(), 5000) != WAIT_OBJECT_0 || !hold.held)
+    if (!holder || WaitForSingleObject(hold.opened.get(), 5000) != WAIT_OBJECT_0 || !hold.held ||
+        GetOpenClipboardWindow() != hold.window)
     {
         hold.release.SetEvent();
         if (holder)
@@ -1629,8 +1754,8 @@ int Application::RunClipboardSelfTest() noexcept
     const bool systemRead =
         SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still, SystemClipboard::kHarnessAttempts);
     const DWORD systemReadError = GetLastError();
-    const bool writeFailed = systemRead && still.Width() == 3 && _session.Clipboard().has_value() &&
-                             _session.Clipboard()->image.Width() == 30;
+    const bool writeFailed = hold.released == WAIT_OBJECT_0 && hold.closed && systemRead && still.Width() == 3 &&
+                             _session.Clipboard().has_value() && _session.Clipboard()->image.Width() == 30;
     // Paste takes the session's copy, newer than the other app's image the system clipboard still holds.
     clipboardCommand(ChromeHost::kCommandPaste);
     const ImageLayer* pasted = _session.ActiveLayer();
@@ -1640,9 +1765,9 @@ int Application::RunClipboardSelfTest() noexcept
     {
         SelfTestFailure(std::format(L"Paste after a copy that could not reach the system clipboard took an "
                                     L"older image (write failed {}, OS read {} {} × {}, native error {:#x}, "
-                                    L"holder release {:#x}, OS publication {}, pasted {} × {}).\n",
+                                    L"holder release {:#x}, closed {}, OS publication {}, pasted {} × {}).\n",
                                     writeFailed, systemRead, still.Width(), still.Height(), systemReadError,
-                                    hold.released, _clipboardWriteSucceeded,
+                                    hold.released, hold.closed, _clipboardWriteSucceeded,
                                     pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
                                     pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
         return 5;
@@ -1763,7 +1888,7 @@ int Application::RunSessionSelfTest() noexcept
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{300, 200};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
     }
@@ -1785,13 +1910,28 @@ int Application::RunSessionSelfTest() noexcept
         _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 320.0, 250.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 380.0, 250.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The captured stroke did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         (void)SendMessageW(_window.get(), WM_CAPTURECHANGED, 0, elsewhere);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The captured stroke did not acknowledge its capture-loss completion.\n");
+            return 5;
+        }
         const bool committed = _session.PendingBrush() == nullptr && _session.history.UndoCount() == before + 1 &&
                                _session.history.UndoName() == L"Brush Stroke";
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 450.0, 250.0);
         pointer(WM_LBUTTONUP, 0, 450.0, 250.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The pointer after capture loss did not settle before checking the committed stroke.\n");
+            return 5;
+        }
         if (!stroking || !committed || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
             SelfTestFailure(std::format(L"Losing the capture mid-stroke did not end the stroke (stroking {}, "
@@ -1804,12 +1944,22 @@ int Application::RunSessionSelfTest() noexcept
     {
         pointer(WM_LBUTTONDOWN, 0, 320.0, 300.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 360.0, 300.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The uncaptured stroke did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         _releasingCapture = true;
         (void)ReleaseCapture();
         _releasingCapture = false;
         (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The uncaptured stroke did not acknowledge its leave-window completion.\n");
+            return 5;
+        }
         if (!stroking || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
             SelfTestFailure(L"Leaving the window did not end a stroke that no longer held the capture.\n");
@@ -1828,10 +1978,20 @@ int Application::RunSessionSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 320.0, 350.0);
         const int before = _session.history.UndoCount();
         OnPointer(WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(over.x, over.y));
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The stroke over chrome did not acknowledge its opening and input replay.\n");
+            return 5;
+        }
         const bool followed = _session.PendingBrush() != nullptr && _brushHover.has_value() &&
                               std::fabs(_brushHover->x - underPointer.x) < 1e-6 &&
                               std::fabs(_brushHover->y - underPointer.y) < 1e-6;
         OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(over.x, over.y));
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The stroke over chrome did not acknowledge its release completion.\n");
+            return 5;
+        }
         if (row.bottom <= row.top || !followed || _session.PendingBrush() != nullptr ||
             _session.history.UndoCount() != before + 1 || _session.history.UndoName() != L"Brush Stroke")
         {

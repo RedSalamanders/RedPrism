@@ -1,8 +1,10 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "ChromeHost.h"
-#include "HistoryRestoreTestGate.h"
 #include "HistoryRestoreWork.h"
+#include "Runtime.Tests.HistoryRestoreTestGate.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -67,6 +69,16 @@ class Application::HistoryRestoreJob final : public Job
             return {JobStatus::Cancelled};
         if (!_payload)
             return {};
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed =
+                _payload->publication && _payload->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         DocumentHistory::PrepareObserver observer;
         if (_gate && _gate->throwHistoryStage)
             observer = {[](void* opaque, DocumentHistory::PrepareStage stage)
@@ -85,6 +97,12 @@ class Application::HistoryRestoreJob final : public Job
             return {JobStatus::Cancelled};
         if (!_payload->publication)
             return {JobStatus::Failed, E_FAIL};
+        if (_gate && _gate->lateResidencySource.HasStorage())
+        {
+            if (!_gate->lateResidencySource.Data())
+                return {JobStatus::Failed, E_FAIL};
+            _gate->residentGrowths.fetch_add(1);
+        }
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
@@ -92,6 +110,9 @@ class Application::HistoryRestoreJob final : public Job
                 return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
             const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
             const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
+            // Test-only witness: cancellation or a timeout alone cannot prove the shutdown event woke this Run.
+            if (waited == WAIT_OBJECT_0 + 1)
+                _gate->shutdownObserved.store(true);
             if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
                 return {JobStatus::Cancelled};
             return waited == WAIT_OBJECT_0 ? _gate->result
@@ -99,10 +120,38 @@ class Application::HistoryRestoreJob final : public Job
         }
         return {};
     }
-    bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (_payload || !Current() || _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
+        if (_payload)
+        {
+            if (!_payload->publication)
+                return false;
+            const auto decision = _payload->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false;
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _captureError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshReservationHeld.store(_gate->reservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket);
+                return true;
+            }
+            _captureError = E_UNEXPECTED;
+            return false;
+        }
         try
         {
             _payload.reset(std::make_unique<RestorePayload>().release());
@@ -111,6 +160,7 @@ class Application::HistoryRestoreJob final : public Job
             _payload->ownerThread = _ownerThread;
             if (_gate)
             {
+                _gate->captures.fetch_add(1);
                 _gate->reservationHeld.store(_gate->reservationBytes != 0 &&
                                              _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
                 if (_gate->throwCaptureFailure)
@@ -130,6 +180,7 @@ class Application::HistoryRestoreJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -156,6 +207,7 @@ class Application::HistoryRestoreJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        _residencyPermit.Reset(); // Release before chrome, callbacks, or another history/source pump.
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_HISTORY_RESTORE);
         _owner._historyRestoreTicket.reset();
@@ -186,6 +238,8 @@ class Application::HistoryRestoreJob final : public Job
     const std::shared_ptr<HistoryRestoreTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<RestorePayload, RetireRestorePayload> _payload;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _refreshResidency = false;
     std::int32_t _captureError = 0;
 };
 
@@ -209,6 +263,11 @@ HRESULT Application::StartHistoryRestore(bool redo) noexcept
     auto retirement = _session.HistoryRestoreRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    // One prepared restore and one worker refresh candidate/index/stack may coexist under this ticket.
+    if (memory > maximum / 2)
+        memory = 0;
+    else
+        memory *= 2;
     if (memory && retirement && sizeof(HistoryRestoreJob) + sizeof(RestorePayload) <= maximum - memory)
     {
         memory += sizeof(HistoryRestoreJob) + sizeof(RestorePayload);
@@ -250,6 +309,10 @@ HRESULT Application::StartHistoryRestore(bool redo) noexcept
 
 int Application::RunHistoryRestoreSelfTest() noexcept
 {
+    const auto originalHistoryBudget = _session.history.RetainedByteLimit();
+    const auto restoreHistoryBudget =
+        wil::scope_exit([this, originalHistoryBudget]() noexcept
+                        { _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget}; });
     enum class Mode
     {
         Undo,
@@ -279,7 +342,13 @@ int Application::RunHistoryRestoreSelfTest() noexcept
         SavedDuringWorker,
         EmptyRedo,
         NestedUndo,
-        NestedRedo
+        NestedRedo,
+        ResidencyUndo,
+        ResidencyRedo,
+        ResidencyUndoFault,
+        ResidencyRedoFault,
+        ResidencyUndoCancel,
+        ResidencyRedoCancel
     };
     struct State final
     {
@@ -355,19 +424,54 @@ int Application::RunHistoryRestoreSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._historyRestoreTestGate->release.get());
     };
-    for (const auto mode :
-         {Mode::Undo,           Mode::Redo,          Mode::Ordered,       Mode::Empty,       Mode::Crop,
-          Mode::Mask,           Mode::NewCanvasUndo, Mode::NewCanvasRedo, Mode::Cancel,      Mode::Failure,
-          Mode::CaptureFailure, Mode::UndoSnapshot,  Mode::UndoStack,     Mode::UndoTrim,    Mode::RedoSnapshot,
-          Mode::RedoStack,      Mode::RedoTrim,      Mode::Epoch,         Mode::Generation,  Mode::Active,
-          Mode::MaskOnly,       Mode::CropOnly,      Mode::Lasso,         Mode::Replacement, Mode::SavedDuringWorker,
-          Mode::EmptyRedo,      Mode::NestedUndo,    Mode::NestedRedo})
+    for (const auto mode : {Mode::Undo,
+                            Mode::Redo,
+                            Mode::Ordered,
+                            Mode::Empty,
+                            Mode::Crop,
+                            Mode::Mask,
+                            Mode::NewCanvasUndo,
+                            Mode::NewCanvasRedo,
+                            Mode::Cancel,
+                            Mode::Failure,
+                            Mode::CaptureFailure,
+                            Mode::UndoSnapshot,
+                            Mode::UndoStack,
+                            Mode::UndoTrim,
+                            Mode::RedoSnapshot,
+                            Mode::RedoStack,
+                            Mode::RedoTrim,
+                            Mode::Epoch,
+                            Mode::Generation,
+                            Mode::Active,
+                            Mode::MaskOnly,
+                            Mode::CropOnly,
+                            Mode::Lasso,
+                            Mode::Replacement,
+                            Mode::SavedDuringWorker,
+                            Mode::EmptyRedo,
+                            Mode::NestedUndo,
+                            Mode::NestedRedo,
+                            Mode::ResidencyUndo,
+                            Mode::ResidencyRedo,
+                            Mode::ResidencyUndoFault,
+                            Mode::ResidencyRedoFault,
+                            Mode::ResidencyUndoCancel,
+                            Mode::ResidencyRedoCancel})
     {
+        const bool residency = mode >= Mode::ResidencyUndo && mode <= Mode::ResidencyRedoCancel;
+        const bool residencyRedo =
+            mode == Mode::ResidencyRedo || mode == Mode::ResidencyRedoFault || mode == Mode::ResidencyRedoCancel;
+        const bool residencyFault = mode == Mode::ResidencyUndoFault || mode == Mode::ResidencyRedoFault;
+        const bool residencyCancel = mode == Mode::ResidencyUndoCancel || mode == Mode::ResidencyRedoCancel;
+        Raster lateResidencySource;
         const bool newCanvas = mode == Mode::NewCanvasUndo || mode == Mode::NewCanvasRedo;
         const bool noPublication =
             mode == Mode::Empty || mode == Mode::EmptyRedo || mode == Mode::NestedUndo || mode == Mode::NestedRedo;
-        const bool redo = mode == Mode::Redo || mode == Mode::NewCanvasRedo || mode == Mode::EmptyRedo ||
-                          mode == Mode::NestedRedo || (mode >= Mode::RedoSnapshot && mode <= Mode::RedoTrim);
+        const bool redo = residencyRedo || mode == Mode::Redo || mode == Mode::NewCanvasRedo ||
+                          mode == Mode::EmptyRedo || mode == Mode::NestedRedo ||
+                          (mode >= Mode::RedoSnapshot && mode <= Mode::RedoTrim);
+        _session.history = DocumentHistory{kHistoryEntryLimit, originalHistoryBudget};
         _session.ClearDocument();
         const Guid emptyRevision = _session.history.CurrentRevision();
         _session.CreateDocument(1, 1, true);
@@ -381,8 +485,9 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             constexpr std::array<std::uint8_t, 4> pixel{17, 34, 51, 255};
             const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
             const Guid id = _session.ActiveLayerID().value();
-            _session.EditForTest(
-                [&](CanvasDocument& document)
+            EditLayerRecordsForTest(
+                _session,
+                [&](DocumentFixture& document)
                 {
                     for (auto& layer : document.layers)
                         if (layer.id == id)
@@ -411,6 +516,29 @@ int Application::RunHistoryRestoreSelfTest() noexcept
         }
         else if (redo)
             _session.Undo(); // production Redo must be admissible with no live document
+        if (residency)
+        {
+            constexpr std::array<std::uint8_t, 4> historicalBytes{61, 62, 63, 255};
+            const Raster leaf =
+                Raster::Make(1, 1, RasterFormat::Bgra8888, historicalBytes.data(), historicalBytes.size());
+            lateResidencySource = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {{0, 0, leaf}}, 1);
+            auto historical = DocumentFixture::Copy(_session.Document().value());
+            historical.layers.front().asset->image = lateResidencySource;
+            _session.history = DocumentHistory{100, 8};
+            auto baseline = DocumentHistory::PrepareEdit(_session.history.CaptureState(), std::move(historical).Seal(),
+                                                         _session.ActiveLayerID(), _session.Document(),
+                                                         _session.ActiveLayerID(), L"Literal historical cache");
+            if (!baseline || !_session.history.Publish(baseline.value()))
+                return 5;
+            baseline.reset();
+            undoRevision = _session.history.CurrentRevision();
+            _session.SetOpacity(0.25);
+            redoRevision = _session.history.CurrentRevision();
+            if (redo)
+                _session.Undo();
+            if (_session.history.RetainedBytes(_session.Document()) != 4 || lateResidencySource.IsMaterialized())
+                return 5;
+        }
         if (mode == Mode::NestedUndo || mode == Mode::NestedRedo)
             _session.history.Begin(L"Open transaction", _session.Document(), _session.ActiveLayerID());
         if (mode == Mode::Crop || mode == Mode::Empty || mode == Mode::EmptyRedo)
@@ -424,6 +552,9 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             return 5;
         const bool historyFailure = mode >= Mode::UndoSnapshot && mode <= Mode::RedoTrim;
         _historyRestoreTestGate->throwCaptureFailure = mode == Mode::CaptureFailure;
+        _historyRestoreTestGate->lateResidencySource = lateResidencySource;
+        _historyRestoreTestGate->throwResidencyRefresh = residencyFault;
+        _historyRestoreTestGate->cancelResidencyRefresh = residencyCancel;
         if (historyFailure)
         {
             constexpr std::array stages{DocumentHistory::PrepareStage::RestoreSnapshot,
@@ -451,11 +582,12 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             younger = QueueHostInput(HostCommandInput{ChromeHost::kCommandRedo});
         const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
         const auto actual = state.receipt.Read();
-        const auto expected = mode == Mode::Cancel ? HostOutcome::Cancelled
-                              : mode == Mode::Failure || mode == Mode::CaptureFailure || historyFailure
-                                  ? HostOutcome::Failed
-                              : mode >= Mode::Epoch && mode <= Mode::Replacement ? HostOutcome::Stale
-                                                                                 : HostOutcome::Succeeded;
+        const auto expected =
+            mode == Mode::Cancel || residencyCancel ? HostOutcome::Cancelled
+            : mode == Mode::Failure || mode == Mode::CaptureFailure || historyFailure || residencyFault
+                ? HostOutcome::Failed
+            : mode >= Mode::Epoch && mode <= Mode::Replacement ? HostOutcome::Stale
+                                                               : HostOutcome::Succeeded;
         const auto gate = _historyRestoreTestGate;
         const bool reached = noPublication || mode == Mode::CaptureFailure || historyFailure
                                  ? !state.visited
@@ -466,7 +598,7 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             _renderer.PresentCount() == presents &&
             (noPublication ? gate->reservationBytes == 0 && !gate->retired.load()
                            : gate->reservationHeld.load() && gate->retired.load() && gate->retiredOffOwner.load());
-        if (mode == Mode::CaptureFailure || historyFailure)
+        if (mode == Mode::CaptureFailure || historyFailure || residencyFault)
             correct = correct && actual.error == E_OUTOFMEMORY;
         if (historyFailure)
             correct = correct && gate->historyFaultHits.load() == 1;
@@ -497,7 +629,8 @@ int Application::RunHistoryRestoreSelfTest() noexcept
                 else
                 {
                     _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 1, 1, pixel.data(), 4, 0);
-                    correct = correct && _session.ActiveLayer()->opacity == (redo ? 0.25 : 1.0);
+                    correct = correct && _session.ActiveLayer()->opacity ==
+                                             (residency ? (redo ? 0.25 : 0.5) : (redo ? 0.25 : 1.0));
                 }
                 if (mode == Mode::Ordered)
                     correct = correct && younger->Read().outcome == HostOutcome::Succeeded &&
@@ -507,7 +640,8 @@ int Application::RunHistoryRestoreSelfTest() noexcept
                 else
                     correct = correct && pixel == std::array<std::uint8_t, 4>{17, 34, 51, 255} &&
                               _session.history.CurrentRevision() == (redo ? redoRevision : undoRevision) &&
-                              _session.history.UndoCount() == (redo ? 2 : 0) && _session.history.CanRedo() != redo;
+                              _session.history.UndoCount() == (redo ? (residency ? 1 : 2) : 0) &&
+                              _session.history.CanRedo() != redo;
                 if (mode == Mode::Mask)
                     correct = correct && _session.IsMaskSelected() && _session.ActiveLayer()->mask.has_value();
                 if (mode == Mode::Crop)
@@ -515,6 +649,18 @@ int Application::RunHistoryRestoreSelfTest() noexcept
                 if (mode == Mode::SavedDuringWorker)
                     correct = correct && _session.history.IsModified(); // later saved live revision is retained
             }
+        }
+        if (residency)
+        {
+            correct = correct && gate->captures.load() == 1 && gate->visits.load() == 1 &&
+                      gate->residentGrowths.load() == 1 && gate->residencyRefreshes.load() == 1 &&
+                      gate->refreshReservationHeld.load() && lateResidencySource.ByteSize() == 8;
+            if (expected == HostOutcome::Succeeded)
+                correct = correct && _session.history.RetainedBytes(_session.Document()) == 0 &&
+                          _session.history.CurrentRevision() == (redo ? redoRevision : undoRevision) &&
+                          _session.history.IsModified(); // Refresh must preserve the saved revision of the live input.
+            else
+                correct = correct && !_session.history.IsModified();
         }
         _historyRestoreTestGate.reset();
         _session.CancelLasso();

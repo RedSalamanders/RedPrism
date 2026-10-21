@@ -21,6 +21,67 @@ namespace
 }
 } // namespace
 
+PreparedImageImport::PreparedImageImport(PreparedImageImport&& source) noexcept
+    : _authority(std::move(source._authority)), _retiredDrafts(std::move(source._retiredDrafts)),
+      _view(std::move(source._view)), _history(std::move(source._history)),
+      _replacement(std::move(source._replacement)), _source(std::move(source._source)),
+      _baseline(std::move(source._baseline)), _document(std::move(source._document)),
+      _retiredDisplay(std::move(source._retiredDisplay)), _active(std::move(source._active)),
+      _selected(std::move(source._selected)), _retiredCollapsed(std::move(source._retiredCollapsed)),
+      _retiredBrushCommit(std::move(source._retiredBrushCommit)),
+      _retiredAdjustment(std::move(source._retiredAdjustment)),
+      _retiredSnapGuides(std::move(source._retiredSnapGuides)), _retiredWarpImage(std::move(source._retiredWarpImage)),
+      _maskSelected(source._maskSelected), _changesDocument(source._changesDocument),
+      _applied(std::exchange(source._applied, true))
+{
+}
+
+PreparedImageImport& PreparedImageImport::operator=(PreparedImageImport&& source) noexcept
+{
+    if (this != &source)
+    {
+        _authority = std::move(source._authority);
+        _retiredDrafts = std::move(source._retiredDrafts);
+        _view = std::move(source._view);
+        _history = std::move(source._history);
+        _replacement = std::move(source._replacement);
+        _source = std::move(source._source);
+        _baseline = std::move(source._baseline);
+        _document = std::move(source._document);
+        _retiredDisplay = std::move(source._retiredDisplay);
+        _active = std::move(source._active);
+        _selected = std::move(source._selected);
+        _retiredCollapsed = std::move(source._retiredCollapsed);
+        _retiredBrushCommit = std::move(source._retiredBrushCommit);
+        _retiredAdjustment = std::move(source._retiredAdjustment);
+        _retiredSnapGuides = std::move(source._retiredSnapGuides);
+        _retiredWarpImage = std::move(source._retiredWarpImage);
+        _maskSelected = source._maskSelected;
+        _changesDocument = source._changesDocument;
+        _applied = std::exchange(source._applied, true);
+    }
+    return *this;
+}
+
+DocumentHistory::ResidencyValidation PreparedImageImport::TryAcquireHistoryResidency(
+    DocumentHistory::ResidencyPermit& permit) noexcept
+{
+    if (_applied || !_authority._valid)
+        return DocumentHistory::ResidencyValidation::Invalid;
+    if (_replacement)
+        return permit.TryAcquire(_replacement.value());
+    return _history ? permit.TryAcquire(_history.value()) : DocumentHistory::ResidencyValidation::Ready;
+}
+
+bool PreparedImageImport::RefreshHistoryResidency(CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+{
+    if (_applied || !_authority._valid || cancellation.IsCancelled())
+        return false;
+    if (_replacement)
+        return DocumentHistory::RefreshPreparedResidency(_replacement.value(), _document, cancellation, observer);
+    return !_history || DocumentHistory::RefreshPreparedResidency(_history.value(), _document, cancellation, observer);
+}
+
 ImageImportAuthority DocumentSession::CaptureImageImportAuthority() const noexcept
 {
     ImageImportAuthority result;
@@ -201,7 +262,8 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
     static_assert(std::is_nothrow_swappable_v<std::optional<GradientEdit>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<PixelMove>>);
     static_assert(std::is_nothrow_swappable_v<std::optional<ColorEdit>>);
-    if (!CanApplyImageImport(prepared._authority) || (prepared._replacement && !prepared._retiredDrafts) ||
+    if (prepared._applied || !CanApplyImageImport(prepared._authority) ||
+        (prepared._replacement && !prepared._retiredDrafts) ||
         (prepared._replacement ? !history.CanPublishReplacement(prepared._replacement.value())
          : prepared._history   ? !history.CanPublish(prepared._history.value())
                                : !history.IsCurrent(prepared._view)))
@@ -237,15 +299,23 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
             auto& drafts = *prepared._retiredDrafts;
             std::swap(_transformEdit, drafts.transform);
             std::swap(_lassoDraft, drafts.lasso);
+            InvalidateLassoPendingIntents();
             std::swap(_selectionMoveOrigin, drafts.selectionMove);
+            _selectionMoveOffset.reset();
             std::swap(_brush, drafts.brush);
+            _brushFinishingOpening.reset();
+            _brushUpdatingOpening.reset();
             std::swap(_warp, drafts.warp);
+            _warpUpdatingOpening.reset();
+            _warpUpdatingSequence.reset();
+            _warpFinishingOpening.reset();
             std::swap(_gradient, drafts.gradient);
             std::swap(_shapeDraft, drafts.shape);
             std::swap(_pixelMove, drafts.pixelMove);
             std::swap(_colorEdit, drafts.color);
             ++_documentSerial;
             std::swap(_collapsed, prepared._retiredCollapsed);
+            _collapseRevision.Advance();
             std::swap(_lastBrushCommit, prepared._retiredBrushCommit);
             std::swap(_adjustmentOriginal, prepared._retiredAdjustment);
             std::swap(_snapGuides, prepared._retiredSnapGuides);
@@ -262,6 +332,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
         }
         NoteDocumentMutation();
     }
+    prepared._applied = true;
     prepared._authority._valid = false;
     return true;
 }
@@ -289,34 +360,17 @@ std::uint64_t DocumentSession::ImageImportRetirementMemoryBytes() const noexcept
         const auto amount = stroke->RetirementMemoryBytes();
         return amount && add(1, amount);
     };
-    // H2 will cache this shared document's complete record/storage bound. Until then metadata traversal is
-    // explicit admission work; no optional<CanvasDocument> copy or pixel/materialization occurs on the owner.
+    // Every published layer root and selection caches its complete held graph, including immutable lookup
+    // metadata and potential sparse assembly. Read one complete bound; no record/name/pixel traversal or copy.
     const auto documentBytes = [&](const std::shared_ptr<CanvasDocument>& document) noexcept
     {
         if (!document)
             return true;
-        if (!add(1, sizeof(CanvasDocument) + 64) || !add(document->layers.capacity(), sizeof(ImageLayer)) ||
-            (document->selection && !add(1, document->selection->loops.StorageBytes())))
-            return false;
-        for (const auto& layer : document->layers)
-        {
-            if (!add(layer.name.capacity() + 1, sizeof(wchar_t)) || !rasterBytes(layer.shapeImage))
-                return false;
-            if (layer.asset && (!add(layer.asset->name.capacity() + 1, sizeof(wchar_t)) ||
-                                !rasterBytes(layer.asset->image) || !rasterBytes(layer.asset->thumbnail)))
-                return false;
-            if (layer.mask && (!add(layer.mask->asset.name.capacity() + 1, sizeof(wchar_t)) ||
-                               !rasterBytes(layer.mask->asset.image) || !rasterBytes(layer.mask->asset.thumbnail)))
-                return false;
-            if (layer.adjustment)
-                for (const auto& channel : layer.adjustment->curves.channels)
-                    if (!add(channel.capacity(), sizeof(CurvePoint)))
-                        return false;
-        }
-        return true;
+        const auto amount = document->RetirementMemoryBytes();
+        return amount && add(1, amount) && add(1, 64); // the shared document's own control allocation
     };
     if (!bytes || !add(1, sizeof(PreparedImageImport::RetiredDrafts) + 64) ||
-        (_lassoDraft && !add(_lassoDraft->points.capacity(), sizeof(Vec2))) ||
+        (_lassoDraft && !add(1, _lassoDraft->RetirementMemoryBytes())) ||
         (_selectionMoveOrigin && !add(1, _selectionMoveOrigin->loops.StorageBytes())) || !strokeBytes(_brush) ||
         (_gradient && !strokeBytes(_gradient->raster)) ||
         (_pixelMove && (!strokeBytes(_pixelMove->raster) || !add(1, _pixelMove->origin.loops.StorageBytes()))))

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "CanvasSize.h"
 #include "ChromeHost.h"
 #include "Resources.h"
@@ -73,7 +75,7 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
         _sizeDialog.image = ImageSizeDraft(document.width, document.height, document.resolution);
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CancelSizeCard() noexcept
@@ -95,7 +97,7 @@ void Application::CancelSizeCard() noexcept
     }
     _sizeDialog.kind = SizeCardKind::None;
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::ApplySizeCard(std::optional<std::uint32_t> extensionArgb) noexcept
@@ -139,7 +141,8 @@ void Application::ApplySizeCard(std::optional<std::uint32_t> extensionArgb) noex
     }
     // A pending gradient or transform commits first, so the resize starts from the document that holds it (the
     // settle closes the card; the draft stays in _sizeDialog).
-    SettleInteractions(false);
+    if (!SettleInteractions(false))
+        return;
     if (!_session.Document().has_value())
     {
         return;
@@ -189,7 +192,7 @@ void Application::ApplySizeCard(std::optional<std::uint32_t> extensionArgb) noex
     if (FAILED(_hostExecutionError))
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_RESIZE);
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnSizeAction(SizeAction action, double value) noexcept
@@ -311,7 +314,7 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
         break;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept
@@ -323,7 +326,7 @@ void Application::OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept
     // Cancel restores the color the picker opened on; Preview and OK take the working color.
     _sizeDialog.customArgb = (phase == ChromeEditPhase::Cancel ? _sizeDialog.customBefore : argb) | 0xFF000000u;
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::SyncSizeCard() noexcept
@@ -435,7 +438,7 @@ int Application::RunSizeSelfTest() noexcept
         ImageLayer layer = ImageLayer::Blank(L"Red", Vec2{6, 3});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();

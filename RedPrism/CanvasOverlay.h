@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "SelectionOutlineWork.h"
 
 #include <DxUi/DxUi.h>
 
@@ -44,10 +45,64 @@ class CanvasOverlay final : public DxUi::Control
     // move, and a DxUi invalidation repaints the whole chrome surface (RF-1001).
     bool SetGeometry(const std::optional<Geometry>& geometry) noexcept;
     bool SetGuides(const std::vector<float>& xs, const std::vector<float>& ys);
-    void SetSelectionOutline(std::vector<OutlineLoop> loops);
+    void SetSelectionOutline(std::vector<OutlineLoop> loops, std::optional<std::uint64_t> memoryBytes = std::nullopt);
+    // The old reference buffers move into the original admitted worker payload; no owner-side free/copy.
+    [[nodiscard]] bool SetPreparedSelectionOutline(PreparedSelectionOutline outline,
+                                                   std::vector<OutlineLoop>& retired) noexcept;
+    [[nodiscard]] std::optional<std::uint64_t> LegacySelectionOutlineMemoryOwner() const noexcept
+    {
+        return _outline.empty() ? std::optional<std::uint64_t>{0} : _legacyOutlineBytes;
+    }
+    bool SetSelectionMapping(D2D1_POINT_2F originDip, float scale) noexcept;
+    [[nodiscard]] D2D1_MATRIX_3X2_F SelectionMappingForTest() const noexcept
+    {
+        return D2D1::Matrix3x2F::Scale(_selectionScale, _selectionScale) *
+               D2D1::Matrix3x2F::Translation(_selectionOrigin.x, _selectionOrigin.y);
+    }
+    // Diagnostic counters only. No callback can reenter/destroy the overlay during a timed interval.
+    struct SelectionTimingForTest final
+    {
+        std::uint64_t createTicks = 0;
+        std::uint64_t appendTicks = 0;
+        std::uint64_t closeTicks = 0;
+        std::uint64_t solidDrawTicks = 0;
+        std::uint64_t dashDrawTicks = 0;
+        std::uint64_t builds = 0;
+        std::uint64_t drawPairs = 0;
+    };
+    void EnableSelectionTimingForTest(bool enabled) noexcept
+    {
+        _selectionTimingEnabledForTest = enabled;
+        _selectionTimingForTest = {};
+    }
+    [[nodiscard]] SelectionTimingForTest SelectionTimingStateForTest() const noexcept
+    {
+        return _selectionTimingForTest;
+    }
+    struct SelectionResourcesForTest
+    {
+        std::uint64_t pathsBuilt = 0;
+        bool hasPath = false;
+        bool fixedSolid = false;
+        bool fixedDashes = false;
+        std::array<float, 2> dashes{};
+    };
+    [[nodiscard]] SelectionResourcesForTest SelectionResourcesStateForTest() const noexcept;
+    [[nodiscard]] const std::vector<OutlineLoop>& SelectionOutlineForTest() const noexcept
+    {
+        return SelectionPoints();
+    }
     // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
     // is made once and kept.
     void SetAntPhase(float phase) noexcept;
+    void SetSelectionPaintExternal(bool external) noexcept
+    {
+        if (_selectionPaintExternal != external)
+        {
+            _selectionPaintExternal = external;
+            RequestInvalidate();
+        }
+    }
     [[nodiscard]] float AntPhase() const noexcept
     {
         return _antPhase;
@@ -114,7 +169,14 @@ class CanvasOverlay final : public DxUi::Control
     std::optional<Geometry> _geometry;
     std::vector<float> _guideXs;
     std::vector<float> _guideYs;
+    [[nodiscard]] const std::vector<OutlineLoop>& SelectionPoints() const noexcept
+    {
+        return _preparedOutline.HasStorage() ? _preparedOutline.Points() : _outline;
+    }
+    bool _selectionPaintExternal = false;
     std::vector<OutlineLoop> _outline;
+    std::optional<std::uint64_t> _legacyOutlineBytes;
+    PreparedSelectionOutline _preparedOutline;
     std::optional<Draft> _draft;
     std::optional<BrushCursor> _brushCursor;
     std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> _gradientLine;
@@ -123,10 +185,17 @@ class CanvasOverlay final : public DxUi::Control
     std::optional<SampleRing> _sampleRing;
     std::optional<D2D1_POINT_2F> _cloneSource;
     // Device-independent Direct2D resources, rebuilt when the outline or the factory changes.
+    D2D1_POINT_2F _selectionOrigin{};
+    float _selectionScale = 1;
     mutable wil::com_ptr_nothrow<ID2D1Factory> _factory;
+    mutable wil::com_ptr_nothrow<ID2D1Factory1> _selectionFactory;
+    mutable wil::com_ptr_nothrow<ID2D1StrokeStyle1> _selectionStyle;
     mutable wil::com_ptr_nothrow<ID2D1PathGeometry> _outlineGeometry;
     // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
-    mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle>, 8> _antStyles;
+    mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle1>, 8> _antStyles;
+    mutable std::uint64_t _selectionPathsBuilt = 0;
+    bool _selectionTimingEnabledForTest = false;
+    mutable SelectionTimingForTest _selectionTimingForTest;
     mutable bool _outlineDirty = false;
     float _antPhase = 0.0f;
 };

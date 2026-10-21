@@ -53,7 +53,7 @@ void Application::BeginCropDrag(Vec2 view) noexcept
     }
     _drag = drag;
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::ContinueCropDrag(Vec2 view) noexcept
@@ -75,14 +75,14 @@ void Application::ContinueCropDrag(Vec2 view) noexcept
         _session.SetCropFrame(rect);
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::EndCropDrag() noexcept
 {
     DropDrag<CropDrag>();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::ApplyCrop() noexcept
@@ -95,7 +95,7 @@ void Application::ApplyCrop() noexcept
         return;
     }
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::CancelCropFrame() noexcept
@@ -103,7 +103,7 @@ void Application::CancelCropFrame() noexcept
     DropDrag<CropDrag>();
     _session.CancelCrop();
     SyncChrome();
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::OnCropAction(CropAction action, double value) noexcept
@@ -123,7 +123,7 @@ void Application::OnCropAction(CropAction action, double value) noexcept
         _session.cropRatioChoice = std::clamp(static_cast<int>(value), 0, 4);
         _session.ChangeCropRatio();
         SyncChrome();
-        _frameInvalidated = true;
+        InvalidateFrame();
         break;
     case CropAction::Cancel:
         CancelCropFrame();

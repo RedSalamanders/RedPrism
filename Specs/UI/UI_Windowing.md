@@ -1,7 +1,7 @@
 # RedPrism windowing and host command line
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-10-21
 Owner: `Application` HWND, DPI, and `RedPrism/CommandLine.h`
 
 ## Scope
@@ -64,8 +64,7 @@ not chrome.
 - `WM_ENDSESSION(TRUE)` saves the settings as a close does ([`Core_Settings.md`](../Core/Core_Settings.md)): the
   process may end as soon as it returns. `WM_ENDSESSION(FALSE)` (the end was cancelled) destroys the reason, and a
   prompt still waiting or showing no longer closes the window.
-- The busy-state policy of the active `UiNeverBlocks` plan (a save in progress at session end) supersedes these rules
-  when it lands.
+- File-write session-end policy is additional to the unsaved-document policy; see [Job activity and end-session policy](#job-activity-and-end-session-policy).
 
 ### Pointer loss
 
@@ -106,6 +105,9 @@ On shutdown, the application requests cancellation and hides the window before j
 their inputs and dependent owners alive until they return, drops undelivered callbacks, then tears down chrome,
 renderer/device, HWND and localization/COM state. A shutdown request from inside a job UI callback is deferred
 until that callback returns.
+Completion-suppressed sampler jobs retain their original ticket, source and history stamp through the scheduler's
+worker/retirement join. The join is their shutdown acknowledgement; only then does the host clear that ticket,
+finish the exact stamp and sweep scalar openings. Normal completion remains the ordinary acknowledgement path.
 
 ### Job activity and end-session policy
 
@@ -114,18 +116,39 @@ oldest foreground job's 250 ms deadline; it is killed before handling its messag
 update the indicator without periodic polling. Already-queued timer messages revalidate current activity and cannot
 revive a completed job. Shutdown removes the timer and clears its fixed-capacity activity state.
 
-`GetEndSessionWorkPolicy` is the tested pure policy for the P1 file-flow wiring (the current synchronous file flows
-do not yet call it). Flags may overlap; each row contributes its action:
+`GetEndSessionWorkPolicy` is the tested policy used by production file flows. Flags may overlap; each row contributes
+its action:
 
-| Work | Noncritical query | Critical query | Actual session end |
+| Work | Noncritical query | Critical query | Confirmed session end |
 | --- | --- | --- | --- |
-| Save or export in worker encode/write | Block, with a localized saving reason | Allow | Bounded wait on worker completion only; no UI apply |
-| Export still in GPU/readback | Allow | Allow | Cancel |
-| Clipboard write | Allow | Allow | Cancel |
+| Project save queued or writing | Block with localized saving reason | Allow | Wait for its worker event within the shared 1500 ms total budget |
+| Export writing | Block with localized saving reason | Allow | Wait for its worker event within the shared 1500 ms total budget |
+| Export in readback | No work-specific block; continue the existing unsaved-document check | Allow | Cancel readback if cancellation wins the atomic worker-entry boundary; otherwise the entered writer is covered above |
+| Clipboard transfer | No work-specific block; continue the existing unsaved-document check | Allow | Cancel the exact ticket and current stamp; do not wait |
 | None of these | Existing unsaved-document policy | Allow | No worker-write wait |
 
-HostTests enumerates all 32 combinations including the critical flag. Actual worker-write waits, shutdown block
-reasons, save-before-close continuations and file-job cancellation land with P1.7.
+A saving block takes precedence over an earlier pending unsaved-document prompt without replacing that prompt's
+generation. The existing unsaved-document policy remains in force: a modified document still refuses an ordinary
+query (unless it is critical) and posts the existing prompt when no file writer takes precedence.
+
+`WM_ENDSESSION(TRUE)` cancels export readback only if its atomic transition to Writing has not already succeeded,
+and requests cancellation of the exact clipboard ticket/current stamp. A file-writer wait uses the same total 1500 ms
+deadline across Save and export. It waits on the worker event only: it pumps no messages, applies no completion or
+receipt, performs no GPU work, and grants no saved-revision or publication authority. Timeout requests cancellation
+of the exact writer ticket/current stamp while retaining the original job, event, result and reservation until
+ordinary acknowledgement or shutdown join. `WM_ENDSESSION(FALSE)` clears the session-end block/prompt state and
+cancels and waits for no worker.
+
+HostTests enumerates all 32 pure-policy combinations including the critical flag. The actual-message file matrix has
+108 assertions across 12 cases; the protocol suite has 16 assertions. The clipboard matrix has 48 assertions across
+six cases. Fresh qualification of the registered file-writer controls is recorded in
+[P1FileSessionEnd](../TestRuns/P1FileSessionEnd_2026-10-06.md). The earlier
+clipboard oracle passed its 48 controls in Debug r275; Release r276 failed a combined publication-counter
+assertion. The current, repaired oracle permits the supported pre-Empty Busy retry and verifies that acquisition
+count does not increase after Empty; production retry behavior is unchanged;
+fresh qualification is recorded in [P1ClipboardSessionEnd](../TestRuns/P1ClipboardSessionEnd_2026-10-06.md). Full
+configuration/native/resource and measured P1/G1 qualification remains required. Details live in
+[`Testing_Validation.md`](../Testing/Testing_Validation.md).
 
 ## Command line
 
@@ -173,12 +196,27 @@ capture failed.
 
 ## Self-test window checks
 
+The initial hidden self-test/benchmark and screenshot fixture resize uses `SWP_NOSENDCHANGING` together with `SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE`. This preserves the specified off-screen client canvas when a CI desktop is smaller than the fixture, without changing the display mode. Subsequent window messages and ordinary visible-window startup retain their normal minimum/maximum tracking policy. The independent Win32 preflight is a geometry check; it does not replace application, rendering, capture or performance qualification.
+
+
 Before initializing the renderer, `--self-test` MUST verify:
 
 - `GetDpiForWindow` is non-zero
 - style includes `WS_CLIPCHILDREN`
 - extended style includes `WS_EX_NOREDIRECTIONBITMAP`
 - client size equals the 1280×800 logical canvas scaled to that DPI
+
+The hidden self-test records the actual DPI, styles, client/outer rectangles, requested default outer size,
+monitor/work rectangles and OS maximum-track metrics before evaluating these checks. Failed Win32 rectangle
+queries retain their error codes. Diagnostics MUST NOT relax the default-size assertion or infer which of its
+combined predicates failed without the recorded values.
+
+Synthetic document-pointer scenarios MUST explicitly frame their intended document region inside the canvas hole.
+At 100% zoom a centered 1280×800 document is larger than the 96-DPI canvas area; document-space points such as
+(40, 40) can otherwise map outside the input surface. The selection, brush, retouch and pixel-edit fixtures use
+an actual-pixel viewport anchored at the document origin, preserving every literal selection/pixel assertion.
+Independent viewport controls cover 96/144/216-DPI canvas sizes and prior zoom/pan state. This harness framing
+does not change ordinary window sizing, production pan/zoom, display settings or pointer-loss handling.
 
 ## Validation
 
@@ -194,3 +232,70 @@ reason, the posted prompt's Cancel keeps the window, Don't Save posts a close th
 is allowed) and `WM_ENDSESSION(TRUE)` (the settings file is written), and sends `WM_CAPTURECHANGED`, `WM_KILLFOCUS`,
 `WM_ACTIVATEAPP` and `WM_MOUSELEAVE` mid-gesture (a stroke commits, a Move drag goes back, a splitter drag
 restores, Space panning ends).
+
+### Sampler Escape while admission waits
+
+Escape on a live sampler MUST seal accepted input and release its pointer gesture/capture immediately,
+including while the original scheduler ticket awaits memory admission. It requests cancellation without
+publishing or releasing unfinished source/row/GPU owners. The selected receipt, ticket, history barrier and
+reservation survive until acknowledgement; then the original receipt reports cancellation and joined cleanup
+drains all opening references. Previously published color remains selected. No source is captured on refusal
+or cancellation before admission; palette, document and history stay unchanged in that case.
+
+## Selected preserving marquee messages
+
+Under the explicit selection-press gate, Rectangle/Ellipse Add/Subtract Down records a fixed descriptor
+before source capture. Ordered Move/Up/Lost remain attached to its original history barrier and prefix.
+Changing live kind/mode preferences cannot rewrite an accepted Down; Up contributes AA only. Refused
+admission performs no geometry capture, stale target preserves foreign state, and joined Close suppresses
+useful completion while retaining borrowed owners until acknowledgement. No ordinary activation follows
+from the selected gate's Release/ASan proof.
+
+## Selected cursor worker messages
+
+Pointer leave invalidates the selected cursor request before the capture-related early return. The
+existing focus/capture/cancel interaction cleanup also invalidates it. Cancellation retains the original
+ticket until acknowledgement, including before source capture. A visible successful completion may
+post `WM_SETCURSOR` only to its own still-visible window when that window is under the actual pointer.
+Workers perform no window access. Joined shutdown acknowledges captured work after worker retirement
+and cannot restart a closed request state. The selected route remains gated pending ordinary activation.
+
+## Selected Polygonal native input
+
+The selected test-only Polygonal owner consumes actual Win32 Down/Up, hover and paired key transitions.
+Up preserves a drawing draft; Enter may be captured before original controller admission. Provisional
+near-first/double-click closure waits for ordered replay and retains its own receipt. Capture/writer
+cleanup belongs to original completion or scheduler join; a generic cancellation path MUST NOT drop the
+input/prepared writer while the original job can still access it. Pointer leave that keeps a Polygonal
+draft retains that original owner. The gate remains disabled for ordinary input pending complete scope,
+view/device, full-profile and latency qualification.
+
+
+### Polygonal live view and pointer leave
+
+Queued Zoom In/Out during a selected live Polygonal drawing changes the viewport while retaining its
+original ticket, prepared writer, committed selection and history. Subsequent native corner coordinates
+use the current viewport mapping; already captured document coordinates and drawing mode stay unchanged.
+Native `WM_MOUSELEAVE` without capture clears hover tracking and the transient pointer drag while retaining
+the original drawing owner/draft. Reentry continues that same prepared writer. Terminal selection/history
+and joined refunds keep their existing rules. These input invariants do not qualify complete DPI/device/
+hidden-display scope, ordinary activation or measured presentation latency.
+
+
+### Selected Polygonal terminal and DPI-message validation
+
+Native Escape, Backspace-to-zero, two-corner near-first and true double-click handling preserve original
+job/input/history ownership in the selected Polygonal caller. A mode callback preserves its captured mode.
+The DPI fixture uses a screenshot-DPI override plus native `WM_DPICHANGED`, restores the override and window
+bounds, and verifies that the same writer survives with unchanged committed state. This is harness-DPI
+message-path evidence; actual monitor transitions, widget interaction and ordinary activation remain
+separate gates. [Evidence](../TestRuns/P1PolygonalTerminal_2026-10-18.md).
+
+
+### Polygonal draft and chrome pointer release
+
+A parked selected Polygonal journal cannot consume the Up belonging to an outside-canvas chrome press. Forward it
+to DxUi before reserving any Polygonal ordinal/raw input, unless the original owns a canvas left press. A canvas
+press released outside retains its original capture/terminal rules. This changes no DxUi dependency or API.
+The actual header-button regression uses the public UIA tree and real HWND Down/Up dispatch; the selected gate
+remains disabled for ordinary input. [Evidence](../TestRuns/P1PolygonalHeaderWidget_2026-10-19.md).

@@ -458,5 +458,55 @@ std::string FormatBenchmarkMachineInfo(const BenchmarkMachineInfo& info)
     AppendQuoted(output, info.configuration);
     output.append(" fma3=");
     output.append(Fma3Text(info.fma3));
+    output.append(" monitor_device=");
+    if (info.monitorDeviceName.has_value())
+    {
+        AppendQuoted(output, info.monitorDeviceName.value());
+    }
+    else
+    {
+        output.append("unknown");
+    }
+
+    output.append(" refresh_numerator=");
+    if (info.refreshRate.has_value() && info.refreshRate.value().numerator != 0 &&
+        info.refreshRate.value().denominator != 0)
+    {
+        output.append(std::to_string(info.refreshRate.value().numerator));
+        output.append(" refresh_denominator=");
+        output.append(std::to_string(info.refreshRate.value().denominator));
+    }
+    else
+    {
+        output.append("unknown refresh_denominator=unknown");
+    }
     return output;
+}
+
+std::optional<BenchmarkMachineInfo::RefreshRate> SelectBenchmarkRefreshRate(
+    std::span<const BenchmarkRefreshCandidate> candidates) noexcept
+{
+    std::optional<BenchmarkMachineInfo::RefreshRate> selected;
+    for (const auto& candidate : candidates)
+    {
+        if (!candidate.matches)
+            continue;
+        if (!candidate.eligible || candidate.rate.numerator == 0 || candidate.rate.denominator == 0)
+            return std::nullopt;
+        if (selected && static_cast<std::uint64_t>(selected->numerator) * candidate.rate.denominator !=
+                            static_cast<std::uint64_t>(candidate.rate.numerator) * selected->denominator)
+            return std::nullopt;
+        if (!selected)
+            selected = candidate.rate;
+    }
+    return selected;
+}
+
+void BenchmarkDisplayContinuity::ObserveMessage(const std::uint32_t message, const bool monitorIdentityChanged) noexcept
+{
+    if (invalidated)
+        return;
+    if (message == WM_DISPLAYCHANGE || message == WM_DPICHANGED || message == WM_EXITSIZEMOVE ||
+        (message == WM_MOVE && monitorIdentityChanged))
+        invalidated = true;
 }

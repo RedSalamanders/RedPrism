@@ -13,6 +13,11 @@ struct ColorEditJobInput final
     std::optional<LayerAdjustment> liveAdjustment;
 };
 
+// Scalar/shared-handle opening descriptor. Full semantic mask/name data stays in sourceLayers and is
+// materialized by the worker before a result can carry it to history. No asset string is copied here.
+[[nodiscard]] TargetIdentity DescribeColorEditTarget(const ImageLayer& layer);
+[[nodiscard]] const LayerMask* ColorEditSourceMask(const ColorEdit& edit) noexcept;
+
 enum class ColorEditJobStatus
 {
     Ready,
@@ -53,7 +58,11 @@ struct ColorEditHistogramResult final
 
 [[nodiscard]] int ColorEditPreviewLimit(FilterKind kind) noexcept;
 [[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept;
+// Borrowed planning before any settings/target capture. The legacy input overload delegates here.
+[[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, bool lookupPreview,
+                                                                       bool liveAdjustment = false) noexcept;
 [[nodiscard]] std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept;
+[[nodiscard]] std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEdit& edit) noexcept;
 [[nodiscard]] ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Executor& executor,
                                                             CancelToken cancellation = {});
 [[nodiscard]] ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input, Executor& executor,

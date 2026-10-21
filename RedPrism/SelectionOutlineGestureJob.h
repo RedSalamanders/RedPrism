@@ -1,0 +1,87 @@
+#pragma once
+
+#include "PixelMoveClosureWork.h"
+#include "SelectionCommandWork.h"
+#include "SelectionHitWork.h"
+#include "SelectionMoveOpeningWork.h"
+#include "SelectionMoveWork.h"
+#include "SelectionOutlineGestureState.h"
+#include "SharedPublicationMemory.h"
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+
+struct SelectionOutlineDrawing;
+
+class SelectionOutlineGestureJob final : public Job
+{
+    enum class Phase
+    {
+        Allocate,
+        Open,
+        Collect,
+        Close,
+        Click,
+        RefreshClose,
+        RefreshClick,
+        DrawOpen,
+        DrawFinish,
+        DrawRefresh,
+        PixelFinish,
+        PixelRefresh,
+        PixelFinalDelegate
+    };
+
+  public:
+    explicit SelectionOutlineGestureJob(SelectionOutlineGestureState& state);
+    JobResult Run(JobContext& context) override;
+    void RetireWorkerStage(JobContext&, JobResult result) noexcept override;
+    bool DeferRetirement(JobResult result, JobTicket ticket) noexcept override;
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override;
+    bool NotifyInput() noexcept;
+    void Completed(JobResult result) noexcept override;
+    void RetainJoinedRetirement(JobScheduler&, JobTicket ticket) noexcept override;
+
+  private:
+    JobResult RunCloseForWork(JobContext& context);
+    JobResult RunClickForWork(JobContext& context);
+    bool NotifyMoves(bool changed) noexcept;
+    void NotifyInputProgress(bool parked = false) noexcept;
+    bool ConsumeDrawing() noexcept;
+    bool ConsumePixels() noexcept;
+    void AbortPixels() noexcept;
+    bool ConsumePolygonal() noexcept;
+    bool FinishDrawing(const HostSelectionGestureInput::Sample& sample) noexcept;
+    bool DrawingCurrent() const noexcept;
+    void AbortDrawing() noexcept;
+    bool Refuse(std::int32_t error) noexcept;
+    bool Resume() noexcept;
+    bool Consume() noexcept;
+    SelectionOutlineGestureState& _state;
+    std::unique_ptr<Job> _pixelFinalJob;
+    const std::optional<LassoFinishGeometry::DrawingPlan> _drawingPolicy;
+    Phase _phase = Phase::Allocate;
+    std::shared_ptr<SharedPublicationMemory> _output, _final, _temporary;
+    std::optional<DocumentReadAuthority> _source;
+    std::optional<std::uint64_t> _lineageMinimum;
+    SelectionDisplayValue _display;
+    Vec2 _point{}, _offset{};
+    std::uint64_t _geometryEnvelope = 0;
+    std::int32_t _error = 0;
+    bool _click = false, _terminal = false, _control = false;
+    std::optional<HostSelectionGestureInput::Event> _lastInput;
+    std::uint64_t _lastPolygonalOrdinal = 0, _reportedInputOrdinal = 0;
+    std::optional<SelectionMoveOpeningInput> _input;
+    std::optional<PreparedSelectionMoveOpening> _opening;
+    std::optional<PixelMoveOpeningInput> _pixelInput;
+    std::optional<PreparedPixelMoveOpening> _pixelOpening;
+    std::optional<PixelMoveClosureInput> _pixelCloseInput;
+    std::optional<PreparedPixelMoveClosure> _pixelClose;
+    std::optional<SelectionMoveClosureInput> _closeInput;
+    std::optional<PreparedSelectionMoveClosure> _close;
+    std::optional<SelectionCommandInput> _commandInput;
+    std::optional<PreparedSelectionCommand> _command;
+    DocumentHistory::ResidencyPermit _residency;
+    std::shared_ptr<SelectionOutlineDrawing> _drawing;
+};

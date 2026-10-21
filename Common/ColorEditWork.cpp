@@ -1,5 +1,6 @@
 #include "ColorEditWork.h"
 #include "ColorEditHistory.h"
+#include "DocumentDraft.h"
 
 #include "Adjust.h"
 #include "RasterWork.h"
@@ -11,8 +12,56 @@
 #include <new>
 #include <utility>
 
+TargetIdentity DescribeColorEditTarget(const ImageLayer& layer)
+{
+    std::optional<LayerMask> mask;
+    if (layer.mask)
+    {
+        const auto& source = *layer.mask;
+        mask.emplace(RasterAsset{source.asset.image, source.asset.thumbnail, {}}, source.enabled, source.placement,
+                     source.linked);
+    }
+    return {layer.id,        layer.asset ? layer.asset->image : Raster{},
+            layer.transform, std::move(mask),
+            layer.isGroup,   layer.adjustment};
+}
+
+const LayerMask* ColorEditSourceMask(const ColorEdit& edit) noexcept
+{
+    if (edit.sourceLayers.Identity())
+    {
+        const auto* source = edit.sourceLayers.FindKey(edit.layerID);
+        return source && source->mask ? &*source->mask : nullptr;
+    }
+    return edit.sourceToken && edit.sourceToken->target && edit.sourceToken->target->mask
+               ? &*edit.sourceToken->target->mask
+               : nullptr;
+}
+
 namespace
 {
+// A borrowed root supplies metadata only after the original owner captured its complete target authority.
+// Never replace a corrupted/different token with fresh authority from that root.
+bool CompleteColorTargetForWork(JobToken& token, const ColorEdit& edit, const CancelToken& cancellation,
+                                bool carryMask = false)
+{
+    if (cancellation.IsCancelled())
+        return false;
+    if (!edit.sourceLayers.Identity())
+        return true;
+    const auto* source = edit.sourceLayers.FindKey(edit.layerID);
+    if (!source || !token.target)
+        return false;
+    const auto& target = *token.target;
+    if (target.layerId != source->id || target.image != (source->asset ? source->asset->image : Raster{}) ||
+        target.transform != source->transform || target.mask != source->mask || target.isGroup != source->isGroup ||
+        target.adjustment != source->adjustment)
+        return false;
+    if (carryMask)
+        token.target->mask = source->mask;
+    return !cancellation.IsCancelled();
+}
+
 bool CanReuseColorPreview(const ColorEdit& edit, std::uint64_t sequence) noexcept
 {
     return edit.previewSequence == sequence && edit.preview && !edit.previewFailed && edit.previewRaster.HasStorage() &&
@@ -195,7 +244,7 @@ bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) no
 namespace
 {
 std::optional<std::uint64_t> CommitMemoryBytes(const ColorEdit& edit, std::uint64_t sequence,
-                                               const std::optional<TargetIdentity>& target) noexcept
+                                               const LayerMask* targetMask) noexcept
 {
     const Raster& source = edit.Source();
     if (!ValidColorGrid(edit))
@@ -223,15 +272,15 @@ std::optional<std::uint64_t> CommitMemoryBytes(const ColorEdit& edit, std::uint6
     // semantic mask thumbnail; a reused sparse preview may need a private copy even though kernel outputs are flat.
     const bool trim = (edit.grownGrid || edit.grownImage.HasStorage()) &&
                       (edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur);
-    const std::uint64_t thumbnails = target && target->mask ? allocation(96 * 96) : 0;
+    const std::uint64_t thumbnails = targetMask ? allocation(96 * 96) : 0;
     const std::uint64_t newImage = !reused || trim ? rgba : 0;
     const std::uint64_t privatePreview = reused && !edit.previewRaster.IsMaterialized() ? rgba : 0;
     std::uint64_t finishPeak =
         std::max(newImage + thumbnails + privatePreview, trim ? (reused ? rgba : rgba * 2) + privatePreview : 0);
     std::uint64_t metadata = 128 * 1024; // Bounded settings copies, stack, raster headers, small vectors/records.
-    if (target && target->mask)
+    if (targetMask)
     {
-        const LayerMask& mask = target->mask.value();
+        const LayerMask& mask = *targetMask;
         if (mask.asset.image.Format() != RasterFormat::Gray8)
         {
             return std::nullopt;
@@ -269,20 +318,28 @@ std::optional<std::uint64_t> CommitMemoryBytes(const ColorEdit& edit, std::uint6
 
 std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& input) noexcept
 {
-    return CommitMemoryBytes(input.edit, input.token.sequence, input.token.target);
+    const auto* mask = input.edit.sourceLayers.Identity()               ? ColorEditSourceMask(input.edit)
+                       : input.token.target && input.token.target->mask ? &*input.token.target->mask
+                                                                        : nullptr;
+    return CommitMemoryBytes(input.edit, input.token.sequence, mask);
 }
 
 std::optional<std::uint64_t> ColorEditCommitMemoryBytes(const ColorEdit& edit, std::uint64_t sequence) noexcept
 {
     if (!edit.sourceToken)
         return std::nullopt;
-    return CommitMemoryBytes(edit, sequence, edit.sourceToken->target);
+    return CommitMemoryBytes(edit, sequence, ColorEditSourceMask(edit));
 }
 
 std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept
 {
-    const ColorEdit& edit = input.edit;
-    if (input.liveAdjustment)
+    return ColorEditPreviewMemoryBytes(input.edit, input.lookupPreview, input.liveAdjustment.has_value());
+}
+
+std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, bool lookupPreview,
+                                                         bool liveAdjustment) noexcept
+{
+    if (liveAdjustment)
         return 1024 * 1024; // immutable tables/cube, bounded settings and result metadata, without raster work
     if (!ValidColorGrid(edit))
     {
@@ -313,7 +370,7 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput
     // Downscaled currently owns a full-size private read until its smaller result is produced. It is released
     // before filtering starts; the new padding and preview source remain owned by the returned cache.
     const auto preparation = downscale ? fullRgba + rgba : 0;
-    if (input.lookupPreview && FilterIsImageAdjustment(edit.kind))
+    if (lookupPreview && FilterIsImageAdjustment(edit.kind))
     {
         const auto coverage = CoverageMemoryBytes(edit, width, height);
         if (!coverage)
@@ -328,7 +385,11 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput
 
 std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept
 {
-    const ColorEdit& edit = input.edit;
+    return ColorEditHistogramMemoryBytes(input.edit);
+}
+
+std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEdit& edit) noexcept
+{
     if (!edit.original.HasStorage() || edit.original.Format() != RasterFormat::Bgra8888 ||
         edit.kind != FilterKind::Levels)
     {
@@ -361,9 +422,14 @@ ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Ex
         result.status = cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
         return std::move(result);
     };
+    if (!CompleteColorTargetForWork(result.token, edit, cancellation))
+        return failed();
     if (input.liveAdjustment)
     {
-        edit.previewLookup = Adjust::BuildAdjustmentLookup(input.liveAdjustment.value(), cancellation);
+        // The admitted source remains the original immutable layer in worker mode. Render the accepted
+        // settings, rather than depending on an owner-side mutation of that layer's parameter record.
+        const auto adjustment = Adjust::AdjustmentWithSettings(input.liveAdjustment.value(), edit.settings);
+        edit.previewLookup = Adjust::BuildAdjustmentLookup(adjustment, cancellation);
         if (!edit.previewLookup)
             return failed();
         edit.previewLookupOnly = true;
@@ -462,6 +528,8 @@ ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input
         result.status = cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
         return std::move(result);
     };
+    if (!CompleteColorTargetForWork(result.token, edit, cancellation))
+        return failed();
     if (edit.kind != FilterKind::Levels || cancellation.IsCancelled())
     {
         return failed();
@@ -550,6 +618,11 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
         result.status = ColorEditJobStatus::Unchanged;
         return result;
     }
+    if (!CompleteColorTargetForWork(result.token, edit, cancellation, true))
+    {
+        (void)cancelled();
+        return result;
+    }
     // A settings update may have refused a larger grid while retaining the panel for retry. Never commit that
     // larger blur on the previous, smaller grid: it would clip the spread even when the final pixels fit.
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin)
@@ -586,11 +659,11 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
         cropX = trimmed.cropX;
         cropY = trimmed.cropY;
     }
-    if (cancelled() || !image.HasStorage() || !placed.IsValid() || !input.token.target.has_value())
+    if (cancelled() || !image.HasStorage() || !placed.IsValid() || !result.token.target.has_value())
     {
         return result;
     }
-    result.mask = input.token.target->mask;
+    result.mask = result.token.target->mask;
     if (edit.grownImage.HasStorage() && result.mask.has_value() && !result.mask->placement.has_value() &&
         result.mask->asset.image.PixelCount() > 1)
     {
@@ -625,6 +698,26 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     return result;
 }
 
+bool DocumentSession::HasCurrentWandColorSelectionBinding() const noexcept
+{
+    if (!_document || !_colorEdit || !_colorEdit->_wandSelectionBinding)
+        return false;
+    const auto& binding = _colorEdit->_wandSelectionBinding.value();
+    const auto& current = _document->selection;
+    return binding.opening == _colorEdit->openingSequence && binding.selection.has_value() == current.has_value() &&
+           (!current || (binding.selection->antialiased == current->antialiased &&
+                         binding.selection->loops.Identity() == current->loops.Identity()));
+}
+
+void DocumentSession::NormalizeWandColorSelectionToken(JobToken& token) const noexcept
+{
+    if (!HasCurrentWandColorSelectionBinding() || !token.target || token.target->layerId != _colorEdit->layerID)
+        return;
+    // Only a newly captured job receives the acknowledged Wand validation selection. The panel still
+    // samples/renders its original opening coverage; every older produced token stays strict.
+    token.selection = _colorEdit->_wandSelectionBinding->selection;
+}
+
 std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditCommit() const
 {
     if (!_document.has_value() || !_colorEdit.has_value() || _adjustmentEditingID.has_value() ||
@@ -638,6 +731,7 @@ std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditCommit() const
     JobToken token = _colorEdit->sourceToken.value();
     token.sessionIdentity = _tokenIdentity.value;
     token.sequence = _colorEditSequence;
+    NormalizeWandColorSelectionToken(token);
     return ColorEditJobInput{std::move(token), _colorEdit.value()};
 }
 
@@ -654,6 +748,7 @@ std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditPreview() cons
     }
     token->sessionIdentity = _tokenIdentity.value;
     token->sequence = _colorEditSequence;
+    NormalizeWandColorSelectionToken(*token);
     return ColorEditJobInput{std::move(*token), *_colorEdit};
 }
 
@@ -784,7 +879,10 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
     }
     if (!CanApplyJobResult(result.token, _colorEditSequence))
     {
-        CancelColorEdit();
+        // An older selection result must not close this still-valid panel after its acknowledged Wand.
+        // This branch only refuses; publication below still requires the complete public token guard.
+        if (!HasCurrentWandColorSelectionBinding() || !IsJobTargetAndSessionCurrent(result.token, _colorEditSequence))
+            CancelColorEdit();
         return false;
     }
     switch (result.status)
@@ -828,12 +926,14 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
         ++_editRevision;
         return false;
     }
-    ImageLayer* layer = MutableLayer(id); // CanApplyJobResult proved that this image layer still exists.
+    const ImageLayer* layer = FindLayer(id); // CanApplyJobResult proved that this image layer still exists.
+    if (!layer)
+        return false;
     if (prepared)
     {
-        if (!history.Publish(prepared->_history))
+        if (!prepared->_document || !history.Publish(prepared->_history))
             return false;
-        std::swap(*layer, prepared->_layer);
+        std::swap(_document, prepared->_document);
         std::swap(filterSettings, prepared->_result.settings);
         std::swap(_colorEdit, prepared->_retiredPanel);
         ++_colorEditSequence;
@@ -843,10 +943,23 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
     RasterAsset asset{result.image, result.thumbnail, layer->name};
     auto mask = result.mask;
     FilterSettings appliedSettings = result.settings;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    {
+        auto& edited = draft.value().EditLayers()[index.value()];
+        edited.asset = std::move(asset);
+        edited.transform = result.transform;
+        edited.mask = std::move(mask);
+    }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
     BeginEdit(FilterKindName(result.kind));
-    layer->asset = std::move(asset);
-    layer->transform = result.transform;
-    layer->mask = std::move(mask);
+    std::swap(_document.value(), after.value());
     EndEdit();
     filterSettings = std::move(appliedSettings);
     _colorEdit.reset();

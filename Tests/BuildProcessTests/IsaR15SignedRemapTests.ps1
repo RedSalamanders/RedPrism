@@ -1,9 +1,10 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1') *> $null
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1') *> $null
 $fixtureRoot = Join-Path $repo ('.build/BuildProcessTests/IsaR15SignedRemap-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $fixtureRoot -Force)
 $imageBase = [UInt64]0x140000000
@@ -252,7 +253,7 @@ function New-R15Case {
 
 function Invoke-R15Control([string]$Name,[string]$Fault,[bool]$ExpectedPass,[int]$Pairs=1,[int]$Count=2,[int]$Extent=31,[int]$ExpectedInline=-1,[int]$ExpectedVectors=-1){
     $case=New-R15Case $Name $Fault $Count $Pairs $Extent
-    try{$result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@())}
+    try{$result=[RedPrismBuild.IsaScanner]::Scan($case.Binary,$case.Metadata,$case.Symbols,$case.Disassembly,[string[]]@(),[string[]]@(),[string[]]@(), $false)}
     catch [IO.InvalidDataException] {
         if ($ExpectedPass -or $Fault -notin @('BrokenPdbGuid','TruncatedPe')) { throw }
         $script:r15Cases.Add($Name); Write-Host "PASS isa-r15-signed-remap.$Name"; return

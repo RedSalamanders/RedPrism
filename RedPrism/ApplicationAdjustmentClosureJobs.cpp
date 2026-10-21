@@ -1,7 +1,9 @@
 #include "Application.h"
 
+#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+
 #include "AdjustmentClosureWork.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 
 #include <algorithm>
 #include <array>
@@ -221,7 +223,7 @@ Application::HostOutcome Application::StartAdjustmentClosure(std::uint64_t ordin
     if (_colorPreviewTicket)
     {
         (void)_jobs.Cancel(_colorPreviewTicket.value());
-        _colorPreviewTicket.reset();
+        // The cancelled preview ticket is retained until its exact acknowledgement.
     }
     DocumentChanged();
     return HostOutcome::Pending;
@@ -307,7 +309,7 @@ int Application::RunAdjustmentClosureSelfTest() noexcept
             for (std::size_t attempt = 0; attempt < attempts; ++attempt)
             {
                 _session.CancelColorEdit(); // no worker is live at this fixture construction boundary
-                CanvasDocument document;
+                DocumentFixture document;
                 document.id = Guid::Generate();
                 document.width = 4;
                 document.height = 1;
@@ -315,7 +317,7 @@ int Application::RunAdjustmentClosureSelfTest() noexcept
                 base.asset = RasterAsset{image, {}, base.name};
                 const Guid baseID = base.id;
                 document.layers.push_back(std::move(base));
-                ReplaceDocument(std::move(document), baseID, {});
+                ReplaceDocument(std::move(document).Seal(), baseID, {});
                 _session.AddAdjustment(kind);
                 const Guid id = _session.ActiveLayerID().value();
                 LayerAdjustment original = _session.ActiveLayer()->adjustment.value();

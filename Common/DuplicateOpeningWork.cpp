@@ -1,5 +1,7 @@
 #include "DuplicateOpeningWork.h"
 
+#include "DocumentDraft.h"
+
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -26,7 +28,7 @@ bool Checkpoint(DuplicateOpeningObserver observer, DuplicateOpeningStage stage, 
 std::uint64_t DocumentSession::DuplicateOpeningPreparationMemoryBytes() const
 {
     if (!_document || !_activeLayerID || _transformEdit || _transformDuplicate || _gradient || _pixelMove || _brush ||
-        _warp || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin || TransformsAsGroup() ||
+        HasPendingWarp() || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin || TransformsAsGroup() ||
         !CanTransform() || _document->layers.size() >= static_cast<std::size_t>(kMaxLayerCount) ||
         history.CaptureState().Depth() == (std::numeric_limits<int>::max)() ||
         _generation == (std::numeric_limits<std::uint64_t>::max)() ||
@@ -82,9 +84,16 @@ DuplicateOpeningResult DocumentSession::PrepareDuplicateOpeningPublication(
     TransformEdit edit{duplicateID, duplicate.transform, false, std::nullopt, false, std::nullopt};
     if (!Checkpoint(observer, DuplicateOpeningStage::Document, cancellation))
         return {DuplicateOpeningStatus::Cancelled};
-    auto after = input._source;
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(index.value() + 1), std::move(duplicate));
-    const auto validation = ValidateDocument(after);
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size() + 1, cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    if (!draft.value().Insert(index.value() + 1, std::move(duplicate)))
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    auto afterDocument = std::move(after.value());
+    const auto validation = ValidateDocument(afterDocument);
     if (validation != DocumentStatus::Ok)
         return {validation == DocumentStatus::TooLarge ? DuplicateOpeningStatus::TooLarge
                                                        : DuplicateOpeningStatus::Invalid};
@@ -118,7 +127,7 @@ DuplicateOpeningResult DocumentSession::PrepareDuplicateOpeningPublication(
     if (!Checkpoint(observer, DuplicateOpeningStage::Publication, cancellation))
         return {DuplicateOpeningStatus::Cancelled};
     opening._source = std::move(input._source);
-    opening._document = std::move(after);
+    opening._document = std::move(afterDocument);
     opening._active = duplicateID;
     opening._selected.insert(duplicateID);
     opening._maskSelected = false;
@@ -138,7 +147,7 @@ bool DocumentSession::ApplyPreparedDuplicateOpeningIfCurrent(PreparedDuplicateOp
     static_assert(std::is_nothrow_swappable_v<std::optional<std::pair<Guid, Guid>>>);
     static_assert(std::is_nothrow_swappable_v<SnapGuides>);
     if (!_document || !_activeLayerID || !prepared._restore || !prepared._edit || !prepared._duplicate ||
-        _transformEdit || _transformDuplicate || _gradient || _pixelMove || _brush || _warp || _colorEdit ||
+        _transformEdit || _transformDuplicate || _gradient || _pixelMove || _brush || HasPendingWarp() || _colorEdit ||
         _shapeDraft || _lassoDraft || _selectionMoveOrigin || _selected.size() > 1 ||
         _editRevision != prepared._revision || !ApplyPreparedImageImportIfCurrent(prepared._publication))
         return false;
@@ -152,7 +161,7 @@ bool DocumentSession::IsDuplicateRestoreCurrent(const PreparedDuplicateRestore& 
 {
     return _document && _transformEdit && !_transformEdit->floating &&
            _transformEdit->layerID == prepared._duplicate.first && _transformDuplicate == prepared._duplicate &&
-           !_gradient && !_pixelMove && !_brush && !_warp && !_colorEdit && !_shapeDraft && !_lassoDraft &&
+           !_gradient && !_pixelMove && !_brush && !HasPendingWarp() && !_colorEdit && !_shapeDraft && !_lassoDraft &&
            !_selectionMoveOrigin && CanApplyImageImport(prepared._publication._authority) &&
            prepared._publication._history && history.CanPublish(prepared._publication._history.value());
 }

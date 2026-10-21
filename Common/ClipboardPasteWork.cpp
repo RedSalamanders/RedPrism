@@ -1,5 +1,7 @@
 #include "ClipboardPasteWork.h"
 
+#include "DocumentDraft.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -102,25 +104,18 @@ std::optional<PreparedClipboardPaste> DocumentSession::PrepareClipboardPastePubl
     }
     const auto active = added.id;
     const auto parent = added.parentID;
-    CanvasDocument after;
-    after.id = input._source.id;
-    after.width = input._source.width;
-    after.height = input._source.height;
-    after.resolution = input._source.resolution;
-    // Paste drops the selection; no image thumbnail is required and mask thumbnails remain untouched.
-    after.layers.reserve(input._source.layers.size() + 1);
-    for (std::size_t i = 0; i <= input._source.layers.size(); ++i)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        if (i == insertion)
-            after.layers.push_back(std::move(added));
-        if (i < input._source.layers.size())
-            after.layers.push_back(input._source.layers[i]);
-    }
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size() + 1, cancellation);
+    if (!draft)
+        return std::nullopt;
+    if (cancellation.IsCancelled() || !draft.value().Insert(insertion, std::move(added)))
+        return std::nullopt;
+    draft.value().DocumentState().selection.reset();
+    auto sealed = draft.value().Seal(cancellation);
+    if (!sealed || cancellation.IsCancelled())
+        return std::nullopt;
     ImageImportBatchResult imported;
     imported.status = ProjectIoStatus::Ok;
-    imported.importedDocument = std::move(after);
+    imported.importedDocument = std::move(sealed.value());
     imported.importedActiveLayerID = active;
     imported.historyName = L"Paste";
     auto publication =
@@ -139,7 +134,7 @@ bool DocumentSession::ApplyPreparedClipboardPasteIfCurrent(PreparedClipboardPast
         return false;
     // GUID erasure cannot allocate or fail. Expand only the inserted layer's parent, preserving other UI state.
     if (prepared._parent)
-        _collapsed.erase(prepared._parent.value());
+        SetGroupCollapsed(prepared._parent.value(), false);
     return true;
 }
 

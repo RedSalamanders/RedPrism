@@ -3,9 +3,9 @@
 #include "DuplicateOpeningWork.h"
 #include "FloatingMergeWork.h"
 #include "FloatingOpeningWork.h"
+#include "Runtime.Tests.TransformWorkTestGate.h"
 #include "TransformCancellationWork.h"
 #include "TransformCommitWork.h"
-#include "TransformWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -405,7 +405,7 @@ class Application::TransformJob final : public Job
         else
         {
             _owner.SyncChrome();
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         (void)_owner._historyWork.Finish(_stamp);
         _owner.ResumeHostHistory(_stamp, outcome,

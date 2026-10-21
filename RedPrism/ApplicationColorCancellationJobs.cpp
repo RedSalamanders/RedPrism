@@ -1,7 +1,7 @@
 #include "Application.h"
 
 #include "ColorDismissalWork.h"
-#include "ColorWorkTestGate.h"
+#include "Runtime.Tests.ColorWorkTestGate.h"
 
 #include <algorithm>
 #include <limits>
@@ -200,7 +200,7 @@ Application::HostOutcome Application::StartColorCancellation(std::uint64_t ordin
     if (_colorPreviewTicket)
     {
         (void)_jobs.Cancel(_colorPreviewTicket.value());
-        _colorPreviewTicket.reset();
+        // The cancelled preview ticket is retained until its exact acknowledgement.
     }
     DocumentChanged();
     return HostOutcome::Pending;

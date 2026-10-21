@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 Proves that a failed runtime check in a test executable ends the run with its report and exit code 3 instead of waiting
-on a dialog (RF-702, Tests/Support/FailureReports.h). HostTests, DocumentTests, IoTests and CompositionTests each run their
+on a dialog (RF-702, Tests/Support/Support.Tests.FailureReports.h). HostTests, DocumentTests, IoTests and CompositionTests each run their
 hidden --failure-report-self-test, which in Debug and ASan Debug fails a CRT assertion on purpose, the way --asan-probe
 proves the sanitizer is really wired up. Release has no such checks: the switch must end with exit code 0 there.
 
@@ -15,6 +15,7 @@ param(
     [string] $Configuration = 'Debug',
     [ValidateRange(5, 600)]
     [int] $TimeoutSeconds = 60,
+    [ValidateSet('HostTests','DocumentTests','IoTests','CompositionTests')][AllowEmptyCollection()][string[]] $Suites=@('HostTests','DocumentTests','IoTests','CompositionTests'),
     $EvidenceRun = $null
 )
 $ErrorActionPreference = 'Stop'
@@ -36,7 +37,7 @@ $logRoot = Join-Path $EvidenceRun.Path ('failure-reports-' + [guid]::NewGuid().T
 [void](New-Item -ItemType Directory -Path $logRoot -Force)
 $passed = $false
 try {
-    foreach ($suite in 'HostTests', 'DocumentTests', 'IoTests', 'CompositionTests') {
+    foreach ($suite in $Suites) {
         $executable = Join-Path $OutputRoot "$suite.exe"
         if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
             throw "$suite.exe was not found: $executable"

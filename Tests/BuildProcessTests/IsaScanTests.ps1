@@ -7,32 +7,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
-& (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
-& (Join-Path $PSScriptRoot 'IsaQwordPaddingTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls failed.' }
-if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR9HoistedDirectTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Hoisted R9 message-switch parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls failed.' }
-& (Join-Path $PSScriptRoot 'IsaR15SignedRemapTests.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Hoisted R15 signed byte-remap parser controls failed.' }
+# Pure parser controls belong to Invoke-ToolingTests.ps1 once per validation.
+# This native gate retains compiler-generated passing/failing PE/full-PDB controls for this profile.
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
-$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
+$source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'Tooling.Tests.IsaProbe.cpp'))
 
 function Invoke-Probe {
     param([string] $Name, [string] $ObjectName, [string] $Definition, [bool] $Negative)
@@ -119,6 +97,30 @@ $result = [RedPrismBuild.IsaScanner]::Scan((Join-Path $negativeRoot 'out\IsaProb
 if ($result.Violations.Count -eq 0) { throw 'A same-named runtime function in an unapproved object bypassed the gate.' }
 Write-Host 'PASS isa-scan.control.RuntimeFunctionWrongObject (expected rejection)'
 
+# The real relinked Size diagnostic uses lowercase imagecodecs.obj in the matching PDB. Windows
+# object basenames ignore case; C/C++ procedure names remain ordinal and exact. Reuse the compiled
+# hostile vector fixture and its exact altered procedure range, without executing vector bytes.
+foreach ($case in @(
+    @{ Name = 'RuntimeFunctionExactObject'; Entry = 'BaselineLeak.obj!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionLowercaseObject'; Entry = 'baselineleak.obj!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionUppercaseObject'; Entry = 'BASELINELEAK.OBJ!wmemchr'; Refused = $false },
+    @{ Name = 'RuntimeFunctionNameCase'; Entry = 'BaselineLeak.obj!WMEMCHR'; Refused = $true },
+    @{ Name = 'RuntimeFunctionObjectPrefix'; Entry = 'OtherBaselineLeak.obj!wmemchr'; Refused = $true },
+    @{ Name = 'RuntimeFunctionObjectSuffix'; Entry = 'BaselineLeak.obj.extra!wmemchr'; Refused = $true },
+    @{ Name = 'RuntimeFunctionNameSuffix'; Entry = 'BaselineLeak.obj!wmemchr_extra'; Refused = $true }
+)) {
+    $result = [RedPrismBuild.IsaScanner]::Scan((Join-Path $negativeRoot 'out\IsaProbe.exe'),
+        (Join-Path $negativeScan 'contributions.txt'), $alteredSymbols, (Join-Path $negativeScan 'disassembly.txt'),
+        [string[]] $allowlist.Objects, [string[]] $allowlist.Libraries, [string[]] @($case.Entry))
+    if ($case.Refused) {
+        if ($result.Violations.Count -eq 0) { throw "Runtime function identity control accepted: $($case.Name)" }
+    } elseif ($result.Violations.Count -ne 0 -or $result.RuntimeInstructions -eq 0) {
+        throw "Exact runtime function/object control refused or observed no vector instructions: $($case.Name)"
+    }
+    Write-Host "PASS isa-scan.control.$($case.Name)"
+}
+
+
 foreach ($case in @(
     @{ Name = 'MissingPdb'; Pdb = (Join-Path $root 'absent.pdb'); Pattern = 'needs the linked image and its full PDB' },
     @{ Name = 'MismatchedPdb'; Pdb = [IO.Path]::ChangeExtension($avx2, '.pdb'); Pattern = 'PDB GUID/age does not match' }
@@ -131,6 +133,39 @@ foreach ($case in @(
         $caught = $true
     }
     if (-not $caught) { throw "ISA control $($case.Name) unexpectedly passed." }
+    Write-Host "PASS isa-scan.control.$($case.Name) (expected rejection)"
+}
+
+# Identity must reject an unrelated PDB before its offsets are interpreted against the linked image.
+# Give both mismatch controls a deliberately impossible contribution, independent of compiler section layout.
+$scalarScan = Join-Path $root 'Scalar\scan'
+$scalarMetadata = Get-Content -LiteralPath (Join-Path $scalarScan 'contributions.txt') -Raw
+$scalarSymbols = Join-Path $scalarScan 'symbols.txt'
+$scalarDisassembly = Join-Path $scalarScan 'disassembly.txt'
+$guidPattern = '(?m)^\s*GUID: (\{.+\})\r?$'
+$agePattern = '(?m)^\s*Age: (\d+)\r?$'
+$guidRecord = [regex]::Match($scalarMetadata, $guidPattern)
+$ageRecord = [regex]::Match($scalarMetadata, $agePattern)
+if (-not $guidRecord.Success -or -not $ageRecord.Success) { throw 'Scalar PDB identity controls need a GUID and age.' }
+$wrongGuid = [guid]::NewGuid()
+if ($wrongGuid -eq [guid]::Parse($guidRecord.Groups[1].Value)) { throw 'Independent GUID unexpectedly matches the fixture.' }
+$wrongAge = if ([uint32]::Parse($ageRecord.Groups[1].Value) -eq [uint32]::MaxValue) { 0 } else { [uint32]::Parse($ageRecord.Groups[1].Value) + 1 }
+$impossibleContribution = "`nSection Contributions`n  SC[identity-first] | mod = 0, 65534:18446744073709551615, size = 1,`n"
+foreach ($case in @(
+    @{ Name = 'GuidBeforeMalformedContribution'; Metadata = [regex]::Replace($scalarMetadata, $guidPattern, ('  GUID: {' + $wrongGuid.ToString().ToUpperInvariant() + '}')) },
+    @{ Name = 'AgeBeforeMalformedContribution'; Metadata = [regex]::Replace($scalarMetadata, $agePattern, ('  Age: ' + $wrongAge)) }
+)) {
+    $path = Join-Path $root ($case.Name + '.txt')
+    ($case.Metadata + $impossibleContribution) | Set-Content -LiteralPath $path -Encoding utf8
+    $caught = $false
+    try {
+        $null = [RedPrismBuild.IsaScanner]::Scan($scalar, $path, $scalarSymbols, $scalarDisassembly,
+            [string[]] $allowlist.Objects, [string[]] $allowlist.Libraries, [string[]] $allowlist.Functions)
+    } catch {
+        if ($_.Exception.Message -notmatch 'PDB GUID/age does not match') { throw }
+        $caught = $true
+    }
+    if (-not $caught) { throw "ISA control $($case.Name) interpreted a mismatched PDB." }
     Write-Host "PASS isa-scan.control.$($case.Name) (expected rejection)"
 }
 $global:LASTEXITCODE = 0

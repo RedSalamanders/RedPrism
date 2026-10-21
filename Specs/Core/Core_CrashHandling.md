@@ -46,6 +46,13 @@ the event. Every private-pool callback installs the UCRT's per-thread terminate 
 The Windows Error Reporting dialog never
 appears: the filter answers `EXCEPTION_EXECUTE_HANDLER`.
 
+The scheduler's owner-wake endpoint treats failure to signal a live owned event after work publication as an
+invariant failure and calls `std::terminate`; the existing installed handler records code `0xE0000001`. Startup
+event/wait creation failures instead propagate an HRESULT and unwind before work can be accepted. Endpoint
+callbacks install the worker terminate handler before accessing state. A private injected-failure qualification
+runs separate children and verifies the actual dump, marker and exception code; it never installs handlers in
+the in-process Host suite.
+
 Debug CRT assertion dialogs are separate and stay as they are for developers; the test executables route them to
 stderr ([`Testing_Validation.md`](../Testing/Testing_Validation.md)).
 

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "SelectionNudgeTestGate.h"
+#include "Runtime.Tests.SelectionNudgeTestGate.h"
 #include "SelectionNudgeWork.h"
 #include "resource.h"
 
@@ -63,6 +63,16 @@ class Application::SelectionNudgeJob final : public Job
             return {JobStatus::Cancelled};
         if (!_payload)
             return {}; // full scheduler admission precedes owner capture on the resumable boundary
+        if (_refreshResidency)
+        {
+            if (_gate && _gate->throwResidencyRefresh)
+                throw std::bad_alloc{};
+            const bool refreshed =
+                _payload->publication && _payload->publication->RefreshHistoryResidency(context.cancellation);
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                   : refreshed                        ? JobResult{}
+                                                      : JobResult{JobStatus::Failed, E_FAIL};
+        }
         DocumentHistory::PrepareObserver observer;
         if (_gate && _gate->throwHistoryStage)
             observer = {[](void* opaque, DocumentHistory::PrepareStage stage)
@@ -83,6 +93,12 @@ class Application::SelectionNudgeJob final : public Job
             return {JobStatus::Cancelled};
         if (!_payload->publication)
             return {JobStatus::Failed, E_FAIL};
+        if (_gate && _gate->lateResidencySource.HasStorage())
+        {
+            if (!_gate->lateResidencySource.Data())
+                return {JobStatus::Failed, E_FAIL};
+            _gate->residentGrowths.fetch_add(1);
+        }
         if (_gate && _gate->hold)
         {
             _gate->visits.fetch_add(1);
@@ -99,9 +115,36 @@ class Application::SelectionNudgeJob final : public Job
     }
     bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
     {
-        if (result.status != JobStatus::Finished || _payload || !Current() ||
-            _owner._historyWork.CancelRequested(_stamp))
+        if (result.status != JobStatus::Finished || !Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
+        if (_payload)
+        {
+            if (!_payload->publication)
+                return false;
+            const auto decision = _payload->publication->TryAcquireHistoryResidency(_residencyPermit);
+            if (decision == DocumentHistory::ResidencyValidation::Ready)
+                return false;
+            if (decision == DocumentHistory::ResidencyValidation::Invalid)
+            {
+                _captureError = E_UNEXPECTED;
+                return false;
+            }
+            _refreshResidency = true;
+            if (_gate)
+            {
+                _gate->residencyRefreshes.fetch_add(1);
+                _gate->refreshReservationHeld.store(_gate->reservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+            }
+            if (_owner._jobs.Resume(ticket))
+            {
+                if (_gate && _gate->cancelResidencyRefresh)
+                    (void)_owner._jobs.Cancel(ticket);
+                return true;
+            }
+            _captureError = E_UNEXPECTED;
+            return false;
+        }
         try
         {
             _payload.reset(std::make_unique<SelectionNudgePayload>().release());
@@ -135,6 +178,7 @@ class Application::SelectionNudgeJob final : public Job
     }
     void Completed(JobResult result) noexcept override
     {
+        const auto releasePermit = wil::scope_exit([this]() noexcept { _residencyPermit.Reset(); });
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
@@ -161,6 +205,7 @@ class Application::SelectionNudgeJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        _residencyPermit.Reset(); // Release before chrome/coverage reads, callbacks or another history writer.
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
         _owner._selectionNudgeTicket.reset();
@@ -185,6 +230,8 @@ class Application::SelectionNudgeJob final : public Job
     const std::shared_ptr<SelectionNudgeTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<SelectionNudgePayload, RetireSelectionNudgePayload> _payload;
+    DocumentHistory::ResidencyPermit _residencyPermit;
+    bool _refreshResidency = false;
     std::int32_t _captureError = 0;
 };
 

@@ -136,6 +136,7 @@ class HistoryWork final
     }
 
   private:
+    friend struct HistoryWorkFixture; // Only native fixtures may place the event clock at its boundary.
     std::uint64_t _next = 0;
     std::uint64_t _lastStarted = 0;
     std::uint64_t _acquisition = 0;

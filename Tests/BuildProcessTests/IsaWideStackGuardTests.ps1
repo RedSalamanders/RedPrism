@@ -4,7 +4,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $wideStackRepo = $PSScriptRoot
 while (-not (Test-Path -LiteralPath (Join-Path $wideStackRepo 'Build/IsaScan.cs')) -or
-    -not (Test-Path -LiteralPath (Join-Path $wideStackRepo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1'))) {
+    -not (Test-Path -LiteralPath (Join-Path $wideStackRepo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1'))) {
     $wideStackParent = Split-Path -Parent $wideStackRepo
     if (-not $wideStackParent -or $wideStackParent -eq $wideStackRepo) { throw 'Repository root not found' }
     $wideStackRepo = $wideStackParent
@@ -13,7 +13,7 @@ if (-not ('RedPrismBuild.IsaScanner' -as [type])) {
     Add-Type -Path (Join-Path $wideStackRepo 'Build/IsaScan.cs')
 }
 # Reuse independently encoded PE/PDB fixture primitives and rerun all earlier controls.
-. (Join-Path $wideStackRepo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $wideStackRepo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 function New-GuardedTerminalDwordWideStackCase([string]$Name, [string]$Fault = '', [int]$Maximum = 10) {
     $case = New-SyntheticCase ($Name + 'Seed') -PdbData

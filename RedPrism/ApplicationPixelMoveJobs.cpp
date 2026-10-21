@@ -2,7 +2,9 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
-#include "PixelMoveWorkTestGate.h"
+#include "PreparedRasterPreview.h"
+#include "Runtime.Tests.PixelMoveWorkTestGate.h"
+#include "SharedPublicationMemory.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -17,6 +19,9 @@ namespace
 #pragma warning(disable : 4324)
 struct PixelMovePayload final : DeferredReleaseNode
 {
+    std::shared_ptr<const SharedPublicationMemory> memory; // All captured/output owners retire first.
+    bool preparedDisplay = false;
+    bool workerTargetCapture = false;
     RasterEditInput input;
     std::optional<JobToken> token;
     RasterEditResult committed;
@@ -85,7 +90,8 @@ struct RetirePixelMovePayload final
 {
     void operator()(PixelMovePayload* payload) const noexcept
     {
-        if (payload && !TryDeferRelease(*payload))
+        if (payload && !TryDeferRelease(*payload, payload->preparedDisplay ? DeferredReleasePolicy::AlwaysOnOwner
+                                                                           : DeferredReleasePolicy::SizeThreshold))
         {
             const std::unique_ptr<PixelMovePayload> owned(payload);
         }
@@ -100,7 +106,7 @@ class Application::PixelMoveJob final : public Job
   public:
     PixelMoveJob(Application& owner, PixelMoveRequest request, std::uint64_t serial, std::uint64_t generation,
                  std::int64_t pixelLimit, std::uint64_t preparationBytes, std::optional<PreviewStamp> preview,
-                 std::optional<HistoryWorkStamp> commit, std::uint64_t retirementBytes)
+                 std::optional<HistoryWorkStamp> commit, std::uint64_t retirementBytes, bool prepareDisplay)
         : _owner(owner), _request(request), _serial(serial), _generation(generation), _pixelLimit(pixelLimit),
           _preparationBytes(preparationBytes), _retirementBytes(retirementBytes), _preview(preview), _commit(commit),
           _gate(owner._pixelMoveWorkTestGate &&
@@ -108,7 +114,8 @@ class Application::PixelMoveJob final : public Job
                             (commit ? PixelMoveWorkTestKind::Commit : PixelMoveWorkTestKind::Preview)
                     ? owner._pixelMoveWorkTestGate
                     : nullptr),
-          _ownerThread(GetCurrentThreadId())
+          _ownerThread(GetCurrentThreadId()), _prepareDisplay(prepareDisplay),
+          _ownerIdentity(std::this_thread::get_id())
     {
     }
     JobResult Run(JobContext& context) override
@@ -125,6 +132,31 @@ class Application::PixelMoveJob final : public Job
         }
         if (_gate && _gate->throwAllocationFailure)
             throw std::bad_alloc{};
+        if (_payload->workerTargetCapture)
+        {
+            // Commits and prepared previews already hold the complete document phase envelope.
+            // Resolve and copy all potentially large layer/mask metadata on this worker only.
+            if (!_payload->source || !_payload->token)
+                return {JobStatus::Failed, E_UNEXPECTED};
+            const auto* layer = _payload->source->layers.FindKey(_request.target);
+            if (!layer || !layer->asset)
+                return {JobStatus::Failed, E_ABORT};
+            _payload->input.layer = *layer;
+            _payload->token->target = TargetIdentity{layer->id,   layer->asset->image, layer->transform,
+                                                     layer->mask, layer->isGroup,      layer->adjustment};
+            if (!_commit)
+                _payload->source.reset(); // Drop the extra whole-document owner on the worker after target capture.
+            _payload->workerTargetCapture = false;
+            if (_gate)
+            {
+                const bool onOwner = GetCurrentThreadId() == _ownerThread;
+                _gate->targetCapturesOnOwner.fetch_add(onOwner ? 1u : 0u);
+                _gate->targetCapturesOnWorker.fetch_add(onOwner ? 0u : 1u);
+                _gate->capturedImageNameUnits.store(_payload->input.layer.asset->name.size());
+                _gate->capturedMaskNameUnits.store(
+                    _payload->input.layer.mask ? _payload->input.layer.mask->asset.name.size() : 0);
+            }
+        }
         _payload->input.progressContext = &context;
         _payload->input.progress = [](void* value, std::size_t completed, std::size_t total) noexcept
         {
@@ -156,6 +188,7 @@ class Application::PixelMoveJob final : public Job
         else
         {
             _payload->preview = RunRasterEditPreview(_payload->input, context.cancellation);
+            _payload->memory = _payload->preview.memory;
             if (_gate && _payload->preview.status == RasterEditStatus::Ready && _payload->preview.pixelMoveOpening)
                 (_payload->input.pixelMoveOpening ? _gate->openingReuses : _gate->openingPreparations).fetch_add(1);
         }
@@ -197,13 +230,31 @@ class Application::PixelMoveJob final : public Job
             }
             auto owned = std::make_unique<PixelMovePayload>();
             _payload.reset(owned.release());
+            _payload->preparedDisplay = _prepareDisplay;
             _payload->gate = _gate;
             _payload->ownerThread = _ownerThread;
             _payload->preparationBytes = _preparationBytes;
             _payload->retirementBytes = _retirementBytes;
             _payload->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
             auto& input = _payload->input;
-            input.layer = *layer;
+            input.prepareDisplay = _prepareDisplay;
+            input.ownerThread = _ownerIdentity;
+            _original = ticket;
+            _payload->workerTargetCapture = _commit.has_value() || _prepareDisplay;
+            if (_payload->workerTargetCapture)
+            {
+                // This immutable root is included in the pre-capture commit/prepared-preview bound.
+                _payload->source = _owner._session.Document();
+                if (_gate)
+                    _gate->rootOnlyCapturedOnOwner = GetCurrentThreadId() == _ownerThread;
+            }
+            else
+            {
+                // The unprepared-preview fixture path has no complete document-source envelope yet.
+                input.layer = *layer;
+                if (_gate)
+                    _gate->targetCapturesOnOwner.fetch_add(1);
+            }
             input.selection = _owner._session.Selection();
             input.canvasWidth = _owner._session.Document()->width;
             input.canvasHeight = _owner._session.Document()->height;
@@ -217,11 +268,11 @@ class Application::PixelMoveJob final : public Job
                 input.pixelMoveOpening = _owner._pixelMoveOpening;
             // Acquisition and pixelMove settings are separate clocks. A continued selected ordinal has a fresh
             // acquisition; a preview has a mailbox sequence. Neither is compared with the metadata sequence.
+            const auto target = _payload->workerTargetCapture ? std::optional<Guid>{} : std::optional(_request.target);
             _payload->token =
-                _owner._session.CaptureJobToken(_request.target, _commit ? _commit->acquisition : _preview->sequence);
+                _owner._session.CaptureJobToken(target, _commit ? _commit->acquisition : _preview->sequence);
             if (_commit)
             {
-                _payload->source = _owner._session.Document();
                 _payload->historyState = _owner._session.history.CaptureState();
             }
             if (_payload->token && _owner._jobs.Resume(ticket))
@@ -255,6 +306,19 @@ class Application::PixelMoveJob final : public Job
             switch (status)
             {
             case RasterEditStatus::Ready:
+                if (_prepareDisplay)
+                {
+                    if (!_payload->preview.memory || !_payload->preview.display)
+                        error = E_UNEXPECTED;
+                    else
+                        error = static_cast<HRESULT>(
+                            _payload->preview.memory->BindAfterCompletedWork(_owner._jobs, _original));
+                    if (FAILED(error))
+                    {
+                        outcome = HostOutcome::Failed;
+                        break;
+                    }
+                }
                 if (_commit)
                 {
                     const auto* pending = _owner._session.PendingPixelMove();
@@ -272,16 +336,16 @@ class Application::PixelMoveJob final : public Job
                 {
                     // Active older ticks may publish before the pending newest tick, as required by the mailbox.
                     // The cache belongs to the exact opening/source, independently of its frame settings sequence.
-                    if (_payload->preview.pixelMoveOpening)
+                    produced = _owner._session.PublishPixelMovePreview(
+                        std::move(_payload->preview.stroke), _payload->token.value(), _request.opening,
+                        _request.sequence, std::move(_payload->preview.display));
+                    if (produced && _payload->preview.pixelMoveOpening)
                     {
                         _owner._pixelMoveOpening = _payload->preview.pixelMoveOpening;
                         _owner._pixelMoveOpeningSerial = _serial;
                         _owner._pixelMoveOpeningId = _request.opening;
                         _owner._pixelMoveOpeningGeneration = _generation;
                     }
-                    produced = _owner._session.PublishPixelMovePreview(std::move(_payload->preview.stroke),
-                                                                       _payload->token.value(), _request.opening,
-                                                                       _request.sequence);
                 }
                 if (!produced)
                     outcome = HostOutcome::Stale;
@@ -335,7 +399,7 @@ class Application::PixelMoveJob final : public Job
             (void)_owner._pixelMovePreviews.Finish(_preview.value(), produced);
             _owner.SyncStrokePreview();
             _owner.SyncChrome(); // observes a new opening/tick and launches the latest pending request
-            _owner._frameInvalidated = true;
+            _owner.InvalidateFrame();
         }
         if (_owner._pixelMoveMailboxOpen && _owner._pixelMovePreviews.HasPending())
             (void)_owner._jobs.RequestUiActionSource(_owner._continuationAction);
@@ -380,6 +444,9 @@ class Application::PixelMoveJob final : public Job
     const std::optional<HistoryWorkStamp> _commit;
     const std::shared_ptr<PixelMoveWorkTestGate> _gate;
     const DWORD _ownerThread;
+    const bool _prepareDisplay;
+    const std::thread::id _ownerIdentity;
+    JobTicket _original;
     std::unique_ptr<PixelMovePayload, RetirePixelMovePayload> _payload;
     HRESULT _captureError = S_OK;
 };
@@ -410,6 +477,9 @@ void Application::CancelPixelMoveJobs(bool keepOpening) noexcept
 void Application::RefreshPixelMoveJobs() noexcept
 {
     const auto* pending = _session.PendingPixelMove();
+    if (pending && pending->proceduralOpening)
+        return; // The original physical parent owns all CPU work; the separately admitted frame consumer reads its
+                // lift.
     if (!_pixelMoveCommitTicket && pending && pending->deferred && pending->openingGeneration != _session.Generation())
     {
         _session.CancelPixelMove();
@@ -469,13 +539,32 @@ HRESULT Application::SubmitPixelMoveJob(PixelMoveRequest request, std::optional<
     const auto limit = _session.RasterEditPixelLimit(*layer, false);
     const auto preparation = PixelMoveMemoryBytes(*layer, _session.Selection().value(), _session.Document()->width,
                                                   _session.Document()->height, limit);
+    const bool prepareDisplay = !commit && _pendingDisplayInitialized;
+    std::uint64_t previewOwners = 0;
+    if (prepareDisplay)
+    {
+        const auto grid = BrushStroke::PlanGrid(*layer, false, BrushSettings{}, _session.Document()->width,
+                                                _session.Document()->height);
+        const auto metadata = grid ? RasterPreviewMetadataMemoryBytes(grid->width, grid->height) : 0;
+        const auto source = _session.Document()->RetirementMemoryBytes();
+        if (!metadata || !source || source > (std::numeric_limits<std::uint64_t>::max)() - metadata)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        previewOwners = source + metadata;
+        const auto opening = PixelMoveOpeningMemoryBytes(_pixelMoveOpening);
+        if (opening > (std::numeric_limits<std::uint64_t>::max)() - previewOwners)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        previewOwners += opening;
+    }
     const auto history = commit ? _session.history.EditMemoryBytes(_session.Document()) : 0;
     if (preparation == 0 || (commit && history == 0) ||
         history > (std::numeric_limits<std::uint64_t>::max)() - sizeof(PixelMoveJob) - sizeof(PixelMovePayload) ||
         preparation >
             (std::numeric_limits<std::uint64_t>::max)() - history - sizeof(PixelMoveJob) - sizeof(PixelMovePayload))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto memory = preparation + history + sizeof(PixelMoveJob) + sizeof(PixelMovePayload);
+    const auto baseMemory = preparation + history + sizeof(PixelMoveJob) + sizeof(PixelMovePayload);
+    if (previewOwners > (std::numeric_limits<std::uint64_t>::max)() - baseMemory)
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto memory = baseMemory + previewOwners;
     auto held = commit ? _session.RasterEditRetirementMemoryBytes() : 1;
     const auto addHeld = [&](std::uint64_t more) noexcept
     {
@@ -503,11 +592,12 @@ HRESULT Application::SubmitPixelMoveJob(PixelMoveRequest request, std::optional<
             throw std::bad_alloc{};
         std::unique_ptr<Job> job =
             std::make_unique<PixelMoveJob>(*this, request, _session.DocumentSerial(), _session.Generation(), limit,
-                                           preparation, preview, commit, retirement);
+                                           preparation, preview, commit, retirement, prepareDisplay);
         JobTicket ticket;
-        const auto result = static_cast<HRESULT>(_jobs.Submit(
-            job, {commit ? JobClass::Commit : JobClass::InteractivePreview, _session.DocumentSerial(), memory},
-            ticket));
+        JobOptions options{commit ? JobClass::Commit : JobClass::InteractivePreview, _session.DocumentSerial(), memory};
+        options.reserveRetainedMemory = prepareDisplay;
+        options.allowMemoryWaiting = !prepareDisplay; // A replacement cannot wait on its own opening/cache.
+        const auto result = static_cast<HRESULT>(_jobs.Submit(job, options, ticket));
         if (SUCCEEDED(result))
         {
             if (commit)

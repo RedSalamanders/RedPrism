@@ -19,7 +19,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$sourcePath = Join-Path $PSScriptRoot 'ConcurrencyAnalysisProbe.cpp'
+$sourcePath = Join-Path $PSScriptRoot 'Tooling.Tests.ConcurrencyAnalysisProbe.cpp'
 $analysisRoot = Join-Path $repo ".build\AnalysisProbe\$Platform\$($Configuration -replace '\s', '')"
 $previousExtensions = [Environment]::GetEnvironmentVariable('Esp.Extensions', 'Process')
 $extensions = @($previousExtensions -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -102,7 +102,7 @@ function Invoke-AnalysisProbe {
         if ($exitCode -eq 0) {
             throw "Negative concurrency SAL probe unexpectedly compiled. Log: $logPath"
         }
-        if ($logText -notmatch "(?m)^.*ConcurrencyAnalysisProbe\.cpp\(\d+(?:,\d+)?\): warning C261\d{2}:.*function 'ConcurrencyAnalysisProbe::Unsafe'.*$") {
+        if ($logText -notmatch "(?m)^.*Tooling\.Tests\.ConcurrencyAnalysisProbe\.cpp\(\d+(?:,\d+)?\): warning C261\d{2}:.*function 'ConcurrencyAnalysisProbe::Unsafe'.*$") {
             throw "Negative concurrency SAL probe failed without a C261xx diagnostic at the intended Unsafe access. Log: $logPath"
         }
         Write-Host "PASS negative concurrency SAL control (expected C261xx; log: $logPath)"

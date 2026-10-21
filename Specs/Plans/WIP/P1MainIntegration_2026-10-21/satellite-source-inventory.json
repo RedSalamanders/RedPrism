@@ -1,0 +1,1014 @@
+[
+  {
+    "branch": "codex/p1-sampler",
+    "tip": "8f5110dfe758a8e6b87a1cb26feea640e35a0de7",
+    "base": "e0360b0c1f19e0263c47741708dd14078bb2f5a3",
+    "paths": [
+      {
+        "path": "Specs/Plans/WIP/README.md",
+        "satelliteBlob": "d69064c691b7bb51c13d9db3f71b46b5637b1a6f",
+        "canonicalBlob": "7d49811d1a321aa5cdf89e46ee0a76e3687bcca2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/WandCompositeReadback_2026-10-04.md",
+        "satelliteBlob": "06bcf1255fac287adda295c0ea71e8d923c2afe4",
+        "canonicalBlob": "06bcf1255fac287adda295c0ea71e8d923c2afe4",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/WandCompositeReadback_2026-10-04.md",
+        "satelliteBlob": "b3caa5c2b3e9772acfab8d02e2cca957d5fd8692",
+        "canonicalBlob": "b3caa5c2b3e9772acfab8d02e2cca957d5fd8692",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/WandCompositeSelectionTests.cpp",
+        "satelliteBlob": "1c6142a8dd8feed4a99455e0f1007bab9f61e20f",
+        "canonicalBlob": "1c6142a8dd8feed4a99455e0f1007bab9f61e20f",
+        "status": "IDENTICAL"
+      }
+    ]
+  },
+  {
+    "branch": "codex/p1-sampler-callers",
+    "tip": "3f49ea231fe538c69eaca0cbba3393438952f515",
+    "base": "e0360b0c1f19e0263c47741708dd14078bb2f5a3",
+    "paths": [
+      {
+        "path": "Common/BrushStroke.cpp",
+        "satelliteBlob": "d65c0619a59306225fa9a8d78be9de05a086d5a7",
+        "canonicalBlob": "4ce740d90ac4ee59fd8066364231ec103791fd3d",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/DeferredRelease.h",
+        "satelliteBlob": "fbab1463657155f33d521db1437d510d4cc6c76d",
+        "canonicalBlob": "fbab1463657155f33d521db1437d510d4cc6c76d",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/Document.cpp",
+        "satelliteBlob": "8ccb4f9edf650eed867fb82ff9abde02bec3a988",
+        "canonicalBlob": "2dba9700c9fb361277d515ef9449654af988cf65",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/Document.h",
+        "satelliteBlob": "015d397f9f60657cf33a6a335e33fb610094f37f",
+        "canonicalBlob": "dcfc5599543a92972df4f1febce4f5a4ba5507e8",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/DocumentHistory.cpp",
+        "satelliteBlob": "3c6434182dbf5d609db1eb12907faab4628baa8f",
+        "canonicalBlob": "188c149a17c2d01aacd445825322b5a6099cd5ca",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/HistoryEntries.h",
+        "satelliteBlob": "9712e59e52aea68cef67f03f715483e7deccf506",
+        "canonicalBlob": "70f0c511e671f1b5f7144a15499a2ffb8b49b9e6",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/Jobs.cpp",
+        "satelliteBlob": "391d10e37a00a8c05356a41bb0bfff497a61cf88",
+        "canonicalBlob": "f44fd4d7ca73e9d4b219a5bdd3aceb7342818cc4",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/Jobs.h",
+        "satelliteBlob": "41042b325b1585a6ed875fad82336cc32778ad48",
+        "canonicalBlob": "3207c58d37f0f458aec9b780f9526a1b0b933327",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/RasterWork.cpp",
+        "satelliteBlob": "aba31c4fa633c1ea4713eba9bd523258bf134562",
+        "canonicalBlob": "d4ae7acbf52b0a9bf665eb5011bb0315ba4c2134",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/SamplerInput.h",
+        "satelliteBlob": "9140b5f41a71b117f89410ee73073001e2bb380b",
+        "canonicalBlob": "9140b5f41a71b117f89410ee73073001e2bb380b",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SamplerIntentInput.h",
+        "satelliteBlob": "58cb6a46e0b3e5f9009ec8814628a59e682a9746",
+        "canonicalBlob": "58cb6a46e0b3e5f9009ec8814628a59e682a9746",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/WarpStroke.cpp",
+        "satelliteBlob": "cecd27c73d74967690a6f5513a46688894c3a55b",
+        "canonicalBlob": "7c74eea26e3e41c726cf2d6e1c71b252bf4217b0",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/WarpStroke.h",
+        "satelliteBlob": "78bc104f37244a15f62acb0486870e73f7f1471f",
+        "canonicalBlob": "6f659c8fcfa1a08919e204940094ac1e3285a657",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Application.cpp",
+        "satelliteBlob": "b174c37ad57894afafd11107698bcf91c77b8f5a",
+        "canonicalBlob": "0ae56b7293b04f4253e11879972622c1348f8c0a",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Application.h",
+        "satelliteBlob": "cfd2cbe9d0e6f22a426b528763d48b08db301f31",
+        "canonicalBlob": "11ebb330336c67d722a87001406a0428b1a02025",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationBenchmark.cpp",
+        "satelliteBlob": "f378a713d3398296736f81ac570ba4c539f9bc06",
+        "canonicalBlob": "fb6cd63063e0fbf0d33b21ca8be5acdae3b79dc4",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationCanvasBrushInput.cpp",
+        "satelliteBlob": "6fb6b22936d3177a595cb264666119dd774e280f",
+        "canonicalBlob": "28d33c06996b5a09416857b45f19e1b75640b000",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationContinuations.cpp",
+        "satelliteBlob": "a3a1963f74a7684a484bdba29abced084d393928",
+        "canonicalBlob": "fff45a38aab5f3a5ac3f45ef385869c8ddf4b7bf",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationGradientJobs.cpp",
+        "satelliteBlob": "66fc0ee4fd5eb06a163a8035f0d78f5f6d1a117e",
+        "canonicalBlob": "e69695d6172eb01be0ff86b58748b2d922474e8e",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationKeyboard.cpp",
+        "satelliteBlob": "1a090090e870fc5712a5b1ee253f7db6350185cf",
+        "canonicalBlob": "2abe4958126ae012e2b4fa38337f20689f3e030b",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationSamplerCallerSelfTest.cpp",
+        "satelliteBlob": "d6518b5bf17da951e9abee384829025094b8a854",
+        "canonicalBlob": "7608e0ec81b5a1923c910ab7faf98f08f2ddfa12",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationSamplerHostSelfTest.cpp",
+        "satelliteBlob": "8d10dccf8329d02046357c5e59317a25e1d5b728",
+        "canonicalBlob": "75e426275ead0390f68d350cb01a41c7b47ad6de",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationSamplerInput.cpp",
+        "satelliteBlob": "dace00192e1d2f13b37d27f869f473c7aa46e57a",
+        "canonicalBlob": "7d1635854f591149463d742f4319ae8fd00fab8c",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationSamplerIntentSelfTest.cpp",
+        "satelliteBlob": "a344159fe70e280a343c084e40b862f1220eaa6b",
+        "canonicalBlob": "a344159fe70e280a343c084e40b862f1220eaa6b",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/ApplicationSamplerJobs.cpp",
+        "satelliteBlob": "38a2632cd0fae2ff4c13ac1608b3dc37430e4ece",
+        "canonicalBlob": "03dc659af40cc17444fe03e7041e4d40dbdbbc18",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationShapeJobs.cpp",
+        "satelliteBlob": "3895292232758110bbadc61cd9195ad9b560f8d5",
+        "canonicalBlob": "2ddfcac7386e6757f3445c479aabe25dc8090607",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationShutdownTests.cpp",
+        "satelliteBlob": "b559d88de8e13a1d35b55627a8f300904fa83a78",
+        "canonicalBlob": "336952d4c69b06327f3be134b03dfbce37c618ba",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ChromeHost.cpp",
+        "satelliteBlob": "9781e3a2db34ae63a8c0ccd2d04b866f034be8be",
+        "canonicalBlob": "363b749710d361bb52800e6311e095f6905b3ba8",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ChromeHost.h",
+        "satelliteBlob": "ecc26bb93df5716eefbd615bf144b0663c9c80e2",
+        "canonicalBlob": "558ede70f47dded5f6ca382de95a59921ad1ece9",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/CommandLine.h",
+        "satelliteBlob": "f1308bfd38d7aa767d0355e6a25cd5aeaa8497ca",
+        "canonicalBlob": "fd8831c6868c4239392b29660aa3353372b9bd89",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ContinuationRequests.h",
+        "satelliteBlob": "388af386ab0cbb12ae7edeffab62a4482227cfd4",
+        "canonicalBlob": "4764b02b1a98325d8f75e22815b5e1d8bdb5b571",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/RedPrism.vcxproj",
+        "satelliteBlob": "da5ce23574e7e9f65f8079ef414ed4e48a29d18b",
+        "canonicalBlob": "4e6ee75a68feb4eccf0b81dc12045e524fb3515e",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/SamplerState.h",
+        "satelliteBlob": "950ad56a40a1496b608e0cecbad63d024a62a772",
+        "canonicalBlob": "950ad56a40a1496b608e0cecbad63d024a62a772",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/UiBenchmark.h",
+        "satelliteBlob": "4b3eca9e3a5d414733e45a538781ee91ce653a00",
+        "canonicalBlob": "3a5bc52623ddbcc82db1928e364e850a3c940007",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Document/Document_Tools.md",
+        "satelliteBlob": "6fc4efffe6a49e89041c6a6e613dbd484b6d2c49",
+        "canonicalBlob": "087c60168495eb4516149a07adc19ffffc012326",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/README.md",
+        "satelliteBlob": "08210a3639cca3027cf0d5ca8ccb6f8d810bba79",
+        "canonicalBlob": "7d49811d1a321aa5cdf89e46ee0a76e3687bcca2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/SamplerReadback_2026-10-04.md",
+        "satelliteBlob": "56afd3224a7ddae678a1e363e040f29aa1073996",
+        "canonicalBlob": "535b51e30e5fdfaa7e36d8ad600a25132f8a3287",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/P1PrivateCandidatePause_2026-10-05.md",
+        "satelliteBlob": "f45e9de17535f72b43c550e70020b4ba844696d8",
+        "canonicalBlob": "f45e9de17535f72b43c550e70020b4ba844696d8",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/BuildProcessTests/UiBenchmarkSmokeTests.ps1",
+        "satelliteBlob": "6c50c408725b77f0b17f3fe8249ef0cbaa588a6a",
+        "canonicalBlob": "630383a024fd76f8bb2c1cff913ce585b11b5d6b",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/DocumentTests.cpp",
+        "satelliteBlob": "24413a67f310275b4ee577b3d6ca68fed5ec581d",
+        "canonicalBlob": "61a6d4a75d7397754f11bb6d20820c7d982de2b4",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/HistoryEntriesTests.cpp",
+        "satelliteBlob": "31faf342ba48508a61ca204fa24d8b5c44fff33d",
+        "canonicalBlob": "31faf342ba48508a61ca204fa24d8b5c44fff33d",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/HistoryRetirementBoundTests.cpp",
+        "satelliteBlob": "3542ae9880e3da39ffbdf6cfc10cb7158b21394d",
+        "canonicalBlob": "49575d844b539e424a6e5477d260fc0341f63034",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/RasterWorkTests.cpp",
+        "satelliteBlob": "93051abc91771de73797b08c4553d08e5ffcc9e9",
+        "canonicalBlob": "78d2bd5182c30cd437a0f6725dbc3c910ead4069",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/RecordOwnershipBoundsTests.cpp",
+        "satelliteBlob": "e79043015bcc5b3040d8cdb27130d17bdd601db5",
+        "canonicalBlob": "8fce902b8639f2c5337d8099e7217a9378d96859",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/WandCompositeSelectionTests.cpp",
+        "satelliteBlob": "1c6142a8dd8feed4a99455e0f1007bab9f61e20f",
+        "canonicalBlob": "1c6142a8dd8feed4a99455e0f1007bab9f61e20f",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/HostTests/DeferredReleaseTests.cpp",
+        "satelliteBlob": "6eb4f114192f89d5383e007c03102482fa7177c4",
+        "canonicalBlob": "6eb4f114192f89d5383e007c03102482fa7177c4",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/HostTests/HostTests.cpp",
+        "satelliteBlob": "9c36057383d22eec8793e5a5e6d2f436114ae655",
+        "canonicalBlob": "7f287c6751fcc866763d61ebe6421bc2000cf8fb",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/HostTests/HostTests.vcxproj",
+        "satelliteBlob": "23c8aac46b39a446c8e3626b2d9ba1362b21fac0",
+        "canonicalBlob": "ed707a4f2b8dba75be8ede0b3b212153470081fa",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/HostTests/JobMemoryTests.cpp",
+        "satelliteBlob": "e011b26bd3e9afa1bad6a9627c6f27ee54a86a3a",
+        "canonicalBlob": "e011b26bd3e9afa1bad6a9627c6f27ee54a86a3a",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/HostTests/KernelCliTests.cpp",
+        "satelliteBlob": "a35f10fe81fd471ad23d460395f842a33e33171c",
+        "canonicalBlob": "8020893dbee9cbe26c29783e13a09b69382648b3",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/HostTests/SamplerIntentInputTests.cpp",
+        "satelliteBlob": "2a392e7b35a6caaa1286d5ba85643fad6601aa70",
+        "canonicalBlob": "2a392e7b35a6caaa1286d5ba85643fad6601aa70",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/HostTests/SamplerIntentInputTests.h",
+        "satelliteBlob": "06d2832363f9c55eb2b6f863f3baf357ef88325d",
+        "canonicalBlob": "06d2832363f9c55eb2b6f863f3baf357ef88325d",
+        "status": "IDENTICAL"
+      }
+    ]
+  },
+  {
+    "branch": "ej/p1-selection-gesture-prerequisites",
+    "tip": "819e604725d272a42f2fa7b9180cfae755e47d3e",
+    "base": "727a8565a92eccf0bc8555fe5dc737980157a462",
+    "paths": [
+      {
+        "path": "Common/Document.h",
+        "satelliteBlob": "78dffd5ce2703bc65c80cb56b7003233a9e92926",
+        "canonicalBlob": "dcfc5599543a92972df4f1febce4f5a4ba5507e8",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/DocumentHistory.cpp",
+        "satelliteBlob": "188c149a17c2d01aacd445825322b5a6099cd5ca",
+        "canonicalBlob": "188c149a17c2d01aacd445825322b5a6099cd5ca",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/HistoryRestoreWork.cpp",
+        "satelliteBlob": "84315000589f50a6c2787b77ea0c2f9acdabf7ba",
+        "canonicalBlob": "84315000589f50a6c2787b77ea0c2f9acdabf7ba",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/Jobs.cpp",
+        "satelliteBlob": "f44fd4d7ca73e9d4b219a5bdd3aceb7342818cc4",
+        "canonicalBlob": "f44fd4d7ca73e9d4b219a5bdd3aceb7342818cc4",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/Jobs.h",
+        "satelliteBlob": "3207c58d37f0f458aec9b780f9526a1b0b933327",
+        "canonicalBlob": "3207c58d37f0f458aec9b780f9526a1b0b933327",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/LassoFinishGeometry.cpp",
+        "satelliteBlob": "054e121818fb4651cc8227d1b783620ed3857fc7",
+        "canonicalBlob": "1a9930233e0a23506368e3e2f936c140c62fb3e2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/LassoFinishGeometry.h",
+        "satelliteBlob": "9345ca29300a600e84e111e70eb8b4de786b089d",
+        "canonicalBlob": "d4ca0d8eedcd646dce3e1c709c0503f13577f9f5",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/LassoIntent.h",
+        "satelliteBlob": "79e73354929128d26e8c1bbf843100bcd1fb37fb",
+        "canonicalBlob": "79e73354929128d26e8c1bbf843100bcd1fb37fb",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/LassoOpeningWork.cpp",
+        "satelliteBlob": "9900d3c02e43bcf2a89111e218a2746d4a8004d3",
+        "canonicalBlob": "d786258fb5c22bd4bfc103b08897ed0b210e9fd4",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Common/LassoOpeningWork.h",
+        "satelliteBlob": "d691286f1a3b9ec564543e29af8b3e4f995b621f",
+        "canonicalBlob": "d691286f1a3b9ec564543e29af8b3e4f995b621f",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionCommandWork.cpp",
+        "satelliteBlob": "147e73d29777ff26405a32e53c85eca8dbd389f2",
+        "canonicalBlob": "147e73d29777ff26405a32e53c85eca8dbd389f2",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionCommandWork.h",
+        "satelliteBlob": "536c49793dcdfd09473462175de69db209c5be37",
+        "canonicalBlob": "536c49793dcdfd09473462175de69db209c5be37",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionMoveOpeningWork.cpp",
+        "satelliteBlob": "6d179bbae9406d2b592e3eac2a37679b0d534089",
+        "canonicalBlob": "6d179bbae9406d2b592e3eac2a37679b0d534089",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionMoveOpeningWork.h",
+        "satelliteBlob": "e0032efff32747f0cafee98bbfe351525c305d3f",
+        "canonicalBlob": "e0032efff32747f0cafee98bbfe351525c305d3f",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionMoveWork.cpp",
+        "satelliteBlob": "54e59d6150449d26c922f4aa4d85e987f3672247",
+        "canonicalBlob": "54e59d6150449d26c922f4aa4d85e987f3672247",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SelectionMoveWork.h",
+        "satelliteBlob": "e1669a92f5f436990078130cead063a1ddd9327f",
+        "canonicalBlob": "e1669a92f5f436990078130cead063a1ddd9327f",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SharedPublicationMemory.cpp",
+        "satelliteBlob": "eadaf83888737e525ed6852fecaf4a96e84d6b48",
+        "canonicalBlob": "eadaf83888737e525ed6852fecaf4a96e84d6b48",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Common/SharedPublicationMemory.h",
+        "satelliteBlob": "48808c270e3e16e3fac277bdb479118b7a2c001c",
+        "canonicalBlob": "48808c270e3e16e3fac277bdb479118b7a2c001c",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/Application.Tests.FileEndSession.cpp",
+        "satelliteBlob": "6943d055e07c5953f2dd62f4048fde8878f9b39b",
+        "canonicalBlob": "80ecb02f55b8e0766d640330254b572227c24c11",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Application.Tests.RectanglePress.cpp",
+        "satelliteBlob": "b374fea55ed6a27b35a80f085857845ba6dd57b7",
+        "canonicalBlob": "b374fea55ed6a27b35a80f085857845ba6dd57b7",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/Application.Tests.ScalarSelectionClosure.cpp",
+        "satelliteBlob": "530df3d2f13806b83c489046eb2f3f493f46a063",
+        "canonicalBlob": "530df3d2f13806b83c489046eb2f3f493f46a063",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/Application.Tests.SelectionPressGesture.cpp",
+        "satelliteBlob": "bb4100224325a67022e181d9677ec0644d05a246",
+        "canonicalBlob": "794a6fdb9f2e52a5bb8692a5e2ca5b85ecea76b8",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Application.Tests.SelectionPressShutdown.cpp",
+        "satelliteBlob": "f05e401c078388dc0b2574819369d1c70f52af0e",
+        "canonicalBlob": "f05e401c078388dc0b2574819369d1c70f52af0e",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/Application.cpp",
+        "satelliteBlob": "97fa2664a519ab1849c89bcd27fc7c0e693f3496",
+        "canonicalBlob": "0ae56b7293b04f4253e11879972622c1348f8c0a",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Application.h",
+        "satelliteBlob": "87e1470637d05309bb6b06562cfb3b2a9e927aba",
+        "canonicalBlob": "11ebb330336c67d722a87001406a0428b1a02025",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationContinuations.cpp",
+        "satelliteBlob": "319ac6ec101370edf1e0fa4773a955c3ecd1101e",
+        "canonicalBlob": "fff45a38aab5f3a5ac3f45ef385869c8ddf4b7bf",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ApplicationSelectionMoveCloseJobs.cpp",
+        "satelliteBlob": "66f4d8335836659a91edf8b93ac8accbd9361c52",
+        "canonicalBlob": "66f4d8335836659a91edf8b93ac8accbd9361c52",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/ApplicationSelectionPressJobs.cpp",
+        "satelliteBlob": "9644df32847b107a5ed607ef0e8fe94edf731c2b",
+        "canonicalBlob": "399f643869cbba22bf3f6e9e208cbf309148d91b",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/ContinuationRequests.h",
+        "satelliteBlob": "028a1041c9b19dcdf4d17ecf488e47711c684d80",
+        "canonicalBlob": "4764b02b1a98325d8f75e22815b5e1d8bdb5b571",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/Main.cpp",
+        "satelliteBlob": "b14894843fc72b785b311ae28d1e722f68a94154",
+        "canonicalBlob": "bca763449c9870b63d9d2c8b63bed74d5c44efbd",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/RedPrism.vcxproj",
+        "satelliteBlob": "84456328466bfef9586bf2ee9fbdd63eb9ed3191",
+        "canonicalBlob": "4e6ee75a68feb4eccf0b81dc12045e524fb3515e",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/SelectionMoveCloseTestGate.h",
+        "satelliteBlob": "13fa8ae8c5526ea3e4ba90b0996337e6a4687a0d",
+        "canonicalBlob": "13fa8ae8c5526ea3e4ba90b0996337e6a4687a0d",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "RedPrism/SelectionOutlineGestureJob.cpp",
+        "satelliteBlob": "f66db153cb2b06706993c9bb920fc5501685224b",
+        "canonicalBlob": "3d443c8ec50f0ea80cde0029dbbb3c3f02e35d03",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/SelectionOutlineGestureJob.h",
+        "satelliteBlob": "d026ca8499305bc6699c833b8188317b598514d3",
+        "canonicalBlob": "7bf2055cd803d10b92eee40934bc4f6f874a2df0",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/SelectionOutlineGestureMemory.h",
+        "satelliteBlob": "4b7ac6c8d55f5a217f058fd60cc95ce95c3b98c6",
+        "canonicalBlob": "04329b4a7a7ed1ebd10f4920655c48327daa18cb",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "RedPrism/SelectionOutlineGestureState.h",
+        "satelliteBlob": "3ccc663d2821c6a02e3af92e1627842bdb1640ac",
+        "canonicalBlob": "ed51c52bf7b6dea40fc188cda4eb57a925aa4bcb",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Core/Core_Architecture.md",
+        "satelliteBlob": "087dcd83a5b3b88ec3bca6b6aef3325917b24b70",
+        "canonicalBlob": "087dcd83a5b3b88ec3bca6b6aef3325917b24b70",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/Core/Core_PerformanceAndResources.md",
+        "satelliteBlob": "8e197a96a011172df3556ea614452f008cc35716",
+        "canonicalBlob": "879ba52df394510ab04101a2e3e7ed86bab2c7dd",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Document/Document_History.md",
+        "satelliteBlob": "3db60f648f88ec20ccf9d0d5f7e28db30d2987df",
+        "canonicalBlob": "0dabd847c657362e316aa7f4ef37024b5e13a29f",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Document/Document_Tools.md",
+        "satelliteBlob": "4420ec14f9dcdaa1d2ca8667506126f070e10b6c",
+        "canonicalBlob": "087c60168495eb4516149a07adc19ffffc012326",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/P1EllipseGestureParent_2026-10-17.md",
+        "satelliteBlob": "413373f2827e1548744f762eb070361386308574",
+        "canonicalBlob": "413373f2827e1548744f762eb070361386308574",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1EllipseSelectionHost_2026-10-17.md",
+        "satelliteBlob": "dacb56ddecf8a7cbb62225c11d03acf6f6722f08",
+        "canonicalBlob": "dacb56ddecf8a7cbb62225c11d03acf6f6722f08",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1LassoDrawingAuthority_2026-10-17.md",
+        "satelliteBlob": "d4004343b060006b12baefa321a5476a18409bcd",
+        "canonicalBlob": "ce5c565e03c570d89b63368105949b1010a932a2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/P1LassoOpeningSettings_2026-10-17.md",
+        "satelliteBlob": "45cb04035a3e25311a87656cefccd652805887c2",
+        "canonicalBlob": "45cb04035a3e25311a87656cefccd652805887c2",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1RectangleGestureParent_2026-10-17.md",
+        "satelliteBlob": "1641600418b4b321d317df35414cfd472891163b",
+        "canonicalBlob": "1641600418b4b321d317df35414cfd472891163b",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1RectangleSelectionHost_2026-10-17.md",
+        "satelliteBlob": "1252d1c928aab6ecd207e2c74cd33e5e03dca2e2",
+        "canonicalBlob": "1252d1c928aab6ecd207e2c74cd33e5e03dca2e2",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SelectionGestureAdmission_2026-10-17.md",
+        "satelliteBlob": "a936228b7b920a45fade0978fde11e02d0d0b376",
+        "canonicalBlob": "a936228b7b920a45fade0978fde11e02d0d0b376",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SelectionGestureNotifications_2026-10-16.md",
+        "satelliteBlob": "c794b8ea0801c94c0bf8737d3f66f68666811330",
+        "canonicalBlob": "c794b8ea0801c94c0bf8737d3f66f68666811330",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SelectionGestureResidency_2026-10-17.md",
+        "satelliteBlob": "c7525645473ac8a1d0302e9fcb34b2457139b659",
+        "canonicalBlob": "c7525645473ac8a1d0302e9fcb34b2457139b659",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SelectionPhysicalPrefix_2026-10-16.md",
+        "satelliteBlob": "55883e7e08657cf915650915e9cb483448bf4a5f",
+        "canonicalBlob": "f38c73c79002fc1a7df48dcc86b6cf3749446e33",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Testing/Testing_Validation.md",
+        "satelliteBlob": "7c481447e12bc06b0ef02d57c74bb105abf1730f",
+        "canonicalBlob": "fe5b75a19ea44dbac82863e1f04a4e526c3dc103",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.ContinuingPublication.cpp",
+        "satelliteBlob": "6d35ee94aaada0c5cd9b4cd5b8e6000d0bacae55",
+        "canonicalBlob": "e339ab4fb29ffbf520e0b92ca0b6c05500b58921",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.ContinuingPublication.h",
+        "satelliteBlob": "619e9d97841ccd72a2473401320bdb59e9f05aae",
+        "canonicalBlob": "619e9d97841ccd72a2473401320bdb59e9f05aae",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.EllipseFinishPlan.cpp",
+        "satelliteBlob": "7bb2eb1ef2b8fcabf1d0a998c38f52b4e6b32fd4",
+        "canonicalBlob": "7bb2eb1ef2b8fcabf1d0a998c38f52b4e6b32fd4",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.EllipseFinishPlan.h",
+        "satelliteBlob": "9e1923b70421eafc2848e7d220dea254b45c8148",
+        "canonicalBlob": "9e1923b70421eafc2848e7d220dea254b45c8148",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.LassoGestureAuthority.cpp",
+        "satelliteBlob": "71eeef6c438372aaf3813e794a61355e3b50b36b",
+        "canonicalBlob": "927522d485069e8f2402a6c955126344827ee05a",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.LassoGestureAuthority.h",
+        "satelliteBlob": "f018e944178180f087dc20ccf8ff48d31fc19aeb",
+        "canonicalBlob": "ed38b5615b3d0841b227573803d6a6e5154bc92d",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.LassoOpeningSettings.cpp",
+        "satelliteBlob": "e09fc853d790d2e7acd6c24304d039992d7d7f43",
+        "canonicalBlob": "e4ed67d3fe9a5649dcf546ebe1559e27719577c0",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.LassoOpeningSettings.h",
+        "satelliteBlob": "a6b2f3fa6ce894620e0985bb313f8e53fc43c8e9",
+        "canonicalBlob": "a6b2f3fa6ce894620e0985bb313f8e53fc43c8e9",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.RectangleFinishPlan.cpp",
+        "satelliteBlob": "edb52b3e085ec6bdf962b0bdcb809ca4dc4aa05e",
+        "canonicalBlob": "edb52b3e085ec6bdf962b0bdcb809ca4dc4aa05e",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.RectangleFinishPlan.h",
+        "satelliteBlob": "44979b8f21e5f28da8cdd743ff82a5589ebf436b",
+        "canonicalBlob": "44979b8f21e5f28da8cdd743ff82a5589ebf436b",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.RectangleGestureParent.cpp",
+        "satelliteBlob": "ed6aa5c05113222f4592391317c5a84a5cb88b24",
+        "canonicalBlob": "e33232c6d7a6092bb2686fddfed91ab261bbdd60",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.RectangleGestureParent.h",
+        "satelliteBlob": "b8d295e20917fb502e43f02ac258644bce5eee9e",
+        "canonicalBlob": "9c1c0719cdd7d9e7345aaa78e846ddff112580df",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionCommandMemory.cpp",
+        "satelliteBlob": "7946f3b2d73897aa6244f5cddaf2fdd08083679a",
+        "canonicalBlob": "7946f3b2d73897aa6244f5cddaf2fdd08083679a",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionCommandMemory.h",
+        "satelliteBlob": "a9b8123326f783094d58336728010c367e002513",
+        "canonicalBlob": "a9b8123326f783094d58336728010c367e002513",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAbort.cpp",
+        "satelliteBlob": "eeece6a2d9362582d4ab03256ee41939fe6023b5",
+        "canonicalBlob": "eeece6a2d9362582d4ab03256ee41939fe6023b5",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAbort.h",
+        "satelliteBlob": "6cc1753b35aa5c02567cbdda895234f8c8a737b6",
+        "canonicalBlob": "6cc1753b35aa5c02567cbdda895234f8c8a737b6",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAdmission.cpp",
+        "satelliteBlob": "7f3476819b4131c8ec0ad2973b0bde677a5b1eee",
+        "canonicalBlob": "7f3476819b4131c8ec0ad2973b0bde677a5b1eee",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAdmission.h",
+        "satelliteBlob": "ecd8119d830c21ee42586c7f5cc92e3f13ca65d6",
+        "canonicalBlob": "ecd8119d830c21ee42586c7f5cc92e3f13ca65d6",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAdmissionAuthority.cpp",
+        "satelliteBlob": "f9879e9ab9102d6afe678e52bba17aae7ccfdab7",
+        "canonicalBlob": "f9879e9ab9102d6afe678e52bba17aae7ccfdab7",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureAdmissionAuthority.h",
+        "satelliteBlob": "e03adbb869d5af9730c105eef91a11fb4f1ad508",
+        "canonicalBlob": "e03adbb869d5af9730c105eef91a11fb4f1ad508",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureParent.cpp",
+        "satelliteBlob": "ee7e39cf459ef4328794bac7bf28c262f65d80d0",
+        "canonicalBlob": "ee7e39cf459ef4328794bac7bf28c262f65d80d0",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureParent.h",
+        "satelliteBlob": "6a54dabb9ed32ef4c3017705f9bf6e6800a4db72",
+        "canonicalBlob": "6a54dabb9ed32ef4c3017705f9bf6e6800a4db72",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureResidency.cpp",
+        "satelliteBlob": "101766d03758fe0f13790bb853b7954d9c9dd301",
+        "canonicalBlob": "101766d03758fe0f13790bb853b7954d9c9dd301",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionGestureResidency.h",
+        "satelliteBlob": "42d18d2cdb7b0967bb9462060c9837e164b1adec",
+        "canonicalBlob": "42d18d2cdb7b0967bb9462060c9837e164b1adec",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionHistoryBoundLifetime.cpp",
+        "satelliteBlob": "a0c79f4ceb699bfb1194c08b187c5cede5389a05",
+        "canonicalBlob": "a0c79f4ceb699bfb1194c08b187c5cede5389a05",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionHistoryBoundLifetime.h",
+        "satelliteBlob": "c2ff62a69bfa6e2f1ab395939c9a13e51f660d04",
+        "canonicalBlob": "c2ff62a69bfa6e2f1ab395939c9a13e51f660d04",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionHistoryOwnership.cpp",
+        "satelliteBlob": "fcafae24ea45a062aef04550c67c981376a5b3ae",
+        "canonicalBlob": "fcafae24ea45a062aef04550c67c981376a5b3ae",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionHistoryOwnership.h",
+        "satelliteBlob": "60646ff621e5f4f32875b9b7c7eb217de807986e",
+        "canonicalBlob": "60646ff621e5f4f32875b9b7c7eb217de807986e",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionPhysicalPrefix.cpp",
+        "satelliteBlob": "a41adac0bfa54f29488b4139a551f1e50a39d843",
+        "canonicalBlob": "a41adac0bfa54f29488b4139a551f1e50a39d843",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/Document.Tests.SelectionPhysicalPrefix.h",
+        "satelliteBlob": "0bdb36a33f1d46abddafcdbf112f217319d378df",
+        "canonicalBlob": "0bdb36a33f1d46abddafcdbf112f217319d378df",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Tests/DocumentTests/DocumentTests.cpp",
+        "satelliteBlob": "a2230e6ab025a717c14245f3813761c10e1ec036",
+        "canonicalBlob": "61a6d4a75d7397754f11bb6d20820c7d982de2b4",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Tests/DocumentTests/DocumentTests.vcxproj",
+        "satelliteBlob": "06c2c55fbfbda77c06afd4dc8c6e964429a38f7d",
+        "canonicalBlob": "3149cbc8385ca07d965bb6f6b5973189c3f915a2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      }
+    ]
+  },
+  {
+    "branch": "codex/ui-never-blocks-paused-2026-10-03",
+    "tip": "97dd25b70e83f81c339a4b4e7e7b7589268f2510",
+    "base": "024380a1d00092a5a17462a963169b11e7073ba8",
+    "paths": [
+      {
+        "path": "Specs/Core/Core_PerformanceAndResources.md",
+        "satelliteBlob": "83f032826ae8242796e18615d2871765b774ab05",
+        "canonicalBlob": "879ba52df394510ab04101a2e3e7ed86bab2c7dd",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Document/Document_History.md",
+        "satelliteBlob": "b9d15e149624f8ce9bcb5b7bda45711d50024ae1",
+        "canonicalBlob": "0dabd847c657362e316aa7f4ef37024b5e13a29f",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/BoundedRasterUploads_2026-10-05.md",
+        "satelliteBlob": "01a80216c2fd94b006a05cff6bf108906c96e932",
+        "canonicalBlob": "f814658d19b61d16cf997817645a18d4deba3b07",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/DeferredColorDisplay_2026-10-04.md",
+        "satelliteBlob": "10df2f7da6bea9534ae397ac38c40139ac7cb84f",
+        "canonicalBlob": "5dd0d9562eb5a4bd77653b6e69189643331f4460",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/HistoryStorageAccounting_2026-09-30.md",
+        "satelliteBlob": "93d0cfc5ba60c6b829ec19c97a96b5992a194444",
+        "canonicalBlob": "e4c0343dafeb0cd5fc5a460e485c72ec1325aa6c",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/README.md",
+        "satelliteBlob": "54fae567fd3683fc2793a64826ed9fe22a24d53c",
+        "canonicalBlob": "7d49811d1a321aa5cdf89e46ee0a76e3687bcca2",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/Plans/WIP/UiNeverBlocks_2026-09-22.md",
+        "satelliteBlob": "bcc281c092e23caf2e5b1225997e42dcabb86e8b",
+        "canonicalBlob": "6ed4005deeca796d2389fce71c0399f3c27d54df",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/DeferredColorDisplay_2026-10-04.md",
+        "satelliteBlob": "aecf7d25f6bfef647eb23a8423a4a5223b4f5358",
+        "canonicalBlob": "5a0745f3972784493f03cc4c220e2a7c88355baa",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/HistoryStorageIndexCandidate_2026-10-05.md",
+        "satelliteBlob": "73328ea535a64fceceaca7f17fa1b30b62ea2baa",
+        "canonicalBlob": "73328ea535a64fceceaca7f17fa1b30b62ea2baa",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1GpuCreationAndAdmission_2026-10-05.md",
+        "satelliteBlob": "8e84ce55bb3a0145aa1826f962be871b7fe4ba52",
+        "canonicalBlob": "8e84ce55bb3a0145aa1826f962be871b7fe4ba52",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1GpuMipChain_2026-10-05.md",
+        "satelliteBlob": "4c4d158481aadb23d89e6fa9c39ed0c2f1ffb535",
+        "canonicalBlob": "4c4d158481aadb23d89e6fa9c39ed0c2f1ffb535",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1ManifestWandEscape_2026-10-05.md",
+        "satelliteBlob": "37f3cec29781c1a2a20194a3c592e108cf22d087",
+        "canonicalBlob": "37f3cec29781c1a2a20194a3c592e108cf22d087",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1PreparedLayerRowsEdit_2026-10-06.md",
+        "satelliteBlob": "5c4701a82eb75d3a4b08a697989bb7bae9296af9",
+        "canonicalBlob": "5c4701a82eb75d3a4b08a697989bb7bae9296af9",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1PreparedLayerRows_2026-10-05.md",
+        "satelliteBlob": "adb64aa60595afaf13112ed914e6423783c1340f",
+        "canonicalBlob": "adb64aa60595afaf13112ed914e6423783c1340f",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1PrivateCandidatePause_2026-10-05.md",
+        "satelliteBlob": "f45e9de17535f72b43c550e70020b4ba844696d8",
+        "canonicalBlob": "f45e9de17535f72b43c550e70020b4ba844696d8",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1ResidencyCore_2026-10-05.md",
+        "satelliteBlob": "adefbbdae30ce2c07ec20e52b828aa3065cf55c0",
+        "canonicalBlob": "adefbbdae30ce2c07ec20e52b828aa3065cf55c0",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1ResidencyPlanAndStages_2026-10-05.md",
+        "satelliteBlob": "e145ef0ea282861e1db6dfe12eeac6cc39a364da",
+        "canonicalBlob": "e145ef0ea282861e1db6dfe12eeac6cc39a364da",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1ResourceStageMeasurements_2026-10-05.md",
+        "satelliteBlob": "f20b6a604b4c66de0cb81cc05fe282fe957c4882",
+        "canonicalBlob": "f20b6a604b4c66de0cb81cc05fe282fe957c4882",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SamplerMeasurements_2026-10-05.md",
+        "satelliteBlob": "c6f0126768b2417986d2d585362bac5b4fcafc3c",
+        "canonicalBlob": "c6f0126768b2417986d2d585362bac5b4fcafc3c",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1SharedRowLifetime_2026-10-06.md",
+        "satelliteBlob": "e70dde38c14ef1de679a83bb2eb3e1a3dfdbd81f",
+        "canonicalBlob": "f9b63d1c8ad76e6c9a8da79a8b7d883939889eaf",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "Specs/TestRuns/P1UploadCpuPreparation_2026-10-05.md",
+        "satelliteBlob": "a424507680158e653dd8cb73701e346309b35d02",
+        "canonicalBlob": "a424507680158e653dd8cb73701e346309b35d02",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/P1UploadLifetime_2026-10-05.md",
+        "satelliteBlob": "9cd0f307dd71ca4a8e394485511e9941ee6e4259",
+        "canonicalBlob": "9cd0f307dd71ca4a8e394485511e9941ee6e4259",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/TestRuns/UiNeverBlocksPause_2026-10-05.md",
+        "satelliteBlob": "f5477cab308c16a531679f5716c9527d3c9e3c7c",
+        "canonicalBlob": "f5477cab308c16a531679f5716c9527d3c9e3c7c",
+        "status": "IDENTICAL"
+      },
+      {
+        "path": "Specs/Testing/Testing_Validation.md",
+        "satelliteBlob": "e3f52e07885bd38b4f91a25dd9c5004593fd4b53",
+        "canonicalBlob": "fe5b75a19ea44dbac82863e1f04a4e526c3dc103",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      },
+      {
+        "path": "docs/README.md",
+        "satelliteBlob": "c16f35828f9517b4696162466603e8faa8e8f507",
+        "canonicalBlob": "0ded2ffde1a6463b2cce55e5cf1edf7599d44d03",
+        "status": "DIVERGENT_RETAIN_CURRENT"
+      }
+    ]
+  }
+]

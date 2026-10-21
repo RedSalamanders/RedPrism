@@ -1,6 +1,30 @@
 # Asynchronous file processing (P1.7)
 
+## Current delivery checklist — 2026-10-17
+
+- [x] Qualify and adopt real external clipboard contention: four native Copy/Paste release/exhaust cases, all 53 new facts and the complete 148-stage predecessor roster pass exact Release and real ASan (342 App TUs), including actual UAF detection. Saved clipboard, original ticket/history/reservation and joined holder/worker lifetime are checked; retained reader refusal is corrected without runtime replay. [Evidence](../../TestRuns/P1ClipboardRealContention_2026-10-17.md).
+- [ ] Finish remaining F5/F6 phase, lifecycle, ordinary activation and measured G1 gates; qualify all full native profiles on the latest adopted source. Native ARM64 execution remains unavailable.
+
 ## Implementation checklist
+
+Latest native file checkpoint (2026-10-16): the adopted long-path source is included in qualified native
+`67a77dd`: Release analysis r1034, full x64 Release r1035/Debug r1036/real ASan r1041 and ARM64
+Debug r1042/Release r1043/instrumented ASan r1044 cross-builds pass. Main independently reviews all archives,
+actual compiler/profile/ISA and executable/PDB identities. No native ARM64 execution is claimed.
+[Current x64 evidence](../../TestRuns/P1CombinedStartupIoLassoX64_2026-10-16.md);
+[ARM64 matrix](../../TestRuns/P1CombinedStartupIoLassoArm64Matrix_2026-10-16.md).
+All 184 native path-read controls remain present in each x64 profile; production header reads already yield
+the compute lane to the shared event-wait route. Complete phase bounds, ordinary activation, broader F6 and
+measured G1 remain open. The OS-selected predecessor root and explicit-Z new fixtures remain distinct.
+
+Earlier private file checkpoint (2026-10-14): private R7 real ASan verifies all 1,823 predecessors plus 130 long-path
+facts in each ordinary C:/explicit Z: process. Original nine failures are fixed with predicates intact; Main
+verifies source/dependency/product bookends and a 3,036-file archive. Ten reviewed code/test/project paths are
+selectively adopted. Native analysis/profiles and complete F6/G1 remain open. The old fixtures still use their
+OS-selected C: temp fallback; only the new fixture chooses the 311-unit Z: TMP explicitly.
+[Scoped evidence](../../TestRuns/P1LongPathIoRepair_2026-10-14.md).
+
+Current step (2026-10-10): cancellation/display repair `c9fd72d` is committed/pushed after exact full x64 Debug r731, Release r732, real ASan r733, analysis r734 and all three ARM64 r89 cross-builds on the D981/1,136-input source. Current-source cost originals r735 and r741 stop before timings: Windows reports the display off (`presentation-unavailable`, visible1/displayOn0). Both failures and immutable archives remain; the temporary real display-power request is restored. The user now confirms the display is on and unlocked; fresh actual presentation measurements are due after the build matrix. The original display-off attempts remain failures. Baseline2.183ms Apply, G1 and ordinary activation remain open. The private utility graph/admission component and original-stream epoch restart now pass authenticated x64 full Debug r759, Release r760, real ASan r761 and Release analysis r762 on DAB609/1,144 inputs ([utility record](../../TestRuns/P1UtilityRecording_2026-10-10.md)); real utility caller integration and production admission/retirement remain due. ARM64 r90 Debug/Release/real ASan cross-builds also pass with all 15 EXE/PDB pairs and five sanitizer instrumentation controls independently authenticated; native ARM64 runtime remains unavailable. Ordinary activation=false, G1=false and P1 Done=false. [Current record](../../TestRuns/P1CancellationCheck_2026-10-10.md). All nine P1 delivery areas remain open.
 
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.
@@ -13,7 +37,7 @@
     - [x] F3b.3 — Wire both graphs under the selected host ordinal, preserve per-project batch continuation and formatted notices outside completion, qualify real cancellation/staleness/younger-input/device-independent lifetime and record open/import UI measurements.
       - [x] F3b.3a — Project-open probe/decode jobs, validated replacement continuation, 36 phase/nine batch gates, allocation floors and 22-row smoke pass all configurations. Hardware 4K/45 MP and WARP 4K measurements recorded; apply/frame overruns leave G1 open ([evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md)).
       - [x] F3b.3b — Image-import probe/preparation/apply, 130 host cases and capped opened streams pass all configurations and 24-row hardware 4K/45 MP/100 MP and WARP 4K runs ([evidence](../../TestRuns/ImageImportJobs_2026-10-01.md)). Existing-layer apply reaches 11.403 ms at 45 MP; P1/G1 remain open.
-- [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision.
+- [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision. The utility recording/admission component passes x64 Debug759/Release760/real ASan761/analysis762 on the 1,144-input DAB609 freeze; these component controls do not qualify real callers, production admission/retirement or activation. ARM64 r90 Debug/Release/real ASan cross-builds pass; native ARM64 runtime remains unavailable.
   - [x] F4a — Cancellable asset encoding/staged writes/libzip close preserve the external publication boundary; full configuration matrix passes.
   - [x] F4a.1 — Direct bounded PNG/JPEG file streams and staged ZIP asset-file sources remove whole-archive encoded-buffer retention. Three serial Release runs per mode at 4K/45 MP and the full matrix pass.
   - [ ] F4b — Admit and run owned project/save/export graphs with exact saved-revision and destination ordering tests.
@@ -95,6 +119,10 @@
   - [x] F6a — Directory rotation/rollback/cleanup faults, backup-only retry recovery and truthful publication/errors; 24 injected/real filesystem checks and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Cleanup allocates its bounded scratch before staging and never follows reparse targets. Intermittent real save cause, flush/close faults and overall F6 remain open.
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
+    - [x] Recover the two original failed logs and independently verify exact readback hashes
+      ([evidence](../../TestRuns/P1HistoricalSaveFailures_2026-10-16.md)). Neither contains the native error
+      needed to establish cause. The separate outline-fixture/v7 failures and error-5 observations are not
+      substituted for them; the parent cause investigation remains open.
 
     Selection r2 qualification passes Debug/Release, then ASan fails one `destination-retry.baseline` initial
     fixture save. Its complete 423-input/image/log snapshot is preserved under
@@ -158,6 +186,56 @@ replace waits with the shared event pool before F6/overall P1.7 closes; no UI-th
 WIC band checkpoints cannot cancel a codec COM call already in flight. Neither a stop request nor a returned
 partial decoder result authorizes publishing pixels. Record measured stop-to-return distributions separately
 from structural band bounds. Preserve imported orientation and ICC policy and PNG/JPEG numeric expectations.
+
+### F6 shared native-read continuation — implementation sequence (2026-10-09)
+
+Implementation status (2026-10-09): The shared native-read checkpoint is qualified on freeze `1125320A...2FA421E` (1,093 inputs): focused Debug556/Host557/actual WARP App558, full x64 Release560/Debug561/real-ASan562, Release analysis559 and ARM64 r63 Debug/Release/ASan cross-builds. Main verifies exact archived copies/receipts, 44 primitive/26 transfer/144 host controls, 121 stages and all predecessors. Both ASan stress executions and the separately preserved actual probe pass. Preserved checker refusals change no native expectations. Skills15/format964/diff-check pass; native ARM64 runtime is unavailable. Identity exhaustion, complete phase peaks, writer/session-end and measured G1 remain open. [Evidence](../../TestRuns/P1NativePathRead_2026-10-09.md).
+
+Every read, including immediate completion and cancellation before issue, consumes its original registered callback before event reuse. Readiness cannot resume a running issue worker; Await arms only after joined return. A stop request invokes actual worker CancelIoEx without faking hEvent. GetOverlappedResult acknowledges before reuse/free, with reset/recheck for premature readiness. Shutdown joins readiness callbacks, detaches borrowed wrappers while retaining the event, and closes it after final worker native acknowledgement and scheduler Close. The ninth route preserves fair rotation and explicit nine-source/tenth-refusal controls.
+
+The fixed native inventories are eight primitive cases/44 controls, 26 transfer controls and nine hidden-host scenarios plus three startup prefixes/144 controls. The early-ready case holds the actual issue worker until a readiness callback occurs before Await arms; only subsequent actual native acknowledgement can satisfy its controls. Other cases cover three read cycles, premature signal, cancel, replacement, late cancel, shutdown and premature-signal cancellation/shutdown. A separate job on the same one-worker pool supplies the pending read bytes. The independently reviewed output checker passes fourteen explicitly synthetic controls; those are checker tests only. All existing host classification and predecessor gates remain required. Unbudgeted fabricated path roots refuse before capture; the owner retains original receipt/input budget while its unchanged vector swaps into and back from the private worker payload. Large input refusal retirement, complete phase bounds, OS stop-to-return, writer durability/session-end faults and F5d/G1 remain open.
+
+
+- [x] Create one stable Application-owned header-read event/source at processing startup. Register its wait
+  with JobScheduler outside callbacks; RegisterEventWait/RemoveEventWait are startup/teardown APIs and cannot
+  be called from a job completion. The callback only publishes readiness and wakes the owner. Rearm the
+  existing registration for the exact suspended original classification job; never create a new job per file.
+- [x] Split worker attribute/open/issue from pending completion. A pending ReadFile yields its compute lane.
+  Keep file, four-byte buffer, OVERLAPPED, path scratch and exact original ticket/ordinal alive. On readiness,
+  resume the original stage and use GetOverlappedResult without waiting. Incomplete/old readiness yields back
+  to the same event route. Synchronous attribute/open calls remain private worker calls with measured limits.
+- [x] Preserve cancellation authority on skipped worker stages: the retirement worker requests CancelIoEx
+  for the exact operation; a stop request never acknowledges it. Pending cancellation keeps the same event,
+  inputs and reservation until actual native completion, then retires the whole private payload on a worker.
+  Close joins event callbacks before workers. Its final worker cleanup must cancel/acknowledge any remaining
+  native operation before releasing its file/event/buffer; report uninterruptible OS stop-to-return separately.
+- [x] Remove the current owner path-vector copy before Submit. HostInputBudget caps aggregate input storage
+  at 1 MiB. Admit complete cached path-storage/scratch/metadata bounds first, allocate the private payload on
+  the original worker, then transfer the selected request's vector in constant time at the exact joined owner
+  callback. Keep the host receipt/reservation on the owner; its owner-affine budget ticket must never be freed
+  by the worker. Restore paths to that same selected request after successful classification so its existing
+  ordered project/image continuation works. Failure/Close retains any transferred paths through worker release.
+- [x] Add real pending-operation fixtures (an admitted test file source may supply a real overlapped pipe),
+  plus immediate file success/short header/API refusal, stop-before-issue, pending cancel, already-completed
+  cancel, late signal, repeated rearm, replacement, original FIFO, hidden shutdown and joined Close. Require
+  actual GetOverlappedResult acknowledgement; synthetic readiness is never completion proof. Keep existing
+  .prism-extension/directory/ZIP-signature/empty-host-path ordering semantics and independent literal bytes.
+- [x] Qualify this 1,093-input source checkpoint in all full x64 profiles, Release analysis and all three ARM64 cross-builds. Actual results and independent inventories are recorded above; this does not close the remaining phase/stop-to-return/G1 requirements or the later exhaustion repair.
+- [ ] Qualify every current-source profile, exact native resource/retirement bounds and the F6 stop-to-return
+  measurements before activation/closure. The existing blocking helper may remain a reference test surface;
+  ordinary classification must use the shared continuation. Writer flush/close/rename/cleanup failures and
+  F5d/G1 remain separate open gates, including the preserved unexplained exploded-save failures.
+- [x] Close the bounded native-read identity-exhaustion defect without losing a pending OS owner. Only a new
+  operation consumes an identity and may refuse before reset/issue; incomplete same-ticket rearm retains the
+  nonzero final identity and leaves the event unreset. Twenty Host and 34 actual Application controls prove
+  last-identity premature readiness, real incomplete/native acknowledgements, same-pool progress, next-issue
+  refusal, original error/younger continuation, complete retirement, initial exhaustion and zero/foreign-ticket
+  refusal. Full Release572, Debug573, real ASan574, analysis571 and all ARM64 r66 cross-builds qualify the repaired
+  1,096-input source; exact archives, products, sanitizer probe and predecessor inventories authenticate.
+  The step is committed/pushed as `205ce70`. Earlier analysis/ISA failures and verifier/launcher refusals remain
+  preserved in [the identity record](../../TestRuns/P1NativeReadIdentity_2026-10-09.md). This closes the counter
+  defect only; complete F6 phase bounds, measured stop-to-return, writer faults and later source qualification
+  remain open.
 
 ## Preparation and application
 

@@ -1,9 +1,10 @@
+# Dispatch-form controls isolate the recognizers; the default image gate retains PDB-marked proof in IsaMarkedTableTests.ps1.
 [CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableTests.ps1')
+. (Join-Path $repo 'Tests/BuildProcessTests/IsaInlineTableFixtures.ps1')
 
 # These fixtures are literal parser controls. They are never executed as native code.
 # The seed supplies the same small PE32+ / RSDS image used by the neighboring controls;
@@ -369,7 +370,7 @@ function Add-R8Companion($Case,[string]$Fault,[int]$Maximum) {
 function Invoke-HoistedDirectControl([string]$Name, [string]$Fault, [int]$Maximum, [bool]$ExpectedPass, [int]$ExpectedInline = -1, [int]$ExpectedVectors = -1) {
     $case = New-HoistedDirectCase $Name $Fault $Maximum
     $result = [RedPrismBuild.IsaScanner]::Scan($case.Binary, $case.Metadata, $case.Symbols, $case.Disassembly,
-        [string[]]@(), [string[]]@(), [string[]]@())
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and $result.Violations.Count -ne 0) { throw "${Name}: unexpected ISA rejection: $($result.Violations -join '; ')" }
     if (-not $ExpectedPass -and $result.Violations.Count -eq 0) { throw "${Name}: malformed synthetic fixture was accepted." }
     if ($ExpectedInline -ge 0 -and $result.InlineTableVectorData -ne $ExpectedInline) { throw "${Name}: expected $ExpectedInline inline data rows, got $($result.InlineTableVectorData)." }

@@ -235,7 +235,8 @@ Raster ContiguousRasterForWork(const Raster& image, CancelToken cancellation)
                : Raster{};
 }
 
-Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill, CancelToken cancellation)
+Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill, CancelToken cancellation,
+                         const std::shared_ptr<const void>& outputLifetime)
 {
     if (!image.HasStorage() || region.width <= 0 || region.height <= 0 || region.width > kMaxCanvasSide ||
         region.height > kMaxCanvasSide || cancellation.IsCancelled())
@@ -249,7 +250,7 @@ Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outs
     {
         return {};
     }
-    return Raster::Adopt(region.width, region.height, image.Format(), std::move(bytes));
+    return Raster::Adopt(region.width, region.height, image.Format(), std::move(bytes), outputLifetime);
 }
 
 Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation)
@@ -299,7 +300,8 @@ Raster StretchedRasterForWork(const Raster& source, int width, int height, Cance
     return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(width, height, source.Format(), std::move(output));
 }
 
-Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken cancellation)
+Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken cancellation,
+                              const std::shared_ptr<const void>& outputLifetime)
 {
     if (cancellation.IsCancelled() || !source.HasStorage() || maxSide < 1)
     {
@@ -310,6 +312,15 @@ Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken can
     const int largest = std::max(width, height);
     if (largest <= maxSide)
     {
+        // Semantic mask thumbnails are eager dense pixels even when no downsampling is necessary. Copy
+        // privately; later MaskEdgeBackground reads cannot change the shared mask's resident history charge.
+        if (source.Format() == RasterFormat::Gray8 && !source.IsMaterialized())
+        {
+            auto pixels = CopyRasterPixelsForWork(source, cancellation);
+            if (!pixels || cancellation.IsCancelled())
+                return {};
+            return Raster::Adopt(width, height, source.Format(), std::move(pixels), outputLifetime);
+        }
         return cancellation.IsCancelled() ? Raster{} : source;
     }
 
@@ -377,11 +388,12 @@ Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken can
     {
         return {};
     }
-    return Raster::Adopt(thumbWidth, thumbHeight, source.Format(), std::move(output));
+    return Raster::Adopt(thumbWidth, thumbHeight, source.Format(), std::move(output), outputLifetime);
 }
 
 Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width, int height,
-                          std::uint8_t outside, CancelToken cancellation)
+                          std::uint8_t outside, CancelToken cancellation,
+                          const std::shared_ptr<const void>& outputLifetime)
 {
     if (cancellation.IsCancelled() || !mask.HasStorage() || oldWidth < 1 || oldHeight < 1 || width < 1 || height < 1 ||
         oldWidth > kMaxCanvasSide || oldHeight > kMaxCanvasSide || width > kMaxCanvasSide || height > kMaxCanvasSide)
@@ -473,5 +485,5 @@ Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x
     {
         return {};
     }
-    return Raster::Adopt(width, height, mask.Format(), std::move(output));
+    return Raster::Adopt(width, height, mask.Format(), std::move(output), outputLifetime);
 }

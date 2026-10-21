@@ -1,3 +1,4 @@
+#include "Application.Tests.RowPublication.h"
 #include "Application.h"
 #include "CommandLine.h"
 #include "CrashDumps.h"
@@ -261,13 +262,191 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     if (parsed.selfTest)
     {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineGpuHostSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionOutlineGpuHostSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneLassoDraftDisplaySelfTest\n");
+        if (const int failed = Application::RunStandaloneLassoDraftDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneDisplayOpeningRetirementSelfTest\n");
+        if (const int failed = Application::RunStandaloneDisplayOpeningRetirementSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCtrlPixelPressSelfTest\n");
+        if (const int failed = Application::RunStandaloneCtrlPixelPressSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSizeFinalPublicationSelfTest\n");
+        if (const int failed = Application::RunStandaloneSizeFinalPublicationSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionPressGestureSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionPressGestureSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneRectanglePressSelfTest\n");
+        if (const int failed = Application::RunStandaloneRectanglePressSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneEllipsePressSelfTest\n");
+        if (const int failed = Application::RunStandaloneEllipsePressSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneClipboardContentionSelfTest\n");
+        if (const int failed = Application::RunStandaloneClipboardContentionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneMarqueeModesSelfTest\n");
+        if (const int failed = Application::RunStandaloneMarqueeModesSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneFreehandPressSelfTest\n");
+        if (const int failed = Application::RunStandaloneFreehandPressSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionCursorSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionCursorSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionPressShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionPressShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneLassoHostInputSelfTest\n");
+        if (const int failed = Application::RunStandaloneLassoHostInputSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineParitySelfTest\n");
+        const int parity = Application::RunStandaloneSelectionOutlineParitySelfTest(instance);
+        if (parity != 0)
+            return parity;
+        std::printf("BEGIN self-test.RunStandaloneSelectionOutlineOwnerCapacitySelfTest\n");
+        if (const int failed = Application::RunStandaloneSelectionOutlineOwnerCapacitySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneClipboardMergedShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneClipboardMergedShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneMergeReadbackSelfTest\n");
+        if (const int failed = Application::RunStandaloneMergeReadbackSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCanvasLifetimeShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneCanvasLifetimeShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCloneReadbackShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneCloneReadbackShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCloneLayerSourceShutdownSelfTest\n");
+        if (const int failed = Application::RunStandaloneCloneLayerSourceShutdownSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsGroupSelectionSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsGroupSelectionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsBoundarySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsBoundarySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsInteractionSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsInteractionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsRetrySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsRetrySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsEditSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsEditSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsIdentitySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsIdentitySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsAccessibilitySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsAccessibilitySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsCapacitySelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsCapacitySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePreparedLayerRowsNotificationSelfTest\n");
+        if (const int failed = Application::RunStandalonePreparedLayerRowsNotificationSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneResponsiveStartupSelfTest\n");
+        if (const int failed = Application::RunStandaloneResponsiveStartupSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneResponsiveSelectionStartupSelfTest\n");
+        if (const int failed = Application::RunStandaloneResponsiveSelectionStartupSelfTest(instance); failed != 0)
+            return failed;
+        // This fixture owns a scheduler/TLS retirement sink and must precede the main Application owner.
+        std::printf("BEGIN self-test.RunStandalonePanelWandFollowthroughSelfTest\n");
+        if (const int failed = Application::RunStandalonePanelWandFollowthroughSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneScalarSelectionClosureSelfTest\n");
+        if (const int failed = Application::RunStandaloneScalarSelectionClosureSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneHistoryResidencyStartupSelfTest\n");
+        if (const int failed = Application::RunStandaloneHistoryResidencyStartupSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePathReadContinuationSelfTest\n");
+        if (const int failed = Application::RunStandalonePathReadContinuationSelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneProcessingSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneLeaseShutdownSelfTest(instance); failed != 0)
             return failed;
         if (const int failed = Application::RunStandaloneLiveShutdownSelfTest(instance); failed != 0)
             return failed;
+        std::printf("BEGIN self-test.RunStandalonePendingDisplaySelfTest\n");
+        if (const int failed = Application::RunStandalonePendingDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePendingRasterDisplaySelfTest\n");
+        if (const int failed = Application::RunStandalonePendingRasterDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePendingDisplayTransportSelfTest\n");
+        if (const int failed = Application::RunStandalonePendingDisplayTransportSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneCommittedDisplaySelfTest\n");
+        if (const int failed = Application::RunStandaloneCommittedDisplaySelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneUiCancellationCanvasSelfTest\n");
+        if (const int failed = Application::RunStandaloneUiCancellationCanvasSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunPreparedRowPublicationTests\n");
+        if (const int failed = RunPreparedRowPublicationTests(); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeFinishSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeFinishSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneWarpFinishSelfTest\n");
+        if (const int failed = Application::RunStandaloneWarpFinishSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveHostSelfTest\n");
+        if (const int failed = Application::RunWarpLiveHostSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveFaultSelfTest\n");
+        if (const int failed = Application::RunWarpLiveFaultSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveInputSelfTest\n");
+        if (const int failed = Application::RunWarpLiveInputSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveTargetsSelfTest\n");
+        if (const int failed = Application::RunWarpLiveTargetsSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveAdmissionSelfTest\n");
+        if (const int failed = Application::RunWarpLiveAdmissionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunWarpLiveStaleSelfTest\n");
+        if (const int failed = Application::RunWarpLiveStaleSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleFaultSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleFaultSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleInputSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleInputSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleAdmissionSelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleAdmissionSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandaloneStrokeSampleParitySelfTest\n");
+        if (const int failed = Application::RunStandaloneStrokeSampleParitySelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
+            return failed;
+        // These fixtures own processing and an HWND. Run before the main owner installs its TLS sink
+        // and registers the shared window class; each fixture joins before the next owner starts.
+        std::printf("BEGIN self-test.RunSelectionOutlineTimingSelfTest\n");
+        if (const int failed = Application::RunSelectionOutlineTimingSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunOpacityClosureGuardSelfTest\n");
+        if (const int failed = Application::RunOpacityClosureGuardSelfTest(instance); failed != 0)
+            return failed;
+        std::printf("BEGIN self-test.RunStandalonePolygonalPressSelfTest\n");
+        if (const int failed = Application::RunStandalonePolygonalPressSelfTest(instance); failed != 0)
             return failed;
     }
     const std::unique_ptr<Application> application{new (std::nothrow) Application(

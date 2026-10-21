@@ -14,7 +14,24 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Package manager: vcpkg (`vcpkg.json` + `vcpkg-tool.json`)
 - Graphics: Direct3D 11, DXGI, DirectWrite, DxUi (from C2). No GDI text. No chrome HWND over the swap chain.
 
+## Drive-root output policy
+
+Do not create scratch, caches, evidence, copied checkouts, or other output directories directly at a drive root.
+Use repository-local generated outputs or an existing approved workspace. The only permitted new drive-root
+output name is `<Project>.Perf` (for example `RedPrism.Perf`, `RedSalamander.Perf`, or another project's own
+name), and the user must explicitly authorize the exact path before its first creation or initialization.
+A matching name, environment variable, low disk space, or authorization for another drive/project is not
+authorization. Keep outputs beneath the approved root; do not invent sibling root folders. Preserve any
+runner-specific ownership markers and authorization. Historical cleanup inventories and preserves useful
+evidence/recovery data, checks process use, repairs live junction/worktree references, and verifies preservation
+before removal. Never follow junctions during cleanup or leave compatibility junctions at forbidden old roots.
+
 ## Canonical guidance
+
+Future qualification archives use `archive-qualification.ps1` and
+[`Specs/Build/Build_QualificationArchives.md`](Specs/Build/Build_QualificationArchives.md), rather than per-run
+payload copy loops. Retain independent run evidence and every existing source/freshness/profile/stage/runtime
+check. Shared payloads remain read-only; edit only independent copies. Preserve frozen historical helpers.
 
 - This file is the repository-wide instruction source.
 - `Specs/README.md` defines specification authority and the plan lifecycle.
@@ -24,12 +41,6 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Generated products belong under `.build/`; never commit them.
 - Preserve the documented blend math, project schema and independent numeric goldens in the owning specs.
 
-## Drive-root output and run evidence policy
-
-Use repository-local generated outputs or an existing approved workspace. New drive-root outputs are permitted
-only as `<Project>.Perf`, and the user must explicitly authorize the exact path before creation or initialization.
-A matching name, environment variable, low disk space, or approval for another drive/project is not authorization.
-Never follow junctions during cleanup, clear shared read-only payload attributes, or delete unique run evidence.
 Native test output follows [the retention contract](Specs/Testing/Testing_RunEvidence.md): unique per-run evidence,
 preserved failures and interruptions, verified identities/hashes/streams/metadata, and no automatic old-run sweep.
 
@@ -66,6 +77,7 @@ preserved failures and interruptions, verified identities/hashes/streams/metadat
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
 | `JobScheduler` (`Common/Jobs.*`), owned by `Application` | Bounded job records, class/priority scheduling, cancellation, ordered completion delivery and UI actions; standard-only public header with a private implementation; no document mutation or GPU ownership |
 | `GpuWorkQueue` (`RedPrism/GpuWork.*`), optional registered owner pump | Bounded staging/copy slots, completion fences/events, mapped-row leases and retired context/resource references; owner-only recording/Map/Unmap; shares the scheduler's event wait pool; no swap chain, Present, pixel copying on the UI thread or document mutation |
+| `GpuCommandStream`, `GpuCommandPump`, `GpuRecordingCommands` | Two-slot command transport, original-context owner execution/acknowledgement and worker-only bounded recording into a private deferred context; explicitly enabled single scheduler recorder, shared admission/FIFO, no immediate context on workers, read Map, swap chain, Present or document mutation |
 | `Kernels` (`Common/Kernels.*`, `Kernels_<Tier>_<Module>.*`) | Immutable CPU dispatch tables, guarded CPU/OS capability detection and noinline tier entry points; no UI, document mutation or GPU ownership |
 | `Executor`, `WorkerPool`, `WaitPool` | Standard C++ kernel execution interface; private bounded Windows compute pool and separate event-wait pool, cancellation, callback/COM lifetime; no document mutation or GPU ownership |
 
@@ -115,3 +127,15 @@ regressions need measurement and a spec or WIP justification.
 ```
 
 ARM64 builds cross-compile with `build.ps1 -Platform ARM64`; runtime claims need a native ARM64 host.
+
+## Scoped testing policy (2026-10-21)
+
+Use `Test-Changes.ps1 -Explain` and the affected default while editing. Use explicit Full/PrePush for qualification; this accepted workflow replaces unconditional full-test iteration. Successful default affected runs advance their source/index baseline; explicit partial, failed, mutated or CI-pending runs do not. Reuse only exact successful evidence. CI_PENDING requires all named candidate checks to pass before merge, including when this private account cannot enforce protected checks. Preserve native/manual/platform/performance gates in Specs/Testing/Testing_Validation.md and contextual Scope.Tests.Something.h/.cpp names.
+## Changes workflow
+
+Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)
+and [Specs/Core/Core_Changes.md](Specs/Core/Core_Changes.md). Do not hand-edit generated `CHANGELOG.md` entries.
+Run `Tools/Test-Changelog.ps1` while editing. Before PrePush and final handoff, and immediately after every
+merge/rebase that introduces fragments, run `Tools/Fold-Changelog.ps1` and then `Tools/Fold-Changelog.ps1 -Check`,
+even for one fragment. Include the generated changelog and fragment removals in the current change; do not wait
+for release batches or a separate cleanup PR. Validation is read-only; `-WhatIf` previews folding without writes.

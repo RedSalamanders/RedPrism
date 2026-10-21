@@ -37,19 +37,25 @@ namespace
 void QueryVideoMemory(IDXGIAdapter3* adapter, DXGI_MEMORY_SEGMENT_GROUP segment, VideoMemoryInfo& result) noexcept
 {
     DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-    result.queryResult = adapter->QueryVideoMemoryInfo(0, segment, &info);
-    result.available = SUCCEEDED(result.queryResult);
-    if (!result.available)
-    {
-        return;
-    }
-
-    result.budget = info.Budget;
-    result.currentUsage = info.CurrentUsage;
-    result.availableForReservation = info.AvailableForReservation;
-    result.currentReservation = info.CurrentReservation;
+    const HRESULT queryResult = adapter->QueryVideoMemoryInfo(0, segment, &info);
+    result = VideoMemoryInfoFromQuery(queryResult, info);
 }
 } // namespace
+
+VideoMemoryInfo VideoMemoryInfoFromQuery(HRESULT queryResult, const DXGI_QUERY_VIDEO_MEMORY_INFO& info) noexcept
+{
+    VideoMemoryInfo result{};
+    result.queryResult = queryResult;
+    result.available = SUCCEEDED(queryResult);
+    if (result.available)
+    {
+        result.budget = info.Budget;
+        result.currentUsage = info.CurrentUsage;
+        result.availableForReservation = info.AvailableForReservation;
+        result.currentReservation = info.CurrentReservation;
+    }
+    return result;
+}
 
 CompletionRoute SelectCompletionRoute(const Report& report) noexcept
 {
@@ -193,6 +199,57 @@ HRESULT Probe(ID3D11Device* device, ID3D11DeviceContext* context, Report& report
 
     QueryVideoMemory(adapter4.get(), DXGI_MEMORY_SEGMENT_GROUP_LOCAL, report.localVideoMemory);
     QueryVideoMemory(adapter4.get(), DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, report.nonLocalVideoMemory);
+    return S_OK;
+}
+
+HRESULT QueryVideoMemorySnapshot(ID3D11Device* device, VideoMemorySnapshot& snapshot) noexcept
+{
+    snapshot = {};
+    if (device == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+
+    HRESULT result = device->GetDeviceRemovedReason();
+    if (FAILED(result))
+    {
+        return result;
+    }
+
+    wil::com_ptr_nothrow<IDXGIDevice> dxgiDevice;
+    result = device->QueryInterface(IID_PPV_ARGS(dxgiDevice.put()));
+    if (FAILED(result))
+    {
+        return result;
+    }
+
+    wil::com_ptr_nothrow<IDXGIAdapter> adapter;
+    result = dxgiDevice->GetAdapter(adapter.put());
+    if (FAILED(result))
+    {
+        return result;
+    }
+    if (!adapter)
+    {
+        return E_NOINTERFACE;
+    }
+
+    wil::com_ptr_nothrow<IDXGIAdapter3> adapter3;
+    result = adapter->QueryInterface(IID_PPV_ARGS(adapter3.put()));
+    if (FAILED(result))
+    {
+        return result;
+    }
+
+    QueryVideoMemory(adapter3.get(), DXGI_MEMORY_SEGMENT_GROUP_LOCAL, snapshot.local);
+    QueryVideoMemory(adapter3.get(), DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, snapshot.nonLocal);
+
+    result = device->GetDeviceRemovedReason();
+    if (FAILED(result))
+    {
+        snapshot = {};
+        return result;
+    }
     return S_OK;
 }
 } // namespace GpuCapabilities

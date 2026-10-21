@@ -1,4 +1,5 @@
 #include "TransformPixelsWork.h"
+#include "DocumentDraft.h"
 
 #include "RasterWork.h"
 #include "ShapeEditWork.h"
@@ -152,9 +153,11 @@ TransformPixelsResult PrepareTransformPixels(const CanvasDocument& source, const
     if (!TransformPixelsMemoryBytes(source, edit) || ValidateDocument(source) != DocumentStatus::Ok)
         return {};
     TransformPixelsResult result;
-    auto after = source;
+    auto draft = CanvasDocumentDraft::Clone(source, source.layers.size(), cancellation);
     if (cancellation.IsCancelled())
         return {TransformPixelsStatus::Cancelled};
+    if (!draft)
+        return {};
     std::int64_t imageLeft = kMaxLayerPixels;
     std::int64_t maskLeft = kMaxMaskPixels;
     for (const auto& layer : source.layers)
@@ -175,15 +178,15 @@ TransformPixelsResult PrepareTransformPixels(const CanvasDocument& source, const
                 return {TransformPixelsStatus::Cancelled};
             if (!seen.insert(entry.first).second)
                 return {};
-            if (const auto index = IndexOf(after.layers, entry.first))
+            if (const auto index = IndexOf(source.layers, entry.first))
                 targets.push_back(index.value());
         }
     }
-    else if (const auto index = IndexOf(after.layers, edit.layerID))
+    else if (const auto index = IndexOf(source.layers, edit.layerID))
         targets.push_back(index.value());
     for (const auto index : targets)
     {
-        auto& layer = after.layers[index];
+        auto& layer = draft.value().EditLayers()[index];
         if (cancellation.IsCancelled())
             return {TransformPixelsStatus::Cancelled};
         const auto moved = Placement(edit, layer);
@@ -303,13 +306,16 @@ TransformPixelsResult PrepareTransformPixels(const CanvasDocument& source, const
     }
     if (cancellation.IsCancelled())
         return {TransformPixelsStatus::Cancelled};
-    if (ValidateDocument(after) != DocumentStatus::Ok)
+    auto after = draft.value().Seal(cancellation);
+    if (cancellation.IsCancelled())
+        return {TransformPixelsStatus::Cancelled};
+    if (!after || ValidateDocument(after.value()) != DocumentStatus::Ok)
         return {};
     result.historyName = edit.mask      ? edit.corners ? L"Distort Layer Mask" : L"Transform Layer Mask"
                          : edit.corners ? edit.group ? L"Distort Layers" : L"Distort"
                          : edit.group   ? L"Transform Layers"
                                         : L"Transform Layer";
-    result.document = std::move(after);
+    result.document = std::move(after.value());
     result.status = TransformPixelsStatus::Ready;
     return result;
 }

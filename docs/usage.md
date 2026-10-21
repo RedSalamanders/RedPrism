@@ -32,6 +32,9 @@ version 7. A project the app cannot open (unsupported version, damaged metadata,
 same 100-megapixel budget while editing (a paste, a duplicate, a new mask, a filter, a merge, a distortion, a
 shape) is refused with a notice the same way, and nothing changes.
 
+Long local paths are supported for opening and saving projects and for PNG/JPEG export, within Windows and
+filesystem path limits.
+
 ## Images
 
 PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) open through File › Open, File › Import Images…
@@ -43,6 +46,9 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 (opaque, quality 0.8) from the File menu. Save, Save As and Export apply anything still open first — a typed
 value, a live stroke, a pending gradient or transform, an adjustment panel — so the saved or exported file always
 matches what the canvas shows.
+
+Windows may wait briefly for a project save or image export that is already writing before signing out. If an export
+is still preparing the canvas, Windows cancels that work.
 
 ## Keyboard reference
 
@@ -71,7 +77,7 @@ matches what the canvas shows.
 | Ctrl+A / Ctrl+D / Ctrl+Shift+I | Select all, deselect, inverse |
 | [ / ] and Shift+[ / Shift+] | Brush size down / up by a fifth; hardness down / up by a quarter (brush tools) |
 | 0-9 | Brush opacity 100 %, 10-90 % (two digits within 0.6 s for other percents); the active layer's opacity with the Move tool. Holding a digit sets it once, not repeatedly |
-| Shift-click / Escape | Straight brush line from the last stroke / drop the stroke in progress |
+| Shift-click / Escape | Straight brush line from the last stroke / cancel the brush stroke while the pointer is down |
 | Alt-click | Set the Clone Stamp source; with the Brush, Spot Healing or Gradient, sample a color |
 | Ctrl+M / Ctrl+L / Ctrl+U | Curves, Levels, Hue/Saturation on the active layer (the Image menu adds Exposure, Gradient Map, Grain; the Filter menu the blurs, noise and lens correction) |
 | Ctrl+Alt+C / Ctrl+Alt+I | Canvas Size, Image Size (Image menu) |
@@ -84,6 +90,19 @@ matches what the canvas shows.
 | V M L W C B E J S R G U I H Z | Tools (canvas focused) |
 | Space (held) | Pan; types a space in a text field, or presses a control reached by keyboard (Tab) instead |
 | Escape | Focus chrome |
+
+With Clone Stamp, after choosing a source with Alt-click, you can press and drag while the
+source image is preparing; your movement and release are kept. Zoom remains available during preparation.
+The press keeps its current All Layers choice: either the committed composite or the active layer's placed pixels.
+After releasing the stroke, hold Space and drag to pan while the source finishes preparing.
+Escape cancels while the pointer is down. After release or capture loss, the accepted stroke is kept even if
+its source is still preparing. Undo after release waits for the stroke, then undoes it.
+
+## Hue/Saturation sampling
+
+In Hue/Saturation, the range eyedroppers recenter, widen or narrow a color band's range. Transparent and
+near-neutral pixels leave it unchanged. Targeted adjustment drags change saturation; hold Ctrl to change hue.
+The amount is measured from the original press. Releasing ends the drag without sampling another position.
 
 ## Settings, crash reports and languages
 

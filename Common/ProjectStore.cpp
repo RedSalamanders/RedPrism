@@ -1,7 +1,9 @@
 #include "ProjectStore.h"
+#include "DocumentDraft.h"
 
 #include "JsonRead.h"
 #include "Utf8.h"
+#include "Win32FilePath.h"
 #include "ZipOwner.h"
 
 #include <algorithm>
@@ -58,42 +60,42 @@ struct Manifest
     std::vector<LayerRecord> records;
 };
 
-[[nodiscard]] std::wstring FullPath(const wchar_t* path)
+[[nodiscard]] std::wstring FullPath(const wchar_t* path, Win32FilePath::Use use)
 {
     if (path == nullptr || path[0] == L'\0')
-    {
         return {};
-    }
-    const DWORD needed = GetFullPathNameW(path, 0, nullptr, nullptr);
-    if (needed == 0)
-    {
-        return {};
-    }
-    std::wstring full(static_cast<std::size_t>(needed), L'\0');
-    const DWORD written = GetFullPathNameW(path, needed, full.data(), nullptr);
-    if (written == 0)
-    {
-        return {};
-    }
-    full.resize(written);
-    return full;
+
+    // Resolve every ordinary root/member spelling through the same path policy. The policy applies the role's
+    // threshold after resolution and preserves already-verbatim names exactly, so a short project root and a
+    // long generated member can be compared safely by ExplodedMemberPathAllowed across namespace spellings.
+    std::wstring apiPath;
+    return FAILED(Win32FilePath::Resolve(path, use, apiPath)) ? std::wstring{} : std::move(apiPath);
 }
 
 [[nodiscard]] bool HasReparse(const wchar_t* path) noexcept
 {
-    const DWORD attributes = GetFileAttributesW(path);
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::Directory, apiPath)))
+        return true;
+    const DWORD attributes = GetFileAttributesW(apiPath.c_str());
     return attributes != kInvalidAttributes && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
 }
 
 [[nodiscard]] bool IsDirectory(const wchar_t* path) noexcept
 {
-    const DWORD attributes = GetFileAttributesW(path);
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::Directory, apiPath)))
+        return false;
+    const DWORD attributes = GetFileAttributesW(apiPath.c_str());
     return attributes != kInvalidAttributes && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
 [[nodiscard]] bool IsFile(const wchar_t* path) noexcept
 {
-    const DWORD attributes = GetFileAttributesW(path);
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::Directory, apiPath)))
+        return false;
+    const DWORD attributes = GetFileAttributesW(apiPath.c_str());
     return attributes != kInvalidAttributes && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
@@ -103,12 +105,13 @@ struct Manifest
     bytes.clear();
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (path == nullptr || HasReparse(path))
-    {
+    if (path == nullptr)
         return ProjectIoStatus::Invalid;
-    }
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)) || HasReparse(apiPath.c_str()))
+        return ProjectIoStatus::Invalid;
     WIN32_FILE_ATTRIBUTE_DATA info{};
-    if (!GetFileAttributesExW(path, GetFileExInfoStandard, &info) ||
+    if (!GetFileAttributesExW(apiPath.c_str(), GetFileExInfoStandard, &info) ||
         (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {
         return ProjectIoStatus::Invalid;
@@ -120,7 +123,7 @@ struct Manifest
     {
         return ProjectIoStatus::TooLarge;
     }
-    const HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+    const HANDLE file = CreateFileW(apiPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     if (file == INVALID_HANDLE_VALUE)
     {
@@ -160,11 +163,14 @@ struct Manifest
     return ProjectIoStatus::Ok;
 }
 
+[[nodiscard]] std::uint32_t RequestedFailure(ProjectSaveFaultPolicy policy, ProjectSaveFaultStage stage) noexcept;
+
 // Project assets are staged beside their destination and must be fully written, flushed, and closed before the
 // directory rotation can publish them. Keep the manifest close result observable here; asset encodes use the
 // codec's separate checked file-stream publication path.
 [[nodiscard]] ProjectIoStatus WriteFileBytes(const wchar_t* path, const std::uint8_t* bytes, std::size_t size,
-                                             CancelToken cancellation, ProjectIoObserver observer)
+                                             CancelToken cancellation, ProjectIoObserver observer,
+                                             ProjectSaveFaultPolicy faultPolicy)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -172,7 +178,15 @@ struct Manifest
     {
         return ProjectIoStatus::Encode;
     }
-    wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    std::wstring apiPath;
+    const HRESULT pathResult = Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath);
+    if (FAILED(pathResult))
+    {
+        Report(observer, ProjectIoStage::CreateFailed, HRESULT_CODE(pathResult));
+        return ProjectIoStatus::Encode;
+    }
+    wil::unique_hfile file{
+        CreateFileW(apiPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
     if (!file)
     {
         Report(observer, ProjectIoStage::CreateFailed, GetLastError());
@@ -198,10 +212,18 @@ struct Manifest
     }
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (!FlushFileBuffers(file.get()))
+    const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ManifestFlush);
+    if (flushFailure != 0 || !FlushFileBuffers(file.get()))
     {
-        Report(observer, ProjectIoStage::FlushFailed, GetLastError());
+        const auto error = flushFailure != 0 ? flushFailure : GetLastError();
+        Report(observer, ProjectIoStage::FlushFailed, error);
         return ProjectIoStatus::Encode;
+    }
+    const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ManifestClose);
+    if (closeFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, closeFailure);
+        return ProjectIoStatus::Encode; // Original RAII owner still closes before staging cleanup.
     }
     HANDLE raw = file.release();
     if (!CloseHandle(raw))
@@ -214,21 +236,46 @@ struct Manifest
 
 // libzip closes its own handle internally; reopen the completed archive and require both flush and close to succeed
 // before the caller can publish it over the current destination.
-[[nodiscard]] bool FlushFileToDisk(const wchar_t* path) noexcept
+[[nodiscard]] bool FlushFileToDisk(const wchar_t* path, ProjectIoObserver observer,
+                                   ProjectSaveFaultPolicy faultPolicy) noexcept
 {
-    wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-                                       FILE_ATTRIBUTE_NORMAL, nullptr)};
-    if (!file || !FlushFileBuffers(file.get()))
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)))
+        return false;
+    wil::unique_hfile file{CreateFileW(apiPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (!file)
     {
+        Report(observer, ProjectIoStage::CreateFailed, GetLastError());
+        return false;
+    }
+    const auto flushFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveFlush);
+    if (flushFailure != 0 || !FlushFileBuffers(file.get()))
+    {
+        const auto error = flushFailure != 0 ? flushFailure : GetLastError();
+        Report(observer, ProjectIoStage::FlushFailed, error);
+        return false;
+    }
+    const auto closeFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveClose);
+    if (closeFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, closeFailure);
         return false;
     }
     HANDLE raw = file.release();
-    return CloseHandle(raw) != 0;
+    if (!CloseHandle(raw))
+    {
+        Report(observer, ProjectIoStage::CloseFailed, GetLastError());
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] std::wstring UniqueSiblingPath(const std::wstring& destination)
 {
-    return destination + L".~" + Utf8ToWide(Guid::Generate().ToUtf8());
+    const std::wstring suffix = L".~" + Utf8ToWide(Guid::Generate().ToUtf8());
+    std::wstring sibling;
+    return FAILED(Win32FilePath::SiblingWithSuffix(destination, suffix, sibling)) ? std::wstring{} : std::move(sibling);
 }
 
 // Thin names over Common/JsonRead.h kept so the call sites below (and their `required` argument, matching the
@@ -909,12 +956,20 @@ template <typename T, typename Parser>
         }
         manifest.records.push_back(std::move(record));
     }
+    auto draft = CanvasDocumentDraft::Rebuild(manifest.document, count, cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     for (LayerRecord& record : manifest.records)
     {
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
-        manifest.document.layers.push_back(record.layer);
+        if (!draft.value().Append(record.layer))
+            return ProjectIoStatus::TooLarge;
     }
+    auto parsed = draft.value().Seal(cancellation);
+    if (!parsed)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    manifest.document = std::move(parsed.value());
     const DocumentStatus graph = ValidateDocument(manifest.document, manifest.version);
     if (graph == DocumentStatus::UnsupportedVersion)
     {
@@ -1214,7 +1269,13 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
 {
     zip_error_t error{};
     zip_error_init(&error);
-    zip_source_t* source = zip_source_win32w_create(path, 0, -1, &error);
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)))
+    {
+        zip_error_fini(&error);
+        return {};
+    }
+    zip_source_t* source = zip_source_win32w_create(apiPath.c_str(), 0, -1, &error);
     if (source == nullptr)
     {
         zip_error_fini(&error);
@@ -1282,6 +1343,9 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
                                            ProjectLoadPixelLimits pixelLimits, auto&& loader)
 {
     Report(observer, ProjectIoStage::ManifestReady);
+    auto draft = CanvasDocumentDraft::Clone(manifest.document, manifest.document.layers.size(), cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     int imagePixels = pixelLimits.imagePixels;
     int maskPixels = pixelLimits.maskPixels;
     for (std::size_t index = 0; index < manifest.records.size(); ++index)
@@ -1289,7 +1353,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
         LayerRecord& record = manifest.records[index];
-        ImageLayer& layer = manifest.document.layers[index];
+        ImageLayer& layer = draft.value().EditLayers()[index];
         if (!record.imageFile.empty())
         {
             DecodedImage decoded{};
@@ -1336,6 +1400,10 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
             layer.mask = mask;
         }
     }
+    auto decoded = draft.value().Seal(cancellation);
+    if (!decoded)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    manifest.document = std::move(decoded.value());
     return ProjectIoStatus::Ok;
 }
 
@@ -1344,7 +1412,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
 {
     const auto attributes = [](const std::wstring& path) -> std::uint32_t { return GetFileAttributesW(path.c_str()); };
     const std::wstring metadata = root + L"\\manifest.json";
-    if (!ExplodedMemberPathAllowed(root, FullPath(metadata.c_str()), attributes))
+    if (!ExplodedMemberPathAllowed(root, FullPath(metadata.c_str(), Win32FilePath::Use::File), attributes))
     {
         return ProjectIoStatus::Invalid;
     }
@@ -1364,7 +1432,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         [&](const std::string& file, bool mask, int remainingPixels, DecodedImage& decoded) -> ProjectIoStatus
         {
             const std::wstring path = root + L"\\images\\" + Utf8ToWide(file);
-            const std::wstring full = FullPath(path.c_str());
+            const std::wstring full = FullPath(path.c_str(), Win32FilePath::Use::File);
             if (!ExplodedMemberPathAllowed(root, full, attributes))
             {
                 return ProjectIoStatus::Invalid;
@@ -1550,19 +1618,54 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     std::uint32_t failure = RequestedFailure(faultPolicy, faultStage);
     if (failure == 0)
     {
-        const bool extended = path.starts_with(L"\\\\?\\");
-        const bool unc = !extended && path.starts_with(L"\\\\");
-        const std::wstring_view prefix = extended ? L"" : unc ? L"\\\\?\\UNC\\" : L"\\\\?\\";
-        const std::size_t offset = unc ? 2 : 0;
-        const std::size_t length = prefix.size() + path.size() - offset;
-        if (path.empty() || length >= scratch.size())
-            failure = ERROR_FILENAME_EXCED_RANGE;
+        // These inputs are absolute paths generated from FullPath plus a sibling suffix. Normalize their API
+        // spelling once into the preallocated buffer so recursive cleanup can traverse beyond MAX_PATH without
+        // allocating or changing the user-visible destination spelling. Verbatim names are copied untouched.
+        if (path.empty())
+            failure = ERROR_BAD_PATHNAME;
+        else if (Win32FilePath::IsVerbatim(path))
+        {
+            if (path.size() >= scratch.size())
+                failure = ERROR_FILENAME_EXCED_RANGE;
+            else
+            {
+                std::copy(path.begin(), path.end(), scratch.begin());
+                scratch[path.size()] = L'\0';
+                failure = DeleteTreePath(scratch, path.size(), 0);
+            }
+        }
+        else if (Win32FilePath::HasOrdinaryParsingComponents(path))
+            failure = ERROR_INVALID_NAME;
         else
         {
-            std::copy(prefix.begin(), prefix.end(), scratch.begin());
-            std::copy(path.begin() + offset, path.end(), scratch.begin() + prefix.size());
-            scratch[length] = L'\0';
-            failure = DeleteTreePath(scratch, length, 0);
+            std::wstring_view prefix;
+            std::wstring_view suffix;
+            if (Win32FilePath::IsDosAbsolute(path))
+            {
+                prefix = L"\\\\?\\";
+                suffix = path;
+            }
+            else if (Win32FilePath::IsUncAbsolute(path))
+            {
+                prefix = L"\\\\?\\UNC\\";
+                suffix = std::wstring_view{path}.substr(2);
+            }
+            else
+                failure = ERROR_BAD_PATHNAME;
+
+            if (failure == 0)
+            {
+                if (prefix.size() + suffix.size() >= scratch.size())
+                    failure = ERROR_FILENAME_EXCED_RANGE;
+                else
+                {
+                    std::copy(prefix.begin(), prefix.end(), scratch.begin());
+                    std::copy(suffix.begin(), suffix.end(), scratch.begin() + prefix.size());
+                    const std::size_t length = prefix.size() + suffix.size();
+                    scratch[length] = L'\0';
+                    failure = DeleteTreePath(scratch, length, 0);
+                }
+            }
         }
     }
     if (failure != 0)
@@ -1572,7 +1675,6 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
     return true;
 }
-
 [[nodiscard]] ProjectIoStatus PublishDirectory(const std::wstring& staging, const std::wstring& dest,
                                                std::uint32_t& failure, bool rotated, CancelToken cancellation,
                                                ProjectSaveFaultPolicy faultPolicy, ProjectIoObserver observer) noexcept
@@ -1696,7 +1798,10 @@ constexpr unsigned int kMaxCleanupDepth = 128;
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    const std::wstring backup = dest + L".old";
+    const std::wstring backupCandidate = dest + L".old";
+    std::wstring backup;
+    if (FAILED(Win32FilePath::PrefixResolvedPath(backupCandidate.c_str(), Win32FilePath::Use::Directory, backup)))
+        return ProjectIoStatus::Encode;
     bool rotated = false;
     Report(observer, ProjectIoStage::Staged);
     if (cancellation.IsCancelled())
@@ -1744,18 +1849,18 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     return ProjectIoStatus::Ok;
 }
 
-[[nodiscard]] ProjectIoStatus SaveZip(const wchar_t* path, const std::string& json, const std::wstring& images,
+[[nodiscard]] ProjectIoStatus SaveZip(const std::wstring& dest, const std::string& json, const std::wstring& images,
                                       const std::vector<std::string>& files, CancelToken cancellation,
-                                      ProjectIoObserver observer)
+                                      ProjectIoObserver observer, ProjectSaveFaultPolicy faultPolicy)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    const std::wstring dest = FullPath(path);
     if (dest.empty())
-    {
         return ProjectIoStatus::Encode;
-    }
-    const std::wstring temp = UniqueSiblingPath(dest);
+    const std::wstring tempCandidate = UniqueSiblingPath(dest);
+    std::wstring temp;
+    if (FAILED(Win32FilePath::PrefixResolvedPath(tempCandidate.c_str(), Win32FilePath::Use::File, temp)))
+        return ProjectIoStatus::Encode;
     bool ownsTemp = false;
     auto cleanupTemp = wil::scope_exit(
         [&]() noexcept
@@ -1809,7 +1914,10 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
         const std::string entry = std::string("images/") + file;
-        const std::wstring assetPath = images + L"\\" + Utf8ToWide(file);
+        const std::wstring assetCandidate = images + L"\\" + Utf8ToWide(file);
+        std::wstring assetPath;
+        if (FAILED(Win32FilePath::PrefixResolvedPath(assetCandidate.c_str(), Win32FilePath::Use::File, assetPath)))
+            return ProjectIoStatus::Encode;
         zip_source_t* source = zip_source_win32w(zip.get(), assetPath.c_str(), 0, -1);
         if (source == nullptr)
         {
@@ -1826,13 +1934,19 @@ constexpr unsigned int kMaxCleanupDepth = 128;
             return ProjectIoStatus::Encode;
         }
     }
+    const auto commitFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveCommit);
+    if (commitFailure != 0)
+    {
+        Report(observer, ProjectIoStage::CloseFailed, commitFailure);
+        return ProjectIoStatus::Encode; // Discard precedes exclusive temporary cleanup.
+    }
     if (!ZipCommit(zip))
     {
         return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Encode;
     }
     // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
     // another file. Publication is refused when that flush or its transferred handle close fails.
-    if (!FlushFileToDisk(temp.c_str()))
+    if (!FlushFileToDisk(temp.c_str(), observer, faultPolicy))
     {
         return ProjectIoStatus::Encode;
     }
@@ -1840,6 +1954,12 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     // An acknowledged stop before this boundary leaves dest intact. Publication is not cancelled midway.
+    const auto replaceFailure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::ArchiveReplace);
+    if (replaceFailure != 0)
+    {
+        Report(observer, ProjectIoStage::StagingToDestinationFailed, replaceFailure);
+        return ProjectIoStatus::Encode;
+    }
     if (IsFile(dest.c_str()))
     {
         if (!ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) &&
@@ -1891,8 +2011,11 @@ bool PathLooksLikeZipProject(const wchar_t* path) noexcept
     {
         return false;
     }
-    wil::unique_hfile file{
-        CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    std::wstring apiPath;
+    if (FAILED(Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath)))
+        return false;
+    wil::unique_hfile file{CreateFileW(apiPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL, nullptr)};
     if (!file)
     {
         return false;
@@ -1933,9 +2056,9 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
     pixelLimits.manifestBytes = (std::min)(pixelLimits.manifestBytes, kMaxProjectManifestBytes);
     pixelLimits.encodedAssetBytes = (std::min)(pixelLimits.encodedAssetBytes, kMaxProjectEncodedAssetBytes);
     Manifest manifest{};
-    const ProjectIoStatus status = IsDirectory(path)
-                                       ? LoadExploded(FullPath(path), manifest, cancellation, observer, pixelLimits)
-                                       : LoadZip(path, manifest, cancellation, observer, pixelLimits);
+    const ProjectIoStatus status = IsDirectory(path) ? LoadExploded(FullPath(path, Win32FilePath::Use::Directory),
+                                                                    manifest, cancellation, observer, pixelLimits)
+                                                     : LoadZip(path, manifest, cancellation, observer, pixelLimits);
     result.status = status;
     if (cancellation.IsCancelled())
     {
@@ -1988,7 +2111,7 @@ namespace
     }
     else
     {
-        const std::wstring path = FullPath((root + L"\\images\\" + Utf8ToWide(name)).c_str());
+        const std::wstring path = FullPath((root + L"\\images\\" + Utf8ToWide(name)).c_str(), Win32FilePath::Use::File);
         const auto attributes = [](const std::wstring& value) -> std::uint32_t
         { return GetFileAttributesW(value.c_str()); };
         if (!ExplodedMemberPathAllowed(root, path, attributes))
@@ -2049,12 +2172,12 @@ ProjectLoadProbeResult ProbeProjectLoad(const wchar_t* path, CancelToken cancell
     if (path == nullptr || path[0] == L'\0')
         return result;
     const bool folder = IsDirectory(path);
-    const auto root = folder ? FullPath(path) : std::wstring{};
+    const auto root = folder ? FullPath(path, Win32FilePath::Use::Directory) : std::wstring{};
     unique_zip archive;
     std::vector<std::uint8_t> bytes;
     if (folder)
     {
-        const auto metadata = FullPath((root + L"\\manifest.json").c_str());
+        const auto metadata = FullPath((root + L"\\manifest.json").c_str(), Win32FilePath::Use::File);
         const auto attributes = [](const std::wstring& value) -> std::uint32_t
         { return GetFileAttributesW(value.c_str()); };
         if (!ExplodedMemberPathAllowed(root, metadata, attributes))
@@ -2139,10 +2262,14 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
             return ProjectIoStatus::Cancelled;
         return json.size() > kMaxManifestBytes ? ProjectIoStatus::TooLarge : ProjectIoStatus::Encode;
     }
-    const std::wstring destination = FullPath(path);
+    const std::wstring destination =
+        FullPath(path, zipArchive ? Win32FilePath::Use::File : Win32FilePath::Use::Directory);
     if (destination.empty() || !std::filesystem::path(destination).has_filename())
         return ProjectIoStatus::Invalid;
-    const std::wstring staging = UniqueSiblingPath(destination);
+    const std::wstring stagingCandidate = UniqueSiblingPath(destination);
+    std::wstring staging;
+    if (FAILED(Win32FilePath::PrefixResolvedPath(stagingCandidate.c_str(), Win32FilePath::Use::Directory, staging)))
+        return ProjectIoStatus::Encode;
     const auto cleanupScratch = std::make_unique_for_overwrite<TreeCleanupBuffer>();
     if (!CreateDirectoryW(staging.c_str(), nullptr))
     {
@@ -2156,7 +2283,10 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
             (void)DeleteTree(staging, ProjectSaveFaultStage::StagingCleanup, ProjectIoStage::StagingCleanupFailed,
                              stagingFaultPolicy, observer, *cleanupScratch);
         });
-    const std::wstring images = staging + L"\\images";
+    const std::wstring imagesCandidate = staging + L"\\images";
+    std::wstring images;
+    if (FAILED(Win32FilePath::PrefixResolvedPath(imagesCandidate.c_str(), Win32FilePath::Use::Directory, images)))
+        return ProjectIoStatus::Encode;
     if (!CreateDirectoryW(images.c_str(), nullptr))
     {
         Report(observer, ProjectIoStage::CreateFailed, GetLastError());
@@ -2164,7 +2294,7 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
     }
     const auto manifestStatus =
         WriteFileBytes((staging + L"\\manifest.json").c_str(), reinterpret_cast<const std::uint8_t*>(json.data()),
-                       json.size(), cancellation, observer);
+                       json.size(), cancellation, observer, faultPolicy);
     if (manifestStatus != ProjectIoStatus::Ok)
         return manifestStatus;
     // Assets are bounded direct-to-file encodes. libzip later streams these files using STORE instead of
@@ -2176,7 +2306,7 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
         return encoded;
     }
     const auto status = zipArchive
-                            ? SaveZip(path, json, images, files, cancellation, observer)
+                            ? SaveZip(destination, json, images, files, cancellation, observer, faultPolicy)
                             : SaveExploded(destination, staging, cancellation, observer, faultPolicy, *cleanupScratch);
     if (status == ProjectIoStatus::Ok && !zipArchive)
         cleanup.release(); // rotation transferred the directory; this name no longer denotes our staging.
@@ -2247,8 +2377,6 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
         decoded.name.empty() ? L"Layer" : decoded.name,
         Vec2{static_cast<double>(decoded.image.Width()), static_cast<double>(decoded.image.Height())});
     layer.asset = RasterAsset{decoded.image, decoded.thumbnail, layer.name};
-    const int previousWidth = document.width;
-    const int previousHeight = document.height;
     const bool establishesCanvas = document.layers.empty();
     if (!establishesCanvas)
     {
@@ -2278,27 +2406,30 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
             layer.parentID = active->isGroup ? std::optional<Guid>(active->id) : active->parentID;
         }
     }
-    const std::optional<Guid> previousActive = activeLayerID;
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
+    auto draft = CanvasDocumentDraft::Clone(document, document.layers.size() + 1, cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     if (establishesCanvas)
     {
-        document.width = decoded.image.Width();
-        document.height = decoded.image.Height();
+        draft.value().DocumentState().width = decoded.image.Width();
+        draft.value().DocumentState().height = decoded.image.Height();
     }
-    document.layers.push_back(std::move(layer));
-    const Guid importedID = document.layers.back().id;
-    const DocumentStatus validated = ValidateDocument(document);
+    const Guid importedID = layer.id;
+    if (!draft.value().Append(std::move(layer)))
+        return ProjectIoStatus::TooLarge;
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    const DocumentStatus validated = ValidateDocument(after.value());
     if (validated != DocumentStatus::Ok || cancellation.IsCancelled())
     {
-        document.layers.pop_back();
-        document.width = previousWidth;
-        document.height = previousHeight;
-        activeLayerID = previousActive;
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
         return validated == DocumentStatus::TooLarge ? ProjectIoStatus::TooLarge : ProjectIoStatus::Invalid;
     }
+    std::swap(document, after.value());
     activeLayerID = importedID;
     return ProjectIoStatus::Ok;
 }

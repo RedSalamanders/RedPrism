@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
+#include <new>
 #include <stop_token>
 #include <windows.h>
 
@@ -104,8 +106,8 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
 }
 } // namespace
 
-PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths,
-                                          const CancelToken& cancellation) noexcept
+PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths, const CancelToken& cancellation,
+                                          PathClassificationScratchSource scratchSource) noexcept
 {
     if (paths.size() > kMaxPathClassificationBatch)
     {
@@ -127,7 +129,24 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
 
     PathClassificationBatch result;
     result.status = PathClassificationStatus::Ok;
-    std::array<wchar_t, kMaxPathClassificationLength + 1> terminatedPath{};
+    if (paths.empty())
+        return result;
+    std::unique_ptr<PathClassificationScratch> scratch;
+    try
+    {
+        scratch = scratchSource.create ? scratchSource.create(scratchSource.context)
+                                       : std::make_unique<PathClassificationScratch>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        // One bounded allocation at this noexcept batch-admission boundary; refuse the whole batch.
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
+                                                      : PathClassificationStatus::OutOfMemory);
+    }
+    if (!scratch)
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
+                                                      : PathClassificationStatus::OutOfMemory);
+    auto& terminatedPath = *scratch;
     for (std::size_t index = 0; index < paths.size(); ++index)
     {
         if (cancellation.IsCancelled())

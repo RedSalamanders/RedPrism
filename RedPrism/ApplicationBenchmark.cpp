@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "DocumentDraft.h"
+
 #include "BenchmarkMachine.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
@@ -15,6 +17,7 @@
 #include <new>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -34,7 +37,8 @@ enum class Expected
     ImportedLayers,
     ImportedLayersRefused,
     GradientPreview,
-    GradientApplied
+    GradientApplied,
+    SampledPrefix
 };
 
 struct Operation final
@@ -48,7 +52,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 26> kOperations{{
+constexpr std::array<Operation, 27> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -75,11 +79,26 @@ constexpr std::array<Operation, 26> kOperations{{
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
     {"gradient-preview-coalesced", 0, 0, {}, 0, Expected::GradientPreview},
     {"gradient-apply-ordered", 0, 0, {}, 0, Expected::GradientApplied},
+    {"sampler-accepted-prefix", 0, 0, {}, 0, Expected::SampledPrefix},
 }};
+static_assert(kOperations.back().expected == Expected::SampledPrefix);
+
+constexpr std::array<Operation, 3> kSizeOperations{{
+    {"canvas-size-fill", ChromeHost::kCommandCanvasSize, 0, {}, 0, Expected::Size, true},
+    {"image-size-nearest", ChromeHost::kCommandImageSize, 0, {}, 0, Expected::Size, true},
+    {"image-size-resolution", ChromeHost::kCommandImageSize, 0, {}, 300, Expected::Size, true},
+}};
+
+[[nodiscard]] std::size_t OperationCount(const UiBenchmarkState& state) noexcept
+{
+    return state.sizeOnly ? kSizeOperations.size() : state.samplerOnly ? std::size_t{1} : kOperations.size();
+}
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
 {
-    auto operation = kOperations[state.operation];
+    auto operation = state.sizeOnly      ? kSizeOperations[state.operation]
+                     : state.samplerOnly ? kOperations[kOperations.size() - 1]
+                                         : kOperations[state.operation];
     if (state.fixture.width == 10000 && operation.prepareCommand == ChromeHost::kCommandGaussianBlur)
     {
         // At today's pixel ceiling even the initial blur grow is refused. Measure that real command
@@ -136,6 +155,93 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
         return "unknown";
     }
     return result;
+}
+
+struct BenchmarkMonitorSnapshot final
+{
+    std::uintptr_t monitorIdentity = 0;
+    std::optional<std::string> deviceName;
+    std::optional<BenchmarkMachineInfo::RefreshRate> refresh;
+};
+
+// Benchmark metadata only: no display changes, timers, frame work or device creation. Unknown
+// metadata stays unknown. A changing topology gets at most three bounded buffer refresh attempts.
+BenchmarkMonitorSnapshot ReadBenchmarkMonitor(HWND window)
+{
+    BenchmarkMonitorSnapshot result;
+    const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    if (!monitor || !GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&info)))
+        return result;
+    result.monitorIdentity = reinterpret_cast<std::uintptr_t>(monitor);
+    result.deviceName = Utf8(info.szDevice);
+    constexpr UINT32 flags = QDC_ONLY_ACTIVE_PATHS | QDC_VIRTUAL_MODE_AWARE | QDC_VIRTUAL_REFRESH_RATE_AWARE;
+    constexpr UINT32 maximumPaths = 128;
+    constexpr UINT32 maximumModes = 512;
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths;
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes;
+    std::vector<BenchmarkRefreshCandidate> candidates;
+    for (unsigned int attempt = 0; attempt < 3; ++attempt)
+    {
+        UINT32 pathCount = 0;
+        UINT32 modeCount = 0;
+        if (GetDisplayConfigBufferSizes(flags, &pathCount, &modeCount) != ERROR_SUCCESS || pathCount == 0 ||
+            pathCount > maximumPaths || modeCount == 0 || modeCount > maximumModes)
+            return result;
+        paths.resize(pathCount);
+        modes.resize(modeCount);
+        const LONG status = QueryDisplayConfig(flags, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
+        if (status == ERROR_INSUFFICIENT_BUFFER)
+            continue;
+        if (status != ERROR_SUCCESS || pathCount > paths.size() || modeCount > modes.size())
+            return result;
+        candidates.clear();
+        candidates.reserve(pathCount);
+        for (UINT32 index = 0; index < pathCount; ++index)
+        {
+            const auto& path = paths[index];
+            DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
+            source.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+            source.header.size = sizeof(source);
+            source.header.adapterId = path.sourceInfo.adapterId;
+            source.header.id = path.sourceInfo.id;
+            if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS)
+                return result; // An unresolved source could be another matching clone.
+            const int comparison = CompareStringOrdinal(source.viewGdiDeviceName, -1, info.szDevice, -1, TRUE);
+            if (comparison == 0)
+                return result;
+            const bool matches = comparison == CSTR_EQUAL;
+            const bool eligible = (path.flags & DISPLAYCONFIG_PATH_ACTIVE) && path.targetInfo.targetAvailable &&
+                                  !(path.flags & DISPLAYCONFIG_PATH_BOOST_REFRESH_RATE) &&
+                                  path.targetInfo.scanLineOrdering == DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE;
+            candidates.push_back(
+                {matches, eligible, {path.targetInfo.refreshRate.Numerator, path.targetInfo.refreshRate.Denominator}});
+        }
+        if (MonitorFromWindow(window, MONITOR_DEFAULTTONULL) != monitor)
+            return {};
+        MONITORINFOEXW current{};
+        current.cbSize = sizeof(current);
+        if (!GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&current)) ||
+            CompareStringOrdinal(info.szDevice, -1, current.szDevice, -1, TRUE) != CSTR_EQUAL)
+            return {};
+        result.refresh = SelectBenchmarkRefreshRate(candidates);
+        return result;
+    }
+    return result;
+}
+
+[[nodiscard]] bool SameRefreshRate(const std::optional<BenchmarkMachineInfo::RefreshRate>& left,
+                                   const std::optional<BenchmarkMachineInfo::RefreshRate>& right) noexcept
+{
+    if (left.has_value() != right.has_value())
+        return false;
+    if (!left)
+        return true;
+    if (left->numerator == 0 || left->denominator == 0 || right->numerator == 0 || right->denominator == 0)
+        return false;
+    return static_cast<std::uint64_t>(left->numerator) * right->denominator ==
+           static_cast<std::uint64_t>(right->numerator) * left->denominator;
 }
 
 [[nodiscard]] Raster Pattern(int width, int height, unsigned int seed, bool mask, std::uint64_t& checksum)
@@ -216,13 +322,50 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
     try
     {
         auto next = std::make_unique<UiBenchmarkState>();
-        const bool smoke = mode == L"ui-smoke";
-        const bool ceiling = mode == L"ui100";
-        const int width = smoke ? 64 : ceiling ? 10000 : mode == L"ui45" ? 8192 : 3840;
-        const int height = smoke ? 48 : ceiling ? 10000 : mode == L"ui45" ? 5464 : 2160;
+        const bool cancellation = IsUiCancellationBenchmark(mode);
+        if (cancellation)
+        {
+            next->cancellation = std::make_unique<UiCancellationBenchmark>();
+            // Explicit diagnostic opt-in. Ordinary runs and timing gates use the unchanged wall histogram.
+            wchar_t attribution[2]{};
+            next->timing.attributionEnabled =
+                GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 &&
+                attribution[0] == L'1';
+        }
+        const bool samplerOnly =
+            mode == L"ui-sampler" || mode == L"ui-sampler45" || mode == L"ui-sampler100" || mode == L"ui-sampler-smoke";
+        const bool sizeOnly = mode == L"ui-size-prepared" || mode == L"ui-size-prepared45" ||
+                              mode == L"ui-size-prepared100" || mode == L"ui-size-prepared-smoke";
+        if (sizeOnly)
+        {
+            wchar_t attribution[2]{};
+            next->timing.attributionEnabled =
+                GetEnvironmentVariableW(L"REDPRISM_UI_TIMING_ATTRIBUTION", attribution, 2) == 1 &&
+                attribution[0] == L'1';
+        }
+        const bool preparedDisplay = mode == L"ui-prepared" || mode == L"ui-prepared45" || mode == L"ui-prepared100" ||
+                                     mode == L"ui-prepared-smoke" || sizeOnly || mode == L"ui-cancel-prepared" ||
+                                     mode == L"ui-cancel-prepared45" || mode == L"ui-cancel-prepared100" ||
+                                     mode == L"ui-cancel-prepared-smoke";
+        const bool smoke = mode == L"ui-smoke" || mode == L"ui-sampler-smoke" || mode == L"ui-prepared-smoke" ||
+                           mode == L"ui-size-prepared-smoke" || mode == L"ui-cancel-smoke" ||
+                           mode == L"ui-cancel-prepared-smoke";
+        const bool ceiling = mode == L"ui100" || mode == L"ui-sampler100" || mode == L"ui-prepared100" ||
+                             mode == L"ui-size-prepared100" || mode == L"ui-cancel100" ||
+                             mode == L"ui-cancel-prepared100";
+        const bool layered45 = mode == L"ui45" || mode == L"ui-sampler45" || mode == L"ui-prepared45" ||
+                               mode == L"ui-size-prepared45" || mode == L"ui-cancel45" ||
+                               mode == L"ui-cancel-prepared45";
+        const int width = smoke ? 64 : ceiling ? 10000 : layered45 ? 8192 : 3840;
+        const int height = smoke ? 48 : ceiling ? 10000 : layered45 ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
-        std::array<wchar_t, 32768> temporary{};
+        next->samplerOnly = samplerOnly;
+        next->preparedDisplay = preparedDisplay;
+        next->sizeOnly = sizeOnly;
+        next->operation = samplerOnly ? kOperations.size() - 1 : 0;
+        const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
+        auto& temporary = *temporaryStorage;
         const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
         if (units == 0 || units >= temporary.size())
             return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
@@ -250,9 +393,14 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         next->imageImportBaseline.id = Guid::Generate();
         next->imageImportBaseline.width = width;
         next->imageImportBaseline.height = height;
+        auto importDraft = CanvasDocumentDraft::Rebuild(next->imageImportBaseline, 1);
+        auto fixtureDraft = CanvasDocumentDraft::Rebuild(next->fixture, ceiling ? 1 : 3);
+        if (!importDraft || !fixtureDraft)
+            return E_INVALIDARG;
         auto importBaseLayer = top;
         importBaseLayer.mask.reset();
-        next->imageImportBaseline.layers.push_back(std::move(importBaseLayer));
+        if (!importDraft.value().Append(std::move(importBaseLayer)))
+            return E_INVALIDARG;
         if (!ceiling)
         {
             Raster mask = Pattern(width, height, 0, true, next->fixtureChecksum);
@@ -264,9 +412,11 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
             top.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Benchmark mask"}};
             auto bottom = ImageLayer::Blank(L"Benchmark bottom", size);
             bottom.asset = RasterAsset{bottomPixels, Raster::MakeThumbnail(bottomPixels), L"Benchmark bottom"};
-            next->fixture.layers.push_back(std::move(bottom));
+            if (!fixtureDraft.value().Append(std::move(bottom)))
+                return E_INVALIDARG;
         }
-        next->fixture.layers.push_back(std::move(top));
+        if (!fixtureDraft.value().Append(std::move(top)))
+            return E_INVALIDARG;
         if (!ceiling)
         {
             ImageLayer adjustment;
@@ -276,8 +426,15 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
             adjustment.adjustment = LayerAdjustment{};
             adjustment.adjustment->kind = AdjustmentKind::Exposure;
             adjustment.adjustment->exposureSettings = ExposureSettings{0.25, 0, 1};
-            next->fixture.layers.push_back(std::move(adjustment));
+            if (!fixtureDraft.value().Append(std::move(adjustment)))
+                return E_INVALIDARG;
         }
+        auto importDocument = importDraft.value().Seal();
+        auto fixtureDocument = fixtureDraft.value().Seal();
+        if (!importDocument || !fixtureDocument)
+            return E_INVALIDARG;
+        next->imageImportBaseline = std::move(importDocument.value());
+        next->fixture = std::move(fixtureDocument.value());
         if (ValidateDocument(next->fixture) != DocumentStatus::Ok)
         {
             return E_INVALIDARG;
@@ -299,18 +456,19 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
 
 struct Distribution final
 {
+    std::uint64_t samples = 0;
     std::uint64_t p99UpperUs = 0;
     std::uint64_t maximumUs = 0;
 };
 
-Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcept
+template <typename Select> Distribution SummarizeSelected(const UiBenchmarkState& state, Select select) noexcept
 {
     std::array<std::uint64_t, UiTimingHistogram::kBucketCount> buckets{};
     std::uint64_t count = 0;
     Distribution result;
     for (unsigned int run = 0; run < state.runs; ++run)
     {
-        const auto& histogram = state.samples[run].timing.durations[static_cast<std::size_t>(kind)];
+        const auto& histogram = select(state.samples[run].timing);
         count += histogram.SampleCount();
         result.maximumUs = (std::max)(result.maximumUs, histogram.MaximumMicroseconds());
         for (std::size_t bucket = 0; bucket < buckets.size(); ++bucket)
@@ -318,6 +476,7 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
             buckets[bucket] += histogram.BucketCounts()[bucket];
         }
     }
+    result.samples = count;
     if (count == 0)
     {
         return result;
@@ -337,43 +496,182 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
     return result;
 }
 
+Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind)
+{
+    return SummarizeSelected(state, [kind](const UiTimingStats& stats) -> const UiTimingHistogram&
+                             { return stats.durations[static_cast<std::size_t>(kind)]; });
+}
+
+constexpr std::array<std::pair<UiTimingKind, const char*>, 6> kResourceStages{{
+    {UiTimingKind::TextureCreate, "texture-create"},
+    {UiTimingKind::ShaderViewCreate, "shader-view-create"},
+    {UiTimingKind::MipGeneration, "mip-generation"},
+    {UiTimingKind::RasterUpload, "raster-upload"},
+    {UiTimingKind::CompositionRecord, "composition-record"},
+    {UiTimingKind::ChromeSync, "chrome-sync"},
+}};
+
+void ResetBenchmarkTiming(UiTimingStats& timing) noexcept
+{
+    const bool attribution = timing.attributionEnabled;
+    timing = {};
+    timing.attributionEnabled = attribution;
+}
+
+void PrintSizeAttributionString(const char* value) noexcept
+{
+    std::fputc('"', stdout);
+    for (; *value; ++value)
+    {
+        if (*value == '\\' || *value == '"')
+            std::fputc('\\', stdout);
+        std::fputc(*value, stdout);
+    }
+    std::fputc('"', stdout);
+}
+
+void ReportSizeAttribution(const UiBenchmarkState& state, const char* boundary) noexcept
+{
+    if (!state.sizeOnly || !state.timing.attributionEnabled)
+        return;
+    for (std::uint32_t index = 0; index < state.timing.attributionCursor; ++index)
+    {
+        const auto& record = state.timing.attributionRecords[index];
+        std::printf("UI SIZE ATTRIBUTION name=%s trial=%u boundary=%s index=%u kind=%u detail=%u "
+                    "wallUs=%llu qpcBegin=%lld qpcEnd=%lld qpcFrequency=%lld cyclesKnown=%d "
+                    "threadCycles=%llu sourceLine=%u source=",
+                    CurrentOperation(state).name, state.trial, boundary, index, static_cast<unsigned int>(record.kind),
+                    record.detail, static_cast<unsigned long long>(record.wallMicroseconds),
+                    static_cast<long long>(record.qpcBegin), static_cast<long long>(record.qpcEnd),
+                    static_cast<long long>(record.qpcFrequency), record.threadCycleKnown,
+                    static_cast<unsigned long long>(record.threadCycleDelta), static_cast<unsigned int>(record.line));
+        PrintSizeAttributionString(record.file);
+        std::printf(" function=");
+        PrintSizeAttributionString(record.function);
+        std::fputc('\n', stdout);
+    }
+    std::printf("UI SIZE ATTRIBUTION SUMMARY name=%s trial=%u boundary=%s count=%u overflow=%llu "
+                "clockFailures=%llu capacity=%zu minimumUs=%llu diagnostic=1\n",
+                CurrentOperation(state).name, state.trial, boundary, state.timing.attributionCursor,
+                static_cast<unsigned long long>(state.timing.attributionOverflowCount),
+                static_cast<unsigned long long>(state.timing.attributionClockFailures), kUiTimingAttributionCapacity,
+                static_cast<unsigned long long>(kUiTimingAttributionMinimumMicroseconds));
+}
+
+void ReportResourceStages(const UiBenchmarkState& state, const char* boundary, bool recorded)
+{
+    for (const auto& [kind, name] : kResourceStages)
+    {
+        Distribution distribution;
+        if (recorded)
+            distribution = Summarize(state, kind);
+        else
+        {
+            const auto& histogram = state.timing.durations[static_cast<std::size_t>(kind)];
+            distribution = {histogram.SampleCount(), histogram.PercentileUpperBound(99),
+                            histogram.MaximumMicroseconds()};
+        }
+        // Zero samples means this boundary performed none of that work, not a measured zero-duration stage.
+        std::printf("%s\n", std::format("UI RESOURCE name={} boundary={} stage={} samples={} "
+                                        "p99UpperUs={} maxUs={} inclusive=1",
+                                        CurrentOperation(state).name, boundary, name, distribution.samples,
+                                        distribution.p99UpperUs, distribution.maximumUs)
+                                .c_str());
+    }
+}
+
 void Report(const UiBenchmarkState& state)
 {
     std::array<std::uint64_t, 10> elapsed{};
+    const auto runs = static_cast<std::size_t>(state.runs);
+    if (runs == 0 || runs > elapsed.size())
+    {
+        std::fprintf(stderr, "UI BENCH report rejected invalid run count=%u\n", state.runs);
+        return;
+    }
     std::uint64_t frames = 0;
+    std::uint64_t clockFailures = 0;
+    std::uint64_t abandonedFrames = 0;
+    std::uint64_t sizeFinalPublications = 0;
     GpuReadbackStatistics readback;
-    for (unsigned int run = 0; run < state.runs; ++run)
+    for (std::size_t run = 0; run < runs; ++run)
     {
         elapsed[run] = state.samples[run].elapsedUs;
         frames += state.samples[run].frames;
+        sizeFinalPublications += state.samples[run].sizeFinalPublications;
+        clockFailures += state.samples[run].timing.clockFailures;
+        abandonedFrames += state.samples[run].timing.abandonedFrameIntervals;
         readback.copies += state.samples[run].readback.copies;
         readback.maps += state.samples[run].readback.maps;
         readback.readinessBarriers += state.samples[run].readback.readinessBarriers;
         readback.busyFailures += state.samples[run].readback.busyFailures;
     }
-    std::sort(elapsed.begin(), elapsed.begin() + state.runs);
+    std::sort(elapsed.begin(), elapsed.begin() + runs);
     const auto dispatch = Summarize(state, UiTimingKind::MessageDispatch);
     const auto message = Summarize(state, UiTimingKind::WindowMessage);
     const auto drain = Summarize(state, UiTimingKind::CompletionDrain);
     const auto apply = Summarize(state, UiTimingKind::ResultApply);
     const auto action = Summarize(state, UiTimingKind::UiAction);
     const auto frame = Summarize(state, UiTimingKind::Frame);
+    const auto frameLatency = SummarizeSelected(state, [](const UiTimingStats& stats) -> const UiTimingHistogram&
+                                                { return stats.frameLatency; });
     const double median =
-        static_cast<double>(elapsed[(state.runs - 1) / 2]) * 0.5 + static_cast<double>(elapsed[state.runs / 2]) * 0.5;
-    std::printf("%s\n",
-                std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
-                            "elapsedP95Us={} elapsedMaxUs={} "
-                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                            "drainP99UpperUs={} drainMaxUs={} "
-                            "applyMaxUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
-                            "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
-                            CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
-                            elapsed[(state.runs * 95 + 99) / 100 - 1], elapsed[state.runs - 1], dispatch.p99UpperUs,
-                            dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs,
-                            drain.maximumUs, apply.maximumUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs,
-                            frames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
-                    .c_str());
+        static_cast<double>(elapsed.at((runs - 1) / 2)) * 0.5 + static_cast<double>(elapsed.at(runs / 2)) * 0.5;
+    std::printf(
+        "%s\n",
+        std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
+                    "elapsedP95Us={} elapsedMaxUs={} "
+                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                    "drainP99UpperUs={} drainMaxUs={} "
+                    "applyMaxUs={} actionP99UpperUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
+                    "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                    "invalidationToPresentMaxUs={} clockFailures={} abandonedFrameIntervals={} "
+                    "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
+                    CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
+                    elapsed.at((runs * 95 + 99) / 100 - 1), elapsed.at(runs - 1), dispatch.p99UpperUs,
+                    dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs, drain.maximumUs,
+                    apply.maximumUs, action.p99UpperUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs, frames,
+                    frameLatency.samples, frameLatency.p99UpperUs, frameLatency.maximumUs, clockFailures,
+                    abandonedFrames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
+            .c_str());
+    if (state.sizeOnly)
+        std::printf("UI SIZE PUBLICATION name=%s recorded=%llu expected=%llu warmupExcluded=1\n",
+                    CurrentOperation(state).name, static_cast<unsigned long long>(sizeFinalPublications),
+                    static_cast<unsigned long long>(CurrentOperation(state).expected == Expected::Size ? runs : 0));
     std::fflush(stdout);
+    ReportResourceStages(state, "recorded", true);
+}
+
+void ReportFocusedBoundary(const UiBenchmarkState& state, const char* boundary)
+{
+    // Report initial display preparation and the excluded first trial separately. The recorded distribution
+    // must not hide their owner-thread cost, and neither row is an isolated GPU upload timer.
+    const auto& timing = state.timing;
+    const auto& dispatch = timing.durations[static_cast<std::size_t>(UiTimingKind::MessageDispatch)];
+    const auto& message = timing.durations[static_cast<std::size_t>(UiTimingKind::WindowMessage)];
+    const auto& drain = timing.durations[static_cast<std::size_t>(UiTimingKind::CompletionDrain)];
+    const auto& apply = timing.durations[static_cast<std::size_t>(UiTimingKind::ResultApply)];
+    const auto& action = timing.durations[static_cast<std::size_t>(UiTimingKind::UiAction)];
+    const auto& frame = timing.durations[static_cast<std::size_t>(UiTimingKind::Frame)];
+    std::printf("%s\n", std::format("UI BENCH BOUNDARY name={} boundary={} width={} height={} "
+                                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                                    "drainP99UpperUs={} drainMaxUs={} applyMaxUs={} actionP99UpperUs={} actionMaxUs={} "
+                                    "frameP99UpperUs={} frameMaxUs={} frames={} clockFailures={} "
+                                    "invalidationToPresentSamples={} invalidationToPresentP99UpperUs={} "
+                                    "invalidationToPresentMaxUs={} abandonedFrameIntervals={}",
+                                    CurrentOperation(state).name, boundary, state.fixture.width, state.fixture.height,
+                                    dispatch.PercentileUpperBound(99), dispatch.MaximumMicroseconds(),
+                                    message.PercentileUpperBound(99), message.MaximumMicroseconds(),
+                                    drain.PercentileUpperBound(99), drain.MaximumMicroseconds(),
+                                    apply.MaximumMicroseconds(), action.PercentileUpperBound(99),
+                                    action.MaximumMicroseconds(), frame.PercentileUpperBound(99),
+                                    frame.MaximumMicroseconds(), frame.SampleCount(), timing.clockFailures,
+                                    timing.frameLatency.SampleCount(), timing.frameLatency.PercentileUpperBound(99),
+                                    timing.frameLatency.MaximumMicroseconds(), timing.abandonedFrameIntervals)
+                            .c_str());
+    std::fflush(stdout);
+    ReportResourceStages(state, boundary, false);
+    ReportSizeAttribution(state, boundary);
 }
 } // namespace
 
@@ -418,6 +716,16 @@ int Application::RunUiBenchmark() noexcept
         std::printf("UI BENCH REPORT status=failed setup=0x%08lx\n", static_cast<unsigned long>(status));
         return 5;
     }
+    if (_uiBenchmark->cancellation)
+    {
+        if (!_preUiCancellationObservation)
+        {
+            std::printf("UI BENCH REPORT status=failed reason=missing-startup-observer\n");
+            return 5;
+        }
+        // Transfer ownership, not the object: the scheduler already borrows this stable context/event.
+        _uiBenchmark->cancellation->observation = std::move(_preUiCancellationObservation);
+    }
     _quietUi = true;
     _prompts = &QuietPrompts();
     _screenshotDpi = 0;
@@ -433,6 +741,16 @@ HRESULT Application::InitializeUiBenchmark() noexcept
     {
         auto& state = *_uiBenchmark;
         auto& machine = state.machine;
+        // Explicit experiment only: qualify the actual prepared controller/row caller chain before normal
+        // activation. Refusal is an operation failure; no fallback silently measures the legacy display.
+        if (state.preparedDisplay && !InitializeResponsiveSourcesOwner(false))
+            return E_FAIL;
+        if (state.sizeOnly)
+        {
+            // This benchmark alone opts the existing Size final-publication route in, after prepared display/rows
+            // have been acquired successfully. Ordinary editing and every other benchmark retain the default off.
+            _selectionPixelFinalPublicationEnabled = true;
+        }
         machine.applicationVersion = Utf8(RedPrism::FormatRunningModuleVersion(L"unknown"));
         machine.isa = Utf8(KernelIsaName(ActiveKernels().isa));
         machine.workerCount = _jobs.WorkerCount();
@@ -453,10 +771,42 @@ HRESULT Application::InitializeUiBenchmark() noexcept
                                                     HIWORD(driver.LowPart), LOWORD(driver.LowPart));
             }
         }
+        const auto monitor = ReadBenchmarkMonitor(_window.get());
+        machine.monitorDeviceName = monitor.deviceName;
+        machine.refreshRate = monitor.refresh;
+        state.displayAuthorityKnown = monitor.monitorIdentity != 0 && monitor.deviceName.has_value() &&
+                                      !monitor.deviceName->empty() && monitor.refresh.has_value() &&
+                                      monitor.refresh->numerator != 0 && monitor.refresh->denominator != 0;
+        if (!state.displayContinuityCaptured)
+        {
+            state.displayContinuity = {};
+            state.initialMonitorIdentity = monitor.monitorIdentity;
+            state.displayContinuityCaptured = true;
+        }
         std::printf("BENCH MACHINE %s device=%s fixtureChecksum=%016llx\n", FormatBenchmarkMachineInfo(machine).c_str(),
                     _renderer.IsWarp() ? "WARP" : "hardware", static_cast<unsigned long long>(state.fixtureChecksum));
+        if (state.RejectPerformanceForUnknownDisplayAuthority())
+        {
+            FailUiBenchmark("display-authority-unknown");
+            return E_FAIL;
+        }
+        if (state.sizeOnly)
+        {
+            std::printf("UI BENCH ROUTE display=%s rows=%s asyncStroke=%d asyncWarp=%d "
+                        "finalPublication=size-prepared-benchmark ordinaryActivation=0\n",
+                        _committedDisplayInitialized ? "prepared" : "direct",
+                        _preparedLayerRowsEnabled ? "prepared" : "direct", _asyncStrokeSamplesEnabled,
+                        _asyncWarpLiveEnabled);
+        }
+        else
+        {
+            std::printf("UI BENCH ROUTE display=%s rows=%s asyncStroke=%d asyncWarp=%d ordinaryActivation=0\n",
+                        _committedDisplayInitialized ? "prepared" : "direct",
+                        _preparedLayerRowsEnabled ? "prepared" : "direct", _asyncStrokeSamplesEnabled,
+                        _asyncWarpLiveEnabled);
+        }
         // A single failure deadline for an opt-in harness, never a normal application polling timer.
-        if (SetTimer(_window.get(), kUiBenchmarkTimerId, _bench == L"ui-smoke" ? 90000 : 1800000, nullptr) == 0)
+        if (SetTimer(_window.get(), kUiBenchmarkTimerId, state.smoke ? 90000 : 1800000, nullptr) == 0)
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -468,6 +818,45 @@ HRESULT Application::InitializeUiBenchmark() noexcept
         // Setup failed; Run exits and Main performs the normal all-owner shutdown.
         return E_OUTOFMEMORY;
     }
+}
+
+bool Application::ValidateUiBenchmarkDisplayAuthority() noexcept
+{
+    auto& state = *_uiBenchmark;
+    if (!state.displayContinuityCaptured)
+    {
+        FailUiBenchmark("display-authority-not-captured");
+        return false;
+    }
+    try
+    {
+        const auto endpoint = ReadBenchmarkMonitor(_window.get());
+        const bool endpointAuthorityKnown = endpoint.monitorIdentity != 0 && endpoint.deviceName.has_value() &&
+                                            !endpoint.deviceName->empty() && endpoint.refresh.has_value() &&
+                                            endpoint.refresh->numerator != 0 && endpoint.refresh->denominator != 0;
+        if (!endpointAuthorityKnown)
+            state.displayAuthorityKnown = false;
+        else if (endpoint.monitorIdentity != state.initialMonitorIdentity ||
+                 endpoint.deviceName != state.machine.monitorDeviceName ||
+                 !SameRefreshRate(endpoint.refresh, state.machine.refreshRate))
+            state.displayContinuity.invalidated = true;
+    }
+    catch (const std::bad_alloc&)
+    {
+        FailUiBenchmark("display-endpoint-capture-failed");
+        return false;
+    }
+    if (state.RejectPerformanceForDisplayChange())
+    {
+        FailUiBenchmark("display-authority-changed");
+        return false;
+    }
+    if (state.RejectPerformanceForUnknownDisplayAuthority())
+    {
+        FailUiBenchmark("display-endpoint-authority-unknown");
+        return false;
+    }
+    return true;
 }
 
 void Application::FailUiBenchmark(const char* reason) noexcept
@@ -487,14 +876,34 @@ void Application::FailUiBenchmark(const char* reason) noexcept
                         _session.history.IsModified() == _uiBenchmark->previousModified,
                         layer && layer->asset && layer->asset->image == _uiBenchmark->previousImage, _lastErrorId);
         }
+        if (_uiBenchmark->cancellation)
+        {
+            const auto& trial = *_uiBenchmark->cancellation;
+            std::printf("UI CANCEL DETAIL phase=%u ownerPending=%d ownerReady=%d gpuPending=%d gpuReady=%d "
+                        "committedPending=%d committedReady=%d pendingPending=%d pendingReady=%d "
+                        "commandsPending=%d commandsReady=%d rowsPending=%d rowsReady=%d historyReady=%d "
+                        "hostActive=%d hostQueued=%zu historyBusy=%d colorCommit=%d colorPreview=%d colorHistogram=%d "
+                        "rowsTicket=%d rowsCacheTicket=%d frameInvalidated=%d opening=%llu original=%d cursor=%zu\n",
+                        static_cast<unsigned int>(trial.phase), _ownerWork.HasPending(), _ownerWork.HasReady(),
+                        _gpuWork.HasPending(), _gpuWork.HasReady(), _committedDisplay.HasPending(),
+                        _committedDisplay.HasReady(), _pendingDisplay.HasPending(), _pendingDisplay.HasReady(),
+                        _recordedCommands.HasPending(), _recordedCommands.HasReady(), _layerRowsSource.HasPending(),
+                        _layerRowsSource.HasReady(), _historyResidencySource.HasReady(), _activeHostRequest.has_value(),
+                        _hostRequests.Size(), _historyWork.Busy(), _colorCommitTicket.has_value(),
+                        _colorPreviewTicket.has_value(), _colorHistogramTicket.has_value(),
+                        _layerRowsTicket.has_value(), _layerRowsCacheTicket.has_value(), _frameInvalidated,
+                        static_cast<unsigned long long>(trial.opening), trial.original.has_value(), trial.cursor);
+        }
+        DisarmUiCancellationTimer();
         _uiBenchmark->failed = true;
         _uiBenchmark->phase = UiBenchmarkState::Phase::Done;
         std::printf("UI BENCH REPORT status=failed reason=%s operation=%zu name=%s trial=%u "
                     "visible=%d displayOn=%d suspended=%d occluded=%d jobsIdle=%d presents=%llu expectedAfter=%llu "
                     "frameFailure=0x%08lx canvasFailure=0x%08lx failedStage=%u\n",
-                    reason, _uiBenchmark->operation, CurrentOperation(*_uiBenchmark).name, _uiBenchmark->trial,
-                    _windowVisible, _displayPoweredOn, _renderer.IsSuspended(), _renderer.IsOccluded(), _jobs.IsIdle(),
-                    static_cast<unsigned long long>(_renderer.PresentCount()),
+                    reason, _uiBenchmark->operation,
+                    _uiBenchmark->cancellation ? UiCancellationOperationName() : CurrentOperation(*_uiBenchmark).name,
+                    _uiBenchmark->trial, _windowVisible, _displayPoweredOn, _renderer.IsSuspended(),
+                    _renderer.IsOccluded(), _jobs.IsIdle(), static_cast<unsigned long long>(_renderer.PresentCount()),
                     static_cast<unsigned long long>(_uiBenchmark->previousPresents),
                     static_cast<unsigned long>(_lastFrameFailure),
                     static_cast<unsigned long>(_renderer.CanvasFailure()),
@@ -508,6 +917,11 @@ void Application::FailUiBenchmark(const char* reason) noexcept
 void Application::PrepareUiBenchmarkStep() noexcept
 {
     auto& state = *_uiBenchmark;
+    if (state.cancellation)
+    {
+        PrepareUiCancellationStep();
+        return;
+    }
     _session.CancelColorEdit();
     const auto operation = CurrentOperation(state);
     if (operation.expected == Expected::ImportedLayers || operation.expected == Expected::ImportedLayersRefused)
@@ -532,6 +946,11 @@ void Application::PrepareUiBenchmarkStep() noexcept
         state.exportReceipt.reset();
     if (operation.expected == Expected::GradientApplied)
         state.gradientApplyReceipt.reset();
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        state.samplerReceipt.reset();
+        OnTool(EditorTool::Eyedropper);
+    }
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
@@ -603,12 +1022,44 @@ void Application::PrepareUiBenchmarkStep() noexcept
 
 void Application::ExecuteUiBenchmarkStep() noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->cancellation)
+    {
+        ExecuteUiCancellationStep();
+        return;
+    }
     if (!_uiBenchmark || _uiBenchmark->phase != UiBenchmarkState::Phase::Posted)
     {
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.expected == Expected::GradientPreview)
+    if (operation.expected == Expected::SampledPrefix)
+    {
+        // Exact document coordinates avoid fit-zoom integer client rounding. These are the actual accepted
+        // Down/Move/end producers; the posted harness message, admission, readback, publication and final frame
+        // remain inside the measured outer application loop. End never samples a release coordinate.
+        DxUi::PointerEvent down{};
+        down.action = DxUi::PointerAction::Down;
+        down.modifiers = MK_LBUTTON;
+        const Vec2 first{0.5, 0.5};
+        PressCanvas(down, WM_LBUTTONDOWN, _viewport.ViewFromDocument(first, DocumentSize()), POINT{});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto* opening = sampling && sampling->opening ? FindSamplerOpening(sampling->opening.value()) : nullptr;
+        if (!opening || sampling->composite || _samplerHostTicket || _samplerHostJob)
+        {
+            FailUiBenchmark("sampler-scalar-admission");
+            return;
+        }
+        _uiBenchmark->samplerReceipt = opening->receipt;
+        SampleColorAt(_viewport.ViewFromDocument(Vec2{1.5, 0.5}, DocumentSize()));
+        SampleColorAt(_viewport.ViewFromDocument(first, DocumentSize()));
+        if (opening->points.PendingCount() != 3)
+        {
+            FailUiBenchmark("sampler-three-point-prefix");
+            return;
+        }
+        EndColorSampling();
+    }
+    else if (operation.expected == Expected::GradientPreview)
     {
         auto& state = *_uiBenchmark;
         const double startX = 1.5;
@@ -692,7 +1143,7 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         OnAdjustAction(operation.action, operation.value);
     }
     _uiBenchmark->phase = UiBenchmarkState::Phase::AwaitingFrame;
-    _frameInvalidated = true;
+    InvalidateFrame();
 }
 
 void Application::AdvanceUiBenchmark() noexcept
@@ -700,6 +1151,16 @@ void Application::AdvanceUiBenchmark() noexcept
     auto& state = *_uiBenchmark;
     if (state.phase == UiBenchmarkState::Phase::Done)
     {
+        return;
+    }
+    if (state.RejectPerformanceForDisplayChange())
+    {
+        FailUiBenchmark("display-authority-changed");
+        return;
+    }
+    if (state.RejectPerformanceForUnknownDisplayAuthority())
+    {
+        FailUiBenchmark("display-authority-unknown");
         return;
     }
     if (!_windowVisible || (!_displayPoweredOn && !state.smoke) || _renderer.IsSuspended() || _renderer.IsOccluded())
@@ -712,11 +1173,48 @@ void Application::AdvanceUiBenchmark() noexcept
         FailUiBenchmark("render-failure");
         return;
     }
+    if (state.cancellation)
+    {
+        AdvanceUiCancellationBenchmark();
+        return;
+    }
     // A completion can arrive after an earlier frame already presented. Wait for the frame invalidated by
     // that completion, so asynchronous work cannot pass readiness while its final image/chrome is still unseen.
     if (!_jobs.IsIdle() || _frameInvalidated || _renderer.PresentCount() <= state.previousPresents)
     {
         return;
+    }
+    if (state.preparedDisplay)
+    {
+        if (!_committedDisplayInitialized || !_pendingDisplayInitialized || !_preparedLayerRowsEnabled ||
+            FAILED(_committedDisplayFailure) || _layerRowsRetryAvailable)
+        {
+            FailUiBenchmark("prepared-display-or-row-route-failed");
+            return;
+        }
+        // Joining the generic scheduler alone does not establish current display/row publication authority.
+        // Keep all real owner pumps pending, then require the controller's descriptor-checked frame root.
+        if (_committedDisplay.HasPending() || _committedDisplay.HasReady() || _pendingDisplay.HasPending() ||
+            _pendingDisplay.HasReady() || _recordedCommands.HasPending() || _recordedCommands.HasReady() ||
+            _layerRowsTicket || _layerRowsSource.HasPending() || _layerRowsSource.HasReady())
+            return;
+        if (_session.Document() && !_committedDisplay.HasCurrentPublicationOwner())
+        {
+            FailUiBenchmark("prepared-committed-root-not-current");
+            return;
+        }
+        CommittedDisplayDescriptor pending;
+        if (_pendingDisplayClient.DescribeCommittedDisplayOwner(pending) &&
+            !_pendingDisplay.HasCurrentPublicationOwner())
+        {
+            FailUiBenchmark("prepared-pending-root-not-current");
+            return;
+        }
+        if (!_layerRowsPublishedKey || _layerRowsPublishedKey.value() != CurrentLayerRowsKey())
+        {
+            FailUiBenchmark("prepared-rows-not-current");
+            return;
+        }
     }
     if (state.phase == UiBenchmarkState::Phase::Preparing)
     {
@@ -739,6 +1237,7 @@ void Application::AdvanceUiBenchmark() noexcept
                 return;
             }
         }
+        state.previousSizeFinalPublications = state.sizeFinalPublications;
         state.previousRevision = _session.history.CurrentRevision();
         state.previousSessionSerial = _session.DocumentSerial();
         if (_documentPath.size() >= state.previousDocumentPath.size())
@@ -768,6 +1267,7 @@ void Application::AdvanceUiBenchmark() noexcept
             }
         }
         state.previousReadback = _gpuWork.Statistics();
+        state.previousReservedMemoryBytes = _jobs.ReservedMemoryBytes();
         const auto* layer = _session.ActiveLayer();
         if (!layer || !layer->asset.has_value())
         {
@@ -780,7 +1280,16 @@ void Application::AdvanceUiBenchmark() noexcept
         state.previousPreviewSequence = edit.has_value() ? edit->previewSequence : 0;
         state.previousZoom = _viewport.zoom;
         state.previousPan = _viewport.pan;
-        state.timing = {};
+        if ((state.samplerOnly || state.sizeOnly) && state.trial == 0)
+        {
+            if (state.timing.clockFailures != 0)
+            {
+                FailUiBenchmark(state.samplerOnly ? "sampler-preparation-clock" : "size-preparation-clock");
+                return;
+            }
+            ReportFocusedBoundary(state, "initial-display");
+        }
+        ResetBenchmarkTiming(state.timing);
         state.previousPresents = _renderer.PresentCount();
         state.requestedAt = Now();
         state.phase = UiBenchmarkState::Phase::Posted;
@@ -861,7 +1370,8 @@ void Application::AdvanceUiBenchmark() noexcept
         _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Import Image";
     const bool importRefused =
         expected == Expected::ImportedLayersRefused && state.importReceipt &&
-        importResult.outcome == HostOutcome::Failed && importResult.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) &&
+        importResult.outcome == HostOutcome::Failed &&
+        importResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) &&
         _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
         document->id == state.imageImportBaseline.id && document->width == state.expectedImageWidth &&
         document->height == state.expectedImageHeight && document->layers.size() == 1 &&
@@ -869,6 +1379,9 @@ void Application::AdvanceUiBenchmark() noexcept
         layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
         _session.history.UndoCount() == state.previousUndoCount && _errorsShown == state.previousErrorsShown + 1 &&
         _lastErrorId == IDS_ERROR_TOO_LARGE;
+    const bool sizePublicationReady =
+        !state.sizeOnly ||
+        state.sizeFinalPublications == state.previousSizeFinalPublications + (expected == Expected::Size ? 1u : 0u);
     const bool sizeReady =
         expected == Expected::Size && document && !SizeCardOpen() &&
         _session.history.CurrentRevision() != state.previousRevision &&
@@ -898,9 +1411,27 @@ void Application::AdvanceUiBenchmark() noexcept
         layer->asset->image != state.previousImage && _session.history.CurrentRevision() != state.previousRevision &&
         _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Gradient" &&
         GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
-    if (!duration.has_value() || state.timing.clockFailures != 0 ||
+    const auto samplerResult = state.samplerReceipt ? state.samplerReceipt->Read() : ContinuationReceipt::Result{};
+    const auto samplerReadback = _gpuWork.Statistics();
+    // Independent fixture oracle at (0,0): top gray 29 over bottom gray 71 with mask 128 rounds to 50.
+    // Exposure +0.25 in linear sRGB rounds that byte to 55. The ceiling fixture has only opaque top gray 29.
+    const auto expectedSample = state.fixture.width == 10000 ? 0xFF1D1D1Du : 0xFF373737u;
+    const bool sampledPrefix =
+        expected == Expected::SampledPrefix && state.samplerReceipt &&
+        samplerResult.outcome == HostOutcome::Succeeded && _session.ForegroundColor() == expectedSample &&
+        _session.DocumentSerial() == state.previousSessionSerial &&
+        _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount &&
+        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
+        layer->asset->image == state.previousImage && !edit && !std::holds_alternative<ColorSampling>(_drag) &&
+        !_samplerHostTicket && !_samplerHostStamp && !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() &&
+        !_historyWork.Busy() &&
+        _jobs.ReservedMemoryBytes() == (state.preparedDisplay ? state.previousReservedMemoryBytes : 0) &&
+        _composition.UtilitySurfaceBytes() == 0 && samplerReadback.copies - state.previousReadback.copies == 3 &&
+        samplerReadback.busyFailures == state.previousReadback.busyFailures;
+    if (!duration.has_value() || state.timing.clockFailures != 0 || !sizePublicationReady ||
         !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
-          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied ||
+          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied || sampledPrefix ||
           (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
@@ -915,25 +1446,40 @@ void Application::AdvanceUiBenchmark() noexcept
                                           {readback.copies - state.previousReadback.copies,
                                            readback.maps - state.previousReadback.maps,
                                            readback.readinessBarriers - state.previousReadback.readinessBarriers,
-                                           readback.busyFailures - state.previousReadback.busyFailures}};
+                                           readback.busyFailures - state.previousReadback.busyFailures},
+                                          state.sizeFinalPublications - state.previousSizeFinalPublications};
+        ReportSizeAttribution(state, "recorded");
+    }
+    else if (state.samplerOnly || state.sizeOnly)
+    {
+        ReportFocusedBoundary(state, "excluded-warmup");
     }
     if (saved)
         state.savedBaselineReady = true;
     if (++state.trial > state.runs)
     {
+        const bool finalOperation = state.samplerOnly || state.operation + 1 == OperationCount(state);
+        if (finalOperation && !ValidateUiBenchmarkDisplayAuthority())
+            return;
         Report(state);
         state.trial = 0;
-        if (++state.operation == kOperations.size())
+        if (state.samplerOnly || ++state.operation == OperationCount(state))
         {
             state.phase = UiBenchmarkState::Phase::Done;
             state.complete = true;
             (void)KillTimer(_window.get(), kUiBenchmarkTimerId);
-            std::printf("UI BENCH REPORT status=ok width=%d height=%d operations=%zu\n", state.fixture.width,
-                        state.fixture.height, kOperations.size());
+            std::printf("UI BENCH REPORT status=ok width=%d height=%d operations=%zu smokeCorrectnessOnly=%d "
+                        "displayAuthorityKnown=%d displayChanged=%d\n",
+                        state.fixture.width, state.fixture.height, OperationCount(state), state.smoke,
+                        state.displayAuthorityKnown, state.displayContinuity.invalidated);
             std::fflush(stdout);
             PostQuitMessage(0);
             return;
         }
+        // The next focused Size operation reports its own preparation/display boundary. Start that interval
+        // after the previous operation's scored report so its timing and resource rows remain operation-local.
+        if (state.sizeOnly)
+            ResetBenchmarkTiming(state.timing);
     }
     PrepareUiBenchmarkStep();
 }

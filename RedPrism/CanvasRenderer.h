@@ -29,6 +29,10 @@
 // the committed document at full resolution, in tiles when it must. A raster larger than the limit is uploaded as
 // the part the window shows, reduced by a power of two when that part is still too large; nothing ever asks the
 // device for a texture it cannot create (Decision D1, Rendering_Composition.md "Documents larger than the device").
+class GpuRecordingCommands;
+struct PreparedWarpPreview;
+class PreparedPixelMovePreview;
+
 class CanvasRenderer final
 {
   public:
@@ -38,13 +42,26 @@ class CanvasRenderer final
     CanvasRenderer(const CanvasRenderer&) = delete;
     CanvasRenderer& operator=(const CanvasRenderer&) = delete;
 
-    HRESULT CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context) noexcept;
+    HRESULT CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context,
+                                  GpuRecordingCommands* recording = nullptr) noexcept;
+    // Private producer-only preparation. Seed only from a retained, published/sealed graph whose owner blits
+    // without editing its cache. This copies immutable raster residents, never adjustment/stroke writable targets.
+    [[nodiscard]] ID3D11Texture2D* PreparedDisplayTextureForTest() const noexcept
+    {
+        return _recordedDisplaySealed ? _canvas[_front].texture.texture.get() : nullptr;
+    }
+    HRESULT SeedRasterResidencyForWork(const CanvasRenderer& stable) noexcept;
+    HRESULT SealRecordedDisplayForWork() noexcept;
+    // Parent has separately joined recording and acknowledged every original command batch. This binds the
+    // already complete graph for owner blits; it neither establishes GPU completion nor adopts a reservation.
+    HRESULT BindAcknowledgedDisplayOwner(ID3D11DeviceContext* context) noexcept;
     void ReleaseDeviceResources() noexcept;
     void ReleaseDocumentSurfaces() noexcept;
     // The next Compose re-renders every layer. Cheap; the application calls it after every document edit.
     void InvalidateDocument() noexcept
     {
-        _documentDirty = true;
+        if (!_recordedDisplaySealed)
+            _documentDirty = true;
     }
     // The display composite (with the stroke preview in place of its layer), at the proxy scale the document needs.
     HRESULT Compose(const CanvasDocument& document) noexcept;
@@ -82,6 +99,21 @@ class CanvasRenderer final
     HRESULT BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
                          const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                          float holeHeight) noexcept;
+    // Private S5 route proof only: complete same-device R8 mip-0 masks on a pixel-aligned view grid.
+    // Parent retains the original admitted CPU/GPU epoch and both SRVs through actual drawing/retirement.
+    // This records one overlay pass; it never composes, traverses points, creates resources or copies pixels.
+    // Calls borrow the actual immediate owner context; no recorder or ordinary activation is authorized here.
+    HRESULT DrawSelectionOutlineToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth,
+                                         unsigned int targetHeight, ID3D11ShaderResourceView* solid,
+                                         ID3D11ShaderResourceView* dashes, unsigned int maskWidth,
+                                         unsigned int maskHeight, float pixelLeft, float pixelTop,
+                                         const std::array<float, 4>* clip = nullptr) noexcept;
+    // One same-device premultiplied BGRA draft view. The original admitted parent owns the graph
+    // through recording and actual context acknowledgement; the optional fractional clip applies once.
+    HRESULT DrawLassoDraftToTarget(ID3D11RenderTargetView* target, unsigned int targetWidth, unsigned int targetHeight,
+                                   ID3D11ShaderResourceView* color, unsigned int width, unsigned int height,
+                                   float pixelLeft, float pixelTop,
+                                   const std::array<float, 4>* clip = nullptr) noexcept;
     // The last display composite at document resolution. Fails while the display draws a reduced proxy: a document
     // readback goes through ComposeReadback.
     HRESULT Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept;
@@ -97,11 +129,24 @@ class CanvasRenderer final
         int height = 0;
         LayerTransform transform; // places the grid on the document
         Raster source;            // the layer's image (or mask) the stroke started from; may be empty
-        int sourceX = 0;          // where the source sits in the grid
+        // Recorded worker only: complete document-grid Warp bytes over the exact placed original.
+        std::shared_ptr<const PreparedWarpPreview> warpSource;
+        int sourceX = 0; // where the source sits in the grid
         int sourceY = 0;
+        // Explicit nearest stretch of the immutable source in the private recorder. Zero uses source size.
+        int sourceWidth = 0;
+        int sourceHeight = 0;
         std::uint8_t fill = 0; // pixels beyond the source (255 reveals for masks)
+        // Complete immutable lifted-pixel reader; accepted only by the private recording path.
+        std::shared_ptr<const PreparedPixelMovePreview> pixelSource;
     };
     HRESULT BeginStroke(const StrokePreview& preview) noexcept;
+    // Exclusive private recorder only. Establish document/proxy geometry before any oversize grid upload.
+    // Inherit only an exact same-grid seed into a NEW texture, with bounded GPU copies; no seed mutation.
+    // Parent holds the published seed through this producer and all original command acknowledgements.
+    HRESULT PrepareRecordedStrokeForWork(const CanvasDocument& document, const StrokePreview& preview,
+                                         std::span<const RasterTile> changed, const CanvasRenderer* publishedSeed,
+                                         bool& inherited) noexcept;
     // Tiles of the grid whose pixels changed; every touched tile when StrokeTextureMissing() (the texture is then
     // created from the source and the fill first).
     HRESULT UpdateStrokeTiles(std::span<const RasterTile> tiles) noexcept;
@@ -112,6 +157,11 @@ class CanvasRenderer final
     [[nodiscard]] bool HasStroke() const noexcept
     {
         return _stroke.has_value();
+    }
+    // Harness borrow after the original recorder joined; no device commands, upload or source creation.
+    [[nodiscard]] std::shared_ptr<const PreparedPixelMovePreview> PixelPreviewForTestOwner() const noexcept
+    {
+        return _stroke ? _stroke->pixelSource : nullptr;
     }
     // The layer and target (its mask or its image) the preview draws for, while one is live.
     [[nodiscard]] std::optional<Guid> StrokeLayerID() const noexcept
@@ -178,6 +228,11 @@ class CanvasRenderer final
     }
 
   private:
+    HRESULT DrawViewOverlayToTarget(ID3D11RenderTargetView*, unsigned int targetWidth, unsigned int targetHeight,
+                                    ID3D11ShaderResourceView*, ID3D11ShaderResourceView*, unsigned int width,
+                                    unsigned int height, float pixelLeft, float pixelTop,
+                                    const std::array<float, 4>* clip, bool colorDraft) noexcept;
+
     struct GpuTexture
     {
         wil::com_ptr_nothrow<ID3D11Texture2D> texture;
@@ -366,6 +421,15 @@ class CanvasRenderer final
     [[nodiscard]] const ImageLayer* Find(const Guid& id) const noexcept;
     void SwapCanvas() noexcept;
 
+    void ClearRecorded(ID3D11RenderTargetView* target, const float* color) noexcept;
+    void UpdateRecorded(ID3D11Resource* resource, UINT subresource, const D3D11_BOX* region, const void* data,
+                        UINT rowPitch, UINT depthPitch) noexcept;
+    void CopyRecorded(ID3D11Resource* destination, UINT destinationSubresource, UINT x, UINT y, UINT z,
+                      ID3D11Resource* source, UINT sourceSubresource, const D3D11_BOX* region) noexcept;
+    void GenerateRecordedMips(ID3D11ShaderResourceView* source) noexcept;
+    GpuRecordingCommands* _recordingCommands = nullptr;
+    bool _recordedDisplaySealed = false;
+    std::uint32_t _recordedOwnerThread = 0;
     ID3D11Device* _device = nullptr;
     ID3D11DeviceContext* _context = nullptr;
     wil::com_ptr_nothrow<ID3D11VertexShader> _vertexShader;
@@ -376,6 +440,7 @@ class CanvasRenderer final
     wil::com_ptr_nothrow<ID3D11RasterizerState> _rasterizer;
     wil::com_ptr_nothrow<ID3D11Buffer> _layerConstants;
     wil::com_ptr_nothrow<ID3D11Buffer> _blitConstants;
+    wil::com_ptr_nothrow<ID3D11BlendState> _selectionOutlineBlend;
     Surface _canvas[2];
     Surface _stack[2];
     std::vector<Surface> _coverage;

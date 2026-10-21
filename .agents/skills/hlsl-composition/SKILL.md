@@ -65,7 +65,7 @@ Read `Specs/Rendering/Rendering_Composition.md` first; it is the contract and th
 
 ## Proving a change
 
-Add a numeric golden to `Tests/CompositionTests/CompositionTests.cpp` (2×2 documents, nearest sampling, alphas or one
+Add a numeric golden to `Tests/CompositionTests/Composition.Tests.Runner.cpp` (2×2 documents, nearest sampling, alphas or one
 channel, tolerance named in the spec table) and run:
 
 ```powershell

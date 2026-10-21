@@ -10,29 +10,63 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Platform = 'x64',
 
-    [switch] $Rebuild
+    [switch] $Rebuild,
+    [string[]] $Suites=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling'),
+    [switch] $Full,
+    [switch] $SkipBuild,
+    [switch] $SkipTooling,
+    [ValidateRange(0, 65535)]
+    [int] $BuildNumber = 0,
+
+    [ValidateRange(0, 256)]
+    [int] $MaxCpuCount = 0,
+
+    # A deadlock/failure bound, never a performance target. Extended bounds require native ARM64.
+    [ValidateRange(1200, 5400)]
+    [int] $SelfTestTimeoutSeconds = 1200
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
+$available=@('Host','Document','IO','Composition','Runtime','Stress','Performance','Captures','Tooling')
+if($Full){$Suites=$available}
+$Suites=@($Suites|ForEach-Object{$_ -split ','}|ForEach-Object{$_.Trim()}|Where-Object{$_}|Sort-Object -Unique)
+foreach($suite in $Suites){if($suite -notin $available){throw "Unknown suite '$suite'."}}
+if($SkipTooling){$Suites=@($Suites|Where-Object{$_ -ne 'Tooling'})}
+if($Configuration -ne 'ASan Debug'){$Suites=@($Suites|Where-Object{$_ -ne 'Stress'})}
 $nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 if ($Platform -eq 'ARM64' -and $nativeArchitecture -ne 'Arm64') {
     throw 'ARM64 runtime qualification requires a native ARM64 host; use build.ps1 for cross-compilation.'
 }
 
+if ($SelfTestTimeoutSeconds -ne 1200 -and ($Platform -ne 'ARM64' -or $nativeArchitecture -ne 'Arm64')) {
+    throw 'An extended self-test failure bound requires native ARM64.'
+}
+
+if('Tooling' -in $Suites){
+    & (Join-Path $repoRoot 'validate.ps1')
+    if($LASTEXITCODE -ne 0){throw 'Independent validation failed.'}
+}
+if(-not @($Suites|Where-Object{$_ -ne 'Tooling'}).Count){Write-Host 'Independent tooling passed; native coverage NOT_EVALUATED';exit 0}
+& (Join-Path $repoRoot 'Tools/Fold-Changelog.ps1') -Check
 $buildArguments = @{
     Configuration = $Configuration
     Platform = $Platform
+    MaxCpuCount = $MaxCpuCount
 }
+if($BuildNumber -gt 0){$buildArguments.BuildNumber=$BuildNumber}
 if ($Rebuild) {
     $buildArguments.Rebuild = $true
 }
 
+if(-not $SkipBuild){
 & (Join-Path $repoRoot 'build.ps1') @buildArguments
 if ($LASTEXITCODE -ne 0) {
     throw "Build entrypoint failed with exit code $LASTEXITCODE."
+}
+
 }
 
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
@@ -48,20 +82,23 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
     throw 'RedPrism.exe is missing its Windows version identity.'
 }
 
+Import-Module (Join-Path $repoRoot 'Build/ScopedTesting.psm1') -Force
+$buildAttestation=Join-Path $outputRoot 'build-attestation.json'
+if(-not(Test-ScopedReceipt $buildAttestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $info.FileBuildPart))){throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'}
 # First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
-& (Join-Path $repoRoot 'Tests/BuildProcessTests/TestRunEvidenceTests.ps1')
 Write-Host 'Running failure report self-tests...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration -EvidenceRun $evidence
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration -Suites @($Suites | Where-Object {$_ -in @('Host','Document','IO','Composition')} | ForEach-Object {if($_ -eq 'IO'){'IoTests'}else{$_+'Tests'}}) -EvidenceRun $evidence
 if ($LASTEXITCODE -ne 0) {
     throw "Failure report self-tests failed with exit code $LASTEXITCODE."
 }
 
 foreach ($suite in @(
-        @{ Name = 'HostTests'; Path = $hostTests; Label = 'host contract' },
-        @{ Name = 'DocumentTests'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
-        @{ Name = 'CompositionTests'; Path = (Join-Path $outputRoot 'CompositionTests.exe'); Label = 'composition' },
-        @{ Name = 'IoTests'; Path = (Join-Path $outputRoot 'IoTests.exe'); Label = 'project I/O' }
+        @{ Name = 'HostTests'; Scope = 'Host'; Path = $hostTests; Label = 'host contract' },
+        @{ Name = 'DocumentTests'; Scope = 'Document'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
+        @{ Name = 'CompositionTests'; Scope = 'Composition'; Path = (Join-Path $outputRoot 'CompositionTests.exe'); Label = 'composition' },
+        @{ Name = 'IoTests'; Scope = 'IO'; Path = (Join-Path $outputRoot 'IoTests.exe'); Label = 'project I/O' }
     )) {
+    if($suite.Scope -notin $Suites){continue}
     Write-Host "Running $($suite.Label) tests..." -ForegroundColor Cyan
     & $suite.Path 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path ($suite.Name + '.log'))
     if ($LASTEXITCODE -ne 0) {
@@ -69,7 +106,7 @@ foreach ($suite in @(
     }
 }
 
-if ($Configuration -eq 'ASan Debug') {
+if ($Configuration -eq 'ASan Debug' -and 'Stress' -in $Suites) {
     Write-Host 'Running concurrent raster stress...' -ForegroundColor Cyan
     & (Join-Path $outputRoot 'DocumentTests.exe') --stress 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path 'DocumentTests.stress.log')
     if ($LASTEXITCODE -ne 0) {
@@ -99,6 +136,7 @@ if ($Configuration -eq 'ASan Debug') {
     $global:LASTEXITCODE = 0
 }
 
+if('Runtime' -in $Suites){
 foreach ($probeKind in @('main', 'worker')) {
     Write-Host "Running $probeKind crash probe..." -ForegroundColor Cyan
     $crashRoot = Join-Path $evidence.Path ("crash-probe-$probeKind-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
@@ -125,6 +163,9 @@ foreach ($probeKind in @('main', 'worker')) {
 }
 $global:LASTEXITCODE = 0
 
+}
+
+if('Runtime' -in $Suites){
 Write-Host 'Running command-line help...' -ForegroundColor Cyan
 $helpLog = Join-Path $evidence.Path 'RedPrism.help.log'
 $helpErr = Join-Path $evidence.Path 'RedPrism.help.err.log'
@@ -149,10 +190,10 @@ if ($unknown.ExitCode -ne 2) {
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
 $selfTestErr = Join-Path $evidence.Path 'RedPrism.self-test.err.log'
 $selfTestLog = Join-Path $evidence.Path 'RedPrism.self-test.log'
-$selfTestTimeoutSeconds = 1200
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
+Write-Host "Hidden WARP self-test PID $($selfTest.Id); failure bound $SelfTestTimeoutSeconds seconds. This is not a performance qualification."
 if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).
@@ -167,6 +208,9 @@ if ($selfTest.ExitCode -ne 0) {
 }
 Write-Host "PASS hidden WARP self-test: $selfTestLog" -ForegroundColor Green
 
+}
+
+if('Performance' -in $Suites){
 Write-Host 'Running kernel benchmark smoke...' -ForegroundColor Cyan
 $kernelSmokeLog = Join-Path $evidence.Path 'RedPrism.kernels-smoke.log'
 $kernelSmokeErr = Join-Path $evidence.Path 'RedPrism.kernels-smoke.err.log'
@@ -232,12 +276,41 @@ if ($LASTEXITCODE -ne 0) {
 }
 $global:LASTEXITCODE = 0
 
-Write-Host 'Running qualified gradient benchmark runner controls...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\GradientBenchmarkRunnerTests.ps1')
+Write-Host 'Running prepared display benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute prepared
 if ($LASTEXITCODE -ne 0) {
-    throw "Gradient benchmark runner controls failed with exit code $LASTEXITCODE."
+    throw "Prepared display benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+Write-Host 'Running prepared Size final-publication benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute size-prepared
+if ($LASTEXITCODE -ne 0) {
+    throw "Prepared Size final-publication benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+foreach ($cancelRoute in @('direct', 'prepared')) {
+    Write-Host "Running UI cancellation smoke ($cancelRoute)..." -ForegroundColor Cyan
+    & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkSmokeTests.ps1') `
+        -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute $cancelRoute
+    if ($LASTEXITCODE -ne 0) { throw "UI cancellation smoke ($cancelRoute) failed with exit code $LASTEXITCODE." }
+    $global:LASTEXITCODE = 0
 }
 
+Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $evidence.Path
+if ($LASTEXITCODE -ne 0) {
+    throw "Layer-row benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
+}
+
+if('Performance' -in $Suites){
 $foreignIsa = if ($Platform -eq 'x64') { 'neon' } else { 'sse2' }
 foreach ($isaCase in @(
     @{ Name = 'not-implemented'; Value = 'avx512'; Pattern = 'not implemented' },
@@ -259,64 +332,13 @@ foreach ($isaCase in @(
     Write-Host "PASS kernel-isa.$($isaCase.Name)"
 }
 
+}
+
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
 Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
 Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') `
     -Platform $Platform -Configuration $Configuration
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiProvenanceTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "DxUi provenance tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating build presentation...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\BuildPresentationTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "Build presentation tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating the build preflight helper...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\BuildPreflightTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "Build preflight tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating tool discovery...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\ToolDiscoveryTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "Tool discovery tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating the vcpkg toolset pin...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\VcpkgToolsetTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "vcpkg toolset pin tests failed with exit code $LASTEXITCODE."
-}
-
-
-Write-Host 'Validating the DxUi source restore from a deep root...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiRestoreTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "DxUi source restore tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating ARM64 ASan wiring...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\AsanArm64Tests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "ARM64 ASan wiring tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating the WPR performance profile (read-only)...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\WprProfileTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "WPR profile tests failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Validating RAW corpus preparation (offline only)...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\RawCorpusTests.ps1')
-if ($LASTEXITCODE -ne 0) {
-    throw "RAW corpus preparation tests failed with exit code $LASTEXITCODE."
-}
-
+if('Captures' -in $Suites){
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 Add-Type -AssemblyName System.Drawing
 
@@ -409,7 +431,9 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     Write-Host "PASS harness screenshot ($shotName): $shotPath"
 }
 
-Write-Host 'All tests passed.' -ForegroundColor Green
+}
+
+Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
 $runPassed = $true
 } finally { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
 exit 0

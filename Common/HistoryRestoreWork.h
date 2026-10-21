@@ -32,8 +32,14 @@ class PreparedHistoryRestore final
   public:
     PreparedHistoryRestore(const PreparedHistoryRestore&) = delete;
     PreparedHistoryRestore& operator=(const PreparedHistoryRestore&) = delete;
-    PreparedHistoryRestore(PreparedHistoryRestore&&) noexcept = default;
-    PreparedHistoryRestore& operator=(PreparedHistoryRestore&&) noexcept = default;
+    PreparedHistoryRestore(PreparedHistoryRestore&& source) noexcept;
+    PreparedHistoryRestore& operator=(PreparedHistoryRestore&& source) noexcept;
+    // Owner try and worker refresh retain the exact prepared Undo/Redo snapshot and its original revision.
+    // They do not recreate restore intent or consult the live session. Hosts reserve the refresh overlap first.
+    [[nodiscard]] DocumentHistory::ResidencyValidation TryAcquireHistoryResidency(
+        DocumentHistory::ResidencyPermit& permit) noexcept;
+    [[nodiscard]] bool RefreshHistoryResidency(CancelToken cancellation = {},
+                                               DocumentHistory::PrepareObserver observer = {});
 
   private:
     friend class DocumentSession;
@@ -51,7 +57,7 @@ class PreparedHistoryRestore final
     std::unordered_set<Guid> _selected;
     std::optional<DocumentHistory::Snapshot> _retired;
     std::optional<CanvasDocument> _retiredDisplay;
-    bool _changesDocumentSerial = false, _maskSelected = false;
+    bool _changesDocumentSerial = false, _maskSelected = false, _applied = false;
 };
 
 [[nodiscard]] std::optional<PreparedHistoryRestore> PrepareHistoryRestorePublication(

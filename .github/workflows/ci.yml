@@ -1,0 +1,108 @@
+name: Scoped validation
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: scoped-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-scope:
+    runs-on: windows-2025-vs2026
+    outputs:
+      native: ${{ steps.scope.outputs.native }}
+      proof_run: ${{ steps.scope.outputs.proof_run }}
+      build_number: ${{ steps.scope.outputs.build_number }}
+      input_key: ${{ steps.scope.outputs.input_key }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        name: Determine new native obligations
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./Tools/Get-CiNativeScope.ps1
+      - name: Retain native input descriptor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-native-inputs
+          path: .build/ci-scope/ci-native-inputs.json
+          retention-days: 14
+  tooling:
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned validation dependencies
+        shell: pwsh
+        run: py -3 -m pip install -r Build/requirements-validation.txt
+      - name: Independent tooling
+        shell: pwsh
+        run: ./validate.ps1
+      - name: Native formatting
+        shell: pwsh
+        run: ./format.ps1 -Check
+  native:
+    name: native (${{ matrix.platform }}, ${{ matrix.configuration }})
+    needs: native-scope
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+        configuration: [Debug, Release, ASan Debug]
+        include:
+          - platform: x64
+            runner: windows-2025-vs2026
+          - platform: ARM64
+            runner: windows-11-vs2026-arm
+    steps:
+      - if: needs.native-scope.outputs.native == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify native checkout inputs
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./Tools/Get-CiNativeScope.ps1 -VerifyInputs "${{ needs.native-scope.outputs.input_key }}" -BuildNumber ${{ needs.native-scope.outputs.build_number }}
+      - name: Verify hidden window fixture
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./Tests/Tooling.Tests.WindowFixture.ps1
+      - name: Build native profile
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./build.ps1 -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
+      - name: Retain original native qualification
+        if: needs.native-scope.outputs.native != 'true'
+        shell: pwsh
+        run: Write-Host 'NATIVE_UNCHANGED - original qualification retained from run ${{ needs.native-scope.outputs.proof_run }}; no new native/resource/environment execution.'
+      - name: Full native qualification
+        if: needs.native-scope.outputs.native == 'true'
+        shell: pwsh
+        run: ./test.ps1 -Full -SkipTooling -SkipBuild -Platform ${{ matrix.platform }} -Configuration "${{ matrix.configuration }}" -MaxCpuCount 2 -BuildNumber ${{ needs.native-scope.outputs.build_number }}
+      - name: Retain source-profile test diagnostics
+        if: always() && needs.native-scope.outputs.native == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-${{ matrix.platform }}-${{ matrix.configuration }}
+          include-hidden-files: true
+          path: |
+            .build/logs/**
+            .build/evidence/test-runs/**
+            .build/reports/**/*.json
+            .build/tests/**/*.json
+            .build/tests/**/*.log
+            .build/screenshots/*.png
+            .build/${{ matrix.platform }}/${{ matrix.configuration }}/*.log
+          retention-days: 14

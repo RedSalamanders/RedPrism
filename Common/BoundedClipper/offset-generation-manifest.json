@@ -1,0 +1,33 @@
+{
+  "status": "GENERATED_ONLY",
+  "files": [
+    {
+      "upstream": "include/clipper2/clipper.offset.h",
+      "upstream_sha256": "00D0B670F40D030FAD5CD658B71A34B8FF3185673825BBCC9F40E63D9216CBB2",
+      "generated": "clipper.offset.h",
+      "generated_sha256": "AEDF216BAF3B0F68570F684CED63C1CE37DF262F00B95F18C382501374C9ED3A",
+      "checked_loops": {
+        "while": 0,
+        "for": 0,
+        "range_for": 0
+      }
+    },
+    {
+      "upstream": "src/clipper.offset.cpp",
+      "upstream_sha256": "EBC01258953212D20FED090A4A740F94926C3C6706A092FEC4C5E9CB5292305A",
+      "generated": "clipper.offset.cpp",
+      "generated_sha256": "39432A9B9CE09F59B19B7FDA865DF1A5AA13127BE19F8E6EB913526A666B62EB",
+      "checked_loops": {
+        "while": 2,
+        "for": 10,
+        "range_for": 10
+      }
+    }
+  ],
+  "existing_boolean_manifest_sha256": "427D9DBBBB770146345051B6FE0DFA813C588290739ED7828C252C2BECB0FE95",
+  "numerical_policy": "Normalize at binary128; offset at decimal100; cleanup original Clipper64; Expand clips at binary128.",
+  "scope": "Deterministic authoring provenance only; runtime/admission/cancellation require separate tests",
+  "boolean_generator_sha256": "9FA4A3301E04BCB2F1B66FE0CFEA6DEAEFE824D07D7EE2F8C868CC57CE3976FD",
+  "generator_sha256": "4C6F80E41987CDFE00F2D9FF5F8E5281E5BA076B2924E4DC540A09063110C054",
+  "runtime_qualified": false
+}
