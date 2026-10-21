@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Record the owner's authorization to merge the locally tested canvas-fixture repair while hosted CI is billing-blocked; retain successful local evidence, failed CI results and the active plan's remaining qualification gates.
 - Keep the concurrent thumbnail test's independent 23x15 pixel oracle explicit in loop bounds and divisors so newer MSVC Release optimization can prove the divisors are nonzero without suppressing warnings; the focused Release Document suite passes.
 - Frame synthetic actual-pixel canvas fixtures at the document origin so their literal drag points reach the canvas at 96 DPI as well as larger DPI scales; retain all selection/brush/pixel assertions and add independent viewport regressions. Native CI qualification remains required.
 - Prefer the discovered Visual Studio formatter bundle over unrelated PATH LLVM tools, report its version, and include formatter binary bytes in tooling evidence identity.
