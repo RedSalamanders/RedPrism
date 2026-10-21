@@ -70,7 +70,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
-$evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration }
+$evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds }
 $runPassed = $false
 try {
 $outputRoot = Join-Path $repoRoot ".build\$Platform\$Configuration"
