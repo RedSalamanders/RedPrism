@@ -173,6 +173,9 @@ capture failed.
 
 ## Self-test window checks
 
+The initial hidden self-test/benchmark and screenshot fixture resize uses `SWP_NOSENDCHANGING` together with `SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE`. This preserves the specified off-screen client canvas when a CI desktop is smaller than the fixture, without changing the display mode. Subsequent window messages and ordinary visible-window startup retain their normal minimum/maximum tracking policy. The independent Win32 preflight is a geometry check; it does not replace application, rendering, capture or performance qualification.
+
+
 Before initializing the renderer, `--self-test` MUST verify:
 
 - `GetDpiForWindow` is non-zero

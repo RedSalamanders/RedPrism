@@ -75,10 +75,10 @@ jobs:
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh
         run: ./Tools/Get-CiNativeScope.ps1 -VerifyInputs "${{ needs.native-scope.outputs.input_key }}" -BuildNumber ${{ needs.native-scope.outputs.build_number }}
-      - name: Prepare hosted display fixture
+      - name: Verify hidden window fixture
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh
-        run: ./Tools/Initialize-CiDisplay.ps1
+        run: ./Tests/Tooling.Tests.WindowFixture.ps1
       - name: Build native profile
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh

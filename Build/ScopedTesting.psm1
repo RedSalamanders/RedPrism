@@ -339,7 +339,7 @@ function Get-ScopedPrDelegation {
         # this branch left it.
         $baseRef = 'origin/' + $Manifest.defaultBranch
         $base = Get-ScopedMergeBase $Root $baseRef
-        $runner = @('.github/workflows/ci.yml','test.ps1','Tests/test-scopes.json','Build/ScopedTesting.psm1','Tools/Get-CiNativeScope.ps1','Tools/Initialize-CiDisplay.ps1') + @($Manifest.toolingCommands)
+        $runner = @('.github/workflows/ci.yml','test.ps1','Tests/test-scopes.json','Build/ScopedTesting.psm1','Tools/Get-CiNativeScope.ps1','Tests/Tooling.Tests.WindowFixture.ps1') + @($Manifest.toolingCommands)
         $moved = @((Invoke-ScopedGit $Root (@('diff','--name-only','--no-renames','-z',$base,$baseRef,'--') + $runner)) -split '\x00' | Where-Object { $_ })
         if ($moved.Count) {
             return & $keepLocal "$baseRef changed $($moved -join ', ') after this branch left it, so the PR would not run the reviewed version; integrate $baseRef first"

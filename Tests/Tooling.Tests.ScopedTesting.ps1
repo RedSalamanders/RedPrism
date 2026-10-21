@@ -228,17 +228,18 @@ try{
         Assert (-not(Test-ScopedNativeCiProof $expected $jobs)) 'A skipped/listed/inherited row was treated as actual execution'
         Assert (-not(Test-ScopedNativeCiProof $expected @($jobs|Select-Object -Skip 1))) 'Incomplete matrix inherited'
     }
-    Case 'hosted display mutation refuses a local host before using display APIs' {
+    Case 'hidden Win32 fixture keeps its exact canvas without changing display settings' {
         $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
         $start.UseShellExecute=$false;$start.CreateNoWindow=$true
         $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-        $start.Environment['GITHUB_ACTIONS']='false'
-        foreach($argument in @('-NoProfile','-NonInteractive','-File',(Join-Path $root 'Tools/Initialize-CiDisplay.ps1'))){[void]$start.ArgumentList.Add($argument)}
+        foreach($argument in @('-NoProfile','-NonInteractive','-File',(Join-Path $root 'Tests/Tooling.Tests.WindowFixture.ps1'),'-ReportPath',(Join-Path $fixture 'window-fixture.json'))){[void]$start.ArgumentList.Add($argument)}
         $process=[Diagnostics.Process]::Start($start)
         try{
-            if(-not $process.WaitForExit(10000)){$process.Kill($true);$process.WaitForExit();throw 'Display host refusal timed out.'}
+            if(-not $process.WaitForExit(30000)){$process.Kill($true);$process.WaitForExit();throw 'Hidden window fixture timed out.'}
             $output=$process.StandardOutput.ReadToEnd()+$process.StandardError.ReadToEnd()
-            Assert ($process.ExitCode -ne 0 -and $output -match 'restricted to a GitHub-hosted runner') 'A local host reached display mutation'
+            Assert ($process.ExitCode -eq 0) ("Hidden window fixture failed: "+$output)
+            $record=Get-Content -LiteralPath (Join-Path $fixture 'window-fixture.json') -Raw|ConvertFrom-Json
+            Assert ($record.passed -and $record.hidden -and -not $record.displaySettingsChanged -and $record.dpi -gt 0 -and $record.clientWidth -gt 0 -and $record.clientHeight -gt 0) 'Incomplete hidden-window evidence'
         }finally{$process.Dispose()}
     }
     $public=Join-Path $fixture 'public';New-Repository $public
