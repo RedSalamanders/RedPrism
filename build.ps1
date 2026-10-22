@@ -92,7 +92,7 @@ try {
     $logDir = Join-Path $repoRoot '.build\logs'
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     $logFlavor = if ($Analyze) { '-Analyze' } else { '' }
-    $logPath = Join-Path $logDir ("{0}-{1}-{2}{3}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor)
+    $logPath = Join-Path $logDir ("{0}-{1}-{2}{3}-{4}-{5}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor, [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'), [guid]::NewGuid().ToString('N'))
     $arguments = @(
         $solutionPath,
         "/t:$target",

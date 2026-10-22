@@ -41,6 +41,9 @@ check. Shared payloads remain read-only; edit only independent copies. Preserve 
 - Generated products belong under `.build/`; never commit them.
 - Preserve the documented blend math, project schema and independent numeric goldens in the owning specs.
 
+Native test output follows [the retention contract](Specs/Testing/Testing_RunEvidence.md): unique per-run evidence,
+preserved failures and interruptions, verified identities/hashes/streams/metadata, and no automatic old-run sweep.
+
 ## Skills
 
 | Skill | Use it for |

@@ -15,14 +15,27 @@ param(
     [string] $Configuration = 'Debug',
     [ValidateRange(5, 600)]
     [int] $TimeoutSeconds = 60,
-    [ValidateSet('HostTests','DocumentTests','IoTests','CompositionTests')][AllowEmptyCollection()][string[]] $Suites=@('HostTests','DocumentTests','IoTests','CompositionTests')
+    [ValidateSet('HostTests','DocumentTests','IoTests','CompositionTests')][AllowEmptyCollection()][string[]] $Suites=@('HostTests','DocumentTests','IoTests','CompositionTests'),
+    $EvidenceRun = $null
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $expectedReport = 'the failure-report self-test fails this check on purpose'
-$logRoot = Join-Path ([IO.Path]::GetTempPath()) ('RedPrism.FailureReportTests-' + [guid]::NewGuid().ToString('N'))
+Import-Module (Join-Path $PSScriptRoot '../../Build/TestRunEvidence.psm1') -Force
+$ownedEvidence = $null
+if (-not $EvidenceRun) {
+    $ownedEvidence = Start-TestRunEvidence -Repository (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) -Context @{project='RedPrism';scope='failure-report-controls';configuration=$Configuration}
+    $EvidenceRun = $ownedEvidence
+}
+$repository = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+if ($EvidenceRun.Repository -cne $repository -or $EvidenceRun.Owner -ne $PID -or $EvidenceRun.Closed -or
+    $EvidenceRun.Path -cne (Join-Path $repository ".build\evidence\test-runs\$($EvidenceRun.Id)\payload")) {
+    throw 'Failure-report controls require an owned repository-local evidence run.'
+}
+$logRoot = Join-Path $EvidenceRun.Path ('failure-reports-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $logRoot -Force)
+$passed = $false
 try {
     foreach ($suite in $Suites) {
         $executable = Join-Path $OutputRoot "$suite.exe"
@@ -68,13 +81,8 @@ try {
         }
         Write-Host "PASS failure report self-test ($suite.exe, $Configuration)"
     }
+    $passed = $true
 } finally {
-    $resolved = [IO.Path]::GetFullPath($logRoot)
-    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    if (-not $resolved.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -or
-        (Split-Path -Leaf $resolved) -notlike 'RedPrism.FailureReportTests-*') {
-        throw "Unsafe failure report log cleanup path: $resolved"
-    }
-    Remove-Item -LiteralPath $resolved -Recurse -Force
+    if ($ownedEvidence) { Complete-TestRunEvidence -Run $ownedEvidence -Passed $passed }
 }
 exit 0

@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Verify retained run inventories using fresh pinned-handle metadata and stable path/stream ordering; preserve before/after move diagnostics and exact safety checks, with stale-metadata and reversed-enumeration regressions.
+- Retain the selected suites and requested self-test timeout in RedPrism run metadata when using the current scoped runner; preserve the original failure bound and source/build checks.
+- Preserve completed, failed and interrupted test-run payloads in unique verified evidence folders, retain prior logs and crash probes, and collect hidden evidence in CI without modifying shared read-only files or weakening scoped qualification checks.
 - Publish the historical paused-branch adversarial review, with WIP index routing and explicit snapshot/validation limits. P1 integration and current-head review triage remain open.
 - Record the paused P1 main consolidation: stable x64 Release build, linked-image ISA gates and selected Host/Document/IO/Composition/Runtime suites pass.
   Preserve failed attempts and satellite alternative source in history. Pure ISA parser controls now run once in independent tooling;

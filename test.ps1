@@ -69,6 +69,10 @@ if ($LASTEXITCODE -ne 0) {
 
 }
 
+Import-Module (Join-Path $repoRoot 'Build/TestRunEvidence.psm1') -Force
+$evidence = Start-TestRunEvidence -Repository $repoRoot -Context @{ project='RedPrism'; platform=$Platform; configuration=$Configuration; suites=$Suites; selfTestTimeoutSeconds=$SelfTestTimeoutSeconds }
+$runPassed = $false
+try {
 $outputRoot = Join-Path $repoRoot ".build\$Platform\$Configuration"
 $executable = Join-Path $outputRoot 'RedPrism.exe'
 $hostTests = Join-Path $outputRoot 'HostTests.exe'
@@ -83,7 +87,7 @@ $buildAttestation=Join-Path $outputRoot 'build-attestation.json'
 if(-not(Test-ScopedReceipt $buildAttestation (Get-ScopedBuildAttestationKey $repoRoot $Platform $Configuration $info.FileBuildPart))){throw 'Native artifact/source/profile/toolchain attestation is stale or missing. Run build.ps1 before -SkipBuild.'}
 # First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
 Write-Host 'Running failure report self-tests...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration -Suites @($Suites | Where-Object {$_ -in @('Host','Document','IO','Composition')} | ForEach-Object {if($_ -eq 'IO'){'IoTests'}else{$_+'Tests'}})
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration -Suites @($Suites | Where-Object {$_ -in @('Host','Document','IO','Composition')} | ForEach-Object {if($_ -eq 'IO'){'IoTests'}else{$_+'Tests'}}) -EvidenceRun $evidence
 if ($LASTEXITCODE -ne 0) {
     throw "Failure report self-tests failed with exit code $LASTEXITCODE."
 }
@@ -96,7 +100,7 @@ foreach ($suite in @(
     )) {
     if($suite.Scope -notin $Suites){continue}
     Write-Host "Running $($suite.Label) tests..." -ForegroundColor Cyan
-    & $suite.Path
+    & $suite.Path 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path ($suite.Name + '.log'))
     if ($LASTEXITCODE -ne 0) {
         throw "$($suite.Name).exe failed with exit code $LASTEXITCODE."
     }
@@ -104,16 +108,16 @@ foreach ($suite in @(
 
 if ($Configuration -eq 'ASan Debug' -and 'Stress' -in $Suites) {
     Write-Host 'Running concurrent raster stress...' -ForegroundColor Cyan
-    & (Join-Path $outputRoot 'DocumentTests.exe') --stress
+    & (Join-Path $outputRoot 'DocumentTests.exe') --stress 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path 'DocumentTests.stress.log')
     if ($LASTEXITCODE -ne 0) {
         throw "DocumentTests.exe --stress failed with exit code $LASTEXITCODE."
     }
     Write-Host 'Running concurrent worker stress...' -ForegroundColor Cyan
-    & $hostTests --stress
+    & $hostTests --stress 2>&1 | Tee-Object -FilePath (Join-Path $evidence.Path 'HostTests.stress.log')
     if ($LASTEXITCODE -ne 0) {
         throw "HostTests.exe --stress failed with exit code $LASTEXITCODE."
     }
-    $probeLog = Join-Path $repoRoot ".build\logs\ASan-probe-$Platform-$([guid]::NewGuid().ToString('N')).log"
+    $probeLog = Join-Path $evidence.Path "ASan-probe-$Platform-$([guid]::NewGuid().ToString('N')).log"
     New-Item -ItemType Directory -Path (Split-Path $probeLog) -Force | Out-Null
     $previousOptions = $env:ASAN_OPTIONS
     try {
@@ -135,8 +139,8 @@ if ($Configuration -eq 'ASan Debug' -and 'Stress' -in $Suites) {
 if('Runtime' -in $Suites){
 foreach ($probeKind in @('main', 'worker')) {
     Write-Host "Running $probeKind crash probe..." -ForegroundColor Cyan
-    $crashRoot = Join-Path $repoRoot (".build\logs\crash-probe-$probeKind-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
-    $crashErr = Join-Path $outputRoot "RedPrism.crash-probe-$probeKind.err.log"
+    $crashRoot = Join-Path $evidence.Path ("crash-probe-$probeKind-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
+    $crashErr = Join-Path $evidence.Path "RedPrism.crash-probe-$probeKind.err.log"
     $probeArguments = @('--crash-probe', ('"' + $crashRoot + '"'))
     if ($probeKind -eq 'worker') { $probeArguments += '--crash-probe-worker' }
     $probe = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList $probeArguments -PassThru `
@@ -155,12 +159,7 @@ foreach ($probeKind in @('main', 'worker')) {
         throw "The $probeKind crash probe did not leave one dump and marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
     }
     Write-Host "PASS $probeKind crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
-    $resolvedCrashRoot = [IO.Path]::GetFullPath($crashRoot)
-    $expectedCrashParent = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build\logs')) + [IO.Path]::DirectorySeparatorChar
-    if (-not $resolvedCrashRoot.StartsWith($expectedCrashParent, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing probe cleanup outside $expectedCrashParent"
-    }
-    Remove-Item -LiteralPath $resolvedCrashRoot -Recurse -Force
+
 }
 $global:LASTEXITCODE = 0
 
@@ -168,9 +167,8 @@ $global:LASTEXITCODE = 0
 
 if('Runtime' -in $Suites){
 Write-Host 'Running command-line help...' -ForegroundColor Cyan
-$helpLog = Join-Path $outputRoot 'RedPrism.help.log'
-$helpErr = Join-Path $outputRoot 'RedPrism.help.err.log'
-Remove-Item -LiteralPath $helpLog, $helpErr -ErrorAction SilentlyContinue
+$helpLog = Join-Path $evidence.Path 'RedPrism.help.log'
+$helpErr = Join-Path $evidence.Path 'RedPrism.help.err.log'
 $help = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--help') -Wait -PassThru `
     -RedirectStandardOutput $helpLog -RedirectStandardError $helpErr
 if ($help.ExitCode -ne 0) {
@@ -181,9 +179,8 @@ if ($helpText -notmatch '--self-test' -or $helpText -notmatch '--dpi') {
     throw 'RedPrism.exe --help did not print the command catalog.'
 }
 
-$unknownLog = Join-Path $outputRoot 'RedPrism.unknown.log'
-$unknownErr = Join-Path $outputRoot 'RedPrism.unknown.err.log'
-Remove-Item -LiteralPath $unknownLog, $unknownErr -ErrorAction SilentlyContinue
+$unknownLog = Join-Path $evidence.Path 'RedPrism.unknown.log'
+$unknownErr = Join-Path $evidence.Path 'RedPrism.unknown.err.log'
 $unknown = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--no-such-switch') -Wait -PassThru `
     -RedirectStandardOutput $unknownLog -RedirectStandardError $unknownErr
 if ($unknown.ExitCode -ne 2) {
@@ -191,10 +188,8 @@ if ($unknown.ExitCode -ne 2) {
 }
 
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
-$selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
-Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
-$selfTestLog = Join-Path $outputRoot 'RedPrism.self-test.log'
-Remove-Item -LiteralPath $selfTestLog -ErrorAction SilentlyContinue
+$selfTestErr = Join-Path $evidence.Path 'RedPrism.self-test.err.log'
+$selfTestLog = Join-Path $evidence.Path 'RedPrism.self-test.log'
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
@@ -217,9 +212,8 @@ Write-Host "PASS hidden WARP self-test: $selfTestLog" -ForegroundColor Green
 
 if('Performance' -in $Suites){
 Write-Host 'Running kernel benchmark smoke...' -ForegroundColor Cyan
-$kernelSmokeLog = Join-Path $outputRoot 'RedPrism.kernels-smoke.log'
-$kernelSmokeErr = Join-Path $outputRoot 'RedPrism.kernels-smoke.err.log'
-Remove-Item -LiteralPath $kernelSmokeLog, $kernelSmokeErr -ErrorAction SilentlyContinue
+$kernelSmokeLog = Join-Path $evidence.Path 'RedPrism.kernels-smoke.log'
+$kernelSmokeErr = Join-Path $evidence.Path 'RedPrism.kernels-smoke.err.log'
 $kernelSmoke = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--bench', 'kernels-smoke', '--isa', 'scalar') `
     -PassThru -RedirectStandardOutput $kernelSmokeLog -RedirectStandardError $kernelSmokeErr
 $null = $kernelSmoke.Handle
@@ -276,7 +270,7 @@ Write-Host 'PASS kernel benchmark smoke: 13 operations and 3 equivalent copy/ado
 
 Write-Host 'Running UI benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
-    -ExecutablePath $executable -OutputDirectory $outputRoot
+    -ExecutablePath $executable -OutputDirectory $evidence.Path
 if ($LASTEXITCODE -ne 0) {
     throw "UI benchmark smoke failed with exit code $LASTEXITCODE."
 }
@@ -284,7 +278,7 @@ $global:LASTEXITCODE = 0
 
 Write-Host 'Running prepared display benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
-    -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute prepared
+    -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute prepared
 if ($LASTEXITCODE -ne 0) {
     throw "Prepared display benchmark smoke failed with exit code $LASTEXITCODE."
 }
@@ -292,7 +286,7 @@ $global:LASTEXITCODE = 0
 
 Write-Host 'Running prepared Size final-publication benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
-    -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute size-prepared
+    -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute size-prepared
 if ($LASTEXITCODE -ne 0) {
     throw "Prepared Size final-publication benchmark smoke failed with exit code $LASTEXITCODE."
 }
@@ -301,14 +295,14 @@ $global:LASTEXITCODE = 0
 foreach ($cancelRoute in @('direct', 'prepared')) {
     Write-Host "Running UI cancellation smoke ($cancelRoute)..." -ForegroundColor Cyan
     & (Join-Path $repoRoot 'Tests\BuildProcessTests\UiCancellationBenchmarkSmokeTests.ps1') `
-        -ExecutablePath $executable -OutputDirectory $outputRoot -DisplayRoute $cancelRoute
+        -ExecutablePath $executable -OutputDirectory $evidence.Path -DisplayRoute $cancelRoute
     if ($LASTEXITCODE -ne 0) { throw "UI cancellation smoke ($cancelRoute) failed with exit code $LASTEXITCODE." }
     $global:LASTEXITCODE = 0
 }
 
 Write-Host 'Running prepared layer-row benchmark smoke...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\LayerRowsBenchmarkSmokeTests.ps1') `
-    -ExecutablePath $executable -OutputDirectory $outputRoot
+    -ExecutablePath $executable -OutputDirectory $evidence.Path
 if ($LASTEXITCODE -ne 0) {
     throw "Layer-row benchmark smoke failed with exit code $LASTEXITCODE."
 }
@@ -323,8 +317,8 @@ foreach ($isaCase in @(
     @{ Name = 'unsupported'; Value = $foreignIsa; Pattern = 'not supported' },
     @{ Name = 'malformed'; Value = 'auto'; Pattern = 'Unknown argument' }
 )) {
-    $isaError = Join-Path $outputRoot "RedPrism.isa-$($isaCase.Name).err.log"
-    $isaOutput = Join-Path $outputRoot "RedPrism.isa-$($isaCase.Name).log"
+    $isaError = Join-Path $evidence.Path "RedPrism.isa-$($isaCase.Name).err.log"
+    $isaOutput = Join-Path $evidence.Path "RedPrism.isa-$($isaCase.Name).log"
     $isaProcess = Start-Process -WindowStyle Hidden -FilePath $executable `
         -ArgumentList @('--bench', 'kernels-smoke', '--isa', $isaCase.Value) -PassThru `
         -RedirectStandardOutput $isaOutput -RedirectStandardError $isaError
@@ -393,17 +387,15 @@ function Test-RedPrismScreenshotContent {
     }
 }
 
-$shotDir = Join-Path $repoRoot '.build\screenshots'
+$shotDir = Join-Path $evidence.Path 'screenshots'
 New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
 foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ dpi = 96; demo = 'transform' }, @{ dpi = 96; demo = 'selection' }, @{ dpi = 96; demo = 'brush' }, @{ dpi = 96; demo = 'retouch' }, @{ dpi = 96; demo = 'adjust' }, @{ dpi = 96; demo = 'canvassize' }, @{ dpi = 96; demo = 'crop' })) {
     $dpi = $shotCase.dpi
     $demo = $shotCase.demo
     $shotName = if ($demo) { "$demo-$dpi" } else { "empty-shell-$dpi" }
     $shotPath = Join-Path $shotDir "$shotName-$Platform-$($Configuration -replace '\s','').png"
-    Remove-Item -LiteralPath $shotPath -ErrorAction SilentlyContinue
-    $shotLog = Join-Path $outputRoot "RedPrism.screenshot-$shotName.log"
-    $shotErr = Join-Path $outputRoot "RedPrism.screenshot-$shotName.err.log"
-    Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
+    $shotLog = Join-Path $evidence.Path "RedPrism.screenshot-$shotName.log"
+    $shotErr = Join-Path $evidence.Path "RedPrism.screenshot-$shotName.err.log"
     # The path is quoted as its own argument: Start-Process -ArgumentList joins array elements with a bare space and
     # does not quote them itself, so an unquoted path with a space (a username, "Program Files", ...) would split
     # into two arguments (the crash probe below already quotes its directory the same way).
@@ -442,4 +434,6 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
 }
 
 Write-Host ('Selected suites passed: '+($Suites -join ', ')+'. Unselected/manual/platform/resource coverage remains NOT_EVALUATED.') -ForegroundColor Green
+$runPassed = $true
+} finally { Complete-TestRunEvidence -Run $evidence -Passed $runPassed }
 exit 0

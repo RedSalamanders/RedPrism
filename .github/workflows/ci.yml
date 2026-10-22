@@ -96,8 +96,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ matrix.platform }}-${{ matrix.configuration }}
+          include-hidden-files: true
           path: |
             .build/logs/**
+            .build/evidence/test-runs/**
             .build/reports/**/*.json
             .build/tests/**/*.json
             .build/tests/**/*.log
