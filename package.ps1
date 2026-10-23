@@ -176,6 +176,7 @@ foreach ($port in 'yyjson', 'libzip', 'zlib', 'clipper2', 'wil') {
     }
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty\Lucide\LICENSE') -Destination (Join-Path $notices 'lucide.txt')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty/RedMonitor/LICENSE.txt') -Destination (Join-Path $notices 'redmonitor.txt')
 
 # DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
 # leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.

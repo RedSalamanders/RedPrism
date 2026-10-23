@@ -4,6 +4,7 @@
 #include "CrashDumps.h"
 #include "Kernels.h"
 #include "Localization.h"
+#include "MonitorDiagnostics.h"
 #include "Resources.h"
 #include "SettingsStore.h"
 #include "WorkerPool.h"
@@ -546,7 +547,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 }
 } // namespace
 
-_Use_decl_annotations_ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
+_Use_decl_annotations_ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR command, int showCommand)
 {
+    MonitorDiagnostics::Initialize();
+    const int monitorCommand = MonitorDiagnostics::HandleCommand(command ? command : L"");
+    if (monitorCommand >= 0)
+        return monitorCommand;
+    MonitorDiagnostics::Write(RedMonitor::Severity::Info, L"application starting");
     return RunApplication(instance, showCommand);
 }

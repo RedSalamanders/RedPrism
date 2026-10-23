@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Share only the pinned RedMonitor client header and MIT notice, verify them offline during builds, and discover the separately installed production Release helper for explicit launch or optional bare Debug startup; keep normalized bounded diagnostics and application-only packages.
+- Added explicit optional pinned RedMonitor portable distribution with verified runtime/resource/license closure and behavioral rejection controls.
+- Add the exact pinned RedMonitor producer SDK, bounded application-labelled diagnostics and explicit optional adjacent viewer command; preserve existing logs, crash handling and application ownership, with consumer qualification tracked separately.
 - Verify retained run inventories using fresh pinned-handle metadata and stable path/stream ordering; preserve before/after move diagnostics and exact safety checks, with stale-metadata and reversed-enumeration regressions.
 - Retain the selected suites and requested self-test timeout in RedPrism run metadata when using the current scoped runner; preserve the original failure bound and source/build checks.
 - Preserve completed, failed and interrupted test-run payloads in unique verified evidence folders, retain prior logs and crash probes, and collect hidden evidence in CI without modifying shared read-only files or weakening scoped qualification checks.
