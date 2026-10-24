@@ -1,5 +1,7 @@
 # Active plan index
 
+- **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated compiler/linker policy, pinned-archive forwarding, all-profile qualification and retained size/performance comparisons.
+
 Main consolidation on 21 October preserves P1 **HOLD**. The user will restart P1 from the new main after merging;
 the opening [consolidation ledger](UiNeverBlocks_2026-09-22.md#main-consolidation--21-october-2026) supersedes older
 checkout routing. Satellite history preservation does not adopt unqualified residual code or close delivery gates.

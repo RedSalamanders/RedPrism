@@ -74,6 +74,9 @@ if (-not $installation) {
     throw "The Visual Studio installation of '$msbuild' could not be determined. Install Visual Studio 2026 (18.x) with the Desktop development with C++ workload."
 }
 $toolset = Get-RedPrismDefaultToolset -Installation $installation
+[xml]$msvcPolicy = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Directory.Build.props')
+$requiredTools = $msvcPolicy.SelectSingleNode('/Project/PropertyGroup/RequiredMsvcToolsVersion').InnerText
+if ($toolset.MajorMinor -cne $requiredTools) { throw "This product requires default MSVC $requiredTools.x; selected $($toolset.Version)." }
 Write-Host "Visual Studio: $installation" -ForegroundColor Cyan
 Write-Host "MSVC toolset:  $($toolset.Version), the default MSBuild compiles with; vcpkg is pinned to $($toolset.MajorMinor)" -ForegroundColor Cyan
 

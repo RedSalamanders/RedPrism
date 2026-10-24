@@ -37,6 +37,10 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      - name: Prepare required MSVC 14.52 tools
+        uses: ./.github/actions/setup-msvc
+        with:
+          platform: ARM64
       - name: Run canonical ARM64 test entrypoint
         shell: pwsh
         env:

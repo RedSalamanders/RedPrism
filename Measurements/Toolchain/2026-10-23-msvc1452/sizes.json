@@ -1,0 +1,578 @@
+[
+  {
+    "path": "CompositionTests.exe",
+    "beforeBytes": 2392064,
+    "afterBytes": 2562560,
+    "changePercent": 7.127568,
+    "baselineSha256": "76D4B587C4AB223184EE3961EAAF5912AB5EE50B20FC6ED65B7D137DEB50E8E6",
+    "candidateSha256": "3F97C54AC799D31E285186633CFB15E51085A87A24F4963612A1BB5379DB9F2A",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1786859,
+        "fileBytes": 1786880
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 514264,
+        "fileBytes": 514560
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 129000,
+        "fileBytes": 27648
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 56940,
+        "fileBytes": 57344
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 3744,
+        "fileBytes": 4096
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1967915,
+        "fileBytes": 1968128
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 509864,
+        "fileBytes": 509952
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 125672,
+        "fileBytes": 24576
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 53940,
+        "fileBytes": 54272
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 3620,
+        "fileBytes": 4096
+      }
+    ]
+  },
+  {
+    "path": "DocumentTests.exe",
+    "beforeBytes": 7476224,
+    "afterBytes": 7434240,
+    "changePercent": -0.561567,
+    "baselineSha256": "9B3D2ADBF80EAF2DE43DADA9311B9C677AF8069A6692BBD3D4BA93AEBFBADF51",
+    "candidateSha256": "D66429C77801DC60CA406ADA9AF8FF85882674EBB7CCEFD46AD16AEB6250A901",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 6100635,
+        "fileBytes": 6100992
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 1181222,
+        "fileBytes": 1181696
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 158200,
+        "fileBytes": 55296
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 132024,
+        "fileBytes": 132096
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 4380,
+        "fileBytes": 4608
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 6104491,
+        "fileBytes": 6104576
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 1157516,
+        "fileBytes": 1157632
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 152240,
+        "fileBytes": 49152
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 116796,
+        "fileBytes": 117248
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 4092,
+        "fileBytes": 4096
+      }
+    ]
+  },
+  {
+    "path": "HostTests.exe",
+    "beforeBytes": 1957376,
+    "afterBytes": 2060288,
+    "changePercent": 5.257651,
+    "baselineSha256": "0DCAC6A2AC6C3CD944C38D48C343A6A86540BB1D41F96FDFE1F8FD5F4A6EF317",
+    "candidateSha256": "DA7D44B96A0AA66F2625EC8CDBBA13E7C64FB5606EE1C9DDFEBB5CDC465F584B",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1419627,
+        "fileBytes": 1419776
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 478514,
+        "fileBytes": 478720
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 114920,
+        "fileBytes": 13312
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 39792,
+        "fileBytes": 39936
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 3644,
+        "fileBytes": 4096
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1525579,
+        "fileBytes": 1525760
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 476590,
+        "fileBytes": 476672
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 114336,
+        "fileBytes": 12800
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 39672,
+        "fileBytes": 39936
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 3492,
+        "fileBytes": 3584
+      }
+    ]
+  },
+  {
+    "path": "IoTests.exe",
+    "beforeBytes": 1447424,
+    "afterBytes": 1427456,
+    "changePercent": -1.379554,
+    "baselineSha256": "290DEAC6E66A6FBF8C811DC5C8B86DC7208DB72B1F0773AC840CD76FE18DC259",
+    "candidateSha256": "703AAFE2FBE4219ECF4527289D32872CD16787CF14CCCE45AA4A4FEFAEEB71D2",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1064635,
+        "fileBytes": 1064960
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 345974,
+        "fileBytes": 346112
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 106488,
+        "fileBytes": 5120
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 28320,
+        "fileBytes": 28672
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 824,
+        "fileBytes": 1024
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 1049387,
+        "fileBytes": 1049600
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 342390,
+        "fileBytes": 342528
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 105904,
+        "fileBytes": 5120
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 27408,
+        "fileBytes": 27648
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 788,
+        "fileBytes": 1024
+      }
+    ]
+  },
+  {
+    "path": "RedPrism.exe",
+    "beforeBytes": 7965184,
+    "afterBytes": 7760384,
+    "changePercent": -2.57119,
+    "baselineSha256": "DEA96EA6E5A096BF59639636D9C9C0AD2F83F22D440C1B92B804623F89EC91B6",
+    "candidateSha256": "B5B516687FD5CD75DFE9729734A94672DC5071B64F0DDA50B6016B132EB6C099",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 6135451,
+        "fileBytes": 6135808
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 1176752,
+        "fileBytes": 1177088
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 181396,
+        "fileBytes": 78848
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 151920,
+        "fileBytes": 152064
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 407408,
+        "fileBytes": 407552
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 12368,
+        "fileBytes": 12800
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 5949003,
+        "fileBytes": 5949440
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 1164602,
+        "fileBytes": 1164800
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 176936,
+        "fileBytes": 74240
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 150744,
+        "fileBytes": 151040
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 407408,
+        "fileBytes": 407552
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 12184,
+        "fileBytes": 12288
+      }
+    ]
+  },
+  {
+    "path": "yyjson.dll",
+    "beforeBytes": 257536,
+    "afterBytes": 257536,
+    "changePercent": 0.0,
+    "baselineSha256": "96C9E693D2AEAC5337D62CC5C6FE0FC99FA73CDF949B49B991AAE8C9A72BE9A4",
+    "candidateSha256": "96C9E693D2AEAC5337D62CC5C6FE0FC99FA73CDF949B49B991AAE8C9A72BE9A4",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 226648,
+        "fileBytes": 226816
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 25348,
+        "fileBytes": 25600
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 288,
+        "fileBytes": 512
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 2460,
+        "fileBytes": 2560
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 68,
+        "fileBytes": 512
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 226648,
+        "fileBytes": 226816
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 25348,
+        "fileBytes": 25600
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 288,
+        "fileBytes": 512
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 2460,
+        "fileBytes": 2560
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 68,
+        "fileBytes": 512
+      }
+    ]
+  },
+  {
+    "path": "z.dll",
+    "beforeBytes": 87552,
+    "afterBytes": 87552,
+    "changePercent": 0.0,
+    "baselineSha256": "7A284EFF64DFF833506496A7802258536F32AE71264C1E537B31E13CC929B11E",
+    "candidateSha256": "7A284EFF64DFF833506496A7802258536F32AE71264C1E537B31E13CC929B11E",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 57528,
+        "fileBytes": 57856
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 22212,
+        "fileBytes": 22528
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 288,
+        "fileBytes": 512
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 3276,
+        "fileBytes": 3584
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 1360,
+        "fileBytes": 1536
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 104,
+        "fileBytes": 512
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 57528,
+        "fileBytes": 57856
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 22212,
+        "fileBytes": 22528
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 288,
+        "fileBytes": 512
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 3276,
+        "fileBytes": 3584
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 1360,
+        "fileBytes": 1536
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 104,
+        "fileBytes": 512
+      }
+    ]
+  },
+  {
+    "path": "zip.dll",
+    "beforeBytes": 106496,
+    "afterBytes": 106496,
+    "changePercent": 0.0,
+    "baselineSha256": "1D031C21CF1AB9455B7CC5F35C7B3BB1DB75AF1F52737C94329E5AB5D4DA36D7",
+    "candidateSha256": "1D031C21CF1AB9455B7CC5F35C7B3BB1DB75AF1F52737C94329E5AB5D4DA36D7",
+    "beforeSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 76600,
+        "fileBytes": 76800
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 19762,
+        "fileBytes": 19968
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 992,
+        "fileBytes": 1024
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 6168,
+        "fileBytes": 6656
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 304,
+        "fileBytes": 512
+      }
+    ],
+    "afterSections": [
+      {
+        "name": ".text",
+        "virtualBytes": 76600,
+        "fileBytes": 76800
+      },
+      {
+        "name": ".rdata",
+        "virtualBytes": 19762,
+        "fileBytes": 19968
+      },
+      {
+        "name": ".data",
+        "virtualBytes": 992,
+        "fileBytes": 1024
+      },
+      {
+        "name": ".pdata",
+        "virtualBytes": 6168,
+        "fileBytes": 6656
+      },
+      {
+        "name": ".rsrc",
+        "virtualBytes": 480,
+        "fileBytes": 512
+      },
+      {
+        "name": ".reloc",
+        "virtualBytes": 304,
+        "fileBytes": 512
+      }
+    ]
+  }
+]
