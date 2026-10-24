@@ -3,4 +3,9 @@
        reaches RequireRestoredDxUi (RedPrism.DxUi.props) and prints "Run restore-dxui.ps1", instead of failing
        first with MSB4019 for a project file that does not exist (RF-706). -->
   <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.targets" Condition="'$(DxUiRoot)'!=''" />
+  <ItemGroup Condition="'$(DxUiRoot)'!=''">
+    <ProjectReference Update="$(DxUiResolvedRoot)src\DxUi.vcxproj">
+      <AdditionalProperties>%(ProjectReference.AdditionalProperties);WholeProgramOptimization=$(WholeProgramOptimization);VCToolsVersion=$(VCToolsVersion)</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
 </Project>

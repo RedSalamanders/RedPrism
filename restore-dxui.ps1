@@ -59,6 +59,23 @@ if (-not $MSBuildPath) {
 
 Import-Module (Join-Path $source 'Tools/ConsumerBuild.psm1') -Force
 $buildIdentity = Get-DxUiConsumerBuildIdentity -DxUiRoot $source -MSBuildPath $MSBuildPath -Platform $Platform
+# A changed compiler policy owns a separate writable archive output, even when the API/source pin stays unchanged.
+[xml]$msvcPolicy = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'Directory.Build.props')
+$requiredTools = $msvcPolicy.SelectSingleNode('/Project/PropertyGroup/RequiredMsvcToolsVersion').InnerText
+if (-not ([string]$buildIdentity.Identity.vcToolsVersion).StartsWith($requiredTools + '.', [StringComparison]::Ordinal)) {
+    throw "This product requires MSVC $requiredTools.x; selected $($buildIdentity.Identity.vcToolsVersion)."
+}
+$policyIdentity = [ordered]@{}
+if ($buildIdentity.Identity -is [Collections.IDictionary]) {
+    foreach ($entry in $buildIdentity.Identity.GetEnumerator()) { $policyIdentity[$entry.Key] = $entry.Value }
+} else {
+    foreach ($entry in $buildIdentity.Identity.PSObject.Properties) { $policyIdentity[$entry.Name] = $entry.Value }
+}
+$policyIdentity['releaseOptimizationPolicy'] = 'Gy-REF-GL-LTCG-full-v1'
+$policyHasher = [Security.Cryptography.SHA256]::Create()
+try { $policyFingerprint = ([BitConverter]::ToString($policyHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($policyIdentity | ConvertTo-Json -Depth 8 -Compress))))).Replace('-','').ToLowerInvariant() }
+finally { $policyHasher.Dispose() }
+$buildIdentity = [pscustomobject]@{ Fingerprint=$policyFingerprint; Identity=$policyIdentity }
 Import-Module (Join-Path $PSScriptRoot 'Build/DxUiOutputPath.psm1') -Force
 $output = Initialize-RedPrismDxUiOutputRoot -DependencyRoot $dependencyRoot -BuildIdentity $buildIdentity
 & (Join-Path $source 'vcpkg-install.ps1') -Platform $Platform -OutputRoot $output

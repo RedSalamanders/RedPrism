@@ -121,6 +121,28 @@ foreach ($case in @(
 }
 
 
+# LTO can inline the CRT into the exact STL wrapper. Exercise the same exact-name/range
+# mechanism independently of the native runtime, including refusal under the shipped allowance.
+$wrapper = 'std::_WChar_traits<wchar_t>::find'
+$wrapperSymbols = Join-Path $negativeRoot 'runtime-wrapper-symbols.txt'
+$symbolText.Replace('`Kernels_Avx2_Probe_Copy`', ('`' + $wrapper + '`')) |
+    Set-Content -LiteralPath $wrapperSymbols -Encoding utf8
+foreach ($case in @(
+    @{Name='LtoWrapperExact'; Functions=@('BaselineLeak.obj!' + $wrapper); Refused=$false},
+    @{Name='LtoWrapperWrongObject'; Functions=$allowlist.Functions; Refused=$true},
+    @{Name='LtoWrapperNameSuffix'; Functions=@('BaselineLeak.obj!' + $wrapper + '_extra'); Refused=$true},
+    @{Name='LtoWrapperNameCase'; Functions=@('BaselineLeak.obj!' + $wrapper.ToUpperInvariant()); Refused=$true}
+)) {
+    $result = [RedPrismBuild.IsaScanner]::Scan((Join-Path $negativeRoot 'out/IsaProbe.exe'),
+        (Join-Path $negativeScan 'contributions.txt'), $wrapperSymbols, (Join-Path $negativeScan 'disassembly.txt'),
+        [string[]]$allowlist.Objects, [string[]]$allowlist.Libraries, [string[]]$case.Functions)
+    if ($case.Refused) {
+        if ($result.Violations.Count -eq 0) { throw "LTO wrapper identity control accepted: $($case.Name)" }
+    } elseif ($result.Violations.Count -ne 0 -or $result.RuntimeInstructions -eq 0) {
+        throw 'Exact LTO wrapper control did not classify the bounded runtime procedure.'
+    }
+    Write-Host "PASS isa-scan.control.$($case.Name)"
+}
 foreach ($case in @(
     @{ Name = 'MissingPdb'; Pdb = (Join-Path $root 'absent.pdb'); Pattern = 'needs the linked image and its full PDB' },
     @{ Name = 'MismatchedPdb'; Pdb = [IO.Path]::ChangeExtension($avx2, '.pdb'); Pattern = 'PDB GUID/age does not match' }

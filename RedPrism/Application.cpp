@@ -1577,8 +1577,17 @@ int Application::RunSelfTest() noexcept
             const bool antialiasedBeforeClick = _session.selectionAntialiased;
             pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
             pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
-            if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            const SettleResult wandSettleResult = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+            if (wandSettleResult != SettleResult::Settled)
+            {
+                const wchar_t* reason =
+                    wandSettleResult == SettleResult::TimedOut
+                        ? L"WAND fixture: job settlement timed out.\n"
+                        : (wandSettleResult == SettleResult::Quit ? L"WAND fixture: job settlement received WM_QUIT.\n"
+                                                                  : L"WAND fixture: job settlement failed.\n");
+                SelfTestFailure(reason);
                 return 5;
+            }
             box = bounds();
             if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
                 _session.history.UndoName() != L"Magic Wand")
