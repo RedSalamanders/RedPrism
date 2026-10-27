@@ -310,6 +310,22 @@ exit 0
         $r=Run @('-SkipBuild');Assert ($r.Exit -ne 0 -and $r.Text.Contains('SkipBuild refused')) 'Stale compiled source accepted'
         $r=Run;Assert ($r.Exit -eq 0) "Mutated sources did not recover: $($r.Text)"
     }
+    Case 'independent commands preserve empty arguments and named switches for strict scripts' {
+        Put (Join-Path $public 'validate.ps1') @'
+[CmdletBinding()] param()
+[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/strict-commands.txt'),"empty`n")
+'@
+        Put (Join-Path $public 'strict-format.ps1') @'
+[CmdletBinding()] param([switch]$Check)
+if(-not $Check){throw 'The named Check switch was not forwarded'}
+[IO.File]::AppendAllText((Join-Path $PSScriptRoot '.build/strict-commands.txt'),"check`n")
+'@
+        $mini.scopes[2].commands=@(@{path='validate.ps1';arguments=@()},@{path='strict-format.ps1';arguments=@('-Check')})
+        Put (Join-Path $public 'Tests/test-scopes.json') ($mini|ConvertTo-Json -Depth 8)
+        $r=Run @('-Scopes','Tooling','-Force')
+        Assert ($r.Exit -eq 0) "Strict independent commands failed: $($r.Text)"
+        Assert (([IO.File]::ReadAllText((Join-Path $public '.build/strict-commands.txt')) -replace "`r`n","`n") -ceq "empty`ncheck`n") 'Strict command arguments or execution count changed'
+    }
     Write-Host "Scoped testing: $passed cases passed."
 }finally{
     $absolute=[IO.Path]::GetFullPath($fixture);$allowed=[IO.Path]::GetFullPath((Join-Path $root '.build/ToolTests'))+[IO.Path]::DirectorySeparatorChar

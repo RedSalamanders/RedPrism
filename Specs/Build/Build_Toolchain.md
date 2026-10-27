@@ -180,7 +180,7 @@ standalone run finds the MSBuild `build.ps1` would), and the toolset from that i
 `Microsoft.VCToolsVersion.v145.default.props`; the two agree on the installation this was written against, and the choice
 follows DxUi's `Get-DxUiDefaultToolset`). Neither is hard-coded, and a missing or malformed version file
 fails before anything is cloned, naming the file and the repair. The two differ when a newer toolset is installed beside the
-default: VS 18 Insiders' 14.52, beside the default 14.51, has no x64-hosted ARM64 compiler, so every fresh ARM64 restore failed
+default: in the historical 14.51-default installation, the side-by-side 14.52 preview lacked an x64-hosted ARM64 compiler, so every fresh ARM64 restore failed
 while configuring its first library (`LNK1104` on `MSVCRTD.lib`), and compiled libraries from a toolset newer than the one that
 links them are a link hazard.
 
@@ -863,3 +863,24 @@ jumps and orphan prefixes refuse the proof. Candidate body collection grants no 
 proved table bytes receive data status; real VEX/EVEX instructions remain gated everywhere else.
 `IsaR9dRcxR8Tests.ps1` contributes 85 encoded controls, including conflicting scopes and genuine
 vector body/target/adjacent cases. [Failure and qualification](../TestRuns/IsaR9dRcxR8_2026-10-21.md).
+
+## MSVC 14.52 Release compilation and linkage
+
+All native profiles require the installed default MSVC **14.52.x** family with the v145 platform toolset. Discovery remains installation-independent. Restore rejects another default family before dependency compilation; MSBuild validates the selected family before compilation. Record exact patch/compiler/linker identities; GL archives and their final links require exactly matching tools.
+
+Release explicitly uses /Gy and /GL, /OPT:REF and full /LTCG, with ordinary incremental linking disabled. Debug/ASan diagnostic optimization settings are unchanged. Preserve existing project-specific size/speed, warning, ISA, CRT and subsystem choices. Evaluated-profile tests check all six native configurations, pinned archives, and negative compiler/linker controls; resource-only satellites contain no C++ bodies.
+
+Project references explicitly forward WholeProgramOptimization and VCToolsVersion into the adopted DxUi archive. Dependency identity includes releaseOptimizationPolicy=Gy-REF-GL-LTCG-full-v1 and is rehashed before choosing writable outputs. This separates the new archive policy without changing the adopted API/source pin. Keep header/library/compiler/CRT identities matched.
+
+LTO is scoped to each final EXE/DLL and does not guarantee reduced size or improved speed. Retain baseline/candidate image hashes, sizes, build/link durations, fixture and dependency identities, every runtime/resource sample and concurrent-activity observations. Different compiler policies are an intentional experiment, not identical-profile evidence reuse. Cross-built ARM64 and headless functional passes cannot close native ARM64, interactive, or existing product/performance acceptance gates.
+
+### MSVC 14.52 CRT inline wrapper
+
+The exact runtime allowance includes IO.Tests.Runner.obj!std::_WChar_traits<wchar_t>::find after reviewed /GL inlining of UCRT wmemchr. The matching PDB inline-site, installed SDK source and linked flag branch establish its attribution. Only its exact procedure range is allowed; all surrounding code remains gated. IsaScanTests.ps1 adds exact-name and refusal controls. See [attribution and qualification](../TestRuns/Msvc1452ReleaseOptimization_2026-10-23.md).
+
+
+### CI toolchain preparation and audit evidence
+
+Active Windows compilation/tooling workflows use the local setup-msvc composite action. It reads RequiredMsvcToolsVersion, verifies the discovered default compiler, linker, ASan target libraries, SDK and x64 LLVM scanner tools, and provisions Visual Studio 2026 Insiders only on GitHub-hosted runners when necessary. The Microsoft-signed bootstrapper runs under RUNNER_TEMP; existing installations are retained. A channel that no longer supplies 14.52 fails rather than accepting another compiler. Local -VerifyOnly is read-only; automatic local installation is refused. Hosted provisioning remains a separate unexecuted branch until its actual CI receipt exists.
+
+[Full evaluated settings and differences](../../Measurements/Toolchain/2026-10-23-msvc1452/Settings.md) include both platform/configuration matrices and exact per-file metadata. [Microsoft installation guidance](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc) documents channel-specific acquisition. The published [runner image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-VS2026-Readme.md) does not establish that the required toolset is installed; runtime versions alone are also not compiler proof.

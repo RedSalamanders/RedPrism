@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <RequiredMsvcToolsVersion>14.52</RequiredMsvcToolsVersion>
     <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
     <RedPrismBuildRoot>$(MSBuildThisFileDirectory).build\</RedPrismBuildRoot>
     <OutDir>$(RedPrismBuildRoot)$(Platform)\$(Configuration)\</OutDir>
@@ -69,4 +70,9 @@
       <AdditionalLibraryDirectories>$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+
+<Import Project="$(MSBuildThisFileDirectory)Build\RedMonitor.props" />
 </Project>

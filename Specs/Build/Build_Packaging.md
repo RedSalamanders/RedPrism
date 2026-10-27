@@ -74,3 +74,5 @@ first run; the `.sha256` beside the download is the integrity check.
 `package.ps1 -Platform x64` exits 0 with the smoke passed; `package.ps1 -Platform ARM64` exits 0 (smoke skipped on
 an x64 host). Recorded at each release and in the C15 closeout with the ZIP names and sizes. It is a release gate,
 not part of `test.ps1`.
+
+RedMonitor is installed independently. Application packages include its client MIT notice and no viewer executable, runtime, satellite or theme payload. Normal builds verify only the pinned local header/license; see [RedMonitor integration](../Core/Core_RedMonitorIntegration.md).

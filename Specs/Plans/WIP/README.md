@@ -1,5 +1,7 @@
 # Active plan index
 
+- **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated compiler/linker policy, pinned-archive forwarding, all-profile qualification and retained size/performance comparisons.
+
 Main consolidation on 21 October preserves P1 **HOLD**. The user will restart P1 from the new main after merging;
 the opening [consolidation ledger](UiNeverBlocks_2026-09-22.md#main-consolidation--21-october-2026) supersedes older
 checkout routing. Satellite history preservation does not adopt unqualified residual code or close delivery gates.
@@ -105,3 +107,5 @@ Polygonal drawing CPU parent (2026-10-17): complete scoped Release/real-ASan qua
 inside-hit/command arbitration, latest native qualification and ordinary/G1 gates stay open.
 
 - [Scoped testing](ScopedTesting_2026-10-05.md) — ACTIVE: contextual native names, affected scopes, exact evidence, successful-iteration baselines and explicit local/PR qualification.
+
+- [RedMonitor adoption](RedMonitor_Adoption_2026-10-23.md) — pinned producer, optional viewer and consumer qualification.

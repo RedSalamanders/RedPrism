@@ -533,6 +533,7 @@
     <ClCompile Include="PaletteControl.cpp" />
     <ClCompile Include="FileDialogs.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="..\Common\MonitorDiagnostics.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Application.Tests.SizeFinalPublication.cpp" />
   </ItemGroup>

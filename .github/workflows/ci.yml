@@ -41,6 +41,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Prepare required MSVC 14.52 tools
+        uses: ./.github/actions/setup-msvc
+        with:
+          platform: x64
       - name: Install pinned validation dependencies
         shell: pwsh
         run: py -3 -m pip install -r Build/requirements-validation.txt
@@ -71,6 +75,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Prepare required MSVC 14.52 tools
+        if: needs.native-scope.outputs.native == 'true'
+        uses: ./.github/actions/setup-msvc
+        with:
+          platform: ${{ matrix.platform }}
       - name: Verify native checkout inputs
         if: needs.native-scope.outputs.native == 'true'
         shell: pwsh

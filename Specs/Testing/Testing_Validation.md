@@ -3886,3 +3886,5 @@ The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before
 ## Test-run retention
 
 [Generated test-run evidence](Testing_RunEvidence.md) owns completed, failed and interrupted run storage, verification and CI collection.
+
+The WAND fixture's startup job-settlement check retains its 10,000 ms bound and exit code 5. Any non-settled result emits the fixture name and the actual result category (TimedOut, Quit/WM_QUIT, or Failed) through the existing self-test debugger/stderr channel. Diagnostics do not extend the deadline or classify an earlier silent exit's cause.

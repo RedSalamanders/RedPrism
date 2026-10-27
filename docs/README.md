@@ -136,3 +136,5 @@ Empty-document harness captures:
 - [Crop tool](screenshots/crop-96.png) (`--demo crop`)
 
 See [usage.md](usage.md) for the command line and file formats.
+
+[RedMonitor diagnostics](Diagnostics.md) explains the optional viewer and application logging.
