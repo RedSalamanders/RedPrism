@@ -109,5 +109,3 @@ inside-hit/command arbitration, latest native qualification and ordinary/G1 gate
 - [Scoped testing](ScopedTesting_2026-10-05.md) — ACTIVE: contextual native names, affected scopes, exact evidence, successful-iteration baselines and explicit local/PR qualification.
 
 - [RedMonitor adoption](RedMonitor_Adoption_2026-10-23.md) — pinned producer, optional viewer and consumer qualification.
-
-- [Hosted MSVC setup followup](MsvcHostedSetup_2026-10-27.md) - owned GUI completion, exact required tools, retained installer diagnostics and behavioral controls.
