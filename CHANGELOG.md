@@ -4,9 +4,15 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Integrate the standalone RedMonitor pinned header client with MSVC 14.52 Release optimization and current main, preserving existing tests, source-bound qualification evidence and separate native/manual/release gates. Correct independent scoped command argument forwarding and test strict zero-argument and named-switch scripts.
 - Report the WAND fixture's job-settlement timeout, quit or failure on redirected stderr while preserving the existing ten-second bound and exit code, so a failed hidden WARP run retains an actionable reason.
 - Prepare and verify the required MSVC 14.52 toolchain in active Windows CI, with read-only local checks and refusal controls; hosted installation and native ARM64 runtime results remain separate qualification gates.
 - Require MSVC 14.52.x and enable Release function-level/whole-program compilation and unused-function elimination with full LTCG; forward exact tools and WPO into the adopted DxUi archive with a separate policy fingerprint. Validation and measured before/after evidence remain tracked in the active build-policy plan.
+
+- Point RedMonitor contract and adoption-plan links to its merged main branch so retiring the delivery branch preserves documentation navigation.
+- Share only the pinned RedMonitor client header and MIT notice, verify them offline during builds, and discover the separately installed production Release helper for explicit launch or optional bare Debug startup; keep normalized bounded diagnostics and application-only packages.
+- Added explicit optional pinned RedMonitor portable distribution with verified runtime/resource/license closure and behavioral rejection controls.
+- Add the exact pinned RedMonitor producer SDK, bounded application-labelled diagnostics and explicit optional adjacent viewer command; preserve existing logs, crash handling and application ownership, with consumer qualification tracked separately.
 - Verify retained run inventories using fresh pinned-handle metadata and stable path/stream ordering; preserve before/after move diagnostics and exact safety checks, with stale-metadata and reversed-enumeration regressions.
 - Retain the selected suites and requested self-test timeout in RedPrism run metadata when using the current scoped runner; preserve the original failure bound and source/build checks.
 - Preserve completed, failed and interrupted test-run payloads in unique verified evidence folders, retain prior logs and crash probes, and collect hidden evidence in CI without modifying shared read-only files or weakening scoped qualification checks.

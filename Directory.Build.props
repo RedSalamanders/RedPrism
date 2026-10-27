@@ -73,4 +73,6 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+
+<Import Project="$(MSBuildThisFileDirectory)Build\RedMonitor.props" />
 </Project>

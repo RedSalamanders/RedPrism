@@ -103,7 +103,10 @@ if($pending.Count){
     if(@($pending|Where-Object{-not $_.native}).Count){
         foreach($scope in @($pending|Where-Object{-not $_.native})){
             foreach($command in $scope.commands){
-                $global:LASTEXITCODE=0;& (Join-Path $root $command.path) @($command.arguments)
+                $commandArguments=@($command.arguments)
+                $engine=Join-Path $PSHOME $(if($IsWindows){'pwsh.exe'}else{'pwsh'})
+                $invocationArguments=@('-NoProfile','-File',(Join-Path $root $command.path))+$commandArguments
+                $global:LASTEXITCODE=0;& $engine @invocationArguments
                 if(-not $? -or $LASTEXITCODE -ne 0){throw "Independent scope failed: $($scope.name) ($LASTEXITCODE)"}
             }
         }

@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "MonitorDiagnostics.h"
 #include "Runtime.Tests.ViewportFixture.h"
 
 #include "../Tests/Support/Support.Tests.DocumentFixture.h"
@@ -559,6 +560,7 @@ void Application::RenderFrame() noexcept
         _frameInvalidated = false;
         AbandonUiFrameLatency();
         OutputDebugStringW(L"Frame rendering failed.\n");
+        MonitorDiagnostics::Write(RedMonitor::Severity::Error, L"frame rendering failed");
         if (_failedFrames >= kFailedFramesBeforeClose)
         {
             OnFrameLoopFailure(result);
