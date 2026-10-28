@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Recognize only complete unquoted date/timestamp metadata scalars so date-prefixed guidance stays valid prose; retain quoted strings and typed temporal rejection controls.
 - Validate hidden skill packages and preserve quoted ISO metadata strings; keep inline-code spans within paragraphs and validate continued Markdown references and parenthesized titles, with focused read-only controls including literal file-URI filenames.
 - Check package paths before metadata reads, validate local drive/file-URI references, preserve balanced links and inline examples, recognize literal aliases and ShouldProcess parameters without executing scripts, and scope only the two reviewed skill-validator modules to Tooling while retaining broad shared-build fallback.
 - Run routine skill validation and behavioral fixtures on PowerShell 7 without Python/PyYAML; retain explicit metadata/instruction checks while keeping manual Clipper source-generation prerequisites separate.

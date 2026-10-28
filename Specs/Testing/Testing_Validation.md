@@ -38,7 +38,8 @@ evidence. Keep exact dependency identities in locks and qualified results in sou
 The public `validate-skills.ps1` runs package/path checks before the independent metadata grammar opens SKILL.md.
 Hidden direct skill directories are part of both inventories; a Hidden attribute cannot skip header or package
 validation. JSON-compatible quoted metadata strings retain their exact text, including ISO dates/timestamps,
-without automatic date conversion; unquoted typed scalars keep the existing rejection rules.
+without automatic date conversion. Date/timestamp type detection matches a complete scalar; plain prose such
+as `2026-10-28 migration guidance` remains a string, while complete unquoted dates/timestamps require quotes.
 Only exact `Build/SkillPackageIntegrity.psm1` and `Build/SkillValidation.psm1` changes select Tooling alone before
 generic Build and project-manifest rules. Shared `Build/ScopedTesting.psm1` and unknown Build inputs retain broad
 fallback; the full tooling source identity continues to include the validator closure.
