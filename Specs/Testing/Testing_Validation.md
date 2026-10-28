@@ -17,6 +17,11 @@ unreviewed C4746 outside those scopes. `Document.Tests.CropLifetime.cpp` additio
 pixel preservation after source/caller release and final lifetime release; the private charged storage size is
 checked at compile time on both target architectures.
 
+The shared isolated sanitizer probe deliberately reads freed storage. Its ARM64 sanitizer-only, definition-local
+C4746 annotation preserves the allocation, release and faulting read; the child must still produce a real
+AddressSanitizer diagnostic. Ordinary builds keep the probe's refusal return, and native ARM64 runtime proof
+remains separate from cross-compilation.
+
 ### Skill package and example integrity
 
 Skill metadata grammar and package usability are separate checks. `Build/SkillPackageIntegrity.psm1` checks

@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Confine the ARM64 sanitizer probe's intentional volatile use-after-free observation to a definition-local C4746 scope. Keep the allocation, release and faulting read unchanged so real sanitizer instrumentation remains required.
 - Include the shared capacity test helper through the existing repository include root, keeping each test's include path explicit without parent-directory warning C4464.
 - Annotate SDK WRL's ARM64 volatile reference-count definitions before the UI Automation fixture includes application headers. Keep the scope on the SDK include, retain owned-code diagnostics and leave COM ownership and the target volatile model unchanged.
 - Clarify build and WIL guidance: `/WX` remains disabled while the build gate requires zero warnings, with narrowly scoped external include annotations.

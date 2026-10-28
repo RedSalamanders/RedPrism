@@ -66,3 +66,10 @@ them while both x64 controls stay warning-free. The fixture parses that annotate
 headers can include it. Evidence: `E:/RedPrism.Perf/build-policy-arm64-wrl-scope-proof-20261028-r2/`.
 The first proof attempt is retained: its fixture omitted the original test's noncopyable-trait annotations,
 so unrelated copy/move notices correctly refused its zero-warning gate. No result from that attempt is accepted.
+
+Candidate22b8 passed five native profiles; ARM64 ASan Debug compiled/linked but correctly failed the zero-warning
+gate on two uses of the shared deliberate use-after-free probe. Its function now has an ARM64 sanitizer-only
+definition-local C4746 annotation, with the faulting body unchanged. Four real sanitizer compiler controls reproduce
+the old notice only on ARM64 and accept the fixed header warning-free on ARM64/x64. Receipt:
+`E:/RedPrism.Perf/build-policy-sanitizer-probe-scope-proof-20261028/`. Real x64 sanitizer child diagnostics and the
+final six-build/three-Full matrix remain required; no runtime result follows from compile-only controls.
