@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Limit recognized Markdown fence openers and closers to zero to three leading spaces, preserving required-resource and unfinished-instruction checks across four-space and tab-indented markers; add boundary controls.
+- Keep line-leading same-line backtick spans as inline prose so they cannot hide following required resources or unfinished instructions; retain tilde-fence info handling and cover both cases with read-only controls.
 - Recognize only complete unquoted date/timestamp metadata scalars so date-prefixed guidance stays valid prose; retain quoted strings and typed temporal rejection controls.
 - Validate hidden skill packages and preserve quoted ISO metadata strings; keep inline-code spans within paragraphs and validate continued Markdown references and parenthesized titles, with focused read-only controls including literal file-URI filenames.
 - Check package paths before metadata reads, validate local drive/file-URI references, preserve balanced links and inline examples, recognize literal aliases and ShouldProcess parameters without executing scripts, and scope only the two reviewed skill-validator modules to Tooling while retaining broad shared-build fallback.

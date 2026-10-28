@@ -101,8 +101,10 @@ function Test-RedPrismSkillPackageIntegrity {
             $language = ''
             $prose = [Collections.Generic.List[string]]::new()
             foreach ($line in [IO.File]::ReadAllLines($file.FullName)) {
-                $marker = [regex]::Match($line, '^[ \t]*(?:(?:[-+*]|\d+[.)])[ \t]+)?(?<fence>`{3,}|~{3,})(?<rest>.*)$')
-                if ($marker.Success) {
+                $marker = [regex]::Match($line, '^ {0,3}(?:(?:[-+*]|\d+[.)])[ \t]+)?(?<fence>`{3,}|~{3,})(?<rest>.*)$')
+                # Backtick fence info cannot contain backticks; a same-line code span is prose.
+                if ($marker.Success -and ($null -ne $fence -or $marker.Groups['fence'].Value[0] -cne '`' -or
+                    -not $marker.Groups['rest'].Value.Contains('`'))) {
                     $token = $marker.Groups['fence'].Value
                     if ($null -eq $fence) { $fence = $token; $language = $marker.Groups['rest'].Value.Trim() }
                     elseif ($token[0] -ceq $fence[0] -and $token.Length -ge $fence.Length -and -not $marker.Groups['rest'].Value.Trim()) {

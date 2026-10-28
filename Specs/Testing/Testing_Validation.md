@@ -25,6 +25,10 @@ The bounded inline-code scanner stops at blank paragraphs (including whitespace-
 soft line breaks within a paragraph remain supported. Link titles may use single quotes, double quotes or
 parentheses on one line. A reference destination may continue onto the immediately following line; this does
 not make its declaration a rendered link use. These forms do not claim a general CommonMark parser.
+Backtick fence opening info cannot contain a backtick: line-leading same-line code such as
+`` ```literal``` `` remains inline prose and cannot hide the following paragraph. Tilde-fence info may contain backticks.
+Recognized fence openers and closers have zero to three leading spaces before the optional list marker.
+Four-space or tab indentation does not open or close a fence in this bounded scanner.
 File URI path escapes are decoded once, preserving encoded `#` and literal percent sequences in filenames.
 
 For literal `./...ps1` or `.\\...ps1` command lines in `powershell` fences, the package check parses the named

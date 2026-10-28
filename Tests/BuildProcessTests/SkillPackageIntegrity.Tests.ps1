@@ -124,6 +124,20 @@ Put $skill 'Read [web](https://example.invalid/no-fetch) and [local section](#se
 Expect 'web and section are not fetched' $true
 Put $skill ('```markdown'+"`n[illustrative](missing.md)`n"+'```')
 Expect 'illustrative fenced link ignored' $true
+Put $skill '```literal```'
+Expect 'line-leading same-line backtick code is valid prose' $true
+Put $skill ('```literal```'+"`n`n[Missing](missing.md)")
+Expect 'line-leading inline code cannot hide following real resource' $false 'Missing or non-repository'
+Put $skill ('~~~info`literal'+"`n[Illustration](missing.md)`n"+'~~~')
+Expect 'tilde fence info can retain backticks' $true
+foreach ($indent in '    ',"`t") {
+    Put $skill ($indent+'```text'+"`n`n[Missing](missing.md)")
+    Expect "indent length $($indent.Length) cannot open a fence hiding a real link" $false 'Missing or non-repository'
+    Put $skill ('```text'+"`n"+$indent+'```'+"`n[Illustration](missing.md)`n"+'```')
+    Expect "indent length $($indent.Length) cannot close an illustrative fence" $true
+}
+Put $skill ('   ```text'+"`n[Illustration](missing.md)`n"+'   ```')
+Expect 'three-space fence boundary remains supported' $true
 Put $skill 'Read [reference](references/working.md).'
 Put '.agents/skills/example-skill/references/working.md' 'Read [missing support](absent.md).'
 Expect 'broken supporting reference refused' $false
