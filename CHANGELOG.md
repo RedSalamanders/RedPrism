@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Occupy the private raster storage base's ARM64 tail padding to address MSVC C5291 without suppressing the diagnostic. Preserve x64 layout and charged lifetime accounting, check the derived size at compile time, and verify charged pixels after source and caller lifetime release.
 - Advance the API3 maintenance lock to the test-only leased-foreground followup after six upstream builds and all three zero-skip desktop profiles pass. Preserve matching public headers/library and requalify the consumer through normal restore and build entrypoints.
 - Restore the previous CRT allocation hook with a documented statement-local annotation for the CRT-erased noexcept type; preserve the allocation-failure test behavior.
 - Select the API3 DxUi maintenance candidate with stable posted-payload type identity under Release ICF and warning repairs. Preserve the experimental prepared-row boundary and historical qualification receipts; track fresh consumer and desktop-focus gates in the indexed native-policy plan.

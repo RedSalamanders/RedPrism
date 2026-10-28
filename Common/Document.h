@@ -364,6 +364,10 @@ class Raster
         std::optional<std::uint64_t> gridReplacementWorkspaceBytes;
         std::uint64_t graphNodes = 1;
         unsigned int graphDepth = 0;
+#if defined(_M_ARM64)
+        // Occupy the base tail padding: MSVC C5291 warns that deriving through it can violate the ARM64 ABI.
+        std::uint64_t arm64AbiTailPadding = 0;
+#endif
     };
 #pragma warning(pop)
 
@@ -383,6 +387,7 @@ class Raster
         explicit ChargedStorage(std::uint64_t identity) noexcept;
         std::shared_ptr<const void> lifetime;
     };
+    static_assert(sizeof(ChargedStorage) == sizeof(Storage) + sizeof(std::shared_ptr<const void>));
 #pragma warning(pop)
 
 #pragma warning(pop)

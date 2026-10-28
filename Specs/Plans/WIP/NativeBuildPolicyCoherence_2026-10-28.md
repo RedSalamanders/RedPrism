@@ -40,3 +40,14 @@ RedTilde ARM64 restore and required policy/lease logs are under that task's
 RedTilde-ARM64-restore folder; both exited zero before implementation.
 
 Candidate pin: `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b` (API3). Six upstream native builds and all 54 nonforeground suite runs pass. The declined focus countdown remains an open qualification gate; this candidate lock enables independent product builds and is not a final green receipt.
+
+The user subsequently authorized the 30-second automatic start and resumed focus qualification. All three upstream
+focus configurations now pass with restoration; the earlier declined run remains retained as historical evidence.
+
+The product ARM64 Debug build exposed MSVC C5291 on private `Raster::ChargedStorage`. The interrupted run is not a
+pass. An ARM64-only 8-byte base tail member addresses the compiler's recommendation without suppressing C5291.
+An independent four-way header compile reproduces the warning before the change only on ARM64, and compiles the
+new header with zero warnings on ARM64 and x64 using x64-hosted MSVC 14.52.37025. Its immutable receipt is under
+`E:/RedPrism.Perf/build-policy-arm64-layout-proof-20261028/`. A static assertion checks the charged object-size
+increment, and the crop lifetime test checks retained pixels after source/caller release. Full native builds and
+runtime qualification on the final product source remain required; no native ARM64 runtime execution is claimed.
