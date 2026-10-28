@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Validate hidden skill packages and preserve quoted ISO metadata strings; keep inline-code spans within paragraphs and validate continued Markdown references and parenthesized titles, with focused read-only controls including literal file-URI filenames.
 - Check package paths before metadata reads, validate local drive/file-URI references, preserve balanced links and inline examples, recognize literal aliases and ShouldProcess parameters without executing scripts, and scope only the two reviewed skill-validator modules to Tooling while retaining broad shared-build fallback.
 - Run routine skill validation and behavioral fixtures on PowerShell 7 without Python/PyYAML; retain explicit metadata/instruction checks while keeping manual Clipper source-generation prerequisites separate.
 - Preserve the deliberate crash-formatting exception, route ported guards through current pending-edit rules and keep dependency history in the integration contract; add independent skill-reference and literal-command-signature controls without executing examples or native builds.

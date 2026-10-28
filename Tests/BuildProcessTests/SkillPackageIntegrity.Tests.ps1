@@ -22,8 +22,8 @@ function Put([string]$Name,[string]$Text) {
 function Snapshot {
     return (@(Get-ChildItem -LiteralPath $run -Force -Recurse | Sort-Object FullName | ForEach-Object {
         $relative = [IO.Path]::GetRelativePath($run,$_.FullName)
-        if ($_.PSIsContainer) { 'D:'+$relative }
-        else { 'F:'+$relative+':'+$_.LastWriteTimeUtc.Ticks+':'+(Get-FileHash -LiteralPath $_.FullName).Hash }
+        if ($_.PSIsContainer) { 'D:'+$relative+':'+$_.Attributes }
+        else { 'F:'+$relative+':'+$_.LastWriteTimeUtc.Ticks+':'+(Get-FileHash -LiteralPath $_.FullName).Hash+':'+$_.Attributes }
     }) -join "`n")
 }
 function Expect([string]$Name,[bool]$Accepted,[string]$ExpectedProblem='') {
@@ -55,6 +55,43 @@ Put $skill 'Read [contract](../../../Specs/contract(v1).md).'
 Expect 'balanced destination parentheses' $true
 Put $skill 'The syntax is `[example](missing.md)` or `` `[another](absent.md)` ``.'
 Expect 'inline-code pseudo-links ignored' $true
+Put $skill ('first `'+"`n`n[Missing](missing.md)`n`n"+'last `')
+Expect 'inline-code delimiters do not hide another paragraph' $false 'Missing or non-repository'
+Put $skill ('first `'+"`n `t`n[Missing](missing.md)`n`n"+'last `')
+Expect 'whitespace-only blank line ends inline-code span' $false 'Missing or non-repository'
+Put $skill ('Read `'+"soft`n[example](missing.md)"+'` within one paragraph.')
+Expect 'soft-line inline-code pseudo-link remains ignored' $true
+Put $skill 'Read [contract](../../../Specs/contract.md (Owning contract)).'
+Expect 'parenthesized link title accepted' $true
+Put $skill 'Read [missing](missing.md (Owning contract)).'
+Expect 'parenthesized link title cannot hide a missing target' $false 'Missing or non-repository'
+Put $skill "[owner]:`n  ../../../Specs/contract.md`nRead [contract][owner]."
+Expect 'continued reference destination resolves' $true
+Put $skill "[owner]:`n  missing.md"
+Expect 'unused continued definition still validates target' $false 'Missing or non-repository'
+Put $skill "[owner]:`n  ../../../Specs/contract.md (Owning contract)`nRead [owner][]."
+Expect 'continued definition with parenthesized title resolves' $true
+foreach ($fileName in 'guide#v1.md','literal%20.md') {
+    Put ('Specs/'+$fileName) '# Encoded filename contract'
+    $target = Join-Path $run ('Specs/'+$fileName)
+    $uri = [uri]::new('file:///'+$target.Replace('\','/').Replace('%','%25').Replace('#','%23')).AbsoluteUri
+    Put $skill ('Read [contract]('+ $uri +').')
+    Expect "file URI preserves literal filename $fileName" $true
+}
+$hidden = Join-Path $run '.agents/skills/hidden-skill'
+[void][IO.Directory]::CreateDirectory($hidden)
+[IO.File]::SetAttributes($hidden,[IO.FileAttributes]::Directory -bor [IO.FileAttributes]::Hidden)
+try {
+    Expect 'hidden package missing entrypoint refused' $false 'Missing SKILL.md'
+    Put '.agents/skills/hidden-skill/SKILL.md' 'Read [contract](../../../Specs/contract.md).'
+    Expect 'hidden valid package checked' $true
+    Put '.agents/skills/hidden-skill/SKILL.md' 'Read [missing](missing.md).'
+    Expect 'hidden package missing resource refused' $false 'Missing or non-repository'
+} finally {
+    [IO.File]::SetAttributes($hidden,[IO.FileAttributes]::Directory)
+    [IO.File]::Delete((Join-Path $hidden 'SKILL.md'))
+    [IO.Directory]::Delete($hidden)
+}
 Put $skill '[External](//example.invalid/no-fetch)'
 Expect 'protocol-relative external URL ignored' $true
 Put $skill ('Read [contract]('+((Join-Path $run 'Specs/contract.md').Replace('\','/'))+').')
@@ -152,7 +189,7 @@ foreach ($relative in 'validate-skills.ps1','Build/SkillValidation.psm1','Build/
     [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination))
     [IO.File]::Copy((Join-Path $root $relative),$destination)
 }
-Put $skill "---`nname: example-skill`ndescription: Validate references.`n---`nRead the contract."
+Put $skill "---`nname: example-skill`ndescription: `"2026-10-28T09:00:00Z`"`n---`nRead [contract](../../../Specs/contract.md (Owning contract)).`n[owner]:`n  ../../../Specs/contract.md`nRead [contract][owner]."
 Put 'Changes/README.md' '# Changelog fragments'
 Put 'CHANGELOG.md' "# Changes`n`n## Unreleased`n"
 $before = Snapshot

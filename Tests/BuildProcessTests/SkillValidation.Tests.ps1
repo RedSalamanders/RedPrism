@@ -16,6 +16,9 @@ $cases = @(
     @{Name='JSON quoted escape'; Text='---'+"`nname: example-skill`ndescription: "+'"Line\nDeux \u65e5"'+"`n---`nRead."; Valid=$true},
     @{Name='plain comment'; Text="---`n# comment`nname: example-skill`ndescription: valid # comment`n---`nRead."; Valid=$true},
     @{Name='quoted typed string'; Text="---`nname: example-skill`ndescription: '123'`n---`nRead."; Valid=$true},
+    @{Name='double quoted date'; Text=$prefix.Replace('description: valid','description: "2026-10-28"')+'Read.'; Valid=$true},
+    @{Name='double quoted UTC timestamp'; Text=$prefix.Replace('description: valid','description: "2026-10-28T09:00:00Z"')+'Read.'; Valid=$true},
+    @{Name='double quoted offset timestamp'; Text=$prefix.Replace('description: valid','description: "2026-10-28T09:00:00+02:00"')+'Read.'; Valid=$true},
     @{Name='missing file'; Text=$null; Valid=$false},
     @{Name='missing delimiters'; Text='name: example-skill'+"`ndescription: valid`nRead."; Valid=$false},
     @{Name='malformed YAML'; Text="---`n[`n---`nRead."; Valid=$false},
@@ -51,6 +54,11 @@ $unicodeScalar = [char]::ConvertFromUtf32(0x1f4d8)
 $cases += @{Name='Unicode code-point limit'; Text=$prefix.Replace('description: valid',('description: '+($unicodeScalar*1024)))+'Read.'; Valid=$true}
 $cases += @{Name='Unicode code-point overflow'; Text=$prefix.Replace('description: valid',('description: '+($unicodeScalar*1025)))+'Read.'; Valid=$false}
 $passed = 0
+foreach ($literal in '2026-10-28T09:00:00Z','2026-10-28T09:00:00+02:00') {
+    $decoded = & $skillModule {param($Text) ConvertFrom-SkillScalar ('"'+$Text+'"')} $literal
+    if ($decoded -isnot [string] -or $decoded -cne $literal) { throw 'Quoted timestamp did not preserve its exact string value' }
+    $passed++
+}
 foreach ($block in @(
     @{Text="description: |`n  first`n  second"; Expected="first`nsecond`n"},
     @{Text="description: |-`n  first`n  second"; Expected="first`nsecond"},
@@ -73,6 +81,25 @@ try {
     $path = Join-Path $fixture '.agents/skills/example-skill/SKILL.md'
     [IO.File]::WriteAllText($path,$prefix+'Read.',[Text.UTF8Encoding]::new($false))
     if ((Test-RepositorySkills $fixture) -ne 1) { throw 'Aggregate did not validate the fixture skill' }
+    $hidden = Join-Path $fixture '.agents/skills/hidden-skill'
+    [void][IO.Directory]::CreateDirectory($hidden)
+    $hiddenPath = Join-Path $hidden 'SKILL.md'
+    try {
+        [IO.File]::SetAttributes($hidden,[IO.FileAttributes]::Directory -bor [IO.FileAttributes]::Hidden)
+        [IO.File]::WriteAllText($hiddenPath,$prefix.Replace('example-skill','hidden-skill')+'Read.')
+        if ((Test-RepositorySkills $fixture) -ne 2) { throw 'Hidden valid package was omitted' }
+        [IO.File]::WriteAllText($hiddenPath,'malformed')
+        $before = (Get-FileHash -LiteralPath $hiddenPath).Hash+':'+[IO.File]::GetLastWriteTimeUtc($hiddenPath).Ticks+':'+[IO.File]::GetAttributes($hidden)
+        $message='';try { Test-RepositorySkills $fixture | Out-Null } catch [System.Management.Automation.RuntimeException] {$message=$_.Exception.Message}
+        if ($message -notlike '*hidden-skill: missing YAML front matter*') { throw "Hidden malformed package was omitted: $message" }
+        $after = (Get-FileHash -LiteralPath $hiddenPath).Hash+':'+[IO.File]::GetLastWriteTimeUtc($hiddenPath).Ticks+':'+[IO.File]::GetAttributes($hidden)
+        if ($after -cne $before) { throw 'Hidden-package validation modified fixture data or attributes' }
+        $passed += 3
+    } finally {
+        [IO.File]::SetAttributes($hidden,[IO.FileAttributes]::Directory)
+        if ([IO.File]::Exists($hiddenPath)) { [IO.File]::Delete($hiddenPath) }
+        [IO.Directory]::Delete($hidden)
+    }
     [IO.File]::WriteAllText($path,$prefix,[Text.UTF8Encoding]::new($false))
     $message='';try { Test-RepositorySkills $fixture | Out-Null } catch [System.Management.Automation.RuntimeException] {$message=$_.Exception.Message}
     if ($message -notlike '*example-skill: empty skill instructions*') { throw "Aggregate admitted invalid instructions: $message" }

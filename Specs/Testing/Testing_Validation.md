@@ -21,6 +21,11 @@ case-insensitive labels and check their definition destinations; the first defin
 reference labels fail. Full/collapsed references require adjacent brackets; space, tab or newline separation leaves
 independent shortcut/text spans. Bracket-only shortcuts without definitions remain ordinary text. Links inside fenced
 illustrations or inline code, backtick prose paths and target anchors are outside this check.
+The bounded inline-code scanner stops at blank paragraphs (including whitespace-only blank lines), while
+soft line breaks within a paragraph remain supported. Link titles may use single quotes, double quotes or
+parentheses on one line. A reference destination may continue onto the immediately following line; this does
+not make its declaration a rendered link use. These forms do not claim a general CommonMark parser.
+File URI path escapes are decoded once, preserving encoded `#` and literal percent sequences in filenames.
 
 For literal `./...ps1` or `.\\...ps1` command lines in `powershell` fences, the package check parses the named
 repository-root script and checks the spelled named parameters against its AST, without executing either the
@@ -31,6 +36,9 @@ runtime binding are not validated. A structural pass is not instruction-quality,
 evidence. Keep exact dependency identities in locks and qualified results in source-bound receipts, not skills.
 
 The public `validate-skills.ps1` runs package/path checks before the independent metadata grammar opens SKILL.md.
+Hidden direct skill directories are part of both inventories; a Hidden attribute cannot skip header or package
+validation. JSON-compatible quoted metadata strings retain their exact text, including ISO dates/timestamps,
+without automatic date conversion; unquoted typed scalars keep the existing rejection rules.
 Only exact `Build/SkillPackageIntegrity.psm1` and `Build/SkillValidation.psm1` changes select Tooling alone before
 generic Build and project-manifest rules. Shared `Build/ScopedTesting.psm1` and unknown Build inputs retain broad
 fallback; the full tooling source identity continues to include the validator closure.

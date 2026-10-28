@@ -33,21 +33,24 @@ function Get-RedPrismPackageMarkdown {
 
 function Get-RedPrismDeclaredSkillLink {
     param([string]$Prose)
-    $text = [regex]::Replace($Prose,'(?<![\\`])(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)',' ')
+    # A blank line ends this bounded inline-code span; it cannot hide links in another paragraph.
+    $text = [regex]::Replace($Prose,'(?<![\\`])(`+)(?!`)(?:(?!\r?\n[ \t]*\r?\n)[\s\S])*?(?<!`)\1(?!`)',' ')
     $destination = '(?:<(?<angle>[^>\r\n]*)>|(?<plain>(?:\\[()]|\\(?![()])|[^()\s\\]|\((?<depth>)|\)(?<-depth>))+(?(depth)(?!))))'
-    $title = '(?:[ \t]+(?:"[^"]*"|''[^'']*''))?[ \t]*'
+    $title = '(?:[ \t]+(?:"[^"\r\n]*"|''[^''\r\n]*''|\([^()\r\n]*\)))?[ \t]*'
     foreach ($link in [regex]::Matches($text,('\]\([ \t]*'+$destination+$title+'\)'))) {
         $target = if ($link.Groups['angle'].Success) { $link.Groups['angle'].Value } else { $link.Groups['plain'].Value }
         if ($target) { $target -replace '\\([()])','$1' }
     }
     $definitions = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($link in [regex]::Matches($text,('(?m)^[ ]{0,3}\[(?<label>[^\]\r\n]+)\]:[ \t]*'+$destination+$title+'$'))) {
+    $definitionPattern = '(?m)^[ ]{0,3}\[(?<label>[^\]\r\n]+)\]:[ \t]*(?:\r?\n[ \t]*)?'+$destination+$title+'$'
+    foreach ($link in [regex]::Matches($text,$definitionPattern)) {
         $label = [regex]::Replace($link.Groups['label'].Value.Trim(),'\s+',' ')
         if ($definitions.ContainsKey($label)) { continue } # CommonMark uses the first definition.
         $target = if ($link.Groups['angle'].Success) { $link.Groups['angle'].Value } else { $link.Groups['plain'].Value }
         $definitions.Add($label,$target)
         if ($target) { $target -replace '\\([()])','$1' }
     }
+    $text = [regex]::Replace($text,$definitionPattern,' ')
     # A full/collapsed reference has adjacent brackets. Whitespace separates shortcut/text spans.
     foreach ($usage in [regex]::Matches($text,'\[(?<text>[^\]\r\n]+)\]\[(?<label>[^\]\r\n]*)\]')) {
         $label = if ($usage.Groups['label'].Value) { $usage.Groups['label'].Value } else { $usage.Groups['text'].Value }
@@ -84,7 +87,7 @@ function Test-RedPrismSkillPackageIntegrity {
     param([Parameter(Mandatory)][string]$Root)
     $skillRoot = Join-Path $Root '.agents/skills'
     Assert-RedPrismOrdinarySkillPath $skillRoot
-    $folders = @(Get-ChildItem -LiteralPath $skillRoot -Directory -ErrorAction Stop)
+    $folders = @(Get-ChildItem -LiteralPath $skillRoot -Directory -Force -ErrorAction Stop)
     if (-not $folders.Count) { throw 'No skill packages found' }
     $referenceCount = 0
     $commandCount = 0
