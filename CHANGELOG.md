@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Restore the previous CRT allocation hook with a documented statement-local annotation for the CRT-erased noexcept type; preserve the allocation-failure test behavior.
 - Select the API3 DxUi maintenance candidate with stable posted-payload type identity under Release ICF and warning repairs. Preserve the experimental prepared-row boundary and historical qualification receipts; track fresh consumer and desktop-focus gates in the indexed native-policy plan.
 - Exercise the real build entrypoint with warnings, errors and missing diagnostic logs even when the native command returns zero; ensure those cases fail before provenance and preserve the caller environment. Use the common whole-entrypoint timer for the final result.
 - Make owned raster, geometry, host and test conversions explicit for the zero-warning /Wall policy; preserve image arithmetic and constructor/capture lifetimes, spell out enum fallbacks and array subobjects, and remove unused private test helpers. Full native and runtime qualification remains tracked in the build-policy plan.

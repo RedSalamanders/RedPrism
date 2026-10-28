@@ -57,6 +57,9 @@ class ScopedCrtAllocationHook final
     ~ScopedCrtAllocationHook()
     {
         gTrackCrtAllocations = false;
+        // The CRT return type erases noexcept; restore the exact previous hook unchanged.
+        // Owner: RedPrism test maintainers; review: 2027-01-31.
+#pragma warning(suppress : 5039)
         (void)_CrtSetAllocHook(_previous);
         // Keep the chain valid for an already-entered callback on another thread after restoration.
     }
