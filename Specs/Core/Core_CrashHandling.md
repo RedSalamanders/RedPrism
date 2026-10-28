@@ -46,6 +46,10 @@ the event. Every private-pool callback installs the UCRT's per-thread terminate 
 The Windows Error Reporting dialog never
 appears: the filter answers `EXCEPTION_EXECUTE_HANDLER`.
 
+This fixed-buffer crash writer is the deliberate exception to the ordinary `std::format_to_n` formatting policy.
+Do not replace it during generic style cleanup; a crash-path redesign must preserve the failure-context allocation
+constraint and receive its own validation under this contract.
+
 The scheduler's owner-wake endpoint treats failure to signal a live owned event after work publication as an
 invariant failure and calls `std::terminate`; the existing installed handler records code `0xE0000001`. Startup
 event/wait creation failures instead propagate an HRESULT and unwind before work can be accepted. Endpoint

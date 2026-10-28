@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Check package paths before metadata reads, validate local drive/file-URI references, preserve balanced links and inline examples, recognize literal aliases and ShouldProcess parameters without executing scripts, and scope only the two reviewed skill-validator modules to Tooling while retaining broad shared-build fallback.
+- Run routine skill validation and behavioral fixtures on PowerShell 7 without Python/PyYAML; retain explicit metadata/instruction checks while keeping manual Clipper source-generation prerequisites separate.
+- Preserve the deliberate crash-formatting exception, route ported guards through current pending-edit rules and keep dependency history in the integration contract; add independent skill-reference and literal-command-signature controls without executing examples or native builds.
 - Bind hosted build and restore to the verified MSVC 14.52 installation's MSBuild, preserving strict compiler-family checks and local read-only behavior; cover stale ambient discovery and missing-MSBuild refusal.
 - Wait for the hosted Visual Studio GUI installer and use its explicit result before verifying MSVC 14.52; retain installer diagnostics and cover delayed completion, failures and strict tool/refusal checks without a real installation.
 - Integrate the standalone RedMonitor pinned header client with MSVC 14.52 Release optimization and current main, preserving existing tests, source-bound qualification evidence and separate native/manual/release gates. Correct independent scoped command argument forwarding and test strict zero-argument and named-switch scripts.

@@ -14,3 +14,5 @@ repeating identical CI tests; pending CI is not a pass. `-Mode Full` remains the
 See the [test guide](Tests/README.md) and [validation contract](Specs/Testing/Testing_Validation.md).
 
 Builds require the default MSVC **14.52.x** tools (v145). Release uses /Gy /GL and final /OPT:REF /LTCG; archive and final-link tools must match exactly. The build contract documents the preserved API pin, explicit archive forwarding and policy-specific output identity.
+
+Repository skill validation and its regression tests run on PowerShell 7 without Python or PyYAML. Manual Clipper source regeneration and archived analysis retain their documented prerequisites.

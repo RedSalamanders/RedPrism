@@ -9,6 +9,44 @@ Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
+### Skill package and example integrity
+
+Skill metadata grammar and package usability are separate checks. `Build/SkillPackageIntegrity.psm1` checks
+declared inline local Markdown links in skills and their supporting Markdown files, resolving them from each
+document within this repository and refusing missing/escaping/reparse targets. External URLs and section-only
+links are not fetched; protocol-relative URLs remain external. Local absolute paths and file URIs must pass the
+same existence/containment checks as relative paths. Reparse package files and ancestors fail before reads.
+Balanced destination parentheses are supported. Full/collapsed reference links resolve normalized,
+case-insensitive labels and check their definition destinations; the first definition wins, and undefined explicit
+reference labels fail. Full/collapsed references require adjacent brackets; space, tab or newline separation leaves
+independent shortcut/text spans. Bracket-only shortcuts without definitions remain ordinary text. Links inside fenced
+illustrations or inline code, backtick prose paths and target anchors are outside this check.
+
+For literal `./...ps1` or `.\\...ps1` command lines in `powershell` fences, the package check parses the named
+repository-root script and checks the spelled named parameters against its AST, without executing either the
+example or target. Literal Alias attributes and the installed runtime's common parameters/aliases are recognized.
+WhatIf and Confirm are available only for omitted/literal-true SupportsShouldProcess on CmdletBinding. Parameter
+values, dynamic commands or attribute expressions, expression evaluation, native executables and
+runtime binding are not validated. A structural pass is not instruction-quality, policy-consistency or runtime
+evidence. Keep exact dependency identities in locks and qualified results in source-bound receipts, not skills.
+
+The public `validate-skills.ps1` runs package/path checks before the independent metadata grammar opens SKILL.md.
+Only exact `Build/SkillPackageIntegrity.psm1` and `Build/SkillValidation.psm1` changes select Tooling alone before
+generic Build and project-manifest rules. Shared `Build/ScopedTesting.psm1` and unknown Build inputs retain broad
+fallback; the full tooling source identity continues to include the validator closure.
+
+`Tests/BuildProcessTests/SkillPackageIntegrity.Tests.ps1` is discovered by the independent tooling runner. It
+checks the current skill corpus plus missing links/scripts, wrong parameters, supporting-reference resolution,
+entrypoint absence, inline/fenced illustrations, local URI boundaries, declared aliases/ShouldProcess and read-only
+snapshots. Reparse file and ancestor targets are synthetic and remain inside the same owned fixture; hosts without
+symbolic-link privilege report explicit skips for those controls. An example target that throws proves it was
+never invoked. Fixtures remain beneath unique `.build/skill-package-tests` directories; no native build or
+desktop input is required.
+
+Shared changelog behavior fixtures run through `Tests/BuildProcessTests/ChangelogWorkflow.Tests.ps1` in the
+independent tooling runner, with unique `.build/changelog-fixtures` scratch. They remain required after removing
+fixture mutations from the narrow skill checker; read-only fragment validation does not replace these controls.
+
 `ToolDiscoveryTests.ps1` also runs the exact-entrypoint compiler-host controls in `ToolArchitectureTests.ps1`.
 They observe dependency/restore/solution/provenance boundaries, explicit and unset selections, Clean and failure
 cleanup through isolated stand-ins. They preserve MSBuild override/PATH precedence and the caller environment;

@@ -1,47 +1,27 @@
 <#
 .SYNOPSIS
-Validates every repository-local RedPrism skill.
+Validates repository-local skill packages, references, literal script signatures and metadata.
+.DESCRIPTION
+Runs the repository-owned PowerShell 7 validator. Supports the documented YAML subset,
+including multiline descriptions; requires no Python, external YAML module or Codex installation.
+.OUTPUTS
+Validation diagnostics. Fails on any invalid skill.
+.NOTES
+Reads skills and validates changelog fragments; does not modify files or access the network.
+.EXAMPLE
+./validate-skills.ps1
 #>
-[CmdletBinding()]
-param()
-
+#Requires -Version 7.0
+[CmdletBinding()]param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$repoRoot = Split-Path -Parent $PSCommandPath
-& (Join-Path $repoRoot 'Tools/Test-Changelog.ps1')
-$changesScratch = Join-Path $repoRoot '.build/changelog-fixtures'
-[void][IO.Directory]::CreateDirectory($changesScratch)
-& (Join-Path $repoRoot 'Tools/Test-ChangelogWorkflow.ps1') -ScratchRoot $changesScratch
-$skillRoot = Join-Path $repoRoot '.agents\skills'
-if (-not (Test-Path -LiteralPath $skillRoot -PathType Container)) {
-    throw "The repository skill directory was not found: $skillRoot"
-}
-
-$validator = Join-Path $repoRoot 'Build\validate_skills.py'
-
-$python = Get-Command 'py.exe' -ErrorAction SilentlyContinue
-$pythonUsesLauncher = $null -ne $python
-if (-not $python) {
-    $python = Get-Command 'python.exe' -ErrorAction SilentlyContinue
-}
-if (-not $python) {
-    throw 'Python was not found. Install Python and Build/requirements-validation.txt.'
-}
-
-$skills = Get-ChildItem -LiteralPath $skillRoot -Directory | Sort-Object Name
-if ($skills.Count -eq 0) {
-    throw "No repository skills were found under: $skillRoot"
-}
-
-if ($pythonUsesLauncher) {
-    & $python.Source -3 $validator
-}
-else {
-    & $python.Source $validator
-}
-if ($LASTEXITCODE -ne 0) {
-    throw 'Skill validation failed. Check the diagnostics and install Build/requirements-validation.txt if needed.'
-}
-
-Write-Host "Validated $($skills.Count) RedPrism skills." -ForegroundColor Green
+$global:LASTEXITCODE = 0
+& (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Changelog validation failed.' }
+# Reject package-file and ancestor reparses before the metadata parser opens SKILL.md.
+Import-Module (Join-Path $PSScriptRoot 'Build/SkillPackageIntegrity.psm1') -Force
+Test-RedPrismSkillPackageIntegrity -Root $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'Build/SkillValidation.psm1') -Force
+$count = Test-RepositorySkills -Root $PSScriptRoot
+Write-Host "Validated $count repository skills." -ForegroundColor Green
+$global:LASTEXITCODE = 0

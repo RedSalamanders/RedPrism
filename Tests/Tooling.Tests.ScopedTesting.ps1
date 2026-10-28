@@ -28,6 +28,15 @@ try{
             Assert ((Get-ScopedTestPlan $manifest @($path)).full) "Unmapped input narrowed coverage: $path"
         }
     }
+    Case 'exact skill validators select tooling while shared and unknown Build inputs remain broad' {
+        foreach($path in @('Build/SkillPackageIntegrity.psm1','Build/SkillValidation.psm1')){
+            $plan=Get-ScopedTestPlan $manifest @($path)
+            Assert ($plan.scopes.Count -eq 1 -and $plan.scopes[0] -eq 'Tooling') "Validator module widened through a generic or live project rule: $path"
+        }
+        foreach($path in @('Build/ScopedTesting.psm1','Build/SkillPackageIntegrityExtra.psm1','Build/Unknown.psm1')){
+            Assert ((Get-ScopedTestPlan $manifest @($path)).full) "Shared/unknown Build policy narrowed: $path"
+        }
+    }
     Case 'prose omits native tests, embedded Markdown does not, and empty changes select nothing' {
         $plan=Get-ScopedTestPlan $manifest @('README.md','CHANGELOG.md')
         Assert (@($manifest.scopes|Where-Object{$_.native -and $_.name -in $plan.scopes}).Count -eq 0) 'Prose selected native tests'

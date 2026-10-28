@@ -11,6 +11,10 @@ the single `DxUi.lib` archive linked into `RedPrism.exe`, and the EmbeddedHost o
 Library behavior remains in DxUi's own contracts. Splitter, ColorPicker, and NumericStepper are library controls
 (DxUi `Specs/Plans/Done/EditorConsumerControls_2026-09-20.md`) consumed as-is by `ChromeHost`.
 
+The lock owns exact dependency identity; this contract and its source-bound evidence links own qualification and
+rollback history. Agent skills route integration work and retain fragile host invariants; they must not copy commit
+chronologies or claim a matrix remains qualified after source, dependency or environment changes.
+
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit

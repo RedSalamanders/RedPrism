@@ -19,10 +19,12 @@ description: Apply RedPrism modern C++ ownership, error-handling, warnings, Unic
 - Headers that are not Win32 wrappers (`EditorTool.h`, `Document.h`, `CommandLine.h`) must not rely on
   `windows.h` typedefs such as `UINT` or `DWORD`; use `unsigned int`, `std::uint32_t`, or `std::size_t` so any test
   can include them first.
-- Formatting into fixed buffers uses `std::format_to_n`, never `swprintf_s`. User-visible text comes from the
-  STRINGTABLE (`localization` skill), never a literal.
+- Formatting into fixed buffers normally uses `std::format_to_n`. The allocation-sensitive crash writer in
+  `Common/CrashDumps.cpp` deliberately retains fixed-buffer `swprintf_s`, as required by the
+  [crash contract](../../../Specs/Core/Core_CrashHandling.md). Preserve that exception; a general formatting
+  cleanup must not redesign the crash path. User-visible text comes from the STRINGTABLE (`localization` skill).
 - Naming: PascalCase types and public methods, camelCase locals, `_` members, `kConstants`. One declaration per line.
-- Format C++ with `.\format.ps1` before every build you intend to keep; `format.ps1 -Check` is a closeout gate.
+- Use `.\format.ps1 -Check` for changed C++ and apply the formatter when needed; preserve the owning validation gates.
 - Preserve UTF-8 source files (`.rc` files carry `#pragma code_page(65001)`) while calling wide-character Win32 APIs.
 - A cache keyed by a pointer identity (`Raster::Identity()`, COM pointers) must own a reference to the object that
   keeps the address stable; otherwise a freed address aliases a new object.
