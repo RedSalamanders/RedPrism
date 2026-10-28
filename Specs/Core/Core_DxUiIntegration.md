@@ -18,10 +18,10 @@ chronologies or claim a matrix remains qualified after source, dependency or env
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit
-`8006d63b6c77d4df5016da1cd29d8640853bd514`, API revision 3, and lock target `["DxUi"]`.
+`a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b`, API revision 3, and lock target `["DxUi"]`.
 This maintenance candidate preserves the predecessor's public interface and consumer behavior while repairing
 owned warning diagnostics and posted-payload type identity under identical COMDAT folding. Its six native builds
-and ordinary x64 suites pass; desktop focus qualification and fresh consumer qualification remain open in the
+and all three desktop-focus profiles pass with zero skips and verified restoration. The refreshed ordinary suites and fresh consumer qualification remain open in the
 indexed NativeBuildPolicyCoherence plan. Never treat a successful restore as product qualification.
 
 The predecessor `8e8994079e82f79e6765e6a885c03fc687957591` had identical-source full

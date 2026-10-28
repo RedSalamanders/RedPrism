@@ -39,4 +39,4 @@ Current task evidence: E:/DxUi.Perf/build-policy-evidence-20261028.
 RedTilde ARM64 restore and required policy/lease logs are under that task's
 RedTilde-ARM64-restore folder; both exited zero before implementation.
 
-Candidate pin: `8006d63b6c77d4df5016da1cd29d8640853bd514` (API3). Six upstream native builds and all 54 nonforeground suite runs pass. The declined focus countdown remains an open qualification gate; this candidate lock enables independent product builds and is not a final green receipt.
+Candidate pin: `a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b` (API3). Six upstream native builds and all 54 nonforeground suite runs pass. The declined focus countdown remains an open qualification gate; this candidate lock enables independent product builds and is not a final green receipt.
