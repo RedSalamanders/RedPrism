@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Include the shared capacity test helper through the existing repository include root, keeping each test's include path explicit without parent-directory warning C4464.
 - Annotate SDK WRL's ARM64 volatile reference-count definitions before the UI Automation fixture includes application headers. Keep the scope on the SDK include, retain owned-code diagnostics and leave COM ownership and the target volatile model unchanged.
 - Clarify build and WIL guidance: `/WX` remains disabled while the build gate requires zero warnings, with narrowly scoped external include annotations.
 - Keep intentional worker page touches and runtime capacity observations under narrow ARM64 C4746 diagnostic scopes, preserving the volatile model, capacity assertions and synchronization behavior. Retain the failed clean-build evidence and require a fresh native matrix.

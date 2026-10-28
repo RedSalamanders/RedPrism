@@ -1,5 +1,5 @@
 #include "Composition.Tests.UtilitySourceCapacity.h"
-#include "../Support/Support.Tests.Capacity.h"
+#include "Tests/Support/Support.Tests.Capacity.h"
 
 #include "GpuCommandPump.h"
 #include "OwnerWorkMultiplexer.h"

@@ -1,5 +1,5 @@
 #include "Host.Tests.OwnerWorkMultiplexer.h"
-#include "../Support/Support.Tests.Capacity.h"
+#include "Tests/Support/Support.Tests.Capacity.h"
 
 #include "OwnerWorkMultiplexer.h"
 

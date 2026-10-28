@@ -1,5 +1,5 @@
 #include "Composition.Tests.UtilityOwnerService.h"
-#include "../Support/Support.Tests.Capacity.h"
+#include "Tests/Support/Support.Tests.Capacity.h"
 
 #include "OwnerWorkMultiplexer.h"
 #include "UtilityReadbackOwnerService.h"
