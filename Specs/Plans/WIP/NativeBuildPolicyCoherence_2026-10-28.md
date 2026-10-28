@@ -58,3 +58,11 @@ Definition-local ARM64 annotations retain page-touch semantics and shared test c
 four-way compiler control reproduces the original ARM64 notices and compiles the scoped version with zero
 warnings on ARM64/x64 (`E:/RedPrism.Perf/build-policy-arm64-volatile-proof-20261028/`). The normal build entrypoint
 will clean/rebuild ARM64 Debug with bounded parallelism before the remaining profiles and Full runtime gates.
+
+That clean rebuild compiles the repaired owned observations without their former warnings, but exposes six SDK
+WRL volatile notices in the UI Automation notification fixture. A real RuntimeClass/FtmBase compiler control
+reproduces all six only on ARM64; parsing the WRL header under a definition-local SDK include annotation removes
+them while both x64 controls stay warning-free. The fixture parses that annotated SDK include before application
+headers can include it. Evidence: `E:/RedPrism.Perf/build-policy-arm64-wrl-scope-proof-20261028-r2/`.
+The first proof attempt is retained: its fixture omitted the original test's noncopyable-trait annotations,
+so unrelated copy/move notices correctly refused its zero-warning gate. No result from that attempt is accepted.

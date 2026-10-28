@@ -1,3 +1,15 @@
+// Parse SDK WRL definitions before application headers can include them. Its ARM64 reference-count
+// volatile operations are SDK-owned; preserve the SDK model and keep this notice scope off owned code.
+// Owner: test maintainers; review: 2027-01-31.
+#if defined(_M_ARM64)
+#pragma warning(push)
+#pragma warning(disable : 4746)
+#endif
+#include <wrl.h>
+#if defined(_M_ARM64)
+#pragma warning(pop)
+#endif
+
 #include "Application.h"
 
 #include "ChromeHost.h"
@@ -14,7 +26,6 @@
 #include <string_view>
 #include <thread>
 #include <utility>
-#include <wrl.h>
 
 namespace
 {
