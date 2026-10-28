@@ -1,6 +1,6 @@
 #include "Host.Tests.OpacityInputOrder.h"
 
-#include "../../Common/OpacityInputOrder.h"
+#include "Common/OpacityInputOrder.h"
 
 #include <cstdint>
 #include <cstdio>

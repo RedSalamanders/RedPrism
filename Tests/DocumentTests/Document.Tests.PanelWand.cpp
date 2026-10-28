@@ -1,6 +1,6 @@
 #include "Document.Tests.PanelWand.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Selection.h"
@@ -166,6 +166,10 @@ void ConfigurePanel(DocumentSession& session, FilterKind kind)
         session.SetHueSampleMode(HueSampleMode::Add);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session = std::make_unique<DocumentSession>();
@@ -216,7 +220,12 @@ struct Fixture final
                   LiteralPixels(session->PendingColorEdit()->original, kLayerPixels)));
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Snapshot final
 {
     std::optional<CanvasDocument> document;
@@ -244,6 +253,7 @@ struct Snapshot final
     {
     }
 };
+#pragma warning(pop)
 
 bool PanelUnchanged(const DocumentSession& session, const Snapshot& before)
 {

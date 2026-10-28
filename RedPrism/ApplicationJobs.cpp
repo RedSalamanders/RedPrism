@@ -10,6 +10,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ShutdownEvidence final
 {
     wil::unique_handle started{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -18,7 +22,12 @@ struct ShutdownEvidence final
     bool destroyedAfterRun = false;
     unsigned int applies = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class ShutdownGateJob final : public Job
 {
   public:
@@ -49,7 +58,12 @@ class ShutdownGateJob final : public Job
   private:
     ShutdownEvidence& _evidence;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ActivityEvidence final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -59,7 +73,12 @@ struct ActivityEvidence final
     std::atomic<bool> returned{false};
     bool applied = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ActivityGateJob final : public Job
 {
   public:
@@ -87,6 +106,8 @@ class ActivityGateJob final : public Job
   private:
     ActivityEvidence& _evidence;
 };
+#pragma warning(pop)
+
 } // namespace
 
 void Application::JobNoticeThunk(void* context, JobNotice notice) noexcept

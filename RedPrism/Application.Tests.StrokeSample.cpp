@@ -1,10 +1,11 @@
 #include "Application.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "PreparedLayerRows.h"
 #include "Runtime.Tests.StrokeFinishTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -47,7 +48,7 @@ CanvasDocument MakeScene(const Mode& mode, Guid& target)
     {
         std::array<std::uint8_t, kSide * kSide * 4> pixels{};
         for (std::size_t i = 0; i < pixels.size(); i += 4)
-            std::copy(color.begin(), color.end(), pixels.begin() + i);
+            std::copy(color.begin(), color.end(), pixels.begin() + static_cast<std::ptrdiff_t>(i));
         return Raster::Make(kSide, kSide, RasterFormat::Bgra8888, pixels.data(), pixels.size());
     };
     auto layer = ImageLayer::Blank(L"Sample target", {kSide, kSide});

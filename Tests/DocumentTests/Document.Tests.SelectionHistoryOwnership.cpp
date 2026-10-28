@@ -1,9 +1,9 @@
 #include "Document.Tests.SelectionHistoryOwnership.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>
@@ -51,6 +51,10 @@ bool HasLiteral(const std::optional<DocumentSelection>& selection, const std::ar
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session{new DocumentSession()};
@@ -77,6 +81,7 @@ struct Fixture final
                 session->history.CanRedo() && session->history.RedoName() == L"Seed redo";
     }
 };
+#pragma warning(pop)
 
 using OpeningInput = std::optional<SelectionMoveOpeningInput>;
 using PreparedOpening = std::optional<PreparedSelectionMoveOpening>;

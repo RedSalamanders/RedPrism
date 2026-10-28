@@ -1,8 +1,8 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -175,7 +175,7 @@ int Application::RunStandaloneMarqueePressSelfTest(HINSTANCE instance, LassoKind
                      inside         ? Vec2{32, 28}
                      : shift || alt ? Vec2{60, 55}
                                     : Vec2{60, 60},
-                     MK_LBUTTON | (shift ? MK_SHIFT : 0));
+                     static_cast<WPARAM>(MK_LBUTTON | (shift ? MK_SHIFT : 0)));
                 if (alt)
                     KeyboardState::Write(beforeKeys);
             }

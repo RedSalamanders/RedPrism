@@ -39,6 +39,10 @@ enum class Phase
     Terminal
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final : GpuCommandSourceReceiver, GpuBufferReadbackReceiver, GpuCompletionReceiver
 {
     JobScheduler& jobs;
@@ -281,7 +285,12 @@ struct State final : GpuCommandSourceReceiver, GpuBufferReadbackReceiver, GpuCom
                         apartment == APTTYPE_MTA;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RecordingJob final : public Job
 {
   public:
@@ -367,6 +376,7 @@ class RecordingJob final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
 
 void RunFixture(double hardness, std::size_t segmentCount)
 {

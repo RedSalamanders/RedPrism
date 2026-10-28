@@ -1,11 +1,11 @@
 #include "Document.Tests.FloatingPixelsWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "FloatingPixelsWork.h"
 #include "RasterEditWork.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

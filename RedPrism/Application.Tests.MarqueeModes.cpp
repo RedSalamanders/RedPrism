@@ -1,9 +1,9 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -210,7 +210,7 @@ int Application::RunStandaloneMarqueeModesSelfTest(HINSTANCE instance) noexcept
                 keys[VK_MENU] = initialAlt ? 0x80 : 0;
                 KeyboardState::Write(keys);
                 refuseMemory = refused;
-                send(WM_LBUTTONDOWN, {3, 3}, MK_LBUTTON | (initialShift ? MK_SHIFT : 0));
+                send(WM_LBUTTONDOWN, {3, 3}, static_cast<WPARAM>(MK_LBUTTON | (initialShift ? MK_SHIFT : 0)));
                 const auto* context =
                     owner->_selectionPressInput.CapturedContext(owner->_selectionPressInput.Opening());
                 if (!expect(owner->_selectionPressInput.Busy() &&
@@ -226,7 +226,7 @@ int Application::RunStandaloneMarqueeModesSelfTest(HINSTANCE instance) noexcept
                     owner->_session.SelectLayer(other);
                 if (!refused && !target)
                 {
-                    send(WM_MOUSEMOVE, {9, 8}, MK_LBUTTON | (initialShift ? MK_SHIFT : 0));
+                    send(WM_MOUSEMOVE, {9, 8}, static_cast<WPARAM>(MK_LBUTTON | (initialShift ? MK_SHIFT : 0)));
                     if (rearm)
                     {
                         keys[VK_SHIFT] = 0;

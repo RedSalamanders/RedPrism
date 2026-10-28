@@ -1,9 +1,9 @@
 #include "Document.Tests.TransformPixelsWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "ShapeEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformPixelsWork.h"
 
 #include <algorithm>

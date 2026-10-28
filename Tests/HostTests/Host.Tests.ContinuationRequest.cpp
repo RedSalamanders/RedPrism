@@ -1,4 +1,4 @@
-#include "../../RedPrism/ContinuationRequests.h"
+#include "RedPrism/ContinuationRequests.h"
 
 #include "Host.Tests.ContinuationRequest.h"
 

@@ -37,6 +37,10 @@ enum class ContinuationRetirement
 // UI-owned event parameters, never a document snapshot. The owner takes immutable pixels/selection and the
 // result token only when TakeReady returns the command, after preceding history work has applied or dropped.
 // Ordinals come from one host sequence shared with recorded strokes, preserving their relative input order.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 template <typename Request> class ContinuationQueue final
 {
     static_assert(std::is_nothrow_move_constructible_v<Request> && std::is_nothrow_move_assignable_v<Request> &&
@@ -51,11 +55,16 @@ template <typename Request> class ContinuationQueue final
         ContinuationKind kind;
         Request input;
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
     struct Taken final
     {
         std::optional<Entry> ready;
         std::size_t stale = 0; // owner reports that these entries belonged to a replaced document
     };
+#pragma warning(pop)
 
     // On refusal, the caller retains its request and must report a notice. A multi-file drop is one Request.
     [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal,
@@ -310,3 +319,4 @@ template <typename Request> class ContinuationQueue final
     std::size_t _count = 0;
     std::uint64_t _lastOrdinal = 0;
 };
+#pragma warning(pop)

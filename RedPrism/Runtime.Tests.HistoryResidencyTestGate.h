@@ -12,6 +12,10 @@
 #pragma warning(pop)
 
 // Absent in production. Tiny fixture hooks use the real admission/staging/owner and worker retirement paths.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct HistoryResidencyTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 0x5c1;
@@ -24,3 +28,4 @@ struct HistoryResidencyTestGate final
     std::atomic<bool> reservationHeld{false}, retired{false}, retiredOffOwner{false};
     std::atomic<bool> published{false}, cancelled{false}, failed{false}, stale{false};
 };
+#pragma warning(pop)

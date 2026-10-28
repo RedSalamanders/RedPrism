@@ -40,6 +40,10 @@ struct WarpSampleMemoryPlan final
 // the active layer as the canvas shows it, at document size, changing it dab by dab; the host shows that working
 // copy in place of the layer. When the stroke ends the session paints the result into the layer's own pixels along
 // the stroke's path (`DocumentSession::FinishWarp`).
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class WarpStroke
 {
   public:
@@ -170,11 +174,16 @@ class WarpStroke
     [[nodiscard]] std::optional<SampleMemoryPlan> PlanSampleMemoryImpl(Vec2 point) const noexcept;
     [[nodiscard]] bool IsSamplePlanCurrent(const SampleMemoryPlan& plan) const noexcept;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
     struct Tile final
     {
         PixelBuffer pixels;
         Raster published;
     };
+#pragma warning(pop)
 
     SmearMode _mode = SmearMode::Liquify;
     double _diameter = 2;
@@ -203,3 +212,4 @@ class WarpStroke
     std::vector<std::uint8_t> _dirty; // bit 0 changed, bit 1 ever touched
     bool _valid = false;
 };
+#pragma warning(pop)

@@ -12,6 +12,10 @@ struct SelectionOutlineGestureState;
 // A worker constructs this optional stage object inside its already admitted original gesture.
 // It is never submitted to the scheduler. The parent forwards its existing ticket/context and retains
 // the same FIFO position, cancellation, descriptor slot and accounting endpoint through final retirement.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5027)
 struct SelectionPixelFinalWork final
 {
     PreparedPixelMoveClosure closure;
@@ -22,6 +26,7 @@ struct SelectionPixelFinalWork final
     std::uint32_t ownerThread = 0; // Owner-captured scalar, never a worker HWND/session query.
     std::uint64_t displayCpuBytes = 0, displayGpuBytes = 0;
 };
+#pragma warning(pop)
 
 // The factory runs on the worker and may only own its moved immutable work and store borrowed host/result
 // pointers. Host/session/device capture is owner-only after original-stage acknowledgement/admission.

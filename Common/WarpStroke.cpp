@@ -19,6 +19,10 @@ namespace
 {
 // A thrown allocation also seals a partially changed exclusive draft as invalid. The admitted job runner
 // owns exception translation; the kernel does not catch or expose reusable partial pixels after failure.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626)
 struct InvalidateWarpAttempt final
 {
     bool& valid;
@@ -29,6 +33,7 @@ struct InvalidateWarpAttempt final
             valid = false;
     }
 };
+#pragma warning(pop)
 
 // Explicit geometric growth avoids copying the complete dab path after every accepted pointer point.
 // Reserve happens once before a sample's mutation, under its declared old/new capacity overlap.
@@ -121,6 +126,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct OwnedWarpStroke final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory; // dies after the draft's last CPU allocation
@@ -145,6 +154,8 @@ struct OwnedWarpStroke final : DeferredReleaseNode
         { const std::unique_ptr<OwnedWarpStroke> owned(static_cast<OwnedWarpStroke*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 struct RetireWarpStroke final
@@ -327,9 +338,10 @@ std::optional<WarpStroke::SampleMemoryPlan> WarpStroke::PlanSampleMemoryImpl(Vec
     };
     const auto pixelBytes = PixelBuffer::RequiredBytes(kTileSize * kTileSize * 4);
     const auto scratchSide = static_cast<std::uint64_t>(2 * reach + 1);
-    const auto scratch = _mode == SmearMode::Liquify && hasNext ? std::min<std::uint64_t>(_width, scratchSide) *
-                                                                      std::min<std::uint64_t>(_height, scratchSide) * 4
-                                                                : 0;
+    const auto scratch = _mode == SmearMode::Liquify && hasNext
+                             ? std::min<std::uint64_t>(static_cast<std::uint64_t>(_width), scratchSide) *
+                                   std::min<std::uint64_t>(static_cast<std::uint64_t>(_height), scratchSide) * 4
+                             : 0;
     const auto carried = _mode == SmearMode::Smudge && (hasNext || !_last)
                              ? static_cast<std::uint64_t>(2 * Radius() + 1) * (2 * Radius() + 1) * 4
                              : 0;

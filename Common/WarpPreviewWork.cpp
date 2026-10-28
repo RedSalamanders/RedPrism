@@ -23,6 +23,10 @@ bool Add(std::uint64_t& total, std::uint64_t count, std::uint64_t unit = 1) noex
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct OwnedWarpPreview final : DeferredReleaseNode
 {
     PreparedWarpPreview value;
@@ -32,6 +36,8 @@ struct OwnedWarpPreview final : DeferredReleaseNode
         { const std::unique_ptr<OwnedWarpPreview> owned(static_cast<OwnedWarpPreview*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 struct RetireWarpPreview final

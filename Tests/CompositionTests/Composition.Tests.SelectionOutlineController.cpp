@@ -28,6 +28,10 @@ SelectionLoops Source()
     worker.join();
     return value ? std::move(*value) : SelectionLoops{};
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final : SelectionOutlineDisplayClient
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -161,6 +165,7 @@ struct Rig final : SelectionOutlineDisplayClient
             std::terminate();
     }
 };
+#pragma warning(pop)
 
 void TestCache()
 {

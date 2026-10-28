@@ -1,9 +1,9 @@
 #include "Document.Tests.AdjustmentOpening.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "AdjustmentOpeningWork.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>
@@ -277,9 +277,9 @@ void OpenAndCancelOneKind(AdjustmentKind kind, std::size_t index)
                input->documentID == fixture.baseline->id && input->layerID == fixture.adjustmentID &&
                input->active == fixture.session.ActiveLayerID(),
            (name + ".whole-document-input-authority").c_str());
-    auto candidate = DocumentSession::PrepareAdjustmentOpeningPublication(
-        std::move(AdjustmentOpeningInput{input.value()}), fixture.session.Document(), fixture.source,
-        fixture.session.history.CaptureState());
+    auto candidate = DocumentSession::PrepareAdjustmentOpeningPublication(AdjustmentOpeningInput{input.value()},
+                                                                          fixture.session.Document(), fixture.source,
+                                                                          fixture.session.history.CaptureState());
     Expect(candidate.has_value(), (name + ".publication-prepared").c_str());
     Expect(SameLiveState(fixture.session, before), (name + ".prepare-does-not-change-live-state").c_str());
     if (!candidate)

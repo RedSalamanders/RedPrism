@@ -109,6 +109,10 @@ int Application::RunStandaloneResponsiveSelectionStartupSelfTest(HINSTANCE insta
                 return 5;
         }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -131,7 +135,9 @@ int Application::RunStandaloneResponsiveSelectionStartupSelfTest(HINSTANCE insta
             std::uint64_t generation = 0;
             Guid revision;
             std::optional<DocumentReadAuthority> authority;
-        } state{*owner, scenario, inertRoutes};
+        }
+#pragma warning(pop)
+        state{*owner, scenario, inertRoutes};
 
         ApplicationProcessingTestProbe probe;
         probe.context = &state;

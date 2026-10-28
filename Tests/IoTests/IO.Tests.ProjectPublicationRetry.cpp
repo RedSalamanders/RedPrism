@@ -1,9 +1,9 @@
 #include "IO.Tests.ProjectPublicationRetry.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/ProjectStore.h"
+#include "Common/Document.h"
+#include "Common/ProjectStore.h"
 
 #include <algorithm>
 #include <array>
@@ -69,6 +69,10 @@ enum class Mode : unsigned int
     UnexpectedDestination
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Control final
 {
     Mode mode;
@@ -87,6 +91,7 @@ struct Control final
     bool foreignCreated = false;
     std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> visits{};
 };
+#pragma warning(pop)
 
 bool LocksSource(Mode mode) noexcept
 {
@@ -179,9 +184,9 @@ std::uint32_t Fault(void* opaque, ProjectSaveFaultStage stage) noexcept
         (control.mode == Mode::TimerWait && stage == ProjectSaveFaultStage::PublicationTimerWait);
     if (timerFault)
     {
-        control.timerFaultError = control.mode == Mode::TimerCreate ? ERROR_NOT_ENOUGH_MEMORY
-                                  : control.mode == Mode::TimerArm  ? ERROR_INVALID_HANDLE
-                                                                    : ERROR_TIMEOUT;
+        control.timerFaultError = static_cast<std::uint32_t>(control.mode == Mode::TimerCreate ? ERROR_NOT_ENOUGH_MEMORY
+                                                             : control.mode == Mode::TimerArm  ? ERROR_INVALID_HANDLE
+                                                                                               : ERROR_TIMEOUT);
         return control.timerFaultError;
     }
     return 0;

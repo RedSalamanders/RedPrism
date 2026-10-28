@@ -6,7 +6,7 @@
 #include "Runtime.Tests.LayerMetadataTestGate.h"
 #include "Runtime.Tests.StrokeOpeningTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -207,6 +207,10 @@ int Application::RunSealedCloneHostSelfTest() noexcept
         Escape,
         Undo,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     struct CloneGateState final
     {
         explicit CloneGateState(Application& application, SealedAction requested) noexcept
@@ -233,6 +237,8 @@ int Application::RunSealedCloneHostSelfTest() noexcept
         bool youngerCancelled = false;
         bool undoQueuedBehindStroke = false;
     };
+#pragma warning(pop)
+
     const auto cloneGatePump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<CloneGateState*>(opaque);
@@ -416,6 +422,10 @@ int Application::RunSealedCloneHostSelfTest() noexcept
     _strokeOpeningTestGate = queuedOpeningGate;
     OnLayerOpacity(.25, ChromeEditPhase::Preview);
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     struct OpacityCloneState final
     {
         explicit OpacityCloneState(Application& application) noexcept : owner(application) {}
@@ -436,7 +446,9 @@ int Application::RunSealedCloneHostSelfTest() noexcept
         bool strokeQueuedSealed = false;
         bool escapeRetainedStroke = false;
         bool youngerCancelled = false;
-    } opacity(*this);
+    }
+#pragma warning(pop)
+    opacity(*this);
     opacity.opacityGate = _layerMetadataTestGate;
     opacity.findOrdinal = findCloneOrdinal;
     opacity.downPosition = clientAt(kCloneDestination);
@@ -543,6 +555,10 @@ int Application::RunSealedCloneHostSelfTest() noexcept
     _strokeOpeningTestGate = singleOpeningGate;
     pointer(WM_LBUTTONDOWN, MK_LBUTTON, kCloneDestination);
     pointer(WM_LBUTTONUP, 0, kCloneDestination);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct SingleOpeningState final
     {
         Application& owner;
@@ -551,7 +567,9 @@ int Application::RunSealedCloneHostSelfTest() noexcept
         bool heldOriginal = false;
         bool sourceRetained = false;
         bool immutableSourceAndOffset = false;
-    } single{*this, singleOpeningGate};
+    }
+#pragma warning(pop)
+    single{*this, singleOpeningGate};
     const auto singleOpeningPump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<SingleOpeningState*>(opaque);

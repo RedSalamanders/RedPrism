@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionCommandTestGate.h"
@@ -68,6 +68,10 @@ int Application::RunSelectionCommandSelfTest() noexcept
         DeselectResidencyRefreshFault,
         DeselectResidencyRefreshCancel,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -92,6 +96,8 @@ int Application::RunSelectionCommandSelfTest() noexcept
         double zoomBefore = 0;
         unsigned int pumpMessages = 0;
     };
+#pragma warning(pop)
+
     constexpr UINT kPumpMessage = WM_APP + 0x4c6;
     int passed = 0;
     const auto expect = [&passed](const char* mode, const char* check, bool condition, const char* detail) noexcept
@@ -431,6 +437,33 @@ int Application::RunSelectionCommandSelfTest() noexcept
         case Mode::TrimIndex:
             gate->throwHistoryStage = DocumentHistory::PrepareStage::TrimIndex;
             break;
+        case Mode::Active:
+        case Mode::Cancel:
+        case Mode::CaptureFailure:
+        case Mode::Crop:
+        case Mode::Deselect:
+        case Mode::DeselectResidencyRefresh:
+        case Mode::DeselectResidencyRefreshCancel:
+        case Mode::DeselectResidencyRefreshFault:
+        case Mode::EmptyDocument:
+        case Mode::Epoch:
+        case Mode::Failure:
+        case Mode::Generation:
+        case Mode::Lasso:
+        case Mode::Mask:
+        case Mode::Nested:
+        case Mode::NoOpDeselect:
+        case Mode::NoOpRedo:
+        case Mode::Ordered:
+        case Mode::PreserveTargets:
+        case Mode::ReopenedBrush:
+        case Mode::Replacement:
+        case Mode::ResidencyRefresh:
+        case Mode::ResidencyRefreshCancel:
+        case Mode::ResidencyRefreshFault:
+        case Mode::SavedDuringWorker:
+        case Mode::SelectAll:
+        case Mode::ViewPump:
         default:
             break;
         }

@@ -1,6 +1,6 @@
 #include "Host.Tests.ContinuationAdjacentPreview.h"
 
-#include "../../Common/ContinuationQueue.h"
+#include "Common/ContinuationQueue.h"
 
 #include <array>
 #include <cstddef>

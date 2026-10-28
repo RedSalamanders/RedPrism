@@ -8,7 +8,7 @@
 #include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -23,6 +23,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ImageImportPayload final : DeferredReleaseNode
 {
     std::vector<std::wstring> paths;
@@ -52,6 +56,8 @@ struct ImageImportPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireImageImportPayload final
 {
     void operator()(ImageImportPayload* payload) const noexcept
@@ -64,6 +70,10 @@ struct RetireImageImportPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Application::ImageImportJob final : public Job
 {
   public:
@@ -121,11 +131,17 @@ class Application::ImageImportJob final : public Job
             ImageImportBatchInput input{_payload->source, _active, paths, _newProject, _center};
             input.files = _payload->files.value();
             input.maximumAddedPixels = _maximumAddedPixels;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct Progress final
             {
                 JobContext& context;
                 std::size_t count;
-            } progress{context, paths.size()};
+            }
+#pragma warning(pop)
+            progress{context, paths.size()};
             input.progressContext = &progress;
             input.progress = [](void* value, std::size_t attempted, ProjectIoStatus) noexcept
             {
@@ -357,6 +373,7 @@ class Application::ImageImportJob final : public Job
     bool _snapshotReady = false, _refreshResidency = false;
     HRESULT _snapshotError = S_OK;
 };
+#pragma warning(pop)
 
 HRESULT Application::SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t generation,
                                        std::vector<std::wstring> paths,
@@ -506,6 +523,10 @@ int Application::RunImageImportSelfTest() noexcept
         MaskOnly,
         CropOnly
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -520,6 +541,8 @@ int Application::RunImageImportSelfTest() noexcept
         bool cancelPending = false;
         HRESULT deviceRecovered = E_UNEXPECTED;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -924,6 +947,10 @@ int Application::RunImageImportSelfTest() noexcept
         MixedFailure,
         AllMissing
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct BatchState final
     {
         Application& owner;
@@ -935,6 +962,8 @@ int Application::RunImageImportSelfTest() noexcept
         bool held = false;
         bool rewritten = true;
     };
+#pragma warning(pop)
+
     const auto batchDispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<BatchState*>(context);

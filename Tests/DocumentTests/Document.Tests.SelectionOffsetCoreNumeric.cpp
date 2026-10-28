@@ -1,9 +1,9 @@
 #include "Document.Tests.SelectionOffsetCoreNumeric.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Selection.h"
 #include "SelectionOffsetWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cstdint>
 #include <cstdio>

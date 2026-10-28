@@ -1,8 +1,9 @@
 #include "Application.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -53,7 +54,7 @@ bool MaskPaletteExtensionLiteralImage(const Raster& image) noexcept
                      kMaskPaletteExtensionWidth * 4, 0);
     for (std::size_t offset = 0; offset < bytes.size(); offset += 4)
         if (!std::equal(kMaskPaletteExtensionSourcePixel.begin(), kMaskPaletteExtensionSourcePixel.end(),
-                        bytes.begin() + offset))
+                        bytes.begin() + static_cast<std::ptrdiff_t>(offset)))
             return false;
     return true;
 }
@@ -135,6 +136,10 @@ int Application::RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept
     };
     constexpr std::array cases{Case{"white-paint-success", false, false}, Case{"mask-eraser-success", true, false},
                                Case{"white-paint-failure", false, true}, Case{"mask-eraser-failure", true, true}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -149,6 +154,8 @@ int Application::RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept
         bool captured = false;
         bool terminalAndUnchanged = false;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);
@@ -225,7 +232,7 @@ int Application::RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept
         std::array<std::uint8_t, kMaskPaletteExtensionWidth * kMaskPaletteExtensionHeight * 4> bytes{};
         for (std::size_t offset = 0; offset < bytes.size(); offset += 4)
             std::copy(kMaskPaletteExtensionSourcePixel.begin(), kMaskPaletteExtensionSourcePixel.end(),
-                      bytes.begin() + offset);
+                      bytes.begin() + static_cast<std::ptrdiff_t>(offset));
         const Raster image = Raster::Make(kMaskPaletteExtensionWidth, kMaskPaletteExtensionHeight,
                                           RasterFormat::Bgra8888, bytes.data(), bytes.size());
         EditLayerRecordsForTest(_session,

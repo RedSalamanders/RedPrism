@@ -7,7 +7,7 @@
 #include "Runtime.Tests.StrokeFinishTestGate.h"
 #include "WarpOpeningWork.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

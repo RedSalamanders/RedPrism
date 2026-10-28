@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Resources.h"
 #include "Runtime.Tests.LayerRowsTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -119,6 +119,10 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
             return 5;
         _layerRowsTestGate = gate;
         const auto release = wil::scope_exit([gate]() noexcept { (void)SetEvent(gate->release.get()); });
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -127,7 +131,9 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
             LayerRowsKey original;
             std::shared_ptr<LayerRowsTestGate> gate;
             bool visited = false, held = false, view = false;
-        } state{*this, mode, groupID, childID, original, gate};
+        }
+#pragma warning(pop)
+        state{*this, mode, groupID, childID, original, gate};
         const auto dispatch = [](void* raw, void* native) noexcept
         {
             auto& state = *static_cast<State*>(raw);
@@ -177,6 +183,11 @@ int Application::RunPreparedLayerRowsSelfTest() noexcept
                 owner.SyncPreparedLayerRows();
                 break;
             }
+            case Mode::AllocationFailure:
+            case Mode::CancelBeforeCapture:
+            case Mode::CaptureFailure:
+            case Mode::Success:
+            case Mode::WorkerFailure:
             default:
                 break;
             }

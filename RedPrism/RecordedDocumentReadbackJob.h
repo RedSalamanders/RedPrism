@@ -21,6 +21,10 @@ enum class RecordedReadbackCaptureKind : std::uint8_t
 // The submitted descriptor contains no captured document or graphics resource. The caller admits its
 // complete CPU/GPU envelope before construction/submission, including its own processing/output owners.
 // This original job then owns capture, private recording, serial copies and final joined retirement.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class RecordedDocumentReadbackJob : public Job,
                                     public GpuCommandSourceReceiver,
                                     public GpuReadbackReceiver,
@@ -190,3 +194,4 @@ class RecordedDocumentReadbackJob : public Job,
     bool _softwareMemoryAdmitted;
     bool _deviceSoftware = false;
 };
+#pragma warning(pop)

@@ -1,6 +1,7 @@
 #include "Document.Tests.WandLayerSelection.h"
+#include <cstddef>
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Selection.h"
@@ -646,7 +647,8 @@ void CaptureAndInputOwnership()
     {
         DocumentSession session = SourceSession();
         std::array<char, 96> name{};
-        std::format_to_n(name.data(), name.size() - 1, "capture.invalid-point-{}-refused", pointNames[pointIndex++]);
+        std::format_to_n(name.data(), static_cast<std::ptrdiff_t>(name.size() - 1), "capture.invalid-point-{}-refused",
+                         pointNames[pointIndex++]);
         Expect(!session.PrepareWandLayerSelectionInput(point, Settings(), false), name.data());
     }
     {
@@ -700,7 +702,8 @@ void StaleAuthorityAndSessionOwnership()
         DocumentSession session = SourceSession(true, 1, true);
         auto prepared = Prepare(session);
         std::array<char, 128> opening{};
-        std::format_to_n(opening.data(), opening.size() - 1, "{}-opening-is-current", name);
+        std::format_to_n(opening.data(), static_cast<std::ptrdiff_t>(opening.size() - 1), "{}-opening-is-current",
+                         name);
         Expect(prepared && session.IsPreparedWandLayerSelectionCurrent(prepared.value()), opening.data());
         if (!prepared)
             return;
@@ -929,7 +932,7 @@ void CancellationAndHistoryFailures()
             static_cast<void>(process.request_stop());
         else
             static_cast<void>(local.Cancel());
-        const CancelToken token{local.Token().LocalToken(), process.get_token()};
+        const CancelToken token(local.Token().LocalToken(), process.get_token());
         WandFailure failure = WandFailure::None;
         auto prepared = Prepare(session, Vec2{1.5, 1.5}, Settings(), false, &failure, token);
         Expect(!prepared && failure == WandFailure::Cancelled && SameState(session, before),
@@ -1056,6 +1059,10 @@ void WorkerPublicationAndAggregateRetirement()
         std::condition_variable condition;
         bool ready = false, retire = false;
         std::thread::id retiredOn;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
         struct Aggregate final
         {
             std::optional<WandLayerSelectionInput> input;
@@ -1072,6 +1079,8 @@ void WorkerPublicationAndAggregateRetirement()
                 retiredOn = std::this_thread::get_id();
             }
         };
+#pragma warning(pop)
+
         auto owned = std::make_unique<Aggregate>(std::move(input.value()), retiredOn);
         auto* borrowed = owned.get();
         std::jthread worker(

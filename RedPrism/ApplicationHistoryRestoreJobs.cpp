@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "HistoryRestoreWork.h"
@@ -19,6 +19,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RestorePayload final : DeferredReleaseNode
 {
     HistoryRestoreAuthority authority;
@@ -42,6 +46,8 @@ struct RestorePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireRestorePayload final
 {
     void operator()(RestorePayload* payload) const noexcept
@@ -54,6 +60,10 @@ struct RetireRestorePayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Application::HistoryRestoreJob final : public Job
 {
   public:
@@ -242,6 +252,7 @@ class Application::HistoryRestoreJob final : public Job
     bool _refreshResidency = false;
     std::int32_t _captureError = 0;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartHistoryRestore(bool redo) noexcept
 {
@@ -350,6 +361,10 @@ int Application::RunHistoryRestoreSelfTest() noexcept
         ResidencyUndoCancel,
         ResidencyRedoCancel
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -363,6 +378,8 @@ int Application::RunHistoryRestoreSelfTest() noexcept
         bool mask = false, visited = false, held = false, cancelPending = false;
         int entries = 0;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);
@@ -411,6 +428,31 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             // A save of the live revision during worker preparation is independent of authority.
             owner._session.history.MarkSaved(state.writtenRevision);
             break;
+        case Mode::CaptureFailure:
+        case Mode::Crop:
+        case Mode::Empty:
+        case Mode::EmptyRedo:
+        case Mode::Failure:
+        case Mode::Mask:
+        case Mode::NestedRedo:
+        case Mode::NestedUndo:
+        case Mode::NewCanvasRedo:
+        case Mode::NewCanvasUndo:
+        case Mode::Ordered:
+        case Mode::Redo:
+        case Mode::RedoSnapshot:
+        case Mode::RedoStack:
+        case Mode::RedoTrim:
+        case Mode::ResidencyRedo:
+        case Mode::ResidencyRedoCancel:
+        case Mode::ResidencyRedoFault:
+        case Mode::ResidencyUndo:
+        case Mode::ResidencyUndoCancel:
+        case Mode::ResidencyUndoFault:
+        case Mode::Undo:
+        case Mode::UndoSnapshot:
+        case Mode::UndoStack:
+        case Mode::UndoTrim:
         default:
             break;
         }

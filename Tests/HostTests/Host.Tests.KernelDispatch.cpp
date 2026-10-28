@@ -1,10 +1,10 @@
 #include "Host.Tests.KernelDispatch.h"
 
-#include "../../Common/Adjust.h"
-#include "../../Common/Executor.h"
-#include "../../Common/Kernels.h"
+#include "Common/Adjust.h"
+#include "Common/Executor.h"
+#include "Common/Kernels.h"
 
-#include "../../Common/Kernels_Scalar_Adjust.h"
+#include "Common/Kernels_Scalar_Adjust.h"
 
 #include <array>
 #include <cstddef>

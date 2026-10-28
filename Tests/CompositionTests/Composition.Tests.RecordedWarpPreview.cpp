@@ -1,11 +1,11 @@
 #include "Composition.Tests.RecordedWarpPreview.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "GpuCommandPump.h"
 #include "GpuWork.h"
 #include "Jobs.h"
 #include "OwnerWorkMultiplexer.h"
 #include "RecordedDisplayGraph.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpPreviewWork.h"
 #include <algorithm>
 #include <array>
@@ -109,8 +109,8 @@ bool MakeFixtures(std::array<CanvasDocument, kGraphCount>& documents,
     std::array<std::uint8_t, 8 * 8 * 4> bytes{};
     for (int y = 0; y < 8; ++y)
         for (int x = 0; x < 8; ++x)
-            std::copy(colors[(y / 4) * 2 + x / 4].begin(), colors[(y / 4) * 2 + x / 4].end(),
-                      bytes.data() + (y * 8 + x) * 4);
+            std::copy(colors[static_cast<std::size_t>((y / 4) * 2 + x / 4)].begin(),
+                      colors[static_cast<std::size_t>((y / 4) * 2 + x / 4)].end(), bytes.data() + (y * 8 + x) * 4);
     Raster image = geometry == 4 ? Raster{} : Raster::Make(8, 8, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     if (geometry == 3)
     {
@@ -140,7 +140,7 @@ bool MakeFixtures(std::array<CanvasDocument, kGraphCount>& documents,
                     continue;
                 const int ix = geometry == 1 ? localX / 2 : geometry == 2 ? 7 - localX : localX;
                 const int iy = geometry == 1 ? localY / 2 : geometry == 2 ? 7 - localY : localY;
-                const auto& color = colors[(iy / 4) * 2 + ix / 4];
+                const auto& color = colors[static_cast<std::size_t>((iy / 4) * 2 + ix / 4)];
                 auto* pixel = initial.data() + (y * kSide + x) * 4;
                 std::copy(color.begin(), color.end(), pixel);
                 if (geometry == 3 && ix == 2 && iy == 3)
@@ -249,6 +249,10 @@ bool CheckRefusalsForWork(RecordedDisplayGraph& graph, ID3D11Device* device, con
     return refuse("missing-factory-completeness-refuses-without-resources", bad);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionReceiver
 {
   public:
@@ -640,7 +644,12 @@ class ParentState final : public GpuCommandSourceReceiver, public GpuCompletionR
         lastUseCapture = {};
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RecordedBlitParentJob final : public Job
 {
   public:
@@ -731,6 +740,7 @@ class RecordedBlitParentJob final : public Job
   private:
     ParentState& _state;
 };
+#pragma warning(pop)
 
 bool WaitForParent(JobScheduler& scheduler, OwnerWorkMultiplexer& routes, ParentState& state) noexcept
 {

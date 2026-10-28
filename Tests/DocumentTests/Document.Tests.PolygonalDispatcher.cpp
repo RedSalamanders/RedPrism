@@ -1,8 +1,8 @@
 #include "Document.Tests.PolygonalDispatcher.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionHitWork.h"
 #include "SelectionOutlineGestureJob.h"
 #include "SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <atomic>
 #include <cstdio>
@@ -84,6 +84,10 @@ void Install(DocumentSession& session)
     session.ReplaceDocument(std::move(document).Seal(), active);
     session.history.Reset();
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     unsigned opened = 0, moved = 0, terminal = 0, corners = 0, closes = 0;
@@ -162,6 +166,12 @@ struct Probe final
             Broken("worker-gate");
     }
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     Memory memory;
@@ -327,6 +337,8 @@ struct Fixture final
         Settle(jobs);
     }
 };
+#pragma warning(pop)
+
 bool Pixels(const DocumentSession& session, SelectionMode mode, int movedX = 0, int movedY = 0)
 {
     if (!session.Selection())

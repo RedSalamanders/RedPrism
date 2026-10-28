@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.WandLayerHostTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -38,6 +38,10 @@ int Application::RunPanelWandLifecycleSelfTest() noexcept
             _session.selectionAntialiased = originalAa;
             SyncChrome();
         });
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -50,6 +54,8 @@ int Application::RunPanelWandLifecycleSelfTest() noexcept
         Raster source;
         bool visited = false, held = false, afterTerminalStillCharged = false;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);
@@ -144,17 +150,18 @@ int Application::RunPanelWandLifecycleSelfTest() noexcept
             auto state = std::make_unique<State>(State{
                 *this, mode, gate, entry->input.Receipt(), {}, opening, _session.history.CurrentRevision(), raster});
             const auto result = SettleJobs(_jobs, 15000, pump, state.get());
-            if (!check(result == SettleResult::Settled && state->visited && state->held, composite, names[mode],
-                       "original-graph-held-before-terminal"))
+            if (!check(result == SettleResult::Settled && state->visited && state->held, composite,
+                       names[static_cast<std::size_t>(mode)], "original-graph-held-before-terminal"))
                 return 5;
-            if (!check(state->afterTerminalStillCharged, composite, names[mode], "no-early-refund-or-receipt"))
+            if (!check(state->afterTerminalStillCharged, composite, names[static_cast<std::size_t>(mode)],
+                       "no-early-refund-or-receipt"))
                 return 5;
             const auto outcome = mode == 0 || mode == 3 ? HostOutcome::Cancelled
                                  : mode == 1            ? HostOutcome::Failed
                                                         : HostOutcome::Stale;
             if (!check(state->receipt.Read().outcome == outcome && !_wandLayerHostTicket && !_historyWork.Busy() &&
                            !PanelWandBusyOwner() && gate->retired.load(),
-                       composite, names[mode], "original-terminal-joins-and-retires"))
+                       composite, names[static_cast<std::size_t>(mode)], "original-terminal-joins-and-retires"))
                 return 5;
             if (!check(!_session.Selection() && _session.history.UndoCount() == 0 &&
                            _session.history.CurrentRevision() == state->revision &&
@@ -164,7 +171,7 @@ int Application::RunPanelWandLifecycleSelfTest() noexcept
                                       : _session.PendingColorEdit() &&
                                             (mode == 2 ? _session.PendingColorEdit()->openingSequence != opening
                                                        : _session.PendingColorEdit()->openingSequence == opening)),
-                       composite, names[mode], "source-history-and-live-panel-preserved"))
+                       composite, names[static_cast<std::size_t>(mode)], "source-history-and-live-panel-preserved"))
                 return 5;
             _wandLayerHostTestGate.reset();
         }

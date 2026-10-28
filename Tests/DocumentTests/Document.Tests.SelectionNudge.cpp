@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionNudge.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Executor.h"
@@ -501,6 +501,10 @@ void WorkerPreparationAndDisposal()
         expect(input.has_value(), "sealed-input");
         if (!input)
             continue;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
         struct Trial final
         {
             std::mutex mutex;
@@ -511,7 +515,9 @@ void WorkerPreparationAndDisposal()
             std::thread::id worker;
             std::thread::id disposed;
             std::optional<PreparedSelectionNudge> result;
-        } trial;
+        }
+#pragma warning(pop)
+        trial;
         const SelectionNudgeObserver observer{&trial,
                                               [](void* opaque, SelectionNudgeStage stage, std::uint64_t) noexcept
                                               {
@@ -527,7 +533,7 @@ void WorkerPreparationAndDisposal()
                                               }};
         CancelSource local;
         CancelSource shutdown;
-        const auto cancellation = CancelToken{local.Token().LocalToken(), shutdown.Token().LocalToken()};
+        const auto cancellation = CancelToken(local.Token().LocalToken(), shutdown.Token().LocalToken());
         const auto owner = std::this_thread::get_id();
         std::jthread worker(
             [&trial, captured = std::move(input.value()), cancellation, observer]() mutable
@@ -601,6 +607,10 @@ void WorkerPreparationAndDisposal()
                    "owner-applies-literal-result");
         if (!trial.result)
             continue;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
         struct Retire final
         {
             std::optional<PreparedSelectionNudge> result;
@@ -614,6 +624,8 @@ void WorkerPreparationAndDisposal()
                 *disposed = std::this_thread::get_id();
             }
         };
+#pragma warning(pop)
+
         auto retired = std::make_unique<Retire>(std::move(trial.result.value()), trial.disposed);
         trial.result.reset();
         session.ClearDocument();

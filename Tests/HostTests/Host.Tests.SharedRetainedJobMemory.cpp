@@ -1,6 +1,6 @@
 #include "Host.Tests.SharedRetainedJobMemory.h"
 
-#include "../../Common/Jobs.h"
+#include "Common/Jobs.h"
 
 #include <objbase.h>
 #include <windows.h>
@@ -87,6 +87,10 @@ bool SampleMemory(void* context, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct TransferState final
 {
     JobScheduler* scheduler = nullptr;
@@ -109,7 +113,12 @@ struct TransferState final
     HANDLE runEntered = nullptr;
     HANDLE runRelease = nullptr;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class TransferJob final : public Job
 {
   public:
@@ -147,6 +156,7 @@ class TransferJob final : public Job
   private:
     TransferState& _state;
 };
+#pragma warning(pop)
 
 void SubmitTransfer(JobScheduler& scheduler, TransferState& state, std::uint64_t bytes, const char* name,
                     bool allowMemoryWaiting = true)
@@ -321,6 +331,10 @@ void TestMoveAcknowledgement(int& failures)
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct GraphGates final
 {
     HANDLE bodyEntered = nullptr;
@@ -328,7 +342,12 @@ struct GraphGates final
     HANDLE payloadRelease = nullptr;
     std::atomic<bool> payloadSawBody{false};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 struct GatedPayload final
 {
     explicit GatedPayload(GraphGates& gates) noexcept : _gates(gates) {}
@@ -343,7 +362,12 @@ struct GatedPayload final
   private:
     GraphGates& _gates;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct GatedGraph final
 {
     GatedGraph(SharedRetainedMemoryLease&& retained, GraphGates& gates) noexcept
@@ -361,6 +385,7 @@ struct GatedGraph final
   private:
     GraphGates& _gates;
 };
+#pragma warning(pop)
 
 void TestForeignGraphDestructionOrder(int& failures)
 {
@@ -427,6 +452,10 @@ void TestForeignGraphDestructionOrder(int& failures)
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct MixedCapacityState final
 {
     explicit MixedCapacityState(JobScheduler& owner) noexcept : scheduler(owner)
@@ -439,7 +468,12 @@ struct MixedCapacityState final
     RetainedMemoryTicket ownerOnly{};
     std::array<std::int32_t, JobScheduler::kRetainedMemoryCapacity> results{};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class MixedCapacityJob final : public Job
 {
   public:
@@ -468,6 +502,7 @@ class MixedCapacityJob final : public Job
     std::size_t _ordinal;
     JobTicket _ticket{};
 };
+#pragma warning(pop)
 
 void TestSharedCapacityAndReuse(int& failures)
 {
@@ -585,6 +620,10 @@ struct ReadablePayload final
     std::uint64_t marker = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ReadableGraph final
 {
     ReadableGraph(SharedRetainedMemoryLease&& retained, std::uint64_t marker) noexcept
@@ -595,6 +634,7 @@ struct ReadableGraph final
     SharedRetainedMemoryLease lease; // First declaration: readable payload retires before endpoint acknowledgement.
     ReadablePayload payload;
 };
+#pragma warning(pop)
 
 void TestEndpointOutlivesScheduler(int& failures)
 {

@@ -7,6 +7,10 @@
 // Test-only Prompts facade for a synchronous modal-question probe. The callback context is borrowed only while
 // AskThreeWay is running. The callback receiver and delegate must outlive this facade call, and all jobs must settle
 // before destruction. Restore Application::_prompts before destroying this facade.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class ModalProbePrompts final : public Prompts
 {
   public:
@@ -60,3 +64,4 @@ class ModalProbePrompts final : public Prompts
     void* _context;
     Callback _callback;
 };
+#pragma warning(pop)

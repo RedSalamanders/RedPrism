@@ -52,6 +52,10 @@ int Application::RunCanvasBrushCancellationSelfTest() noexcept
         Scenario{"held-escape", Key::Escape, false}, Scenario{"held-undo", Key::Undo, false},
         Scenario{"held-redo", Key::Redo, false},     Scenario{"live-escape", Key::Escape, true},
         Scenario{"live-undo", Key::Undo, true},      Scenario{"live-redo", Key::Redo, true}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State
     {
         Application& owner;
@@ -60,10 +64,13 @@ int Application::RunCanvasBrushCancellationSelfTest() noexcept
         bool held = false;
         bool cancelledOnOwner = false;
     };
+#pragma warning(pop)
+
     const auto press = [](Application& owner, Key key) noexcept
     {
-        return owner.HandleAccelerator(key == Key::Escape ? VK_ESCAPE : 'Z',
-                                       key == Key::Escape ? 0 : MK_CONTROL | (key == Key::Redo ? MK_SHIFT : 0));
+        return owner.HandleAccelerator(
+            key == Key::Escape ? VK_ESCAPE : 'Z',
+            static_cast<UINT>(key == Key::Escape ? 0 : MK_CONTROL | (key == Key::Redo ? MK_SHIFT : 0)));
     };
     const auto clientAt = [this](Vec2 point) noexcept
     {
@@ -73,11 +80,17 @@ int Application::RunCanvasBrushCancellationSelfTest() noexcept
                           static_cast<int>(std::lround(hole.top + view.y)));
     };
     // The bounded owner pump borrows only this harness's pure key driver, never worker/session storage.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct PumpState
     {
         State& state;
         decltype(press)& pressKey;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& inputs = *static_cast<PumpState*>(opaque);

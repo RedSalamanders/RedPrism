@@ -1,9 +1,7 @@
-#include "../../Common/AddressSanitizerProbe.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
-#include "../Support/Support.Tests.FailureReports.h"
 #include "Adjust.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
+#include "Common/AddressSanitizerProbe.h"
 #include "Crop.h"
 #include "Document.Tests.AdjustmentClosure.h"
 #include "Document.Tests.AdjustmentNested.h"
@@ -65,6 +63,8 @@
 #include "Document.Tests.TransformCommitWork.h"
 #include "Document.Tests.TransformDeferred.h"
 #include "Document.Tests.TransformDeferredGuard.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.FailureReports.h"
 
 #include "Document.Tests.BrushRetirementBounds.h"
 #include "Document.Tests.CapturedCloneOffset.h"
@@ -731,7 +731,10 @@ void TestCollapsedRows()
     session.SetGroupCollapsed(folder, true);
     rows = session.LayerRows();
     Expect(rows.size() == 1 && rows[0].collapsed && rows[0].isGroup, "rows.collapsed-flag");
-    Expect(!HierarchyEntries(session.Document().value().layers)[0].collapsed, "rows.default-not-collapsed");
+    {
+        const auto entries = HierarchyEntries(session.Document().value().layers);
+        Expect(!entries[0].collapsed, "rows.default-not-collapsed");
+    }
     // RF-907: a row carries its layer's mask for the layers panel's badge, and whether the mask is on.
     rows = session.LayerRows();
     const bool bare = rows.size() == 1 && !rows[0].hasMask && rows[0].maskEnabled;
@@ -3438,6 +3441,10 @@ void TestBrushCurveAndTail()
 }
 
 // A raw stroke on a blank canvas-sized layer with the CPU engine (legacy BrushIntersectionTests.stroke).
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RawStroke
 {
     DocumentSession session;
@@ -3470,6 +3477,7 @@ struct RawStroke
         return StrokePixel(*stroke, x + 0.5, y + 0.5)[3];
     }
 };
+#pragma warning(pop)
 
 void TestBrushCrossings()
 {
@@ -4184,7 +4192,7 @@ void TestSmearWarp()
            "warp.private-source.cancelled-before-copy-exposes-no-partial-stroke");
     Expect(!sparse.IsMaterialized() && !nested.IsMaterialized(),
            "warp.private-source.cancelled-copy-leaves-source-caches-unassembled");
-    WarpStroke shutdown(sparse, SmearMode::Liquify, BrushSettings{}, CancelToken{{}, stopped.Token().LocalToken()});
+    WarpStroke shutdown(sparse, SmearMode::Liquify, BrushSettings{}, CancelToken({}, stopped.Token().LocalToken()));
     Expect(!shutdown.IsValid() && !shutdown.Image().HasStorage() && !sparse.IsMaterialized() &&
                shutdown.RetirementMemoryBytes() == emptyStorageBytes,
            "warp.private-source.worker-shutdown-token-refuses-copy");
@@ -6091,13 +6099,13 @@ void TestFilters()
     }
     // Legacy removeDistortionBendsAboutTheCenterAndOnlyPincushionCorrectionOpensTheCorners.
     {
-        const Raster source = BytesRaster(40, 30,
-                                          [](int x, int y) -> std::array<std::uint8_t, 4>
-                                          {
-                                              const int index = (x < 20 ? 0 : 1) + (y < 15 ? 0 : 2);
-                                              return {static_cast<std::uint8_t>(255 - index * 85), 128,
-                                                      static_cast<std::uint8_t>(index * 85), 255};
-                                          });
+        const Raster source = BytesRaster(
+            40, 30,
+            [](int x, int y) -> std::array<std::uint8_t, 4>
+            {
+                const int index = (x < 20 ? 0 : 1) + (y < 15 ? 0 : 2);
+                return {{static_cast<std::uint8_t>(255 - index * 85), 128, static_cast<std::uint8_t>(index * 85), 255}};
+            });
         const auto distorted = [&](double distortion)
         {
             FilterSettings settings;
@@ -6252,9 +6260,9 @@ void TestAdjustmentLayers()
                                          {
                                              const std::uint8_t alphas[] = {255, 128, 32, 0};
                                              const std::uint8_t a = alphas[y * 2 + x];
-                                             return {static_cast<std::uint8_t>(std::lround(0.1 * a)),
-                                                     static_cast<std::uint8_t>(std::lround(0.7 * a)),
-                                                     static_cast<std::uint8_t>(std::lround(0.4 * a)), a};
+                                             return {{static_cast<std::uint8_t>(std::lround(0.1 * a)),
+                                                      static_cast<std::uint8_t>(std::lround(0.7 * a)),
+                                                      static_cast<std::uint8_t>(std::lround(0.4 * a)), a}};
                                          });
         Expect(Bytes(Adjust::ApplyAdjustment(Adjustment(AdjustmentKind::Curves), asset)) == Bytes(asset),
                "adjustlayer.curves-identity");
@@ -7615,8 +7623,8 @@ void TestOneColorEditSession()
             BytesRaster(8, 8,
                         [](int x, int y) -> std::array<std::uint8_t, 4>
                         {
-                            return {static_cast<std::uint8_t>(x * 30), static_cast<std::uint8_t>(y * 30),
-                                    static_cast<std::uint8_t>(200 - x * 20), 255};
+                            return {{static_cast<std::uint8_t>(x * 30), static_cast<std::uint8_t>(y * 30),
+                                     static_cast<std::uint8_t>(200 - x * 20), 255}};
                         });
         FilterSettings settings = changes;
         settings.gradientMap = GradientMapSettings{AdjustmentColor{1, 0, 0}, AdjustmentColor{0, 0, 1}, true};
@@ -8011,8 +8019,8 @@ void TestPixelMoveTiles()
     const auto pattern = [](int x, int y) -> std::array<std::uint8_t, 4>
     {
         const int alpha = 64 + (x * 7 + y * 13) % 192;
-        return {static_cast<std::uint8_t>(alpha * (x % 3) / 2), static_cast<std::uint8_t>(alpha * (y % 5) / 4),
-                static_cast<std::uint8_t>(alpha / 2), static_cast<std::uint8_t>(alpha)};
+        return {{static_cast<std::uint8_t>(alpha * (x % 3) / 2), static_cast<std::uint8_t>(alpha * (y % 5) / 4),
+                 static_cast<std::uint8_t>(alpha / 2), static_cast<std::uint8_t>(alpha)}};
     };
     const Raster source = BytesRaster(1200, 300, pattern);
     const auto setup = [&](DocumentSession& session)

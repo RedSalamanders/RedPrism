@@ -16,6 +16,10 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct GpuWorkQueue::Impl final
 {
     enum class State
@@ -26,6 +30,10 @@ struct GpuWorkQueue::Impl final
         Quarantined,
         Lent
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Slot final
     {
         Impl* owner = nullptr;
@@ -61,6 +69,7 @@ struct GpuWorkQueue::Impl final
         GpuCompletionReceiver* completionReceiver = nullptr;
         GpuReadbackProducer* producer = nullptr;
     };
+#pragma warning(pop)
 
     // Allocated once inside Initialize's construction boundary, never during capture/recording.
     const std::shared_ptr<const std::uint8_t> identity = std::make_shared<const std::uint8_t>(std::uint8_t{0});
@@ -414,6 +423,7 @@ struct GpuWorkQueue::Impl final
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
     }
 };
+#pragma warning(pop)
 
 GpuWorkQueue::GpuWorkQueue() noexcept = default;
 GpuWorkQueue::~GpuWorkQueue()

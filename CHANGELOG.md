@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Select the API3 DxUi maintenance candidate with stable posted-payload type identity under Release ICF and warning repairs. Preserve the experimental prepared-row boundary and historical qualification receipts; track fresh consumer and desktop-focus gates in the indexed native-policy plan.
+- Exercise the real build entrypoint with warnings, errors and missing diagnostic logs even when the native command returns zero; ensure those cases fail before provenance and preserve the caller environment. Use the common whole-entrypoint timer for the final result.
+- Make owned raster, geometry, host and test conversions explicit for the zero-warning /Wall policy; preserve image arithmetic and constructor/capture lifetimes, spell out enum fallbacks and array subobjects, and remove unused private test helpers. Full native and runtime qualification remains tracked in the build-policy plan.
+- Unify native builds on /Wall without /WX and require zero diagnostics before accepting success; align Debug /ZI and ASan /Zi, enable Release-only /OPT:ICF, print green artifact/log links with quoted launch commands, and shorten consumer DxUi source/output folders while preserving complete collision-checked identities. Native qualification remains tracked in the active build-policy plan.
 - Bind hosted build and restore to the verified MSVC 14.52 installation's MSBuild, preserving strict compiler-family checks and local read-only behavior; cover stale ambient discovery and missing-MSBuild refusal.
 - Wait for the hosted Visual Studio GUI installer and use its explicit result before verifying MSVC 14.52; retain installer diagnostics and cover delayed completion, failures and strict tool/refusal checks without a real installation.
 - Integrate the standalone RedMonitor pinned header client with MSVC 14.52 Release optimization and current main, preserving existing tests, source-bound qualification evidence and separate native/manual/release gates. Correct independent scoped command argument forwarding and test strict zero-argument and named-switch scripts.

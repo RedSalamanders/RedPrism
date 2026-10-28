@@ -64,7 +64,8 @@ TransformPixelsStatus Redraw(ImageLayer& layer, std::int64_t imageLeft, Executor
     const double w = (std::max)(1.0, std::round(layer.transform.size.x));
     const double h = (std::max)(1.0, std::round(layer.transform.size.y));
     // Preserve D7's stretched old image for sizes beyond the raster/document budget. Check before int conversion.
-    if (w > kMaxCanvasSide || h > kMaxCanvasSide || w * h > DocumentSession::kMaxShapePixels || w * h > imageLeft)
+    if (w > kMaxCanvasSide || h > kMaxCanvasSide || w * h > DocumentSession::kMaxShapePixels ||
+        w * h > static_cast<double>(imageLeft))
         return TransformPixelsStatus::Ready;
     const auto width = static_cast<int>(w);
     const auto height = static_cast<int>(h);

@@ -1,8 +1,9 @@
 #include "Application.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -61,6 +62,10 @@ int Application::RunCanvasBrushPaletteSelfTest() noexcept
         EraserFailure,
         MaskFailure,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -68,6 +73,8 @@ int Application::RunCanvasBrushPaletteSelfTest() noexcept
         bool visited = false;
         bool held = false;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);
@@ -163,7 +170,8 @@ int Application::RunCanvasBrushPaletteSelfTest() noexcept
 
         std::vector<std::uint8_t> sourceBytes(static_cast<std::size_t>(kWidth) * kHeight * kSourcePixel.size());
         for (std::size_t offset = 0; offset < sourceBytes.size(); offset += kSourcePixel.size())
-            std::copy(kSourcePixel.begin(), kSourcePixel.end(), sourceBytes.begin() + offset);
+            std::copy(kSourcePixel.begin(), kSourcePixel.end(),
+                      sourceBytes.begin() + static_cast<std::ptrdiff_t>(offset));
         const Raster source =
             Raster::Make(kWidth, kHeight, RasterFormat::Bgra8888, sourceBytes.data(), sourceBytes.size());
         if (!source.HasStorage() || !_session.ActiveLayerID())

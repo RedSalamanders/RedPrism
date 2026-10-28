@@ -2,10 +2,10 @@
 
 #include "PreparedRasterPreview.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
 #include "RasterEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

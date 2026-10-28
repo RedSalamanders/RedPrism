@@ -149,6 +149,10 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
         Case{"save-session-ended", Mode::SaveSession, true},
         Case{"published-save-session-ended", Mode::PublishedSaveSession, true},
         Case{"copied-save-path", Mode::CopiedSavePath, true}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -172,6 +176,8 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
         bool closePostAfterAcknowledgement = true;
         bool continuationStopReached = false;
     };
+#pragma warning(pop)
+
     constexpr UINT kLifecycleOutlinePump = WM_APP + 0x4cf;
     constexpr std::size_t temporarySize = 32768;
     auto temporary = std::make_unique<wchar_t[]>(temporarySize);

@@ -40,6 +40,10 @@ bool Memory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Observation final
 {
     const DWORD ownerThread = GetCurrentThreadId();
@@ -67,9 +71,14 @@ struct Observation final
     bool retired = false;
     unsigned completed = 0;
 };
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Payload final : DeferredReleaseNode
 {
     explicit Payload(Observation& value) noexcept : observation(value)
@@ -97,6 +106,12 @@ struct Payload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Parent final : public Job, public UtilityReadbackOwner
 {
   public:
@@ -188,6 +203,7 @@ class Parent final : public Job, public UtilityReadbackOwner
     Payload* _payload = nullptr;
     bool _pending = false;
 };
+#pragma warning(pop)
 
 bool WaitAttached(JobScheduler& jobs, Observation& observation) noexcept
 {
@@ -204,12 +220,18 @@ bool WaitAttached(JobScheduler& jobs, Observation& observation) noexcept
     }
     return true;
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct CloseState final
 {
     UtilityReadbackOwnerService& service;
     GpuResidencyBudget& budget;
     Observation& observation;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int RunUtilityJoinedCloseTests()

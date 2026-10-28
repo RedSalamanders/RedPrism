@@ -1,14 +1,14 @@
 #include "Document.Tests.SelectionPhysicalPrefix.h"
-#include "../../RedPrism/HostSelectionPressInput.h"
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
+#include "RedPrism/HostSelectionPressInput.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
 #include "SelectionCommandWork.h"
 #include "SelectionHitWork.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformEdit.h"
 #include <array>
 #include <atomic>
@@ -50,6 +50,10 @@ bool Literal(const std::optional<DocumentSelection>& value, const std::array<Vec
             return false;
     return true;
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct MemoryProbe final
 {
     std::atomic<std::uint64_t> queries{0};
@@ -63,6 +67,8 @@ struct MemoryProbe final
         return true;
     }
 };
+#pragma warning(pop)
+
 void Settle(JobScheduler& scheduler)
 {
     if (SettleJobs(scheduler, 10000) != SettleResult::Settled)
@@ -88,6 +94,10 @@ template <class Predicate> void Until(JobScheduler& scheduler, Predicate done)
     }
 }
 using PrefixParent = SelectionOutlineGestureJob;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final : SelectionOutlineGestureState
 {
     MemoryProbe& memory;
@@ -135,6 +145,12 @@ struct State final : SelectionOutlineGestureState
         };
     }
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class YoungerWriter final : public Job
 {
   public:
@@ -156,6 +172,8 @@ class YoungerWriter final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
+
 enum class Mode
 {
     EarlyClick,
@@ -364,12 +382,12 @@ void RunCase(Mode mode, const char* name)
                                                                   : mode == Mode::AsyncShift ? kShifted
                                                                   : mode == Mode::Overflow   ? kOverflow
                                                                                              : kMoved);
-        const std::uint64_t mutations = cancelled                    ? 3
-                                        : mode == Mode::EarlyClick   ? 2
-                                        : mode == Mode::QueuedWriter ? 3
-                                        : mode == Mode::AsyncShift   ? 3
-                                        : mode == Mode::Overflow     ? 512
-                                                                     : 2;
+        const std::uint64_t mutations = static_cast<std::uint64_t>(cancelled                    ? 3
+                                                                   : mode == Mode::EarlyClick   ? 2
+                                                                   : mode == Mode::QueuedWriter ? 3
+                                                                   : mode == Mode::AsyncShift   ? 3
+                                                                   : mode == Mode::Overflow     ? 512
+                                                                                                : 2);
         Expect(geometry && !session->IsMovingSelection() && session->Generation() == generation + mutations &&
                    now.Depth() == 0 &&
                    (cancelled ? now.Revision() == before.Revision() && session->history.CanRedo()
@@ -380,10 +398,10 @@ void RunCase(Mode mode, const char* name)
     Expect(state.firstBudget == kTotal && state.remainingBudget == kTotal - state.openingBytes &&
                state.queriesAtEnd == state.queryBaseline,
            "prepaid-closing-and-retirement-never-query-or-readmit");
-    const unsigned expectedMoves = mode == Mode::Overflow                                   ? 511
-                                   : mode == Mode::AsyncShift                               ? 2
-                                   : mode == Mode::EarlyClick || mode == Mode::QueuedWriter ? 0
-                                                                                            : 1;
+    const unsigned expectedMoves = static_cast<unsigned>(mode == Mode::Overflow                                   ? 511
+                                                         : mode == Mode::AsyncShift                               ? 2
+                                                         : mode == Mode::EarlyClick || mode == Mode::QueuedWriter ? 0
+                                                                                                                  : 1);
     const bool lost = mode == Mode::LostMoved || mode == Mode::Overflow || mode == Mode::OrdinalExhaust;
     const std::uint64_t expectedTerminal = cancelled                      ? 0
                                            : mode == Mode::Overflow       ? 512
@@ -393,12 +411,13 @@ void RunCase(Mode mode, const char* name)
     Expect(state.moves == expectedMoves && state.terminalLost == lost && state.terminalOrdinal == expectedTerminal &&
                state.overflowObserved == (mode == Mode::Overflow) && state.inputAcknowledged && !prefix->Busy(),
            "bounded-prefix-retains-accepted-points-modifiers-and-terminal");
-    const unsigned expectedRuns = mode == Mode::AsyncShift || mode == Mode::QueuedWriter ? 5
-                                  : mode == Mode::EarlyClick || mode == Mode::LostMoved  ? 4
-                                                                                         : 3;
-    const unsigned expectedCollects = mode == Mode::AsyncShift                                             ? 2
-                                      : mode == Mode::LostMoved || mode == Mode::QueuedWriter || cancelled ? 1
-                                                                                                           : 0;
+    const unsigned expectedRuns = static_cast<unsigned>(mode == Mode::AsyncShift || mode == Mode::QueuedWriter ? 5
+                                                        : mode == Mode::EarlyClick || mode == Mode::LostMoved  ? 4
+                                                                                                               : 3);
+    const unsigned expectedCollects =
+        static_cast<unsigned>(mode == Mode::AsyncShift                                             ? 2
+                              : mode == Mode::LostMoved || mode == Mode::QueuedWriter || cancelled ? 1
+                                                                                                   : 0);
     Expect(state.runs == expectedRuns && state.collectAcks == expectedCollects &&
                state.closurePrepares == (cancelled ? 0u : 1u) &&
                state.clickPrepares == ((mode == Mode::EarlyClick || mode == Mode::QueuedWriter) ? 1u : 0u),

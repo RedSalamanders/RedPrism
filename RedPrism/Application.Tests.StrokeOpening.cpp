@@ -4,7 +4,7 @@
 #include "KeyboardState.h"
 #include "Runtime.Tests.StrokeOpeningTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -20,7 +20,6 @@ using Pixel = std::array<std::uint8_t, 4>; // BGRA
 constexpr int kSide = 8;
 constexpr Pixel kTransparent{0, 0, 0, 0};
 constexpr Pixel kCapturedRed{0, 0, 255, 255};
-constexpr Pixel kChangedGreen{0, 255, 0, 255};
 
 // This is the receipt contract: each row is emitted in this order for each case, followed by
 // the cases in declaration order. It is deliberately literal so archived host output is auditable.
@@ -235,6 +234,10 @@ int Application::RunStrokeOpeningHostSelfTest() noexcept
         if (opening == 0)
             return 5;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -249,7 +252,9 @@ int Application::RunStrokeOpeningHostSelfTest() noexcept
             bool prefixRetained = false;
             bool viewResponsive = false;
             bool settingsCaptured = false;
-        } state{*this, spec, gate, revisionBefore, documentRecordsBefore, opening, before};
+        }
+#pragma warning(pop)
+        state{*this, spec, gate, revisionBefore, documentRecordsBefore, opening, before};
 
         const auto dispatch = [](void* opaque, void* native) noexcept
         {
@@ -451,6 +456,10 @@ int Application::RunStrokeOpeningHostSelfTest() noexcept
         if (opening == 0)
             return false;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct FaultState final
         {
             Application& owner;
@@ -466,7 +475,9 @@ int Application::RunStrokeOpeningHostSelfTest() noexcept
             bool prefix = false;
             bool action = false;
             bool replacement = false;
-        } state{*this, fault, gate, revisionBefore, recordsBefore, serialBefore, opening, before};
+        }
+#pragma warning(pop)
+        state{*this, fault, gate, revisionBefore, recordsBefore, serialBefore, opening, before};
 
         const auto dispatch = [](void* opaque, void* native) noexcept
         {

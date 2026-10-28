@@ -116,16 +116,23 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
         return;
     }
     const std::wstring caption = LoadStringResource(nullptr, IDS_COMMAND_LINE_CAPTION);
-    MessageBoxW(nullptr, text.c_str(), caption.c_str(), MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
+    MessageBoxW(nullptr, text.c_str(), caption.c_str(),
+                static_cast<UINT>(MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION)));
 }
 
 int RunWorkerCrashProbe() noexcept
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Probe final
     {
         std::atomic<unsigned int> started{0};
         wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    } probe;
+    }
+#pragma warning(pop)
+    probe;
     if (!probe.ready)
     {
         return 1;

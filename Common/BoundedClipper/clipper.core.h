@@ -568,7 +568,7 @@ inline Path<T1> ScalePath(const Path<T2>& path, double scale_x, double scale_y, 
                    [scale_x, scale_y](const auto& pt)
                    {
                        Workspace::Pulse();
-                       return Point<T1>(pt.x * scale_x, pt.y * scale_y);
+                       return Point<T1>(static_cast<double>(pt.x) * scale_x, static_cast<double>(pt.y) * scale_y);
                    });
 #endif
     return result;
@@ -721,6 +721,10 @@ inline int TriSign(int64_t x) // returns 0, 1 or -1
     return (x > 0) - (x < 0);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct UInt128Struct
 {
     const uint64_t lo = 0;
@@ -731,6 +735,7 @@ struct UInt128Struct
         return lo == other.lo && hi == other.hi;
     };
 };
+#pragma warning(pop)
 
 inline UInt128Struct MultiplyUInt64(uint64_t a, uint64_t b) // #834, #835
 {
@@ -786,8 +791,8 @@ template <typename T> inline int CrossProductSign(const Point<T>& pt1, const Poi
     else
         return 0;
 #else
-    const auto ab = MultiplyUInt64(std::abs(a), std::abs(b));
-    const auto cd = MultiplyUInt64(std::abs(c), std::abs(d));
+    const auto ab = MultiplyUInt64(static_cast<uint64_t>(std::abs(a)), static_cast<uint64_t>(std::abs(b)));
+    const auto cd = MultiplyUInt64(static_cast<uint64_t>(std::abs(c)), static_cast<uint64_t>(std::abs(d)));
 
     const auto sign_ab = TriSign(a) * TriSign(b);
     const auto sign_cd = TriSign(c) * TriSign(d);
@@ -873,13 +878,13 @@ template <typename T> inline double Area(const Path<T>& path)
         ++stop;
     for (it1 = path.cbegin(); (Workspace::Pulse(), it1 != stop);)
     {
-        a += static_cast<double>(it2->y + it1->y) * (it2->x - it1->x);
+        a += static_cast<double>(it2->y + it1->y) * static_cast<double>(it2->x - it1->x);
         it2 = it1 + 1;
-        a += static_cast<double>(it1->y + it2->y) * (it1->x - it2->x);
+        a += static_cast<double>(it1->y + it2->y) * static_cast<double>(it1->x - it2->x);
         it1 += 2;
     }
     if (cnt & 1)
-        a += static_cast<double>(it2->y + it1->y) * (it2->x - it1->x);
+        a += static_cast<double>(it2->y + it1->y) * static_cast<double>(it2->x - it1->x);
     return (a * 0.5);
 }
 
@@ -907,7 +912,7 @@ template <typename T> inline bool IsPositive(const Path<T>& poly)
 // be constrained to seg1. However, it's possible that 'ip' won't be inside
 // seg2, even when 'ip' hasn't been constrained (ie 'ip' is inside seg1).
 
-#if CLIPPER2_HI_PRECISION
+#if defined(CLIPPER2_HI_PRECISION) && CLIPPER2_HI_PRECISION
 // caution: this will compromise performance
 // https://github.com/AngusJohnson/Clipper2/issues/317#issuecomment-1314023253
 // See also CPP/BenchMark/GetIntersectPtBenchmark.cpp
@@ -976,15 +981,15 @@ inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b, const
     double det = dy1 * dx2 - dy2 * dx1;
     if (det == 0.0)
         return false;
-    double t = ((ln1a.x - ln2a.x) * dy2 - (ln1a.y - ln2a.y) * dx2) / det;
+    double t = (static_cast<double>(ln1a.x - ln2a.x) * dy2 - static_cast<double>(ln1a.y - ln2a.y) * dx2) / det;
     if (t <= 0.0)
         ip = ln1a;
     else if (t >= 1.0)
         ip = ln1b;
     else
     {
-        ip.x = static_cast<T>(ln1a.x + t * dx1);
-        ip.y = static_cast<T>(ln1a.y + t * dy1);
+        ip.x = static_cast<T>(static_cast<double>(ln1a.x) + t * dx1);
+        ip.y = static_cast<T>(static_cast<double>(ln1a.y) + t * dy1);
 #ifdef USINGZ
         ip.z = 0;
 #endif
@@ -1032,7 +1037,7 @@ inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const 
     if (inclusive)
     {
         // result **includes** segments that touch at an end point
-        double t = ((seg1a.x - seg2a.x) * dy2 - (seg1a.y - seg2a.y) * dx2);
+        double t = (static_cast<double>(seg1a.x - seg2a.x) * dy2 - static_cast<double>(seg1a.y - seg2a.y) * dx2);
         if (t == 0)
             return true;
         if (t > 0)
@@ -1043,7 +1048,7 @@ inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const 
         else if (cp > 0 || t < cp)
             return false; // false when t more neg. than cp
 
-        t = ((seg1a.x - seg2a.x) * dy1 - (seg1a.y - seg2a.y) * dx1);
+        t = (static_cast<double>(seg1a.x - seg2a.x) * dy1 - static_cast<double>(seg1a.y - seg2a.y) * dx1);
         if (t == 0)
             return true;
         if (t > 0)
@@ -1054,7 +1059,7 @@ inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const 
     else
     {
         // result **excludes** segments that touch at an end point
-        double t = ((seg1a.x - seg2a.x) * dy2 - (seg1a.y - seg2a.y) * dx2);
+        double t = (static_cast<double>(seg1a.x - seg2a.x) * dy2 - static_cast<double>(seg1a.y - seg2a.y) * dx2);
         if (t == 0)
             return false;
         if (t > 0)
@@ -1065,7 +1070,7 @@ inline bool SegmentsIntersect(const Point64& seg1a, const Point64& seg1b, const 
         else if (cp > 0 || t <= cp)
             return false; // false when t more neg. than cp
 
-        t = ((seg1a.x - seg2a.x) * dy1 - (seg1a.y - seg2a.y) * dx1);
+        t = (static_cast<double>(seg1a.x - seg2a.x) * dy1 - static_cast<double>(seg1a.y - seg2a.y) * dx1);
         if (t == 0)
             return false;
         if (t > 0)

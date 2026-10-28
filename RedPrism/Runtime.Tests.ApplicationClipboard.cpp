@@ -1,12 +1,12 @@
 #include "Application.h"
 
-#include "../Tests/Runtime.Tests.ClipboardMergedBudget.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
+#include "Tests/Runtime.Tests.ClipboardMergedBudget.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -294,6 +294,10 @@ int Application::RunClipboardWorkSelfTest() noexcept
         Scenario{"merged-replacement", merged, Mode::Replacement, ClipboardWorkPhase::MergedSnapshot,
                  HostOutcome::Stale},
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State
     {
         Application& owner;
@@ -308,6 +312,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         unsigned int foreignReplacementStage = 0;
         HWND foreignWindow = nullptr;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<State*>(raw);
@@ -367,6 +373,22 @@ int Application::RunClipboardWorkSelfTest() noexcept
             state.cancelAcknowledged =
                 state.younger.Read().outcome == HostOutcome::Pending && owner._session.history.UndoCount() == 0;
             break;
+        case Mode::Admission:
+        case Mode::Capture:
+        case Mode::Empty:
+        case Mode::EncodeFailure:
+        case Mode::Exhaust:
+        case Mode::Failure:
+        case Mode::Foreign:
+        case Mode::MainAdmission:
+        case Mode::Malformed:
+        case Mode::NoFormats:
+        case Mode::ReceiptFailure:
+        case Mode::ReceiptOrigin:
+        case Mode::Retry:
+        case Mode::Success:
+        case Mode::UnavailableSequence:
+        case Mode::WorkerAllocation:
         default:
             break;
         }
@@ -636,7 +658,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
         {
             std::printf("DIAG clipboard-post-close held=%d afterClose=%d installed=%d error=%lu nativeStage=%u "
                         "windowValid=%d closed=%u receipts=%u "
-                        "writeSucceeded=%d preferred=%u live=%u\n",
+                        "writeSucceeded=%d preferred=%lu live=%lu\n",
                         state.held, state.replacementWhilePendingAfterClose, state.foreignReplacementInstalled,
                         state.foreignReplacementError, state.foreignReplacementStage, IsWindow(state.foreignWindow),
                         gate->publications.load(), gate->receiptPlacements.load(), _clipboardWriteSucceeded,
@@ -743,11 +765,17 @@ int Application::RunStandaloneClipboardMergedShutdownSelfTest(HINSTANCE instance
         const auto serial = owner->_session.ClipboardSerial();
         owner->_clipboardWorkTestGate = gate;
         const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandCopyMerged});
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
             bool reached = false;
-        } state{*owner};
+        }
+#pragma warning(pop)
+        state{*owner};
         const auto dispatch = [](void* opaque, void* native) noexcept
         {
             auto& value = *static_cast<State*>(opaque);
@@ -780,6 +808,10 @@ int Application::RunStandaloneClipboardMergedShutdownSelfTest(HINSTANCE instance
                    owner->_historyWork.Busy() && gate->captureReservationHeld && gate->reservationBytes != 0 &&
                    owner->_jobs.ReservedMemoryBytes() == gate->reservationBytes && gate->visits.load() == 1,
                "actual-original-ticket-and-full-admission-held");
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct Observation final
         {
             Application& owner;
@@ -792,7 +824,9 @@ int Application::RunStandaloneClipboardMergedShutdownSelfTest(HINSTANCE instance
             bool exactSource = false;
             bool exactPrivate = false;
             bool charged = false;
-        } observed{*owner, root, generation, revision, serial, privateApplied, gate->reservationBytes};
+        }
+#pragma warning(pop)
+        observed{*owner, root, generation, revision, serial, privateApplied, gate->reservationBytes};
         ApplicationShutdownTestProbe probe;
         probe.checkContext = &observed;
         probe.checkOwner = [](void* opaque) noexcept

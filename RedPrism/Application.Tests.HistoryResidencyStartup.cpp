@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.HistoryResidencyTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -13,6 +13,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class StartupCacheJob final : public Job
 {
   public:
@@ -36,6 +40,7 @@ class StartupCacheJob final : public Job
     const Raster _source;
     bool& _completed;
 };
+#pragma warning(pop)
 
 class EmptyStartupSource final : public OwnerWorkPump
 {
@@ -102,6 +107,10 @@ int Application::RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance
             for (auto& subscription : subscriptions)
                 if (!subscription.Start([](void*) noexcept {}, nullptr))
                     return 5;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -111,7 +120,9 @@ int Application::RunStandaloneHistoryResidencyStartupSelfTest(HINSTANCE instance
             bool literal = false;
             bool producerCompleted = false;
             bool retired = false;
-        } state{*owner, mode};
+        }
+#pragma warning(pop)
+        state{*owner, mode};
         ApplicationProcessingTestProbe probe;
         probe.context = &state;
         probe.afterRuntimeSources = [](void* raw) noexcept -> std::int32_t

@@ -1,6 +1,6 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -129,7 +129,8 @@ int Application::RunStandaloneSelectionOutlineParitySelfTest(HINSTANCE instance)
                         static_cast<bool>(owner->_selectionOutlineDisplay.BorrowFrameOwner(0)),
                     "actual-worker-source-settles-at-fractional-view-edge"))
             return 5;
-        expect(owner->ChromeDpi() == dpi && owner->_selectionOutlineGrid.dpi == dpi,
+        expect(owner->ChromeDpi() == static_cast<float>(dpi) &&
+                   owner->_selectionOutlineGrid.dpi == static_cast<float>(dpi),
                "actual-chrome-and-worker-grid-use-requested-dpi");
         const double right = static_cast<double>(hole.left) + hole.width;
         expect(std::floor(right) != right, "actual-chrome-hole-has-fractional-right-boundary");

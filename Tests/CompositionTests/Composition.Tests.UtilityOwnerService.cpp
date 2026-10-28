@@ -103,6 +103,10 @@ struct Entry final
     std::size_t completed = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class AdmittedRoutingJob final : public Job
 {
   public:
@@ -148,6 +152,7 @@ class AdmittedRoutingJob final : public Job
     JobScheduler& _scheduler;
     bool _deferred = false;
 };
+#pragma warning(pop)
 
 bool DrainUntilDeferred(JobScheduler& scheduler, const std::vector<Entry>& entries) noexcept
 {

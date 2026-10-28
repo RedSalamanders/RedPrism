@@ -1,5 +1,5 @@
 #include "Document.Tests.RecordRootBench.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "RecordRoot.h"

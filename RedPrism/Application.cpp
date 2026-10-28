@@ -2,11 +2,11 @@
 #include "MonitorDiagnostics.h"
 #include "Runtime.Tests.ViewportFixture.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "SelectionCommandWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "PipelineTrace.h"
 
@@ -4323,7 +4323,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     if (_traceWandForTest)
     {
         const CanvasHole hole = _chrome->HolePixels();
-        const Vec2 view{point.x - hole.left, point.y - hole.top};
+        const Vec2 view{static_cast<float>(point.x) - hole.left, static_cast<float>(point.y) - hole.top};
         const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
         const bool inside = view.x >= 0 && view.y >= 0 && view.x < hole.width && view.y < hole.height;
         std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n", message,
@@ -4497,6 +4497,9 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             SyncBrushCursor();
         }
         return;
+    case ::DxUi::PointerAction::Cancel:
+    case ::DxUi::PointerAction::Move:
+    case ::DxUi::PointerAction::Up:
     default:
         if (!DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
         {
@@ -5918,7 +5921,7 @@ void Application::NewDocument() noexcept
         ReportHostAdmission(QueueHostInput(HostNewInput{}));
         return;
     }
-    _hostExecutionError = StartDocumentLifecycle(std::array<int, 2>{kDefaultClientWidth, kDefaultClientHeight});
+    _hostExecutionError = StartDocumentLifecycle(std::array<int, 2>{{kDefaultClientWidth, kDefaultClientHeight}});
     if (FAILED(_hostExecutionError))
     {
         ++_errorsShown;
@@ -8240,6 +8243,18 @@ BrushKind Application::BrushKindFor() const noexcept
         return BrushKind::Clone;
     case EditorTool::Smear:
         return BrushKind::Blur;
+    case ::EditorTool::Brush:
+    case ::EditorTool::Count:
+    case ::EditorTool::Crop:
+    case ::EditorTool::Eyedropper:
+    case ::EditorTool::Gradient:
+    case ::EditorTool::Hand:
+    case ::EditorTool::Lasso:
+    case ::EditorTool::Marquee:
+    case ::EditorTool::Move:
+    case ::EditorTool::Shape:
+    case ::EditorTool::Wand:
+    case ::EditorTool::Zoom:
     default:
         return _session.brushMode == BrushToolMode::Erase ? BrushKind::Erase : BrushKind::Paint;
     }

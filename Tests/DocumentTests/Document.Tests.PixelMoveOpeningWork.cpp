@@ -1,10 +1,10 @@
 #include "Document.Tests.PixelMoveOpeningWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "DeferredRelease.h"
 #include "Document.h"
 #include "RasterEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -116,7 +116,7 @@ void ReusedOpeningKeepsLiteralMoveResults(int& failures)
         return;
     }
     const DocumentSelection originalSelection = session.Document()->selection.value();
-    const std::size_t undoCount = session.history.UndoCount();
+    const int undoCount = session.history.UndoCount();
     const bool canRedo = session.history.CanRedo();
     const std::wstring redoName = session.history.RedoName();
     const Guid revision = session.history.CurrentRevision();

@@ -1,9 +1,9 @@
 #include "Document.Tests.SelectionMoveGeometryLifetime.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DeferredRelease.h"
 #include "SelectionMoveWork.h"
 #include "SelectionNudgeWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <atomic>
 #include <cstdint>
@@ -25,11 +25,17 @@ void Expect(bool value, const char* label)
     gFailures += value ? 0 : 1;
     std::printf("%s selection-move-lifetime.%s\n", value ? "PASS" : "FAIL", label);
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Trace final
 {
     std::atomic<unsigned> destroyed{0};
     std::thread::id thread;
 };
+#pragma warning(pop)
+
 struct Lifetime final
 {
     Trace* trace;

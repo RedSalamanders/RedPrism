@@ -19,6 +19,10 @@ constexpr double kInfinity = std::numeric_limits<double>::infinity();
 
 using Index = std::int64_t;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct Work final
 {
     const CancelToken& cancellation;
@@ -32,6 +36,7 @@ struct Work final
         return !cancellation.IsCancelled();
     }
 };
+#pragma warning(pop)
 
 [[nodiscard]] std::uint32_t HashKey(std::uint32_t x) noexcept
 {
@@ -417,7 +422,8 @@ struct Work final
             const std::uint8_t* s = haveSource ? PixelAt(rgba, stride, ix + ox, iy + oy) : nullptr;
             for (int c = 0; c < 4; ++c)
             {
-                value[p * 4 + static_cast<std::size_t>(c)] = static_cast<float>(t[c]) - (s ? s[c] : 0);
+                value[p * 4 + static_cast<std::size_t>(c)] =
+                    static_cast<float>(t[c]) - static_cast<float>(s ? s[c] : 0);
                 mean[c] += value[p * 4 + static_cast<std::size_t>(c)];
             }
             if (!haveSource)
@@ -497,8 +503,8 @@ struct Work final
             double out[4];
             for (int c = 0; c < 4; ++c)
             {
-                const double healed =
-                    (s ? s[c] : 0) + value[p * 4 + static_cast<std::size_t>(c)] + (c < 3 ? grain * detail[c] : 0);
+                const double healed = static_cast<float>(s ? s[c] : 0) + value[p * 4 + static_cast<std::size_t>(c)] +
+                                      (c < 3 ? grain * detail[c] : 0);
                 out[c] = t[c] + (healed - t[c]) * amount;
             }
             const double alpha = out[3] < 0 ? 0 : out[3] > 255 ? 255 : out[3];

@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentSizeHistory.h"
 #include "FinalPublicationWork.h"
 #include "Runtime.Tests.SizingWorkTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 
@@ -22,6 +22,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SizingPayload final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> finalMemory;
@@ -50,6 +54,8 @@ struct SizingPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireSizingPayload final
 {
     void operator()(SizingPayload* payload) const noexcept
@@ -62,6 +68,10 @@ struct RetireSizingPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::SizingJob final : public Job
 {
   public:
@@ -411,6 +421,7 @@ class Application::SizingJob final : public Job
     ResizeStatus _status = ResizeStatus::Invalid;
     std::int32_t _captureError = 0;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept
 {
@@ -554,6 +565,10 @@ int Application::RunSizingWorkSelfTest() noexcept
         HistoryTrim,
         HistoryEpoch
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -565,6 +580,8 @@ int Application::RunSizingWorkSelfTest() noexcept
         bool visited = false;
         bool cancelPending = false;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);

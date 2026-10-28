@@ -82,8 +82,13 @@ class PreparedPixelMoveOpening final
     bool _applied = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct PreparedPixelMoveOpeningResult final
 {
     PixelMoveLiftStatus status = PixelMoveLiftStatus::Invalid;
     std::optional<PreparedPixelMoveOpening> prepared;
 };
+#pragma warning(pop)

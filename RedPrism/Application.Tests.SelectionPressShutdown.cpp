@@ -1,8 +1,8 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cmath>
 #include <cstdio>
@@ -12,6 +12,10 @@
 namespace
 {
 constexpr std::uint64_t kObserverBytes = 8192;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ShutdownEndpointJob final : public Job
 {
   public:
@@ -42,6 +46,8 @@ class ShutdownEndpointJob final : public Job
     std::shared_ptr<SharedPublicationMemory> _memory;
     JobTicket _ticket;
 };
+#pragma warning(pop)
+
 } // namespace
 int Application::RunStandaloneSelectionPressShutdownSelfTest(HINSTANCE instance) noexcept
 {

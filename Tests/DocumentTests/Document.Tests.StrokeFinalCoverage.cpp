@@ -49,6 +49,10 @@ ImageLayer SourceLayer(const Raster& source)
     return layer;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Fixture final
 {
     Raster source = SolidSource();
@@ -61,6 +65,7 @@ struct Fixture final
         return stroke.Append(Vec2{0, 16}) && stroke.Append(Vec2{16, 16}) && stroke.Append(Vec2{32, 16});
     }
 };
+#pragma warning(pop)
 
 struct WorkerResult final
 {
@@ -362,6 +367,10 @@ Raster HealingGraySource()
     return Raster::Make(32, 32, RasterFormat::Bgra8888, pixels.data(), pixels.size());
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct HealingFixture final
 {
     Raster source = HealingGraySource();
@@ -379,6 +388,7 @@ struct HealingFixture final
         return stroke.Append(Vec2{16, 16}) && stroke.Append(Vec2{16.5, 16});
     }
 };
+#pragma warning(pop)
 
 bool HealingCoverageEquals(const BrushStroke& stroke, int x, int y, std::uint8_t expected) noexcept
 {

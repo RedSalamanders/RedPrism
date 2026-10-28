@@ -109,6 +109,10 @@ enum class RunMode
     WaitForShutdown
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final
 {
     HANDLE entered = nullptr;
@@ -147,7 +151,12 @@ struct State final
     bool ownerSawWorkerHook = false;
     bool completedSawWorkerHook = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class WorkerStageJob final : public Job
 {
   public:
@@ -252,6 +261,7 @@ class WorkerStageJob final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
 
 void TestFinishedFailureAndAllocationFailure()
 {
@@ -448,6 +458,10 @@ void TestSuspendedCancellationSkipsUsefulStageAndHoldsFifo()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CloseState final
 {
     std::atomic<unsigned int> ownerCleanup{0};
@@ -457,6 +471,7 @@ struct CloseState final
     std::atomic<bool> workerAfterOwner{false};
     std::atomic<bool> workerMta{false};
 };
+#pragma warning(pop)
 
 void OwnerClose(void* context) noexcept
 {

@@ -1,9 +1,9 @@
 #include "Document.Tests.DuplicateOpeningLimit.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "DuplicateOpeningWork.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

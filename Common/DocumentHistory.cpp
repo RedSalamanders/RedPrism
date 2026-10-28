@@ -2,6 +2,7 @@
 #include "LocallyOwnedPublication.h"
 #include "PersistentOwnerIndex.h"
 #include "SharedPublicationMemory.h"
+#include <cstddef>
 
 #include <algorithm>
 #include <array>
@@ -1771,8 +1772,8 @@ bool DocumentHistory::TrimPrepared(StateView& state, const std::optional<CanvasD
         // The archived behavioral reference adapter already owns an intrusive retirement node. Preserve its exact
         // whole-index deferred destruction and cached bound rather than allocating a different wrapper.
         auto* raw = index.release();
-        state.storageIndex = std::shared_ptr<const StorageIndex>{raw, StorageIndex::Retire{},
-                                                                 PublicationGraphAllocator<StorageIndex>{{}}};
+        state.storageIndex = std::shared_ptr<const StorageIndex>(raw, StorageIndex::Retire{},
+                                                                 PublicationGraphAllocator<StorageIndex>{{}});
     }
     return !cancellation.IsCancelled();
 }

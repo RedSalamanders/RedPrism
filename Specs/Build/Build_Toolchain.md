@@ -38,7 +38,7 @@ adopted by replacing the locked files and the lock together.
 | IDE / toolset | Visual Studio 2026 (18.x), `v145` |
 | Windows SDK | `10.0.26100.0` |
 | Language | MSVC `stdcpplatest`, Unicode Win32 APIs |
-| Warnings | `/W4`, `/permissive-`, SDL, warnings as errors, `/utf-8`, `/Zc:preprocessor` |
+| Warnings | `/Wall`, `/permissive-`, SDL, /WX disabled, zero warnings, `/utf-8`, `/Zc:preprocessor` |
 | CRT | `/MDd` Debug and ASan Debug, `/MD` Release |
 | Minimum OS | Windows 11 build 22000.2600 |
 
@@ -888,3 +888,5 @@ Active Windows compilation/tooling workflows use the local setup-msvc composite 
 Hosted setup waits for the hidden, owned GUI bootstrapper with both its --wait switch and PowerShell Start-Process -Wait. It reads that process's explicit exit code (0 or 3010), then rechecks the required compiler family and complete target tools. Ambient LASTEXITCODE cannot establish installer success. Paths with spaces stay one argument; installer stdout, stderr and fresh dd_* logs remain downloadable on failure. Delayed-GUI, stale-exit, wrong-family, missing-tool, signature and local/read-only refusal controls exercise the actual setup script without running an installer.
 
 The hosted action exports MSBUILD_EXE_PATH through GITHUB_ENV from the exact installation it verified, preferring its native 64-bit MSBuild and requiring the chosen executable to exist. Build and restore therefore consume that verified toolchain ahead of the runner's older environment or PATH entries. Local -VerifyOnly does not publish or change compiler selection. The regression applies the exported value to the actual product discovery function and retains the older-ambient counterfactual; rejecting MSVC 14.51 remains required.
+
+The [native policy, console and dependency-path contract](Build_ConsoleAndPaths.md) owns /Wall without /WX, zero-warning acceptance, Debug/ASan symbols, Release-only ICF, common terminal results and verified short dependency folders.

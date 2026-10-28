@@ -8,8 +8,6 @@
 #include "IO.Tests.CodecMemoryStream.h"
 #include "IO.Tests.FileIoBench.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
-#include "../Support/Support.Tests.FailureReports.h"
 #include "Document.h"
 #include "IO.Tests.ClipboardDibWork.h"
 #include "IO.Tests.ImageCodecWork.h"
@@ -23,6 +21,8 @@
 #include "Io.Tests.ProjectDurabilityFaults.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.FailureReports.h"
 #include "ZipOwner.h"
 #include <cwchar>
 
@@ -1779,6 +1779,10 @@ void ObserveRotation(void* context, ProjectIoStage stage, unsigned int value) no
         (void)log.stopOnStagingPublishFailure->request_stop();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RollbackChildReader
 {
     RotationEventLog events;
@@ -1789,6 +1793,7 @@ struct RollbackChildReader
     bool directory = false;
     DWORD openFailureError = ERROR_SUCCESS;
 };
+#pragma warning(pop)
 
 void ObserveRollbackChildReader(void* context, ProjectIoStage stage, unsigned int value) noexcept
 {
@@ -1904,6 +1909,10 @@ void TestNativeDestinationRotation()
                                 fixture.resolution = 144;
                                 fixture.layers.front().name = L"Published destination retry";
                             });
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
         struct Control final
         {
             Mode mode;
@@ -1911,7 +1920,9 @@ void TestNativeDestinationRotation()
             wil::unique_hfile reader;
             CancelSource cancellation;
             std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::Count)> visits{};
-        } control{mode};
+        }
+#pragma warning(pop)
+        control{mode};
         const bool needsReader = mode != Mode::InjectedFinal && mode != Mode::Healthy;
         if (needsReader)
         {
@@ -2035,7 +2046,7 @@ void TestNativeDestinationRotation()
     wil::unique_hfile handle{CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr)};
     DWORD returned = 0;
-    return handle && DeviceIoControl(handle.get(), FSCTL_SET_REPARSE_POINT, &data, 8 + data.dataLength, nullptr, 0,
+    return handle && DeviceIoControl(handle.get(), FSCTL_SET_REPARSE_POINT, &data, 8u + data.dataLength, nullptr, 0,
                                      &returned, nullptr);
 }
 
@@ -2168,8 +2179,8 @@ void TestProjectRotationFaultRecovery()
     if (!restoredTreeMatches || restored.status != ProjectIoStatus::Ok || restored.document.resolution != 72 ||
         !backupGone || stagingCount != 0)
         std::printf("rotation rollback: tree=%d status=%u dpi=%g backupGone=%d staging=%zu cleanupError=%u "
-                    "rollbackError=%u rollbackReports=%u rollbackAttempts=%u destinationAttributes=%08x "
-                    "backupAttributes=%08x\n",
+                    "rollbackError=%u rollbackReports=%u rollbackAttempts=%u destinationAttributes=%08lx "
+                    "backupAttributes=%08lx\n",
                     restoredTreeMatches, static_cast<unsigned int>(restored.status), restored.document.resolution,
                     backupGone, stagingCount,
                     publishEvents.errors[static_cast<std::size_t>(ProjectIoStage::StagingCleanupFailed)],

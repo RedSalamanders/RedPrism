@@ -392,6 +392,10 @@ class PolyPath
 typedef typename ArenaVector<std::unique_ptr<PolyPath64>> PolyPath64List;
 typedef typename ArenaVector<std::unique_ptr<PolyPathD>> PolyPathDList;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class PolyPath64 : public PolyPath
 {
   private:
@@ -455,7 +459,12 @@ class PolyPath64 : public PolyPath
                                [](double a, const auto& child) { return a + child->Area(); });
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class PolyPathD : public PolyPath
 {
   private:
@@ -546,6 +555,7 @@ class PolyPathD : public PolyPath
                                [](double a, const auto& child) { return a + child->Area(); });
     }
 };
+#pragma warning(pop)
 
 class Clipper64 : public ClipperBase
 {

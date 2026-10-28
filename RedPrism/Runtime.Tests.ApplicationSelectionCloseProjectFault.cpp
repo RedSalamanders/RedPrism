@@ -129,6 +129,10 @@ int Application::RunSelectionCloseProjectFaultSelfTest() noexcept
         Case{"lifecycle-card", Mode::LifecycleCard},
         Case{"save-card", Mode::SaveCard, true},
         Case{"copied-save-path", Mode::CopiedSavePath, true}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -148,6 +152,8 @@ int Application::RunSelectionCloseProjectFaultSelfTest() noexcept
         bool saveVisited = false, saveHeld = false, cancelPending = false, mutationReached = false;
         bool youngerHeld = true, zoomChanged = false, messagePumped = false;
     };
+#pragma warning(pop)
+
     constexpr UINT kCloseProjectOutlinePump = WM_APP + 0x4cf;
     constexpr std::size_t temporarySize = 32768;
     auto temporary = std::make_unique<wchar_t[]>(temporarySize);

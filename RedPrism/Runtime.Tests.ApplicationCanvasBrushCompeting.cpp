@@ -47,6 +47,10 @@ int Application::RunCanvasBrushCompetingSelfTest() noexcept
         CaptureAfterRefusal,
         RetiredOpening,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -64,6 +68,8 @@ int Application::RunCanvasBrushCompetingSelfTest() noexcept
         double shownOpacity = .25;
         BrushSettings settings{3, 1, 1, 0, 0, 1};
     };
+#pragma warning(pop)
+
     static constexpr auto point = [](Application& owner, UINT message, WPARAM modifiers, Vec2 documentPoint) noexcept
     {
         const CanvasHole hole = owner._chrome->HolePixels();

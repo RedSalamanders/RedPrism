@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.WandLayerHostTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -74,6 +74,10 @@ int Application::RunWandCompositeHostSelfTest() noexcept
         DeviceBeforeCopy,
         DeviceRestartLimit,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -118,6 +122,7 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             return queued[queuedCount++];
         }
     };
+#pragma warning(pop)
 
     constexpr UINT kWindowMessage = WM_APP + 0x4c8;
     int checks = 0;

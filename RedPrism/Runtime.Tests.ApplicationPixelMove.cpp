@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.PixelMoveWorkTestGate.h"
@@ -41,6 +41,10 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         YoungerNudge,
         ReopenPreview,
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -55,6 +59,8 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         bool firstShown = false;
         ContinuationReceipt younger;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -144,6 +150,15 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
                 owner.DragPixels(Vec2{3.5, 0.5}, false);
             }
             break;
+        case Mode::Admission:
+        case Mode::Allocation:
+        case Mode::Capture:
+        case Mode::Failure:
+        case Mode::Invalid:
+        case Mode::Memory:
+        case Mode::Success:
+        case Mode::TooLarge:
+        case Mode::Unchanged:
         default:
             break;
         }

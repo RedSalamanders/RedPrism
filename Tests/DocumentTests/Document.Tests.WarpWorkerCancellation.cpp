@@ -1,6 +1,6 @@
 #include "Document.Tests.WarpWorkerCancellation.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -84,16 +84,16 @@ void CheckCancelledAt(WarpStroke::WorkStage stage, SmearMode mode, const char* n
                                : stage == WarpStroke::WorkStage::Complete ? 1u
                                                                           : 21u;
     StopAtStage observer{&stop, stage, 0, stopAt};
-    WarpStroke stroke(source, mode, BrushSettings{40, 0.5, 0, 0, 0, 0.8}, CancelToken{{}, stop.get_token()});
+    WarpStroke stroke(source, mode, BrushSettings{40, 0.5, 0, 0, 0, 0.8}, CancelToken({}, stop.get_token()));
     // Pick-up occurs on the first point; other stages run after an uncancelled opening. Row cancellation
     // happens at the center of the tip after preceding rows, not merely at the entry guard.
     bool accepted = false;
     if (stage == WarpStroke::WorkStage::PickUpRow)
-        accepted = stroke.AppendForWork({200, 200}, CancelToken{{}, stop.get_token()}, Observer(observer));
+        accepted = stroke.AppendForWork({200, 200}, CancelToken({}, stop.get_token()), Observer(observer));
     else
     {
         stroke.Append({200, 200});
-        accepted = stroke.AppendForWork({224, 200}, CancelToken{{}, stop.get_token()}, Observer(observer));
+        accepted = stroke.AppendForWork({224, 200}, CancelToken({}, stop.get_token()), Observer(observer));
     }
     Expect(!accepted && observer.hits == stopAt && stop.stop_requested(), name);
     Expect(!stroke.IsValid() && !stroke.Image().HasStorage() && stroke.TakeChangedTiles().empty(),
@@ -125,7 +125,7 @@ void PreCancelledTokens()
         std::stop_source* selected = shutdown ? &workerShutdown : &local;
         static_cast<void>(selected->request_stop());
         const CancelToken token =
-            shutdown ? CancelToken{{}, workerShutdown.get_token()} : CancelToken{local.get_token(), {}};
+            shutdown ? CancelToken({}, workerShutdown.get_token()) : CancelToken(local.get_token(), {});
         WarpStroke stroke(source, SmearMode::Smudge, BrushSettings{}, token);
         Expect(!stroke.IsValid() && !stroke.Image().HasStorage() && stroke.Points().empty() &&
                    stroke.TakeChangedTiles().empty(),
@@ -256,7 +256,7 @@ void InvalidPrivateWarpCannotCommitAsOrdinaryPaint()
     }
     std::stop_source stop;
     StopAtStage observer{&stop, WarpStroke::WorkStage::Complete, 0, 1};
-    Expect(!draft->AppendForWork({2, 0}, CancelToken{{}, stop.get_token()}, Observer(observer)) && !draft->IsValid() &&
+    Expect(!draft->AppendForWork({2, 0}, CancelToken({}, stop.get_token()), Observer(observer)) && !draft->IsValid() &&
                !draft->Points().empty(),
            "session.cancelled-draft-retains-private-prefix-but-hides-image");
     session.FinishWarp();

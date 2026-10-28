@@ -182,7 +182,7 @@ struct Manifest
     const HRESULT pathResult = Win32FilePath::Prepare(path, Win32FilePath::Use::File, apiPath);
     if (FAILED(pathResult))
     {
-        Report(observer, ProjectIoStage::CreateFailed, HRESULT_CODE(pathResult));
+        Report(observer, ProjectIoStage::CreateFailed, static_cast<unsigned int>(HRESULT_CODE(pathResult)));
         return ProjectIoStatus::Encode;
     }
     wil::unique_hfile file{
@@ -1590,7 +1590,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
                 if (length + 1 + name.size() >= path.size())
                     return ERROR_FILENAME_EXCED_RANGE;
                 path[length] = L'\\';
-                std::copy(name.begin(), name.end(), path.begin() + length + 1);
+                std::copy(name.begin(), name.end(), path.data() + length + 1);
                 const std::size_t childLength = length + 1 + name.size();
                 path[childLength] = L'\0';
                 const std::uint32_t failure = DeleteTreePath(path, childLength, depth + 1);
@@ -1660,7 +1660,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
                 else
                 {
                     std::copy(prefix.begin(), prefix.end(), scratch.begin());
-                    std::copy(suffix.begin(), suffix.end(), scratch.begin() + prefix.size());
+                    std::copy(suffix.begin(), suffix.end(), scratch.data() + prefix.size());
                     const std::size_t length = prefix.size() + suffix.size();
                     scratch[length] = L'\0';
                     failure = DeleteTreePath(scratch, length, 0);

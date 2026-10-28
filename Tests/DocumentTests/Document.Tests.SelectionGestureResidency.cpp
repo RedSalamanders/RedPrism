@@ -1,9 +1,9 @@
 #include "Document.Tests.SelectionGestureResidency.h"
-#include "../../RedPrism/SelectionOutlineGestureJob.h"
-#include "../../RedPrism/SelectionOutlineGestureMemory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "DocumentDraft.h"
+#include "RedPrism/SelectionOutlineGestureJob.h"
+#include "RedPrism/SelectionOutlineGestureMemory.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <atomic>
 #include <cstdio>
@@ -66,6 +66,10 @@ struct Memory final
     }
 };
 constexpr std::uint64_t kObserverBytes = 8192;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EndpointObserverJob final : public Job
 {
   public:
@@ -96,6 +100,12 @@ class EndpointObserverJob final : public Job
     std::shared_ptr<SharedPublicationMemory> _memory;
     JobTicket _ticket;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class LeaseHolder final
 {
   public:
@@ -140,6 +150,8 @@ class LeaseHolder final
     std::atomic<bool> held{false}, expired{false};
     std::jthread thread;
 };
+#pragma warning(pop)
+
 enum class Mode
 {
     LateMove,
@@ -150,6 +162,10 @@ enum class Mode
     ForeignMove,
     ForeignClick
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     Raster retired;
@@ -199,6 +215,8 @@ struct Probe final
         }
     }
 };
+#pragma warning(pop)
+
 void Run(Mode mode, const char* name)
 {
     current = name;

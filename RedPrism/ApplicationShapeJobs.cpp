@@ -13,6 +13,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ShapePayload final : DeferredReleaseNode
 {
     std::optional<ShapeEditInput> input;
@@ -35,6 +39,8 @@ struct ShapePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireShapePayload final
 {
     void operator()(ShapePayload* payload) const noexcept
@@ -47,6 +53,10 @@ struct RetireShapePayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Application::ShapeJob final : public Job
 {
   public:
@@ -265,6 +275,7 @@ class Application::ShapeJob final : public Job
     bool _refreshResidency = false;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartShape(const ShapeDraft& draft, std::uint32_t foreground) noexcept
 {

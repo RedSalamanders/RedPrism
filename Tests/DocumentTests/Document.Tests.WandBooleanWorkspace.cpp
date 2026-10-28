@@ -29,6 +29,10 @@ struct LifetimeCounts final
     int parentDestroyed = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class TrackedObject final : public ArenaObject<TrackedObject>
 {
   public:
@@ -46,7 +50,12 @@ class TrackedObject final : public ArenaObject<TrackedObject>
   private:
     LifetimeCounts& _counts;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class TrackedChild final : public ArenaObject<TrackedChild>
 {
   public:
@@ -59,7 +68,12 @@ class TrackedChild final : public ArenaObject<TrackedChild>
   private:
     LifetimeCounts& _counts;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class ThrowingParent final : public ArenaObject<ThrowingParent>
 {
   public:
@@ -76,6 +90,7 @@ class ThrowingParent final : public ArenaObject<ThrowingParent>
   private:
     LifetimeCounts& _counts;
 };
+#pragma warning(pop)
 
 bool DisjointAlignedAllocations()
 {

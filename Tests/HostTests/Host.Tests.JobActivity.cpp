@@ -1,6 +1,6 @@
 #include "Host.Tests.JobActivity.h"
 
-#include "../../Common/JobActivity.h"
+#include "Common/JobActivity.h"
 
 #include <array>
 #include <cstddef>
@@ -186,6 +186,10 @@ struct EventJobState final
     bool callbacksOnOwner = true;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EventJob final : public Job
 {
   public:
@@ -243,6 +247,7 @@ class EventJob final : public Job
     bool _submitSuccessor;
     bool _successor;
 };
+#pragma warning(pop)
 
 void TestSchedulerObserver(int& failures)
 {

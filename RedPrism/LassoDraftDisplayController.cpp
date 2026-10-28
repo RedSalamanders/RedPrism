@@ -25,6 +25,10 @@ JobResult Result(HRESULT result) noexcept
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class LassoDraftDisplayController::DraftJob final : public Job
 {
   public:
@@ -151,6 +155,7 @@ class LassoDraftDisplayController::DraftJob final : public Job
     Cell& _cell;
     Stage _stage = Stage::Opening;
 };
+#pragma warning(pop)
 
 LassoDraftDisplayController::LassoDraftDisplayController() noexcept : _ownerThread(GetCurrentThreadId())
 {

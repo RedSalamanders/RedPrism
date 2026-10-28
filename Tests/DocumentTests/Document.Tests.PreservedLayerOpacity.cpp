@@ -1,8 +1,8 @@
 #include "Document.Tests.PreservedLayerOpacity.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "LayerMetadataWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

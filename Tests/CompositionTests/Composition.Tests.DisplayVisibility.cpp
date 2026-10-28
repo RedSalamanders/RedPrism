@@ -49,6 +49,10 @@ constexpr std::array<std::uint8_t, 16> kLatestPixels{
     0xC1, 0xB2, 0xA3, 0xFF, 0x94, 0x85, 0x76, 0xFF, 0x67, 0x58, 0x49, 0xFF, 0x3A, 0x2B, 0x1C, 0xFF,
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
   public:
@@ -117,7 +121,12 @@ class Client final : public CommittedDisplayClient
         return session.CaptureDocumentReadAuthority().has_value();
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -189,6 +198,7 @@ struct Rig final
         Close();
     }
 };
+#pragma warning(pop)
 
 class WorkerGate final : public Job
 {

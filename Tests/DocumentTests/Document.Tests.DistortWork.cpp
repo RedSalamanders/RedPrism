@@ -345,9 +345,9 @@ void TileBoundaryPixels()
                 const std::size_t offset =
                     static_cast<std::size_t>(y) * static_cast<std::size_t>(result.image.Stride()) +
                     static_cast<std::size_t>(x) * 4u;
-                const std::array<std::uint8_t, 4> expected{static_cast<std::uint8_t>(x % 251),
-                                                           static_cast<std::uint8_t>(y * 31),
-                                                           static_cast<std::uint8_t>((x + y) % 253), 255};
+                const std::array<std::uint8_t, 4> expected{{static_cast<std::uint8_t>(x % 251),
+                                                            static_cast<std::uint8_t>(y * 31),
+                                                            static_cast<std::uint8_t>((x + y) % 253), 255}};
                 boundariesMatch = boundariesMatch && std::equal(expected.begin(), expected.end(), actual + offset);
             }
         }

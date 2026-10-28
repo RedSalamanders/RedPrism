@@ -1,9 +1,9 @@
 #include "Host.Tests.WarpFactoryLifetime.h"
 
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/SharedPublicationMemory.h"
-#include "../../Common/WarpStroke.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
+#include "Common/SharedPublicationMemory.h"
+#include "Common/WarpStroke.h"
 
 #include <windows.h>
 
@@ -145,6 +145,10 @@ struct FactoryState final
     unsigned int callbacksCompleted = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class WarpFactoryJob final : public Job
 {
   public:
@@ -209,6 +213,7 @@ class WarpFactoryJob final : public Job
   private:
     FactoryState& _state;
 };
+#pragma warning(pop)
 
 void StartScheduler(JobScheduler& scheduler)
 {

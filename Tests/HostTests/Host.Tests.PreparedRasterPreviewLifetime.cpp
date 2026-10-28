@@ -1,11 +1,11 @@
 #include "Host.Tests.PreparedRasterPreviewLifetime.h"
 
-#include "../../Common/BrushStroke.h"
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/PreparedRasterPreview.h"
-#include "../../Common/RasterEditWork.h"
-#include "../../Common/SharedPublicationMemory.h"
+#include "Common/BrushStroke.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
+#include "Common/PreparedRasterPreview.h"
+#include "Common/RasterEditWork.h"
+#include "Common/SharedPublicationMemory.h"
 
 #include <windows.h>
 
@@ -132,6 +132,10 @@ struct PreviewState final
     std::uint64_t callbackChargeAfter = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PreviewJob final : public Job
 {
   public:
@@ -158,6 +162,7 @@ class PreviewJob final : public Job
     PreviewState& _state;
     RasterEditInput _input;
 };
+#pragma warning(pop)
 
 struct Fixture final
 {

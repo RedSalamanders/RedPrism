@@ -169,7 +169,7 @@ void CancelImageSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const 
 
     std::stop_source stop;
     StopAtStage observer{&stop, stage, 0, stopAt};
-    const Raster cancelled = stroke.ImageForWork(CancelToken{{}, stop.get_token()}, Observer(observer));
+    const Raster cancelled = stroke.ImageForWork(CancelToken({}, stop.get_token()), Observer(observer));
     std::snprintf(label, sizeof(label), "%s.stop-observed-before-publication", prefix);
     Expect(observer.hits == stopAt && stop.stop_requested(), label);
     std::snprintf(label, sizeof(label), "%s.partial-and-stale-image-are-unpublished", prefix);
@@ -192,7 +192,7 @@ void CancelTileSnapshot(WarpStroke::WorkStage stage, std::size_t stopAt, const c
     std::stop_source stop;
     StopAtStage observer{&stop, stage, 0, stopAt};
     const std::vector<RasterTile> cancelled =
-        stroke.TakeChangedTilesForWork(CancelToken{{}, stop.get_token()}, Observer(observer));
+        stroke.TakeChangedTilesForWork(CancelToken({}, stop.get_token()), Observer(observer));
 
     std::snprintf(label, sizeof(label), "%s.stop-observed-before-publication", prefix);
     Expect(appended && observer.hits == stopAt && stop.stop_requested(), label);
@@ -213,7 +213,7 @@ void PreCancelledSnapshotRefusal()
         std::stop_source& selected = shutdown ? shutdownStop : localStop;
         static_cast<void>(selected.request_stop());
         const CancelToken token =
-            shutdown ? CancelToken{{}, shutdownStop.get_token()} : CancelToken{localStop.get_token(), {}};
+            shutdown ? CancelToken({}, shutdownStop.get_token()) : CancelToken(localStop.get_token(), {});
         const char* kind = shutdown ? "shutdown" : "local";
 
         WarpStroke imageStroke = NewStroke(source);

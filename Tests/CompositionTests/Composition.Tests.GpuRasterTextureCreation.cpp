@@ -1,8 +1,8 @@
 #include "Composition.Tests.GpuRasterTextureCreation.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/RasterUploadLayout.h"
-#include "../../RedPrism/GpuRasterTextureCreation.h"
+#include "Common/Document.h"
+#include "Common/RasterUploadLayout.h"
+#include "RedPrism/GpuRasterTextureCreation.h"
 
 #include <array>
 #include <cstddef>

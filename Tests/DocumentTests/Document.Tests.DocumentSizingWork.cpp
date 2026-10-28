@@ -1,9 +1,9 @@
 #include "Document.Tests.DocumentSizingWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasSize.h"
 #include "PixelBuffer.h"
 #include "RasterWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
@@ -160,6 +160,10 @@ int Application::RunLayerOpacityHostSelfTest() noexcept
         Target,
         View
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -173,6 +177,8 @@ int Application::RunLayerOpacityHostSelfTest() noexcept
         bool held = false;
         bool responsive = false;
     };
+#pragma warning(pop)
+
     const auto pump = [](void* opaque, void* native) noexcept
     {
         auto& state = *static_cast<State*>(opaque);

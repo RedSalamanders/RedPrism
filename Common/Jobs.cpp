@@ -45,6 +45,8 @@ WorkPriority Priority(JobClass kind) noexcept
     case JobClass::Commit:
     case JobClass::Io:
         return WorkPriority::Normal;
+    case ::JobClass::Background:
+    case ::JobClass::Count:
     default:
         return WorkPriority::Background;
     }
@@ -59,6 +61,10 @@ bool Serial(JobClass kind) noexcept
 // Windows interlocked SLIST requires this alignment on both its head and every intrusive entry.
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct JobScheduler::Impl final
 {
     enum class State
@@ -79,6 +85,10 @@ struct JobScheduler::Impl final
         bool final = false;
     };
     static_assert(offsetof(Node, link) == 0);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Record final
     {
         // State, sequence and slot reuse are protected by Impl::lock. The payload/options/cancel source are
@@ -104,6 +114,7 @@ struct JobScheduler::Impl final
         unsigned int publishedPercent = 0;
         std::uint64_t publishedAt = 0;
     };
+#pragma warning(pop)
 
     Impl()
     {
@@ -558,12 +569,18 @@ struct JobScheduler::Impl final
     {
         if (!executionObserver.cancellationObserved)
             return record.job->Run(execution);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
         struct FirstCheck final
         {
             Impl& scheduler;
             const JobExecutionNotice& identity;
             std::atomic<bool> reported{false};
-        } first{*this, identity};
+        }
+#pragma warning(pop)
+        first{*this, identity};
         static_assert(std::atomic<bool>::is_always_lock_free);
         const CancellationObservation::Scope scope{{[](void* context) noexcept
                                                     {
@@ -595,13 +612,9 @@ struct JobScheduler::Impl final
                                               ? &observation
                                               : nullptr))
         {
-            JobContext execution{self.workers,
-                                 record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
-                                 self.shutdown.get(),
-                                 Report,
-                                 record,
-                                 record->reserved,
-                                 record->options.deferredRetirement};
+            JobContext execution(self.workers, record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
+                                 self.shutdown.get(), Report, record, record->reserved,
+                                 record->options.deferredRetirement);
             JobResult result{JobStatus::Cancelled};
             if (!execution.cancellation.IsCancelled())
             {
@@ -710,6 +723,8 @@ struct JobScheduler::Impl final
         WakeQueued();
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 JobScheduler::JobScheduler() noexcept = default;
@@ -1543,12 +1558,18 @@ void JobScheduler::Close(CloseHooks hooks) noexcept
     self.memoryWaits.Close();
     self.lowMemory.reset();
     self.highMemory.reset();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct CloseState final
     {
         JobScheduler& owner;
         Impl& scheduler;
         CloseHooks hooks;
-    } closeState{*this, self, hooks};
+    }
+#pragma warning(pop)
+    closeState{*this, self, hooks};
     // Recorder callbacks borrow the same records and general executor. Join them before general-pool
     // teardown, job-wrapper destruction, owner cleanup and final worker graph retirement.
     if (self.recorders)

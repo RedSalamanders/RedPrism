@@ -35,6 +35,10 @@ struct Checks final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct JobState final
 {
     explicit JobState(JobScheduler& owner) noexcept : scheduler(owner) {}
@@ -47,7 +51,12 @@ struct JobState final
     bool terminal = false;
     JobResult result{};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ProbeJob final : public Job
 {
   public:
@@ -96,6 +105,7 @@ class ProbeJob final : public Job
     bool _block;
     bool _throwBadAlloc;
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Until(JobScheduler& scheduler, Predicate ready) noexcept
 {
@@ -132,6 +142,10 @@ JobOptions RecordingOptions() noexcept
     return options;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SerialState final
 {
     explicit SerialState(JobScheduler& owner) noexcept
@@ -152,7 +166,12 @@ struct SerialState final
     unsigned int retirementHooks = 0;
     JobTicket predecessorTicket{};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class DeferredSerialJob final : public Job
 {
   public:
@@ -191,7 +210,12 @@ class DeferredSerialJob final : public Job
   private:
     SerialState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SerialSuccessorJob final : public Job
 {
   public:
@@ -213,6 +237,7 @@ class SerialSuccessorJob final : public Job
   private:
     SerialState& _state;
 };
+#pragma warning(pop)
 
 void RunSerialRetirementCase(Checks& checks)
 {

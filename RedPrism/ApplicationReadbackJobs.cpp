@@ -75,6 +75,10 @@ int Application::RunUtilityReadbackSelfTest() noexcept
         ProbeStale,
         NoPlan
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -83,6 +87,8 @@ int Application::RunUtilityReadbackSelfTest() noexcept
         bool visited = false, held = false, cancelPending = false;
         HRESULT rebound = E_PENDING;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -354,11 +360,17 @@ int Application::RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept
         const auto undo = owner->_session.history.UndoCount();
         owner->_utilityWorkTestGate = gate;
         const auto receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandMergeDown});
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
             bool reached = false;
-        } state{*owner};
+        }
+#pragma warning(pop)
+        state{*owner};
         const auto dispatch = [](void* opaque, void* native) noexcept
         {
             auto& current = *static_cast<State*>(opaque);
@@ -402,6 +414,10 @@ int Application::RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept
         };
         if (close)
         {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct ShutdownState final
             {
                 Application& owner;
@@ -410,7 +426,9 @@ int Application::RunStandaloneMergeReadbackSelfTest(HINSTANCE instance) noexcept
                 Guid revision;
                 int undo;
                 bool unchanged = false;
-            } observed{*owner, root, generation, revision, undo};
+            }
+#pragma warning(pop)
+            observed{*owner, root, generation, revision, undo};
             ApplicationShutdownTestProbe probe;
             probe.checkContext = &observed;
             probe.checkOwner = [](void* opaque) noexcept

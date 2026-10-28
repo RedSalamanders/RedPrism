@@ -1,5 +1,5 @@
 #include "Document.Tests.LassoConditionalInput.h"
-#include "../../RedPrism/HostLassoInput.h"
+#include "RedPrism/HostLassoInput.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -71,6 +71,10 @@ int RunLassoConditionalInputTests()
 {
     gAssertions = 0;
     gFailures = 0;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Fixture final
     {
         HostLassoInput replay;
@@ -79,6 +83,8 @@ int RunLassoConditionalInputTests()
         HostLassoInput doubleClick;
         HostLassoInput overflow;
     };
+#pragma warning(pop)
+
     const auto fixture = std::make_unique<Fixture>();
     const auto polygonContext = Context(LassoKind::Polygonal);
     auto& replay = fixture->replay;

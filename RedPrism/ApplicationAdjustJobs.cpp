@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Adjust.h"
 #include "ChromeHost.h"
@@ -92,6 +92,10 @@ std::optional<ColorDisplayPreviewMemory> ColorLookupMemory(const DocumentSession
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ColorPreviewPayload final : DeferredReleaseNode
 {
     std::optional<ColorDisplayPreviewInput> input;
@@ -119,6 +123,8 @@ struct ColorPreviewPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireColorPreviewPayload final
 {
     void operator()(ColorPreviewPayload* value) const noexcept
@@ -131,6 +137,10 @@ struct RetireColorPreviewPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ColorPreviewJob final : public Job
 {
   public:
@@ -307,6 +317,7 @@ class Application::ColorPreviewJob final : public Job
     std::unique_ptr<ColorPreviewPayload, RetireColorPreviewPayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 namespace
 {
@@ -346,6 +357,10 @@ struct RetireColorHistogramPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ColorHistogramJob final : public Job
 {
   public:
@@ -464,6 +479,12 @@ class Application::ColorHistogramJob final : public Job
     std::unique_ptr<ColorHistogramPayload, RetireColorHistogramPayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Application::ColorFailureAction final : public UiAction
 {
   public:
@@ -486,6 +507,7 @@ class Application::ColorFailureAction final : public UiAction
     std::uint64_t _serial;
     std::uint64_t _opening;
 };
+#pragma warning(pop)
 
 void Application::QueueColorFailure() noexcept
 {

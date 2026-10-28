@@ -42,6 +42,10 @@ bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Rig final
 {
   public:
@@ -90,6 +94,7 @@ class Rig final
   private:
     bool _closed = false;
 };
+#pragma warning(pop)
 
 constexpr unsigned int kWidth = 3;
 constexpr unsigned int kHeight = 2;

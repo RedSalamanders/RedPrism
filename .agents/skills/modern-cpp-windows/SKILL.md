@@ -5,7 +5,7 @@ description: Apply RedPrism modern C++ ownership, error-handling, warnings, Unic
 
 # Modern C++ for Windows
 
-- Compile as Unicode `stdcpplatest` with `/W4`, `/permissive-`, SDL checks, and warnings as errors.
+- Compile as Unicode `stdcpplatest` with `/Wall`, `/permissive-`, SDL checks, /WX disabled, and zero-warning build validation.
 - Prefer value types and deterministic RAII. Use `wil::com_ptr_nothrow<T>` for COM in HRESULT code, WIL unique
   wrappers for Windows resources, and standard smart pointers for heap ownership.
 - Delete copying for unique resource owners. Make cleanup idempotent so partial initialization remains safe.

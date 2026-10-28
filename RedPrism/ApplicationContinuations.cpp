@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "FileDialogs.h"
@@ -1336,8 +1336,8 @@ void Application::RunHostContinuation() noexcept
                                       : _hostWriteFormat == HostWriteFormat::Jpeg        ? IDS_ERROR_EXPORT_JPEG
                                                                                          : IDS_ERROR_EXPORT_PNG;
                 ++_errorsShown;
-                _lastErrorId = stringId;
-                _prompts->PostNotice(_window.get(), kNoticeMessage, stringId);
+                _lastErrorId = static_cast<UINT>(stringId);
+                _prompts->PostNotice(_window.get(), kNoticeMessage, static_cast<UINT>(stringId));
                 FinishHostContinuation({HostOutcome::Failed, result});
                 return;
             }
@@ -1986,6 +1986,10 @@ void Application::StopHostContinuations() noexcept
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CountContinuationAction final : public UiAction
 {
   public:
@@ -1998,6 +2002,8 @@ class CountContinuationAction final : public UiAction
   private:
     unsigned int& _count;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int Application::RunHostContinuationSelfTest() noexcept

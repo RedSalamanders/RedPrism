@@ -15,6 +15,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct HueReadbackPayload final : DeferredReleaseNode
 {
     // Retain the original complete reservation after all document/pixel owners and their weak controls.
@@ -31,6 +35,8 @@ struct HueReadbackPayload final : DeferredReleaseNode
         { const std::unique_ptr<HueReadbackPayload> owner(static_cast<HueReadbackPayload*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 struct RetireHueReadback final
 {
@@ -49,6 +55,10 @@ bool AddHueBytes(std::uint64_t& total, std::uint64_t extra) noexcept
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -142,6 +152,7 @@ class Application::HueReadbackHostJob final : public RecordedDocumentReadbackJob
     const std::shared_ptr<ColorWorkTestGate> _gate;
     std::unique_ptr<HueReadbackPayload, RetireHueReadback> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartHueReadbackOwner(std::uint64_t opening) noexcept
 {

@@ -1,9 +1,9 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -19,6 +19,10 @@
 namespace
 {
 // A real UIA client on a fresh MTA. Provider calls are COM-marshalled to the embedded owner's STA.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class LayerRowsStructureObserver final
     : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
                                           IUIAutomationStructureChangedEventHandler, Microsoft::WRL::FtmBase>
@@ -89,6 +93,8 @@ class LayerRowsStructureObserver final
         return S_OK;
     }
 };
+#pragma warning(pop)
+
 } // namespace
 
 int Application::RunStandalonePreparedLayerRowsNotificationSelfTest(HINSTANCE instance) noexcept

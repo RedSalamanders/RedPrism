@@ -1,7 +1,7 @@
 #include "Host.Tests.JobSuspendedRetirement.h"
 
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
 
 #include <atomic>
 #include <combaseapi.h>
@@ -61,6 +61,10 @@ bool SampleMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     JobScheduler* scheduler = nullptr;
@@ -88,9 +92,14 @@ struct Probe final
     std::atomic<bool> finalWorkerEntered{false};
     std::atomic<bool> payloadInFinalWorker{false};
 };
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 struct CpuPayload final : DeferredReleaseNode
 {
     Probe& probe;
@@ -127,6 +136,8 @@ struct CpuPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetirePayload final
 {
     void operator()(CpuPayload* payload) const noexcept
@@ -138,6 +149,10 @@ struct RetirePayload final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct SuspendedState final
 {
     Probe& probe;
@@ -145,7 +160,12 @@ struct SuspendedState final
     HANDLE release = nullptr;
     HANDLE deferred = nullptr;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class SuspendedPayloadJob final : public Job
 {
   public:
@@ -197,7 +217,12 @@ class SuspendedPayloadJob final : public Job
     SuspendedState& _state;
     std::unique_ptr<CpuPayload, RetirePayload> _payload;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CloseGateJob final : public Job
 {
   public:
@@ -221,6 +246,7 @@ class CloseGateJob final : public Job
     Probe& _probe;
     HANDLE _entered;
 };
+#pragma warning(pop)
 
 void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
 {
@@ -324,6 +350,10 @@ void TestSuspendedPayloadRetiresDuringClose()
            "suspended-repeated-close-does-not-retire-again");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class CancelledAtStopJob final : public Job
 {
   public:
@@ -361,6 +391,7 @@ class CancelledAtStopJob final : public Job
     HANDLE _entered;
     HANDLE _release;
 };
+#pragma warning(pop)
 
 void TestPrequeuedReleaseDrainsAfterStopAndCancellation()
 {

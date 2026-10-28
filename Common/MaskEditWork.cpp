@@ -162,8 +162,8 @@ MaskEditResult DocumentSession::PrepareMaskEditPublication(MaskEditInput input, 
                     const auto index = static_cast<std::size_t>(y) * width + x;
                     bytes.Data()[index] =
                         selected ? input._revealing ? static_cast<std::uint8_t>(255 - inside[index]) : inside[index]
-                        : input._revealing ? 255
-                                           : 0;
+                        : input._revealing ? std::uint8_t{255}
+                                           : std::uint8_t{0};
                 }
             }
             return true;

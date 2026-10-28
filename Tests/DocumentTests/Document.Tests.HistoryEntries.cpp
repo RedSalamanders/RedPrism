@@ -27,10 +27,15 @@ void Expect(bool condition, const char* name) noexcept
         ++gFailures;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CopyCounter final
 {
     std::atomic<std::size_t> copies{};
 };
+#pragma warning(pop)
 
 struct Handle final
 {
@@ -427,7 +432,7 @@ void TestRootOwnsHandleWitness()
     {
         auto lifetime = std::make_shared<int>(73);
         witness = lifetime;
-        entries.push_back(Handle{counter, 73, std::move(lifetime)});
+        entries.push_back(Handle(counter, 73, std::move(lifetime)));
     }
     Entries captured = entries;
     entries.clear();
@@ -545,7 +550,7 @@ void FillRefusalEntries(RefusalState& state, RefusalEntries& entries, std::weak_
     {
         auto witness = std::make_shared<int>(values[index]);
         witnesses[index] = witness;
-        entries.push_back(RefusingHandle{state, values[index], std::move(witness)});
+        entries.push_back(RefusingHandle(state, values[index], std::move(witness)));
     }
     state.copyAttempts = 0;
     state.successfulCopies = 0;
@@ -592,7 +597,7 @@ void TestPushCopyRefusalPreservesRootsAndOwnership()
     bool caughtBadAlloc = false;
     try
     {
-        entries.push_back(RefusingHandle{state, kPushedValue, std::move(incomingWitness)});
+        entries.push_back(RefusingHandle(state, kPushedValue, std::move(incomingWitness)));
     }
     catch (const std::bad_alloc&)
     {

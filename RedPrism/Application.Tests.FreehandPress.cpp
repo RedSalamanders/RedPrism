@@ -1,9 +1,9 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "SelectionOutlineGestureMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -224,7 +224,7 @@ int Application::RunStandaloneFreehandPressSelfTest(HINSTANCE instance) noexcept
             keys[VK_MENU] = physical && mode == SelectionMode::Subtract ? 0x80 : 0;
             KeyboardState::Write(keys);
             scarce = refused;
-            send(WM_LBUTTONDOWN, down, MK_LBUTTON | (keys[VK_SHIFT] ? MK_SHIFT : 0));
+            send(WM_LBUTTONDOWN, down, static_cast<WPARAM>(MK_LBUTTON | (keys[VK_SHIFT] ? MK_SHIFT : 0)));
             const auto* captured = owner->_selectionPressInput.CapturedContext(owner->_selectionPressInput.Opening());
             if (!expect(captured &&
                             captured->tool == (marqueeLoss ? HostSelectionPressInput::Tool::Marquee

@@ -32,6 +32,10 @@ bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 
 void NoopWait(void*) noexcept {}
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct WaitProbe final
 {
     std::array<wil::unique_handle, WaitPool::kCapacity> events;
@@ -99,6 +103,7 @@ struct WaitProbe final
         return removed;
     }
 };
+#pragma warning(pop)
 
 struct DummyOwner final : OwnerWorkPump
 {

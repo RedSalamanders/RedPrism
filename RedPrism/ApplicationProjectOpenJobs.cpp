@@ -9,7 +9,7 @@
 #include "Runtime.Tests.ProjectOpenTestGate.h"
 #include "resource.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -25,6 +25,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ProjectOpenPayload final : DeferredReleaseNode
 {
     std::wstring path;
@@ -52,6 +56,8 @@ struct ProjectOpenPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireProjectOpenPayload final
 {
     void operator()(ProjectOpenPayload* payload) const noexcept
@@ -64,6 +70,10 @@ struct RetireProjectOpenPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ProjectOpenJob final : public Job
 {
   public:
@@ -279,6 +289,7 @@ class Application::ProjectOpenJob final : public Job
     ProjectIoStatus _status = ProjectIoStatus::Invalid;
     int _version = 0;
 };
+#pragma warning(pop)
 
 HRESULT Application::SubmitProjectOpen(HistoryWorkStamp stamp, std::uint64_t generation, std::wstring path,
                                        std::optional<ProjectLoadLimits> limits) noexcept
@@ -421,6 +432,10 @@ int Application::RunProjectOpenSelfTest() noexcept
         LiveOutline,
         LiveOutlineFailure
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -434,6 +449,8 @@ int Application::RunProjectOpenSelfTest() noexcept
         bool held = false;
         bool cancellationPending = false;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);
@@ -802,6 +819,10 @@ int Application::RunProjectOpenSelfTest() noexcept
         CancelSecond,
         ReplaceSecond
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct BatchState final
     {
         Application& owner;
@@ -817,6 +838,8 @@ int Application::RunProjectOpenSelfTest() noexcept
         int noticeVersion = -1;
         bool formattedNotice = false;
     };
+#pragma warning(pop)
+
     const auto batchDispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<BatchState*>(context);

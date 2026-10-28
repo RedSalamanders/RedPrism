@@ -1,7 +1,7 @@
 #include "Document.Tests.LayerIndex.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

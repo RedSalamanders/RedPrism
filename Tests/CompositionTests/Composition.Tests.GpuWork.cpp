@@ -97,6 +97,10 @@ struct CopyState final
     bool copyReturnedAfterShutdown = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class CopyJob final : public Job, public GpuReadbackReceiver
 {
   public:
@@ -199,6 +203,7 @@ class CopyJob final : public Job, public GpuReadbackReceiver
     HRESULT _error = S_OK;
     bool _submitted = false;
 };
+#pragma warning(pop)
 
 void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false, unsigned int busyMaps = 0,
               bool multiplexed = false)
@@ -276,6 +281,10 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
 }
 
 constexpr UINT kReleaseLeases = WM_APP + 0x4a2;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CapacityReceiver final : public GpuReadbackReceiver
 {
   public:
@@ -313,6 +322,7 @@ class CapacityReceiver final : public GpuReadbackReceiver
             Expect(queue.ReleaseMapped(lease), "cap.release-held-mapping");
     }
 };
+#pragma warning(pop)
 
 void DispatchLeaseMessage(void* context, void* nativeMessage) noexcept
 {
@@ -357,6 +367,10 @@ void TestCapacity()
     queue.CloseAfterWorkers();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct ShutdownOwner final
 {
     JobScheduler& scheduler;
@@ -364,6 +378,7 @@ struct ShutdownOwner final
     unsigned int messages = 0;
     bool mappingLentAtShutdown = false;
 };
+#pragma warning(pop)
 
 void DispatchShutdown(void* context, void* nativeMessage) noexcept
 {

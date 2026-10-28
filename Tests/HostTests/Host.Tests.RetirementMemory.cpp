@@ -152,6 +152,10 @@ void DestroyQueuedOnJoinedWorker(DeferredQueue& queue)
     queue.count = 0;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct RetirementState final
 {
     JobScheduler* scheduler = nullptr;
@@ -180,7 +184,12 @@ struct RetirementState final
     bool joinedWasUiCallback = true;
     bool joinedAcknowledgedCallback = true;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class RetirementJob final : public Job
 {
   public:
@@ -250,6 +259,7 @@ class RetirementJob final : public Job
   private:
     RetirementState& _state;
 };
+#pragma warning(pop)
 
 void StartScheduler(JobScheduler& scheduler)
 {
@@ -371,6 +381,10 @@ struct MissingSlotState final
     bool noAcknowledgement = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class MissingSlotJob final : public Job
 {
   public:
@@ -390,6 +404,7 @@ class MissingSlotJob final : public Job
   private:
     MissingSlotState& _state;
 };
+#pragma warning(pop)
 
 void TestMissingDescriptorSlot()
 {
@@ -414,6 +429,10 @@ void TestMissingDescriptorSlot()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5027)
 struct ObserverState final
 {
     JobScheduler& scheduler;
@@ -421,7 +440,12 @@ struct ObserverState final
     SharedRetainedMemoryLease lease;
     std::int32_t result = E_PENDING;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class EndpointObserverJob final : public Job
 {
   public:
@@ -439,6 +463,7 @@ class EndpointObserverJob final : public Job
   private:
     ObserverState& _state;
 };
+#pragma warning(pop)
 
 void TestCloseWhileGated(bool releaseWeakFirst, const char* scenario)
 {

@@ -1,9 +1,9 @@
 #include "Document.Tests.ColorDismissal.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "ColorDismissalWork.h"
 #include "ColorEditWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

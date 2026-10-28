@@ -28,11 +28,16 @@ bool Expect(bool condition, const char* name) noexcept
     return condition;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct AdmissionBlocker final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
 };
+#pragma warning(pop)
 
 class AdmissionBlockerJob final : public Job
 {

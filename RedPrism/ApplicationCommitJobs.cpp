@@ -5,7 +5,7 @@
 #include "Runtime.Tests.ColorWorkTestGate.h"
 #include "resource.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -20,6 +20,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ColorCommitPayload final : DeferredReleaseNode
 {
     std::optional<ColorEditJobInput> input;
@@ -47,6 +51,8 @@ struct ColorCommitPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireColorCommitPayload final
 {
     void operator()(ColorCommitPayload* payload) const noexcept
@@ -62,6 +68,10 @@ struct RetireColorCommitPayload final
 
 // Production OK/write callers enter this engine through the owned continuation source. Admission is Pending;
 // only validated apply/drop releases its shared history barrier and authorizes a dependent action.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ColorCommitJob final : public Job
 {
   public:
@@ -176,6 +186,7 @@ class Application::ColorCommitJob final : public Job
     std::int32_t _captureError = 0;
     std::unique_ptr<ColorCommitPayload, RetireColorCommitPayload> _payload;
 };
+#pragma warning(pop)
 
 Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) noexcept
 {

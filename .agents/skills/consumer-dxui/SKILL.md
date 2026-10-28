@@ -11,7 +11,10 @@ the pin. Do not float onto sibling `main`.
 ## Pin
 
 - Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current candidate: `8e8994079e82f79e6765e6a885c03fc687957591`.
+  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current maintenance candidate: `8006d63b6c77d4df5016da1cd29d8640853bd514`.
+  It repairs warning diagnostics and payload identity under ICF without changing API3. Its six builds and ordinary
+  x64 suites pass; focus and consumer qualification remain explicit gates in the indexed native-policy plan.
+  The predecessor `8e8994079e82f79e6765e6a885c03fc687957591` provides the following historical adoption evidence.
   It fixes internal embedded property-event retention and queues structure delivery with a COM-marshalled STA
   provider proxy, and adds `EmbeddedHost::PrepareInteraction` for explicitly arranged hit geometry without painting.
   All library x64 profiles, three ARM64 cross-builds and paired Release common scenes pass. The managed consumer
@@ -48,7 +51,7 @@ the pin. Do not float onto sibling `main`.
 - Import consumer props/targets and reference `src/DxUi.vcxproj` once. Do not enumerate library `.cpp` files.
 - Match CRT (`/MDd` Debug and ASan Debug, `/MD` Release), toolset, architecture, and headers.
 
-## Facts about the pinned library (read the pinned sources under `.build/dependencies/DxUi/source/<commit>`)
+## Facts about the pinned library (read the pinned sources under `.build/dependencies/DxUi/source/<commit-prefix16>`)
 
 - `Toolbar` is a `Panel`: it lays out nothing. Set every child's bounds in `ChromeHost::Arrange`.
 - `Toggle::Paint` draws a switch even for `ButtonVariant::IconOnly`, and `Toolbar::AddToggleButton` gives that

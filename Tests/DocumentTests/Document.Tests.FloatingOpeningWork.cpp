@@ -1,8 +1,8 @@
 #include "Document.Tests.FloatingOpeningWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "FloatingOpeningWork.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -179,6 +179,10 @@ void NestedOpeningRestoration()
     session.Undo();
     Expect(session.Document().value() == parentOpening, "nested-cancel-parent-undo-restores-parent-opening");
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct FaultState final
 {
     FloatingOpeningStage stage;
@@ -186,6 +190,8 @@ struct FaultState final
     CancelSource& cancel;
     unsigned visits = 0;
 };
+#pragma warning(pop)
+
 void Fault(void* raw, FloatingOpeningStage stage)
 {
     auto& fault = *static_cast<FaultState*>(raw);

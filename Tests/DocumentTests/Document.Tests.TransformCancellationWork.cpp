@@ -1,9 +1,9 @@
 #include "Document.Tests.TransformCancellationWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "FloatingOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformCancellationWork.h"
 
 #include <array>

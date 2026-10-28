@@ -1,11 +1,11 @@
 #include "Document.Tests.SelectionHistoryBoundLifetime.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SelectionMoveWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>
@@ -56,6 +56,10 @@ bool HasLiteral(const std::optional<DocumentSelection>& selection, const std::ar
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session = std::make_unique<DocumentSession>();
@@ -82,6 +86,7 @@ struct Fixture final
                 session->history.CanRedo() && session->history.RedoName() == L"Seed redo";
     }
 };
+#pragma warning(pop)
 
 struct MemoryProbe final
 {
@@ -128,6 +133,10 @@ struct PublicationState final
     bool applied = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class SelectedHistoryJob final : public Job
 {
   public:
@@ -253,6 +262,7 @@ class SelectedHistoryJob final : public Job
     std::optional<PreparedSelectionMoveClosure> _closure;
     bool _started = false;
 };
+#pragma warning(pop)
 
 std::uint64_t SubmitSelectedHistory(JobScheduler& scheduler, DocumentSession& session, PublicationState& state,
                                     Operation operation)

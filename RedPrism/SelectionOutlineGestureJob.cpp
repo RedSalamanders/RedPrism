@@ -16,6 +16,10 @@
 
 // Allocated on the original worker before source capture. Its last owner retires through the original
 // temporary partition; no owner callback allocates or destroys a large prepared geometry/history graph.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct SelectionOutlineDrawing final
 {
     LassoOpeningSettings settings;
@@ -30,6 +34,7 @@ struct SelectionOutlineDrawing final
     std::optional<PreparedLassoFinish> finish;
     bool chosen = false, constrainArmed = false;
 };
+#pragma warning(pop)
 
 namespace
 {
@@ -41,6 +46,10 @@ SelectionPixelFinalWork TakePixelFinalWork(SelectionOutlineGestureState& state,
                                            const std::shared_ptr<SharedPublicationMemory>& temporary,
                                            std::uint64_t remainingBytes)
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626)
     struct ClearSource final
     {
         std::optional<PreparedPixelMoveClosure>& value;
@@ -48,7 +57,9 @@ SelectionPixelFinalWork TakePixelFinalWork(SelectionOutlineGestureState& state,
         {
             value.reset();
         }
-    } clear{closure};
+    }
+#pragma warning(pop)
+    clear{closure};
     // Guaranteed prvalue elision builds one argument. ClearSource preserves the previous protocol:
     // the moved source is disengaged before the factory starts, including a throwing factory.
     return SelectionPixelFinalWork{std::move(closure.value()),

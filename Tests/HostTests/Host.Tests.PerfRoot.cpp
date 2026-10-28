@@ -1,6 +1,6 @@
 #include "Host.Tests.PerfRoot.h"
 
-#include "../../Common/PerfRoot.h"
+#include "Common/PerfRoot.h"
 
 #include <cstdio>
 #include <string>

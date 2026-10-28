@@ -1,12 +1,12 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "PixelMovePreviewWork.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
 #include "Runtime.Tests.LayerRowsTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -322,7 +322,8 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         refuseMemory = test == Case::MemoryRefused;
         SetKeys(true, test == Case::ControlShift, test == Case::Duplicate);
         // Alt is a captured event-time keyboard state, not a WM_MOUSEMOVE/WM_LBUTTONDOWN wParam flag.
-        const WPARAM downModifiers = MK_LBUTTON | MK_CONTROL | (test == Case::ControlShift ? MK_SHIFT : 0);
+        const WPARAM downModifiers =
+            static_cast<WPARAM>(MK_LBUTTON | MK_CONTROL | (test == Case::ControlShift ? MK_SHIFT : 0));
         send(WM_LBUTTONDOWN, {1.5, 1.5}, downModifiers);
         const auto downReceipt = polygonal ? owner->_polygonalPressLastReceipt : owner->_selectionPressReceipt;
         std::optional<HostSelectionPressInput::Context> captured;
@@ -395,7 +396,8 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         if (moved)
         {
             SetKeys(test != Case::LaterModifiers, test == Case::LaterModifiers, test == Case::LaterModifiers);
-            const WPARAM modifiers = MK_LBUTTON | (test == Case::LaterModifiers ? MK_SHIFT : MK_CONTROL);
+            const WPARAM modifiers =
+                static_cast<WPARAM>(MK_LBUTTON | (test == Case::LaterModifiers ? MK_SHIFT : MK_CONTROL));
             send(WM_MOUSEMOVE, {3.5, 2.5}, modifiers);
             if (!expect(pumpUntil([&]() noexcept { return state->moves == 1 && state->waiting; }),
                         "move-is-consumed-by-same-parked-parent"))
@@ -576,6 +578,10 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
 
     scenario = "polygonal-queued-pixel-successor";
     {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
         struct ClosureGate
         {
             wil::unique_handle reached{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -583,7 +589,9 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
             const DWORD ownerThread = GetCurrentThreadId();
             std::atomic<unsigned> visits{0};
             std::atomic<bool> failed{false};
-        } gate;
+        }
+#pragma warning(pop)
+        gate;
         auto joinOnFailure = wil::scope_exit(
             [&]() noexcept
             {
@@ -719,6 +727,10 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
                                            "polygonal-final-slot-cancel",
                                            "polygonal-final-slot-close"};
         scenario = boundaryNames[boundary];
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
         struct FinalGate
         {
             wil::unique_handle reached{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -727,7 +739,9 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
             std::atomic<unsigned> visits{0};
             std::atomic<DWORD> waited{WAIT_FAILED};
             std::atomic<bool> wrongThread{false};
-        } gate;
+        }
+#pragma warning(pop)
+        gate;
         ApplicationProcessingTestProbe finalProbe;
         finalProbe.workerCount = 2;
         bool refuseSourceMemory = false;
@@ -933,13 +947,19 @@ int Application::RunStandaloneCtrlPixelPressSelfTest(HINSTANCE instance) noexcep
         }
         else if (busyResidency)
         {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
             struct BusyGate
             {
                 wil::unique_handle acquired{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
                 wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
                 wil::unique_handle refresh{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
                 std::atomic<bool> ownsLease{false};
-            } busy;
+            }
+#pragma warning(pop)
+            busy;
             if (!busy.acquired || !busy.release || !busy.refresh)
                 return 5;
             std::thread holder(

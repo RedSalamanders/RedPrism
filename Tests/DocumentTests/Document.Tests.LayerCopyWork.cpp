@@ -1,6 +1,6 @@
 #include "Document.Tests.LayerCopyWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Executor.h"
@@ -140,7 +140,7 @@ struct OwnerState final
     std::optional<CanvasDocument> document;
     DocumentHistory::StateView history;
     Guid revision;
-    std::size_t undoCount = 0;
+    int undoCount = 0;
     std::size_t redoCount = 0;
     std::wstring undoName;
     std::wstring redoName;

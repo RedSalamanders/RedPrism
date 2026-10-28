@@ -1,6 +1,6 @@
 #include "Composition.Tests.GpuResidencyBudget.h"
 
-#include "../../RedPrism/GpuResidencyBudget.h"
+#include "RedPrism/GpuResidencyBudget.h"
 
 #include <cstdio>
 #include <limits>

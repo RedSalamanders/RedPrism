@@ -1,5 +1,5 @@
 #include "Document.Tests.RasterEditWork.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "RasterEditWork.h"

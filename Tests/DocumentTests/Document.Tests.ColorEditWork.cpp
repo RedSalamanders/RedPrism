@@ -1,10 +1,10 @@
 #include "Document.Tests.ColorEditWork.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

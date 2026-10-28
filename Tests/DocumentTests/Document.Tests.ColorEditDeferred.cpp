@@ -1,11 +1,11 @@
 #include "Document.Tests.ColorEditDeferred.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "AdjustmentClosureWork.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

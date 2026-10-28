@@ -1,7 +1,7 @@
 #include "Document.Tests.SelectionGestureAbort.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionMoveOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>
@@ -71,6 +71,10 @@ CanvasDocument MakeDocument(Guid& activeLayer, std::optional<Guid>& alternateLay
     return std::move(source).Seal();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session{std::make_unique<DocumentSession>()};
@@ -96,6 +100,7 @@ struct Fixture final
                 session->history.RedoName() == L"Seed redo selection";
     }
 };
+#pragma warning(pop)
 
 using Prepared = std::optional<PreparedSelectionMoveOpening>;
 

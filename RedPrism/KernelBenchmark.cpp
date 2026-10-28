@@ -1,8 +1,8 @@
 #include "KernelBenchmark.h"
 
-#include "../Common/Adjust.h"
-#include "../Common/ImageFilters.h"
-#include "../Common/Kernels.h"
+#include "Common/Adjust.h"
+#include "Common/ImageFilters.h"
+#include "Common/Kernels.h"
 
 #include <algorithm>
 #include <bit>
@@ -424,6 +424,14 @@ template <typename Copy, typename Adopt>
         Adjust::AddNoise(pixels.data(), source.Width(), source.Height(), source.Stride(), 12.0f, false, false,
                          0x12345678u);
         break;
+    case ::FilterKind::ContentAwareFill:
+    case ::FilterKind::Curves:
+    case ::FilterKind::Exposure:
+    case ::FilterKind::GaussianBlur:
+    case ::FilterKind::GradientMap:
+    case ::FilterKind::Grain:
+    case ::FilterKind::LensCorrection:
+    case ::FilterKind::MotionBlur:
     default:
         return {};
     }

@@ -36,6 +36,10 @@ void Expect(const char* name, bool condition) noexcept
         ++failures;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
   public:
@@ -105,6 +109,7 @@ class Client final : public CommittedDisplayClient
         return session.CaptureDocumentReadAuthority().has_value();
     }
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Until(JobScheduler& jobs, OwnerWorkMultiplexer& routes, Predicate predicate) noexcept
 {
@@ -299,11 +304,17 @@ bool Run(D3D_DRIVER_TYPE driver, bool optionalHardware = false)
     display.StopOwner();
     Expect("current-query-stopped-controller-refuses", !display.HasCurrentPublicationOwner());
     queue.StopNotifications();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Closing
     {
         CommittedDisplayController& display;
         GpuWorkQueue& queue;
-    } closing{display, queue};
+    }
+#pragma warning(pop)
+    closing{display, queue};
     jobs.Close({[](void* opaque) noexcept
                 {
                     auto& state = *static_cast<Closing*>(opaque);

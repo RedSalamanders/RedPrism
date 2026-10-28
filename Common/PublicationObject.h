@@ -14,6 +14,10 @@ namespace PublicationObjectDetail
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 template <class T> struct Node final : DeferredReleaseNode
 {
     template <class... Args>
@@ -26,6 +30,8 @@ template <class T> struct Node final : DeferredReleaseNode
     std::shared_ptr<const SharedPublicationMemory> memory;
     T value;
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 template <class T> struct DeferOrDestroy final
@@ -65,7 +71,7 @@ template <class T, class... Args>
     using Node = PublicationObjectDetail::Node<T>;
     PublicationGraphAllocator<Node> allocator{memory};
     auto node = std::make_unique<Node>(std::move(memory), retirementBytes, std::forward<Args>(args)...);
-    std::shared_ptr<Node> owner{node.release(), PublicationObjectDetail::DeferOrDestroy<T>{}, std::move(allocator)};
+    std::shared_ptr<Node> owner(node.release(), PublicationObjectDetail::DeferOrDestroy<T>{}, std::move(allocator));
     auto* value = &owner->value;
     return std::shared_ptr<T>{std::move(owner), value};
 }

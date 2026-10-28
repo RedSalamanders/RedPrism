@@ -1,5 +1,7 @@
 # Active plan index
 
+- **ACTIVE**: [Native build policy, terminal results and short DxUi paths](NativeBuildPolicyCoherence_2026-10-28.md). Shared /Wall without /WX, zero-warning validation, Debug/ASan symbols, Release-only ICF, terminal results and verified short dependency folders.
+
 - **ACTIVE**: [MSVC 14.52 and Release optimization](Msvc1452ReleaseOptimization_2026-10-23.md). Evaluated compiler/linker policy, pinned-archive forwarding, all-profile qualification and retained size/performance comparisons.
 
 Main consolidation on 21 October preserves P1 **HOLD**. The user will restart P1 from the new main after merging;

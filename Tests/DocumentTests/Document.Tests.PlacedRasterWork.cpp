@@ -72,13 +72,6 @@ bool ReadPixelEquals(PlacedRasterReader& reader, int x, int y, const std::array<
     return reader.Read(GridRect{x, y, 1, 1}, actual, 4) && actual == expected;
 }
 
-std::array<std::uint8_t, 4> PixelAt(const Raster& image, int x, int y) noexcept
-{
-    std::array<std::uint8_t, 4> pixel{};
-    image.ReadRegion(x, y, 1, 1, pixel.data(), 4, 0);
-    return pixel;
-}
-
 Raster CoordinateRaster(int width, int height)
 {
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
@@ -265,8 +258,8 @@ void SparseWindowBehavior()
         bool windowsRead = true;
         for (const int x : xs)
         {
-            const std::array<std::uint8_t, 4> expected{static_cast<std::uint8_t>(x), 0,
-                                                       static_cast<std::uint8_t>(x / 2), 255};
+            const std::array<std::uint8_t, 4> expected{
+                {static_cast<std::uint8_t>(x), 0, static_cast<std::uint8_t>(x / 2), 255}};
             windowsRead = windowsRead && ReadPixelEquals(reader, x, 0, expected);
         }
         Expect(windowsRead, "sparse.reads-five-source-windows-through-four-slot-cache");
@@ -296,8 +289,8 @@ void OwnershipCancellationAndRetirement()
         constexpr std::array<int, 4> xs{0, 64, 128, 192};
         for (const int x : xs)
         {
-            const std::array<std::uint8_t, 4> expected{static_cast<std::uint8_t>(x), 0,
-                                                       static_cast<std::uint8_t>(x / 2), 255};
+            const std::array<std::uint8_t, 4> expected{
+                {static_cast<std::uint8_t>(x), 0, static_cast<std::uint8_t>(x / 2), 255}};
             touched = touched && ReadPixelEquals(reader, x, 0, expected);
         }
         const std::uint64_t after = reader.RetirementMemoryBytes();

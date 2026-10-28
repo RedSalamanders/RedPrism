@@ -18,7 +18,7 @@ function Write-RedPrismDxUiProvenance {
     }
     $consumerOutputRoot = Read-RedPrismDxUiResolvedOutputRoot -DependencyRoot $dependencyRoot -Platform $Platform -BuildIdentity $identity
     $archive = Join-Path $consumerOutputRoot "$Platform/$Configuration/DxUi.lib"
-    $source = Join-Path $dependencyRoot "source/$($pin.commit)"
+    $source = Join-Path $dependencyRoot "source/$($pin.commit.Substring(0,16))"
     & (Join-Path $source 'Tools/validate_consumer.ps1') -DxUiRoot $source -LockFile (Join-Path $RepoRoot 'Dependencies/DxUi.lock.json')
     $output = Join-Path $RepoRoot ".build/$Platform/$Configuration"
     $tlog = Join-Path $RepoRoot ".build/Intermediate/$Platform/$Configuration/RedPrism/RedPrism.tlog/link.command.1.tlog"

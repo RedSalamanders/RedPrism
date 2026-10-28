@@ -20,6 +20,10 @@ void Expect(bool value, const char* name) noexcept
     failures += value ? 0u : 1u;
 }
 struct Rig;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ArenaJob final : public Job
 {
   public:
@@ -31,6 +35,12 @@ class ArenaJob final : public Job
   private:
     Rig& _rig;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final : SelectionOutlineDisplayClient, LassoDraftDisplayClient
 {
     static constexpr std::uint64_t sourceBytes = 4ull * 1024 * 1024;
@@ -200,6 +210,8 @@ struct Rig final : SelectionOutlineDisplayClient, LassoDraftDisplayClient
             std::terminate();
     }
 };
+#pragma warning(pop)
+
 JobResult ArenaJob::Run(JobContext& context)
 {
     if (context.reservedMemoryBytes != Rig::sourceBytes || !context.deferredRetirement)

@@ -1,8 +1,8 @@
 #include "Document.Tests.SelectionOutlineRaster.h"
 
-#include "../../Common/Executor.h"
-#include "../../Common/SelectionOutlineRasterWork.h"
-#include "../../Common/SharedPublicationMemory.h"
+#include "Common/Executor.h"
+#include "Common/SelectionOutlineRasterWork.h"
+#include "Common/SharedPublicationMemory.h"
 
 #include <objbase.h>
 
@@ -106,7 +106,7 @@ struct LifetimeMarkerDeleter final
     const auto& key = raster.Key();
     return bytes.size() == static_cast<std::size_t>(key.width) * key.height && x < key.width && y < key.height
                ? bytes[static_cast<std::size_t>(y) * key.width + x]
-               : 0;
+               : std::uint8_t{0};
 }
 
 [[nodiscard]] bool PrepareRectangle(Raster& output, Grid grid = BaseGrid())
