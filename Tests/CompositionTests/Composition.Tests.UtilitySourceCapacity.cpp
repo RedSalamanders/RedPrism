@@ -1,4 +1,5 @@
 #include "Composition.Tests.UtilitySourceCapacity.h"
+#include "../Support/Support.Tests.Capacity.h"
 
 #include "GpuCommandPump.h"
 #include "OwnerWorkMultiplexer.h"
@@ -641,7 +642,7 @@ int RunUtilitySourceCapacityTests()
 {
     gFailures = 0;
     static_assert(GpuCommandPump::kCapacity == 2);
-    const volatile std::size_t observedCapacity = GpuCommandPump::kCapacity;
+    const std::size_t observedCapacity = RedPrismTestCapacity::Observe(GpuCommandPump::kCapacity);
     Expect(observedCapacity == 2, "literal-source-capacity-is-two");
     RunCapacityFixture();
     return gFailures;

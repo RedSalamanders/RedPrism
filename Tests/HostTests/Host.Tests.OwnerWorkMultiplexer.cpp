@@ -1,4 +1,5 @@
 #include "Host.Tests.OwnerWorkMultiplexer.h"
+#include "../Support/Support.Tests.Capacity.h"
 
 #include "OwnerWorkMultiplexer.h"
 
@@ -75,7 +76,7 @@ int RunOwnerWorkMultiplexerTests()
     OwnerWorkMultiplexer mux;
     Expect(!mux.HasPending() && !mux.HasReady(), "owner-work.empty-inactive");
     static_assert(OwnerWorkMultiplexer::kCapacity == 11);
-    const volatile std::size_t observedCapacity = OwnerWorkMultiplexer::kCapacity;
+    const std::size_t observedCapacity = RedPrismTestCapacity::Observe(OwnerWorkMultiplexer::kCapacity);
     Expect(observedCapacity == 11, "owner-work.literal-eleven-leaf-capacity");
     mux.Pump();
 

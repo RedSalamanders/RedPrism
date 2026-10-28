@@ -1,4 +1,5 @@
 #include "Composition.Tests.UtilityOwnerService.h"
+#include "../Support/Support.Tests.Capacity.h"
 
 #include "OwnerWorkMultiplexer.h"
 #include "UtilityReadbackOwnerService.h"
@@ -199,7 +200,7 @@ int RunUtilityOwnerServiceRoutingTests()
 {
     g_failures = 0;
     static_assert(JobScheduler::kCapacity == 128);
-    const volatile std::size_t observedCapacity = JobScheduler::kCapacity;
+    const std::size_t observedCapacity = RedPrismTestCapacity::Observe(JobScheduler::kCapacity);
     Expect(observedCapacity == 128, "literal-original-record-capacity-is-128");
 
     // The fixed-capacity fixture is heap-backed; only the small router handles live on this stack.

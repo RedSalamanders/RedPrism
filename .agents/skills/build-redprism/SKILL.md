@@ -43,7 +43,7 @@ When diagnosing a failure:
 
 1. For dependency failures, run `vcpkg-install.ps1` for the exact platform.
 2. Re-run `build.ps1` with the failing configuration and platform.
-3. Fix the first project-code diagnostic; warnings are errors.
+3. Fix every project-code diagnostic; `/WX` stays disabled and build validation requires zero warnings.
 4. Run `test.ps1` after a successful host-architecture build. ARM64 runtime tests require a native ARM64 host.
 5. Build Debug, Release, and ASan Debug when changing project properties. ASan Debug tests must produce a real
    AddressSanitizer diagnostic from the isolated probe.

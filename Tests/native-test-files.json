@@ -894,6 +894,7 @@
   "Tests/IoTests/IO.Tests.Runner.cpp",
   "Tests/Runtime.Tests.ClipboardMergedBudget.cpp",
   "Tests/Runtime.Tests.ClipboardMergedBudget.h",
+  "Tests/Support/Support.Tests.Capacity.h",
   "Tests/Support/Support.Tests.DocumentFixture.h",
   "Tests/Support/Support.Tests.FailureReports.h",
   "Tests/Support/Support.Tests.HistoryWorkFixture.h",

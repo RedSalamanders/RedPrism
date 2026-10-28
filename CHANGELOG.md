@@ -4,6 +4,8 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Clarify build and WIL guidance: `/WX` remains disabled while the build gate requires zero warnings, with narrowly scoped external include annotations.
+- Keep intentional worker page touches and runtime capacity observations under narrow ARM64 C4746 diagnostic scopes, preserving the volatile model, capacity assertions and synchronization behavior. Retain the failed clean-build evidence and require a fresh native matrix.
 - Occupy the private raster storage base's ARM64 tail padding to address MSVC C5291 without suppressing the diagnostic. Preserve x64 layout and charged lifetime accounting, check the derived size at compile time, and verify charged pixels after source and caller lifetime release.
 - Advance the API3 maintenance lock to the test-only leased-foreground followup after six upstream builds and all three zero-skip desktop profiles pass. Preserve matching public headers/library and requalify the consumer through normal restore and build entrypoints.
 - Restore the previous CRT allocation hook with a documented statement-local annotation for the CRT-erased noexcept type; preserve the allocation-failure test behavior.

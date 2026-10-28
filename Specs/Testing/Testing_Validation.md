@@ -9,6 +9,14 @@ Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
 before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
+Runtime capacity controls keep their literal static assertions and observable reads through
+`Tests/Support/Support.Tests.Capacity.h`. Its noinline helper confines ARM64 C4746 annotations to an intentional
+private volatile read; it does not alter the target volatile model or provide synchronization. The worker arena's
+page-prefault annotation is similarly definition-local. Native zero-warning builds must still detect every
+unreviewed C4746 outside those scopes. `Document.Tests.CropLifetime.cpp` additionally checks charged metadata,
+pixel preservation after source/caller release and final lifetime release; the private charged storage size is
+checked at compile time on both target architectures.
+
 ### Skill package and example integrity
 
 Skill metadata grammar and package usability are separate checks. `Build/SkillPackageIntegrity.psm1` checks

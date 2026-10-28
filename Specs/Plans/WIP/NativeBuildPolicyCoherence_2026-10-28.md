@@ -51,3 +51,10 @@ new header with zero warnings on ARM64 and x64 using x64-hosted MSVC 14.52.37025
 `E:/RedPrism.Perf/build-policy-arm64-layout-proof-20261028/`. A static assertion checks the charged object-size
 increment, and the crop lifetime test checks retained pixels after source/caller release. Full native builds and
 runtime qualification on the final product source remain required; no native ARM64 runtime execution is claimed.
+
+The subsequent fresh ARM64 Debug rebuild found intentional page-touch/capacity C4746 observations and later
+C2471/C1907 compiler PDB write errors. This failed/interrupted result is preserved, with no attributed cause.
+Definition-local ARM64 annotations retain page-touch semantics and shared test capacity observations. A second
+four-way compiler control reproduces the original ARM64 notices and compiles the scoped version with zero
+warnings on ARM64/x64 (`E:/RedPrism.Perf/build-policy-arm64-volatile-proof-20261028/`). The normal build entrypoint
+will clean/rebuild ARM64 Debug with bounded parallelism before the remaining profiles and Full runtime gates.
