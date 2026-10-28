@@ -890,3 +890,24 @@ Hosted setup waits for the hidden, owned GUI bootstrapper with both its --wait s
 The hosted action exports MSBUILD_EXE_PATH through GITHUB_ENV from the exact installation it verified, preferring its native 64-bit MSBuild and requiring the chosen executable to exist. Build and restore therefore consume that verified toolchain ahead of the runner's older environment or PATH entries. Local -VerifyOnly does not publish or change compiler selection. The regression applies the exported value to the actual product discovery function and retains the older-ambient counterfactual; rejecting MSVC 14.51 remains required.
 
 The [native policy, console and dependency-path contract](Build_ConsoleAndPaths.md) owns /Wall without /WX, zero-warning acceptance, Debug/ASan symbols, Release-only ICF, common terminal results and verified short dependency folders.
+
+## Repository skill validation
+
+`validate-skills.ps1` uses the local `Build/SkillValidation.psm1` on PowerShell 7. No Python,
+pip package, external YAML module or developer Codex installation is required. The routine CI tooling
+job runs the same validator and behavioral fixtures once; native jobs retain their independent coverage.
+
+The supported front matter is an explicit YAML subset: exact top-level keys `name`, `description`,
+`license`, `allowed-tools` and `metadata`; plain, single-quoted or JSON-compatible double-quoted scalars;
+two-space-indented literal (`|`) and folded (`>`) block scalars with optional `-`/`+` chomping; comments;
+and a one-level, two-space-indented scalar mapping for `metadata`. Duplicate keys, flow collections,
+tags, anchors, aliases, arbitrary nesting and unsupported syntax fail validation. Required strings retain
+YAML 1.1 scalar-type rejection, exact folder/name identity, 64/1024-character limits and nonempty
+instructions. Description TODO placeholders and standalone body TODO placeholders outside Markdown
+backtick/tilde fences fail. This is a deliberate restricted grammar, not general YAML compatibility.
+
+`Tests/BuildProcessTests/SkillValidation.Tests.ps1` covers valid and malformed metadata, Unicode,
+CRLF, multiline values, boundaries, fenced examples and aggregate failures. Its parser fixtures run in
+memory and its small aggregate fixtures stay under repository `.build`. Python is not discovered or
+included in tooling receipt identity. Historical measurement scripts remain reproduction artifacts;
+manual source generators and upstream dependency tools retain their separate prerequisites.

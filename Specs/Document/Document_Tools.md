@@ -18,6 +18,10 @@ transform is the composition's job ([`Rendering_Composition.md`](../Rendering/Re
 that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). Since C9 it also owns the
 selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels.
 
+Ported command guards use the current `DocumentSession` eligibility and pending-edit rules in this contract,
+including color, transform, brush and warp state. An old porting note describing absent modal state cannot waive
+those rules; preserve each existing edit's documented commit, cancellation and lifetime behavior.
+
 ## Asynchronous tool ordering foundations
 
 `Common/PreviewMailbox.h`, `ContinuationQueue.h` and `HistoryWork.h` specify UI-owned state machines. Their actual

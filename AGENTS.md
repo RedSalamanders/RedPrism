@@ -10,6 +10,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Windows 11 SDK 10.0.26100
 - MSVC `stdcpplatest`, Unicode Win32 APIs
 - Debug, Release, and ASan Debug on x64 and ARM64, including real sanitizer instrumentation
+- PowerShell 7 for repository tooling and skill validation; no Python is required for routine validation.
 - Git for the pinned vcpkg bootstrap
 - Package manager: vcpkg (`vcpkg.json` + `vcpkg-tool.json`)
 - Graphics: Direct3D 11, DXGI, DirectWrite, DxUi (from C2). No GDI text. No chrome HWND over the swap chain.

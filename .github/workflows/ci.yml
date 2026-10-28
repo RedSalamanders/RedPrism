@@ -45,9 +45,6 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           platform: x64
-      - name: Install pinned validation dependencies
-        shell: pwsh
-        run: py -3 -m pip install -r Build/requirements-validation.txt
       - name: Independent tooling
         shell: pwsh
         run: ./validate.ps1

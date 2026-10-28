@@ -1,37 +1,20 @@
 ---
 name: consumer-dxui
-description: Add or update the pinned DxUi dependency, MSBuild imports, RedPrism theme or host adapters, and chrome built from DxUi controls. Use from C2 onward for ChromeHost work and pin bumps; not for composition canvas work.
+description: Add or update the pinned DxUi dependency, MSBuild imports, RedPrism theme or host adapters, and chrome built from DxUi controls. Use for ChromeHost work and pin bumps; not for composition canvas work.
 ---
 
 # DxUi consumer integration
 
-Read `Specs/Core/Core_DxUiIntegration.md` and `Specs/UI/UI_ApplicationChrome.md` before touching `ChromeHost` or
-the pin. Do not float onto sibling `main`.
+Read the [consumer contract](../../../Specs/Core/Core_DxUiIntegration.md) and
+[application chrome contract](../../../Specs/UI/UI_ApplicationChrome.md) before touching `ChromeHost` or the pin.
+Use `Dependencies/DxUi.lock.json` for current identity and the consumer contract's evidence links for qualification
+and rollback history. A skill is not a pin manifest or a successful test receipt. Do not float onto sibling `main`.
 
 ## Pin
 
-- Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current maintenance candidate: `8006d63b6c77d4df5016da1cd29d8640853bd514`.
-  It repairs warning diagnostics and payload identity under ICF without changing API3. Its six builds and ordinary
-  x64 suites pass; focus and consumer qualification remain explicit gates in the indexed native-policy plan.
-  The predecessor `8e8994079e82f79e6765e6a885c03fc687957591` provides the following historical adoption evidence.
-  It fixes internal embedded property-event retention and queues structure delivery with a COM-marshalled STA
-  provider proxy, and adds `EmbeddedHost::PrepareInteraction` for explicitly arranged hit geometry without painting.
-  All library x64 profiles, three ARM64 cross-builds and paired Release common scenes pass. The managed consumer
-  repair passes full x64 Debug/Release/real ASan, three ARM64 cross-builds and Release analysis; fresh hardware/WARP
-  largest-row diagnostics retain all initial/rename costs. Full frame, group/multiselect and external-client G1 remain due. Production
-  prepared rows remain disabled. The property-only predecessor `36c0ff66bd7574038ed2e255f79847a81bf054c7`
-  passed its library matrix but blocked the real consumer notification inline on the owner. The earlier library commit
-  `5f1ccdb6b5decde9f8ef6137e8b646dba51555c4` has the same public interface but retains old epochs through event providers.
-  The earlier interface rollback is `271bd54be24eadf3f03ba5221d1be7be069860f2`, also API revision 3. The qualified commit adds
-  optional prepared Tree accessibility capture without changing the numeric API revision; rebuild both DxUi and the
-  consumer against matching headers/library. Functional qualification does not activate production prepared rows:
-  they remain disabled pending complete admission/first-display and measured G1. The qualification receipt is
-  `Specs/TestRuns/P1LayerRowsCosts_2026-10-06.md`. `restore-dxui.ps1` names the revision this code is written against in one constant.
-  Rolling back to `271bd54be24eadf3f03ba5221d1be7be069860f2` keeps `$requiredApiRevision` at 3 but requires reverting
-  the consumer adapter too: remove the optional prepared-source include/override and wrapper interface implementation,
-  restore the preceding full-prepare input boundary instead of calling the absent `PrepareInteraction`, then rebuild
-  against the rollback headers and library.
+- Lock `Dependencies/DxUi.lock.json` to the reviewed repository, exact commit, API revision and targets required by
+  the consumer contract. A rollback must also restore the matching consumer adapter. Rebuild DxUi and RedPrism
+  from matching headers and library even when the numeric API revision is unchanged.
 - Call or import only what the pinned `capabilities.json` lists under `consumerInterface` (scripts, module functions with their
   parameters, MSBuild files, the header root); `restore-dxui.ps1` imports `Tools/ConsumerBuild.psm1` and
   `Tools/ConsumerUpdate.psm1`. Revision 3 renamed the model and delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel`
@@ -47,7 +30,8 @@ the pin. Do not float onto sibling `main`.
   `Measurements/`, `docs/gallery` or `Specs/`; `Build/DxUiRestore.psm1`): read the library's headers and sources in the
   pinned checkout and its specifications in the DxUi repository.
 - Bump the pin only after the library commit is green under DxUi `test.ps1`; then requalify RedPrism with
-  `test.ps1` in Debug, Release and ASan Debug and update `Core_DxUiIntegration.md` and this file.
+  `test.ps1` in Debug, Release and ASan Debug and update the consumer contract/evidence. Edit this skill only when
+  the integration workflow changes, not to duplicate a new commit hash or passing matrix.
 - Import consumer props/targets and reference `src/DxUi.vcxproj` once. Do not enumerate library `.cpp` files.
 - Match CRT (`/MDd` Debug and ASan Debug, `/MD` Release), toolset, architecture, and headers.
 
