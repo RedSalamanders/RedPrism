@@ -15,11 +15,12 @@ Five repositories implement the same policy without implicitly advancing DxUi pi
 - [x] Preserve the pre-change effective-profile audit and isolate changes from concurrent tooling work.
 - [x] Restore RedTilde ARM64 through its normal entrypoint and pass the required policy/lease checks.
 - [x] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
-- [x] Unify green zero-warning build results, diagnostic/log links and opt-in terminal executable hyperlinks, preserving plain text and existing build/run semantics.
+- [x] Unify green zero-warning build results, diagnostic/log links and automatic terminal executable hyperlinks where supported, preserving plain text and existing build/run semantics.
 - [x] Shorten source-commit and output-fingerprint folders to 16 hex characters with full identity validation and collision refusal; retain existing data without cleanup.
 - [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
 - [x] Publish zero-warning guidance and normative build/path/terminal contracts, with meaningful tooling tests.
-- [ ] Execute affected tests, evaluated profiles, required native builds and applicable runtime qualification; retain every failed result and distinguish cross-builds from runtime tests.
+- [x] Execute affected tests, evaluated profiles, required native builds and applicable local x64 runtime qualification; retain every failed result and distinguish ARM64 cross-builds from runtime tests.
+- [x] Freeze matching Release artifacts, report before/after image sizes and collect the prespecified quiet paired performance measurements; retain inconclusive outcomes.
 - [ ] Fold/check the changelog; validate formatting/specs/tooling and close this plan only after all required gates pass.
 
 ## Decisions and limits
@@ -97,3 +98,28 @@ Exact source identities, raw metadata and field differences are retained under t
 evidence. Ordinary Debug and ASan formats remain separate from the recorded RedSalamander Full Embedded recovery mode.
 
 Source 715f passes six native builds, Debug/Release Full and the diagnostic Release Runtime with original refusal assertions and limits. Its ASan Full fails the utility memory-notification assertion; the reversed fixture fields and admission controls above are the pending repair. The prior 60d73 Release failure is retained without an established cause, and a passing repeat is not a causal repair claim.
+
+Candidate 5069ec39 passes all six native builds with zero warnings, Debug/Release Full (eight scopes each), and ASan Full (nine scopes). The original empty-idle assertion and injected sampler/charge controls pass. Prism-5069ec-Full-three-verified1.json binds the exact terminal receipts and logs. The unstarted Release Full9 scheduling hold is retained separately; actual Release Full10 passes. Quiet measurements and required candidate CI remain pending.
+
+
+## Merge handoff, 2026-10-29
+
+The developer explicitly requested merging all five repositories after the pending gates were identified.
+This is an integration decision with the following recorded qualification limits; it does not change any test
+verdict or establish complete production qualification. Focus-taking tests remain paused by the developer.
+
+The prespecified quiet study completed once, without a selected repeat. Its native images and receipts remain
+bound to the earlier source recorded in the evidence; these final handoff edits affect documentation only.
+Baseline and candidate use the same discovered MSVC 14.52 toolchain; the comparison covers the complete change,
+rather than isolating a compiler-version or individual-flag effect. Nonsignificance is not proof of equivalence.
+
+| Scenario / metric | Baseline median | Candidate median | Paired change | Finding |
+| --- | ---: | ---: | ---: | --- |
+| Default / elapsedMedianUs | 124975.75 | 125065.25 | 1.3819% | inconclusive - unstable controls |
+
+Native samples, collection plan, machine-activity observations, preserved receipts and statistical analysis:
+`
+E:\RedPrism.Perf\build-policy-evidence-20261028\studies\RedPrism\20261029T192901-67eb0a11875f44f59415e3d808a279fe
+`.
+
+Local six-profile builds and all three Full runtime profiles passed. GitHub CI was blocked before runner allocation by account billing; those failed checks remain failed and cannot be represented as successful local equivalents. The developer requested local validation/publication and has now explicitly requested the merge.
