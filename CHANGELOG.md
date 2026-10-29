@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Correct the utility routing fixture's reversed memory-source fields; prove that all 128 original admissions use its injected sampler and retain their synthetic charges, while preserving the explicit memory-notification and one-drain idle assertions. Native and full runtime requalification remain required.
+- Record the current native profile and pinned-archive policy audit, qualified native builds and explicit remaining runtime, performance and integration gates.
+- Align build guidance and packaged DxUi license provenance with the verified 16-character source folder convention.
 - Preserve per-stage acknowledgement, error counts/ids, selection state and canvas facts for the existing checkerboard refusal fixture, with its scoped Wand/Layer worker trace. Keep all original assertions and limits while retaining the failed Release image and logs for diagnosis.
 - Confine the ARM64 sanitizer probe's intentional volatile use-after-free observation to a definition-local C4746 scope. Keep the allocation, release and faulting read unchanged so real sanitizer instrumentation remains required.
 - Include the shared capacity test helper through the existing repository include root, keeping each test's include path explicit without parent-directory warning C4464.

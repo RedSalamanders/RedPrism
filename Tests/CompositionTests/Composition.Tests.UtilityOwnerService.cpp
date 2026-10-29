@@ -35,9 +35,10 @@ void FailFast(const char* name, DWORD result) noexcept
     std::_Exit(1);
 }
 
-bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
+bool StableMemory(void* context, MemorySnapshot& snapshot) noexcept
 {
-    // Routing assertions control memory notifications; a real OS notification is independent ready work.
+    ++*static_cast<std::size_t*>(context);
+    // This injected sampler disables live system-pressure waits for the routing fixture.
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
     snapshot = {available, available};
     return true;
@@ -209,7 +210,9 @@ int RunUtilityOwnerServiceRoutingTests()
     OwnerWorkMultiplexer routes;
     JobScheduler scheduler;
 
-    Expect(scheduler.Initialize(2, {}, {nullptr, StableMemory}) >= 0, "scheduler-initialized");
+    std::size_t memorySamples = 0;
+    const MemorySource memory{.sample = StableMemory, .context = &memorySamples};
+    Expect(scheduler.Initialize(2, {}, memory) >= 0, "scheduler-initialized");
     Expect(scheduler.RegisterOwnerWork(routes), "scheduler-routes-registered");
     Expect(SUCCEEDED(service->InitializeOwner(scheduler, routes)), "service-initialized");
 
@@ -238,13 +241,17 @@ int RunUtilityOwnerServiceRoutingTests()
 
         std::unique_ptr<Job> job = std::make_unique<AdmittedRoutingJob>(entry, *service, scheduler);
         JobTicket ticket{};
-        const std::int32_t submitted = scheduler.Submit(job, {}, ticket);
+        JobOptions options{};
+        options.memoryBytes = 1; // Exercise the installed sampler through actual admission.
+        const std::int32_t submitted = scheduler.Submit(job, options, ticket);
         allAdmitted = allAdmitted && submitted >= 0 && !job;
         if (submitted < 0 || job)
             FailFast("original-job-admission-failed", static_cast<DWORD>(submitted));
         entry.ticket = ticket;
     }
     Expect(allAdmitted, "all-original-jobs-admitted");
+    Expect(memorySamples == entries->size(), "injected-memory-sampled-for-every-original-admission");
+    Expect(scheduler.ReservedMemoryBytes() == entries->size(), "original-admissions-retain-synthetic-memory");
 
     if (!DrainUntilDeferred(scheduler, *entries))
         FailFast("original-owner-callback-timeout", WAIT_TIMEOUT);

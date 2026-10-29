@@ -14,7 +14,7 @@ Five repositories implement the same policy without implicitly advancing DxUi pi
 
 - [x] Preserve the pre-change effective-profile audit and isolate changes from concurrent tooling work.
 - [x] Restore RedTilde ARM64 through its normal entrypoint and pass the required policy/lease checks.
-- [ ] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
+- [x] Enforce and negatively test the common compiler/debug/linker policy in every supported native profile and pinned archive.
 - [x] Unify green zero-warning build results, diagnostic/log links and opt-in terminal executable hyperlinks, preserving plain text and existing build/run semantics.
 - [x] Shorten source-commit and output-fingerprint folders to 16 hex characters with full identity validation and collision refusal; retain existing data without cleanup.
 - [x] Update source discovery, direct helper builds, provenance, test fixtures and dependency identities together.
@@ -33,6 +33,12 @@ The existing explicit RedSalamander Embedded compiler-debug recovery mode remain
 an attested exception; ordinary Debug/ASan profiles use the shared defaults.
 
 ## Evidence
+
+The `715f400e` ASan Full run exposed a reversed `MemorySource` aggregate in the utility routing fixture:
+the sampler was installed as context, leaving the callback null and native system-pressure waits active.
+Use named members, retain the one-drain idle assertion, and prove the injected callback is exercised by
+all 128 original admissions with a one-byte synthetic charge each. Preserve the original failed native
+binary/PDB/log. Candidate native and complete runtime qualification remain open.
 
 Baseline audit: E:/DxUi.Perf/flag-coherence-20261028-aea0f188.
 Current task evidence: E:/DxUi.Perf/build-policy-evidence-20261028.
@@ -81,3 +87,13 @@ under this project's Prism-Release-refusal-failure1 evidence. Per-stage scalar d
 worker trace now retain acknowledgement, ids/counts, selection and canvas facts without changing assertions,
 limits, deadlines or production behavior. A diagnostic Release reproduction precedes any claimed repair; final
 native/Full qualification remains open.
+
+
+## Local qualification checkpoint, 2026-10-29
+
+The current five-repository audit passes 504 native profiles and 73,502 evaluated setting groups. All four consumers
+pass their 24 required pinned-archive profiles; the additional Tilde lease profiles and negative controls pass.
+Exact source identities, raw metadata and field differences are retained under the task's final-audit-20261029
+evidence. Ordinary Debug and ASan formats remain separate from the recorded RedSalamander Full Embedded recovery mode.
+
+Source 715f passes six native builds, Debug/Release Full and the diagnostic Release Runtime with original refusal assertions and limits. Its ASan Full fails the utility memory-notification assertion; the reversed fixture fields and admission controls above are the pending repair. The prior 60d73 Release failure is retained without an established cause, and a passing repeat is not a causal repair claim.

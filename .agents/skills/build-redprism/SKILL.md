@@ -50,5 +50,5 @@ When diagnosing a failure:
 
 DxUi restore is C2 work. Do not add an unpinned sibling checkout to the build. A normal build asks DxUi whether
 `main` is newer than the lock and prints that advisory without changing the pin. The restore is a sparse checkout with Git
-long paths (no `Measurements/`, `docs/gallery` or `Specs/`); if `.build/dependencies/DxUi/source/<commit>` is damaged,
+long paths (no `Measurements/`, `docs/gallery` or `Specs/`); if `.build/dependencies/DxUi/source/<first-16-commit-hex>` is damaged,
 delete that directory and restore again.

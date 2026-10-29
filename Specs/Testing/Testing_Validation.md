@@ -3921,7 +3921,10 @@ events cannot invalidate its empty-router baseline. It retains the original idle
 original routing predicate. Three additional controls explicitly call NotifyMemoryChanged: the empty
 scheduler has ready UI work and is non-idle, the utility service stays quiescent, and one drain restores
 idle. Receiver readiness is never queried for an empty service. Ordinary live OS notification behavior
-is unchanged. The complete predecessor roster plus exactly these three controls must pass on the
+is unchanged. The sampler uses named `MemorySource` members (callback, then context); every original
+job requests one synthetic byte so admission must invoke that sampler once per original record and
+retain all 128 bytes until retirement. These two controls detect an accidentally null callback rather
+than relying on a quiet OS to hide it. The complete predecessor roster plus these five controls must pass on the
 required profiles; the [failed attempt and adoption](../TestRuns/P1UtilityIdleNotification_2026-10-20.md)
 remain separate from subsequent qualification.
 
