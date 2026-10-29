@@ -4,6 +4,10 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Publish the production-readiness review of the 2026-10-21..2026-10-28 merges (`0ce2070..85eaef7`, PRs #4–#18) as a
+  DECISION plan with WIP index routing: verified High/Medium/Low production rows, latent P1 rows, CI/tooling rows,
+  simplification items AR-1–AR-11, open questions Q1–Q12 and work packages WP0–WP6. Documentation only; no product
+  code changed, nothing was built or run for the review, and every fix waits on the recorded decisions.
 - Limit recognized Markdown fence openers and closers to zero to three leading spaces, preserving required-resource and unfinished-instruction checks across four-space and tab-indented markers; add boundary controls.
 - Keep line-leading same-line backtick spans as inline prose so they cannot hide following required resources or unfinished instructions; retain tilde-fence info handling and cover both cases with read-only controls.
 - Recognize only complete unquoted date/timestamp metadata scalars so date-prefixed guidance stays valid prose; retain quoted strings and typed temporal rejection controls.
