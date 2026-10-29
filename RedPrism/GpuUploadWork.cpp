@@ -29,6 +29,10 @@ std::uint64_t AllocateUploadQueueIdentity() noexcept
 }
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct GpuUploadQueue::Impl final
 {
     explicit Impl(GpuUploadQueue& uploadQueue) noexcept : queue(uploadQueue) {}
@@ -46,6 +50,10 @@ struct GpuUploadQueue::Impl final
     static constexpr std::uint64_t kFailed = 4;
     static constexpr std::uint64_t kGenerationLimit = std::numeric_limits<std::uint64_t>::max() >> 3;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Slot final
     {
         Impl* owner = nullptr;
@@ -86,6 +94,7 @@ struct GpuUploadQueue::Impl final
         JobTicket ticket;
         GpuUploadReceiver* receiver = nullptr;
     };
+#pragma warning(pop)
 
     DWORD ownerThread = GetCurrentThreadId();
     GpuUploadQueue& queue;
@@ -388,6 +397,7 @@ struct GpuUploadQueue::Impl final
         return false;
     }
 };
+#pragma warning(pop)
 
 GpuUploadQueue::GpuUploadQueue() noexcept = default;
 GpuUploadQueue::~GpuUploadQueue()

@@ -50,6 +50,10 @@ wil::unique_handle Event()
     return wil::unique_handle{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct MemoryProbe final
 {
     MemorySnapshot snapshot{kWideAvailable, kWideAvailable};
@@ -75,7 +79,12 @@ struct MemoryProbe final
         return true;
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct StageState final
 {
     StageState()
@@ -113,7 +122,12 @@ struct StageState final
     std::uint64_t chargeBeforeRetain = 0;
     std::uint64_t chargeAfterRetain = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class TwoStageJob final : public Job
 {
   public:
@@ -166,7 +180,12 @@ class TwoStageJob final : public Job
   private:
     StageState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SuccessorState final
 {
     explicit SuccessorState(StageState& predecessor) noexcept : predecessor_(predecessor) {}
@@ -175,7 +194,12 @@ struct SuccessorState final
     std::atomic<bool> sawFinalCallback{false};
     std::atomic<unsigned int> completions{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SuccessorJob final : public Job
 {
   public:
@@ -197,6 +221,7 @@ class SuccessorJob final : public Job
   private:
     SuccessorState& _state;
 };
+#pragma warning(pop)
 
 JobOptions OriginalOptions() noexcept
 {

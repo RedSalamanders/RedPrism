@@ -1,11 +1,11 @@
 #include "Document.Tests.SelectionCommandMemory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Jobs.h"
 #include "Selection.h"
 #include "SelectionCommandWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>
@@ -64,6 +64,10 @@ bool HasSmallSquare(const std::optional<DocumentSelection>& selection) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     std::unique_ptr<DocumentSession> session = std::make_unique<DocumentSession>();
@@ -92,6 +96,7 @@ struct Fixture final
                 (initiallySelected ? HasSquare(session->Selection()) : !session->Selection());
     }
 };
+#pragma warning(pop)
 
 struct MemoryProbe final
 {
@@ -149,6 +154,10 @@ struct CommandState final
     bool staleAuthorityRejected = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class SelectionCommandJob final : public Job
 {
   public:
@@ -261,6 +270,7 @@ class SelectionCommandJob final : public Job
     std::optional<PreparedSelectionCommand> _prepared;
     bool _started = false;
 };
+#pragma warning(pop)
 
 std::uint64_t Submit(JobScheduler& scheduler, DocumentSession& session, CommandState& state)
 {

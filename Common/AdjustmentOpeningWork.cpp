@@ -57,7 +57,7 @@ std::optional<PreparedAdjustmentOpening> DocumentSession::PrepareAdjustmentOpeni
         cancellation, observer);
     if (!publication || cancellation.IsCancelled())
         return std::nullopt;
-    return PreparedAdjustmentOpening{std::move(input), std::move(panel), original, std::move(publication.value())};
+    return PreparedAdjustmentOpening(std::move(input), std::move(panel), original, std::move(publication.value()));
 }
 
 bool DocumentSession::IsPreparedAdjustmentOpeningCurrent(const PreparedAdjustmentOpening& prepared) const noexcept

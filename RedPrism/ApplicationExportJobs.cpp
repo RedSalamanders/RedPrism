@@ -25,6 +25,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ExportReadbackOwners final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory;
@@ -39,8 +43,14 @@ struct ExportReadbackOwners final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Application::ExportReadbackJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -170,8 +180,8 @@ class Application::ExportReadbackJob final : public RecordedDocumentReadbackJob
                                   : _format == HostWriteFormat::Jpeg ? IDS_ERROR_EXPORT_JPEG
                                                                      : IDS_ERROR_EXPORT_PNG;
             ++_owner._errorsShown;
-            _owner._lastErrorId = stringId;
-            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
+            _owner._lastErrorId = static_cast<UINT>(stringId);
+            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, static_cast<UINT>(stringId));
         }
         _owner._exportWrite.reset();
         _owner.ClearEndSessionWriteBlock();
@@ -210,6 +220,7 @@ class Application::ExportReadbackJob final : public RecordedDocumentReadbackJob
     std::unique_ptr<ExportReadbackOwners> _owners;
     bool _published = false; // published stage ownership synchronizes this worker write with owner reads
 };
+#pragma warning(pop)
 
 HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
 {
@@ -327,6 +338,10 @@ int Application::RunExportReadbackSelfTest() noexcept
         PathBudget,
         LaterTileBusy
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -338,6 +353,8 @@ int Application::RunExportReadbackSelfTest() noexcept
         bool visited = false, held = false, cancelPending = false;
         HRESULT rebound = E_PENDING;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<State*>(context);

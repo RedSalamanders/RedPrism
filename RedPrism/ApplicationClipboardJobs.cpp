@@ -133,6 +133,8 @@ HRESULT ClipboardStatusError(ClipboardTransfer::Status status) noexcept
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     case ClipboardTransfer::Status::OutOfMemory:
         return E_OUTOFMEMORY;
+    case ::ClipboardTransfer::Status::Invalid:
+    case ::ClipboardTransfer::Status::NativeFailure:
     default:
         return E_FAIL;
     }
@@ -147,6 +149,10 @@ bool AddClipboardBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ClipboardCopyPayload final : DeferredReleaseNode
 {
     // Final transfer destination remains empty until the original parent actually terminates/joins.
@@ -187,6 +193,8 @@ struct ClipboardCopyPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireClipboardCopy final
 {
     void operator()(ClipboardCopyPayload* payload) const noexcept
@@ -206,6 +214,10 @@ struct RetireClipboardCopy final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
 {
   public:
@@ -521,7 +533,16 @@ class Application::ClipboardCopyJob final : public Job, public RetryWaitReceiver
     unsigned int _attempts = 0;
     bool _privateApplied = false, _privateOperationFinished = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
+// ClipboardCopyJob stores the opaque resume context; invocation begins after construction.
+// Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4355)
 class Application::ClipboardMergedJob final : public RecordedDocumentReadbackJob
 {
   public:
@@ -596,6 +617,9 @@ class Application::ClipboardMergedJob final : public RecordedDocumentReadbackJob
     Application& _owner;    // device callback only
     ClipboardCopyJob _copy; // same scheduler record, reservation and acknowledged retry receiver
 };
+#pragma warning(pop)
+
+#pragma warning(pop)
 
 HRESULT Application::StartClipboardMerged() noexcept
 {
@@ -681,6 +705,10 @@ HRESULT Application::StartClipboardMerged() noexcept
     return S_OK;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ClipboardPrefillJob final : public Job, public RetryWaitReceiver
 {
   public:
@@ -761,6 +789,7 @@ class Application::ClipboardPrefillJob final : public Job, public RetryWaitRecei
     HRESULT _error = S_OK;
     unsigned int _attempts = 0;
 };
+#pragma warning(pop)
 
 void Application::CancelClipboardPrefill() noexcept
 {
@@ -854,6 +883,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ClipboardPastePayload final : DeferredReleaseNode
 {
     std::shared_ptr<ClipboardWorkTestGate> gate;
@@ -879,6 +912,8 @@ struct ClipboardPastePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireClipboardPaste final
 {
     void operator()(ClipboardPastePayload* payload) const noexcept
@@ -891,6 +926,10 @@ struct RetireClipboardPaste final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ClipboardPasteJob final : public Job, public RetryWaitReceiver
 {
   public:
@@ -1084,7 +1123,12 @@ class Application::ClipboardPasteJob final : public Job, public RetryWaitReceive
     bool _privateOrigin = false, _prepared = false;
     unsigned int _attempts = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitReceiver
 {
   public:
@@ -1231,6 +1275,7 @@ class Application::ClipboardPasteProbeJob final : public Job, public RetryWaitRe
     unsigned int _attempts = 0;
     bool _privatePreference = false, _empty = false;
 };
+#pragma warning(pop)
 
 HRESULT Application::SubmitClipboardPaste(HistoryWorkStamp stamp, ImageImportAuthority authority,
                                           ClipboardTransfer::Inspection inspection, bool privatePreference,
@@ -1249,7 +1294,7 @@ HRESULT Application::SubmitClipboardPaste(HistoryWorkStamp stamp, ImageImportAut
         if (!_session.Clipboard() || key.serial != _session.ClipboardSerial() ||
             key.session != _session.ClipboardSessionIdentity().bytes)
             return E_ABORT;
-        pixels = _session.Clipboard()->image.PixelCount();
+        pixels = static_cast<std::uint64_t>(_session.Clipboard()->image.PixelCount());
     }
     else if (key.serial != _session.ClipboardSerial() || key.session != _session.ClipboardSessionIdentity().bytes)
     {

@@ -1,8 +1,8 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ImageImportTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "resource.h"
 
 #include <array>
@@ -41,6 +41,10 @@ int Application::RunImageImportResidencySelfTest(std::span<const std::wstring_vi
         RefreshFailure,
         RefreshCancel
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Held final
     {
         Application& owner;
@@ -51,6 +55,8 @@ int Application::RunImageImportResidencySelfTest(std::span<const std::wstring_vi
         bool visited = false, unchanged = false;
         std::optional<JobTicket> ticket;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& held = *static_cast<Held*>(context);

@@ -14,6 +14,10 @@
 
 // Harness-only event gate. Every production job has a null gate. The gate is immutable after submission apart
 // from its events and atomics, and stays owned by the job through acknowledgement and final apply/drop.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SizingWorkTestGate final
 {
     static constexpr unsigned int kMessage = WM_APP + 0x4B3;
@@ -34,3 +38,4 @@ struct SizingWorkTestGate final
     std::optional<ResizeStatus> status;
     std::atomic<unsigned int> visits{0};
 };
+#pragma warning(pop)

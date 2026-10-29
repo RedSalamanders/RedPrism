@@ -49,6 +49,10 @@ enum class Mode
     CancelAfterOpening,
     CloseSuspended
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct State final
 {
     JobScheduler& scheduler;
@@ -68,6 +72,12 @@ struct State final
     bool joinedClose = false, completed = false;
     JobResult outcome;
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ContinuingJob final : public Job
 {
   public:
@@ -149,6 +159,8 @@ class ContinuingJob final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
+
 void WaitForOpening(State& state)
 {
     const auto deadline = GetTickCount64() + 10000;
@@ -293,6 +305,10 @@ void RunCase(Mode mode)
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class SlotHolderJob final : public Job
 {
   public:
@@ -315,6 +331,8 @@ class SlotHolderJob final : public Job
     unsigned int& _acknowledgements;
     bool _held = false;
 };
+#pragma warning(pop)
+
 void TestAllSlotsPreclaimed()
 {
     currentCase = "slot-pressure";

@@ -49,6 +49,10 @@ class PolygonalDrawingPlan final
 [[nodiscard]] std::optional<PolygonalDrawingPlan> DescribePolygonalDrawing(const DocumentSession& session,
                                                                            SelectionMode mode) noexcept;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct PolygonalDrawingState final
 {
     enum class Event
@@ -134,7 +138,13 @@ struct PolygonalDrawingState final
             notify(observer, event);
     }
 };
+#pragma warning(pop)
+
 struct PolygonalDrawingPayload;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class PolygonalDrawingJob final : public Job
 {
   public:
@@ -175,3 +185,4 @@ class PolygonalDrawingJob final : public Job
     std::uint64_t _explicitTerminalOrdinal = 0;
     std::uint64_t _lastOrdinal = 0;
 };
+#pragma warning(pop)

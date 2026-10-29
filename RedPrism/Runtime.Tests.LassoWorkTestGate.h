@@ -14,6 +14,10 @@
 #pragma warning(pop)
 
 // Explicit fixture controls only. Configure before admission and keep this owner through joined Close.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct LassoWorkTestGate final
 {
     enum class Stage : std::uint8_t
@@ -47,3 +51,4 @@ struct LassoWorkTestGate final
         return waited == WAIT_OBJECT_0 ? JobResult{} : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
     }
 };
+#pragma warning(pop)

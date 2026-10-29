@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.CloneReadbackTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -215,6 +215,10 @@ int Application::RunCloneLayerSourceSelfTest() noexcept
             gate->result = {JobStatus::Failed, E_ACCESSDENIED};
         _cloneReadbackTestGate = gate;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct State final
         {
             Application& owner;
@@ -237,8 +241,10 @@ int Application::RunCloneLayerSourceSelfTest() noexcept
             bool modeChangedWhileHeld = false;
             bool leaseAdopted = false;
             bool captureLost = false;
-        } state{*this,        mode,     gate,     {},        {},           0,           0, 0,
-                presentCount, revision, targetId, overlayId, targetBefore, sourceBefore};
+        }
+#pragma warning(pop)
+        state{*this,        mode,     gate,     {},        {},           0,           0, 0,
+              presentCount, revision, targetId, overlayId, targetBefore, sourceBefore};
 
         const auto dispatch = [](void* opaque, void* native) noexcept
         {

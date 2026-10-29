@@ -34,6 +34,10 @@ bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct GatedPump final : OwnerWorkPump
 {
     GatedPump(OwnerWorkMultiplexer& source, std::atomic_bool& gate) noexcept : routes(source), paused(gate) {}
@@ -70,7 +74,12 @@ struct GatedPump final : OwnerWorkPump
     bool pauseAfterMip = false;
     bool bounded = true;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     GpuResidencyBudget budget; // outlives queue and every creation/retirement/adopted reservation
@@ -119,7 +128,12 @@ struct Fixture final
         Close();
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Completion final
 {
     GpuRasterCreatedResidency residency;
@@ -132,7 +146,12 @@ struct Completion final
     bool duplicateRefused = false;
     bool oldBorrowCleared = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Probe final : public GpuRasterUploadJob
 {
   public:
@@ -180,12 +199,14 @@ class Probe final : public GpuRasterUploadJob
     Fixture& _fixture;
     Completion& _completion;
 };
+#pragma warning(pop)
 
 std::unique_ptr<GpuRasterUploadInput> Input(const Raster& source, int scale, bool mips)
 {
-    auto layout = RasterUploadLayout::Make(
-        source, 0, 0, source.Width(), source.Height(), scale, 4096,
-        static_cast<std::uint64_t>(1 + (source.Width() - 1) / scale) * source.Channels(), 4096, mips);
+    auto layout = RasterUploadLayout::Make(source, 0, 0, source.Width(), source.Height(), scale, 4096,
+                                           static_cast<std::uint64_t>(1 + (source.Width() - 1) / scale) *
+                                               static_cast<unsigned int>(source.Channels()),
+                                           4096, mips);
     return GpuRasterUploadInput::Make(std::move(layout));
 }
 
@@ -300,13 +321,16 @@ void Success(const char* name, const Raster& source, std::uint64_t logicalBytes,
     Expect(completed.chunks == static_cast<unsigned int>(source.Height()) &&
                fixture.queue.MapAttemptsForTest() == static_cast<unsigned int>(source.Height()),
            name, "mip-stage-never-maps-or-replays-base-rows");
-    Expect(MipEquals(fixture, completed.residency.TextureOwner(), 0, base, source.Channels()), name,
-           "literal-base-preserved");
-    Expect(MipEquals(fixture, completed.residency.TextureOwner(), expectedSlices, last, source.Channels()), name,
-           "literal-final-mip-after-completion");
+    Expect(
+        MipEquals(fixture, completed.residency.TextureOwner(), 0, base, static_cast<unsigned int>(source.Channels())),
+        name, "literal-base-preserved");
+    Expect(MipEquals(fixture, completed.residency.TextureOwner(), expectedSlices, last,
+                     static_cast<unsigned int>(source.Channels())),
+           name, "literal-final-mip-after-completion");
     if (!firstMip.empty())
-        Expect(MipEquals(fixture, completed.residency.TextureOwner(), 1, firstMip, source.Channels()), name,
-               "literal-intermediate-mip-after-completion");
+        Expect(MipEquals(fixture, completed.residency.TextureOwner(), 1, firstMip,
+                         static_cast<unsigned int>(source.Channels())),
+               name, "literal-intermediate-mip-after-completion");
     Expect(completed.duplicateRefused && completed.oldBorrowCleared, name,
            "exactly-once-adoption-clears-producer-borrows");
     auto moved = std::move(completed.residency);

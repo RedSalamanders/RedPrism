@@ -5,7 +5,7 @@
   <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.targets" Condition="'$(DxUiRoot)'!=''" />
   <ItemGroup Condition="'$(DxUiRoot)'!=''">
     <ProjectReference Update="$(DxUiResolvedRoot)src\DxUi.vcxproj">
-      <AdditionalProperties>%(ProjectReference.AdditionalProperties);WholeProgramOptimization=$(WholeProgramOptimization);VCToolsVersion=$(VCToolsVersion)</AdditionalProperties>
+      <AdditionalProperties>%(ProjectReference.AdditionalProperties);WholeProgramOptimization=$(WholeProgramOptimization);VCToolsVersion=$(VCToolsVersion);ForceImportAfterCppTargets=$(MSBuildThisFileDirectory)PinnedDxUiPolicy.targets</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
 </Project>

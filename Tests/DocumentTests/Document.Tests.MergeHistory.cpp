@@ -1,8 +1,8 @@
 #include "Document.Tests.MergeHistory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

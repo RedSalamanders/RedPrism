@@ -212,6 +212,10 @@ JobResult Result(HRESULT status) noexcept
 #pragma warning(push)
 // DeferredReleaseNode intentionally aligns intrusive release records.
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
 {
     explicit Storage(std::uint32_t originalOwner) noexcept : ownerThread(originalOwner), graph(ownerThread)
@@ -273,9 +277,14 @@ struct PreparedCommittedDisplay::Storage final : DeferredReleaseNode
         device.reset();
     }
 };
+#pragma warning(pop)
 
 #pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class CommittedDisplayController::DisplayJob final : public Job
 {
   public:
@@ -619,6 +628,7 @@ class CommittedDisplayController::DisplayJob final : public Job
     HRESULT _recordingAdmission = S_OK;
     bool _rootDeleted = false;
 };
+#pragma warning(pop)
 
 CommittedDisplaySeedLease::~CommittedDisplaySeedLease()
 {

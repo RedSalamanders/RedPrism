@@ -13,6 +13,10 @@ struct CloneReadbackTestGate;
 // Declare the lease first so the document/pixel owners die before its acknowledgement releases the charge.
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct CloneReadbackState final : DeferredReleaseNode
 {
     std::shared_ptr<SharedPublicationMemory> memory;
@@ -52,4 +56,6 @@ struct CloneReadbackState final : DeferredReleaseNode
         }
     };
 };
+#pragma warning(pop)
+
 #pragma warning(pop)

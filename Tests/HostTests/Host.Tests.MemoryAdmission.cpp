@@ -1,5 +1,5 @@
-#include "../../Common/MemoryAdmission.h"
-#include "../../Common/MemoryBudget.h"
+#include "Common/MemoryAdmission.h"
+#include "Common/MemoryBudget.h"
 
 #include "Host.Tests.MemoryAdmission.h"
 

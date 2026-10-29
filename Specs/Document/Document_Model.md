@@ -184,7 +184,10 @@ deallocated. A null alias with an owning control block retains the same lifetime
 both pixels and accounting; invalid adoption consumes neither the pixel buffer nor caller lifetime ownership.
 This creates no new byte reservation and grants no job, document or graphics publication authority. The caller
 must declare all output/control overlap before allocation and bind original accounting before refunding its job.
-The ordinary storage layout/factory remains unchanged. Charged storage adds two shared lifetime handles (32 bytes
+The ordinary storage factory remains unchanged. On ARM64, an explicit 8-byte tail member in the private storage
+base prevents MSVC C5291's inherited-layout ABI hazard. The x64 layout is unchanged. Cached accounting uses the
+actual storage sizes, and a compile-time check preserves the charged storage's one-handle object-size increment.
+Charged storage adds two shared lifetime handles (32 bytes
 on supported 64-bit targets), included in its cached self/graph retirement bounds, with no pixel copy or extra
 pixel allocation. Its last owner-thread release always uses an installed deferred-release sink; workers release
 inline. `WeakStorageForTest` observes control-block expiry without owning or reading dead pixels.

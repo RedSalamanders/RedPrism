@@ -1,6 +1,6 @@
 #include "Host.Tests.JobCloseHook.h"
 
-#include "../../Common/Jobs.h"
+#include "Common/Jobs.h"
 
 #include <atomic>
 #include <combaseapi.h>
@@ -54,6 +54,10 @@ bool SampleMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct HookState final
 {
     JobScheduler* scheduler = nullptr;
@@ -79,6 +83,7 @@ struct HookState final
     std::atomic<bool> workerNotOwner{false};
     std::atomic<bool> workerSawContext{false};
 };
+#pragma warning(pop)
 
 void OwnerCloseHook(void* context) noexcept
 {
@@ -113,6 +118,10 @@ JobScheduler::CloseHooks Hooks(HookState& state) noexcept
     return {OwnerCloseHook, WorkerCloseHook, &state};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class GatedCloseJob final : public Job
 {
   public:
@@ -147,6 +156,7 @@ class GatedCloseJob final : public Job
     HookState& _state;
     HANDLE _entered;
 };
+#pragma warning(pop)
 
 void CheckHooks(const HookState& state, const char* prefix, int& failures) noexcept
 {

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "AdjustmentClosureWork.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
@@ -18,6 +18,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct AdjustmentClosurePayload final : DeferredReleaseNode
 {
     std::optional<AdjustmentClosureInput> input;
@@ -43,6 +47,8 @@ struct AdjustmentClosurePayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireAdjustmentClosure final
 {
     void operator()(AdjustmentClosurePayload* payload) const noexcept
@@ -55,6 +61,10 @@ struct RetireAdjustmentClosure final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::AdjustmentClosureJob final : public Job
 {
   public:
@@ -159,6 +169,7 @@ class Application::AdjustmentClosureJob final : public Job
     std::int32_t _captureError = 0;
     std::unique_ptr<AdjustmentClosurePayload, RetireAdjustmentClosure> _payload;
 };
+#pragma warning(pop)
 
 Application::HostOutcome Application::StartAdjustmentClosure(std::uint64_t ordinal, bool commit) noexcept
 {

@@ -45,6 +45,10 @@ struct WarpDevice final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     ~Rig()
@@ -72,6 +76,7 @@ struct Rig final
     JobScheduler scheduler;
     GpuWorkQueue queue;
 };
+#pragma warning(pop)
 
 bool RefusalClearsOutputs(GpuWorkQueue& queue, const GpuCompletionContext& captured, ID3D11Device* sentinelDevice,
                           ID3D11DeviceContext* sentinelContext, const char* name) noexcept
@@ -293,6 +298,10 @@ struct DeferredReleaseObservation final
     JobResult terminal{};
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class DeferredCaptureRelease final : public Job
 {
   public:
@@ -358,6 +367,7 @@ class DeferredCaptureRelease final : public Job
     DeferredReleaseObservation& _observation;
     GpuCompletionContext _captured;
 };
+#pragma warning(pop)
 
 void TestOriginalTicketWorkerRelease() noexcept
 {

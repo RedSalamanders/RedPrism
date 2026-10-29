@@ -1,7 +1,7 @@
 # DxUi integration
 
 Status: current normative consumer contract
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-28
 Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Build/DxUiOutputPath.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
@@ -18,7 +18,13 @@ chronologies or claim a matrix remains qualified after source, dependency or env
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, current candidate commit
-`8e8994079e82f79e6765e6a885c03fc687957591`, API revision 3, and lock target `["DxUi"]`. Its identical-source full
+`a059e07c39c58cbf5218c34f7b9f1a9ac29baf3b`, API revision 3, and lock target `["DxUi"]`.
+This maintenance candidate preserves the predecessor's public interface and consumer behavior while repairing
+owned warning diagnostics and posted-payload type identity under identical COMDAT folding. Its six native builds
+and all three desktop-focus profiles pass with zero skips and verified restoration. The refreshed ordinary suites and fresh consumer qualification remain open in the
+indexed NativeBuildPolicyCoherence plan. Never treat a successful restore as product qualification.
+
+The predecessor `8e8994079e82f79e6765e6a885c03fc687957591` had identical-source full
 library x64 Debug/Release/real ASan suites, three ARM64 cross-builds and paired Release common-scene comparison pass.
 The managed RedPrism consumer repair passes full x64 Debug/Release/real ASan gates, three ARM64 cross-builds and
 Release analysis on the 858-input freeze recorded in `Specs/TestRuns/P1LayerRowsCosts_2026-10-06.md`. Fresh hardware
@@ -41,7 +47,7 @@ optional prepared-source include and `CapturePreparedAccessibilityRows()` overri
 of that optional interface), and restore the preceding full-prepare input boundary instead of calling the absent
 `PrepareInteraction`, before rebuilding against the rollback headers/library. `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
-`.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
+`.build/dependencies/DxUi/source/<commit-prefix16>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
 sibling `Z:\src\DxUi` working tree. A mismatched or dirty pin fails restore.
 

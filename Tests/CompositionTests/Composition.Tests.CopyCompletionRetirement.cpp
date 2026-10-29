@@ -49,6 +49,10 @@ struct Device final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct Observation final
 {
     const DWORD owner = GetCurrentThreadId();
@@ -66,9 +70,14 @@ struct Observation final
     JobResult result;
     HRESULT delivered = S_OK;
 };
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 struct Payload final : DeferredReleaseNode
 {
     explicit Payload(Observation& value) noexcept : observation(value)
@@ -87,6 +96,12 @@ struct Payload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class Parent final : public Job,
                      public GpuReadbackReceiver,
                      public GpuBufferReadbackReceiver,
@@ -211,6 +226,7 @@ class Parent final : public Job,
     bool _started = false;
     bool _cleanupReady = false;
 };
+#pragma warning(pop)
 
 bool WaitDormant(JobScheduler& jobs, GpuWorkQueue& queue, const Observation& observation) noexcept
 {

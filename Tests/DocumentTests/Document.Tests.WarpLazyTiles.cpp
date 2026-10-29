@@ -116,6 +116,10 @@ void LargeOpeningBounds()
            "100mp-blank-opening-has-no-full-transparent-canvas-allocation");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
 struct CancelAt final
 {
     std::stop_source& stop;
@@ -131,6 +135,7 @@ struct CancelAt final
         }
     }
 };
+#pragma warning(pop)
 
 void CancellationAndParity()
 {

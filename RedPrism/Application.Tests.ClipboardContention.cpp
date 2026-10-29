@@ -1,9 +1,9 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <atomic>
@@ -345,6 +345,10 @@ inline void Record(ClipboardRetryWitnessTestResults& results, const char* name, 
     return ClipboardRetryWitnessTests::Run();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ClipboardHolder final
 {
     wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
@@ -361,6 +365,8 @@ struct ClipboardHolder final
     void (*afterFirstDenied)(void*) noexcept = nullptr;
     bool installDib = false;
 };
+#pragma warning(pop)
+
 DWORD WINAPI HoldClipboard(void* raw) noexcept
 {
     auto& holder = *static_cast<ClipboardHolder*>(raw);
@@ -506,11 +512,17 @@ int VerifyClipboardHolderSetup() noexcept
         [&]() noexcept { std::printf("SUMMARY clipboard-holder-setup checks=%u failures=%u\n", checks, failures); });
     const auto run = [&](bool exhaust) noexcept
     {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
         struct Gate final
         {
             wil::unique_handle denied{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
             wil::unique_handle resume{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-        } gate;
+        }
+#pragma warning(pop)
+        gate;
         ClipboardHolder blocker;
         ClipboardHolder holder;
         wil::unique_handle blockerThread;
@@ -629,6 +641,10 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
         ClipboardHolder holder;
         ClipboardHolder secondHolder;
         holder.installDib = item.paste;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
         struct Retry final
         {
             ClipboardHolder& holder;
@@ -653,7 +669,9 @@ int Application::RunStandaloneClipboardContentionSelfTest(HINSTANCE instance) no
             bool originalBarrier = true;
             bool signalSucceeded = true;
             std::atomic<bool> callbackFailed{false};
-        } retry{holder, secondHolder};
+        }
+#pragma warning(pop)
+        retry{holder, secondHolder};
         retry.forceHandoff = item.paste && item.release;
         retry.releaseOnArm = item.release;
         retry.paste = item.paste;

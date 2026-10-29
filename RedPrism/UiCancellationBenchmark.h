@@ -15,6 +15,10 @@
 
 // Opt-in only. The execution observer owns no Application pointer; its event and fixed log survive joined Close.
 // Trial fields below belong exclusively to the UI owner and are never accessed by a worker callback.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct UiCancellationBenchmark final
 {
     enum class Phase
@@ -84,6 +88,7 @@ struct UiCancellationBenchmark final
         expectedRefusal = UiCancellationRefusalKind::None;
     }
 };
+#pragma warning(pop)
 
 [[nodiscard]] inline bool IsUiCancellationBenchmark(std::wstring_view mode) noexcept
 {

@@ -22,15 +22,15 @@ inline Path<T> Ellipse(const Point<T>& center, double radiusX, double radiusY = 
     if (steps <= 2)
         steps = static_cast<size_t>(PI * sqrt((radiusX + radiusY) / 2));
 
-    double si = std::sin(2 * PI / steps);
-    double co = std::cos(2 * PI / steps);
+    double si = std::sin(2 * PI / static_cast<double>(steps));
+    double co = std::cos(2 * PI / static_cast<double>(steps));
     double dx = co, dy = si;
     Path<T> result;
     result.reserve(steps);
-    result.emplace_back(center.x + radiusX, static_cast<double>(center.y));
+    result.emplace_back(static_cast<double>(center.x) + radiusX, static_cast<double>(center.y));
     for (size_t i = 1; (Workspace::Pulse(), i < steps); ++i)
     {
-        result.emplace_back(center.x + radiusX * dx, center.y + radiusY * dy);
+        result.emplace_back(static_cast<double>(center.x) + radiusX * dx, static_cast<double>(center.y) + radiusY * dy);
         double x = dx * co - dy * si;
         dy = dy * co + dx * si;
         dx = x;
@@ -154,18 +154,18 @@ inline bool IsClosedPath(EndType et)
 static inline Point64 GetPerpendic(const Point64& pt, const PointD& norm, double delta)
 {
 #ifdef USINGZ
-    return Point64(pt.x + norm.x * delta, pt.y + norm.y * delta, pt.z);
+    return Point64(static_cast<double>(pt.x) + norm.x * delta, static_cast<double>(pt.y) + norm.y * delta, pt.z);
 #else
-    return Point64(pt.x + norm.x * delta, pt.y + norm.y * delta);
+    return Point64(static_cast<double>(pt.x) + norm.x * delta, static_cast<double>(pt.y) + norm.y * delta);
 #endif
 }
 
 inline PointD GetPerpendicD(const Point64& pt, const PointD& norm, double delta)
 {
 #ifdef USINGZ
-    return PointD(pt.x + norm.x * delta, pt.y + norm.y * delta, pt.z);
+    return PointD(static_cast<double>(pt.x) + norm.x * delta, static_cast<double>(pt.y) + norm.y * delta, pt.z);
 #else
-    return PointD(pt.x + norm.x * delta, pt.y + norm.y * delta);
+    return PointD(static_cast<double>(pt.x) + norm.x * delta, static_cast<double>(pt.y) + norm.y * delta);
 #endif
 }
 
@@ -243,21 +243,29 @@ void ClipperOffset::DoBevel(const Path64& path, size_t j, size_t k)
     {
         double abs_delta = std::abs(group_delta_);
 #ifdef USINGZ
-        pt1 = PointD(path[j].x - abs_delta * norms[j].x, path[j].y - abs_delta * norms[j].y, path[j].z);
-        pt2 = PointD(path[j].x + abs_delta * norms[j].x, path[j].y + abs_delta * norms[j].y, path[j].z);
+        pt1 = PointD(static_cast<double>(path[j].x) - abs_delta * norms[j].x,
+                     static_cast<double>(path[j].y) - abs_delta * norms[j].y, path[j].z);
+        pt2 = PointD(static_cast<double>(path[j].x) + abs_delta * norms[j].x,
+                     static_cast<double>(path[j].y) + abs_delta * norms[j].y, path[j].z);
 #else
-        pt1 = PointD(path[j].x - abs_delta * norms[j].x, path[j].y - abs_delta * norms[j].y);
-        pt2 = PointD(path[j].x + abs_delta * norms[j].x, path[j].y + abs_delta * norms[j].y);
+        pt1 = PointD(static_cast<double>(path[j].x) - abs_delta * norms[j].x,
+                     static_cast<double>(path[j].y) - abs_delta * norms[j].y);
+        pt2 = PointD(static_cast<double>(path[j].x) + abs_delta * norms[j].x,
+                     static_cast<double>(path[j].y) + abs_delta * norms[j].y);
 #endif
     }
     else
     {
 #ifdef USINGZ
-        pt1 = PointD(path[j].x + group_delta_ * norms[k].x, path[j].y + group_delta_ * norms[k].y, path[j].z);
-        pt2 = PointD(path[j].x + group_delta_ * norms[j].x, path[j].y + group_delta_ * norms[j].y, path[j].z);
+        pt1 = PointD(static_cast<double>(path[j].x) + group_delta_ * norms[k].x,
+                     static_cast<double>(path[j].y) + group_delta_ * norms[k].y, path[j].z);
+        pt2 = PointD(static_cast<double>(path[j].x) + group_delta_ * norms[j].x,
+                     static_cast<double>(path[j].y) + group_delta_ * norms[j].y, path[j].z);
 #else
-        pt1 = PointD(path[j].x + group_delta_ * norms[k].x, path[j].y + group_delta_ * norms[k].y);
-        pt2 = PointD(path[j].x + group_delta_ * norms[j].x, path[j].y + group_delta_ * norms[j].y);
+        pt1 = PointD(static_cast<double>(path[j].x) + group_delta_ * norms[k].x,
+                     static_cast<double>(path[j].y) + group_delta_ * norms[k].y);
+        pt2 = PointD(static_cast<double>(path[j].x) + group_delta_ * norms[j].x,
+                     static_cast<double>(path[j].y) + group_delta_ * norms[j].y);
 #endif
     }
     path_out.emplace_back(pt1);
@@ -306,10 +314,11 @@ void ClipperOffset::DoMiter(const Path64& path, size_t j, size_t k, double cos_a
 {
     double q = group_delta_ / (cos_a + 1);
 #ifdef USINGZ
-    path_out.emplace_back(path[j].x + (norms[k].x + norms[j].x) * q, path[j].y + (norms[k].y + norms[j].y) * q,
-                          path[j].z);
+    path_out.emplace_back(static_cast<double>(path[j].x) + (norms[k].x + norms[j].x) * q,
+                          static_cast<double>(path[j].y) + (norms[k].y + norms[j].y) * q, path[j].z);
 #else
-    path_out.emplace_back(path[j].x + (norms[k].x + norms[j].x) * q, path[j].y + (norms[k].y + norms[j].y) * q);
+    path_out.emplace_back(static_cast<double>(path[j].x) + (norms[k].x + norms[j].x) * q,
+                          static_cast<double>(path[j].y) + (norms[k].y + norms[j].y) * q);
 #endif
 }
 
@@ -336,9 +345,9 @@ void ClipperOffset::DoRound(const Path64& path, size_t j, size_t k, double angle
     if (j == k)
         offsetVec.Negate();
 #ifdef USINGZ
-    path_out.emplace_back(pt.x + offsetVec.x, pt.y + offsetVec.y, pt.z);
+    path_out.emplace_back(static_cast<double>(pt.x) + offsetVec.x, static_cast<double>(pt.y) + offsetVec.y, pt.z);
 #else
-    path_out.emplace_back(pt.x + offsetVec.x, pt.y + offsetVec.y);
+    path_out.emplace_back(static_cast<double>(pt.x) + offsetVec.x, static_cast<double>(pt.y) + offsetVec.y);
 #endif
     int steps = static_cast<int>(std::ceil(steps_per_rad_ * std::abs(angle))); // #448, #456
     for (int i = 1; (Workspace::Pulse(), i < steps); ++i)                      // ie 1 less than steps
@@ -346,9 +355,9 @@ void ClipperOffset::DoRound(const Path64& path, size_t j, size_t k, double angle
         offsetVec = PointD(offsetVec.x * step_cos_ - step_sin_ * offsetVec.y,
                            offsetVec.x * step_sin_ + offsetVec.y * step_cos_);
 #ifdef USINGZ
-        path_out.emplace_back(pt.x + offsetVec.x, pt.y + offsetVec.y, pt.z);
+        path_out.emplace_back(static_cast<double>(pt.x) + offsetVec.x, static_cast<double>(pt.y) + offsetVec.y, pt.z);
 #else
-        path_out.emplace_back(pt.x + offsetVec.x, pt.y + offsetVec.y);
+        path_out.emplace_back(static_cast<double>(pt.x) + offsetVec.x, static_cast<double>(pt.y) + offsetVec.y);
 #endif
     }
     path_out.emplace_back(GetPerpendic(path[j], norms[j], group_delta_));
@@ -463,6 +472,9 @@ void ClipperOffset::OffsetOpenPath(Group& group, const Path64& path)
         case EndType::Round:
             DoRound(path, 0, 0, PI);
             break;
+        case ::RedPrismBoundedClipper::EndType::Joined:
+        case ::RedPrismBoundedClipper::EndType::Polygon:
+        case ::RedPrismBoundedClipper::EndType::Square:
         default:
             DoSquare(path, 0, 0);
             break;
@@ -495,6 +507,9 @@ void ClipperOffset::OffsetOpenPath(Group& group, const Path64& path)
         case EndType::Round:
             DoRound(path, highI, highI, PI);
             break;
+        case ::RedPrismBoundedClipper::EndType::Joined:
+        case ::RedPrismBoundedClipper::EndType::Polygon:
+        case ::RedPrismBoundedClipper::EndType::Square:
         default:
             DoSquare(path, highI, highI);
             break;

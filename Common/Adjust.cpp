@@ -1,4 +1,5 @@
 #include "Adjust.h"
+#include <cstddef>
 
 #include "BrushStroke.h"
 #include "ImageFilters.h"
@@ -1686,6 +1687,15 @@ double BlurMargin(FilterKind kind, const FilterSettings& settings) noexcept
         return settings.radius * 3 + 2;
     case FilterKind::MotionBlur:
         return settings.distance / 2 + 2;
+    case ::FilterKind::AddNoise:
+    case ::FilterKind::ContentAwareFill:
+    case ::FilterKind::Curves:
+    case ::FilterKind::Exposure:
+    case ::FilterKind::GradientMap:
+    case ::FilterKind::Grain:
+    case ::FilterKind::HueSaturation:
+    case ::FilterKind::LensCorrection:
+    case ::FilterKind::Levels:
     default:
         return 0;
     }

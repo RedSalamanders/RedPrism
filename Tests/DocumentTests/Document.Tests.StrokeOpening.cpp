@@ -1,9 +1,9 @@
 #include "Document.Tests.StrokeOpening.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "Selection.h"
 #include "StrokeOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -542,7 +542,7 @@ void StalePublicationPreservesNewerOwnerState()
         }
         }
         const auto currentRevision = fixture.session.history.CurrentRevision();
-        const std::size_t currentUndoCount = fixture.session.history.UndoCount();
+        const int currentUndoCount = fixture.session.history.UndoCount();
         const CanvasDocument* currentDocument =
             fixture.session.Document() ? &fixture.session.Document().value() : nullptr;
         const auto currentDocumentIdentity = currentDocument ? currentDocument->layers.Identity() : nullptr;

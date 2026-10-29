@@ -5,6 +5,10 @@
 #include <memory>
 #include <new>
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Application::SelectionCursorJob final : public Job
 {
   public:
@@ -89,6 +93,7 @@ class Application::SelectionCursorJob final : public Job
     std::optional<SelectionDisplayValue> _display;
     std::optional<bool> _inside;
 };
+#pragma warning(pop)
 
 void Application::InvalidateSelectionCursorOwner() noexcept
 {

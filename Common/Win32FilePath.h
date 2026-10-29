@@ -43,7 +43,9 @@ enum class Use
 {
     if (path.find(L'/') != std::wstring_view::npos)
         return true;
-    std::size_t start = IsDosAbsolute(path) ? 3 : path.starts_with(L"\\\\") ? 2 : 0;
+    std::size_t start = IsDosAbsolute(path)         ? std::size_t{3}
+                        : path.starts_with(L"\\\\") ? std::size_t{2}
+                                                    : std::size_t{0};
     if (path.starts_with(L"\\\\") && IsUncAbsolute(path))
     {
         const std::size_t serverEnd = path.find(L'\\', 2);

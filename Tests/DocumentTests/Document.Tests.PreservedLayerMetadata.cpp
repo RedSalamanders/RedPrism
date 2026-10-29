@@ -1,8 +1,8 @@
 #include "Document.Tests.PreservedLayerMetadata.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "LayerMetadataWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>
@@ -180,7 +180,7 @@ struct OwnerState final
     std::size_t redoCount = 0;
     std::wstring undoName;
     std::wstring redoName;
-    std::size_t depth = 0;
+    int depth = 0;
 
     explicit OwnerState(const DocumentSession& session)
         : document(session.Document()), generation(session.Generation()), revision(session.history.CurrentRevision()),
@@ -228,6 +228,9 @@ const char* KindName(LayerMetadataKind kind) noexcept
         return "opacity";
     case LayerMetadataKind::SetBlendMode:
         return "blend";
+    case ::LayerMetadataKind::FlipHorizontal:
+    case ::LayerMetadataKind::FlipVertical:
+        break;
     }
     return "unknown";
 }
@@ -298,6 +301,9 @@ void PreservedGestureMatrix()
                     break;
                 case LayerMetadataKind::SetBlendMode:
                     expected.layers[0].blendMode = LayerBlendMode::Screen;
+                    break;
+                case ::LayerMetadataKind::FlipHorizontal:
+                case ::LayerMetadataKind::FlipVertical:
                     break;
                 }
                 Expect(SameCapturedPayload(session.Document().value(), std::move(expected).Seal()),
@@ -535,6 +541,9 @@ void AllOpeningAndNestedKinds()
             break;
         case LayerMetadataKind::SetBlendMode:
             expected.layers[0].blendMode = LayerBlendMode::Screen;
+            break;
+        case ::LayerMetadataKind::FlipHorizontal:
+        case ::LayerMetadataKind::FlipVertical:
             break;
         }
         const auto expectedDocument = std::move(expected).Seal();

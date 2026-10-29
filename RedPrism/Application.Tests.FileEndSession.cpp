@@ -1,6 +1,5 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
@@ -8,6 +7,7 @@
 #include "Runtime.Tests.EndSessionWriteTestGate.h"
 #include "Runtime.Tests.ExportWorkTestGate.h"
 #include "Runtime.Tests.ProjectSaveTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Win32FilePath.h"
 #include "WorkerWriteCompletion.h"
 #include "resource.h"
@@ -35,6 +35,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ReleaseWriter final
 {
     HANDLE waitEntered = nullptr;
@@ -42,6 +46,7 @@ struct ReleaseWriter final
     HANDLE nativeWaitReturned = nullptr; // optional controlled deadline: no producer release before owner return
     std::atomic<bool> observed{false}, released{false};
 };
+#pragma warning(pop)
 
 DWORD WINAPI ReleaseWriterAfterWait(void* raw) noexcept
 {
@@ -388,6 +393,10 @@ int Application::RunFileEndSessionSelfTest() noexcept
             }
         });
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -406,6 +415,8 @@ int Application::RunFileEndSessionSelfTest() noexcept
         unsigned int waitVisits = 0, phaseAfterWait = 0;
         DWORD waitResult = WAIT_FAILED, remaining = 0;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<State*>(raw);

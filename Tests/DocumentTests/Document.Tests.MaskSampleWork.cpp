@@ -154,7 +154,7 @@ void CancellationRefusal()
 
     std::stop_source shutdown;
     static_cast<void>(shutdown.request_stop());
-    const CancelToken shutdownToken{{}, shutdown.get_token()};
+    const CancelToken shutdownToken({}, shutdown.get_token());
     const Raster shutdownCancelled = ImageFilters::RenderMaskPixelsForWork(source, transform, 2, 2, 9, shutdownToken);
     Expect(!shutdownCancelled.HasStorage(), "cancel.pre-cancel-shutdown-token-returns-empty");
 }

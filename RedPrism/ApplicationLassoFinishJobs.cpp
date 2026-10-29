@@ -17,6 +17,10 @@
 
 namespace
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct LassoFinishPayload final : DeferredReleaseNode
 {
     std::shared_ptr<LassoWorkTestGate> gate;
@@ -43,6 +47,8 @@ struct LassoFinishPayload final : DeferredReleaseNode
         { const std::unique_ptr<LassoFinishPayload> owned(static_cast<LassoFinishPayload*>(node)); };
     }
 };
+#pragma warning(pop)
+
 struct RetireLassoFinishPayload final
 {
     void operator()(LassoFinishPayload* value) const noexcept
@@ -61,6 +67,10 @@ bool AddLassoFinishBytes(std::uint64_t& value, std::uint64_t extra) noexcept
     return true;
 }
 } // namespace
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Application::LassoFinishJob final : public Job
 {
   public:
@@ -261,6 +271,8 @@ class Application::LassoFinishJob final : public Job
     HRESULT _captureError = S_OK;
     bool _captured = false, _refreshResidency = false;
 };
+#pragma warning(pop)
+
 HRESULT Application::StartLassoFinish(std::uint64_t opening) noexcept
 {
     if (!_activeHostRequest || _lassoFinishTicket || !LassoInputCurrentOwner(opening))

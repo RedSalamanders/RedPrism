@@ -1,6 +1,6 @@
 #include "Host.Tests.KeyboardState.h"
 
-#include "../../RedPrism/KeyboardState.h"
+#include "RedPrism/KeyboardState.h"
 
 #include <algorithm>
 #include <array>

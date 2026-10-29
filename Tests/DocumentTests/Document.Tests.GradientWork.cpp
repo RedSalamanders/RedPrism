@@ -120,13 +120,6 @@ bool Near(int value, int target, int tolerance)
     return std::abs(value - target) <= tolerance;
 }
 
-bool GrayPixel(const Raster& raster, int x, int y, std::uint8_t expected)
-{
-    std::uint8_t actual = 0;
-    raster.ReadRegion(x, y, 1, 1, &actual, 1, 0);
-    return actual == expected;
-}
-
 struct MidTileCancel final
 {
     CancelSource* source = nullptr;

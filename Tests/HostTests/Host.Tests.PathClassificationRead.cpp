@@ -1,8 +1,8 @@
 #include "Host.Tests.PathClassificationRead.h"
 
-#include "../../Common/Executor.h"
-#include "../../Common/PathClassificationRead.h"
-#include "../../Common/PathClassificationWork.h"
+#include "Common/Executor.h"
+#include "Common/PathClassificationRead.h"
+#include "Common/PathClassificationWork.h"
 
 #include <array>
 #include <cstddef>
@@ -270,6 +270,10 @@ void* OpenOverlappedNamedPipe(void* context, const wchar_t*) noexcept
     return state.server->release();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class ReaderFixture final
 {
   public:
@@ -290,6 +294,7 @@ class ReaderFixture final
   private:
     wil::unique_handle _event;
 };
+#pragma warning(pop)
 
 bool WaitForCompletion(HANDLE event) noexcept
 {

@@ -1,5 +1,5 @@
 #include "Host.Tests.UiTimingAttribution.h"
-#include "../../Common/UiTiming.h"
+#include "Common/UiTiming.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

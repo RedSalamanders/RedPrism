@@ -1,7 +1,7 @@
 #include "Application.h"
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "LassoOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include <cstdio>
 #include <memory>
 #include <optional>
@@ -24,6 +24,10 @@ CanvasDocument DraftHostFixture()
     return std::move(fixture).Seal();
 }
 } // namespace
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::LassoDisplayTestOpeningJob final : public Job
 {
   public:
@@ -106,6 +110,8 @@ class Application::LassoDisplayTestOpeningJob final : public Job
     unsigned int _stage = 0;
     bool _cleanup = false;
 };
+#pragma warning(pop)
+
 int Application::RunStandaloneLassoDraftDisplaySelfTest(HINSTANCE instance) noexcept
 {
     unsigned int checks = 0, failures = 0;

@@ -35,7 +35,7 @@ and rollback history. A skill is not a pin manifest or a successful test receipt
 - Import consumer props/targets and reference `src/DxUi.vcxproj` once. Do not enumerate library `.cpp` files.
 - Match CRT (`/MDd` Debug and ASan Debug, `/MD` Release), toolset, architecture, and headers.
 
-## Facts about the pinned library (read the pinned sources under `.build/dependencies/DxUi/source/<commit>`)
+## Facts about the pinned library (read the pinned sources under `.build/dependencies/DxUi/source/<commit-prefix16>`)
 
 - `Toolbar` is a `Panel`: it lays out nothing. Set every child's bounds in `ChromeHost::Arrange`.
 - `Toggle::Paint` draws a switch even for `ButtonVariant::IconOnly`, and `Toolbar::AddToggleButton` gives that

@@ -973,7 +973,7 @@ int Application::RunKeyboardSelfTest() noexcept
             std::array<BYTE, 256> saved{};
             const bool restore = KeyboardState::Read(saved);
             std::array<BYTE, 256> altGr{};
-            for (const UINT held : {VK_CONTROL, VK_LCONTROL, VK_MENU, VK_RMENU})
+            for (const auto held : {UINT{VK_CONTROL}, UINT{VK_LCONTROL}, UINT{VK_MENU}, UINT{VK_RMENU}})
             {
                 altGr[held] = 0x80;
             }

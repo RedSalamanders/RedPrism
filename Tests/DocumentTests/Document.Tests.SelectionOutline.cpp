@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionOutline.h"
 
-#include "../../RedPrism/SelectionOutlineWork.h"
+#include "RedPrism/SelectionOutlineWork.h"
 
 #include "DeferredRelease.h"
 #include "SharedPublicationMemory.h"

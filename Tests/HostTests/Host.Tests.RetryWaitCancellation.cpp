@@ -19,6 +19,10 @@ void Expect(bool condition, const char* name) noexcept
     std::printf("%s retrywait.%s.%s\n", condition ? "PASS" : "FAIL", gScenario, name);
     gFailures += condition ? 0 : 1;
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final
 {
     JobScheduler* scheduler = nullptr;
@@ -37,6 +41,8 @@ struct State final
     unsigned int signalFaultVisits = 0;
     std::int32_t readyError = S_OK;
 };
+#pragma warning(pop)
+
 void BeforePublication(void* context) noexcept
 {
     auto& state = *static_cast<State*>(context);
@@ -49,6 +55,10 @@ void BeforePublication(void* context) noexcept
         std::abort();
     }
 }
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Unrelated final : public Job
 {
     State& _state;
@@ -69,6 +79,12 @@ class Unrelated final : public Job
         (void)SetEvent(_state.release.get());
     }
 };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CancelledRetry final : public Job, public RetryWaitReceiver
 {
     State& _state;
@@ -113,6 +129,8 @@ class CancelledRetry final : public Job, public RetryWaitReceiver
         _state.completed = true;
     }
 };
+#pragma warning(pop)
+
 std::int32_t SignalFault(void* context, RetryWaitFault fault, std::size_t) noexcept
 {
     auto& state = *static_cast<State*>(context);

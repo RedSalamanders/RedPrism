@@ -1,6 +1,7 @@
 #include "Application.h"
+#include <cstddef>
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Adjust.h"
 #include "AdjustControls.h"

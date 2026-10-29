@@ -1,7 +1,7 @@
 #include "Document.Tests.RasterResidencyPlan.h"
 
-#include "../../Common/RasterResidencyPlanWork.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Common/RasterResidencyPlanWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstddef>

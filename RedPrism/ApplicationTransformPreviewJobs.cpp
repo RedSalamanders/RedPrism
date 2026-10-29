@@ -14,6 +14,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct TransformPreviewPayload final : DeferredReleaseNode
 {
     std::optional<TransformPreviewInput> input;
@@ -37,6 +41,8 @@ struct TransformPreviewPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireTransformPreviewPayload final
 {
     void operator()(TransformPreviewPayload* value) const noexcept
@@ -49,6 +55,10 @@ struct RetireTransformPreviewPayload final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::TransformPreviewJob final : public Job
 {
   public:
@@ -182,6 +192,7 @@ class Application::TransformPreviewJob final : public Job
     std::unique_ptr<TransformPreviewPayload, RetireTransformPreviewPayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 void Application::CancelTransformPreviewJobs() noexcept
 {

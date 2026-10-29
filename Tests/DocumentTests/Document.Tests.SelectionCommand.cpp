@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionCommand.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "Document.h"
 #include "Selection.h"
@@ -163,6 +163,14 @@ const char* StageName(DocumentHistory::PrepareStage stage) noexcept
         return "replacement-snapshot";
     case Stage::AdjustmentSnapshot:
         return "adjustment-snapshot";
+    case ::DocumentHistory::PrepareStage::StorageIndexBounds:
+    case ::DocumentHistory::PrepareStage::StorageIndexClone:
+    case ::DocumentHistory::PrepareStage::StorageIndexHistoryEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexLiveEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexMembership:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyFullScan:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyRecord:
+        break;
     }
     return "unknown";
 }

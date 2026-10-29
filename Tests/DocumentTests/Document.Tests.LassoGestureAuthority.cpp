@@ -1,6 +1,5 @@
 #include "Document.Tests.LassoGestureAuthority.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "DocumentDraft.h"
 #include "Executor.h"
@@ -12,6 +11,7 @@
 #include "LocallyOwnedPublication.h"
 #include "MemoryAdmission.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>
@@ -75,6 +75,10 @@ struct Stamp final
     bool redo;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct OpeningState final
 {
     JobScheduler* scheduler = nullptr;
@@ -107,7 +111,12 @@ struct OpeningState final
     bool unboundRefused = false;
     bool boundOriginal = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class OpeningJob final : public Job
 {
   public:
@@ -230,7 +239,12 @@ class OpeningJob final : public Job
     OpeningState& _state;
     bool _preparing = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Fixture final
 {
     explicit Fixture(JobScheduler& jobs) : scheduler(jobs)
@@ -281,6 +295,7 @@ struct Fixture final
     OpeningState later;
     std::optional<LassoFinishInput> finishInput;
 };
+#pragma warning(pop)
 
 bool Submit(Fixture& fixture, OpeningState* selected = nullptr)
 {

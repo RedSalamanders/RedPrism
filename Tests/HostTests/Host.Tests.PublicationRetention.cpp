@@ -1,7 +1,7 @@
 #include "Host.Tests.PublicationRetention.h"
 
-#include "../../Common/Jobs.h"
-#include "../../Common/SharedPublicationMemory.h"
+#include "Common/Jobs.h"
+#include "Common/SharedPublicationMemory.h"
 
 #include <windows.h>
 
@@ -69,10 +69,15 @@ void Wait(HANDLE event, const char* name) noexcept
         SetupFailure(name, result == WAIT_FAILED ? GetLastError() : result);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct MemorySourceState final
 {
     std::atomic<unsigned int> calls{0};
 };
+#pragma warning(pop)
 
 bool SampleMemory(void* context, MemorySnapshot& snapshot) noexcept
 {
@@ -105,6 +110,10 @@ enum class PublicationMode
     AttemptOnly
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PublicationState final
 {
     JobScheduler* scheduler = nullptr;
@@ -137,7 +146,12 @@ struct PublicationState final
     bool sameTicketAcrossStages = true;
     JobResult completedResult{JobStatus::Failed};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PublicationJob final : public Job
 {
   public:
@@ -203,6 +217,7 @@ class PublicationJob final : public Job
   private:
     PublicationState& _state;
 };
+#pragma warning(pop)
 
 void WaitForPublication(JobScheduler& scheduler, PublicationState& state)
 {
@@ -327,6 +342,10 @@ void TestRefusalPrerequisites()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct TerminalState final
 {
     JobScheduler* scheduler = nullptr;
@@ -341,7 +360,12 @@ struct TerminalState final
     JobResult completedResult{JobStatus::Finished};
     unsigned int completedCount = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class TerminalJob final : public Job
 {
   public:
@@ -390,6 +414,7 @@ class TerminalJob final : public Job
     HANDLE _release;
     JobStatus _runStatus;
 };
+#pragma warning(pop)
 
 void TestFailedAndCancelledStagesSkipPublication()
 {
@@ -471,11 +496,16 @@ void TestCancellationAfterTransferKeepsChargeUntilLeaseRetirement()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CloseState final
 {
     std::atomic<unsigned int> ownerHookCount{0};
     std::atomic<unsigned int> workerHookCount{0};
 };
+#pragma warning(pop)
 
 void CloseOwnerHook(void* context) noexcept
 {
@@ -487,13 +517,22 @@ void CloseWorkerHook(void* context) noexcept
     static_cast<CloseState*>(context)->workerHookCount.fetch_add(1, std::memory_order_relaxed);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct CloseWorkerState final
 {
     HANDLE entered = nullptr;
     std::atomic<unsigned int> completedCount{0};
     std::atomic<unsigned int> retiredCount{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class CloseWorkerJob final : public Job
 {
   public:
@@ -517,6 +556,7 @@ class CloseWorkerJob final : public Job
   private:
     CloseWorkerState& _state;
 };
+#pragma warning(pop)
 
 void TestCloseDropsCallbacksAndPreservesForeignEndpoint()
 {
@@ -619,6 +659,10 @@ bool SampleMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PublicationBoundaryJob final : public Job
 {
   public:
@@ -651,6 +695,7 @@ class PublicationBoundaryJob final : public Job
     JobScheduler& _scheduler;
     MemoryState& _state;
 };
+#pragma warning(pop)
 
 void Expect(bool condition, const char* name) noexcept
 {
@@ -831,10 +876,15 @@ void Wait(HANDLE event, const char* name) noexcept
         SetupFailure(name, result == WAIT_FAILED ? GetLastError() : result);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct MemorySourceState final
 {
     std::atomic<unsigned int> calls{0};
 };
+#pragma warning(pop)
 
 bool SampleMemory(void* context, MemorySnapshot& snapshot) noexcept
 {
@@ -860,6 +910,10 @@ JobOptions Options() noexcept
     return options;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct OwnerState final
 {
     JobScheduler* scheduler = nullptr;
@@ -897,7 +951,12 @@ struct OwnerState final
     std::uint64_t finalCallbackCharge = 0;
     JobResult completedResult{JobStatus::Failed};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 struct WorkerAlias final
 {
     std::shared_ptr<SharedPublicationMemory> owner;
@@ -914,7 +973,12 @@ struct WorkerAlias final
         state.wrapperDestructorCount.fetch_add(1, std::memory_order_relaxed);
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class PublicationOwnerJob final : public Job
 {
   public:
@@ -985,6 +1049,7 @@ class PublicationOwnerJob final : public Job
     OwnerState& _state;
     std::unique_ptr<WorkerAlias> _wrapper;
 };
+#pragma warning(pop)
 
 void WaitForPublication(JobScheduler& scheduler, OwnerState& state)
 {

@@ -1,12 +1,12 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h"
 #include "BenchmarkMachine.h"
 #include "ChromeHost.h"
 #include "Kernels.h"
 #include "PreparedLayerRows.h"
 #include "Resources.h"
 #include "Runtime.Tests.LayerMetadataTestGate.h"
+#include "Tests/Support/Support.Tests.PreparedLayerRowsStressFixture.h"
 #include "UiTiming.h"
 #include "VersionInfo.h"
 #include "resource.h"

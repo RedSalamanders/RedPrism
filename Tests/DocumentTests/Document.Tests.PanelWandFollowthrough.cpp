@@ -1,11 +1,11 @@
 #include "Document.Tests.PanelWandFollowthrough.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Executor.h"
 #include "Selection.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WandLayerSelectionWork.h"
 
 #include <array>

@@ -13,6 +13,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ColorDismissalPayload final : DeferredReleaseNode
 {
     std::optional<ColorDismissalInput> input;
@@ -36,6 +40,8 @@ struct ColorDismissalPayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireColorDismissal final
 {
     void operator()(ColorDismissalPayload* payload) const noexcept
@@ -48,6 +54,10 @@ struct RetireColorDismissal final
 };
 } // namespace
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::ColorDismissalJob final : public Job
 {
   public:
@@ -137,6 +147,7 @@ class Application::ColorDismissalJob final : public Job
     std::int32_t _captureError = 0;
     std::unique_ptr<ColorDismissalPayload, RetireColorDismissal> _payload;
 };
+#pragma warning(pop)
 
 Application::HostOutcome Application::StartColorCancellation(std::uint64_t ordinal) noexcept
 {

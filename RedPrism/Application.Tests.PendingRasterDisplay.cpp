@@ -661,6 +661,10 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
                 owner->_pixelMoveWorkTestGate = moveGate;
             else
                 owner->_gradientWorkTestGate = gradientGate;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
             struct FaultState final
             {
                 Application& owner;
@@ -673,6 +677,8 @@ int Application::RunStandalonePendingRasterDisplaySelfTest(HINSTANCE instance) n
                 bool held = false;
                 bool retained = false;
             };
+#pragma warning(pop)
+
             FaultState state{*owner, move, mode, gradientGate, moveGate, priorGraph};
             const auto dispatch = [](void* context, void* native) noexcept
             {

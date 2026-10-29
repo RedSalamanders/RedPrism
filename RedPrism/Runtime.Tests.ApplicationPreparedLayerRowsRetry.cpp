@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.LayerRowsTestGate.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -77,6 +77,10 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
     auto initialGate = std::make_shared<LayerRowsTestGate>();
     initialGate->hold = false; // Initial publication is observed; only the later explicit retry is event-gated.
     owner->_layerRowsTestGate = initialGate;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Pump final
     {
         Application& owner;
@@ -86,7 +90,9 @@ int Application::RunStandalonePreparedLayerRowsRetrySelfTest(HINSTANCE instance)
         bool viewInput = false;
         bool duplicateRetryBlocked = false;
         bool unexpectedInitialHold = false;
-    } pump{*owner, {}};
+    }
+#pragma warning(pop)
+    pump{*owner, {}};
     const auto dispatch = [](void* context, void* native) noexcept
     {
         auto& state = *static_cast<Pump*>(context);

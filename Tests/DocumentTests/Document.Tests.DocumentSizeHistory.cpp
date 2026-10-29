@@ -1,5 +1,5 @@
 #include "Document.Tests.DocumentSizeHistory.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "CanvasSize.h"
 #include "Document.h"
@@ -290,17 +290,6 @@ struct ThrowAtHistoryStage final
             throw std::bad_alloc{};
     }
 };
-
-std::optional<PreparedDocumentSize> PrepareObserved(DocumentSession& session, CanvasDocument result,
-                                                    DocumentHistory::PrepareObserver observer)
-{
-    const auto token = session.CaptureJobToken();
-    if (!token)
-        return std::nullopt;
-    return PrepareDocumentSizePublication(session.Document(), session.ActiveLayerID(), *token,
-                                          session.history.CaptureState(), std::move(result), L"Image Size", {},
-                                          observer);
-}
 
 void ObserverAllocationFailuresPreserveSeededRedo()
 {

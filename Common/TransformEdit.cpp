@@ -238,18 +238,20 @@ std::optional<std::array<Vec2, 4>> TransformDrag::Corners(Vec2 point, bool shift
         }
         if (handle % 2 == 0)
         {
-            moved[count++] = handle / 2;
+            moved[static_cast<std::size_t>(count++)] = handle / 2;
         }
         else
         {
-            moved[count++] = handle / 2;
-            moved[count++] = (handle / 2 + 1) % 4;
+            moved[static_cast<std::size_t>(count++)] = handle / 2;
+            moved[static_cast<std::size_t>(count++)] = (handle / 2 + 1) % 4;
         }
         break;
     case Mode::Move:
         moved = {0, 1, 2, 3};
         count = 4;
         break;
+    case ::TransformDrag::Mode::Resize:
+    case ::TransformDrag::Mode::Rotate:
     default:
         return std::nullopt;
     }

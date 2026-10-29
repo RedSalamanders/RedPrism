@@ -1,4 +1,3 @@
-#include "../Support/Support.Tests.FailureReports.h"
 #include "AdapterSelection.h"
 #include "AddressSanitizerProbe.h"
 #include "CanvasViewport.h"
@@ -89,6 +88,7 @@
 #include "Localization.h"
 #include "Resources.h"
 #include "SettingsStore.h"
+#include "Tests/Support/Support.Tests.FailureReports.h"
 #include "TransformOverlay.h"
 #include "Version.h"
 #include "VersionInfo.h"
@@ -632,7 +632,7 @@ __declspec(noinline) UINT RuntimeEditorToolName(EditorTool tool) noexcept
 {
     return EditorToolNameId(tool);
 }
-__declspec(noinline) EditorTool RuntimeEditorToolForCommand(UINT command) noexcept
+__declspec(noinline) EditorTool RuntimeEditorToolForCommand(int command) noexcept
 {
     return CommandIds::ToolForSelectCommand(command);
 }

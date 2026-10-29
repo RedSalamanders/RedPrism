@@ -17,6 +17,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct GradientPayload final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory; // All captured/output owners retire first.
@@ -86,6 +90,8 @@ struct GradientPayload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
 struct RetireGradientPayload final
 {
     void operator()(GradientPayload* payload) const noexcept
@@ -101,6 +107,10 @@ struct RetireGradientPayload final
 
 // One admission/capture protocol serves both kinds. Requests are primitive event-time values; source handles
 // are captured only under the full held reservation. Run never dereferences the Application or mailboxes.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::GradientJob final : public Job
 {
   public:
@@ -341,6 +351,9 @@ class Application::GradientJob final : public Job
             case RasterEditStatus::Cancelled:
                 outcome = HostOutcome::Cancelled;
                 break;
+            case ::RasterEditStatus::Invalid:
+            case ::RasterEditStatus::Memory:
+            case ::RasterEditStatus::TooLarge:
             default:
                 outcome = HostOutcome::Failed;
                 error = status == RasterEditStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
@@ -423,6 +436,7 @@ class Application::GradientJob final : public Job
     std::unique_ptr<GradientPayload, RetireGradientPayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 Application::GradientRequest Application::CaptureGradientRequest() const noexcept
 {

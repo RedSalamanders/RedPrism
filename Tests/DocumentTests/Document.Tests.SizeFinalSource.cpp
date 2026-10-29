@@ -1,12 +1,12 @@
 #include "Document.Tests.SizeFinalSource.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasSize.h"
 #include "Document.h"
 #include "DocumentSizeHistory.h"
 #include "Executor.h"
 #include "RasterWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdint>

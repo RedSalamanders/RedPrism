@@ -108,8 +108,13 @@ class PreparedDuplicateOpening final
     SnapGuides _retiredGuides;
     std::uint64_t _revision;
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct DuplicateOpeningResult final
 {
     DuplicateOpeningStatus status = DuplicateOpeningStatus::Invalid;
     std::optional<PreparedDuplicateOpening> publication;
 };
+#pragma warning(pop)

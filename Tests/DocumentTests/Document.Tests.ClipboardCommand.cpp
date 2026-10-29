@@ -1,6 +1,6 @@
 #include "Document.Tests.ClipboardCommand.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ClipboardCommandWork.h"
 

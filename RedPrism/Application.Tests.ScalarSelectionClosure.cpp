@@ -1,10 +1,10 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Runtime.Tests.ApplicationProcessingTestProbe.h"
 #include "Runtime.Tests.SelectionMoveCloseTestGate.h"
 #include "SelectionMoveOpeningWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>

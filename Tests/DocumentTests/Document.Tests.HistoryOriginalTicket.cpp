@@ -4,7 +4,7 @@
 #include "Jobs.h"
 #include "SharedPublicationMemory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -84,6 +84,10 @@ struct Documents final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct JobState final
 {
     JobScheduler* scheduler = nullptr;
@@ -107,7 +111,12 @@ struct JobState final
     HANDLE enteredGate = nullptr;
     HANDLE resumeGate = nullptr;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PrepareHistoryJob final : public Job
 {
   public:
@@ -182,6 +191,7 @@ class PrepareHistoryJob final : public Job
   private:
     JobState& _state;
 };
+#pragma warning(pop)
 
 template <class State> void CaptureAdmittedState(JobScheduler& scheduler, State& state)
 {
@@ -398,6 +408,10 @@ void CancellationLeavesRedoAndRevisionUntouched()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct CloseState final
 {
     JobScheduler* scheduler = nullptr;
@@ -418,7 +432,12 @@ struct CloseState final
     std::weak_ptr<const SharedPublicationMemory> weakMemory;
     std::int32_t bindResult = E_UNEXPECTED;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct ObserverState final
 {
     JobScheduler* scheduler = nullptr;
@@ -426,7 +445,12 @@ struct ObserverState final
     SharedRetainedMemoryLease lease;
     std::int32_t result = E_UNEXPECTED;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class ObserverJob final : public Job
 {
   public:
@@ -444,7 +468,12 @@ class ObserverJob final : public Job
   private:
     ObserverState& _state;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class JoinedCloseJob final : public Job
 {
   public:
@@ -493,6 +522,7 @@ class JoinedCloseJob final : public Job
   private:
     CloseState& _state;
 };
+#pragma warning(pop)
 
 void JoinedCloseKeepsHeldGraphAccounting()
 {

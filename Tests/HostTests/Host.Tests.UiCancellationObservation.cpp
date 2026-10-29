@@ -1,6 +1,6 @@
 #include "Host.Tests.UiCancellationObservation.h"
 
-#include "../../RedPrism/UiCancellationObservation.h"
+#include "RedPrism/UiCancellationObservation.h"
 
 #include <array>
 #include <atomic>

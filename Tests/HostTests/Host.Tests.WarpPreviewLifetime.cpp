@@ -1,9 +1,9 @@
 #include "Host.Tests.WarpPreviewLifetime.h"
 
-#include "../../Common/DeferredRelease.h"
-#include "../../Common/Jobs.h"
-#include "../../Common/SharedPublicationMemory.h"
-#include "../../Common/WarpPreviewWork.h"
+#include "Common/DeferredRelease.h"
+#include "Common/Jobs.h"
+#include "Common/SharedPublicationMemory.h"
+#include "Common/WarpPreviewWork.h"
 
 #include <wil/resource.h>
 #include <windows.h>
@@ -120,6 +120,10 @@ void DestroyQueuedOnJoinedWorker(DeferredQueue& queue)
     return settings;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct PreviewState final
 {
     JobScheduler* scheduler = nullptr;
@@ -144,7 +148,12 @@ struct PreviewState final
     bool readerMatchesLiteral = false;
     bool callbacksCompleted = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class WarpPreviewJob final : public Job
 {
   public:
@@ -205,6 +214,7 @@ class WarpPreviewJob final : public Job
   private:
     PreviewState& _state;
 };
+#pragma warning(pop)
 
 void StartScheduler(JobScheduler& scheduler)
 {
@@ -324,6 +334,10 @@ struct NoRetainedSlotState final
     JobResult completion{JobStatus::Failed};
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class NoRetainedSlotJob final : public Job
 {
   public:
@@ -343,6 +357,7 @@ class NoRetainedSlotJob final : public Job
   private:
     NoRetainedSlotState& _state;
 };
+#pragma warning(pop)
 
 void TestCompletedFreeSlotTransfer()
 {

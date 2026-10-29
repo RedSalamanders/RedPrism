@@ -1,6 +1,6 @@
 #include "Document.Tests.RasterUploadLayout.h"
 
-#include "../../Common/RasterUploadLayout.h"
+#include "Common/RasterUploadLayout.h"
 
 #include <array>
 #include <cstdint>

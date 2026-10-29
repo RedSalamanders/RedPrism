@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.MaskWorkTestGate.h"
@@ -34,6 +34,10 @@ int Application::RunMaskWorkSelfTest() noexcept
         Undo,
         LargeRelease
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -44,6 +48,8 @@ int Application::RunMaskWorkSelfTest() noexcept
         Raster source;
         bool visited = false, held = false, cancelledRetained = false, viewChanged = false;
     };
+#pragma warning(pop)
+
     unsigned int checks = 0;
     int failures = 0;
     const auto expect = [&](bool condition, const char* fact, Mode mode, bool after, int kind) noexcept

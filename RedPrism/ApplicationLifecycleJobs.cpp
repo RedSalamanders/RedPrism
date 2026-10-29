@@ -20,6 +20,10 @@ namespace
 {
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct LifecyclePayload final : DeferredReleaseNode
 {
     DocumentHistory::StateView history;
@@ -43,6 +47,8 @@ struct LifecyclePayload final : DeferredReleaseNode
     }
 };
 #pragma warning(pop)
+
+#pragma warning(pop)
 struct RetireLifecyclePayload final
 {
     void operator()(LifecyclePayload* value) const noexcept
@@ -63,9 +69,13 @@ std::optional<std::array<int, 2>> Application::NewCanvasDimensions(const HostSiz
     const double height = std::round(draft.newHeight);
     if (width < 1 || width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
         return std::nullopt;
-    return std::array<int, 2>{static_cast<int>(width), static_cast<int>(height)};
+    return std::array<int, 2>{{static_cast<int>(width), static_cast<int>(height)}};
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::DocumentLifecycleJob final : public Job
 {
   public:
@@ -254,6 +264,7 @@ class Application::DocumentLifecycleJob final : public Job
     std::unique_ptr<LifecyclePayload, RetireLifecyclePayload> _payload;
     HRESULT _captureError = S_OK;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartDocumentLifecycle(std::optional<std::array<int, 2>> dimensions,
                                             std::optional<std::uint64_t> invocation) noexcept

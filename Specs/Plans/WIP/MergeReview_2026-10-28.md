@@ -24,6 +24,10 @@
 - **Coordinates with**: [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) (HOLD). Rows marked
   *latent* only block P1 activation. [`AdversarialReview.md`](AdversarialReview.md) is the older static review
   at `97dd25b`; this file does not re-triage it.
+- **Line anchors**: `path:line` references are to `85eaef7`. PR #19 (shared native build policy, merged
+  2026-10-29 after this snapshot) added `/Wall` conversions, `case` labels and warning-pragma scopes to many
+  cited files. It changed no reviewed behavior, but lines moved: re-anchor each row before fixing it. The CI-row
+  files (`Tools/Get-CiNativeScope.ps1`, `test.ps1`, `IsaScan.cs`) are unchanged.
 
 This file is a non-normative execution record. Requirements move into the owning domain spec in the slice that
 lands them.

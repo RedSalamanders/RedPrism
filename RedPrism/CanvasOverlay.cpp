@@ -530,7 +530,8 @@ namespace
 {
 [[nodiscard]] D2D1_COLOR_F ColorFromArgb(uint32_t argb, float alpha = 1.0f) noexcept
 {
-    return D2D1::ColorF(((argb >> 16) & 0xFFu) / 255.0f, ((argb >> 8) & 0xFFu) / 255.0f, (argb & 0xFFu) / 255.0f,
+    return D2D1::ColorF(static_cast<float>((argb >> 16) & 0xFFu) / 255.0f,
+                        static_cast<float>((argb >> 8) & 0xFFu) / 255.0f, static_cast<float>(argb & 0xFFu) / 255.0f,
                         alpha);
 }
 } // namespace

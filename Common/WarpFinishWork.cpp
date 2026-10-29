@@ -58,7 +58,8 @@ std::optional<WarpFinishMemoryPlan> DocumentSession::PlanWarpFinishMemory(bool c
         !add(plan.cpuBytes, 1, 1024 * 1024) ||
         !add(plan.cpuBytes, plan.maximumReplayTiles, 8192 + 40 * sizeof(RasterTile)) ||
         (target->mask && !target->mask->placement && target->mask->asset.image.PixelCount() > 1 &&
-         (!mask || !add(plan.cpuBytes, 1, mask) || !add(plan.cpuBytes, 1, target->mask->asset.image.Stride()) ||
+         (!mask || !add(plan.cpuBytes, std::uint64_t{1}, mask) ||
+          !add(plan.cpuBytes, std::uint64_t{1}, static_cast<std::uint64_t>(target->mask->asset.image.Stride())) ||
           !add(plan.cpuBytes, width, sizeof(int)) || !add(plan.cpuBytes, 2, 96 * 96 + 4096))))
         return std::nullopt;
     // Private density and uint output survive every replay phase. Tail replacement never resets the epoch.

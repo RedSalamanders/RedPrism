@@ -1,8 +1,8 @@
-#include "../../Common/ContinuationReceipt.h"
+#include "Common/ContinuationReceipt.h"
 
 #include "Host.Tests.ContinuationReceipt.h"
 
-#include "../../Common/ContinuationQueue.h"
+#include "Common/ContinuationQueue.h"
 
 #include <array>
 #include <cstddef>

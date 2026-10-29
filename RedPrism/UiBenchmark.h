@@ -15,6 +15,10 @@
 
 // Opt-in harness state only. Fixed per-operation sample storage lives on the heap, outside timed work.
 // Application owns it until shutdown; every command is driven through the actual outer message/frame loop.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct UiBenchmarkState final
 {
     ~UiBenchmarkState(); // owned opt-in save/export fixture cleanup after Application joins workers
@@ -100,3 +104,4 @@ struct UiBenchmarkState final
     std::optional<ContinuationReceipt> gradientApplyReceipt;
     std::optional<ContinuationReceipt> samplerReceipt;
 };
+#pragma warning(pop)

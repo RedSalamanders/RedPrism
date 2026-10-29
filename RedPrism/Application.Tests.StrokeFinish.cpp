@@ -5,7 +5,7 @@
 #include "PreparedLayerRows.h"
 #include "Runtime.Tests.StrokeFinishTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

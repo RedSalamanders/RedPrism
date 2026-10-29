@@ -5,7 +5,7 @@
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 #include "Runtime.Tests.ColorWorkTestGate.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -494,6 +494,11 @@ int Application::RunColorDisplayHostSelfTest() noexcept
     };
 
     if (!stalePreparedCase("identity.cancel-refuses-prepared-publication",
+
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
                            [this, sourceBytes]
                            {
                                const auto targetId = _session.ActiveLayerID();
@@ -510,7 +515,9 @@ int Application::RunColorDisplayHostSelfTest() noexcept
                                        document = std::move(fixture).Seal();
                                    });
                                return _session.ActiveLayer()->asset->image == replacement && replacement != original;
-                           }))
+                           }
+#pragma warning(pop)
+                           ))
         return fail(L"Changed source identity accepted a prepared display publication.\n");
 
     if (!prepare())
@@ -636,8 +643,13 @@ int Application::RunColorDisplayHostSelfTest() noexcept
 
     // CPU preparation owns no GPU resources. Rebuilding the application's actual WARP device before or after
     // preparation must preserve the admitted CPU authority and render the eventual preview on the new device.
-    const auto deviceCase = [this, &prepare, &start, &waitEntered, &settle, &hasRetiredOffOwner, &expect, &source,
-                             &siblingImage, &expectedDisplay](bool afterPreparation) noexcept
+    const auto deviceCase =
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
+        [this, &prepare, &start, &waitEntered, &settle, &hasRetiredOffOwner, &expect, &source, &siblingImage,
+         &expectedDisplay](bool afterPreparation) noexcept
     {
         if (!prepare())
             return false;
@@ -673,7 +685,9 @@ int Application::RunColorDisplayHostSelfTest() noexcept
                           _session.ActiveLayer()->asset->image == source &&
                           shown->layers[1].asset->image == siblingImage &&
                           _session.history.CurrentRevision() == revision && _session.history.UndoCount() == 0);
-    };
+    }
+#pragma warning(pop)
+    ;
     if (!deviceCase(false) || !deviceCase(true))
         return fail(L"A device recovery invalidated CPU color authority or failed to render the prepared display.\n");
 

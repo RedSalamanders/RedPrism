@@ -323,7 +323,7 @@ void InvalidDimensionsRefuseBeforeRounding()
 {
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const double infinity = std::numeric_limits<double>::infinity();
-    const std::array<double, 4> invalidWidths{nan, infinity, 30'001.0, 1.0e100};
+    const std::array<double, 4> invalidWidths{{nan, infinity, 30'001.0, 1.0e100}};
     for (std::size_t i = 0; i < invalidWidths.size(); ++i)
     {
         ImageLayer layer = BlankLayer(L"invalid finish dimension", 1, 1);

@@ -65,6 +65,8 @@ TP_CALLBACK_PRIORITY NativePriority(WorkPriority priority) noexcept
         return TP_CALLBACK_PRIORITY_HIGH;
     case WorkPriority::Background:
         return TP_CALLBACK_PRIORITY_LOW;
+    case ::WorkPriority::Count:
+    case ::WorkPriority::Normal:
     default:
         return TP_CALLBACK_PRIORITY_NORMAL;
     }

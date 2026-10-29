@@ -21,7 +21,7 @@ std::optional<PreparedColorDismissal> DocumentSession::PrepareColorDismissalPubl
 {
     if (cancellation.IsCancelled() || input.token.target || !input.token.documentSerial || !input.opening)
         return std::nullopt;
-    return PreparedColorDismissal{std::move(input), std::move(history)};
+    return PreparedColorDismissal(std::move(input), std::move(history));
 }
 
 bool DocumentSession::IsPreparedColorDismissalCurrent(const PreparedColorDismissal& prepared) const noexcept

@@ -1,6 +1,7 @@
 #include "Document.h"
 #include "ColorEditWork.h"
 #include "DocumentDraft.h"
+#include <cstddef>
 
 #include "PipelineTrace.h"
 #include "RasterWork.h"
@@ -136,7 +137,7 @@ void Raster::ResidencyLease::Reset() noexcept
 
 Raster::ResidencyLease Raster::AcquireResidencyLease(CancelToken cancellation) noexcept
 {
-    return ResidencyLease{false, cancellation};
+    return ResidencyLease(false, cancellation);
 }
 
 Raster::ResidencyLease Raster::TryResidencyLease() noexcept
@@ -515,8 +516,8 @@ std::shared_ptr<Raster::Storage> Raster::AllocateChargedStorage(std::shared_ptr<
     allocated->lifetime = lifetime;
     // The shared_ptr constructor invokes the supplied deleter if control allocation fails. Ownership
     // starts in make_unique and moves once; neither failure path can abandon or double-free the storage.
-    return std::shared_ptr<Storage>{allocated.release(), FreeChargedStorage{},
-                                    ChargedRasterAllocator<ChargedStorage>{std::move(lifetime)}};
+    return std::shared_ptr<Storage>(allocated.release(), FreeChargedStorage{},
+                                    ChargedRasterAllocator<ChargedStorage>{std::move(lifetime)});
 }
 
 void Raster::FreeChargedStorage::operator()(ChargedStorage* storage) const noexcept
@@ -3038,7 +3039,7 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(
     merged.parentID = plan.parent;
     if (cancellation.IsCancelled())
         return std::nullopt;
-    return PreparedMerge{std::move(merged), composite.Width(), composite.Height(), plan};
+    return PreparedMerge(std::move(merged), composite.Width(), composite.Height(), plan);
 }
 
 bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared)

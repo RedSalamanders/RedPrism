@@ -44,7 +44,7 @@ struct HorzSegSorter
     inline bool operator()(const HorzSegment& hs1, const HorzSegment& hs2)
     {
         if (!hs1.right_op || !hs2.right_op)
-            return (hs1.right_op);
+            return hs1.right_op != nullptr;
         return hs2.left_op->pt.x > hs1.left_op->pt.x;
     }
 };
@@ -67,7 +67,7 @@ inline bool IsOdd(int val)
 
 inline bool IsHotEdge(const Active& e)
 {
-    return (e.outrec);
+    return e.outrec != nullptr;
 }
 
 inline bool IsOpen(const Active& e)
@@ -127,7 +127,7 @@ inline int64_t TopX(const Active& ae, const int64_t currentY)
     else if (currentY == ae.bot.y)
         return ae.bot.x;
     else
-        return ae.bot.x + static_cast<int64_t>(nearbyint(ae.dx * (currentY - ae.bot.y)));
+        return ae.bot.x + static_cast<int64_t>(nearbyint(ae.dx * static_cast<double>(currentY - ae.bot.y)));
     // nb: std::nearbyint (or std::round) substantially *improves* performance here
     // as it greatly improves the likelihood of edge adjacency in ProcessIntersectList().
 }
@@ -595,6 +595,7 @@ template <typename T> inline bool Path2ContainsPath1(const Path<T>& path1, const
                 return true;
             pip = PointInPolygonResult::IsInside;
             break;
+        case ::RedPrismBoundedClipper::PointInPolygonResult::IsOn:
         default:
             break;
         }
@@ -626,6 +627,7 @@ inline bool Path2ContainsPath1(OutPt* op1, OutPt* op2)
                 return true;
             pip = PointInPolygonResult::IsInside;
             break;
+        case ::RedPrismBoundedClipper::PointInPolygonResult::IsOn:
         default:
             break;
         }
@@ -1013,6 +1015,8 @@ bool ClipperBase::IsContributingClosed(const Active& e) const
             return (e.wind_cnt2 > 0);
         case FillRule::Negative:
             return (e.wind_cnt2 < 0);
+        case ::RedPrismBoundedClipper::FillRule::EvenOdd:
+        case ::RedPrismBoundedClipper::FillRule::NonZero:
         default:
             return (e.wind_cnt2 != 0);
         }
@@ -1025,6 +1029,8 @@ bool ClipperBase::IsContributingClosed(const Active& e) const
             return (e.wind_cnt2 <= 0);
         case FillRule::Negative:
             return (e.wind_cnt2 >= 0);
+        case ::RedPrismBoundedClipper::FillRule::EvenOdd:
+        case ::RedPrismBoundedClipper::FillRule::NonZero:
         default:
             return (e.wind_cnt2 == 0);
         }
@@ -1040,6 +1046,8 @@ bool ClipperBase::IsContributingClosed(const Active& e) const
         case FillRule::Negative:
             result = (e.wind_cnt2 >= 0);
             break;
+        case ::RedPrismBoundedClipper::FillRule::EvenOdd:
+        case ::RedPrismBoundedClipper::FillRule::NonZero:
         default:
             result = (e.wind_cnt2 == 0);
         }
@@ -1072,6 +1080,8 @@ inline bool ClipperBase::IsContributingOpen(const Active& e) const
         is_in_clip = e.wind_cnt2 < 0;
         is_in_subj = e.wind_cnt < 0;
         break;
+    case ::RedPrismBoundedClipper::FillRule::EvenOdd:
+    case ::RedPrismBoundedClipper::FillRule::NonZero:
     default:
         is_in_clip = e.wind_cnt2 != 0;
         is_in_subj = e.wind_cnt != 0;
@@ -1083,6 +1093,9 @@ inline bool ClipperBase::IsContributingOpen(const Active& e) const
         return is_in_clip;
     case ClipType::Union:
         return (!is_in_subj && !is_in_clip);
+    case ::RedPrismBoundedClipper::ClipType::Difference:
+    case ::RedPrismBoundedClipper::ClipType::NoClip:
+    case ::RedPrismBoundedClipper::ClipType::Xor:
     default:
         return !is_in_clip;
     }
@@ -1897,6 +1910,10 @@ void ClipperBase::IntersectEdges(Active& e1, Active& e2, const Point64& pt)
             if (!IsHotEdge(*edge_c))
                 return;
             break;
+        case ::RedPrismBoundedClipper::ClipType::Difference:
+        case ::RedPrismBoundedClipper::ClipType::Intersection:
+        case ::RedPrismBoundedClipper::ClipType::NoClip:
+        case ::RedPrismBoundedClipper::ClipType::Xor:
         default:
             if (edge_c->local_min->polytype == PathType::Subject)
                 return;
@@ -1912,6 +1929,8 @@ void ClipperBase::IntersectEdges(Active& e1, Active& e2, const Point64& pt)
             if (edge_c->wind_cnt != -1)
                 return;
             break;
+        case ::RedPrismBoundedClipper::FillRule::EvenOdd:
+        case ::RedPrismBoundedClipper::FillRule::NonZero:
         default:
             if (std::abs(edge_c->wind_cnt) != 1)
                 return;
@@ -2022,6 +2041,8 @@ void ClipperBase::IntersectEdges(Active& e1, Active& e2, const Point64& pt)
         old_e1_windcnt = abs(e1.wind_cnt);
         old_e2_windcnt = abs(e2.wind_cnt);
         break;
+    case ::RedPrismBoundedClipper::FillRule::Negative:
+    case ::RedPrismBoundedClipper::FillRule::Positive:
     default:
         if (fillrule_ == fillpos)
         {
@@ -2127,6 +2148,8 @@ void ClipperBase::IntersectEdges(Active& e1, Active& e2, const Point64& pt)
             e1Wc2 = abs(e1.wind_cnt2);
             e2Wc2 = abs(e2.wind_cnt2);
             break;
+        case ::RedPrismBoundedClipper::FillRule::Negative:
+        case ::RedPrismBoundedClipper::FillRule::Positive:
         default:
             if (fillrule_ == fillpos)
             {
@@ -2184,6 +2207,8 @@ void ClipperBase::IntersectEdges(Active& e1, Active& e2, const Point64& pt)
                 AddLocalMinPoly(e1, e2, pt, false);
 #endif
                 break;
+            case ::RedPrismBoundedClipper::ClipType::Intersection:
+            case ::RedPrismBoundedClipper::ClipType::NoClip:
             default:
                 if (e1Wc2 > 0 && e2Wc2 > 0)
 #ifdef USINGZ
@@ -2299,7 +2324,7 @@ inline bool UpdateHorzSegment(HorzSegment& hs)
 {
     OutPt* op = hs.left_op;
     OutRec* outrec = GetRealOutRec(op->outrec);
-    bool outrecHasEdges = outrec->front_edge;
+    bool outrecHasEdges = outrec->front_edge != nullptr;
     int64_t curr_y = op->pt.y;
     OutPt *opP = op, *opN = op;
     if (outrecHasEdges)
@@ -3222,9 +3247,9 @@ bool BuildPathD(OutPt* op, bool reverse, bool isOpen, PathD& path, double inv_sc
         op2 = op->next;
     }
 #ifdef USINGZ
-    path.emplace_back(lastPt.x * inv_scale, lastPt.y * inv_scale, lastPt.z);
+    path.emplace_back(static_cast<double>(lastPt.x) * inv_scale, static_cast<double>(lastPt.y) * inv_scale, lastPt.z);
 #else
-    path.emplace_back(lastPt.x * inv_scale, lastPt.y * inv_scale);
+    path.emplace_back(static_cast<double>(lastPt.x) * inv_scale, static_cast<double>(lastPt.y) * inv_scale);
 #endif
 
     while ((Workspace::Pulse(), op2 != op))
@@ -3233,9 +3258,10 @@ bool BuildPathD(OutPt* op, bool reverse, bool isOpen, PathD& path, double inv_sc
         {
             lastPt = op2->pt;
 #ifdef USINGZ
-            path.emplace_back(lastPt.x * inv_scale, lastPt.y * inv_scale, lastPt.z);
+            path.emplace_back(static_cast<double>(lastPt.x) * inv_scale, static_cast<double>(lastPt.y) * inv_scale,
+                              lastPt.z);
 #else
-            path.emplace_back(lastPt.x * inv_scale, lastPt.y * inv_scale);
+            path.emplace_back(static_cast<double>(lastPt.x) * inv_scale, static_cast<double>(lastPt.y) * inv_scale);
 #endif
         }
         if (reverse)

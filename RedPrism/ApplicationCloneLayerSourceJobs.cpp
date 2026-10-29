@@ -11,6 +11,10 @@
 
 // Uses the same accepted pointer stream and retained-source graph as All Layers. Only source production differs:
 // the active layer's existing placement sampler runs on a worker, without composition or GPU readback.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 class Application::CloneLayerSourceJob final : public Job
 {
   public:
@@ -135,6 +139,7 @@ class Application::CloneLayerSourceJob final : public Job
     HRESULT _captureError = S_OK;
     std::unique_ptr<CloneReadbackState, CloneReadbackState::Retire> _payload;
 };
+#pragma warning(pop)
 
 HRESULT Application::StartCloneLayerSource(std::uint64_t opening) noexcept
 {

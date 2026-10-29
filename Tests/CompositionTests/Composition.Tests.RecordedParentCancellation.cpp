@@ -56,6 +56,10 @@ bool Memory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Observation final
 {
     Observation() noexcept
@@ -102,6 +106,7 @@ struct Observation final
     std::atomic<bool> aggregateSawTerminal{false};
     std::atomic<bool> aggregateMemoryChargeIntact{false};
 };
+#pragma warning(pop)
 
 struct ActualBody final
 {
@@ -134,6 +139,10 @@ void ObserveExecution(void* opaque, JobExecutionNotice notice) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Retirement final : DeferredReleaseNode
 {
     Retirement(Observation& value, std::uint64_t expected) noexcept : observation(value), expectedCpuBytes(expected)
@@ -167,6 +176,12 @@ struct Retirement final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class CancellationProbe final : public RecordedDocumentReadbackJob
 {
   public:
@@ -273,6 +288,7 @@ class CancellationProbe final : public RecordedDocumentReadbackJob
     std::unique_ptr<Retirement> _aggregate;
     const std::uint64_t _expectedCpuBytes;
 };
+#pragma warning(pop)
 
 struct StartupPrefix final
 {
@@ -325,6 +341,10 @@ bool StartInfrastructure(JobScheduler& jobs, OwnerWorkMultiplexer& routes, GpuWo
     return prefix.serviceInitialized;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
 struct CloseContext final
 {
     JobScheduler& jobs;
@@ -346,6 +366,7 @@ struct CloseContext final
     bool workerSawClosedOwnerInfrastructure = false;
     std::atomic<unsigned> closeSequence{0};
 };
+#pragma warning(pop)
 
 void JoinedOwnerClose(void* opaque) noexcept
 {

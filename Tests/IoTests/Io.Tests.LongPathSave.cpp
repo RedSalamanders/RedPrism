@@ -1,9 +1,9 @@
 #include "Io.Tests.LongPathSave.h"
 
-#include "../../Common/ImageCodecs.h"
-#include "../../Common/ProjectStore.h"
-#include "../../Common/Win32FilePath.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
+#include "Common/ImageCodecs.h"
+#include "Common/ProjectStore.h"
+#include "Common/Win32FilePath.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>
@@ -803,7 +803,7 @@ struct R6Fault final
     constexpr int height = 64;
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * height * 4);
     for (std::size_t offset = 0; offset < pixels.size(); offset += bgra.size())
-        std::copy(bgra.begin(), bgra.end(), pixels.begin() + offset);
+        std::copy(bgra.begin(), bgra.end(), pixels.begin() + static_cast<std::ptrdiff_t>(offset));
     return Raster::Make(width, height, RasterFormat::Bgra8888, pixels.data(), pixels.size());
 }
 

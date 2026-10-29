@@ -1,6 +1,6 @@
 #include "Document.Tests.SelectionCursorProbe.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "SelectionHitWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <cstdio>
 #include <memory>

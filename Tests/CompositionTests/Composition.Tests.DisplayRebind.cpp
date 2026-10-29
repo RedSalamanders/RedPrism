@@ -48,6 +48,10 @@ constexpr std::array<std::uint8_t, 16> kSecondPixels{
     0xD1, 0xB2, 0x93, 0xFF, 0x74, 0x55, 0x36, 0xFF, 0x17, 0xE8, 0xC9, 0xFF, 0xAA, 0x8B, 0x6C, 0xFF,
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
   public:
@@ -120,7 +124,12 @@ class Client final : public CommittedDisplayClient
         }
     }
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     wil::com_ptr_nothrow<ID3D11Device> firstDevice;
@@ -201,6 +210,7 @@ struct Rig final
         Close();
     }
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Settle(Rig& rig, Predicate predicate) noexcept
 {

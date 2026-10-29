@@ -1,9 +1,9 @@
 #include "Document.Tests.PreparedColorHistory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

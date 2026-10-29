@@ -1,8 +1,8 @@
 #include "Document.Tests.HueSampleScalar.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Adjust.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>

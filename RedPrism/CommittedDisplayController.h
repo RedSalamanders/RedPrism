@@ -211,6 +211,10 @@ class CommittedDisplayController final : public OwnerWorkPump
         RetiringGpu,
         RetiringWorker
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Cell final : GpuCommandSourceReceiver, GpuCompletionReceiver
     {
         CommittedDisplayController* owner = nullptr;
@@ -238,6 +242,8 @@ class CommittedDisplayController final : public OwnerWorkPump
         void CommandSourceFailedOwner(JobTicket, HRESULT) noexcept override;
         void GpuCompletionReady(JobTicket, std::uint64_t, HRESULT) noexcept override;
     };
+#pragma warning(pop)
+
     [[nodiscard]] bool IsOwner() const noexcept;
     [[nodiscard]] Cell* PublicationCellOwner(const CommittedDisplayPublicationSlot& slot) noexcept;
     [[nodiscard]] const Cell* PublicationCellOwner(const CommittedDisplayPublicationSlot& slot) const noexcept;

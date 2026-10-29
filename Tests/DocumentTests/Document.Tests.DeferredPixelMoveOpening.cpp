@@ -1,11 +1,11 @@
 #include "Document.Tests.DeferredPixelMoveOpening.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "PixelMoveOpeningWork.h"
 #include "RasterEditWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

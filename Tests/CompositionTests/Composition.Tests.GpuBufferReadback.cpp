@@ -55,6 +55,10 @@ struct Device final
     }
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class Rig final
 {
   public:
@@ -96,6 +100,7 @@ class Rig final
     JobScheduler scheduler;
     GpuWorkQueue queue;
 };
+#pragma warning(pop)
 
 constexpr std::array<std::uint32_t, 6> kExpectedValues{
     0u, 1u, 255u, 256u, 65535u, UINT32_MAX,
@@ -183,6 +188,10 @@ struct ReadbackState final
     std::uint64_t bytesAfterRelease = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class BufferReadbackJob final : public Job, public GpuBufferReadbackReceiver
 {
   public:
@@ -280,6 +289,7 @@ class BufferReadbackJob final : public Job, public GpuBufferReadbackReceiver
     std::array<std::uint8_t, kCount> _converted{};
     bool _submitted = false;
 };
+#pragma warning(pop)
 
 bool SubmitAndSettle(Rig& rig, ID3D11Buffer* source, ReadbackState& state, Device* replacement = nullptr)
 {
@@ -354,6 +364,10 @@ struct MixedReadbackState final
     bool releaseAccepted = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class MixedReadbackJob final : public Job, public GpuBufferReadbackReceiver, public GpuReadbackReceiver
 {
   public:
@@ -478,6 +492,7 @@ class MixedReadbackJob final : public Job, public GpuBufferReadbackReceiver, pub
     bool _bufferReadback = false;
     bool _submitted = false;
 };
+#pragma warning(pop)
 
 bool SubmitAndSettleMixed(Rig& rig, std::unique_ptr<Job> job, MixedReadbackState& state)
 {
@@ -687,6 +702,10 @@ struct DeferredStrokeState final
     int maxCpuDifference = 0;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class DeferredStrokeJob final : public Job, public GpuBufferReadbackReceiver
 {
   public:
@@ -778,6 +797,7 @@ class DeferredStrokeJob final : public Job, public GpuBufferReadbackReceiver
     DWORD _ownerThread;
     bool _submitted = false;
 };
+#pragma warning(pop)
 
 bool SettleDeferredStroke(Rig& rig, GpuBrushCoverage& engine, DeferredStrokeState& state, const char* scenario)
 {

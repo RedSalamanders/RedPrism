@@ -1,8 +1,8 @@
 #include "Document.Tests.TransformDeferred.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "TransformCancellationWork.h"
 #include "TransformPreviewWork.h"
 

@@ -30,6 +30,10 @@ enum class ClipboardWorkPhase : std::uint8_t
 };
 
 // Harness-only event gate. Production does not allocate a gate or enter its waits.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ClipboardWorkTestGate final
 {
     static constexpr UINT kMessage = WM_APP + 55;
@@ -62,3 +66,4 @@ struct ClipboardWorkTestGate final
     std::atomic<unsigned int> publicationVisits{0};
     std::atomic<bool> publicationGateFailed{false};
 };
+#pragma warning(pop)

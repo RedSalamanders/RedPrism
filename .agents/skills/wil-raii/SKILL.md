@@ -15,7 +15,7 @@ Use the WIL package from `vcpkg.json`. Do not add a second WIL copy or return to
 - Use `wil::scope_exit` for temporary cleanup. Do not add `goto` cleanup paths.
 - Keep every resource under one explicit owner immediately after successful creation.
 
-Wrap WIL includes because warnings are errors:
+Use scoped WIL include annotations to keep external diagnostics out of the zero-warning build gate; `/WX` remains disabled:
 
 ```cpp
 #pragma warning(push)

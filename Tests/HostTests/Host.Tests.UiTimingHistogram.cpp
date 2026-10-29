@@ -1,6 +1,6 @@
 #include "Host.Tests.UiTimingHistogram.h"
 
-#include "../../Common/UiTimingHistogram.h"
+#include "Common/UiTimingHistogram.h"
 
 #include <array>
 #include <cstdint>

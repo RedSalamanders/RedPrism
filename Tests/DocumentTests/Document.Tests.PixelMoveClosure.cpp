@@ -1,11 +1,11 @@
 #include "Document.Tests.PixelMoveClosure.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "PixelMoveClosureWork.h"
 #include "PixelMoveOpeningWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

@@ -174,6 +174,10 @@ int Application::RunClipboardPrefillSelfTest() noexcept
         Scenario{"busy-exhaust-six", Mode::Exhaust, PrefillFixture::Dib, 91, 73},
         Scenario{"source-changed-held", Mode::SourceChanged, PrefillFixture::Dib, 1, 1},
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -189,6 +193,8 @@ int Application::RunClipboardPrefillSelfTest() noexcept
         bool idleHistoryAndBarrier = false;
         bool fixtureMutationSucceeded = true;
     };
+#pragma warning(pop)
+
     const auto dispatch = [](void* raw, void* native) noexcept
     {
         auto& state = *static_cast<State*>(raw);
@@ -249,6 +255,13 @@ int Application::RunClipboardPrefillSelfTest() noexcept
         case Mode::SourceChanged:
             state.fixtureMutationSucceeded = InstallPrefillFixture(owner._window.get(), PrefillFixture::Png);
             break;
+        case Mode::BadDib:
+        case Mode::Empty:
+        case Mode::Exhaust:
+        case Mode::Retry:
+        case Mode::Success:
+        case Mode::WorkerBadAlloc:
+        case Mode::WorkerFailure:
         default:
             break;
         }

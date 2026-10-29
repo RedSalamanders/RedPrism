@@ -69,6 +69,10 @@ struct Observation final
 
 // External root: the scheduler-owned OriginalJob below only borrows this state. The queue receiver,
 // owner route, and both Close hooks therefore remain valid after JobScheduler destroys that wrapper.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class State final : public GpuCommandSourceReceiver
 {
   public:
@@ -363,6 +367,10 @@ class State final : public GpuCommandSourceReceiver
   private:
     [[nodiscard]] bool RetiredStageAcknowledged() noexcept;
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class WrongSourceProbe final : public Job
     {
       public:
@@ -402,8 +410,14 @@ class State final : public GpuCommandSourceReceiver
       private:
         State& _source;
     };
+#pragma warning(pop)
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class OriginalJob final : public Job
 {
   public:
@@ -437,6 +451,7 @@ class OriginalJob final : public Job
   private:
     State& _root;
 };
+#pragma warning(pop)
 
 bool State::RetiredStageAcknowledged() noexcept
 {
@@ -598,6 +613,10 @@ int RunOne(bool validReplacement)
     bool commandsInitialized = false;
     bool routeAttached = false;
     bool parentSubmitted = false;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Cleanup final
     {
         JobScheduler& scheduler;
@@ -610,16 +629,18 @@ int RunOne(bool validReplacement)
         bool& foreignQueueInitialized;
         bool& commandsInitialized;
         bool& routeAttached;
-    } cleanup{scheduler,
-              queue,
-              foreignQueue,
-              commands,
-              root,
-              schedulerInitialized,
-              queueInitialized,
-              foreignQueueInitialized,
-              commandsInitialized,
-              routeAttached};
+    }
+#pragma warning(pop)
+    cleanup{scheduler,
+            queue,
+            foreignQueue,
+            commands,
+            root,
+            schedulerInitialized,
+            queueInitialized,
+            foreignQueueInitialized,
+            commandsInitialized,
+            routeAttached};
 
     const auto cleanupScope = wil::scope_exit(
         [&]() noexcept

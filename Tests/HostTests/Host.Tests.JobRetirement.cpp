@@ -1,6 +1,6 @@
 #include "Host.Tests.JobRetirement.h"
 
-#include "../../Common/Jobs.h"
+#include "Common/Jobs.h"
 
 #include <atomic>
 #include <cstdint>
@@ -92,6 +92,10 @@ enum class RunMode
     ShutdownWait
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct State final
 {
     JobScheduler* scheduler = nullptr;
@@ -119,7 +123,12 @@ struct State final
     bool duplicateResumeFromHook = false;
     std::atomic<DWORD> destroyedThread{0};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class RetirementJob final : public Job
 {
   public:
@@ -203,6 +212,7 @@ class RetirementJob final : public Job
   private:
     State& _state;
 };
+#pragma warning(pop)
 
 bool Start(JobScheduler& scheduler, const char* name) noexcept
 {
@@ -616,6 +626,10 @@ void TestSerialHoldAllowsUnrelatedRunnableJob()
     scheduler.Close();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct ShutdownState final
 {
     HANDLE entered = nullptr;
@@ -628,7 +642,12 @@ struct ShutdownState final
     std::atomic<DWORD> destroyedThread{0};
     std::atomic<bool> destroyedAfterProducer{false};
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626)
 class ShutdownJob final : public Job
 {
   public:
@@ -661,6 +680,7 @@ class ShutdownJob final : public Job
   private:
     ShutdownState& _state;
 };
+#pragma warning(pop)
 
 void TestShutdownJoinsAndDropsRetirementCallbacks()
 {

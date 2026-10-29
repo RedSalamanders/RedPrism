@@ -54,6 +54,10 @@ constexpr std::uint32_t Pixel(std::uint32_t x, std::uint32_t y, unsigned int job
     return (x * 17u + y * 31u + job * 13u) ^ 0x5a731fu;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Batch final
 {
     WorkerPool* pool = nullptr;
@@ -69,6 +73,7 @@ struct Batch final
     wil::unique_handle go = Event();
     wil::unique_handle done = Event();
 };
+#pragma warning(pop)
 
 void RunBatch(void* context, WorkPriority, CancelToken token) noexcept
 {
@@ -304,11 +309,17 @@ void TestWaitPool()
     Expect(SUCCEEDED(waits.Initialize()), "wait-initialize");
     auto signal = Event(false);
     auto done = Event(false);
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Counter final
     {
         std::atomic<unsigned int> calls{0};
         HANDLE done;
-    } counter{{0}, done.get()};
+    }
+#pragma warning(pop)
+    counter{{0}, done.get()};
     const auto count = [](void* context) noexcept
     {
         auto& value = *static_cast<Counter*>(context);
@@ -355,12 +366,18 @@ void TestWaitPool()
 
 void TestWaitsIndependentOfWorkers()
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
     struct Blocked final
     {
         wil::unique_handle entered = Event();
         wil::unique_handle release = Event();
         wil::unique_handle done = Event();
-    } blocked;
+    }
+#pragma warning(pop)
+    blocked;
     WorkerPool workers;
     WaitPool waits;
     Expect(SUCCEEDED(workers.Initialize(
@@ -397,12 +414,18 @@ void TestWaitsIndependentOfWorkers()
 
 void TestQueuedCancellation()
 {
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct State final
     {
         std::atomic<unsigned int> calls{0};
         wil::unique_handle started = Event();
         wil::unique_handle release = Event();
-    } state;
+    }
+#pragma warning(pop)
+    state;
     WorkerPool pool;
     Expect(SUCCEEDED(pool.Initialize(
                1,

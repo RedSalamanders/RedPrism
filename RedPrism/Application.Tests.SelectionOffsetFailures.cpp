@@ -1,7 +1,7 @@
 // Private real-caller controls. Expected state follows the ordered-host contract, not pixel implementation.
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionOffsetTestGate.h"
@@ -56,6 +56,10 @@ int Application::RunSelectionOffsetFailureForAmountSelfTest(int amount) noexcept
         ResidencyCancel
     };
     constexpr UINT kOffsetPumpMessage = WM_APP + 0x4cf;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -69,6 +73,8 @@ int Application::RunSelectionOffsetFailureForAmountSelfTest(int amount) noexcept
         bool visited = false, held = false, cancellationPending = false;
         bool youngerPending = false, mutationApplied = false, zoomPending = false, messagePending = false;
     };
+#pragma warning(pop)
+
     int failures = 0;
     const auto expect = [&failures, amount](const char* mode, const char* check, bool condition) noexcept
     {
@@ -307,6 +313,23 @@ int Application::RunSelectionOffsetFailureForAmountSelfTest(int amount) noexcept
         case Mode::TrimIndex:
             gate->throwHistoryStage = DocumentHistory::PrepareStage::TrimIndex;
             break;
+        case Mode::Active:
+        case Mode::Brush:
+        case Mode::Cancel:
+        case Mode::CaptureFailure:
+        case Mode::Crop:
+        case Mode::Epoch:
+        case Mode::Generation:
+        case Mode::Lasso:
+        case Mode::Mask:
+        case Mode::Ordered:
+        case Mode::Replacement:
+        case Mode::ResidencyCancel:
+        case Mode::ResidencyFault:
+        case Mode::ResidencyRefresh:
+        case Mode::Success:
+        case Mode::ViewPump:
+        case Mode::WorkerFailure:
         default:
             break;
         }

@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.SelectionNudgeTestGate.h"
@@ -93,6 +93,10 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         Case{"residency-refresh", Mode::ResidencyRefresh, {}},
         Case{"residency-fault", Mode::ResidencyFault, {}},
         Case{"residency-cancel", Mode::ResidencyCancel, {}}};
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -119,6 +123,8 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         bool pumpPending = false;
         bool zoomChanged = false;
     };
+#pragma warning(pop)
+
     constexpr UINT kPumpMessage = WM_APP + 0x4cc;
     const auto originalViewport = _viewport;
     const auto originalShift = _acceleratorShift;
@@ -251,6 +257,19 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
             case Mode::Saved:
                 owner._session.history.MarkSaved(state.revision);
                 break;
+            case Mode::Cancel:
+            case Mode::CaptureFailure:
+            case Mode::Failure:
+            case Mode::HistoryFault:
+            case Mode::NestedCancel:
+            case Mode::Ordered:
+            case Mode::Pump:
+            case Mode::RealQueued:
+            case Mode::ResidencyCancel:
+            case Mode::ResidencyFault:
+            case Mode::ResidencyRefresh:
+            case Mode::Success:
+            case Mode::ZeroRedo:
             default:
                 break;
             }

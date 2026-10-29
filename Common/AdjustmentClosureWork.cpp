@@ -77,7 +77,7 @@ std::optional<PreparedAdjustmentClosure> DocumentSession::PrepareAdjustmentClosu
     auto publication = DocumentHistory::PrepareEnd(std::move(history), finished, input.active, cancellation, observer);
     if (!publication || cancellation.IsCancelled())
         return std::nullopt;
-    return PreparedAdjustmentClosure{std::move(input), std::move(finished), std::move(publication.value())};
+    return PreparedAdjustmentClosure(std::move(input), std::move(finished), std::move(publication.value()));
 }
 
 bool DocumentSession::IsPreparedAdjustmentClosureCurrent(const PreparedAdjustmentClosure& prepared) const noexcept

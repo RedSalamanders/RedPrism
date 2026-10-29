@@ -1,10 +1,10 @@
 #include "Application.Tests.RowPublication.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
 #include "Jobs.h"
 #include "LayerRowsWork.h"
 #include "PreparedLayerRows.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <windows.h>
 
@@ -63,10 +63,15 @@ void Wait(HANDLE event, const char* name) noexcept
         SetupFailure(name, result == WAIT_FAILED ? GetLastError() : result);
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Sampler final
 {
     std::atomic<unsigned int> calls{0};
 };
+#pragma warning(pop)
 
 bool SampleMemory(void* context, MemorySnapshot& snapshot) noexcept
 {
@@ -95,6 +100,10 @@ CanvasDocument MakeDocument()
     return std::move(fixture).Seal();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Probe final
 {
     std::mutex mutex;
@@ -141,7 +150,12 @@ struct Probe final
     std::uint64_t chargeAfterRefusals = 0;
     std::uint64_t finalCallbackCharge = 0;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PublicationRowsJob final : public Job
 {
   public:
@@ -261,6 +275,7 @@ class PublicationRowsJob final : public Job
     JobScheduler* _scheduler = nullptr;
     DWORD _ownerThread = 0;
 };
+#pragma warning(pop)
 
 void PumpToFirstPublication(JobScheduler& scheduler, Probe& probe)
 {
@@ -313,6 +328,10 @@ void VerifyPreparedRows(PreparedLayerRows& rows)
            "actual-worker-rows-preserve-guid-and-item-identity-lookups");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct LifetimeFixture final
 {
     wil::unique_handle publicationReady = MakeEvent("publication-ready-event");
@@ -332,6 +351,7 @@ struct LifetimeFixture final
         Start(scheduler, sampler);
     }
 };
+#pragma warning(pop)
 
 void BuildAndPublish(LifetimeFixture& fixture)
 {

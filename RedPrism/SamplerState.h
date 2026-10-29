@@ -26,6 +26,10 @@ struct SamplerColorDependency final
     std::uint32_t fallbackArgb = 0xFF000000u;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SamplerOpening final
 {
     // Owner-only fixed metadata. CPU document/pixel owners belong solely to the admitted job's release aggregate.
@@ -44,7 +48,12 @@ struct SamplerOpening final
     bool terminal = false;
     bool overflow = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct SamplerState final
 {
     struct PalettePrefix final
@@ -62,3 +71,4 @@ struct SamplerState final
     // This value owns no document or pixel storage and never adopts a later live manual palette edit.
     std::optional<PalettePrefix> palettePrefix;
 };
+#pragma warning(pop)

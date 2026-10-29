@@ -1,10 +1,10 @@
 #include "Document.Tests.StrokeOpeningMemory.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "Jobs.h"
 #include "Selection.h"
 #include "StrokeOpeningWork.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cmath>
@@ -233,6 +233,10 @@ void SparseDeclarationAndRefusals()
            "refuse.unsupported-finite-grid-is-exact-zero");
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct OpeningTransferState final
 {
     JobScheduler* scheduler = nullptr;
@@ -248,7 +252,12 @@ struct OpeningTransferState final
     bool applied = false;
     bool lateRefused = false;
 };
+#pragma warning(pop)
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class OpeningTransferJob final : public Job
 {
   public:
@@ -286,6 +295,7 @@ class OpeningTransferJob final : public Job
   private:
     OpeningTransferState& _state;
 };
+#pragma warning(pop)
 
 void SchedulerReservationMovesIntoPreparedOpening()
 {

@@ -1,8 +1,8 @@
 #include "Host.Tests.PathReadWaitCycleExhaustion.h"
 
-#include "../../Common/Jobs.h"
-#include "../../Common/OwnerWorkMultiplexer.h"
-#include "../../Common/PathReadWait.h"
+#include "Common/Jobs.h"
+#include "Common/OwnerWorkMultiplexer.h"
+#include "Common/PathReadWait.h"
 
 #include <atomic>
 #include <cstdint>
@@ -31,11 +31,16 @@ void Expect(bool condition, const char* name) noexcept
         ++gFailures;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct SignalObservation final
 {
     wil::unique_event_nothrow callbackEvent;
     std::atomic<std::uint64_t> cycle{0};
 };
+#pragma warning(pop)
 
 void ObserveWaitCallback(void* context, std::uint64_t cycle) noexcept
 {
@@ -70,6 +75,10 @@ class Receiver final : public PathReadWaitReceiver
     bool lastWasCancellationOnly = true;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct Rig final
 {
     JobScheduler scheduler;
@@ -126,6 +135,7 @@ struct Rig final
         Close();
     }
 };
+#pragma warning(pop)
 
 [[nodiscard]] bool SignalAndPump(Rig& rig, JobTicket ticket, Receiver& receiver, std::uint64_t expectedCycle,
                                  bool signalPathEvent) noexcept

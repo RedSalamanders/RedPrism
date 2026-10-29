@@ -40,6 +40,10 @@ bool SampleMemory(void* context, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Observation final
 {
     const DWORD ownerThread = GetCurrentThreadId();
@@ -58,9 +62,14 @@ struct Observation final
     bool invalidPreservedOwnership = false;
     bool nullAliasOwnsLifetime = false;
 };
+#pragma warning(pop)
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Payload final : DeferredReleaseNode
 {
     explicit Payload(Observation& value) noexcept : observation(value)
@@ -92,6 +101,12 @@ struct Payload final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class ChargedRasterJob final : public Job
 {
   public:
@@ -173,6 +188,8 @@ class ChargedRasterJob final : public Job
     Observation& _observation;
     std::unique_ptr<Payload> _payload;
 };
+#pragma warning(pop)
+
 } // namespace
 
 int RunChargedRasterTests()

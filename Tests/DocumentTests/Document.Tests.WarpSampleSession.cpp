@@ -1,9 +1,9 @@
 #include "Document.Tests.WarpSampleSession.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Executor.h"
 #include "LayerMetadataWork.h"
 #include "SharedPublicationMemory.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 #include "WarpOpeningWork.h"
 #include "WarpSampleWork.h"
 
@@ -120,6 +120,10 @@ Opened OpenAndPlan(Fixture& fixture)
     return state;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct AppendResult final
 {
     std::optional<WarpSampleInput> input;
@@ -127,6 +131,7 @@ struct AppendResult final
     bool expectedPixels = false;
     bool duplicateRefused = false;
 };
+#pragma warning(pop)
 
 bool ImageIsLiteral(const Raster& raster, const std::array<std::uint8_t, 4>& pixel) noexcept
 {
@@ -148,7 +153,7 @@ void AppendOnJoinedWorker(AppendResult& result, WarpSampleInput input, const std
     std::thread worker(
         [&result, expected, input = std::move(input)]() mutable
         {
-            result.appended = input.AppendForWork(CancelToken{{}, std::stop_token{}});
+            result.appended = input.AppendForWork(CancelToken({}, std::stop_token{}));
             result.duplicateRefused = !input.AppendForWork({});
             WarpStroke* draft = input.DraftForWork();
             result.expectedPixels = draft && draft->Points().size() == 1 && draft->Points().front() == kSamplePoint &&
@@ -200,7 +205,7 @@ void CaptureAppendApplyLiteralSamples()
                    fixture.session.PendingWarp() == nullptr && fixture.session.HasPendingWarp(),
                "capture-refuses-duplicate-transfer");
         // The worker must append exactly once. Pixel inspection stays on the joined worker.
-        const bool ownerAppendRefused = !sample.value().AppendForWork(CancelToken{{}, std::stop_token{}}) &&
+        const bool ownerAppendRefused = !sample.value().AppendForWork(CancelToken({}, std::stop_token{})) &&
                                         sample.value().DraftForWork() == nullptr;
         Expect(ownerAppendRefused, "worker-api-refuses-owner-append-and-draft-access");
         WarpSampleInput moved(std::move(sample.value()));
@@ -278,7 +283,7 @@ void CancelledWorkerIsDiscardedWithoutPublication()
     std::thread worker(
         [&, input = std::move(sample.value())]() mutable
         {
-            refused = !input.AppendForWork(CancelToken{{}, stop.get_token()});
+            refused = !input.AppendForWork(CancelToken({}, stop.get_token()));
             noMutableAccess = input.DraftForWork() == nullptr;
             result.emplace(std::move(input));
         });

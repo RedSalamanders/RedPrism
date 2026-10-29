@@ -17,6 +17,10 @@
 #include <limits>
 #include <utility>
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class PixelMoveOpening final
 {
   public:
@@ -33,6 +37,7 @@ class PixelMoveOpening final
     const DocumentSelection selection;
     const Guid target;
 };
+#pragma warning(pop)
 
 std::shared_ptr<const PreparedPixelMovePreview> PixelMovePreviewReader::PrepareDisplayForWork(
     std::shared_ptr<const PixelMoveOpening> opening, Vec2 offset, bool duplicate, std::thread::id ownerThread,
@@ -229,6 +234,10 @@ namespace
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 struct OwnedPreviewStroke final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory;
@@ -240,6 +249,8 @@ struct OwnedPreviewStroke final : DeferredReleaseNode
         { const std::unique_ptr<OwnedPreviewStroke> owned(static_cast<OwnedPreviewStroke*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 struct RetirePreviewStroke final
@@ -257,6 +268,10 @@ struct RetirePreviewStroke final
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 struct OwnedPixelMoveOpening final : DeferredReleaseNode
 {
     std::shared_ptr<const SharedPublicationMemory> memory;
@@ -268,6 +283,8 @@ struct OwnedPixelMoveOpening final : DeferredReleaseNode
         { const std::unique_ptr<OwnedPixelMoveOpening> owned(static_cast<OwnedPixelMoveOpening*>(node)); };
     }
 };
+#pragma warning(pop)
+
 #pragma warning(pop)
 
 struct RetirePixelMoveOpening final
@@ -432,7 +449,7 @@ std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelect
     if (!layer.asset || selection.IsEmpty())
         return 0;
     auto bytes = RasterEditMemoryBytes(layer, selection, canvasWidth, canvasHeight, pixelLimit, false);
-    if (!bytes || !AddProduct(bytes, layer.asset->image.PixelCount(), 8) ||
+    if (!bytes || !AddProduct(bytes, static_cast<std::uint64_t>(layer.asset->image.PixelCount()), std::uint64_t{8}) ||
         !AddProduct(bytes, selection.loops.PointCount(), 2 * sizeof(Vec2)) ||
         !AddProduct(bytes, selection.loops.size(), 2 * sizeof(SelectionLoop)))
         return 0;

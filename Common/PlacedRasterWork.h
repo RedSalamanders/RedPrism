@@ -23,6 +23,10 @@ class PlacedRasterReader final
     [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
 
   private:
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
     struct Window final
     {
         PixelBuffer pixels;
@@ -30,6 +34,8 @@ class PlacedRasterReader final
         int y = -1;
         std::uint64_t used = 0;
     };
+#pragma warning(pop)
+
     [[nodiscard]] const std::uint8_t* Pixel(int x, int y, CancelToken cancellation) noexcept;
     Raster _source;
     Affine2 _toPixel;

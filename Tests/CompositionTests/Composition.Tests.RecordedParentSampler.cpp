@@ -113,6 +113,10 @@ bool HostMemory(void*, MemorySnapshot& snapshot) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 struct Observation final
 {
     Observation(bool gateWorker, bool withholdFirst) noexcept : gated(gateWorker), holdFirst(withholdFirst)
@@ -151,6 +155,7 @@ struct Observation final
     std::atomic<bool> retiredMta{false};
     std::atomic<bool> accountingLiveAtSinkRetirement{false};
 };
+#pragma warning(pop)
 
 struct ActiveBody final
 {
@@ -171,6 +176,10 @@ void ObserveExecution(void* opaque, JobExecutionNotice notice) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct Retirement final : DeferredReleaseNode
 {
     Retirement(Observation& state, std::uint64_t bytes) noexcept : observation(state), expectedBytes(bytes)
@@ -202,6 +211,12 @@ struct Retirement final : DeferredReleaseNode
 };
 #pragma warning(pop)
 
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class SamplerProbe final : public RecordedDocumentReadbackJob
 {
   public:
@@ -354,6 +369,7 @@ class SamplerProbe final : public RecordedDocumentReadbackJob
     const std::uint64_t _retirementBytes;
     std::atomic<bool> _terminalRequested{false};
 };
+#pragma warning(pop)
 
 struct Startup final
 {
@@ -367,6 +383,10 @@ struct Startup final
     bool owners = false;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626 5026 5027)
 struct CloseState final
 {
     JobScheduler& jobs;
@@ -385,6 +405,7 @@ struct CloseState final
     bool finalSawOwnerClose = false;
     std::atomic<unsigned> closeOrder{0};
 };
+#pragma warning(pop)
 
 bool Start(JobScheduler& jobs, OwnerWorkMultiplexer& routes, GpuWorkQueue& queue, GpuCommandPump& commands,
            UtilityReadbackOwnerService& owners, ID3D11Device* device, ID3D11DeviceContext* context,

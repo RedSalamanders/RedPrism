@@ -1,7 +1,7 @@
 #include "Document.Tests.HistoryPreparationFault.h"
 
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "Document.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <array>
 #include <cstdio>
@@ -90,6 +90,18 @@ const char* StageName(DocumentHistory::PrepareStage stage) noexcept
         return "pending-record";
     case Stage::RestoreSnapshot:
         return "restore-snapshot";
+    case ::DocumentHistory::PrepareStage::AdjustmentSnapshot:
+    case ::DocumentHistory::PrepareStage::ReplacementReset:
+    case ::DocumentHistory::PrepareStage::ReplacementSnapshot:
+    case ::DocumentHistory::PrepareStage::SelectionSnapshot:
+    case ::DocumentHistory::PrepareStage::StorageIndexBounds:
+    case ::DocumentHistory::PrepareStage::StorageIndexClone:
+    case ::DocumentHistory::PrepareStage::StorageIndexHistoryEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexLiveEdge:
+    case ::DocumentHistory::PrepareStage::StorageIndexMembership:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyFullScan:
+    case ::DocumentHistory::PrepareStage::StorageIndexResidencyRecord:
+        break;
     }
     return "invalid-stage";
 }
@@ -174,7 +186,8 @@ struct Fixture final
 bool SameHistoryState(const DocumentHistory& history, const DocumentHistory::StateView& before)
 {
     const DocumentHistory::StateView after = history.CaptureState();
-    return history.CurrentRevision() == before.Revision() && history.UndoCount() == before.PastCount() &&
+    return history.CurrentRevision() == before.Revision() &&
+           static_cast<std::size_t>(history.UndoCount()) == before.PastCount() &&
            history.UndoName() == before.UndoName() && history.RedoName() == before.RedoName() &&
            after.Revision() == before.Revision() && after.Depth() == before.Depth() &&
            after.PastCount() == before.PastCount() && after.FutureCount() == before.FutureCount() &&

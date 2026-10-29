@@ -94,11 +94,16 @@ struct StrokeOpeningObserver final
     void* context = nullptr;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5027)
 struct StrokeOpeningResult final
 {
     StrokeOpeningStatus status = StrokeOpeningStatus::Invalid;
     std::optional<PreparedStrokeOpening> prepared;
 };
+#pragma warning(pop)
 
 // Complete CPU opening/live-draft declaration from cached owners and scalar grid bounds. This deliberately
 // reserves the supported live tile envelope, not just an empty draft; the exact lease survives its final reader.

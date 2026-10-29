@@ -352,6 +352,7 @@ UINT LoadErrorStringId(ProjectIoStatus status) noexcept
     case ProjectIoStatus::Ok:
     case ProjectIoStatus::Invalid:
     case ProjectIoStatus::Encode:
+    case ::ProjectIoStatus::Cancelled:
     default:
         return IDS_ERROR_OPEN_PROJECT;
     }

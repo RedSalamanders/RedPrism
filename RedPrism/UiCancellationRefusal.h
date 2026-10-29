@@ -48,6 +48,7 @@ struct UiCancellationRefusalFacts final
         return !facts.pendingEdit && !facts.requestedGridRefused;
     case UiCancellationRefusalKind::SettingsPixelBudget:
         return facts.pendingEdit && facts.requestedGridRefused;
+    case ::UiCancellationRefusalKind::None:
     default:
         return false;
     }

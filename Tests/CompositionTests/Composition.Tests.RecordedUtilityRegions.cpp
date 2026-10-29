@@ -94,6 +94,10 @@ class FixturePump final : public OwnerWorkPump
     bool HasReady() const noexcept override;
     void Pump() noexcept override;
 };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Parent final : public Job, public GpuCommandSourceReceiver, public GpuReadbackReceiver, public GpuReadbackProducer
 {
     enum class Stage : std::uint8_t
@@ -281,6 +285,8 @@ class Parent final : public Job, public GpuCommandSourceReceiver, public GpuRead
             return true;
         case Stage::RetireGraph:
             return false;
+        case ::RedPrism::CompositionTests::Parent::Stage::AwaitGpu:
+        case ::RedPrism::CompositionTests::Parent::Stage::AwaitRows:
         default:
             std::terminate();
         }
@@ -346,6 +352,8 @@ class Parent final : public Job, public GpuCommandSourceReceiver, public GpuRead
         _pump.parent = nullptr;
     }
 };
+#pragma warning(pop)
+
 bool FixturePump::HasPending() const noexcept
 {
     return parent != nullptr;

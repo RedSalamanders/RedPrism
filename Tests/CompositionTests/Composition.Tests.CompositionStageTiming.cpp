@@ -1,9 +1,9 @@
 #include "Composition.Tests.CompositionStageTiming.h"
 
-#include "../../Common/Document.h"
-#include "../../Common/UiTiming.h"
-#include "../Support/Support.Tests.DocumentFixture.h"
 #include "CanvasRenderer.h"
+#include "Common/Document.h"
+#include "Common/UiTiming.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include <algorithm>
 #include <array>

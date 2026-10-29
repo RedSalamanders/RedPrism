@@ -1,4 +1,4 @@
-#include "../../RedPrism/ContinuationRequests.h"
+#include "RedPrism/ContinuationRequests.h"
 
 #include "Host.Tests.HostPathRead.h"
 
@@ -43,6 +43,11 @@ void TestUnicodeOrderedBatch()
     std::size_t calls = 0;
     auto request = HostRequest::TryReadPaths(
         lengths, HostPathAction::ImagesAsLayers, Vec2{12.5, -8.25}, budget,
+
+// Keep the fixture snapshot/borrow explicit across nested callbacks; a constant-use notice
+// does not replace its lifetime contract. Owner: RedPrism maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 5258)
         [&calls, &expected](std::size_t index, std::span<wchar_t> destination) noexcept
         {
             ++calls;
@@ -53,7 +58,9 @@ void TestUnicodeOrderedBatch()
             std::copy(expected[index].begin(), expected[index].end(), destination.begin());
             destination.back() = L'\0';
             return true;
-        },
+        }
+#pragma warning(pop)
+        ,
         failure);
 
     const auto* paths = request ? std::get_if<HostPathsInput>(&request->Input()) : nullptr;

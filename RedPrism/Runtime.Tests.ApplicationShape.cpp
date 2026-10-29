@@ -1,6 +1,6 @@
 #include "Application.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.ShapeWorkTestGate.h"
@@ -35,6 +35,10 @@ int Application::RunShapeWorkSelfTest() noexcept
         Undo,
         LargeRelease
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -49,6 +53,8 @@ int Application::RunShapeWorkSelfTest() noexcept
         bool viewChanged = false;
         bool observeSelectedReceipt = false;
     };
+#pragma warning(pop)
+
     unsigned int checks = 0;
     int failures = 0;
     const auto expect = [&](bool condition, const char* name, Mode mode, bool after, int kind) noexcept

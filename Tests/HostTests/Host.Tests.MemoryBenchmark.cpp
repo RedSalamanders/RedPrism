@@ -1,5 +1,5 @@
-#include "../../Common/Jobs.h"
-#include "../../Common/PixelBuffer.h"
+#include "Common/Jobs.h"
+#include "Common/PixelBuffer.h"
 
 #include "Host.Tests.MemoryBenchmark.h"
 

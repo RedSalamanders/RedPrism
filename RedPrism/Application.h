@@ -259,6 +259,10 @@ class Application final : public ChromeEvents,
     void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
     void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
     [[nodiscard]] HRESULT CurrentCommittedDisplayFailureOwner() const noexcept;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     struct PendingDisplayClient final : CommittedDisplayClient
     {
         explicit PendingDisplayClient(Application& owner) noexcept : _owner(owner) {}
@@ -267,6 +271,8 @@ class Application final : public ChromeEvents,
         void CommittedDisplayPublishedOwner(RecordedDisplayGraph* graph) noexcept override;
         void CommittedDisplayFailedOwner(CommittedDisplayKey key, HRESULT failure) noexcept override;
     };
+#pragma warning(pop)
+
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
     static constexpr UINT_PTR kScreenshotTimerId = 1;
     static constexpr UINT_PTR kJobIndicatorTimerId = 8;
@@ -425,6 +431,10 @@ class Application final : public ChromeEvents,
                             const CanvasBrushContext* captured = nullptr,
                             const Raster* cloneComposite = nullptr) noexcept;
     class StrokeFinishJob;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class StrokeFinishSource final : public OwnerWorkPump
     {
       public:
@@ -441,6 +451,8 @@ class Application final : public ChromeEvents,
         Application& _owner;
         bool _attached = false;
     };
+#pragma warning(pop)
+
     [[nodiscard]] HRESULT StartStrokeFinish(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartWarpFinish(std::uint64_t opening) noexcept;
     [[nodiscard]] HRESULT StartWarpLive(std::uint64_t opening) noexcept;
@@ -722,6 +734,10 @@ class Application final : public ChromeEvents,
     int RunColorCommitSelfTest() noexcept;
     int RunAdjustmentClosureSelfTest() noexcept;
     using HostRequestQueue = ContinuationQueue<HostRequest>;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4625 4626)
     struct CanvasLifetimePreflight final
     {
         HostRequestQueue::Entry entry;
@@ -731,10 +747,16 @@ class Application final : public ChromeEvents,
         bool save = false;
         ContinuationReceipt::Result interrupted{HostOutcome::Pending, 0};
     };
+#pragma warning(pop)
+
     static bool CanvasLifetimeInput(const HostRequestInput& input) noexcept;
     [[nodiscard]] bool CanvasLifetimeCurrent() const noexcept;
     void RunCanvasLifetimePreflight() noexcept;
     void FinishCanvasLifetimePreflight(ContinuationReceipt::Result result) noexcept;
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class ContinuationAction final : public UiAction
     {
       public:
@@ -744,6 +766,12 @@ class Application final : public ChromeEvents,
       private:
         Application& _owner;
     };
+#pragma warning(pop)
+
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     class HistoryResidencySource final : public OwnerWorkPump
     {
       public:
@@ -764,6 +792,8 @@ class Application final : public ChromeEvents,
         bool _attached = false;
         bool _deferred = false;
     };
+#pragma warning(pop)
+
     struct LayerRowsKey final
     {
         std::uint64_t documentSerial = 0;
@@ -773,6 +803,10 @@ class Application final : public ChromeEvents,
         const void* root = nullptr; // descriptor only; capture follows successful original admission
         [[nodiscard]] bool operator==(const LayerRowsKey&) const noexcept = default;
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
     class LayerRowsSource final : public OwnerWorkPump
     {
       public:
@@ -797,6 +831,8 @@ class Application final : public ChromeEvents,
         bool _attached = false;
         bool _ready = false;
     };
+#pragma warning(pop)
+
     class LayerRowsJob;
     [[nodiscard]] LayerRowsKey CurrentLayerRowsKey() const noexcept;
     [[nodiscard]] bool EnablePreparedLayerRows() noexcept;

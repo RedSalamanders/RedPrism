@@ -34,6 +34,10 @@ bool Memory(void*, MemorySnapshot& output) noexcept
     return true;
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Client final : public CommittedDisplayClient
 {
   public:
@@ -96,6 +100,7 @@ class Client final : public CommittedDisplayClient
         return true;
     }
 };
+#pragma warning(pop)
 
 template <typename Predicate> bool Until(JobScheduler& jobs, OwnerWorkMultiplexer& routes, Predicate predicate) noexcept
 {
@@ -140,6 +145,10 @@ class ParentPump final : public OwnerWorkPump
     void Pump() noexcept override;
 };
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
 class Parent final : public Job, public GpuCommandSourceReceiver
 {
     enum class Stage
@@ -152,6 +161,10 @@ class Parent final : public Job, public GpuCommandSourceReceiver
         Publish,
         Cleanup
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027)
     struct Payload final
     {
         CanvasDocument source;
@@ -164,6 +177,8 @@ class Parent final : public Job, public GpuCommandSourceReceiver
         GpuCompletionContext detachedCommandOwner;
         GpuCommandStream stream;
     };
+#pragma warning(pop)
+
     JobScheduler& jobs;
     GpuWorkQueue& queue;
     GpuCommandPump& commands;
@@ -325,6 +340,8 @@ class Parent final : public Job, public GpuCommandSourceReceiver
             return false; // Exact successful DeferCompletion gets the publication-transfer authority.
         case Stage::Cleanup:
             return false;
+        case ::Parent::Stage::AwaitCommands:
+        case ::Parent::Stage::Publish:
         default:
             std::terminate();
         }
@@ -417,6 +434,7 @@ class Parent final : public Job, public GpuCommandSourceReceiver
         Resume(Stage::RetireStream);
     }
 };
+#pragma warning(pop)
 
 bool ParentPump::HasPending() const noexcept
 {
@@ -432,6 +450,10 @@ void ParentPump::Pump() noexcept
         parent->Pump();
 }
 
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
 class Follower final : public Job
 {
     Observation& observation;
@@ -449,6 +471,7 @@ class Follower final : public Job
         observation.followerFinished = result.status == JobStatus::Finished;
     }
 };
+#pragma warning(pop)
 
 bool Run(D3D_DRIVER_TYPE driver)
 {
@@ -536,11 +559,17 @@ bool Run(D3D_DRIVER_TYPE driver)
     Expect("finished-parent-route-detaches-without-pending-work", routes.Detach(pump));
     display.StopOwner();
     queue.StopNotifications();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct Closing
     {
         CommittedDisplayController& display;
         GpuWorkQueue& queue;
-    } closing{display, queue};
+    }
+#pragma warning(pop)
+    closing{display, queue};
     jobs.Close({[](void* value) noexcept
                 {
                     auto& state = *static_cast<Closing*>(value);

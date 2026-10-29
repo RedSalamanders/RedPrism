@@ -8,6 +8,10 @@ class CanvasRenderer;
 
 // One immutable snapshot and one scheduler reservation through every tile. Workers allocate/copy/adopt;
 // owner stages alone compose, acknowledge mapped rows, rebind and publish the complete result.
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
 class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuReadbackProducer
 {
   public:
@@ -116,3 +120,4 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     bool _resetOutput = false;
     bool _detachedReady = false; // owner-only: the preceding worker and GPU lease are acknowledged
 };
+#pragma warning(pop)

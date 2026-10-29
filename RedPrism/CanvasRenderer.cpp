@@ -634,8 +634,8 @@ std::array<float, 4> CanvasRenderer::RectFor(const GpuTexture& texture) noexcept
     const double sourceHeight = std::max(1, texture.sourceHeight);
     const double coveredWidth = static_cast<double>(std::max(1, texture.width)) * std::max(1, texture.scale);
     const double coveredHeight = static_cast<double>(std::max(1, texture.height)) * std::max(1, texture.scale);
-    return {static_cast<float>(texture.originX / sourceWidth), static_cast<float>(texture.originY / sourceHeight),
-            static_cast<float>(sourceWidth / coveredWidth), static_cast<float>(sourceHeight / coveredHeight)};
+    return {{static_cast<float>(texture.originX / sourceWidth), static_cast<float>(texture.originY / sourceHeight),
+             static_cast<float>(sourceWidth / coveredWidth), static_cast<float>(sourceHeight / coveredHeight)}};
 }
 
 template <typename Reader> HRESULT CanvasRenderer::UploadRows(GpuTexture& gpu, Reader&& read) noexcept
@@ -2673,9 +2673,10 @@ HRESULT CanvasRenderer::DrawViewOverlayToTarget(ID3D11RenderTargetView* target, 
         maskHeight > sideLimit || maskWidth > pixelLimit / maskHeight || !std::isfinite(pixelLeft) ||
         !std::isfinite(pixelTop) || std::floor(pixelLeft) != pixelLeft || std::floor(pixelTop) != pixelTop)
         return E_INVALIDARG;
-    if (clip && (!std::isfinite((*clip)[0]) || !std::isfinite((*clip)[1]) || !std::isfinite((*clip)[2]) ||
-                 !std::isfinite((*clip)[3]) || (*clip)[0] < 0 || (*clip)[1] < 0 || (*clip)[2] > maskWidth ||
-                 (*clip)[3] > maskHeight || (*clip)[2] <= (*clip)[0] || (*clip)[3] <= (*clip)[1]))
+    if (clip &&
+        (!std::isfinite((*clip)[0]) || !std::isfinite((*clip)[1]) || !std::isfinite((*clip)[2]) ||
+         !std::isfinite((*clip)[3]) || (*clip)[0] < 0 || (*clip)[1] < 0 || (*clip)[2] > static_cast<float>(maskWidth) ||
+         (*clip)[3] > static_cast<float>(maskHeight) || (*clip)[2] <= (*clip)[0] || (*clip)[3] <= (*clip)[1]))
         return E_INVALIDARG;
     LayerConstants constants{};
     if (clip)
@@ -2846,7 +2847,8 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
     if (_adjustmentPreviewSurface.texture.texture)
     {
         const auto& texture = _adjustmentPreviewSurface.texture;
-        bytes += (texture.mipped ? MipChainTexels(texture.width, texture.height)
+        bytes += (texture.mipped ? MipChainTexels(static_cast<std::uint64_t>(texture.width),
+                                                  static_cast<std::uint64_t>(texture.height))
                                  : static_cast<std::uint64_t>(texture.width) * texture.height) *
                  4;
     }

@@ -1,6 +1,6 @@
 #include "Host.Tests.HueInput.h"
 
-#include "../../RedPrism/HostHueInput.h"
+#include "RedPrism/HostHueInput.h"
 
 #include <cmath>
 #include <cstdint>

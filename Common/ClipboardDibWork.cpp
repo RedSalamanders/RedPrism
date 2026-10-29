@@ -26,8 +26,8 @@ constexpr std::uint64_t kMaxDibPixels = 100'000'000;
 
 std::uint16_t ReadU16(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept
 {
-    return static_cast<std::uint16_t>(bytes[offset]) |
-           static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[offset + 1]) << 8);
+    return static_cast<std::uint16_t>(static_cast<std::uint32_t>(bytes[offset]) |
+                                      (static_cast<std::uint32_t>(bytes[offset + 1]) << 8));
 }
 
 std::uint32_t ReadU32(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept

@@ -2,7 +2,7 @@
 
 #include "Runtime.Tests.ApplicationShutdownTestProbe.h"
 
-#include "../Tests/Support/Support.Tests.DocumentFixture.h"
+#include "Tests/Support/Support.Tests.DocumentFixture.h"
 
 #include "ChromeHost.h"
 #include "Runtime.Tests.TransformPreviewTestGate.h"
@@ -31,6 +31,10 @@ int Application::RunTransformPreviewSelfTest() noexcept
         RecoverDevice,
         Shutdown
     };
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
     struct State final
     {
         Application& owner;
@@ -59,6 +63,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         bool deviceRecovered = false;
         std::optional<ContinuationReceipt> receipt;
     };
+#pragma warning(pop)
 
     unsigned checks = 0;
     unsigned failures = 0;
@@ -592,6 +597,10 @@ int Application::RunTransformPreviewSelfTest() noexcept
         state.action = Action::Shutdown;
         const auto generation = closing._session.Generation();
         const auto revision = closing._session.history.CurrentRevision();
+// Existing identity/RAII/reference traits intentionally delete these implicit operations.
+// Preserve aggregate and overload behavior. Owner: repository maintainers; review: 2027-01-31.
+#pragma warning(push)
+#pragma warning(disable : 4623 4626 5027)
         struct AuthorityCheck final
         {
             Application& owner;
@@ -599,7 +608,9 @@ int Application::RunTransformPreviewSelfTest() noexcept
             Guid revision;
             Raster source;
             bool unchanged = false;
-        } authority{closing, generation, revision, source};
+        }
+#pragma warning(pop)
+        authority{closing, generation, revision, source};
         ApplicationShutdownTestProbe probe;
         probe.checkContext = &authority;
         probe.checkOwner = [](void* opaque) noexcept
