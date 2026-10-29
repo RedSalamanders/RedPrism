@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Preserve per-stage acknowledgement, error counts/ids, selection state and canvas facts for the existing checkerboard refusal fixture, with its scoped Wand/Layer worker trace. Keep all original assertions and limits while retaining the failed Release image and logs for diagnosis.
 - Confine the ARM64 sanitizer probe's intentional volatile use-after-free observation to a definition-local C4746 scope. Keep the allocation, release and faulting read unchanged so real sanitizer instrumentation remains required.
 - Include the shared capacity test helper through the existing repository include root, keeping each test's include path explicit without parent-directory warning C4464.
 - Annotate SDK WRL's ARM64 volatile reference-count definitions before the UI Automation fixture includes application headers. Keep the scope on the SDK include, retain owned-code diagnostics and leave COM ownership and the target volatile model unchanged.

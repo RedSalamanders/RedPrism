@@ -73,3 +73,11 @@ definition-local C4746 annotation, with the faulting body unchanged. Four real s
 the old notice only on ARM64 and accept the fixed header warning-free on ARM64/x64. Receipt:
 `E:/RedPrism.Perf/build-policy-sanitizer-probe-scope-proof-20261028/`. Real x64 sanitizer child diagnostics and the
 final six-build/three-Full matrix remain required; no runtime result follows from compile-only controls.
+
+The60d73 full Debug run passed, but full Release failed the checkerboard refusal fixture with mask=false,
+layer=false, blank-layer-silent=true and two errors. Blank-layer silence is the expected behavior. The original
+message did not expose the exact failed predicate. The exact Release executable/PDB and native logs are preserved
+under this project's Prism-Release-refusal-failure1 evidence. Per-stage scalar diagnostics and the existing scoped
+worker trace now retain acknowledgement, ids/counts, selection and canvas facts without changing assertions,
+limits, deadlines or production behavior. A diagnostic Release reproduction precedes any claimed repair; final
+native/Full qualification remains open.

@@ -3952,3 +3952,10 @@ The hosted native CI fixture runs `Tests/Tooling.Tests.WindowFixture.ps1` before
 [Generated test-run evidence](Testing_RunEvidence.md) owns completed, failed and interrupted run storage, verification and CI collection.
 
 The WAND fixture's startup job-settlement check retains its 10,000 ms bound and exit code 5. Any non-settled result emits the fixture name and the actual result category (TimedOut, Quit/WM_QUIT, or Failed) through the existing self-test debugger/stderr channel. Diagnostics do not extend the deadline or classify an earlier silent exit's cause.
+
+## Loaded-selection refusal diagnostics
+
+The checkerboard Load Mask / Layer Selection refusal fixture retains its original edge limit, expected error ids,
+selection-state checks and settlement deadlines. A failure records each stage's acknowledgement, error count,
+last error id, selection presence and canvas dimensions. Its existing Wand/Layer worker trace is scoped to this
+fixture and restored on exit. Diagnostics do not establish a repaired runtime result or authorize a rebaseline.

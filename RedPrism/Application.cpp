@@ -9135,6 +9135,10 @@ int Application::RunRefusalSelfTest() noexcept
     {
         fresh();
         constexpr int kSide = 2100;
+        const bool previousTrace = _traceWandForTest;
+        _traceWandForTest = true;
+        const auto restoreTrace =
+            wil::scope_exit([this, previousTrace]() noexcept { _traceWandForTest = previousTrace; });
         std::vector<std::uint8_t> checker(static_cast<std::size_t>(kSide) * static_cast<std::size_t>(kSide));
         std::vector<std::uint8_t> dots(checker.size() * 4u, 0);
         for (int y = 0; y < kSide; ++y)
@@ -9157,10 +9161,16 @@ int Application::RunRefusalSelfTest() noexcept
         const int errors = _errorsShown;
         OnCommand(ChromeHost::kCommandLoadMaskSelection);
         const bool maskAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const int maskErrors = _errorsShown - errors;
+        const UINT maskErrorId = _lastErrorId;
+        const bool maskHasSelection = _session.Selection().has_value();
         const bool maskRefused = maskAcknowledged && _errorsShown == errors + 1 &&
                                  _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandLoadLayerSelection);
         const bool layerAcknowledged = SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled;
+        const int layerErrors = _errorsShown - errors;
+        const UINT layerErrorId = _lastErrorId;
+        const bool layerHasSelection = _session.Selection().has_value();
         const bool layerRefused = layerAcknowledged && _errorsShown == errors + 2 &&
                                   _lastErrorId == IDS_ERROR_SELECTION_DETAILED && !_session.Selection().has_value();
         OnCommand(ChromeHost::kCommandNewLayer);
@@ -9170,8 +9180,14 @@ int Application::RunRefusalSelfTest() noexcept
         if (!maskRefused || !layerRefused || !emptySilent)
         {
             SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "
-                                        L"layer {}, blank layer silent {}, errors {}).\n",
-                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors)
+                                        L"layer {}, blank layer silent {}, errors {}; "
+                                        L"mask settled={} errors={} id={} selection={}; "
+                                        L"layer settled={} errors={} id={} selection={}; canvas={}x{}).\n",
+                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors, maskAcknowledged,
+                                        maskErrors, maskErrorId, maskHasSelection, layerAcknowledged, layerErrors,
+                                        layerErrorId, layerHasSelection,
+                                        _session.Document().has_value() ? _session.Document()->width : 0,
+                                        _session.Document().has_value() ? _session.Document()->height : 0)
                                 .c_str());
             return 5;
         }
